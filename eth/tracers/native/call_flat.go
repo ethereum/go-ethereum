@@ -76,40 +76,40 @@ type flatCallFrameMarshaling struct {
 }
 
 type flatCallAction struct {
-	Author         common.Address `json:"author,omitempty"`
-	RewardType     string         `json:"rewardType,omitempty"`
-	SelfDestructed common.Address `json:"address,omitempty"`
-	Balance        *big.Int       `json:"balance,omitempty"`
-	CallType       string         `json:"callType,omitempty"`
-	CreationMethod string         `json:"creationMethod,omitempty"`
-	From           common.Address `json:"from,omitempty"`
-	Gas            uint64         `json:"gas,omitempty"`
-	Init           []byte         `json:"init,omitempty"`
-	Input          []byte         `json:"input,omitempty"`
-	RefundAddress  common.Address `json:"refundAddress,omitempty"`
-	To             common.Address `json:"to,omitempty"`
-	Value          *big.Int       `json:"value,omitempty"`
+	Author         *common.Address `json:"author,omitempty"`
+	RewardType     string          `json:"rewardType,omitempty"`
+	SelfDestructed *common.Address `json:"address,omitempty"`
+	Balance        *big.Int        `json:"balance,omitempty"`
+	CallType       string          `json:"callType,omitempty"`
+	CreationMethod string          `json:"creationMethod,omitempty"`
+	From           *common.Address `json:"from,omitempty"`
+	Gas            *uint64         `json:"gas,omitempty"`
+	Init           *[]byte         `json:"init,omitempty"`
+	Input          *[]byte         `json:"input,omitempty"`
+	RefundAddress  *common.Address `json:"refundAddress,omitempty"`
+	To             *common.Address `json:"to,omitempty"`
+	Value          *big.Int        `json:"value,omitempty"`
 }
 
 type flatCallActionMarshaling struct {
 	Balance *hexutil.Big
-	Gas     hexutil.Uint64
-	Init    hexutil.Bytes
-	Input   hexutil.Bytes
+	Gas     *hexutil.Uint64
+	Init    *hexutil.Bytes
+	Input   *hexutil.Bytes
 	Value   *hexutil.Big
 }
 
 type flatCallResult struct {
-	Address common.Address `json:"address,omitempty"`
-	Code    []byte         `json:"code,omitempty"`
-	GasUsed uint64         `json:"gasUsed,omitempty"`
-	Output  []byte         `json:"output,omitempty"`
+	Address *common.Address `json:"address,omitempty"`
+	Code    *[]byte         `json:"code,omitempty"`
+	GasUsed *uint64         `json:"gasUsed,omitempty"`
+	Output  *[]byte         `json:"output,omitempty"`
 }
 
 type flatCallResultMarshaling struct {
-	Code    hexutil.Bytes
-	GasUsed hexutil.Uint64
-	Output  hexutil.Bytes
+	Code    *hexutil.Bytes
+	GasUsed *hexutil.Uint64
+	Output  *hexutil.Bytes
 }
 
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
@@ -280,36 +280,46 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 }
 
 func newFlatCreate(input *callFrame) *flatCallFrame {
+	var (
+		actionInit = input.Input[:]
+		resultCode = input.Output[:]
+	)
+
 	return &flatCallFrame{
 		Type: strings.ToLower(vm.CREATE.String()),
 		Action: flatCallAction{
-			From:  input.From,
-			Gas:   input.Gas,
+			From:  &input.From,
+			Gas:   &input.Gas,
 			Value: input.Value,
-			Init:  input.Input[:],
+			Init:  &actionInit,
 		},
 		Result: &flatCallResult{
-			GasUsed: input.GasUsed,
-			Address: input.To,
-			Code:    input.Output[:],
+			GasUsed: &input.GasUsed,
+			Address: &input.To,
+			Code:    &resultCode,
 		},
 	}
 }
 
 func newFlatCall(input *callFrame) *flatCallFrame {
+	var (
+		actionInput  = input.Input[:]
+		resultOutput = input.Output[:]
+	)
+
 	return &flatCallFrame{
 		Type: strings.ToLower(vm.CALL.String()),
 		Action: flatCallAction{
-			From:     input.From,
-			To:       input.To,
-			Gas:      input.Gas,
+			From:     &input.From,
+			To:       &input.To,
+			Gas:      &input.Gas,
 			Value:    input.Value,
 			CallType: strings.ToLower(input.Type.String()),
-			Input:    input.Input[:],
+			Input:    &actionInput,
 		},
 		Result: &flatCallResult{
-			GasUsed: input.GasUsed,
-			Output:  input.Output[:],
+			GasUsed: &input.GasUsed,
+			Output:  &resultOutput,
 		},
 	}
 }
@@ -318,9 +328,9 @@ func newFlatSuicide(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: "suicide",
 		Action: flatCallAction{
-			SelfDestructed: input.From,
+			SelfDestructed: &input.From,
 			Balance:        input.Value,
-			RefundAddress:  input.To,
+			RefundAddress:  &input.To,
 		},
 	}
 }

@@ -15,19 +15,19 @@ var _ = (*flatCallActionMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (f flatCallAction) MarshalJSON() ([]byte, error) {
 	type flatCallAction struct {
-		Author         common.Address `json:"author,omitempty"`
-		RewardType     string         `json:"rewardType,omitempty"`
-		SelfDestructed common.Address `json:"address,omitempty"`
-		Balance        *hexutil.Big   `json:"balance,omitempty"`
-		CallType       string         `json:"callType,omitempty"`
-		CreationMethod string         `json:"creationMethod,omitempty"`
-		From           common.Address `json:"from,omitempty"`
-		Gas            hexutil.Uint64 `json:"gas,omitempty"`
-		Init           hexutil.Bytes  `json:"init,omitempty"`
-		Input          hexutil.Bytes  `json:"input,omitempty"`
-		RefundAddress  common.Address `json:"refundAddress,omitempty"`
-		To             common.Address `json:"to,omitempty"`
-		Value          *hexutil.Big   `json:"value,omitempty"`
+		Author         *common.Address `json:"author,omitempty"`
+		RewardType     string          `json:"rewardType,omitempty"`
+		SelfDestructed *common.Address `json:"address,omitempty"`
+		Balance        *hexutil.Big    `json:"balance,omitempty"`
+		CallType       string          `json:"callType,omitempty"`
+		CreationMethod string          `json:"creationMethod,omitempty"`
+		From           *common.Address `json:"from,omitempty"`
+		Gas            *hexutil.Uint64 `json:"gas,omitempty"`
+		Init           *hexutil.Bytes  `json:"init,omitempty"`
+		Input          *hexutil.Bytes  `json:"input,omitempty"`
+		RefundAddress  *common.Address `json:"refundAddress,omitempty"`
+		To             *common.Address `json:"to,omitempty"`
+		Value          *hexutil.Big    `json:"value,omitempty"`
 	}
 	var enc flatCallAction
 	enc.Author = f.Author
@@ -37,9 +37,9 @@ func (f flatCallAction) MarshalJSON() ([]byte, error) {
 	enc.CallType = f.CallType
 	enc.CreationMethod = f.CreationMethod
 	enc.From = f.From
-	enc.Gas = hexutil.Uint64(f.Gas)
-	enc.Init = f.Init
-	enc.Input = f.Input
+	enc.Gas = (*hexutil.Uint64)(f.Gas)
+	enc.Init = (*hexutil.Bytes)(f.Init)
+	enc.Input = (*hexutil.Bytes)(f.Input)
 	enc.RefundAddress = f.RefundAddress
 	enc.To = f.To
 	enc.Value = (*hexutil.Big)(f.Value)
@@ -68,13 +68,13 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	if dec.Author != nil {
-		f.Author = *dec.Author
+		f.Author = dec.Author
 	}
 	if dec.RewardType != nil {
 		f.RewardType = *dec.RewardType
 	}
 	if dec.SelfDestructed != nil {
-		f.SelfDestructed = *dec.SelfDestructed
+		f.SelfDestructed = dec.SelfDestructed
 	}
 	if dec.Balance != nil {
 		f.Balance = (*big.Int)(dec.Balance)
@@ -86,22 +86,22 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 		f.CreationMethod = *dec.CreationMethod
 	}
 	if dec.From != nil {
-		f.From = *dec.From
+		f.From = dec.From
 	}
 	if dec.Gas != nil {
-		f.Gas = uint64(*dec.Gas)
+		f.Gas = (*uint64)(dec.Gas)
 	}
 	if dec.Init != nil {
-		f.Init = *dec.Init
+		f.Init = (*[]byte)(dec.Init)
 	}
 	if dec.Input != nil {
-		f.Input = *dec.Input
+		f.Input = (*[]byte)(dec.Input)
 	}
 	if dec.RefundAddress != nil {
-		f.RefundAddress = *dec.RefundAddress
+		f.RefundAddress = dec.RefundAddress
 	}
 	if dec.To != nil {
-		f.To = *dec.To
+		f.To = dec.To
 	}
 	if dec.Value != nil {
 		f.Value = (*big.Int)(dec.Value)
