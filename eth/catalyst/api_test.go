@@ -1113,3 +1113,115 @@ func TestWithdrawals(t *testing.T) {
 		}
 	}
 }
+
+func TestNilWithdrawals(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	// Set shanghai time to last block + 4 seconds (first post-merge block)
+	time := blocks[len(blocks)-1].Time() + 4
+	genesis.Config.ShanghaiTime = &time
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	parent := ethservice.BlockChain().CurrentHeader()
+	aa := common.Address{0xaa}
+
+	type test struct {
+		blockParams beacon.PayloadAttributes
+		wantErr     bool
+	}
+	tests := []test{
+		// Before Shanghai
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 2,
+				Withdrawals: nil,
+			},
+			wantErr: false,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 2,
+				Withdrawals: make([]*types.Withdrawal, 0),
+			},
+			wantErr: true,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp: parent.Time + 2,
+				Withdrawals: []*types.Withdrawal{
+					{
+						Index:   0,
+						Address: aa,
+						Amount:  32,
+					},
+				},
+			},
+			wantErr: true,
+		},
+		// After Shanghai
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 5,
+				Withdrawals: nil,
+			},
+			wantErr: true,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 5,
+				Withdrawals: make([]*types.Withdrawal, 0),
+			},
+			wantErr: false,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp: parent.Time + 5,
+				Withdrawals: []*types.Withdrawal{
+					{
+						Index:   0,
+						Address: aa,
+						Amount:  32,
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	fcState := beacon.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+
+	for _, test := range tests {
+		_, err := api.ForkchoiceUpdatedV2(fcState, &test.blockParams)
+		if test.wantErr {
+			if err == nil {
+				t.Fatal("wanted error on fcuv2 with invalid withdrawals")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("error preparing payload, err=%v", err)
+		}
+
+		// 11: verify locally build block.
+		payloadID := (&miner.BuildPayloadArgs{
+			Parent:       fcState.HeadBlockHash,
+			Timestamp:    test.blockParams.Timestamp,
+			FeeRecipient: test.blockParams.SuggestedFeeRecipient,
+			Random:       test.blockParams.Random,
+		}).Id()
+		execData, err := api.GetPayloadV2(payloadID)
+		if err != nil {
+			t.Fatalf("error getting payload, err=%v", err)
+		}
+		if status, err := api.NewPayloadV2(*execData.ExecutionPayload); err != nil {
+			t.Fatalf("error validating payload: %v", err)
+		} else if status.Status != beacon.VALID {
+			t.Fatalf("invalid payload")
+		}
+	}
+}
