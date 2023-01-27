@@ -1224,5 +1224,4 @@ func TestNilWithdrawals(t *testing.T) {
 			t.Fatalf("invalid payload")
 		}
 	}
-
 }
