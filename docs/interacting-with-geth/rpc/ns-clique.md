@@ -3,7 +3,7 @@ title: clique Namespace
 description: Documentation for the JSON-RPC API "clique" namespace
 ---
 
-The `clique` API provides access to the state of the clique consensus engine. This API cna be used to manage signer votes and to check the health of a private network.
+The `clique` API provides access to the state of the clique consensus engine. This API can be used to manage signer votes and to check the health of a private network.
 
 ## clique_getSnapshot {#clique-getsnapshot}
 
