@@ -37,9 +37,6 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 // returns the signature or error on invalid signature length.
 // For example: Ethereum's signature format uses 27/28 instead of 0/1
 func AlterRecoveryOffsetID(sig []byte, v int) (altered []byte, err error) {
-	if v > 255 || v < -255 {
-		return nil, fmt.Errorf("invalid offset ID value, byte overflow, max value is 255 min value is -255")
-	}
 	if len(sig) != SignatureLength {
 		return nil, fmt.Errorf("invalid signature length, signature is of length: %d when it should be %d", len(sig), SignatureLength)
 	}
