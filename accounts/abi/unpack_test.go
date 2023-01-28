@@ -943,3 +943,29 @@ func TestOOMMaliciousInput(t *testing.T) {
 		}
 	}
 }
+
+func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
+	var encodeABI, decodeABI Arguments
+	uint256Ty, err := NewType("uint256", "", nil)
+	if err != nil {
+		panic(err)
+	}
+	uint8Ty, err := NewType("uint8", "", nil)
+	if err != nil {
+		panic(err)
+	}
+	encodeABI = Arguments{
+		{Type: uint256Ty},
+	}
+	decodeABI = Arguments{
+		{Type: uint8Ty},
+	}
+	packed, err := encodeABI.Pack(big.NewInt(256))
+	if err != nil {
+		panic(err)
+	}
+	_, err = decodeABI.Unpack(packed)
+	if err != errBadUint8 {
+		t.Fatal(err)
+	}
+}
