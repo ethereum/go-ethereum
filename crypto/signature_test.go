@@ -61,6 +61,22 @@ func TestAlterSignatureOffsetID(t *testing.T) {
 			t.Errorf("AlterRecoverOffset is not associative")
 		}
 	}
+	overflowNil, overflowErr := AlterRecoveryOffsetID(testsig, 255)
+	if overflowNil != nil || overflowErr.Error() != "invalid sum, byte overflow. 255 + 1 is > 255" {
+		t.Errorf("AlterSignatureOffsetID overflow protection error")
+	}
+	underflowNil, underflowErr := AlterRecoveryOffsetID(testsig, -255)
+	if underflowNil != nil || underflowErr.Error() != "invalid sum, byte underflow. change 255 > current id 1" {
+		t.Errorf("AlterSignatureOffsetID underflow protection error")
+	}
+	vTooBigNil, vTooBigErr := AlterRecoveryOffsetID(testsig, 256)
+	if vTooBigNil != nil || vTooBigErr.Error() != "invalid offset ID value, byte overflow, max value is 255 min value is -255" {
+		t.Errorf("AlterSignatureOffsetID v too big protection error")
+	}
+	vTooSmallNil, vTooSmallErr := AlterRecoveryOffsetID(testsig, -256)
+	if vTooSmallNil != nil || vTooSmallErr.Error() != "invalid offset ID value, byte overflow, max value is 255 min value is -255" {
+		t.Errorf("AlterSignatureOffsetID v too small protection error")
+	}
 }
 
 func TestVerifySignature(t *testing.T) {

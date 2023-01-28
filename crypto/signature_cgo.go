@@ -45,10 +45,19 @@ func AlterRecoveryOffsetID(sig []byte, v int) (altered []byte, err error) {
 	}
 	altered = make([]byte, SignatureLength)
 	copy(altered, sig)
+	var delta byte
 	if v > 0 {
-		altered[RecoveryIDOffset] += byte(v)
+		delta = byte(v)
+		if v+int(sig[RecoveryIDOffset]) > 255 {
+			return nil, fmt.Errorf("invalid sum, byte overflow. %d + %d is > 255", delta, sig[RecoveryIDOffset])
+		}
+		altered[RecoveryIDOffset] += delta
 	} else {
-		altered[RecoveryIDOffset] -= byte(v * -1)
+		delta = byte(v * -1)
+		if delta > sig[RecoveryIDOffset] {
+			return nil, fmt.Errorf("invalid sum, byte underflow. change %d > current id %d", delta, sig[RecoveryIDOffset])
+		}
+		altered[RecoveryIDOffset] -= delta
 	}
 	return altered, nil
 }
