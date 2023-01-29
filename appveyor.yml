@@ -13,7 +13,7 @@ environment:
       GETH_MINGW: 'C:\msys64\mingw32'
 
 install:
-  - git submodule update --init --depth 1
+  - git submodule update --init --depth 1 --recursive
   - go version
 
 for:

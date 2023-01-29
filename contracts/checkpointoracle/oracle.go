@@ -17,7 +17,8 @@
 // Package checkpointoracle is a an on-chain light client checkpoint oracle.
 package checkpointoracle
 
-//go:generate abigen --sol contract/oracle.sol --pkg contract --out contract/oracle.go
+//go:generate solc contract/oracle.sol --combined-json bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc,metadata,hashes --optimize -o ./ --overwrite
+//go:generate go run ../../cmd/abigen --pkg contract --out contract/oracle.go --combined-json ./combined.json
 
 import (
 	"errors"

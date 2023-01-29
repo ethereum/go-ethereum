@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -49,17 +49,17 @@ func TestVerification(t *testing.T) {
 
 func testVerification(t *testing.T, pubkey, sigdir string) {
 	// Data to verify
-	data, err := ioutil.ReadFile("./testdata/vcheck/data.json")
+	data, err := os.ReadFile("./testdata/vcheck/data.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Signatures, with and without comments, both trusted and untrusted
-	files, err := ioutil.ReadDir(sigdir)
+	files, err := os.ReadDir(sigdir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range files {
-		sig, err := ioutil.ReadFile(filepath.Join(sigdir, f.Name()))
+		sig, err := os.ReadFile(filepath.Join(sigdir, f.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +87,7 @@ func versionUint(v string) int {
 
 // TestMatching can be used to check that the regexps are correct
 func TestMatching(t *testing.T) {
-	data, _ := ioutil.ReadFile("./testdata/vcheck/vulnerabilities.json")
+	data, _ := os.ReadFile("./testdata/vcheck/vulnerabilities.json")
 	var vulns []vulnJson
 	if err := json.Unmarshal(data, &vulns); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,6 @@ func TestMatching(t *testing.T) {
 						version, vuln.Introduced, vuln.Fixed, vuln.Name, vulnIntro, current, vulnFixed)
 				}
 			}
-
 		}
 	}
 	for major := 1; major < 2; major++ {

@@ -10,11 +10,12 @@ consensus                       @karalabe
 core/                           @karalabe @holiman @rjl493456442
 eth/                            @karalabe @holiman @rjl493456442
 eth/catalyst/                   @gballet
-graphql/                        @gballet
+eth/tracers/                    @s1na
+graphql/                        @gballet @s1na
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442
 mobile/                         @karalabe @ligi
-node/                           @fjl @renaynay
+node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
 rpc/                            @fjl @holiman
 p2p/simulations                 @fjl

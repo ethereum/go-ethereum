@@ -1,3 +1,19 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
@@ -36,27 +52,31 @@ func (buf *encBuffer) size() int {
 	return len(buf.str) + buf.lhsize
 }
 
-// toBytes creates the encoder output.
-func (w *encBuffer) toBytes() []byte {
+// makeBytes creates the encoder output.
+func (w *encBuffer) makeBytes() []byte {
 	out := make([]byte, w.size())
+	w.copyTo(out)
+	return out
+}
+
+func (w *encBuffer) copyTo(dst []byte) {
 	strpos := 0
 	pos := 0
 	for _, head := range w.lheads {
 		// write string data before header
-		n := copy(out[pos:], w.str[strpos:head.offset])
+		n := copy(dst[pos:], w.str[strpos:head.offset])
 		pos += n
 		strpos += n
 		// write the header
-		enc := head.encode(out[pos:])
+		enc := head.encode(dst[pos:])
 		pos += len(enc)
 	}
 	// copy string data after the last list header
-	copy(out[pos:], w.str[strpos:])
-	return out
+	copy(dst[pos:], w.str[strpos:])
 }
 
-// toWriter writes the encoder output to w.
-func (buf *encBuffer) toWriter(w io.Writer) (err error) {
+// writeTo writes the encoder output to w.
+func (buf *encBuffer) writeTo(w io.Writer) (err error) {
 	strpos := 0
 	for _, head := range buf.lheads {
 		// write string data before header
@@ -116,6 +136,10 @@ func (buf *encBuffer) writeBytes(b []byte) {
 		buf.encodeStringHeader(len(b))
 		buf.str = append(buf.str, b...)
 	}
+}
+
+func (buf *encBuffer) writeString(s string) {
+	buf.writeBytes([]byte(s))
 }
 
 // wordBytes is the number of bytes in a big.Word
@@ -248,6 +272,19 @@ func (r *encReader) next() []byte {
 	}
 }
 
+func encBufferFromWriter(w io.Writer) *encBuffer {
+	switch w := w.(type) {
+	case EncoderBuffer:
+		return w.buf
+	case *EncoderBuffer:
+		return w.buf
+	case *encBuffer:
+		return w
+	default:
+		return nil
+	}
+}
+
 // EncoderBuffer is a buffer for incremental encoding.
 //
 // The zero value is NOT ready for use. To get a usable buffer,
@@ -275,12 +312,8 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 	// If the destination writer has an *encBuffer, use it.
 	// Note that w.ownBuffer is left false here.
 	if dst != nil {
-		if outer, ok := dst.(*encBuffer); ok {
+		if outer := encBufferFromWriter(dst); outer != nil {
 			*w = EncoderBuffer{outer, nil, false}
-			return
-		}
-		if outer, ok := dst.(EncoderBuffer); ok {
-			*w = EncoderBuffer{outer.buf, nil, false}
 			return
 		}
 	}
@@ -299,7 +332,7 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 func (w *EncoderBuffer) Flush() error {
 	var err error
 	if w.dst != nil {
-		err = w.buf.toWriter(w.dst)
+		err = w.buf.writeTo(w.dst)
 	}
 	// Release the internal buffer.
 	if w.ownBuffer {
@@ -311,7 +344,15 @@ func (w *EncoderBuffer) Flush() error {
 
 // ToBytes returns the encoded bytes.
 func (w *EncoderBuffer) ToBytes() []byte {
-	return w.buf.toBytes()
+	return w.buf.makeBytes()
+}
+
+// AppendToBytes appends the encoded bytes to dst.
+func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
+	size := w.buf.size()
+	out := append(dst, make([]byte, size)...)
+	w.buf.copyTo(out[len(dst):])
+	return out
 }
 
 // Write appends b directly to the encoder output.
@@ -338,6 +379,11 @@ func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 // WriteBytes encodes b as an RLP string.
 func (w EncoderBuffer) WriteBytes(b []byte) {
 	w.buf.writeBytes(b)
+}
+
+// WriteString encodes s as an RLP string.
+func (w EncoderBuffer) WriteString(s string) {
+	w.buf.writeString(s)
 }
 
 // List starts a list. It returns an internal index. Call EndList with

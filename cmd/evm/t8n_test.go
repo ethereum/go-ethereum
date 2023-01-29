@@ -1,3 +1,19 @@
+// Copyright 2021 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -195,6 +211,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp_arrowglacier.json",
 		},
+		{ // Difficulty calculation on gray glacier
+			base: "./testdata/19",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "GrayGlacier", "",
+			},
+			output: t8nOutput{result: true},
+			expOut: "exp_grayglacier.json",
+		},
 		{ // Sign unprotected (pre-EIP155) transaction
 			base: "./testdata/23",
 			input: t8nInput{
@@ -203,8 +227,39 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp.json",
 		},
+		{ // Test post-merge transition
+			base: "./testdata/24",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Merge", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // Test post-merge transition where input is missing random
+			base: "./testdata/24",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env-missingrandom.json", "Merge", "",
+			},
+			output:      t8nOutput{alloc: false, result: false},
+			expExitCode: 3,
+		},
+		{ // Test base fee calculation
+			base: "./testdata/25",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Merge", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // Test withdrawals transition
+			base: "./testdata/26",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Shanghai", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
 	} {
-
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
 		args = append(args, tc.input.get(tc.base)...)
@@ -315,7 +370,6 @@ func TestT9n(t *testing.T) {
 			expExitCode: t8ntool.ErrorIO,
 		},
 	} {
-
 		args := []string{"t9n"}
 		args = append(args, tc.input.get(tc.base)...)
 
@@ -345,13 +399,14 @@ func TestT9n(t *testing.T) {
 }
 
 type b11rInput struct {
-	inEnv       string
-	inOmmersRlp string
-	inTxsRlp    string
-	inClique    string
-	ethash      bool
-	ethashMode  string
-	ethashDir   string
+	inEnv         string
+	inOmmersRlp   string
+	inWithdrawals string
+	inTxsRlp      string
+	inClique      string
+	ethash        bool
+	ethashMode    string
+	ethashDir     string
 }
 
 func (args *b11rInput) get(base string) []string {
@@ -362,6 +417,10 @@ func (args *b11rInput) get(base string) []string {
 	}
 	if opt := args.inOmmersRlp; opt != "" {
 		out = append(out, "--input.ommers")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inWithdrawals; opt != "" {
+		out = append(out, "--input.withdrawals")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.inTxsRlp; opt != "" {
@@ -434,8 +493,17 @@ func TestB11r(t *testing.T) {
 			},
 			expOut: "exp.json",
 		},
+		{ // block with withdrawals
+			base: "./testdata/27",
+			input: b11rInput{
+				inEnv:         "header.json",
+				inOmmersRlp:   "ommers.json",
+				inWithdrawals: "withdrawals.json",
+				inTxsRlp:      "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
 	} {
-
 		args := []string{"b11r"}
 		args = append(args, tc.input.get(tc.base)...)
 

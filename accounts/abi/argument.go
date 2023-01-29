@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -78,8 +79,8 @@ func (arguments Arguments) isTuple() bool {
 // Unpack performs the operation hexdata -> Go format.
 func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	if len(data) == 0 {
-		if len(arguments) != 0 {
-			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
+		if len(arguments.NonIndexed()) != 0 {
+			return nil, errors.New("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
 		return make([]interface{}, 0), nil
 	}
@@ -90,11 +91,11 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	// Make sure map is not nil
 	if v == nil {
-		return fmt.Errorf("abi: cannot unpack into a nil map")
+		return errors.New("abi: cannot unpack into a nil map")
 	}
 	if len(data) == 0 {
-		if len(arguments) != 0 {
-			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
+		if len(arguments.NonIndexed()) != 0 {
+			return errors.New("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
 		return nil // Nothing to unmarshal, return
 	}
@@ -115,8 +116,8 @@ func (arguments Arguments) Copy(v interface{}, values []interface{}) error {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
 	}
 	if len(values) == 0 {
-		if len(arguments) != 0 {
-			return fmt.Errorf("abi: attempting to copy no values while %d arguments are expected", len(arguments))
+		if len(arguments.NonIndexed()) != 0 {
+			return errors.New("abi: attempting to copy no values while arguments are expected")
 		}
 		return nil // Nothing to copy, return
 	}
@@ -186,6 +187,9 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	virtualArgs := 0
 	for index, arg := range nonIndexedArgs {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
+		if err != nil {
+			return nil, err
+		}
 		if arg.Type.T == ArrayTy && !isDynamicType(arg.Type) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -202,9 +206,6 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			// If we have a static tuple, like (uint256, bool, uint256), these are
 			// coded as just like uint256,bool,uint256
 			virtualArgs += getTypeSize(arg.Type)/32 - 1
-		}
-		if err != nil {
-			return nil, err
 		}
 		retval = append(retval, marshalledValue)
 	}

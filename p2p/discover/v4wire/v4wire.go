@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ type (
 	Pong struct {
 		// This field should mirror the UDP envelope address
 		// of the ping packet, which provides a way to discover the
-		// the external address (after NAT).
+		// external address (after NAT).
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
@@ -86,23 +86,23 @@ type (
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrRequest queries for the remote node's record.
+	// ENRRequest queries for the remote node's record.
 	ENRRequest struct {
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrResponse is the reply to enrRequest.
+	// ENRResponse is the reply to ENRRequest.
 	ENRResponse struct {
-		ReplyTok []byte // Hash of the enrRequest packet.
+		ReplyTok []byte // Hash of the ENRRequest packet.
 		Record   enr.Record
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 )
 
-// This number is the maximum number of neighbor nodes in a Neighbors packet.
+// MaxNeighbors is the maximum number of neighbor nodes in a Neighbors packet.
 const MaxNeighbors = 12
 
 // This code computes the MaxNeighbors constant value.
@@ -161,8 +161,9 @@ func NewEndpoint(addr *net.UDPAddr, tcpPort uint16) Endpoint {
 }
 
 type Packet interface {
-	// packet name and type for logging purposes.
+	// Name is the name of the package, for logging purposes.
 	Name() string
+	// Kind is the packet type, for logging purposes.
 	Kind() byte
 }
 

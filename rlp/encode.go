@@ -29,8 +29,11 @@ import (
 var (
 	// Common encoded values.
 	// These are useful when implementing EncodeRLP.
+
+	// EmptyString is the encoding of an empty string.
 	EmptyString = []byte{0x80}
-	EmptyList   = []byte{0xC0}
+	// EmptyList is the encoding of an empty list.
+	EmptyList = []byte{0xC0}
 )
 
 var ErrNegativeBigInt = errors.New("rlp: cannot encode negative big.Int")
@@ -56,20 +59,16 @@ type Encoder interface {
 // Please see package-level documentation of encoding rules.
 func Encode(w io.Writer, val interface{}) error {
 	// Optimization: reuse *encBuffer when called by EncodeRLP.
-	if buf, ok := w.(*encBuffer); ok {
+	if buf := encBufferFromWriter(w); buf != nil {
 		return buf.encode(val)
-	}
-	if ebuf, ok := w.(EncoderBuffer); ok {
-		return ebuf.buf.encode(val)
 	}
 
 	buf := getEncBuffer()
 	defer encBufferPool.Put(buf)
-
 	if err := buf.encode(val); err != nil {
 		return err
 	}
-	return buf.toWriter(w)
+	return buf.writeTo(w)
 }
 
 // EncodeToBytes returns the RLP encoding of val.
@@ -81,7 +80,7 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 	if err := buf.encode(val); err != nil {
 		return nil, err
 	}
-	return buf.toBytes(), nil
+	return buf.makeBytes(), nil
 }
 
 // EncodeToReader returns a reader from which the RLP encoding of val

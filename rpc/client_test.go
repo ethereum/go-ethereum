@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -82,11 +83,15 @@ func TestClientErrorData(t *testing.T) {
 	}
 
 	// Check code.
+	// The method handler returns an error value which implements the rpc.Error
+	// interface, i.e. it has a custom error code. The server returns this error code.
+	expectedCode := testError{}.ErrorCode()
 	if e, ok := err.(Error); !ok {
 		t.Fatalf("client did not return rpc.Error, got %#v", e)
-	} else if e.ErrorCode() != (testError{}.ErrorCode()) {
-		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), testError{}.ErrorCode())
+	} else if e.ErrorCode() != expectedCode {
+		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), expectedCode)
 	}
+
 	// Check data.
 	if e, ok := err.(DataError); !ok {
 		t.Fatalf("client did not return rpc.DataError, got %#v", e)
@@ -142,6 +147,53 @@ func TestClientBatchRequest(t *testing.T) {
 	if !reflect.DeepEqual(batch, wantResult) {
 		t.Errorf("batch results mismatch:\ngot %swant %s", spew.Sdump(batch), spew.Sdump(wantResult))
 	}
+}
+
+func TestClientBatchRequest_len(t *testing.T) {
+	b, err := json.Marshal([]jsonrpcMessage{
+		{Version: "2.0", ID: json.RawMessage("1"), Method: "foo", Result: json.RawMessage(`"0x1"`)},
+		{Version: "2.0", ID: json.RawMessage("2"), Method: "bar", Result: json.RawMessage(`"0x2"`)},
+	})
+	if err != nil {
+		t.Fatal("failed to encode jsonrpc message:", err)
+	}
+	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_, err := rw.Write(b)
+		if err != nil {
+			t.Error("failed to write response:", err)
+		}
+	}))
+	t.Cleanup(s.Close)
+
+	client, err := Dial(s.URL)
+	if err != nil {
+		t.Fatal("failed to dial test server:", err)
+	}
+	defer client.Close()
+
+	t.Run("too-few", func(t *testing.T) {
+		batch := []BatchElem{
+			{Method: "foo"},
+			{Method: "bar"},
+			{Method: "baz"},
+		}
+		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+		defer cancelFn()
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
+			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+		}
+	})
+
+	t.Run("too-many", func(t *testing.T) {
+		batch := []BatchElem{
+			{Method: "foo"},
+		}
+		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+		defer cancelFn()
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
+			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+		}
+	})
 }
 
 func TestClientNotify(t *testing.T) {
@@ -615,10 +667,10 @@ func TestClientReconnect(t *testing.T) {
 	// Start a server and corresponding client.
 	s1, l1 := startServer("127.0.0.1:0")
 	client, err := DialContext(ctx, "ws://"+l1.Addr().String())
-	defer client.Close()
 	if err != nil {
 		t.Fatal("can't dial", err)
 	}
+	defer client.Close()
 
 	// Perform a call. This should work because the server is up.
 	var resp echoResult

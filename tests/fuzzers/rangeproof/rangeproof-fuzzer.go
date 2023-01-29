@@ -24,6 +24,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -61,8 +62,7 @@ func (f *fuzzer) readInt() uint64 {
 }
 
 func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
-
-	trie := new(trie.Trie)
+	trie := trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase()))
 	vals := make(map[string]*kv)
 	size := f.readInt()
 	// Fill it with some fluff
@@ -163,7 +163,6 @@ func (f *fuzzer) fuzz() int {
 			// Modify something in the proof db
 			// add stuff to proof db
 			// drop stuff from proof db
-
 		}
 		if f.exhausted {
 			break
@@ -180,12 +179,16 @@ func (f *fuzzer) fuzz() int {
 	return ok
 }
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
-// 1 if the fuzzer should increase priority of the
-//   given input during subsequent fuzzing (for example, the input is lexically
-//   correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0 otherwise; other values are reserved for future use.
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
+// other values are reserved for future use.
 func Fuzz(input []byte) int {
 	if len(input) < 100 {
 		return 0

@@ -67,6 +67,7 @@ type fetchResult struct {
 	Uncles       []*types.Header
 	Transactions types.Transactions
 	Receipts     types.Receipts
+	Withdrawals  types.Withdrawals
 }
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
@@ -369,7 +370,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 			size += receipt.Size()
 		}
 		for _, tx := range result.Transactions {
-			size += tx.Size()
+			size += common.StorageSize(tx.Size())
 		}
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
@@ -480,9 +481,10 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // to access the queue, so they already need a lock anyway.
 //
 // Returns:
-//   item     - the fetchRequest
-//   progress - whether any progress was made
-//   throttle - if the caller should throttle for a while
+//
+//	item     - the fetchRequest
+//	progress - whether any progress was made
+//	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -631,7 +633,7 @@ func (q *queue) ExpireReceipts(peer string) int {
 // lock is not obtained in here is that the parameters already need to access
 // the queue, so they already need a lock anyway.
 func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque) int {
-	// Retrieve the request being expired and log an error if it's non-existnet,
+	// Retrieve the request being expired and log an error if it's non-existent,
 	// as there's no order of events that should lead to such expirations.
 	req := pendPool[peer]
 	if req == nil {
@@ -763,7 +765,9 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and
 // also wakes any threads waiting for data delivery.
-func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash, uncleLists [][]*types.Header, uncleListHashes []common.Hash) (int, error) {
+func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
+	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
+	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -774,12 +778,19 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		if uncleListHashes[index] != header.UncleHash {
 			return errInvalidBody
 		}
+		if header.WithdrawalsHash == nil {
+			// discard any withdrawals if we don't have a withdrawal hash set
+			withdrawalLists[index] = nil
+		} else if withdrawalListHashes[index] != *header.WithdrawalsHash {
+			return errInvalidBody
+		}
 		return nil
 	}
 
 	reconstruct := func(index int, result *fetchResult) {
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
+		result.Withdrawals = withdrawalLists[index]
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
@@ -817,7 +828,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
-
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {
@@ -857,10 +867,10 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 
 	for _, header := range request.Headers[:i] {
-		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
+		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			reconstruct(accepted, res)
 		} else {
-			// else: betweeen here and above, some other peer filled this result,
+			// else: between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
 			// not something to panic about
 			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)

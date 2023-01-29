@@ -36,7 +36,7 @@ func Handler(reg metrics.Registry) http.Handler {
 		})
 		sort.Strings(names)
 
-		// Aggregate all the metris into a Prometheus collector
+		// Aggregate all the metrics into a Prometheus collector
 		c := newCollector()
 
 		for _, name := range names {

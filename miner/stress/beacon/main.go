@@ -20,7 +20,6 @@ package main
 import (
 	"crypto/ecdsa"
 	"errors"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -81,8 +81,8 @@ var (
 	transitionDifficulty = new(big.Int).Mul(big.NewInt(20), params.MinimumDifficulty)
 
 	// blockInterval is the time interval for creating a new eth2 block
-	blockInterval    = time.Second * 3
 	blockIntervalInt = 3
+	blockInterval    = time.Second * time.Duration(blockIntervalInt)
 
 	// finalizationDist is the block distance for finalizing block
 	finalizationDist = 10
@@ -142,7 +142,7 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableDataV1, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableData, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
@@ -150,7 +150,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if timestamp <= parentTimestamp {
 		timestamp = parentTimestamp + 1
 	}
-	payloadAttribute := beacon.PayloadAttributesV1{
+	payloadAttribute := beacon.PayloadAttributes{
 		Timestamp:             timestamp,
 		Random:                common.Hash{},
 		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
@@ -164,16 +164,17 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if err != nil {
 		return nil, err
 	}
+	time.Sleep(time.Second * 5) // give enough time for block creation
 	return n.api.GetPayloadV1(*payload.PayloadID)
 }
 
-func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
+func (n *ethNode) insertBlock(eb beacon.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
 	switch n.typ {
 	case eth2NormalNode, eth2MiningNode:
-		newResp, err := n.api.ExecutePayloadV1(eb)
+		newResp, err := n.api.NewPayloadV1(eb)
 		if err != nil {
 			return err
 		} else if newResp.Status != "VALID" {
@@ -193,7 +194,7 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 	}
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableDataV1) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -237,7 +238,7 @@ func newNodeManager(genesis *core.Genesis) *nodeManager {
 	return &nodeManager{
 		close:        make(chan struct{}),
 		genesis:      genesis,
-		genesisBlock: genesis.ToBlock(nil),
+		genesisBlock: genesis.ToBlock(),
 	}
 }
 
@@ -316,17 +317,14 @@ func (mgr *nodeManager) run() {
 		}
 		nodes := mgr.getNodes(eth2MiningNode)
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
-		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
-		for _, node := range append(nodes) {
+		//nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
+		for _, node := range nodes {
 			fcState := beacon.ForkchoiceStateV1{
-				HeadBlockHash:      oldest.Hash(),
-				SafeBlockHash:      common.Hash{},
+				HeadBlockHash:      parentBlock.Hash(),
+				SafeBlockHash:      oldest.Hash(),
 				FinalizedBlockHash: oldest.Hash(),
 			}
-			// TODO(rjl493456442) finalization doesn't work properly, FIX IT
-			_ = fcState
-			_ = node
-			//node.api.ForkchoiceUpdatedV1(fcState, nil)
+			node.api.ForkchoiceUpdatedV1(fcState, nil)
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]
@@ -423,7 +421,7 @@ func main() {
 		node := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
-		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), types.HomesteadSigner{}, faucets[index])
+		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(10_000_000_000+rand.Int63n(6_553_600_000)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
@@ -461,7 +459,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 
 func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",
@@ -485,14 +483,14 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalys
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
 			GasFloor: genesis.GasLimit * 9 / 10,
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
-			Recommit: 10 * time.Second, // Disable the recommit
+			Recommit: 1 * time.Second,
 		},
 		LightServ:        100,
 		LightPeers:       10,
@@ -512,7 +510,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalys
 
 func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",
@@ -536,7 +534,7 @@ func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lesc
 		SyncMode:        downloader.LightSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		LightPeers:      10,

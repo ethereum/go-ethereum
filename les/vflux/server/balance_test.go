@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpir
 	// Initialize and customize the setup for the balance testing
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()
-	setup.clientField = setup.setup.NewField("balancTestClient", reflect.TypeOf(balanceTestClient{}))
+	setup.clientField = setup.setup.NewField("balanceTestClient", reflect.TypeOf(balanceTestClient{}))
 
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	if posExp == nil {
@@ -298,7 +298,7 @@ func TestEstimatedPriority(t *testing.T) {
 	}
 }
 
-func TestPostiveBalanceCounting(t *testing.T) {
+func TestPositiveBalanceCounting(t *testing.T) {
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 

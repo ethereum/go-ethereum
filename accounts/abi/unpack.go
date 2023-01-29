@@ -115,7 +115,6 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 
 	reflect.Copy(array, reflect.ValueOf(word[0:t.Size]))
 	return array.Interface(), nil
-
 }
 
 // forEachUnpack iteratively unpack elements.
@@ -124,7 +123,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		return nil, fmt.Errorf("cannot marshal input to array, size is negative (%d)", size)
 	}
 	if start+32*size > len(output) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), start+32*size)
+		return nil, fmt.Errorf("abi: cannot marshal into go array: offset %d would go over slice boundary (len=%d)", len(output), start+32*size)
 	}
 
 	// this value will become our slice or our array, depending on the type
@@ -163,6 +162,9 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
+		if err != nil {
+			return nil, err
+		}
 		if elem.T == ArrayTy && !isDynamicType(*elem) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -179,9 +181,6 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 			// If we have a static tuple, like (uint256, bool, uint256), these are
 			// coded as just like uint256,bool,uint256
 			virtualArgs += getTypeSize(*elem)/32 - 1
-		}
-		if err != nil {
-			return nil, err
 		}
 		retval.Field(index).Set(reflect.ValueOf(marshalledValue))
 	}
@@ -255,7 +254,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 
 // lengthPrefixPointsTo interprets a 32 byte slice as an offset and then determines which indices to look to decode the type.
 func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err error) {
-	bigOffsetEnd := big.NewInt(0).SetBytes(output[index : index+32])
+	bigOffsetEnd := new(big.Int).SetBytes(output[index : index+32])
 	bigOffsetEnd.Add(bigOffsetEnd, common.Big32)
 	outputLength := big.NewInt(int64(len(output)))
 
@@ -268,11 +267,9 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 	}
 
 	offsetEnd := int(bigOffsetEnd.Uint64())
-	lengthBig := big.NewInt(0).SetBytes(output[offsetEnd-32 : offsetEnd])
+	lengthBig := new(big.Int).SetBytes(output[offsetEnd-32 : offsetEnd])
 
-	totalSize := big.NewInt(0)
-	totalSize.Add(totalSize, bigOffsetEnd)
-	totalSize.Add(totalSize, lengthBig)
+	totalSize := new(big.Int).Add(bigOffsetEnd, lengthBig)
 	if totalSize.BitLen() > 63 {
 		return 0, 0, fmt.Errorf("abi: length larger than int64: %v", totalSize)
 	}
@@ -287,7 +284,7 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 
 // tuplePointsTo resolves the location reference for dynamic tuple.
 func tuplePointsTo(index int, output []byte) (start int, err error) {
-	offset := big.NewInt(0).SetBytes(output[index : index+32])
+	offset := new(big.Int).SetBytes(output[index : index+32])
 	outputLen := big.NewInt(int64(len(output)))
 
 	if offset.Cmp(outputLen) > 0 {

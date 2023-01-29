@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -265,7 +265,7 @@ func TestIteratorEmptyTree(t *testing.T) {
 	resolver.add(tree1.ToTXT("n"))
 
 	// Start the iterator.
-	node := make(chan *enode.Node)
+	node := make(chan *enode.Node, 1)
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)

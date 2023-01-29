@@ -19,6 +19,9 @@ package common
 
 import (
 	"encoding/hex"
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // FromHex returns the bytes represented by the hexadecimal string s.
@@ -90,6 +93,15 @@ func Hex2BytesFixed(str string, flen int) []byte {
 	hh := make([]byte, flen)
 	copy(hh[flen-len(h):flen], h)
 	return hh
+}
+
+// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
+func ParseHexOrString(str string) ([]byte, error) {
+	b, err := hexutil.Decode(str)
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		return []byte(str), nil
+	}
+	return b, err
 }
 
 // RightPadBytes zero-pads slice to the right up to length l.

@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/holiman/uint256"
@@ -80,17 +79,4 @@ func (st *Stack) peek() *uint256.Int {
 // Back returns the n'th item in stack
 func (st *Stack) Back(n int) *uint256.Int {
 	return &st.data[st.len()-n-1]
-}
-
-// Print dumps the content of the stack
-func (st *Stack) Print() {
-	fmt.Println("### stack ###")
-	if len(st.data) > 0 {
-		for i, val := range st.data {
-			fmt.Printf("%-3d  %s\n", i, val.String())
-		}
-	} else {
-		fmt.Println("-- empty --")
-	}
-	fmt.Println("#############")
 }

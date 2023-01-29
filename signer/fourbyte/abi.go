@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -75,42 +74,15 @@ func verifySelector(selector string, calldata []byte) (*decodedCallData, error) 
 	return parseCallData(calldata, string(abidata))
 }
 
-// selectorRegexp is used to validate that a 4byte database selector corresponds
-// to a valid ABI function declaration.
-//
-// Note, although uppercase letters are not part of the ABI spec, this regexp
-// still accepts it as the general format is valid. It will be rejected later
-// by the type checker.
-var selectorRegexp = regexp.MustCompile(`^([^\)]+)\(([A-Za-z0-9,\[\]]*)\)`)
-
 // parseSelector converts a method selector into an ABI JSON spec. The returned
 // data is a valid JSON string which can be consumed by the standard abi package.
 func parseSelector(unescapedSelector string) ([]byte, error) {
-	// Define a tiny fake ABI struct for JSON marshalling
-	type fakeArg struct {
-		Type string `json:"type"`
+	selector, err := abi.ParseSelector(unescapedSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse selector: %v", err)
 	}
-	type fakeABI struct {
-		Name   string    `json:"name"`
-		Type   string    `json:"type"`
-		Inputs []fakeArg `json:"inputs"`
-	}
-	// Validate the unescapedSelector and extract it's components
-	groups := selectorRegexp.FindStringSubmatch(unescapedSelector)
-	if len(groups) != 3 {
-		return nil, fmt.Errorf("invalid selector %q (%v matches)", unescapedSelector, len(groups))
-	}
-	name := groups[1]
-	args := groups[2]
 
-	// Reassemble the fake ABI and constuct the JSON
-	arguments := make([]fakeArg, 0)
-	if len(args) > 0 {
-		for _, arg := range strings.Split(args, ",") {
-			arguments = append(arguments, fakeArg{arg})
-		}
-	}
-	return json.Marshal([]fakeABI{{name, "function", arguments}})
+	return json.Marshal([]abi.SelectorMarshaling{selector})
 }
 
 // parseCallData matches the provided call data against the ABI definition and

@@ -19,14 +19,14 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/asm"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var disasmCommand = cli.Command{
+var disasmCommand = &cli.Command{
 	Action:    disasmCmd,
 	Name:      "disasm",
 	Usage:     "disassembles evm binary",
@@ -38,13 +38,13 @@ func disasmCmd(ctx *cli.Context) error {
 	switch {
 	case len(ctx.Args().First()) > 0:
 		fn := ctx.Args().First()
-		input, err := ioutil.ReadFile(fn)
+		input, err := os.ReadFile(fn)
 		if err != nil {
 			return err
 		}
 		in = string(input)
-	case ctx.GlobalIsSet(InputFlag.Name):
-		in = ctx.GlobalString(InputFlag.Name)
+	case ctx.IsSet(InputFlag.Name):
+		in = ctx.String(InputFlag.Name)
 	default:
 		return errors.New("missing filename or --input value")
 	}

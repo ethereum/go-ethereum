@@ -93,9 +93,9 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
 			hash := rawdb.ReadCanonicalHash(db, i)
-			header = rawdb.ReadHeader(db, hash, i)
-			if header == nil {
+			if header = rawdb.ReadHeader(db, hash, i); header == nil {
 				b.Fatalf("Error creating bloomBits data")
+				return
 			}
 			bc.AddBloom(uint(i-sectionIdx*sectionSize), header.Bloom)
 		}
@@ -122,31 +122,36 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 
 	b.Log("Running filter benchmarks...")
 	start = time.Now()
-	var backend *testBackend
 
+	var (
+		backend *testBackend
+		sys     *FilterSystem
+	)
 	for i := 0; i < benchFilterCnt; i++ {
 		if i%20 == 0 {
 			db.Close()
 			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 			backend = &testBackend{db: db, sections: cnt}
+			sys = NewFilterSystem(backend, Config{})
 		}
 		var addr common.Address
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
-		filter := NewRangeFilter(backend, 0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
+		filter := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
 		if _, err := filter.Logs(context.Background()); err != nil {
-			b.Error("filter.Find error:", err)
+			b.Error("filter.Logs error:", err)
 		}
 	}
+
 	d = time.Since(start)
 	b.Log("Finished running filter benchmarks")
 	b.Log(" ", d, "total  ", d/time.Duration(benchFilterCnt), "per address", d*time.Duration(1000000)/time.Duration(benchFilterCnt*cnt*sectionSize), "per million blocks")
 	db.Close()
 }
 
-var bloomBitsPrefix = []byte("bloomBits-")
-
+//nolint:unused
 func clearBloomBits(db ethdb.Database) {
+	var bloomBitsPrefix = []byte("bloomBits-")
 	fmt.Println("Clearing bloombits data...")
 	it := db.NewIterator(bloomBitsPrefix, nil)
 	for it.Next() {
@@ -171,10 +176,11 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	clearBloomBits(db)
 
+	_, sys := newTestFilterSystem(b, db, Config{})
+
 	b.Log("Running filter benchmarks...")
 	start := time.Now()
-	backend := &testBackend{db: db}
-	filter := NewRangeFilter(backend, 0, int64(*headNum), []common.Address{{}}, nil)
+	filter := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)
 	b.Log("Finished running filter benchmarks")

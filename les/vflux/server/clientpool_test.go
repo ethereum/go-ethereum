@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -410,7 +410,6 @@ func TestFreeClientKickedOut(t *testing.T) {
 	clock.Run(5 * time.Minute)
 	for i := 0; i < 10; i++ {
 		connect(pool, newPoolTestPeer(i+10, kicked))
-
 	}
 	clock.Run(0)
 

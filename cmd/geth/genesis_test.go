@@ -17,7 +17,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,19 +72,18 @@ var customGenesisTests = []struct {
 func TestCustomGenesis(t *testing.T) {
 	for i, tt := range customGenesisTests {
 		// Create a temporary data directory to use and inspect later
-		datadir := tmpdir(t)
-		defer os.RemoveAll(datadir)
+		datadir := t.TempDir()
 
 		// Initialize the data directory with the custom genesis block
 		json := filepath.Join(datadir, "genesis.json")
-		if err := ioutil.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
+		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
 		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
 		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
-			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
+			"--datadir", datadir, "--maxpeers", "0", "--port", "0", "--authrpc.port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)

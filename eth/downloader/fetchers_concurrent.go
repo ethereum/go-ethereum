@@ -47,7 +47,7 @@ type typedQueue interface {
 
 	// capacity is responsible for calculating how many items of the abstracted
 	// type a particular peer is estimated to be able to retrieve within the
-	// alloted round trip time.
+	// allotted round trip time.
 	capacity(peer *peerConnection, rtt time.Duration) int
 
 	// updateCapacity is responsible for updating how many items of the abstracted
@@ -58,7 +58,7 @@ type typedQueue interface {
 	// from the download queue to the specified peer.
 	reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
 
-	// unreserve is resposible for removing the current retrieval allocation
+	// unreserve is responsible for removing the current retrieval allocation
 	// assigned to a specific peer and placing it back into the pool to allow
 	// reassigning to some other peer.
 	unreserve(peer string) int
@@ -76,7 +76,7 @@ type typedQueue interface {
 // concurrentFetch iteratively downloads scheduled block parts, taking available
 // peers, reserving a chunk of fetch requests for each and waiting for delivery
 // or timeouts.
-func (d *Downloader) concurrentFetch(queue typedQueue) error {
+func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	// Create a delivery channel to accept responses from all peers
 	responses := make(chan *eth.Response)
 
@@ -127,7 +127,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	finished := false
 	for {
 		// Short circuit if we lost all our peers
-		if d.peers.Len() == 0 {
+		if d.peers.Len() == 0 && !beaconMode {
 			return errNoPeers
 		}
 		// If there's nothing more to fetch, wait or terminate
@@ -190,7 +190,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				req, err := queue.request(peer, request, responses)
 				if err != nil {
 					// Sending the request failed, which generally means the peer
-					// was diconnected in between assignment and network send.
+					// was disconnected in between assignment and network send.
 					// Although all peer removal operations return allocated tasks
 					// to the queue, that is async, and we can do better here by
 					// immediately pushing the unfulfilled requests.
@@ -209,7 +209,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !progressed && !throttled && len(pending) == 0 && len(idles) == d.peers.Len() && queued > 0 {
+			if !progressed && !throttled && len(pending) == 0 && len(idles) == d.peers.Len() && queued > 0 && !beaconMode {
 				return errPeersUnavailable
 			}
 		}

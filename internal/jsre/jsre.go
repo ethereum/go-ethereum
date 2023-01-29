@@ -23,8 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/dop251/goja"
@@ -254,7 +254,7 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (re *JSRE) Exec(file string) error {
-	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
+	code, err := os.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {
 		return err
 	}
@@ -320,13 +320,13 @@ func (re *JSRE) Compile(filename string, src string) (err error) {
 func (re *JSRE) loadScript(call Call) (goja.Value, error) {
 	file := call.Argument(0).ToString().String()
 	file = common.AbsolutePath(re.assetPath, file)
-	source, err := ioutil.ReadFile(file)
+	source, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
+		return nil, fmt.Errorf("could not read file %s: %v", file, err)
 	}
 	value, err := compileAndRun(re.vm, file, string(source))
 	if err != nil {
-		return nil, fmt.Errorf("Error while compiling or running script: %v", err)
+		return nil, fmt.Errorf("error while compiling or running script: %v", err)
 	}
 	return value, nil
 }

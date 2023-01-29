@@ -36,7 +36,6 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
-
 	// PART I
 	// create snapshot from ring network
 
@@ -204,7 +203,6 @@ OuterTwo:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
@@ -448,7 +446,7 @@ func TestGetNodeIDs(t *testing.T) {
 	numNodes := 5
 	nodes, err := createTestNodes(numNodes, network)
 	if err != nil {
-		t.Fatalf("Could not creat test nodes %v", err)
+		t.Fatalf("Could not create test nodes %v", err)
 	}
 
 	gotNodeIDs := network.GetNodeIDs()
@@ -497,7 +495,7 @@ func TestGetNodes(t *testing.T) {
 	numNodes := 5
 	nodes, err := createTestNodes(numNodes, network)
 	if err != nil {
-		t.Fatalf("Could not creat test nodes %v", err)
+		t.Fatalf("Could not create test nodes %v", err)
 	}
 
 	gotNodes := network.GetNodes()
@@ -693,7 +691,6 @@ func BenchmarkMinimalService(b *testing.B) {
 }
 
 func benchmarkMinimalServiceTmp(b *testing.B) {
-
 	// stop timer to discard setup time pollution
 	args := strings.Split(b.Name(), "/")
 	nodeCount, err := strconv.ParseInt(args[2], 10, 16)
