@@ -38,28 +38,28 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 	ret := new(big.Int).SetBytes(b)
 
 	if typ.T == UintTy {
-		v64, isu64 := ret.Uint64(), ret.IsUint64()
+		u64, isu64 := ret.Uint64(), ret.IsUint64()
 		switch typ.Size {
 		case 8:
-			if !isu64 || v64 >= math.MaxUint8 {
+			if !isu64 || u64 >= math.MaxUint8 {
 				return nil, errBadUint8
 			}
-			return byte(v64), nil
+			return byte(u64), nil
 		case 16:
-			if !isu64 || v64 >= math.MaxUint16 {
+			if !isu64 || u64 >= math.MaxUint16 {
 				return nil, errBadUint16
 			}
-			return uint16(v64), nil
+			return uint16(u64), nil
 		case 32:
-			if !isu64 || v64 >= math.MaxUint32 {
+			if !isu64 || u64 >= math.MaxUint32 {
 				return nil, errBadUint32
 			}
-			return uint32(v64), nil
+			return uint32(u64), nil
 		case 64:
-			if !isu64 || v64 > math.MaxUint64 {
+			if !isu64 {
 				return nil, errBadUint64
 			}
-			return v64, nil
+			return u64, nil
 		default:
 			// the only case left for unsigned integer is uint256.
 			return ret, nil
@@ -74,28 +74,28 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 		ret.Add(ret, common.Big1)
 		ret.Neg(ret)
 	}
-	iv64, isi64 := ret.Int64(), ret.IsInt64()
+	i64, isi64 := ret.Int64(), ret.IsInt64()
 	switch typ.Size {
 	case 8:
-		if !isi64 || iv64 < math.MinInt8 || iv64 > math.MaxInt8 {
+		if !isi64 || i64 < math.MinInt8 || i64 > math.MaxInt8 {
 			return nil, errBadInt8
 		}
-		return int8(iv64), nil
+		return int8(i64), nil
 	case 16:
-		if !isi64 || iv64 < math.MinInt16 || iv64 > math.MaxInt16 {
+		if !isi64 || i64 < math.MinInt16 || i64 > math.MaxInt16 {
 			return nil, errBadInt16
 		}
-		return int16(iv64), nil
+		return int16(i64), nil
 	case 32:
-		if !isi64 || iv64 < math.MinInt32 || iv64 > math.MaxInt32 {
+		if !isi64 || i64 < math.MinInt32 || i64 > math.MaxInt32 {
 			return nil, errBadInt32
 		}
-		return int32(iv64), nil
+		return int32(i64), nil
 	case 64:
-		if !isi64 || iv64 < math.MinInt64 || iv64 > math.MaxInt64 {
+		if !isi64 {
 			return nil, errBadInt64
 		}
-		return iv64, nil
+		return i64, nil
 	default:
 		// the only case left for integer is int256
 
