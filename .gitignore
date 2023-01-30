@@ -55,4 +55,3 @@ go.sum
 cicd/devnet/terraform/.terraform
 cicd/devnet/.pwd
 cicd/devnet/tmp/
-cicd/devnet/work/

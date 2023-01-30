@@ -15,6 +15,17 @@ XDC:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/XDC\" to launch XDC."
 
+XDC-devnet-local:
+	@echo "Rebuild the XDC first"
+	mv common/constants.go common/constants.go.tmp
+	cp common/constants/constants.go.devnet common/constants.go
+	make XDC
+	rm -rf common/constants.go
+	mv common/constants.go.tmp common/constants.go
+
+	@echo "Run the devnet script in local"
+	cd cicd/devnet && ./start-local-devnet.sh
+
 gc:
 	go run build/ci.go install ./cmd/gc
 	@echo "Done building."
