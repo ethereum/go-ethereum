@@ -25,6 +25,7 @@ import (
 
 // ContractRef is a reference to the contract's backing object
 type ContractRef interface {
+	// Address returns the contract's address
 	Address() common.Address
 }
 
@@ -58,12 +59,13 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	Gas   uint64
-	value *big.Int
+	Gas          uint64
+	value        *big.Int
+	isPrecompile bool
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
+func NewContract(caller, object ContractRef, value *big.Int, gas uint64) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
 
 	if parent, ok := caller.(*Contract); ok {
@@ -82,7 +84,34 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 	return c
 }
 
+// NewPrecompile returns a new instance of a precompiled contract environment for the execution of EVM.
+func NewPrecompile(caller, object ContractRef, value *big.Int, gas uint64) *Contract {
+	c := &Contract{
+		CallerAddress: caller.Address(),
+		caller:        caller,
+		self:          object,
+		isPrecompile:  true,
+	}
+
+	// Gas should be a pointer so it can safely be reduced through the run
+	// This pointer will be off the state transition
+	c.Gas = gas
+	// ensures a value is set
+	c.value = value
+
+	return c
+}
+
+// IsPrecompile returns true if the contract is a precompiled contract environment
+func (c Contract) IsPrecompile() bool {
+	return c.isPrecompile
+}
+
 func (c *Contract) validJumpdest(dest *uint256.Int) bool {
+	if c.isPrecompile {
+		return false
+	}
+
 	udest, overflow := dest.Uint64WithOverflow()
 	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
 	// Don't bother checking for JUMPDEST in that case.
@@ -99,6 +128,10 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 // isCode returns true if the provided PC location is an actual opcode, as
 // opposed to a data-segment following a PUSHN operation.
 func (c *Contract) isCode(udest uint64) bool {
+	if c.isPrecompile {
+		return false
+	}
+
 	// Do we already have an analysis laying around?
 	if c.analysis != nil {
 		return c.analysis.codeSegment(udest)
@@ -132,6 +165,9 @@ func (c *Contract) isCode(udest uint64) bool {
 // AsDelegate sets the contract to be a delegate call and returns the current
 // contract (for chaining calls)
 func (c *Contract) AsDelegate() *Contract {
+	if c.isPrecompile {
+		return c
+	}
 	// NOTE: caller must, at all times be a contract. It should never happen
 	// that caller is something other than a Contract.
 	parent := c.caller.(*Contract)
@@ -180,6 +216,10 @@ func (c *Contract) Value() *big.Int {
 // SetCallCode sets the code of the contract and address of the backing data
 // object
 func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
+	if c.isPrecompile {
+		return
+	}
+
 	c.Code = code
 	c.CodeHash = hash
 	c.CodeAddr = addr
@@ -188,6 +228,10 @@ func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []by
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
 // In case hash is not provided, the jumpdest analysis will not be saved to the parent context
 func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash) {
+	if c.isPrecompile {
+		return
+	}
+
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr

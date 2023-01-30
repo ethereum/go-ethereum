@@ -37,6 +37,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### State Machie Breaking
+
+* [#10](https://github.com/evmos/go-ethereum/pull/10) Support stateful precompiled contracts.
+
 ### Improvements
 
 * [#8](https://github.com/evmos/go-ethereum/pull/8) Add `Address` function to `PrecompiledContract` interface.
