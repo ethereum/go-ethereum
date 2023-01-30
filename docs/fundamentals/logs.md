@@ -5,7 +5,7 @@ description: Geth's log messages explained
 
 A Geth node continually reports messages to the console allowing users to monitor Geth's current status in real-time. The logs indicate when Geth is running normally and indicates when some attention is required. However, reading these logs can be difficult for new users. This page will help to interpret the log messages to better understand what Geth is doing.
 
-Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth GitHub](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-descrining that they do not require additional explanation.
+Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth GitHub](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-describing that they do not require additional explanation.
 
 ## Configuring log messages {#configuring-log-messages}
 
