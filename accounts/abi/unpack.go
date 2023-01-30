@@ -41,17 +41,17 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 		u64, isu64 := ret.Uint64(), ret.IsUint64()
 		switch typ.Size {
 		case 8:
-			if !isu64 || u64 >= math.MaxUint8 {
+			if !isu64 || u64 > math.MaxUint8 {
 				return nil, errBadUint8
 			}
 			return byte(u64), nil
 		case 16:
-			if !isu64 || u64 >= math.MaxUint16 {
+			if !isu64 || u64 > math.MaxUint16 {
 				return nil, errBadUint16
 			}
 			return uint16(u64), nil
 		case 32:
-			if !isu64 || u64 >= math.MaxUint32 {
+			if !isu64 || u64 > math.MaxUint32 {
 				return nil, errBadUint32
 			}
 			return uint32(u64), nil
