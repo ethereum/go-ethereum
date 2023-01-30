@@ -176,6 +176,12 @@ func (t *flatCallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
+
+	// Child calls must have a value, even if it's zero.
+	if value == nil {
+		t.tracer.callstack[len(t.tracer.callstack)-1].Value = big.NewInt(0)
+	}
+
 	// Delegatecall has same value as parent call.
 	// CallTracer doesn't report this "inherited" value.
 	if typ == vm.DELEGATECALL {
