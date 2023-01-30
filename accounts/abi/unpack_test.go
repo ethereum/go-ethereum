@@ -946,7 +946,6 @@ func TestOOMMaliciousInput(t *testing.T) {
 }
 
 func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
-
 	var encodeABI Arguments
 	uint256Ty, err := NewType("uint256", "", nil)
 	if err != nil {
