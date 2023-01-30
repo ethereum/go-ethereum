@@ -281,7 +281,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 			Input:                origin.Input,
 		}
 		// Get a new instance of the EVM.
-		msg, err := txArgs.ToMessage(0, nil)
+		msg, err := txArgs.ToMessage(api.e.APIBackend.RPCGasCap(), header.BaseFee)
 		if err != nil {
 			preResList = append(preResList, PreResult{
 				Error: PreError{

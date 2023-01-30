@@ -195,14 +195,17 @@ func (st *StateTransition) to() common.Address {
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
 	mgval = mgval.Mul(mgval, st.gasPrice)
+	if st.evm.Config.PreExec {
+		mgval = big.NewInt(0)
+	}
 	balanceCheck := mgval
 	if st.gasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
+		if st.evm.Config.PreExec {
+			balanceCheck = big.NewInt(0)
+		}
 		balanceCheck.Add(balanceCheck, st.value)
-	}
-	if st.evm.Config.PreExec {
-		balanceCheck = big.NewInt(0)
 	}
 	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
