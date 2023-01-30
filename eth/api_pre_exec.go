@@ -6,6 +6,7 @@ import (
 	"hash"
 	"math"
 	"math/big"
+	"math/rand"
 	"strings"
 
 	txtrace "github.com/DeBankDeFi/etherlib/pkg/txtracev1"
@@ -158,8 +159,10 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 
 	tracer = txtrace.NewOeTracer(nil)
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer})
+	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer, PreExec: true})
 	vmenv.Context.BaseFee = big.NewInt(0)
+	vmenv.Context.BlockNumber.Add(vmenv.Context.BlockNumber, big.NewInt(rand.Int63n(6)+6))
+	vmenv.Context.Time.Add(vmenv.Context.Time, big.NewInt(rand.Int63n(60)+30))
 
 	// Call Prepare to clear out the statedb access list
 	d.stateDb.Prepare(d.tx.Hash(), txIndex)
@@ -290,8 +293,10 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		txHash := common.BigToHash(big.NewInt(int64(i)))
 		tracer := txtrace2.NewOeTracer(nil, header.Hash(), header.Number, txHash, uint64(i))
-		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
+		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer, PreExec: true})
 		evm.Context.BaseFee = big.NewInt(0)
+		evm.Context.BlockNumber.Add(evm.Context.BlockNumber, big.NewInt(rand.Int63n(6)+6))
+		evm.Context.Time.Add(evm.Context.Time, big.NewInt(rand.Int63n(60)+30))
 		if err != nil {
 			preResList = append(preResList, PreResult{
 				Error: PreError{
