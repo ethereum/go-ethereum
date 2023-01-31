@@ -28,68 +28,38 @@ import (
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	data       []byte
-	accessList types.AccessList
-	isFake     bool
-}
-
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList types.AccessList, isFake bool) *Message {
-	return &Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		gasFeeCap:  gasFeeCap,
-		gasTipCap:  gasTipCap,
-		data:       data,
-		accessList: accessList,
-		isFake:     isFake,
-	}
+	To         *common.Address
+	From       common.Address
+	Nonce      uint64
+	Value      *big.Int
+	GasLimit   uint64
+	GasPrice   *big.Int
+	GasFeeCap  *big.Int
+	GasTipCap  *big.Int
+	Data       []byte
+	AccessList types.AccessList
+	IsFake     bool
 }
 
 // AsMessage returns the transaction as a core.Message.
 func AsMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		isFake:     false,
+		Nonce:      tx.Nonce(),
+		GasLimit:   tx.Gas(),
+		GasPrice:   new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:  new(big.Int).Set(tx.GasTipCap()),
+		To:         tx.To(),
+		Value:      tx.Value(),
+		Data:       tx.Data(),
+		AccessList: tx.AccessList(),
+		IsFake:     false,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+		msg.GasPrice = math.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
 	}
 	var err error
-	msg.from, err = types.Sender(s, tx)
+	msg.From, err = types.Sender(s, tx)
 	return msg, err
 }
-
-// TODO: Get rid of these accessor methods. Message should remain a simple data-only struct whose
-// values are accessed directly.
-func (m *Message) From() common.Address         { return m.from }
-func (m *Message) To() *common.Address          { return m.to }
-func (m *Message) GasPrice() *big.Int           { return m.gasPrice }
-func (m *Message) GasFeeCap() *big.Int          { return m.gasFeeCap }
-func (m *Message) GasTipCap() *big.Int          { return m.gasTipCap }
-func (m *Message) Value() *big.Int              { return m.amount }
-func (m *Message) Gas() uint64                  { return m.gasLimit }
-func (m *Message) Nonce() uint64                { return m.nonce }
-func (m *Message) Data() []byte                 { return m.data }
-func (m *Message) AccessList() types.AccessList { return m.accessList }
-func (m *Message) IsFake() bool                 { return m.isFake }

@@ -648,7 +648,18 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	from := stateDB.GetOrNewStateObject(call.From)
 	from.SetBalance(math.MaxBig256)
 	// Execute the call.
-	msg := core.NewMessage(call.From, call.To, 0, call.Value, call.Gas, call.GasPrice, call.GasFeeCap, call.GasTipCap, call.Data, call.AccessList, true)
+	msg := &core.Message{
+		From:       call.From,
+		To:         call.To,
+		Value:      call.Value,
+		GasLimit:   call.Gas,
+		GasPrice:   call.GasPrice,
+		GasFeeCap:  call.GasFeeCap,
+		GasTipCap:  call.GasTipCap,
+		Data:       call.Data,
+		AccessList: call.AccessList,
+		IsFake:     true,
+	}
 	txContext := core.NewEVMTxContext(msg)
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	// Create a new environment which holds all relevant information

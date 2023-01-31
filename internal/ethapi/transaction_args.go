@@ -264,7 +264,18 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := core.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+	msg := &core.Message{
+		From:       addr,
+		To:         args.To,
+		Value:      value,
+		GasLimit:   gas,
+		GasPrice:   gasPrice,
+		GasFeeCap:  gasFeeCap,
+		GasTipCap:  gasTipCap,
+		Data:       data,
+		AccessList: accessList,
+		IsFake:     true,
+	}
 	return msg, nil
 }
 

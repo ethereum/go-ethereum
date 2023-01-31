@@ -397,8 +397,19 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		return nil, fmt.Errorf("no gas price provided")
 	}
 
-	msg := core.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
-		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, false)
+	msg := &core.Message{
+		From:       from,
+		To:         to,
+		Nonce:      tx.Nonce,
+		Value:      value,
+		GasLimit:   gasLimit,
+		GasPrice:   gasPrice,
+		GasFeeCap:  tx.MaxFeePerGas,
+		GasTipCap:  tx.MaxPriorityFeePerGas,
+		Data:       data,
+		AccessList: accessList,
+		IsFake:     false,
+	}
 	return msg, nil
 }
 
