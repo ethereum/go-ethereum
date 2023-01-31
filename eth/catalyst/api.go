@@ -762,23 +762,18 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 // GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types.Body {
-	var bodies []*types.Body
-	for _, hash := range hashes {
+	var bodies = make([]*types.Body, len(hashes))
+	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		if block == nil {
-			bodies = append(bodies, nil)
 			continue
 		}
 		body := block.Body()
-		if body == nil {
-			bodies = append(bodies, nil)
-			continue
-		}
 		// We only want to return the transactions, not uncles
 		if len(body.Uncles) != 0 {
 			body.Uncles = make([]*types.Header, 0)
 		}
-		bodies = append(bodies, body)
+		bodies[i] = body
 	}
 	return bodies
 }
@@ -786,11 +781,12 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*types.Body {
-	var bodies []*types.Body
+        var bodies []*types.Body
 	if api.eth.BlockChain().CurrentBlock().NumberU64() < start {
 		// Return [] if the requested range is past our latest block
-		return bodies
+		return 
 	}
+	bodies = make([]*types.Body, count)
 	for i := uint64(0); i < count; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(start + i)
 		if block == nil {
@@ -802,7 +798,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*types
 			bodies = append(bodies, nil)
 			continue
 		}
-		// We only want to return the transactions, not uncles
+		// We only want to return the transactions and withdrawals, not uncles
 		if len(body.Uncles) != 0 {
 			body.Uncles = make([]*types.Header, 0)
 		}
