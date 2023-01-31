@@ -162,7 +162,7 @@ geth --datadir data --networkid 15 --nat extip:172.16.254.4
 The 'node record' of the bootnode can be extracted using the JS console:
 
 ```sh
-geth attach data/geth.ipc --exec admin.nodeInfo.enr
+geth attach --exec admin.nodeInfo.enr data/geth.ipc
 ```
 
 This command should print a base64 string such as the following example. Other nodes will use the information contained in the bootstrap node record to connect to the peer-to-peer network.
