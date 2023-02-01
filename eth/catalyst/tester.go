@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 )
@@ -50,10 +50,7 @@ func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, block *type
 	return cl, nil
 }
 
-// Start launches the full-sync tester by spinning up a background thread
-// for keeping firing NewPayload-UpdateForkChoice combos with the provided
-// target block, it may or may not trigger the beacon sync depends on if
-// there are protocol peers connected.
+// Start launches the beacon sync with provided sync target.
 func (tester *FullSyncTester) Start() error {
 	tester.wg.Add(1)
 	go func() {
@@ -70,19 +67,19 @@ func (tester *FullSyncTester) Start() error {
 					continue
 				}
 				// Short circuit in case the target block is already stored
-				// locally.
+				// locally. TODO(somehow terminate the node stack if target
+				// is reached).
 				if tester.api.eth.BlockChain().HasBlock(tester.block.Hash(), tester.block.NumberU64()) {
 					log.Info("Full-sync target reached", "number", tester.block.NumberU64(), "hash", tester.block.Hash())
 					return
 				}
-				// Shoot out consensus events in order to trigger syncing.
-				data := beacon.BlockToExecutableData(tester.block)
-				tester.api.NewPayloadV1(*data)
-				tester.api.ForkchoiceUpdatedV1(beacon.ForkchoiceStateV1{
-					HeadBlockHash:      tester.block.Hash(),
-					SafeBlockHash:      tester.block.Hash(),
-					FinalizedBlockHash: tester.block.Hash(),
-				}, nil)
+				// Trigger beacon sync with the provided block header as
+				// trusted chain head.
+				err := tester.api.eth.Downloader().BeaconSync(downloader.FullSync, tester.block.Header())
+				if err != nil {
+					log.Info("Failed to beacon sync", "err", err)
+				}
+
 			case <-tester.closed:
 				return
 			}

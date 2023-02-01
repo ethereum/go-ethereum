@@ -26,38 +26,41 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-//go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
+//go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
-// PayloadAttributesV1 structure described at https://github.com/ethereum/execution-apis/pull/74
-type PayloadAttributesV1 struct {
-	Timestamp             uint64         `json:"timestamp"     gencodec:"required"`
-	Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
-	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
+// PayloadAttributes describes the environment context in which a block should
+// be built.
+type PayloadAttributes struct {
+	Timestamp             uint64              `json:"timestamp"             gencodec:"required"`
+	Random                common.Hash         `json:"prevRandao"            gencodec:"required"`
+	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
+	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 }
 
-// JSON type overrides for PayloadAttributesV1.
+// JSON type overrides for PayloadAttributes.
 type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
+//go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
 
-// ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/tree/main/src/engine/specification.md
-type ExecutableDataV1 struct {
-	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
-	FeeRecipient  common.Address `json:"feeRecipient"  gencodec:"required"`
-	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
-	Random        common.Hash    `json:"prevRandao"    gencodec:"required"`
-	Number        uint64         `json:"blockNumber"   gencodec:"required"`
-	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
-	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
-	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
-	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
-	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
-	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
+// ExecutableData is the data necessary to execute an EL payload.
+type ExecutableData struct {
+	ParentHash    common.Hash         `json:"parentHash"    gencodec:"required"`
+	FeeRecipient  common.Address      `json:"feeRecipient"  gencodec:"required"`
+	StateRoot     common.Hash         `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot  common.Hash         `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom     []byte              `json:"logsBloom"     gencodec:"required"`
+	Random        common.Hash         `json:"prevRandao"    gencodec:"required"`
+	Number        uint64              `json:"blockNumber"   gencodec:"required"`
+	GasLimit      uint64              `json:"gasLimit"      gencodec:"required"`
+	GasUsed       uint64              `json:"gasUsed"       gencodec:"required"`
+	Timestamp     uint64              `json:"timestamp"     gencodec:"required"`
+	ExtraData     []byte              `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas *big.Int            `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
+	Transactions  [][]byte            `json:"transactions"  gencodec:"required"`
+	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 }
 
 // JSON type overrides for executableData.
@@ -70,6 +73,18 @@ type executableDataMarshaling struct {
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
+}
+
+//go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
+
+type ExecutionPayloadEnvelope struct {
+	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+}
+
+// JSON type overrides for ExecutionPayloadEnvelope.
+type executionPayloadEnvelopeMarshaling struct {
+	BlockValue *hexutil.Big
 }
 
 type PayloadStatusV1 struct {
@@ -141,8 +156,10 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 //	uncleHash = emptyUncleHash
 //	difficulty = 0
 //
-// and that the blockhash of the constructed block matches the parameters.
-func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
+// and that the blockhash of the constructed block matches the parameters. Nil
+// Withdrawals value will propagate through the returned block. Empty
+// Withdrawals value must be passed via non-nil, length 0 value in params.
+func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -157,34 +174,43 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
-	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.FeeRecipient,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      new(big.Int).SetUint64(params.Number),
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-		BaseFee:     params.BaseFeePerGas,
-		Extra:       params.ExtraData,
-		MixDigest:   params.Random,
+	// Only set withdrawalsRoot if it is non-nil. This allows CLs to use
+	// ExecutableData before withdrawals are enabled by marshaling
+	// Withdrawals as the json null value.
+	var withdrawalsRoot *common.Hash
+	if params.Withdrawals != nil {
+		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
+		withdrawalsRoot = &h
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	header := &types.Header{
+		ParentHash:      params.ParentHash,
+		UncleHash:       types.EmptyUncleHash,
+		Coinbase:        params.FeeRecipient,
+		Root:            params.StateRoot,
+		TxHash:          types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:     params.ReceiptsRoot,
+		Bloom:           types.BytesToBloom(params.LogsBloom),
+		Difficulty:      common.Big0,
+		Number:          new(big.Int).SetUint64(params.Number),
+		GasLimit:        params.GasLimit,
+		GasUsed:         params.GasUsed,
+		Time:            params.Timestamp,
+		BaseFee:         params.BaseFeePerGas,
+		Extra:           params.ExtraData,
+		MixDigest:       params.Random,
+		WithdrawalsHash: withdrawalsRoot,
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
 	return block, nil
 }
 
-// BlockToExecutableData constructs the executableDataV1 structure by filling the
+// BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
-	return &ExecutableDataV1{
+func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadEnvelope {
+	data := &ExecutableData{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
 		FeeRecipient:  block.Coinbase(),
@@ -199,5 +225,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
+		Withdrawals:   block.Withdrawals(),
 	}
+	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
 }

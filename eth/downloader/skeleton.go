@@ -520,7 +520,7 @@ func (s *skeleton) initSync(head *types.Header) {
 				}
 				break
 			}
-			// If the last subchain can be extended, we're lucky. Otherwise create
+			// If the last subchain can be extended, we're lucky. Otherwise, create
 			// a new subchain sync task.
 			var extended bool
 			if n := len(s.progress.Subchains); n > 0 {
@@ -977,8 +977,14 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// the expected new sync cycle after some propagated blocks. Log
 				// it for debugging purposes, explicitly clean and don't escalate.
 				case subchains == 2 && s.progress.Subchains[1].Head == s.progress.Subchains[1].Tail:
-					log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
-					rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					// Remove the leftover skeleton header associated with old
+					// skeleton chain only if it's not covered by the current
+					// skeleton range.
+					if s.progress.Subchains[1].Head < s.progress.Subchains[0].Tail {
+						log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
+						rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					}
+					// Drop the leftover skeleton chain since it's stale.
 					s.progress.Subchains = s.progress.Subchains[:1]
 
 				// If we have more than one header or more than one leftover chain,
@@ -1096,6 +1102,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	var (
 		start = s.progress.Subchains[0].Tail // start deleting from the first known header
 		end   = number                       // delete until the requested threshold
+		batch = s.db.NewBatch()
 	)
 	s.progress.Subchains[0].Tail = number
 	s.progress.Subchains[0].Next = filled.ParentHash
@@ -1105,16 +1112,13 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		// subchain forward to keep tracking the node's block imports
 		end = s.progress.Subchains[0].Head + 1 // delete the entire original range, including the head
 		s.progress.Subchains[0].Head = number  // assign a new head (tail is already assigned to this)
-	}
-	// Execute the trimming and the potential rewiring of the progress
-	batch := s.db.NewBatch()
 
-	if end != number {
 		// The entire original skeleton chain was deleted and a new one
 		// defined. Make sure the new single-header chain gets pushed to
 		// disk to keep internal state consistent.
 		rawdb.WriteSkeletonHeader(batch, filled)
 	}
+	// Execute the trimming and the potential rewiring of the progress
 	s.saveSyncStatus(batch)
 	for n := start; n < end; n++ {
 		// If the batch grew too big, flush it and continue with a new batch.
@@ -1170,8 +1174,13 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, err error) 
 		return nil, nil, err
 	}
 	head = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head)
+	if head == nil {
+		return nil, nil, fmt.Errorf("head skeleton header %d is missing", progress.Subchains[0].Head)
+	}
 	tail = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Tail)
-
+	if tail == nil {
+		return nil, nil, fmt.Errorf("tail skeleton header %d is missing", progress.Subchains[0].Tail)
+	}
 	return head, tail, nil
 }
 

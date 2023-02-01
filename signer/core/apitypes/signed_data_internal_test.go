@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestBytesPadding(t *testing.T) {
@@ -195,5 +196,40 @@ func TestParseInteger(t *testing.T) {
 		if tt.exp.Cmp(res) != 0 {
 			t.Errorf("test %d, got %v expected %v", i, res, tt.exp)
 		}
+	}
+}
+
+func TestConvertStringDataToSlice(t *testing.T) {
+	slice := []string{"a", "b", "c"}
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConvertUint256DataToSlice(t *testing.T) {
+	slice := []*math.HexOrDecimal256{
+		math.NewHexOrDecimal256(1),
+		math.NewHexOrDecimal256(2),
+		math.NewHexOrDecimal256(3),
+	}
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConvertAddressDataToSlice(t *testing.T) {
+	slice := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000002"),
+		common.HexToAddress("0x0000000000000000000000000000000000000003"),
+	}
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

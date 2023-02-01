@@ -44,7 +44,7 @@ var (
 	testBalance = big.NewInt(2e18)
 )
 
-func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Block) {
+func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*types.Block, []*types.Header, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
 		Config:    &config,
@@ -53,21 +53,33 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Bloc
 		Timestamp: 9000,
 		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), n, nil)
-	totalDifficulty := big.NewInt(0)
+	// Pre-merge blocks
+	db, preBLocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), pre, nil)
+	totalDifficulty := new(big.Int).Set(params.GenesisDifficulty)
 
-	var headers []*types.Header
-	for _, b := range blocks {
+	var preHeaders []*types.Header
+	for _, b := range preBLocks {
 		totalDifficulty.Add(totalDifficulty, b.Difficulty())
-		headers = append(headers, b.Header())
+		preHeaders = append(preHeaders, b.Header())
 	}
 	config.TerminalTotalDifficulty = totalDifficulty
+	// Post-merge blocks
+	postBlocks, _ := core.GenerateChain(genesis.Config,
+		preBLocks[len(preBLocks)-1], ethash.NewFaker(), db, post,
+		func(i int, b *core.BlockGen) {
+			b.SetPoS()
+		})
 
-	return genesis, headers, blocks
+	var postHeaders []*types.Header
+	for _, b := range postBlocks {
+		postHeaders = append(postHeaders, b.Header())
+	}
+
+	return genesis, preHeaders, preBLocks, postHeaders, postBlocks
 }
 
 func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
-	genesis, headers, blocks := generatePreMergeChain(10)
+	genesis, headers, blocks, _, _ := generatePreMergeChain(10, 0)
 	n, lesService := startLesService(t, genesis, headers)
 	defer n.Close()
 
@@ -83,21 +95,21 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 }
 
 func TestExecutePayloadV1(t *testing.T) {
-	genesis, headers, blocks := generatePreMergeChain(10)
-	n, lesService := startLesService(t, genesis, headers[:9])
+	genesis, headers, _, _, postBlocks := generatePreMergeChain(10, 2)
+	n, lesService := startLesService(t, genesis, headers)
 	lesService.Merger().ReachTTD()
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
 	fcState := beacon.ForkchoiceStateV1{
-		HeadBlockHash:      blocks[8].Hash(),
+		HeadBlockHash:      postBlocks[0].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
 	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("Failed to update head %v", err)
 	}
-	block := blocks[9]
+	block := postBlocks[0]
 
 	fakeBlock := types.NewBlock(&types.Header{
 		ParentHash:  block.ParentHash(),
@@ -118,7 +130,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		BaseFee:     block.BaseFee(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(beacon.ExecutableDataV1{
+	_, err := api.ExecutePayloadV1(beacon.ExecutableData{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),

@@ -119,9 +119,6 @@ func TestGethClient(t *testing.T) {
 			"TestGetNodeInfo",
 			func(t *testing.T) { testGetNodeInfo(t, client) },
 		}, {
-			"TestSetHead",
-			func(t *testing.T) { testSetHead(t, client) },
-		}, {
 			"TestSubscribePendingTxHashes",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
@@ -138,6 +135,9 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestAccessList",
 			func(t *testing.T) { testAccessList(t, client) },
+		}, {
+			"TestSetHead",
+			func(t *testing.T) { testSetHead(t, client) },
 		},
 	}
 	for _, tt := range tests {
@@ -299,7 +299,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Check that the transaction was send over the channel
+	// Check that the transaction was sent over the channel
 	hash := <-ch
 	if hash != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
@@ -333,7 +333,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Check that the transaction was send over the channel
+	// Check that the transaction was sent over the channel
 	tx = <-ch
 	if tx.Hash() != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())

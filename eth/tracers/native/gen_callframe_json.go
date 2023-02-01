@@ -38,7 +38,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Input = c.Input
 	enc.Output = c.Output
 	enc.Error = c.Error
-	enc.Revertal = c.Revertal
+	enc.RevertReason = c.RevertReason
 	enc.Calls = c.Calls
 	enc.Logs = c.Logs
 	enc.Value = (*hexutil.Big)(c.Value)
@@ -89,8 +89,8 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	if dec.Error != nil {
 		c.Error = *dec.Error
 	}
-	if dec.Revertal != nil {
-		c.Revertal = *dec.Revertal
+	if dec.RevertReason != nil {
+		c.RevertReason = *dec.RevertReason
 	}
 	if dec.Calls != nil {
 		c.Calls = dec.Calls

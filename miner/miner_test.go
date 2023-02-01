@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -87,7 +86,8 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 func TestMiner(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
-	miner.Start(common.HexToAddress("0x12345"))
+
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Start the downloader
 	mux.Post(downloader.StartEvent{})
@@ -115,7 +115,8 @@ func TestMiner(t *testing.T) {
 func TestMinerDownloaderFirstFails(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
-	miner.Start(common.HexToAddress("0x12345"))
+
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Start the downloader
 	mux.Post(downloader.StartEvent{})
@@ -147,7 +148,8 @@ func TestMinerDownloaderFirstFails(t *testing.T) {
 func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
-	miner.Start(common.HexToAddress("0x12345"))
+
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Start the downloader
 	mux.Post(downloader.StartEvent{})
@@ -160,7 +162,7 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 	miner.Stop()
 	waitForMiningState(t, miner, false)
 
-	miner.Start(common.HexToAddress("0x678910"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	miner.Stop()
@@ -171,13 +173,13 @@ func TestStartWhileDownload(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 	waitForMiningState(t, miner, false)
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.StartEvent{})
 	waitForMiningState(t, miner, false)
 	// Starting the miner after the downloader should not work
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, false)
 }
 
@@ -185,7 +187,7 @@ func TestStartStopMiner(t *testing.T) {
 	miner, _, cleanup := createMiner(t)
 	defer cleanup(false)
 	waitForMiningState(t, miner, false)
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	miner.Stop()
 	waitForMiningState(t, miner, false)
@@ -195,7 +197,7 @@ func TestCloseMiner(t *testing.T) {
 	miner, _, cleanup := createMiner(t)
 	defer cleanup(true)
 	waitForMiningState(t, miner, false)
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Terminate the miner and wait for the update loop to run
 	miner.Close()
@@ -207,21 +209,21 @@ func TestCloseMiner(t *testing.T) {
 func TestMinerSetEtherbase(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
-	// Start with a 'bad' mining address
-	miner.Start(common.HexToAddress("0xdead"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Start the downloader
 	mux.Post(downloader.StartEvent{})
 	waitForMiningState(t, miner, false)
 	// Now user tries to configure proper mining address
-	miner.Start(common.HexToAddress("0x1337"))
+	miner.Start()
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
-
 	waitForMiningState(t, miner, true)
-	// The miner should now be using the good address
-	if got, exp := miner.coinbase, common.HexToAddress("0x1337"); got != exp {
-		t.Fatalf("Wrong coinbase, got %x expected %x", got, exp)
+
+	coinbase := common.HexToAddress("0xdeedbeef")
+	miner.SetEtherbase(coinbase)
+	if addr := miner.worker.etherbase(); addr != coinbase {
+		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
 	}
 }
 
@@ -247,10 +249,9 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 		Etherbase: common.HexToAddress("123456789"),
 	}
 	// Create chainConfig
-	memdb := memorydb.New()
-	chainDB := rawdb.NewDatabase(memdb)
+	chainDB := rawdb.NewMemoryDatabase()
 	genesis := core.DeveloperGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, genesis)
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}

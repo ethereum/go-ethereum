@@ -79,6 +79,17 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// All methods provided over the engine endpoint.
+var caps = []string{
+	"engine_forkchoiceUpdatedV1",
+	"engine_forkchoiceUpdatedV2",
+	"engine_exchangeTransitionConfigurationV1",
+	"engine_getPayloadV1",
+	"engine_getPayloadV2",
+	"engine_newPayloadV1",
+	"engine_newPayloadV2",
+}
+
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 
@@ -155,7 +166,39 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 //
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
+	if payloadAttributes != nil && payloadAttributes.Withdrawals != nil {
+		return beacon.STATUS_INVALID, fmt.Errorf("withdrawals not supported in V1")
+	}
+	return api.forkchoiceUpdated(update, payloadAttributes)
+}
+
+// ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload attributes.
+func (api *ConsensusAPI) ForkchoiceUpdatedV2(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
+	if payloadAttributes != nil {
+		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
+			return beacon.STATUS_INVALID, beacon.InvalidPayloadAttributes.With(err)
+		}
+	}
+	return api.forkchoiceUpdated(update, payloadAttributes)
+}
+
+func (api *ConsensusAPI) verifyPayloadAttributes(attr *beacon.PayloadAttributes) error {
+	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
+		// Reject payload attributes with withdrawals before shanghai
+		if attr.Withdrawals != nil {
+			return errors.New("withdrawals before shanghai")
+		}
+	} else {
+		// Reject payload attributes with nil withdrawals after shanghai
+		if attr.Withdrawals == nil {
+			return errors.New("missing withdrawals list")
+		}
+	}
+	return nil
+}
+
+func (api *ConsensusAPI) forkchoiceUpdated(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
@@ -285,6 +328,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			Timestamp:    payloadAttributes.Timestamp,
 			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
 			Random:       payloadAttributes.Random,
+			Withdrawals:  payloadAttributes.Withdrawals,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -334,7 +378,20 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 }
 
 // GetPayloadV1 returns a cached payload by id.
-func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
+func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableData, error) {
+	data, err := api.getPayload(payloadID)
+	if err != nil {
+		return nil, err
+	}
+	return data.ExecutionPayload, nil
+}
+
+// GetPayloadV2 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutionPayloadEnvelope, error) {
+	return api.getPayload(payloadID)
+}
+
+func (api *ConsensusAPI) getPayload(payloadID beacon.PayloadID) (*beacon.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID)
 	if data == nil {
@@ -344,7 +401,19 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
+	if params.Withdrawals != nil {
+		return beacon.PayloadStatusV1{Status: beacon.INVALID}, fmt.Errorf("withdrawals not supported in V1")
+	}
+	return api.newPayload(params)
+}
+
+// NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV2(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
+	return api.newPayload(params)
+}
+
+func (api *ConsensusAPI) newPayload(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
@@ -361,7 +430,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)
+	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
 		log.Debug("Invalid NewPayload params", "params", params, "error", err)
@@ -681,4 +750,9 @@ func (api *ConsensusAPI) heartbeat() {
 			offlineLogged = time.Now()
 		}
 	}
+}
+
+// ExchangeCapabilities returns the current methods provided by this node.
+func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+	return caps
 }
