@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/blocknative"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -215,7 +216,10 @@ func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, aut
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
-	tracer := NewtxnOpCodeTracer(statedb)
+	tracer, err := blocknative.NewTxnOpCodeTracer()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)

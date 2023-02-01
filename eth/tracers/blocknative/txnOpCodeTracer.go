@@ -1,4 +1,4 @@
-package native
+package blocknative
 
 import (
 	"encoding/json"
@@ -10,13 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-func init() {
-	register("txnOpCodeTracer", newtxnOpCodeTracer)
-}
 
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
@@ -29,8 +24,8 @@ type txnOpCodeTracer struct {
 	reason    error                // Textual reason for the interruption (not always specific for us)
 }
 
-// newtxnOpCodeTracer returns a new txnOpCodeTracer tracer.
-func newtxnOpCodeTracer(ctx *tracers.Context, ctor json.RawMessage) (tracers.Tracer, error) {
+// NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer.
+func NewTxnOpCodeTracer() (Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	return &txnOpCodeTracer{callStack: make([]common.CallFrameBN, 1)}, nil
