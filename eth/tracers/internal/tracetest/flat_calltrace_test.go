@@ -97,7 +97,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		Transfer:    core.Transfer,
 		Coinbase:    test.Context.Miner,
 		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+		Time:        uint64(test.Context.Time),
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
@@ -110,7 +110,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	// }
 
 	// Create the tracer, the EVM environment and run it
-	tracer, err := tracers.New(tracerName, new(tracers.Context), test.TracerConfig)
+	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create call tracer: %v", err)
 	}

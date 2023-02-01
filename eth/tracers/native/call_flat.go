@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -35,7 +34,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type flatCallResult -field-override flatCallResultMarshaling -out gen_flatcallresult_json.go
 
 func init() {
-	register("flatCallTracer", newFlatCallTracer)
+	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
 }
 
 var parityErrorMapping = map[string]string{
@@ -135,7 +134,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 		}
 	}
 
-	tracer, err := tracers.New("callTracer", ctx, cfg)
+	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +150,13 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, elapsed time.Duration, err error) {
-	t.tracer.CaptureEnd(output, gasUsed, elapsed, err)
+func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	t.tracer.CaptureEnd(output, gasUsed, err)
 	// Parity trace considers only reports the gas used during the top call frame which doesn't include
 	// tx processing such as intrinsic gas and refunds.
 	t.tracer.callstack[0].GasUsed = gasUsed
