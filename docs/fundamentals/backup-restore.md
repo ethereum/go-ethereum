@@ -27,7 +27,7 @@ Geth's blockchain and state databases can be removed with:
 geth removedb
 ```
 
-This is useful for deleting an old chain and sync'ing to a new one. It only affects data directories that can be re-created on synchronisation and does not touch the keystore.
+This is useful for deleting an old chain and sync'ing to a new one. It only affects data directories that can be re-created on synchronisation and does not touch the keystore. Specifically, passing the `removedb` command with no arguments removes the full node state database, ancient database and light node database (although light nodes are not currently functional for proof-of-stake Ethereum).
 
 ## Blockchain Import/Export {#blockchain-import-export}
 
