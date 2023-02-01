@@ -100,9 +100,10 @@ var (
 		Category: flags.LoggingCategory,
 	}
 	BackingDBFlag = &cli.StringFlag{
-		Name:  "backingdb",
-		Usage: "Backing database implementation to use",
-		Value: "leveldb",
+		Name:     "backingdb",
+		Usage:    "Backing database implementation to use",
+		Value:    "leveldb",
+		Category: flags.EthCategory,
 	}
 	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",

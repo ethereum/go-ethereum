@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -299,8 +299,6 @@ type snapshot struct {
 // data store.
 func (snap *snapshot) Has(key []byte) (bool, error) {
 	_, closer, err := snap.db.Get(key)
-	defer closer.Close()
-
 	if err != nil {
 		if err != pebble.ErrNotFound {
 			return false, err
@@ -308,19 +306,21 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 			return false, nil
 		}
 	}
+	closer.Close()
 	return true, nil
 }
 
 // Get retrieves the given key if it's present in the snapshot backing by
 // key-value data store.
 func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	val, closer, err := snap.db.Get(key)
-
+	dat, closer, err := snap.db.Get(key)
 	if err != nil {
 		return nil, err
 	}
+	ret := make([]byte, len(dat))
+	copy(ret, dat)
 	closer.Close()
-	return val, nil
+	return ret, nil
 }
 
 // Release releases associated resources. Release should always succeed and can
@@ -365,7 +365,7 @@ func (d *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (d *Database) Compact(start []byte, limit []byte) error {
-	return d.db.Compact(start, limit, false)
+	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
 
 // Path returns the path to the database directory.

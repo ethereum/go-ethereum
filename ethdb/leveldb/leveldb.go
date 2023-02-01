@@ -144,7 +144,6 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
 	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
-
 	ldb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return

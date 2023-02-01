@@ -316,10 +316,10 @@ const (
 // instantiated at that location, and if so, returns the type of database (or the
 // empty string).
 func hasPreexistingDb(path string) string {
-	if _, err := os.Stat(path + "/CURRENT"); err != nil {
+	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return "" // No pre-existing db
 	}
-	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
+	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
@@ -334,14 +334,19 @@ type OpenOptions struct {
 	Type              string // "leveldb" | "pebble"
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
-	Namespace         string
-	Cache             int // Cache size in MiB
-	Handles           int
+	Namespace         string // the namespace for database relevant metrics
+	Cache             int    // the capacity(in megabytes) of the data caching
+	Handles           int    // the capacity of the open files caching
 	ReadOnly          bool
 }
 
-// openKvDb Opens a disk-based key-value database, e.g. leveldb or pebble.
-func openKvDb(o OpenOptions) (ethdb.Database, error) {
+// openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
+//
+//	                      type == null          type != null
+//	                   +----------------------------------------
+//	db is non-existent |  leveldb default  |  specified type
+//	db is existent     |  from db          |  specified type (if compatible)
+func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("backingdb choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
@@ -366,7 +371,7 @@ func openKvDb(o OpenOptions) (ethdb.Database, error) {
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
 func Open(o OpenOptions) (ethdb.Database, error) {
-	kvdb, err := openKvDb(o)
+	kvdb, err := openKeyValueDatabase(o)
 	if err != nil {
 		return nil, err
 	}
