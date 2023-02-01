@@ -3,8 +3,8 @@ package tracetest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -73,7 +73,7 @@ type flatCallTracerTest struct {
 
 func flatCallTracerTestRunner(tracerName string, filename string, dirPath string, t testing.TB) error {
 	// Call tracer test found, read if from disk
-	blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, filename))
+	blob, err := os.ReadFile(filepath.Join("testdata", dirPath, filename))
 	if err != nil {
 		return fmt.Errorf("failed to read testcase: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestFlatCallTracerNative(t *testing.T) {
 }
 
 func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
+	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
