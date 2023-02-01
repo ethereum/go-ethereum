@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/holiman/uint256"
-	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/ztyp/view"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -493,8 +492,8 @@ func TestTransactionCoding(t *testing.T) {
 					BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014")},
 				},
 			}
-			var kzgProof KZGProof
-			copy(kzgProof[:], bls.ToCompressedG1((*bls.G1Point)(&bls.ZeroG1)))
+			// This is the identity point serialised
+			var kzgProof KZGProof = [48]byte{192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 			wrapData = &BlobTxWrapData{
 				BlobKzgs:           BlobKzgs{KZGCommitment{0: 0xc0}},
 				Blobs:              Blobs{Blob{}},

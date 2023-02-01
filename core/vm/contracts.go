@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/crate-crypto/go-proto-danksharding-crypto/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
 	big2 "github.com/holiman/big"
-	"github.com/protolambda/go-kzg/eth"
 	"golang.org/x/crypto/ripemd160"
 )
 

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 
+	api "github.com/crate-crypto/go-proto-danksharding-crypto"
+	"github.com/crate-crypto/go-proto-danksharding-crypto/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/protolambda/go-kzg/eth"
+
 	"github.com/protolambda/ztyp/codec"
 )
 
@@ -49,7 +51,7 @@ func (p *KZGCommitment) UnmarshalText(text []byte) error {
 }
 
 func (c KZGCommitment) ComputeVersionedHash() common.Hash {
-	return common.Hash(eth.KZGToVersionedHash(eth.KZGCommitment(c)))
+	return common.Hash(eth.KZGToVersionedHash(api.KZGCommitment(c)))
 }
 
 // Compressed BLS12-381 G1 element
@@ -103,38 +105,26 @@ func (p *BLSFieldElement) UnmarshalText(text []byte) error {
 }
 
 // Blob data
-type Blob [params.FieldElementsPerBlob]BLSFieldElement
-
-// eth.Blob interface
-func (blob Blob) Len() int {
-	return len(blob)
-}
-
-// eth.Blob interface
-func (blob Blob) At(i int) [32]byte {
-	return [32]byte(blob[i])
-}
+type Blob [params.FieldElementsPerBlob * 32]byte
 
 func (blob *Blob) Deserialize(dr *codec.DecodingReader) error {
 	if blob == nil {
 		return errors.New("cannot decode ssz into nil Blob")
 	}
-	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
-		// TODO: do we want to check if each field element is within range?
-		if _, err := dr.Read(blob[i][:]); err != nil {
-			return err
-		}
+
+	// We treat the blob as an opaque sequence of bytes
+	// and therefore we do not do any validation related to field
+	// elements
+	if _, err := dr.Read(blob[:]); err != nil {
+		return err
 	}
+
 	return nil
 }
 
 func (blob *Blob) Serialize(w *codec.EncodingWriter) error {
-	for i := range blob {
-		if err := w.Write(blob[i][:]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return w.Write(blob[:])
+
 }
 
 func (blob *Blob) ByteLength() (out uint64) {
@@ -148,11 +138,8 @@ func (blob *Blob) FixedLength() uint64 {
 func (blob *Blob) MarshalText() ([]byte, error) {
 	out := make([]byte, 2+params.FieldElementsPerBlob*32*2)
 	copy(out[:2], "0x")
-	j := 2
-	for _, elem := range blob {
-		hex.Encode(out[j:j+64], elem[:])
-		j += 64
-	}
+	hex.Encode(out[2:], blob[:])
+
 	return out, nil
 }
 
@@ -175,26 +162,14 @@ func (blob *Blob) UnmarshalText(text []byte) error {
 	if !(text[0] == '0' && text[1] == 'x') {
 		return fmt.Errorf("expected '0x' prefix in Blob string")
 	}
-	j := 0
-	for i := 2; i < l; i += 64 {
-		if _, err := hex.Decode(blob[j][:], text[i:i+64]); err != nil {
-			return fmt.Errorf("blob item %d is not formatted correctly: %v", j, err)
-		}
-		j += 1
+	if _, err := hex.Decode(blob[2:], text); err != nil {
+		return fmt.Errorf("blob is not formatted correctly: %v", err)
 	}
+
 	return nil
 }
 
 type BlobKzgs []KZGCommitment
-
-// eth.KZGCommitmentSequence interface
-func (bk BlobKzgs) Len() int {
-	return len(bk)
-}
-
-func (bk BlobKzgs) At(i int) eth.KZGCommitment {
-	return eth.KZGCommitment(bk[i])
-}
 
 func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
 	return dr.List(func() codec.Deserializable {
@@ -225,16 +200,6 @@ func (li BlobKzgs) copy() BlobKzgs {
 }
 
 type Blobs []Blob
-
-// eth.BlobSequence interface
-func (blobs Blobs) Len() int {
-	return len(blobs)
-}
-
-// eth.BlobSequence interface
-func (blobs Blobs) At(i int) eth.Blob {
-	return blobs[i]
-}
 
 func (a *Blobs) Deserialize(dr *codec.DecodingReader) error {
 	return dr.List(func() codec.Deserializable {
@@ -268,22 +233,39 @@ func (blobs Blobs) copy() Blobs {
 func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGCommitment, versionedHashes []common.Hash, aggregatedProof KZGProof, err error) {
 	commitments = make([]KZGCommitment, len(blobs))
 	versionedHashes = make([]common.Hash, len(blobs))
+
 	for i, blob := range blobs {
-		c, ok := eth.BlobToKZGCommitment(blob)
-		if !ok {
-			return nil, nil, KZGProof{}, errors.New("could not convert blob to commitment")
+		commitment, err := eth.CryptoCtx.BlobToCommitment(blob)
+		if err != nil {
+
+			return nil, nil, KZGProof{}, fmt.Errorf("could not convert blob to commitment: %v", err)
 		}
-		commitments[i] = KZGCommitment(c)
-		versionedHashes[i] = common.Hash(eth.KZGToVersionedHash(c))
+		commitments[i] = KZGCommitment(commitment)
+		versionedHashes[i] = common.Hash(eth.KZGToVersionedHash(commitment))
 	}
 
-	proof, err := eth.ComputeAggregateKZGProof(blobs)
+	proof, _, err := eth.CryptoCtx.ComputeAggregateKZGProof(toBlobs(blobs))
 	if err != nil {
 		return nil, nil, KZGProof{}, err
 	}
 	var kzgProof = KZGProof(proof)
 
 	return commitments, versionedHashes, kzgProof, nil
+}
+
+func toBlobs(_blobs Blobs) []api.Blob {
+	blobs := make([]api.Blob, len(_blobs))
+	for i, _blob := range _blobs {
+		blobs[i] = api.Blob(_blob)
+	}
+	return blobs
+}
+func toComms(_comms BlobKzgs) []api.KZGCommitment {
+	comms := make([]api.KZGCommitment, len(_comms))
+	for i, _comm := range _comms {
+		comms[i] = api.KZGCommitment(_comm)
+	}
+	return comms
 }
 
 type BlobTxWrapper struct {
@@ -338,7 +320,7 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if l1 > params.MaxBlobsPerBlock {
 		return fmt.Errorf("number of blobs exceeds max: %v", l1)
 	}
-	ok, err := eth.VerifyAggregateKZGProof(b.Blobs, b.BlobKzgs, eth.KZGProof(b.KzgAggregatedProof))
+	err := eth.CryptoCtx.VerifyAggregateKZGProof(toBlobs(b.Blobs), api.KZGProof(b.KzgAggregatedProof), toComms(b.BlobKzgs))
 	if err != nil {
 		return fmt.Errorf("error during proof verification: %v", err)
 	}
