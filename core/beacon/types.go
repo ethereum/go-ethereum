@@ -229,3 +229,8 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 	}
 	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
 }
+
+type ExecutionPayloadBodyV1 struct {
+	TransactionData []hexutil.Bytes     `json:"transactions"`
+	Withdrawals     []*types.Withdrawal `json:"withdrawals,omitempty"`
+}

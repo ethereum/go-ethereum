@@ -766,54 +766,49 @@ type payloadBody struct {
 
 // GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*payloadBody {
-	var bodies = make([]*payloadBody, len(hashes))
+func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*beacon.ExecutionPayloadBodyV1 {
+	var bodies = make([]*beacon.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		if block == nil {
 			continue
 		}
-		var (
-			body = block.Body()
-			txs  = make([]hexutil.Bytes, len(body.Transactions))
-		)
-		for j, tx := range body.Transactions {
-			data, _ := tx.MarshalBinary()
-			txs[j] = hexutil.Bytes(data)
-		}
-		bodies[i] = &payloadBody{
-			TransactionData: txs,
-			Withdrawals:     body.Withdrawals,
-		}
+		bodies[i] = getBody(block)
 	}
 	return bodies
 }
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*payloadBody {
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*beacon.ExecutionPayloadBodyV1 {
 	if api.eth.BlockChain().CurrentBlock().NumberU64() < start {
 		// Return [] if the requested range is past our latest block
-		return []*payloadBody{}
+		return []*beacon.ExecutionPayloadBodyV1{}
 	}
-	bodies := make([]*payloadBody, count)
+	bodies := make([]*beacon.ExecutionPayloadBodyV1, count)
 	for i := uint64(0); i < count; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(start + i)
 		if block == nil {
 			continue
 		}
-		var (
-			body = block.Body()
-			txs  = make([]hexutil.Bytes, len(body.Transactions))
-		)
-		for j, tx := range body.Transactions {
-			data, _ := tx.MarshalBinary()
-			txs[j] = hexutil.Bytes(data)
-		}
-		bodies[i] = &payloadBody{
-			TransactionData: txs,
-			Withdrawals:     body.Withdrawals,
-		}
+		bodies[i] = getBody(block)
 	}
 	return bodies
+}
+
+func getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
+	var (
+		body = block.Body()
+		txs  = make([]hexutil.Bytes, len(body.Transactions))
+	)
+
+	for j, tx := range body.Transactions {
+		data, _ := tx.MarshalBinary()
+		txs[j] = hexutil.Bytes(data)
+	}
+
+	return &beacon.ExecutionPayloadBodyV1{
+		TransactionData: txs,
+		Withdrawals:     body.Withdrawals,
+	}
 }
