@@ -377,15 +377,16 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
 	// Filter out personal api
-	apis := n.rpcAPIs
-	for i, api := range apis {
+	var apis []rpc.API
+	for _, api := range n.rpcAPIs {
 		if api.Namespace == "personal" {
-			if !n.config.EnablePersonal {
-				apis = append(apis[:i], apis[i+1:]...)
-			} else {
+			if n.config.EnablePersonal {
 				log.Warn("Deprecated personal namespace activated")
+			} else {
+				continue
 			}
 		}
+		apis = append(apis, api)
 	}
 	if err := n.startInProc(apis); err != nil {
 		return err
