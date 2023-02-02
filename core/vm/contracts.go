@@ -38,6 +38,7 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
+	RegistryKey() common.Address
 	RequiredGas(input []byte) uint64                                                                                              // RequiredPrice calculates the contract gas use
 	Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) // Run runs the precompiled contract
 }
@@ -145,6 +146,10 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // ECRECOVER implemented as a native contract.
 type ecrecover struct{}
 
+func (c *ecrecover) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{1})
+}
+
 func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
@@ -183,6 +188,10 @@ func (c *ecrecover) Run(ctx context.Context, statedb StateDB, input []byte, call
 // SHA256 implemented as a native contract.
 type sha256hash struct{}
 
+func (c *sha256hash) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{2})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
 // This method does not require any overflow checking as the input size gas costs
@@ -197,6 +206,10 @@ func (c *sha256hash) Run(ctx context.Context, statedb StateDB, input []byte, cal
 
 // RIPEMD160 implemented as a native contract.
 type ripemd160hash struct{}
+
+func (c *ripemd160hash) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{3})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
@@ -214,6 +227,10 @@ func (c *ripemd160hash) Run(ctx context.Context, statedb StateDB, input []byte, 
 // data copy implemented as a native contract.
 type dataCopy struct{}
 
+func (c *dataCopy) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{4})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
 // This method does not require any overflow checking as the input size gas costs
@@ -228,6 +245,10 @@ func (c *dataCopy) Run(ctx context.Context, statedb StateDB, input []byte, calle
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
 	eip2565 bool
+}
+
+func (c *bigModExp) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{5})
 }
 
 var (
@@ -423,6 +444,10 @@ func runBn256Add(input []byte) ([]byte, error) {
 // Istanbul consensus rules.
 type bn256AddIstanbul struct{}
 
+func (c *bn256AddIstanbul) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{6})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256AddIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256AddGasIstanbul
@@ -435,6 +460,10 @@ func (c *bn256AddIstanbul) Run(ctx context.Context, statedb StateDB, input []byt
 // bn256AddByzantium implements a native elliptic curve point addition
 // conforming to Byzantium consensus rules.
 type bn256AddByzantium struct{}
+
+func (c *bn256AddByzantium) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{6})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256AddByzantium) RequiredGas(input []byte) uint64 {
@@ -461,6 +490,10 @@ func runBn256ScalarMul(input []byte) ([]byte, error) {
 // multiplication conforming to Istanbul consensus rules.
 type bn256ScalarMulIstanbul struct{}
 
+func (c *bn256ScalarMulIstanbul) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{7})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMulIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256ScalarMulGasIstanbul
@@ -473,6 +506,10 @@ func (c *bn256ScalarMulIstanbul) Run(ctx context.Context, statedb StateDB, input
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
 // multiplication conforming to Byzantium consensus rules.
 type bn256ScalarMulByzantium struct{}
+
+func (c *bn256ScalarMulByzantium) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{7})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMulByzantium) RequiredGas(input []byte) uint64 {
@@ -529,6 +566,10 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 // conforming to Istanbul consensus rules.
 type bn256PairingIstanbul struct{}
 
+func (c *bn256PairingIstanbul) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{8})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasIstanbul + uint64(len(input)/192)*params.Bn256PairingPerPointGasIstanbul
@@ -542,6 +583,10 @@ func (c *bn256PairingIstanbul) Run(ctx context.Context, statedb StateDB, input [
 // conforming to Byzantium consensus rules.
 type bn256PairingByzantium struct{}
 
+func (c *bn256PairingByzantium) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{8})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasByzantium + uint64(len(input)/192)*params.Bn256PairingPerPointGasByzantium
@@ -552,6 +597,10 @@ func (c *bn256PairingByzantium) Run(ctx context.Context, statedb StateDB, input 
 }
 
 type blake2F struct{}
+
+func (c *blake2F) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{9})
+}
 
 func (c *blake2F) RequiredGas(input []byte) uint64 {
 	// If the input is malformed, we can't calculate the gas, return 0 and let the
@@ -622,6 +671,10 @@ var (
 // bls12381G1Add implements EIP-2537 G1Add precompile.
 type bls12381G1Add struct{}
 
+func (c *bls12381G1Add) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{10})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1AddGas
@@ -660,6 +713,10 @@ func (c *bls12381G1Add) Run(ctx context.Context, statedb StateDB, input []byte, 
 // bls12381G1Mul implements EIP-2537 G1Mul precompile.
 type bls12381G1Mul struct{}
 
+func (c *bls12381G1Mul) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{11})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1MulGas
@@ -695,6 +752,10 @@ func (c *bls12381G1Mul) Run(ctx context.Context, statedb StateDB, input []byte, 
 
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
 type bls12381G1MultiExp struct{}
+
+func (c *bls12381G1MultiExp) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{12})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
@@ -753,6 +814,10 @@ func (c *bls12381G1MultiExp) Run(ctx context.Context, statedb StateDB, input []b
 // bls12381G2Add implements EIP-2537 G2Add precompile.
 type bls12381G2Add struct{}
 
+func (c *bls12381G2Add) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{13})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2AddGas
@@ -791,6 +856,10 @@ func (c *bls12381G2Add) Run(ctx context.Context, statedb StateDB, input []byte, 
 // bls12381G2Mul implements EIP-2537 G2Mul precompile.
 type bls12381G2Mul struct{}
 
+func (c *bls12381G2Mul) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{14})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2MulGas
@@ -826,6 +895,10 @@ func (c *bls12381G2Mul) Run(ctx context.Context, statedb StateDB, input []byte, 
 
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
 type bls12381G2MultiExp struct{}
+
+func (c *bls12381G2MultiExp) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{15})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
@@ -883,6 +956,10 @@ func (c *bls12381G2MultiExp) Run(ctx context.Context, statedb StateDB, input []b
 
 // bls12381Pairing implements EIP-2537 Pairing precompile.
 type bls12381Pairing struct{}
+
+func (c *bls12381Pairing) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{16})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381Pairing) RequiredGas(input []byte) uint64 {
@@ -963,6 +1040,10 @@ func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
 // bls12381MapG1 implements EIP-2537 MapG1 precompile.
 type bls12381MapG1 struct{}
 
+func (c *bls12381MapG1) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{17})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381MapG1) RequiredGas(input []byte) uint64 {
 	return params.Bls12381MapG1Gas
@@ -997,6 +1078,10 @@ func (c *bls12381MapG1) Run(ctx context.Context, statedb StateDB, input []byte, 
 
 // bls12381MapG2 implements EIP-2537 MapG2 precompile.
 type bls12381MapG2 struct{}
+
+func (c *bls12381MapG2) RegistryKey() common.Address {
+	return common.BytesToAddress([]byte{18})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381MapG2) RequiredGas(input []byte) uint64 {
