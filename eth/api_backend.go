@@ -112,7 +112,7 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 		return b.eth.blockchain.CurrentBlock(), nil
 	} else if blockNr == rpc.ConfirmedBlockNumber {
 		if b.eth.chainConfig.XDPoS == nil {
-			return nil, errors.New("PoW does not support confirmed block loopup")
+			return nil, errors.New("PoW does not support confirmed block lookup")
 		}
 		current := b.eth.blockchain.CurrentBlock().Header()
 		if b.eth.blockchain.Config().XDPoS.BlockConsensusVersion(
@@ -124,7 +124,7 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 			confirmedHash := b.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
 			return b.eth.blockchain.GetBlockByHash(confirmedHash), nil
 		} else {
-			return nil, errors.New("PoS V1 does not support confirmed block loopup")
+			return nil, errors.New("PoS V1 does not support confirmed block lookup")
 		}
 	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
