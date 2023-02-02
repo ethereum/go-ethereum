@@ -1292,10 +1292,19 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 		},
 	}
 
-	eq := func(a, b *types.Body) bool {
-		aBytes, errA := rlp.EncodeToBytes(a)
-		bBytes, errB := rlp.EncodeToBytes(b)
-
+	eq := func(a *types.Body, b *payloadBody) bool {
+		if a == nil && b == nil {
+			return true
+		} else if a == nil || b == nil {
+			return false
+		}
+		var want []hexutil.Bytes
+		for _, tx := range a.Transactions {
+			data, _ := tx.MarshalBinary()
+			want = append(want, hexutil.Bytes(data))
+		}
+		aBytes, errA := rlp.EncodeToBytes(want)
+		bBytes, errB := rlp.EncodeToBytes(b.TransactionData)
 		if errA != errB {
 			return false
 		}
@@ -1354,10 +1363,19 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		},
 	}
 
-	eq := func(a, b *types.Body) bool {
-		aBytes, errA := rlp.EncodeToBytes(a)
-		bBytes, errB := rlp.EncodeToBytes(b)
-
+	eq := func(a *types.Body, b *payloadBody) bool {
+		if a == nil && b == nil {
+			return true
+		} else if a == nil || b == nil {
+			return false
+		}
+		var want []hexutil.Bytes
+		for _, tx := range a.Transactions {
+			data, _ := tx.MarshalBinary()
+			want = append(want, hexutil.Bytes(data))
+		}
+		aBytes, errA := rlp.EncodeToBytes(want)
+		bBytes, errB := rlp.EncodeToBytes(b.TransactionData)
 		if errA != errB {
 			return false
 		}

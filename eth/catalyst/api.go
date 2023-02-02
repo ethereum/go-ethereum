@@ -759,44 +759,61 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
 
+type payloadBody struct {
+	TransactionData []hexutil.Bytes     `json:"transactions"`
+	Withdrawals     []*types.Withdrawal `json:"withdrawals,omitempty"`
+}
+
 // GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types.Body {
-	var bodies = make([]*types.Body, len(hashes))
+func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*payloadBody {
+	var bodies = make([]*payloadBody, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		if block == nil {
 			continue
 		}
-		body := block.Body()
-		// We only want to return the transactions and withdrawals, not uncles
-		if len(body.Uncles) != 0 {
-			body.Uncles = make([]*types.Header, 0)
+		var (
+			body = block.Body()
+			txs  = make([]hexutil.Bytes, len(body.Transactions))
+		)
+		for j, tx := range body.Transactions {
+			data, _ := tx.MarshalBinary()
+			txs[j] = hexutil.Bytes(data)
 		}
-		bodies[i] = body
+		bodies[i] = &payloadBody{
+			TransactionData: txs,
+			Withdrawals:     body.Withdrawals,
+		}
 	}
 	return bodies
 }
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*types.Body {
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*payloadBody {
 	if api.eth.BlockChain().CurrentBlock().NumberU64() < start {
 		// Return [] if the requested range is past our latest block
-		return []*types.Body{}
+		return []*payloadBody{}
 	}
-	bodies := make([]*types.Body, count)
+	bodies := make([]*payloadBody, count)
 	for i := uint64(0); i < count; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(start + i)
 		if block == nil {
 			continue
 		}
-		body := block.Body()
-		// We only want to return the transactions and withdrawals, not uncles
-		if len(body.Uncles) != 0 {
-			body.Uncles = make([]*types.Header, 0)
+		var (
+			body = block.Body()
+			txs  = make([]hexutil.Bytes, len(body.Transactions))
+		)
+		for j, tx := range body.Transactions {
+			data, _ := tx.MarshalBinary()
+			txs[j] = hexutil.Bytes(data)
 		}
-		bodies[i] = body
+		bodies[i] = &payloadBody{
+			TransactionData: txs,
+			Withdrawals:     body.Withdrawals,
+		}
 	}
 	return bodies
 }
