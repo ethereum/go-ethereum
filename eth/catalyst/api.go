@@ -759,11 +759,6 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
 
-type payloadBody struct {
-	TransactionData []hexutil.Bytes     `json:"transactions"`
-	Withdrawals     []*types.Withdrawal `json:"withdrawals,omitempty"`
-}
-
 // GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*beacon.ExecutionPayloadBodyV1 {
