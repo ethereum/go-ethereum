@@ -19,13 +19,6 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"strconv"
-	"strings"
-	"sync/atomic"
-	"time"
-
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -33,8 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/eth/tracers/blocknative"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -215,7 +209,10 @@ func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, aut
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
-	tracer := NewtxnOpCodeTracer(statedb)
+	tracer, err := blocknative.NewTxnOpCodeTracer()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
@@ -225,139 +222,7 @@ func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainCont
 
 // The below is a copy from "eth/tracers/native/txnOpCodeTracer.go" to solve  acurrent circular dependency, this is tech debt to remove
 // In the future we would like to call something similar to "tracer, err := tracers.New("newtxnOpCodeTracer", nil, nil)"
-
-type txnOpCodeTracer struct {
-	env       *vm.EVM              // EVM context for execution of transaction to occur within
-	callStack []common.CallFrameBN // Data structure for op codes making up our trace
-	interrupt uint32               // Atomic flag to signal execution interruption
-	reason    error                // Textual reason for the interruption (not always specific for us)
-	statedb   *state.StateDB
-}
-
 type TracerResult interface {
 	vm.EVMLogger
 	GetResult() (json.RawMessage, error)
-}
-
-func NewtxnOpCodeTracer(statedb *state.StateDB) TracerResult {
-	return &txnOpCodeTracer{callStack: make([]common.CallFrameBN, 1), statedb: statedb}
-}
-
-func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
-	res, err := json.Marshal(t.callStack[0])
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(res), t.reason
-}
-
-func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
-	t.callStack[0] = common.CallFrameBN{
-		Type:  "CALL",
-		From:  addrToHex(from),
-		To:    addrToHex(to),
-		Input: bytesToHex(input),
-		Gas:   uintToHex(gas),
-		Value: bigToHex(value),
-	}
-	if create {
-		t.callStack[0].Type = "CREATE"
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Duration, err error) {
-	t.callStack[0].GasUsed = uintToHex(gasUsed)
-	t.callStack[0].Time = fmt.Sprintf("%v", time)
-	if err != nil {
-		t.callStack[0].Error = err.Error()
-		if err.Error() == "execution reverted" && len(output) > 0 {
-			t.callStack[0].Output = bytesToHex(output)
-			revertReason, _ := abi.UnpackRevert(output)
-			t.callStack[0].ErrorReason = revertReason
-		}
-	} else {
-		t.callStack[0].Output = bytesToHex(output)
-	}
-}
-
-func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.callStack[depth].Error = "internal failure"
-			log.Warn("Panic during trace. Recovered.", "err", r)
-		}
-	}()
-}
-
-func (t *txnOpCodeTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-}
-
-func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
-		return
-	}
-	call := common.CallFrameBN{
-		Type:  typ.String(),
-		From:  addrToHex(from),
-		To:    addrToHex(to),
-		Input: bytesToHex(input),
-		Gas:   uintToHex(gas),
-		Value: bigToHex(value),
-	}
-	t.callStack = append(t.callStack, call)
-}
-
-func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-
-	size := len(t.callStack)
-	if size <= 1 {
-		return
-	}
-	// pop call
-	call := t.callStack[size-1]
-	t.callStack = t.callStack[:size-1]
-	size -= 1
-
-	call.GasUsed = uintToHex(gasUsed)
-	if err == nil {
-		call.Output = bytesToHex(output)
-	} else {
-		call.Error = err.Error()
-		if call.Type == "CREATE" || call.Type == "CREATE2" {
-			call.To = ""
-		}
-	}
-	t.callStack[size-1].Calls = append(t.callStack[size-1].Calls, call)
-}
-
-func (*txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
-}
-
-func (*txnOpCodeTracer) CaptureTxEnd(restGas uint64) {}
-
-func (t *txnOpCodeTracer) Stop(err error) {
-	t.reason = err
-	atomic.StoreUint32(&t.interrupt, 1)
-}
-
-func bytesToHex(s []byte) string {
-	return "0x" + common.Bytes2Hex(s)
-}
-
-func bigToHex(n *big.Int) string {
-	if n == nil {
-		return ""
-	}
-	return "0x" + n.Text(16)
-}
-
-func uintToHex(n uint64) string {
-	return "0x" + strconv.FormatUint(n, 16)
-}
-
-func addrToHex(a common.Address) string {
-	return strings.ToLower(a.Hex())
 }
