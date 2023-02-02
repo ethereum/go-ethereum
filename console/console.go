@@ -260,7 +260,7 @@ func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	if personal == nil || c.prompter == nil {
 		return
 	}
-	log.Error("Enabling deprecated personal namespace")
+	log.Warn("Enabling deprecated personal namespace")
 	jeth := vm.NewObject()
 	vm.Set("jeth", jeth)
 	jeth.Set("openWallet", personal.Get("openWallet"))
