@@ -16,8 +16,9 @@ import (
 type DebugPprofCommand struct {
 	*Meta2
 
-	seconds uint64
-	output  string
+	seconds   uint64
+	output    string
+	skiptrace bool
 }
 
 func (p *DebugPprofCommand) MarkDown() string {
@@ -44,7 +45,7 @@ func (d *DebugPprofCommand) Flags() *flagset.Flagset {
 
 	flags.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "seconds",
-		Usage:   "seconds to trace",
+		Usage:   "seconds to profile",
 		Value:   &d.seconds,
 		Default: 2,
 	})
@@ -52,6 +53,15 @@ func (d *DebugPprofCommand) Flags() *flagset.Flagset {
 		Name:  "output",
 		Value: &d.output,
 		Usage: "Output directory",
+	})
+
+	// Trace profiles can be expensive and take too much size (for grpc).
+	// This flag will help in making it optional.
+	flags.BoolFlag(&flagset.BoolFlag{
+		Name:    "skiptrace",
+		Value:   &d.skiptrace,
+		Usage:   "Skip running the trace",
+		Default: false,
 	})
 
 	return flags
@@ -119,11 +129,16 @@ func (d *DebugPprofCommand) Run(args []string) int {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	trapSignal(cancelFn)
 
+	// Only take cpu and heap profiles by default
 	profiles := map[string]string{
-		"heap":  "heap",
-		"cpu":   "cpu",
-		"trace": "trace",
+		"heap": "heap",
+		"cpu":  "cpu",
 	}
+
+	if !d.skiptrace {
+		profiles["trace"] = "trace"
+	}
+
 	for profile, filename := range profiles {
 		if err := pprofProfile(ctx, profile, filename); err != nil {
 			d.UI.Error(fmt.Sprintf("Error creating profile '%s': %v", profile, err))
