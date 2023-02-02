@@ -168,7 +168,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
 	if payloadAttributes != nil && payloadAttributes.Withdrawals != nil {
-		return beacon.STATUS_INVALID, fmt.Errorf("withdrawals not supported in V1")
+		return beacon.STATUS_INVALID, beacon.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
 }
@@ -177,7 +177,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 func (api *ConsensusAPI) ForkchoiceUpdatedV2(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
 	if payloadAttributes != nil {
 		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
-			return beacon.STATUS_INVALID, beacon.InvalidPayloadAttributes.With(err)
+			return beacon.STATUS_INVALID, beacon.InvalidParams.With(err)
 		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
