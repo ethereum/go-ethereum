@@ -765,9 +765,6 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*beaco
 	var bodies = make([]*beacon.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
-		if block == nil {
-			continue
-		}
 		bodies[i] = getBody(block)
 	}
 	return bodies
@@ -783,15 +780,16 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*beaco
 	bodies := make([]*beacon.ExecutionPayloadBodyV1, count)
 	for i := uint64(0); i < count; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(start + i)
-		if block == nil {
-			continue
-		}
 		bodies[i] = getBody(block)
 	}
 	return bodies
 }
 
 func getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
+	if block == nil {
+		return nil
+	}
+
 	var (
 		body = block.Body()
 		txs  = make([]hexutil.Bytes, len(body.Transactions))
