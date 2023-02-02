@@ -46,8 +46,12 @@ type PrecompileController interface {
 	// before beginning a state transition.
 	PrepareForStateTransition(statedb StateDB) error
 
-	// `Exists` returns if a precompiled contract was found at `addr`.
-	Exists(addr common.Address) (p PrecompiledContract, found bool)
+	// `Has` returns if a precompiled contract was found at `addr`.
+	Has(addr common.Address) bool
+
+	// `Get` returns the precompiled contract at `addr`. Returns nil if no
+	// contract is found at `addr`.
+	Get(addr common.Address) PrecompiledContract
 
 	// `Run` runs a precompiled contract and returns the remaining gas.
 	Run(p PrecompiledContract, input []byte, caller common.Address,
@@ -192,7 +196,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	p, isPrecompile := evm.PrecompileController.Exists(addr)
+	isPrecompile := evm.PrecompileController.Has(addr)
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
@@ -229,7 +233,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = evm.PrecompileController.Run(p, input, caller.Address(), value, gas, false)
+		ret, gas, err = evm.PrecompileController.Run(
+			evm.PrecompileController.Get(addr), input, caller.Address(), value, gas, false,
+		)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -291,8 +297,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.PrecompileController.Exists(addr); isPrecompile {
-		ret, gas, err = evm.PrecompileController.Run(p, input, caller.Address(), value, gas, true)
+	if isPrecompile := evm.PrecompileController.Has(addr); isPrecompile {
+		ret, gas, err = evm.PrecompileController.Run(
+			evm.PrecompileController.Get(addr), input, caller.Address(), value, gas, true,
+		)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -336,9 +344,11 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.PrecompileController.Exists(addr); isPrecompile {
+	if isPrecompile := evm.PrecompileController.Has(addr); isPrecompile {
 		parent := caller.(*Contract)
-		ret, gas, err = evm.PrecompileController.Run(p, input, parent.CallerAddress, parent.value, gas, false)
+		ret, gas, err = evm.PrecompileController.Run(
+			evm.PrecompileController.Get(addr), input, parent.CallerAddress, parent.value, gas, false,
+		)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
@@ -386,8 +396,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		}(gas)
 	}
 
-	if p, isPrecompile := evm.PrecompileController.Exists(addr); isPrecompile {
-		ret, gas, err = evm.PrecompileController.Run(p, input, caller.Address(), new(big.Int), gas, true)
+	if isPrecompile := evm.PrecompileController.Has(addr); isPrecompile {
+		ret, gas, err = evm.PrecompileController.Run(
+			evm.PrecompileController.Get(addr), input, caller.Address(), new(big.Int), gas, true,
+		)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
