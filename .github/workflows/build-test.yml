@@ -1,0 +1,42 @@
+name: Build Test
+
+on:
+  push:
+    branches: 
+      - geth_mamoru_core_sdk
+
+
+  pull_request:
+    branches: 
+      - geth_mamoru_core_sdk
+
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.17.x
+        
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - uses: actions/cache@v3
+      with:
+        # In order:
+        # * Module download cache
+        # * Build cache (Linux)
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Test Build
+      run: |
+        make geth
+
+

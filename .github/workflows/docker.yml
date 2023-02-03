@@ -1,0 +1,45 @@
+name: "Build docker image"
+on:
+  push:
+    branches:
+      - geth_mamoru_core_sdk
+
+env:
+  REPOSITORY: mamorufoundation/go-ethereum-sniffer
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date -u +'%Y-%m-%d')"
+
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: |
+            GIT_REVISION=${{ github.sha }}
+            BUILD_DATE=${{ steps.date.outputs.date }}
+            PROFILE=release
+          push: true
+          tags: |
+            ${{ env.REPOSITORY }}:latest
+            ${{ env.REPOSITORY }}:${{ github.sha }}
+          cache-to: type=local,dest=/tmp/docker-cache
+          cache-from: type=local,src=/tmp/docker-cache,mode=max
