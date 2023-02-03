@@ -18,13 +18,13 @@ package rawdb
 
 import (
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/crypto/sha3"
 )
 
 // nodeHasher used to derive the hash of trie node.
@@ -56,44 +56,6 @@ func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) ([]byte, common.H
 	return data, hasher.hashData(data)
 }
 
-// ReadStorageTrieNode retrieves the storage trie node and the associated node
-// hash with the specified node path.
-func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) ([]byte, common.Hash) {
-	data, err := db.Get(storageTrieNodeKey(accountHash, path))
-	if err != nil {
-		return nil, common.Hash{}
-	}
-	hasher := newNodeHasher()
-	defer returnHasherToPool(hasher)
-	return data, hasher.hashData(data)
-}
-
-// ReadLegacyTrieNode retrieves the trie node of the provided hash.
-func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(hash.Bytes())
-	return data
-}
-
-// HasLegacyTrieNode checks if the trie node with the provided hash is present in db.
-func HasLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
-	ok, _ := db.Has(hash.Bytes())
-	return ok
-}
-
-// WriteLegacyTrieNode writes the provided trie node database.
-func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
-	if err := db.Put(hash.Bytes(), node); err != nil {
-		log.Crit("Failed to store trie node", "err", err)
-	}
-}
-
-// DeleteLegacyTrieNode deletes the specified trie node from the database.
-func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(hash.Bytes()); err != nil {
-		log.Crit("Failed to delete trie node", "err", err)
-	}
-}
-
 // HasAccountTrieNode checks the account trie node presence with the specified
 // node path and the associated node hash.
 func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) bool {
@@ -120,6 +82,18 @@ func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 	}
 }
 
+// ReadStorageTrieNode retrieves the storage trie node and the associated node
+// hash with the specified node path.
+func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) ([]byte, common.Hash) {
+	data, err := db.Get(storageTrieNodeKey(accountHash, path))
+	if err != nil {
+		return nil, common.Hash{}
+	}
+	hasher := newNodeHasher()
+	defer returnHasherToPool(hasher)
+	return data, hasher.hashData(data)
+}
+
 // HasStorageTrieNode checks the storage trie node presence with the provided
 // node path and the associated node hash.
 func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte, hash common.Hash) bool {
@@ -143,6 +117,32 @@ func WriteStorageTrieNode(db ethdb.KeyValueWriter, accountHash common.Hash, path
 func DeleteStorageTrieNode(db ethdb.KeyValueWriter, accountHash common.Hash, path []byte) {
 	if err := db.Delete(storageTrieNodeKey(accountHash, path)); err != nil {
 		log.Crit("Failed to delete storage trie node", "err", err)
+	}
+}
+
+// ReadLegacyTrieNode retrieves the trie node of the provided hash.
+func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, _ := db.Get(hash.Bytes())
+	return data
+}
+
+// HasLegacyTrieNode checks if the trie node with the provided hash is present in db.
+func HasLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
+	ok, _ := db.Has(hash.Bytes())
+	return ok
+}
+
+// WriteLegacyTrieNode writes the provided trie node database.
+func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
+	if err := db.Put(hash.Bytes(), node); err != nil {
+		log.Crit("Failed to store trie node", "err", err)
+	}
+}
+
+// DeleteLegacyTrieNode deletes the specified trie node from the database.
+func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(hash.Bytes()); err != nil {
+		log.Crit("Failed to delete trie node", "err", err)
 	}
 }
 

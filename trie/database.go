@@ -919,6 +919,6 @@ func (db *Database) CommitPreimages() error {
 }
 
 // Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() NodeScheme {
-	return &hashScheme{}
+func (db *Database) Scheme() string {
+	return rawdb.HashScheme
 }
