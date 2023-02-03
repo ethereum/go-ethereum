@@ -67,6 +67,8 @@ syncmode = "full"
         vhosts = ["*"]
         corsdomain = ["*"]
         # prefix = ""
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
     # [jsonrpc.ws]
         # enabled = false
         # port = 8546
@@ -74,6 +76,8 @@ syncmode = "full"
         # host = "localhost"
         # api = ["web3", "net"]
         # origins = ["*"]
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
     # [jsonrpc.graphql]
         # enabled = false
         # port = 0

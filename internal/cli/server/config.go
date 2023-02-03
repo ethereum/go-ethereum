@@ -281,6 +281,13 @@ type APIConfig struct {
 
 	// Origins is the list of endpoints to accept requests from (only consumed for websockets)
 	Origins []string `hcl:"origins,optional" toml:"origins,optional"`
+
+	// ExecutionPoolSize is max size of workers to be used for rpc execution
+	ExecutionPoolSize uint64 `hcl:"ep-size,optional" toml:"ep-size,optional"`
+
+	// ExecutionPoolRequestTimeout is timeout used by execution pool for rpc execution
+	ExecutionPoolRequestTimeout    time.Duration `hcl:"-,optional" toml:"-"`
+	ExecutionPoolRequestTimeoutRaw string        `hcl:"ep-requesttimeout,optional" toml:"ep-requesttimeout,optional"`
 }
 
 // Used from rpc.HTTPTimeouts
@@ -507,21 +514,25 @@ func DefaultConfig() *Config {
 			GasCap:     ethconfig.Defaults.RPCGasCap,
 			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
 			Http: &APIConfig{
-				Enabled: false,
-				Port:    8545,
-				Prefix:  "",
-				Host:    "localhost",
-				API:     []string{"eth", "net", "web3", "txpool", "bor"},
-				Cors:    []string{"localhost"},
-				VHost:   []string{"localhost"},
+				Enabled:                     false,
+				Port:                        8545,
+				Prefix:                      "",
+				Host:                        "localhost",
+				API:                         []string{"eth", "net", "web3", "txpool", "bor"},
+				Cors:                        []string{"localhost"},
+				VHost:                       []string{"localhost"},
+				ExecutionPoolSize:           40,
+				ExecutionPoolRequestTimeout: 0,
 			},
 			Ws: &APIConfig{
-				Enabled: false,
-				Port:    8546,
-				Prefix:  "",
-				Host:    "localhost",
-				API:     []string{"net", "web3"},
-				Origins: []string{"localhost"},
+				Enabled:                     false,
+				Port:                        8546,
+				Prefix:                      "",
+				Host:                        "localhost",
+				API:                         []string{"net", "web3"},
+				Origins:                     []string{"localhost"},
+				ExecutionPoolSize:           40,
+				ExecutionPoolRequestTimeout: 0,
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
@@ -628,6 +639,8 @@ func (c *Config) fillTimeDurations() error {
 		{"jsonrpc.timeouts.read", &c.JsonRPC.HttpTimeout.ReadTimeout, &c.JsonRPC.HttpTimeout.ReadTimeoutRaw},
 		{"jsonrpc.timeouts.write", &c.JsonRPC.HttpTimeout.WriteTimeout, &c.JsonRPC.HttpTimeout.WriteTimeoutRaw},
 		{"jsonrpc.timeouts.idle", &c.JsonRPC.HttpTimeout.IdleTimeout, &c.JsonRPC.HttpTimeout.IdleTimeoutRaw},
+		{"jsonrpc.ws.ep-requesttimeout", &c.JsonRPC.Ws.ExecutionPoolRequestTimeout, &c.JsonRPC.Ws.ExecutionPoolRequestTimeoutRaw},
+		{"jsonrpc.http.ep-requesttimeout", &c.JsonRPC.Http.ExecutionPoolRequestTimeout, &c.JsonRPC.Http.ExecutionPoolRequestTimeoutRaw},
 		{"txpool.lifetime", &c.TxPool.LifeTime, &c.TxPool.LifeTimeRaw},
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
 		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
@@ -997,7 +1010,11 @@ func (c *Config) buildNode() (*node.Config, error) {
 			WriteTimeout: c.JsonRPC.HttpTimeout.WriteTimeout,
 			IdleTimeout:  c.JsonRPC.HttpTimeout.IdleTimeout,
 		},
-		RPCBatchLimit: c.RPCBatchLimit,
+		RPCBatchLimit:                          c.RPCBatchLimit,
+		WSJsonRPCExecutionPoolSize:             c.JsonRPC.Ws.ExecutionPoolSize,
+		WSJsonRPCExecutionPoolRequestTimeout:   c.JsonRPC.Ws.ExecutionPoolRequestTimeout,
+		HTTPJsonRPCExecutionPoolSize:           c.JsonRPC.Http.ExecutionPoolSize,
+		HTTPJsonRPCExecutionPoolRequestTimeout: c.JsonRPC.Http.ExecutionPoolRequestTimeout,
 	}
 
 	// dev mode

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 
 	mapset "github.com/deckarep/golang-set"
 
@@ -50,12 +51,19 @@ type Server struct {
 	run      int32
 	codecs   mapset.Set
 
-	BatchLimit uint64
+	BatchLimit    uint64
+	executionPool *SafePool
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer() *Server {
-	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
+func NewServer(executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+	server := &Server{
+		idgen:         randomIDGenerator(),
+		codecs:        mapset.NewSet(),
+		run:           1,
+		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout),
+	}
+
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
@@ -65,6 +73,22 @@ func NewServer() *Server {
 
 func (s *Server) SetRPCBatchLimit(batchLimit uint64) {
 	s.BatchLimit = batchLimit
+}
+
+func (s *Server) SetExecutionPoolSize(n int) {
+	s.executionPool.ChangeSize(n)
+}
+
+func (s *Server) SetExecutionPoolRequestTimeout(n time.Duration) {
+	s.executionPool.ChangeTimeout(n)
+}
+
+func (s *Server) GetExecutionPoolRequestTimeout() time.Duration {
+	return s.executionPool.Timeout()
+}
+
+func (s *Server) GetExecutionPoolSize() int {
+	return s.executionPool.Size()
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
@@ -106,7 +130,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.executionPool)
+
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

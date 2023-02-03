@@ -105,7 +105,7 @@ func New(conf *Config) (*Node, error) {
 
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer(),
+		inprocHandler: rpc.NewServer(0, 0),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
@@ -405,10 +405,12 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableRPC(apis, httpConfig{
-			CorsAllowedOrigins: n.config.HTTPCors,
-			Vhosts:             n.config.HTTPVirtualHosts,
-			Modules:            n.config.HTTPModules,
-			prefix:             n.config.HTTPPathPrefix,
+			CorsAllowedOrigins:          n.config.HTTPCors,
+			Vhosts:                      n.config.HTTPVirtualHosts,
+			Modules:                     n.config.HTTPModules,
+			prefix:                      n.config.HTTPPathPrefix,
+			executionPoolSize:           n.config.HTTPJsonRPCExecutionPoolSize,
+			executionPoolRequestTimeout: n.config.HTTPJsonRPCExecutionPoolRequestTimeout,
 		}); err != nil {
 			return err
 		}
@@ -422,9 +424,11 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(n.rpcAPIs, wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
+			Modules:                     n.config.WSModules,
+			Origins:                     n.config.WSOrigins,
+			prefix:                      n.config.WSPathPrefix,
+			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
+			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
 		}); err != nil {
 			return err
 		}

@@ -444,6 +444,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.JsonRPC.Http.API,
 		Group:   "JsonRPC",
 	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "http.ep-size",
+		Usage:   "Maximum size of workers to run in rpc execution pool for HTTP requests",
+		Value:   &c.cliConfig.JsonRPC.Http.ExecutionPoolSize,
+		Default: c.cliConfig.JsonRPC.Http.ExecutionPoolSize,
+		Group:   "JsonRPC",
+	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "http.ep-requesttimeout",
+		Usage:   "Request Timeout for rpc execution pool for HTTP requests",
+		Value:   &c.cliConfig.JsonRPC.Http.ExecutionPoolRequestTimeout,
+		Default: c.cliConfig.JsonRPC.Http.ExecutionPoolRequestTimeout,
+		Group:   "JsonRPC",
+	})
 
 	// ws options
 	f.BoolFlag(&flagset.BoolFlag{
@@ -479,6 +493,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "API's offered over the WS-RPC interface",
 		Value:   &c.cliConfig.JsonRPC.Ws.API,
 		Default: c.cliConfig.JsonRPC.Ws.API,
+		Group:   "JsonRPC",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "ws.ep-size",
+		Usage:   "Maximum size of workers to run in rpc execution pool for WS requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.ExecutionPoolSize,
+		Default: c.cliConfig.JsonRPC.Ws.ExecutionPoolSize,
+		Group:   "JsonRPC",
+	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "ws.ep-requesttimeout",
+		Usage:   "Request Timeout for rpc execution pool for WS requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.ExecutionPoolRequestTimeout,
+		Default: c.cliConfig.JsonRPC.Ws.ExecutionPoolRequestTimeout,
 		Group:   "JsonRPC",
 	})
 
