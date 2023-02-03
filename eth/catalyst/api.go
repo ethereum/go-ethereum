@@ -783,7 +783,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) ([]*beac
 		end = current
 	}
 	var bodies []*beacon.ExecutionPayloadBodyV1
-	for i := uint64(start); i < end; i++ {
+	for i := start; i < end; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		bodies = append(bodies, getBody(block))
 	}
