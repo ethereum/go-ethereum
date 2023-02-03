@@ -924,7 +924,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
+		if w.chainConfig.EnableEIP2718 && w.chainConfig.EnableEIP1559 {
+			header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
+		} else {
+			// When disabling EIP-2718 or EIP-1559, we do not set baseFeePerGas in RPC response.
+			// Setting BaseFee as 0 here can help outside SDK calculates l2geth's RLP encoding,
+			// otherwise the l2geth's BaseFee is not known from the outside.
+			header.BaseFee = big.NewInt(0)
+		}
 		if !w.chainConfig.IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
