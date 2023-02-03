@@ -65,25 +65,25 @@ func (scheme *hashScheme) Name() string {
 // HasTrieNode checks the trie node presence with the provided node info and
 // the associated node hash.
 func (scheme *hashScheme) HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash) bool {
-	return rawdb.HasTrieNode(db, hash)
+	return rawdb.HasLegacyTrieNode(db, hash)
 }
 
 // ReadTrieNode retrieves the trie node from database with the provided node info
 // and associated node hash.
 func (scheme *hashScheme) ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash) []byte {
-	return rawdb.ReadTrieNode(db, hash)
+	return rawdb.ReadLegacyTrieNode(db, hash)
 }
 
 // WriteTrieNode writes the trie node into database with the provided node info
 // and associated node hash.
 func (scheme *hashScheme) WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash, node []byte) {
-	rawdb.WriteTrieNode(db, hash, node)
+	rawdb.WriteLegacyTrieNode(db, hash, node)
 }
 
 // DeleteTrieNode deletes the trie node from database with the provided node info
 // and associated node hash.
 func (scheme *hashScheme) DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash) {
-	rawdb.DeleteTrieNode(db, hash)
+	rawdb.DeleteLegacyTrieNode(db, hash)
 }
 
 // IsTrieNode returns an indicator if the given database key is the key of trie
