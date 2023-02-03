@@ -701,6 +701,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		list := pool.pending[from]
 		if list != nil { // Sender already has pending txs
 			sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+			if repl := list.txs.Get(tx.Nonce()); repl != nil {
+				// Deduct the cost of a transaction replaced by this
+				sum.Sub(sum, repl.Cost())
+			}
 			if sum.Cmp(pool.currentState.GetBalance(from)) > 0 {
 				log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
 				return false, ErrOverdraft
