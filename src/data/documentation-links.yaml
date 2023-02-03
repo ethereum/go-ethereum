@@ -120,6 +120,8 @@
       to: /docs/monitoring/ethstats
     - id: Metrics
       to: /docs/monitoring/metrics
+    - id: Understanding Geth dashboards
+      to: /docs/monitoring/understanding-dashboards
 - id: Tools
   items:
     - id: Clef
@@ -138,12 +140,12 @@
           to: /docs/tools/clef/tutorial
         - id: Clique-signing
           to: /docs/tools/clef/clique-signing
-    - id: puppeth
-      to: /docs/tools/puppeth
     - id: abigen
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p
+    - id: Puppeth
+      to: /docs/tools/puppeth
 - id: FAQs
   to: /docs/faq
 - id: Resources
