@@ -120,7 +120,7 @@ gcmode = "archive"
     # noprefetch = false
     # preimages = false
     # txlookuplimit = 2350000
-    # timeout = "10m0s"
+    # timeout = "1h0m0s"
 
 # [accounts]
     # unlock = []

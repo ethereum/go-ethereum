@@ -565,7 +565,7 @@ func DefaultConfig() *Config {
 			Preimages:     false,
 			TxLookupLimit: 2350000,
 			TriesInMemory: 128,
-			TrieTimeout:   10 * time.Minute,
+			TrieTimeout:   60 * time.Minute,
 		},
 		Accounts: &AccountsConfig{
 			Unlock:              []string{},
