@@ -19,12 +19,15 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 	"strings"
 	"syscall"
@@ -39,8 +42,10 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
@@ -228,6 +233,87 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
+func readList(filename string) ([]string, error) {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(string(b), "\n"), nil
+}
+
+// ImportHistory imports Era1 files containing historical block information,
+// starting from genesis.
+func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
+		return fmt.Errorf("history import only supported when starting from genesis")
+	}
+	entries, err := era.ReadDir(dir, network)
+	if err != nil {
+		return fmt.Errorf("error reading %s: %w", dir, err)
+	}
+	checksums, err := readList(path.Join(dir, "checksums.txt"))
+	if err != nil {
+		return fmt.Errorf("unable to read checksums.txt: %w", err)
+	}
+	if len(checksums) != len(entries) {
+		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries", len(checksums), len(entries))
+	}
+	var (
+		start    = time.Now()
+		reported = time.Now()
+		imported = 0
+		forker   = core.NewForkChoice(chain, nil)
+	)
+	for i, filename := range entries {
+		// Read entire Era1 to memory. Max historical Era1 is around
+		// 600MB. This is a lot to load at once, but it speeds up the
+		// import substantially.
+		f, err := os.ReadFile(path.Join(dir, filename))
+		if err != nil {
+			return fmt.Errorf("unable to open era: %w", err)
+		}
+
+		if have, want := common.Hash(sha256.Sum256(f)).Hex(), checksums[i]; have != want {
+			return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
+		}
+
+		// Import all block data from Era1.
+		r, err := era.NewReader(bytes.NewReader(f))
+		if err != nil {
+			return fmt.Errorf("error making era reader: %w", err)
+		}
+		for j := 0; ; j += 1 {
+			n := i*era.MaxEra1Size + j
+			block, receipts, err := r.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error reading block %d: %w", n, err)
+			} else if block.Number().BitLen() == 0 {
+				continue // skip genesis
+			}
+			if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
+				return fmt.Errorf("error inserting header %d: %w", n, err)
+			} else if status != core.CanonStatTy {
+				return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
+			}
+			if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
+				return fmt.Errorf("error inserting body %d: %w", n, err)
+			}
+			imported += 1
+
+			// Give the user some feedback that something is happening.
+			if time.Since(reported) >= 8*time.Second {
+				log.Info("Importing Era files", "head", n, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
+				imported = 0
+				reported = time.Now()
+			}
+		}
+	}
+
+	return nil
+}
+
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
@@ -294,6 +380,78 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)
+	return nil
+}
+
+// ExportHistory exports blockchain history into the specified directory,
+// following the Era format.
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
+	log.Info("Exporting blockchain history", "dir", dir)
+	if head := bc.CurrentBlock().Number.Uint64(); head < last {
+		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
+		last = head
+	}
+	network := "unknown"
+	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
+		network = name
+	}
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating output directory: %w", err)
+	}
+	var (
+		start     = time.Now()
+		reported  = time.Now()
+		checksums []string
+	)
+	for i := first; i <= last; i += step {
+		var (
+			buf = bytes.NewBuffer(nil)
+			w   = era.NewBuilder(buf)
+		)
+		for j := uint64(0); j < step && j <= last-i; j++ {
+			var (
+				n     = i + j
+				block = bc.GetBlockByNumber(n)
+			)
+			if block == nil {
+				return fmt.Errorf("export failed on #%d: not found", n)
+			}
+			receipts := bc.GetReceiptsByHash(block.Hash())
+			if receipts == nil {
+				return fmt.Errorf("export failed on #%d: receipts not found", n)
+			}
+			td := bc.GetTd(block.Hash(), block.NumberU64())
+			if td == nil {
+				return fmt.Errorf("export failed on #%d: total difficulty not found", n)
+			}
+			if err := w.Add(block, receipts, td); err != nil {
+				return err
+			}
+		}
+		root, err := w.Finalize()
+		if err != nil {
+			return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
+		}
+
+		// Compute checksum of entire Era1.
+		checksums = append(checksums, common.Hash(sha256.Sum256(buf.Bytes())).Hex())
+
+		// Write Era1 to disk.
+		filename := path.Join(dir, era.Filename(network, int(i/step), root))
+		if err := os.WriteFile(filename, buf.Bytes(), os.ModePerm); err != nil {
+			return err
+		}
+
+		if time.Since(reported) >= 8*time.Second {
+			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
+		}
+	}
+
+	os.WriteFile(path.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
+
+	log.Info("Exported blockchain to", "dir", dir)
+
 	return nil
 }
 
