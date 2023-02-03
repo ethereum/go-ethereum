@@ -144,7 +144,7 @@
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p
-    - id: Puppeth
+    - id: puppeth
       to: /docs/tools/puppeth
 - id: FAQs
   to: /docs/faq
