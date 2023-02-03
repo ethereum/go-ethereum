@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -120,9 +120,13 @@ func DeleteStorageTrieNode(db ethdb.KeyValueWriter, accountHash common.Hash, pat
 	}
 }
 
-// ReadLegacyTrieNode retrieves the trie node of the provided hash.
+// ReadLegacyTrieNode retrieves the legacy trie node with the given
+// associated node hash.
 func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(hash.Bytes())
+	data, err := db.Get(hash.Bytes())
+	if err != nil {
+		return nil
+	}
 	return data
 }
 
@@ -132,17 +136,17 @@ func HasLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
 	return ok
 }
 
-// WriteLegacyTrieNode writes the provided trie node database.
+// WriteLegacyTrieNode writes the provided legacy trie node to database.
 func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 	if err := db.Put(hash.Bytes(), node); err != nil {
-		log.Crit("Failed to store trie node", "err", err)
+		log.Crit("Failed to store legacy trie node", "err", err)
 	}
 }
 
-// DeleteLegacyTrieNode deletes the specified trie node from the database.
+// DeleteLegacyTrieNode deletes the specified legacy trie node from database.
 func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(hash.Bytes()); err != nil {
-		log.Crit("Failed to delete trie node", "err", err)
+		log.Crit("Failed to delete legacy trie node", "err", err)
 	}
 }
 

@@ -22,6 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// ReadPreimage retrieves a single preimage of the provided hash.
+func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, _ := db.Get(preimageKey(hash))
+	return data
+}
+
 // WritePreimages writes the provided set of preimages to the database.
 func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
@@ -31,12 +37,6 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	}
 	preimageCounter.Inc(int64(len(preimages)))
 	preimageHitCounter.Inc(int64(len(preimages)))
-}
-
-// ReadPreimage retrieves a single preimage of the provided hash.
-func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(preimageKey(hash))
-	return data
 }
 
 // ReadCode retrieves the contract code of the provided code hash.
