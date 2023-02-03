@@ -103,12 +103,6 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
-	// txctx := &tracers.Context{
-	// 	BlockHash: blockHash,
-	// 	TxIndex:   task.index,
-	// 	TxHash:    txs[task.index].Hash(),
-	// }
-
 	// Create the tracer, the EVM environment and run it
 	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 	if err != nil {
