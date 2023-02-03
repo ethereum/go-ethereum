@@ -811,7 +811,7 @@ func (api *ConsensusAPI) getBody(block *types.Block) *beacon.ExecutionPayloadBod
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
-	if withdrawals == nil && api.eth.APIBackend.ChainConfig().IsShanghai(block.Time()) {
+	if withdrawals == nil && api.eth.BlockChain().Config().IsShanghai(block.Time()) {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 
