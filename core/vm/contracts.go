@@ -38,9 +38,14 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
+	// RegistryKey returns the address at which the contract will be registered.
 	RegistryKey() common.Address
-	RequiredGas(input []byte) uint64                                                                                              // RequiredPrice calculates the contract gas use
-	Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) // Run runs the precompiled contract
+	// RequiredGas calculates the contract static gas use.
+	RequiredGas(input []byte) uint64
+	// Run runs the precompiled contract with the given context.
+	Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error)
+	// WithStateDB sets the statedb for the contract to use.
+	WithStateDB(sdb StateDB) PrecompiledContract
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -154,7 +159,7 @@ func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
 
-func (c *ecrecover) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *ecrecover) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	const ecRecoverInputLength = 128
 
 	input = common.RightPadBytes(input, ecRecoverInputLength)
@@ -185,6 +190,8 @@ func (c *ecrecover) Run(ctx context.Context, statedb StateDB, input []byte, call
 	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
 }
 
+func (c *ecrecover) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // SHA256 implemented as a native contract.
 type sha256hash struct{}
 
@@ -199,10 +206,12 @@ func (c *sha256hash) RegistryKey() common.Address {
 func (c *sha256hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Sha256PerWordGas + params.Sha256BaseGas
 }
-func (c *sha256hash) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *sha256hash) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	h := sha256.Sum256(input)
 	return h[:], nil
 }
+
+func (c *sha256hash) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // RIPEMD160 implemented as a native contract.
 type ripemd160hash struct{}
@@ -218,11 +227,13 @@ func (c *ripemd160hash) RegistryKey() common.Address {
 func (c *ripemd160hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Ripemd160PerWordGas + params.Ripemd160BaseGas
 }
-func (c *ripemd160hash) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *ripemd160hash) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	ripemd := ripemd160.New()
 	ripemd.Write(input)
 	return common.LeftPadBytes(ripemd.Sum(nil), 32), nil
 }
+
+func (c *ripemd160hash) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // data copy implemented as a native contract.
 type dataCopy struct{}
@@ -238,9 +249,11 @@ func (c *dataCopy) RegistryKey() common.Address {
 func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
-func (c *dataCopy) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *dataCopy) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return input, nil
 }
+
+func (c *dataCopy) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
@@ -369,7 +382,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	return gas.Uint64()
 }
 
-func (c *bigModExp) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bigModExp) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	var (
 		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
 		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
@@ -403,6 +416,8 @@ func (c *bigModExp) Run(ctx context.Context, statedb StateDB, input []byte, call
 	}
 	return common.LeftPadBytes(v, int(modLen)), nil
 }
+
+func (c *bigModExp) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
 // returning it, or an error if the point is invalid.
@@ -453,9 +468,11 @@ func (c *bn256AddIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256AddGasIstanbul
 }
 
-func (c *bn256AddIstanbul) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256AddIstanbul) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256Add(input)
 }
+
+func (c *bn256AddIstanbul) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // bn256AddByzantium implements a native elliptic curve point addition
 // conforming to Byzantium consensus rules.
@@ -470,9 +487,11 @@ func (c *bn256AddByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256AddGasByzantium
 }
 
-func (c *bn256AddByzantium) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256AddByzantium) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256Add(input)
 }
+
+func (c *bn256AddByzantium) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // runBn256ScalarMul implements the Bn256ScalarMul precompile, referenced by
 // both Byzantium and Istanbul operations.
@@ -499,9 +518,11 @@ func (c *bn256ScalarMulIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256ScalarMulGasIstanbul
 }
 
-func (c *bn256ScalarMulIstanbul) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256ScalarMulIstanbul) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256ScalarMul(input)
 }
+
+func (c *bn256ScalarMulIstanbul) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
 // multiplication conforming to Byzantium consensus rules.
@@ -516,9 +537,11 @@ func (c *bn256ScalarMulByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256ScalarMulGasByzantium
 }
 
-func (c *bn256ScalarMulByzantium) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256ScalarMulByzantium) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256ScalarMul(input)
 }
+
+func (c *bn256ScalarMulByzantium) WithStateDB(StateDB) PrecompiledContract { return c }
 
 var (
 	// true32Byte is returned if the bn256 pairing check succeeds.
@@ -575,9 +598,11 @@ func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasIstanbul + uint64(len(input)/192)*params.Bn256PairingPerPointGasIstanbul
 }
 
-func (c *bn256PairingIstanbul) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256PairingIstanbul) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256Pairing(input)
 }
+
+func (c *bn256PairingIstanbul) WithStateDB(StateDB) PrecompiledContract { return c }
 
 // bn256PairingByzantium implements a pairing pre-compile for the bn256 curve
 // conforming to Byzantium consensus rules.
@@ -592,9 +617,11 @@ func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasByzantium + uint64(len(input)/192)*params.Bn256PairingPerPointGasByzantium
 }
 
-func (c *bn256PairingByzantium) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bn256PairingByzantium) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	return runBn256Pairing(input)
 }
+
+func (c *bn256PairingByzantium) WithStateDB(StateDB) PrecompiledContract { return c }
 
 type blake2F struct{}
 
@@ -622,7 +649,7 @@ var (
 	errBlake2FInvalidFinalFlag   = errors.New("invalid final flag")
 )
 
-func (c *blake2F) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *blake2F) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Make sure the input is valid (correct length and final flag)
 	if len(input) != blake2FInputLength {
 		return nil, errBlake2FInvalidInputLength
@@ -661,6 +688,8 @@ func (c *blake2F) Run(ctx context.Context, statedb StateDB, input []byte, caller
 	return output, nil
 }
 
+func (c *blake2F) WithStateDB(StateDB) PrecompiledContract { return c }
+
 var (
 	errBLS12381InvalidInputLength          = errors.New("invalid input length")
 	errBLS12381InvalidFieldElementTopBytes = errors.New("invalid field element top bytes")
@@ -680,7 +709,7 @@ func (c *bls12381G1Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1AddGas
 }
 
-func (c *bls12381G1Add) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G1Add) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G1Add precompile.
 	// > G1 addition call expects `256` bytes as an input that is interpreted as byte concatenation of two G1 points (`128` bytes each).
 	// > Output is an encoding of addition operation result - single G1 point (`128` bytes).
@@ -710,6 +739,8 @@ func (c *bls12381G1Add) Run(ctx context.Context, statedb StateDB, input []byte, 
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G1Add) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381G1Mul implements EIP-2537 G1Mul precompile.
 type bls12381G1Mul struct{}
 
@@ -722,7 +753,7 @@ func (c *bls12381G1Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1MulGas
 }
 
-func (c *bls12381G1Mul) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G1Mul) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G1Mul precompile.
 	// > G1 multiplication call expects `160` bytes as an input that is interpreted as byte concatenation of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32` bytes).
 	// > Output is an encoding of multiplication operation result - single G1 point (`128` bytes).
@@ -750,6 +781,8 @@ func (c *bls12381G1Mul) Run(ctx context.Context, statedb StateDB, input []byte, 
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G1Mul) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
 type bls12381G1MultiExp struct{}
 
@@ -776,7 +809,7 @@ func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
 	return (uint64(k) * params.Bls12381G1MulGas * discount) / 1000
 }
 
-func (c *bls12381G1MultiExp) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G1MultiExp) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G1MultiExp precompile.
 	// G1 multiplication call expects `160*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte concatenation of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32` bytes).
 	// Output is an encoding of multiexponentiation operation result - single G1 point (`128` bytes).
@@ -811,6 +844,8 @@ func (c *bls12381G1MultiExp) Run(ctx context.Context, statedb StateDB, input []b
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G1MultiExp) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381G2Add implements EIP-2537 G2Add precompile.
 type bls12381G2Add struct{}
 
@@ -823,7 +858,7 @@ func (c *bls12381G2Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2AddGas
 }
 
-func (c *bls12381G2Add) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G2Add) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G2Add precompile.
 	// > G2 addition call expects `512` bytes as an input that is interpreted as byte concatenation of two G2 points (`256` bytes each).
 	// > Output is an encoding of addition operation result - single G2 point (`256` bytes).
@@ -853,6 +888,8 @@ func (c *bls12381G2Add) Run(ctx context.Context, statedb StateDB, input []byte, 
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G2Add) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381G2Mul implements EIP-2537 G2Mul precompile.
 type bls12381G2Mul struct{}
 
@@ -865,7 +902,7 @@ func (c *bls12381G2Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2MulGas
 }
 
-func (c *bls12381G2Mul) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G2Mul) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G2MUL precompile logic.
 	// > G2 multiplication call expects `288` bytes as an input that is interpreted as byte concatenation of encoding of G2 point (`256` bytes) and encoding of a scalar value (`32` bytes).
 	// > Output is an encoding of multiplication operation result - single G2 point (`256` bytes).
@@ -893,6 +930,8 @@ func (c *bls12381G2Mul) Run(ctx context.Context, statedb StateDB, input []byte, 
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G2Mul) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
 type bls12381G2MultiExp struct{}
 
@@ -919,7 +958,7 @@ func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
 	return (uint64(k) * params.Bls12381G2MulGas * discount) / 1000
 }
 
-func (c *bls12381G2MultiExp) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381G2MultiExp) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 G2MultiExp precompile logic
 	// > G2 multiplication call expects `288*k` bytes as an input that is interpreted as byte concatenation of `k` slices each of them being a byte concatenation of encoding of G2 point (`256` bytes) and encoding of a scalar value (`32` bytes).
 	// > Output is an encoding of multiexponentiation operation result - single G2 point (`256` bytes).
@@ -954,6 +993,8 @@ func (c *bls12381G2MultiExp) Run(ctx context.Context, statedb StateDB, input []b
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381G2MultiExp) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381Pairing implements EIP-2537 Pairing precompile.
 type bls12381Pairing struct{}
 
@@ -966,7 +1007,7 @@ func (c *bls12381Pairing) RequiredGas(input []byte) uint64 {
 	return params.Bls12381PairingBaseGas + uint64(len(input)/384)*params.Bls12381PairingPerPairGas
 }
 
-func (c *bls12381Pairing) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381Pairing) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 Pairing precompile logic.
 	// > Pairing call expects `384*k` bytes as an inputs that is interpreted as byte concatenation of `k` slices. Each slice has the following structure:
 	// > - `128` bytes of G1 point encoding
@@ -1020,6 +1061,8 @@ func (c *bls12381Pairing) Run(ctx context.Context, statedb StateDB, input []byte
 	return out, nil
 }
 
+func (c *bls12381Pairing) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // decodeBLS12381FieldElement decodes BLS12-381 elliptic curve field element.
 // Removes top 16 bytes of 64 byte input.
 func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
@@ -1049,7 +1092,7 @@ func (c *bls12381MapG1) RequiredGas(input []byte) uint64 {
 	return params.Bls12381MapG1Gas
 }
 
-func (c *bls12381MapG1) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381MapG1) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 Map_To_G1 precompile.
 	// > Field-to-curve call expects `64` bytes an an input that is interpreted as a an element of the base field.
 	// > Output of this call is `128` bytes and is G1 point following respective encoding rules.
@@ -1076,6 +1119,8 @@ func (c *bls12381MapG1) Run(ctx context.Context, statedb StateDB, input []byte, 
 	return g.EncodePoint(r), nil
 }
 
+func (c *bls12381MapG1) WithStateDB(StateDB) PrecompiledContract { return c }
+
 // bls12381MapG2 implements EIP-2537 MapG2 precompile.
 type bls12381MapG2 struct{}
 
@@ -1088,7 +1133,7 @@ func (c *bls12381MapG2) RequiredGas(input []byte) uint64 {
 	return params.Bls12381MapG2Gas
 }
 
-func (c *bls12381MapG2) Run(ctx context.Context, statedb StateDB, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
+func (c *bls12381MapG2) Run(ctx context.Context, input []byte, caller common.Address, value *big.Int, readonly bool) ([]byte, error) {
 	// Implements EIP-2537 Map_FP2_TO_G2 precompile logic.
 	// > Field-to-curve call expects `128` bytes an an input that is interpreted as a an element of the quadratic extension field.
 	// > Output of this call is `256` bytes and is G2 point following respective encoding rules.
@@ -1121,3 +1166,5 @@ func (c *bls12381MapG2) Run(ctx context.Context, statedb StateDB, input []byte, 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
 }
+
+func (c *bls12381MapG2) WithStateDB(StateDB) PrecompiledContract { return c }
