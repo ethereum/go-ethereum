@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"sync/atomic"
 
@@ -42,9 +43,9 @@ type (
 
 // `PrecompileManager` allows the EVM to execute a precompiled contract.
 type PrecompileManager interface {
-	// `PrepareForStateTransition` holds the precompile native statedb
+	// `PrepareForStateTransition` sets the native precompile context
 	// before beginning a state transition.
-	PrepareForStateTransition(statedb StateDB) error
+	PrepareForStateTransition(ctx context.Context) error
 
 	// `Has` returns if a precompiled contract was found at `addr`.
 	Has(addr common.Address) bool
