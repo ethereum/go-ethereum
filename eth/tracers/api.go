@@ -177,7 +177,7 @@ func (api *API) getAllBlockTransactions(ctx context.Context, block *types.Block)
 
 	stateSyncPresent := false
 
-	borReceipt := rawdb.ReadBorReceipt(api.backend.ChainDb(), block.Hash(), block.NumberU64())
+	borReceipt := rawdb.ReadBorReceipt(api.backend.ChainDb(), block.Hash(), block.NumberU64(), api.backend.ChainConfig())
 	if borReceipt != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {

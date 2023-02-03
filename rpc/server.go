@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	mapset "github.com/deckarep/golang-set"
+
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -127,9 +128,11 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 				log.Debug("batch limit %d exceeded: %d requests given", s.BatchLimit, len(reqs))
 			}
 		} else {
+			//nolint:contextcheck
 			h.handleBatch(reqs)
 		}
 	} else {
+		//nolint:contextcheck
 		h.handleMsg(reqs[0])
 	}
 }

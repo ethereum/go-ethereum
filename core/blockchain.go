@@ -2059,7 +2059,7 @@ func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
 	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 
 	// Append bor receipt
-	borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number)
+	borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number, bc.chainConfig)
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 	}
