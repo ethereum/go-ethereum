@@ -37,7 +37,7 @@ func packBytesSlice(bytes []byte, l int) []byte {
 // t.
 func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
-	case IntTy, UintTy:
+	case IntTy, UintTy, FixedPointTy, UfixedPointTy:
 		return packNum(reflectValue), nil
 	case StringTy:
 		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len()), nil
