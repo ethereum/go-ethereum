@@ -765,34 +765,44 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*beaco
 	var bodies = make([]*beacon.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
-		bodies[i] = getBody(block)
+		bodies[i] = api.getBody(block)
 	}
 	return bodies
 }
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*beacon.ExecutionPayloadBodyV1 {
-	if api.eth.BlockChain().CurrentBlock().NumberU64() < start {
-		// Return [] if the requested range is past our latest block
-		return []*beacon.ExecutionPayloadBodyV1{}
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) ([]*beacon.ExecutionPayloadBodyV1, error) {
+	if start == 0 || count == 0 || count > 1024 {
+		return nil, beacon.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
 	}
-	bodies := make([]*beacon.ExecutionPayloadBodyV1, count)
-	for i := uint64(0); i < count; i++ {
-		block := api.eth.BlockChain().GetBlockByNumber(start + i)
-		bodies[i] = getBody(block)
+	current := api.eth.BlockChain().CurrentBlock().NumberU64()
+	// Return [] if the requested range is past our latest block
+	if current < start {
+		return []*beacon.ExecutionPayloadBodyV1{}, nil
 	}
-	return bodies
+	// limit count up until current
+	end := start + count
+	if end > current {
+		end = current
+	}
+	var bodies []*beacon.ExecutionPayloadBodyV1
+	for i := uint64(start); i < end; i++ {
+		block := api.eth.BlockChain().GetBlockByNumber(i)
+		bodies = append(bodies, api.getBody(block))
+	}
+	return bodies, nil
 }
 
-func getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
+func (api *ConsensusAPI) getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
 	if block == nil {
 		return nil
 	}
 
 	var (
-		body = block.Body()
-		txs  = make([]hexutil.Bytes, len(body.Transactions))
+		body        = block.Body()
+		txs         = make([]hexutil.Bytes, len(body.Transactions))
+		withdrawals = body.Withdrawals
 	)
 
 	for j, tx := range body.Transactions {
@@ -800,8 +810,13 @@ func getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
 		txs[j] = hexutil.Bytes(data)
 	}
 
+	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
+	if withdrawals == nil && api.eth.APIBackend.ChainConfig().IsShanghai(block.Time()) {
+		withdrawals = make([]*types.Withdrawal, 0)
+	}
+
 	return &beacon.ExecutionPayloadBodyV1{
 		TransactionData: txs,
-		Withdrawals:     body.Withdrawals,
+		Withdrawals:     withdrawals,
 	}
 }

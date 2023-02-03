@@ -1314,8 +1314,8 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 	}{
 		// Genesis
 		{
-			results: []*types.Body{eth.BlockChain().GetBlockByNumber(0).Body()},
-			start:   0,
+			results: []*types.Body{blocks[0].Body()},
+			start:   1,
 			count:   1,
 		},
 		// First post-merge block
@@ -1332,26 +1332,70 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		},
 		// unavailable block
 		{
-			results: []*types.Body{blocks[19].Body(), nil, nil},
-			start:   20,
+			results: []*types.Body{blocks[18].Body()},
+			start:   19,
 			count:   3,
 		},
 		// after range
 		{
 			results: make([]*types.Body, 0),
-			start:   21,
+			start:   20,
 			count:   2,
 		},
 	}
 
 	for k, test := range tests {
-		result := api.GetPayloadBodiesByRangeV1(test.start, test.count)
-		if len(result) != len(test.results) {
+		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result) == len(test.results) {
 			for i, r := range result {
 				if !equalBody(test.results[i], r) {
 					t.Fatalf("test %v: invalid response: expected %+v got %+v", k, test.results[i], r)
 				}
 			}
+		} else {
+			t.Fatalf("invalid length want %v got %v", len(test.results), len(result))
+		}
+	}
+}
+
+func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
+	node, eth, _ := setupBodies(t)
+	api := NewConsensusAPI(eth)
+	defer node.Close()
+
+	tests := []struct {
+		start uint64
+		count uint64
+	}{
+		// Genesis
+		{
+			start: 0,
+			count: 1,
+		},
+		// No block requested
+		{
+			start: 1,
+			count: 0,
+		},
+		// Genesis & no block
+		{
+			start: 0,
+			count: 0,
+		},
+		// More than 1024 blocks
+		{
+			start: 1,
+			count: 1025,
+		},
+	}
+
+	for _, test := range tests {
+		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
+		if err == nil {
+			t.Fatalf("expected error, got %v", result)
 		}
 	}
 }
