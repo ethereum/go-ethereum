@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/go-test/deep"
 
 	// Force-load the native, to trigger registration
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -133,16 +132,16 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		t.Logf("tracer name: %s", tracerName)
 
 		// uncomment this for easier debugging
-		have, _ := json.MarshalIndent(ret, "", " ")
-		want, _ := json.MarshalIndent(test.Result, "", " ")
-		t.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
+		// have, _ := json.MarshalIndent(ret, "", " ")
+		// want, _ := json.MarshalIndent(test.Result, "", " ")
+		// t.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
 
 		// uncomment this for harder debugging <3 meowsbits
-		lines := deep.Equal(ret, test.Result)
-		for _, l := range lines {
-			t.Logf("%s", l)
-			t.FailNow()
-		}
+		// lines := deep.Equal(ret, test.Result)
+		// for _, l := range lines {
+		// 	t.Logf("%s", l)
+		// 	t.FailNow()
+		// }
 
 		t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 	}
