@@ -43,7 +43,7 @@ After adding a page, you will also need to list it in `/src/data/documentation-l
 Notes in documentation pages are highlighted boxes (color depend on the current set dark/light theme). To add a note, wrap the note text in `<Note>` tage as follows:
 
 ```markdown
-<Note> text to include in note</Note>
+<Note>text to include in note</Note>
 ```
 
 <img width="809" alt="Screen Shot 2023-01-04 at 18 22 06" src="https://user-images.githubusercontent.com/948922/210652463-1fc0370e-815c-427d-9eff-64199a300460.png">
