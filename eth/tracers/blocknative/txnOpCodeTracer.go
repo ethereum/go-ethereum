@@ -18,17 +18,17 @@ import (
 // op codes and relevant gas data.
 // This is intended for Blocknative usage.
 type txnOpCodeTracer struct {
-	env       *vm.EVM              // EVM context for execution of transaction to occur within
-	callStack []common.CallFrameBN // Data structure for op codes making up our trace
-	interrupt uint32               // Atomic flag to signal execution interruption
-	reason    error                // Textual reason for the interruption (not always specific for us)
+	env       *vm.EVM     // EVM context for execution of transaction to occur within
+	callStack []CallFrame // Data structure for op codes making up our trace
+	interrupt uint32      // Atomic flag to signal execution interruption
+	reason    error       // Textual reason for the interruption (not always specific for us)
 }
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer.
 func NewTxnOpCodeTracer() (Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &txnOpCodeTracer{callStack: make([]common.CallFrameBN, 1)}, nil
+	return &txnOpCodeTracer{callStack: make([]CallFrame, 1)}, nil
 }
 
 // GetResult returns an empty json object.
@@ -53,7 +53,7 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	// This is the initial call
-	t.callStack[0] = common.CallFrameBN{
+	t.callStack[0] = CallFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
@@ -125,7 +125,7 @@ func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	}
 
 	// Apart from the starting call detected by CaptureStart, here we track every new transaction opcode
-	call := common.CallFrameBN{
+	call := CallFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
 		To:    addrToHex(to),

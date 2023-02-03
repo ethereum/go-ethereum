@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/blocknative"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 	"math/big"
@@ -19,11 +20,11 @@ import (
 )
 
 type txnOpCodeTracerTest struct {
-	Genesis      *core.Genesis       `json:"genesis"`
-	Context      *callContext        `json:"context"`
-	Input        string              `json:"input"`
-	TracerConfig json.RawMessage     `json:"tracerConfig"`
-	Result       *common.CallFrameBN `json:"result"`
+	Genesis      *core.Genesis          `json:"genesis"`
+	Context      *callContext           `json:"context"`
+	Input        string                 `json:"input"`
+	TracerConfig json.RawMessage        `json:"tracerConfig"`
+	Result       *blocknative.CallFrame `json:"result"`
 }
 
 func TestTxnOpCodeTracer(t *testing.T) {
@@ -92,7 +93,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := new(common.CallFrameBN)
+			ret := new(blocknative.CallFrame)
 			if err := json.Unmarshal(res, ret); err != nil {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
@@ -104,13 +105,13 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 	}
 }
 
-func callFrameJsonEqual(x, y *common.CallFrameBN) bool {
+func callFrameJsonEqual(x, y *blocknative.CallFrame) bool {
 	// Clear out non-deterministic time
 	x.Time = ""
 	y.Time = ""
 
-	xTrace := new(common.CallFrameBN)
-	yTrace := new(common.CallFrameBN)
+	xTrace := new(blocknative.CallFrame)
+	yTrace := new(blocknative.CallFrame)
 	if xj, err := json.Marshal(x); err == nil {
 		if json.Unmarshal(xj, xTrace) != nil {
 			return false
