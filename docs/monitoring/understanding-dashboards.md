@@ -3,7 +3,7 @@ title: Understanding Geth's dashboard
 description: How to use a dashboard to understand a Geth node's performance
 ---
 
-Out [dashboards page](/docs/monitoring/dashboards.md) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node.
+Out [dashboards page](/docs/monitoring/dashboards.md) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node. Note that the raw data informing the dashboard can be viewed in JSON format in the browser by navigating to the ip address and port passed to `--metrics.addr` and `--metrics.port` (`127.0.0.1:6060` by default).
 
 ## What does the dashboard look like?
 
@@ -97,7 +97,7 @@ Geth has a capacity for pending transactions defined by `--txpool.globalslots` (
 
 The block processing panel tracks the time taken to complete the various tasks involved in processing each block, measured in microseconds or nanoseconds. Specifically, this includes:
 
-- execution: tiem taken to execute the transactions in the block
+- execution: time taken to execute the transactions in the block
 - validation: time taken to compute a new state root and compare it to the one that arrived in the block
 - commit: time taken to write the new block to the chain data
 - account read: time taken to access account information from the state trie
@@ -109,13 +109,29 @@ The block processing panel tracks the time taken to complete the various tasks i
 - storage hash: time taken to generate a new hash for modified smart contract storage data
 - storage commit: time taken to write modified smart contract storage data to the storage trie. 
 - snapshot account read: time taken to read account data from a snapshot
-- snapshot storage read: time taken to read storage data froma  snapshot
+- snapshot storage read: time taken to read storage data from a  snapshot
 - snapshot commit: time taken to write data to a snapshot
+
+![The block processing panel](/public/images/docs/grafana/block-processing.png)
 
 #### Transaction processing
 
-The block processing panel tracks the time taken to complete the various tasks involved in processing each block, measured in microseconds or nanoseconds. Specifically, this includes:
+The transaction processing panel tracks the time taken to complete the various tasks involved in processing each block, measured as a mean rate of events per second:
 
+- known: rate of new transactions arriving at the node.
+- valid: rate that node marks known transactions as valid
+- invalid: rate that node marks known transactions as invalid
+- underpriced: rate that node marks transactions paying insufficient gas as invalid
+- executable discard: rate that valid transactions are dropped from the transaction pool, e.g. because it is already known.
+- executable replace: rate that valid transactions are replaced with a new one from same sender with same nonce but higher gas
+- executable ratelimit: rate that valid transactions are dropped due to rate-limiting
+- executable nofunds: rate that valid transations are dropped due to running out of ETH to pay gas
+- gapped discard: rate that queued transactions are discarded from the transaction pool
+- gapped replace: rate that queued transactions are replaced with a new one from same sender with same nonce but higher gas
+- gapped ratelimit: rate that queued transactions are dropped due to rate limiting
+- gapped nofunds: rate that queued transactions are dropped due to running out of ETH to pay gas
+
+![The tx processing panel](/public/images/docs/grafana/tx-processing.png)
 
 #### block propagation
 #### transaction propagation
@@ -135,4 +151,3 @@ The block processing panel tracks the time taken to complete the various tasks i
 #### Compaction time
 #### Compaction delay
 #### Compaction count
-#### 
