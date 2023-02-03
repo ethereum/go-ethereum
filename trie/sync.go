@@ -155,7 +155,7 @@ func (batch *syncMemBatch) hasCode(hash common.Hash) bool {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	scheme   NodeScheme                   // Node scheme descriptor used in database.
+	scheme   string                       // Node scheme descriptor used in database.
 	database ethdb.KeyValueReader         // Persistent database to check for existing entries
 	membatch *syncMemBatch                // Memory buffer to avoid frequent database writes
 	nodeReqs map[string]*nodeRequest      // Pending requests pertaining to a trie node path
@@ -165,7 +165,7 @@ type Sync struct {
 }
 
 // NewSync creates a new trie data download scheduler.
-func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallback, scheme NodeScheme) *Sync {
+func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallback, scheme string) *Sync {
 	ts := &Sync{
 		scheme:   scheme,
 		database: database,
@@ -191,7 +191,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 		return
 	}
 	owner, inner := ResolvePath(path)
-	if s.scheme.HasTrieNode(s.database, owner, inner, root) {
+	if rawdb.HasTrieNode(s.database, owner, inner, root, s.scheme) {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -349,7 +349,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for path, value := range s.membatch.nodes {
 		owner, inner := ResolvePath([]byte(path))
-		s.scheme.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value)
+		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
@@ -474,7 +474,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					chash        = common.BytesToHash(node)
 					owner, inner = ResolvePath(child.path)
 				)
-				if s.scheme.HasTrieNode(s.database, owner, inner, chash) {
+				if rawdb.HasTrieNode(s.database, owner, inner, chash, s.scheme) {
 					return
 				}
 				// Locally unknown node, schedule for retrieval
