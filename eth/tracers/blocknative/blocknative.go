@@ -31,9 +31,7 @@ type CallFrame struct {
 	Error       string      `json:"error,omitempty"`
 	ErrorReason string      `json:"errorReason,omitempty"`
 	Calls       []CallFrame `json:"calls,omitempty"`
-	gasIn       uint64
-	gasCost     uint64
-	Time        string `json:"time,omitempty"`
+	Time        string      `json:"time,omitempty"`
 }
 
 func bytesToHex(s []byte) string {
