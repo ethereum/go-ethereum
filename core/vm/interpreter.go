@@ -30,8 +30,6 @@ type Config struct {
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
 
-	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
-
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
@@ -45,7 +43,8 @@ type ScopeContext struct {
 
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
-	evm *EVM
+	evm   *EVM
+	table *JumpTable
 
 	hasher    crypto.KeccakState // Keccak256 hasher instance shared across opcodes
 	hasherBuf common.Hash        // Keccak256 hasher result array shared aross opcodes
@@ -57,48 +56,46 @@ type EVMInterpreter struct {
 // NewEVMInterpreter returns a new instance of the Interpreter.
 func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
-	if evm.Config.JumpTable == nil {
-		switch {
-		case evm.chainRules.IsShanghai:
-			cfg.JumpTable = &shanghaiInstructionSet
-		case evm.chainRules.IsMerge:
-			evm.Config.JumpTable = &mergeInstructionSet
-		case evm.chainRules.IsLondon:
-			evm.Config.JumpTable = &londonInstructionSet
-		case evm.chainRules.IsBerlin:
-			evm.Config.JumpTable = &berlinInstructionSet
-		case evm.chainRules.IsIstanbul:
-			evm.Config.JumpTable = &istanbulInstructionSet
-		case evm.chainRules.IsConstantinople:
-			evm.Config.JumpTable = &constantinopleInstructionSet
-		case evm.chainRules.IsByzantium:
-			evm.Config.JumpTable = &byzantiumInstructionSet
-		case evm.chainRules.IsEIP158:
-			evm.Config.JumpTable = &spuriousDragonInstructionSet
-		case evm.chainRules.IsEIP150:
-			evm.Config.JumpTable = &tangerineWhistleInstructionSet
-		case evm.chainRules.IsHomestead:
-			evm.Config.JumpTable = &homesteadInstructionSet
-		default:
-			evm.Config.JumpTable = &frontierInstructionSet
-		}
-		var extraEips []int
-		if len(evm.Config.ExtraEips) > 0 {
-			// Deep-copy jumptable to prevent modification of opcodes in other tables
-			evm.Config.JumpTable = copyJumpTable(evm.Config.JumpTable)
-		}
-		for _, eip := range evm.Config.ExtraEips {
-			if err := EnableEIP(eip, evm.Config.JumpTable); err != nil {
-				// Disable it, so caller can check if it's activated or not
-				log.Error("EIP activation failed", "eip", eip, "error", err)
-			} else {
-				extraEips = append(extraEips, eip)
-			}
-		}
-		evm.Config.ExtraEips = extraEips
+	var table *JumpTable
+	switch {
+	case evm.chainRules.IsShanghai:
+		table = &shanghaiInstructionSet
+	case evm.chainRules.IsMerge:
+		table = &mergeInstructionSet
+	case evm.chainRules.IsLondon:
+		table = &londonInstructionSet
+	case evm.chainRules.IsBerlin:
+		table = &berlinInstructionSet
+	case evm.chainRules.IsIstanbul:
+		table = &istanbulInstructionSet
+	case evm.chainRules.IsConstantinople:
+		table = &constantinopleInstructionSet
+	case evm.chainRules.IsByzantium:
+		table = &byzantiumInstructionSet
+	case evm.chainRules.IsEIP158:
+		table = &spuriousDragonInstructionSet
+	case evm.chainRules.IsEIP150:
+		table = &tangerineWhistleInstructionSet
+	case evm.chainRules.IsHomestead:
+		table = &homesteadInstructionSet
+	default:
+		table = &frontierInstructionSet
 	}
-
-	return &EVMInterpreter{evm: evm}
+	var extraEips []int
+	if len(evm.Config.ExtraEips) > 0 {
+		// Deep-copy jumptable to prevent modification of opcodes in other tables
+		table = copyJumpTable(table)
+	}
+	for _, eip := range evm.Config.ExtraEips {
+		if err := EnableEIP(eip, table); err != nil {
+			// Disable it, so caller can check if it's activated or not
+			log.Error("EIP activation failed", "eip", eip, "error", err)
+		} else {
+			extraEips = append(extraEips, eip)
+		}
+	}
+	evm.Config.ExtraEips = extraEips
+	return &EVMInterpreter{evm: evm, table: table}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -179,7 +176,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
-		operation := in.evm.Config.JumpTable[op]
+		operation := in.table[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
