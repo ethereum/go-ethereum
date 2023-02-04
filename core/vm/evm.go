@@ -163,7 +163,9 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // SetBlockContext updates the block context of the EVM.
 func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
 	evm.Context = blockCtx
-	evm.chainRules = evm.chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil)
+	num := blockCtx.BlockNumber
+	timestamp := blockCtx.Time
+	evm.chainRules = evm.chainConfig.Rules(num, blockCtx.Random != nil, timestamp)
 }
 
 // Call executes the contract associated with the addr with the given input as
