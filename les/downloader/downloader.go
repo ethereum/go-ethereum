@@ -447,7 +447,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	mode := d.getMode()
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "td", td, "mode", mode)
+	log.Debug("Synchronising with the network", "peer", p.ID(), "eth", p.version, "head", hash, "td", td, "mode", mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
@@ -648,7 +648,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
-			if packet.PeerId() != p.id {
+			if packet.PeerId() != p.ID() {
 				log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
 				break
 			}
@@ -834,7 +834,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
-			if packet.PeerId() != p.id {
+			if packet.PeerId() != p.ID() {
 				log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
 				break
 			}
@@ -926,7 +926,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 
 			case packet := <-d.headerCh:
 				// Discard anything not from the origin peer
-				if packet.PeerId() != p.id {
+				if packet.PeerId() != p.ID() {
 					log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
 					break
 				}
@@ -1043,7 +1043,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 
 		case packet := <-d.headerCh:
 			// Make sure the active peer is giving us the skeleton headers
-			if packet.PeerId() != p.id {
+			if packet.PeerId() != p.ID() {
 				log.Debug("Received skeleton from incorrect peer", "peer", packet.PeerId())
 				break
 			}
@@ -1191,13 +1191,13 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			if d.dropPeer == nil {
 				// The dropPeer method is nil when `--copydb` is used for a local copy.
 				// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
-				p.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", p.id)
+				p.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", p.ID())
 				break
 			}
 			// Header retrieval timed out, consider the peer bad and drop
 			p.log.Debug("Header request timed out", "elapsed", ttl)
 			headerTimeoutMeter.Mark(1)
-			d.dropPeer(p.id)
+			d.dropPeer(p.ID())
 
 			// Finish the sync gracefully instead of dumping the gathered data though
 			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {

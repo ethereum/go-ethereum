@@ -416,15 +416,15 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 
 	// Short circuit if the peer's already downloading something (sanity check to
 	// not corrupt state)
-	if _, ok := q.headerPendPool[p.id]; ok {
+	if _, ok := q.headerPendPool[p.ID()]; ok {
 		return nil
 	}
 	// Retrieve a batch of hashes, skipping previously failed ones
 	send, skip := uint64(0), []uint64{}
 	for send == 0 && !q.headerTaskQueue.Empty() {
 		from, _ := q.headerTaskQueue.Pop()
-		if q.headerPeerMiss[p.id] != nil {
-			if _, ok := q.headerPeerMiss[p.id][from.(uint64)]; ok {
+		if q.headerPeerMiss[p.ID()] != nil {
+			if _, ok := q.headerPeerMiss[p.ID()][from.(uint64)]; ok {
 				skip = append(skip, from.(uint64))
 				continue
 			}
@@ -444,7 +444,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		From: send,
 		Time: time.Now(),
 	}
-	q.headerPendPool[p.id] = request
+	q.headerPendPool[p.ID()] = request
 	return request
 }
 
@@ -488,7 +488,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	if taskQueue.Empty() {
 		return nil, false, true
 	}
-	if _, ok := pendPool[p.id]; ok {
+	if _, ok := pendPool[p.ID()]; ok {
 		return nil, false, false
 	}
 	// Retrieve a batch of tasks, skipping previously failed ones
@@ -563,7 +563,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		Headers: send,
 		Time:    time.Now(),
 	}
-	pendPool[p.id] = request
+	pendPool[p.ID()] = request
 	return request, progress, throttled
 }
 

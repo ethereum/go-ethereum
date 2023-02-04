@@ -160,7 +160,7 @@ func (p *peerCommons) queueSend(f func()) bool {
 
 // String implements fmt.Stringer.
 func (p *peerCommons) String() string {
-	return fmt.Sprintf("Peer %s [%s]", p.id, fmt.Sprintf("les/%d", p.version))
+	return fmt.Sprintf("Peer %s [%s]", p.ID(), fmt.Sprintf("les/%d", p.version))
 }
 
 // PeerInfo represents a short summary of the `eth` sub-protocol metadata known

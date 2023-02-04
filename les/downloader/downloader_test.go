@@ -422,6 +422,11 @@ type downloadTesterPeer struct {
 	missingStates map[common.Hash]bool // State entries that fast sync should not return
 }
 
+// ID return downloadTesterPeer id
+func (dlp *downloadTesterPeer) ID() string {
+	return dlp.id
+}
+
 // Head constructs a function to retrieve a peer's current head hash
 // and total difficulty.
 func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
@@ -434,7 +439,7 @@ func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 // function can be used to retrieve batches of headers from the particular peer.
 func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
 	result := dlp.chain.headersByHash(origin, amount, skip, reverse)
-	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
+	go dlp.dl.downloader.DeliverHeaders(dlp.ID(), result)
 	return nil
 }
 
@@ -443,7 +448,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 // function can be used to retrieve batches of headers from the particular peer.
 func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	result := dlp.chain.headersByNumber(origin, amount, skip, reverse)
-	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
+	go dlp.dl.downloader.DeliverHeaders(dlp.ID(), result)
 	return nil
 }
 
@@ -452,7 +457,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 // batches of block bodies from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 	txs, uncles := dlp.chain.bodies(hashes)
-	go dlp.dl.downloader.DeliverBodies(dlp.id, txs, uncles)
+	go dlp.dl.downloader.DeliverBodies(dlp.ID(), txs, uncles)
 	return nil
 }
 
@@ -461,7 +466,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
 	receipts := dlp.chain.receipts(hashes)
-	go dlp.dl.downloader.DeliverReceipts(dlp.id, receipts)
+	go dlp.dl.downloader.DeliverReceipts(dlp.ID(), receipts)
 	return nil
 }
 
@@ -480,7 +485,7 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 			}
 		}
 	}
-	go dlp.dl.downloader.DeliverNodeData(dlp.id, results)
+	go dlp.dl.downloader.DeliverNodeData(dlp.ID(), results)
 	return nil
 }
 

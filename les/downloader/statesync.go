@@ -166,7 +166,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		// Handle dropped peer connections:
 		case p := <-peerDrop:
 			// Skip if no request is currently pending
-			req := active[p.id]
+			req := active[p.ID()]
 			if req == nil {
 				continue
 			}
@@ -176,7 +176,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.delivered = time.Now()
 
 			finished = append(finished, req)
-			delete(active, p.id)
+			delete(active, p.ID())
 
 		// Handle timed-out requests:
 		case req := <-timeout:
@@ -233,7 +233,7 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*
 			reason = "delivered"
 		// Handle dropped peer connections:
 		case p := <-peerDrop:
-			req = active[p.id]
+			req = active[p.ID()]
 			reason = "peerdrop"
 		// Handle timed-out requests:
 		case req = <-timeout:

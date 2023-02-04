@@ -294,6 +294,11 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 	return ok
 }
 
+// ID returns the peer id
+func (p *peerConnection) ID() string {
+	return p.id
+}
+
 // peerSet represents the collection of active peer participating in the chain
 // download procedure.
 type peerSet struct {
@@ -344,16 +349,16 @@ func (ps *peerSet) Reset() {
 func (ps *peerSet) Register(p *peerConnection) error {
 	// Register the new peer with some meaningful defaults
 	ps.lock.Lock()
-	if _, ok := ps.peers[p.id]; ok {
+	if _, ok := ps.peers[p.ID()]; ok {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
 	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.MedianRoundTrip())
-	if err := ps.rates.Track(p.id, p.rates); err != nil {
+	if err := ps.rates.Track(p.ID(), p.rates); err != nil {
 		ps.lock.Unlock()
 		return err
 	}
-	ps.peers[p.id] = p
+	ps.peers[p.ID()] = p
 	ps.lock.Unlock()
 
 	ps.newPeerFeed.Send(p)
