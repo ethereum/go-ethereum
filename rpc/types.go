@@ -120,14 +120,15 @@ type BlockNumber int64
 type EpochNumber int64
 
 const (
-	PendingBlockNumber  = BlockNumber(-2)
-	LatestBlockNumber   = BlockNumber(-1)
-	EarliestBlockNumber = BlockNumber(0)
-	LatestEpochNumber   = EpochNumber(-1)
+	ConfirmedBlockNumber = BlockNumber(-3)
+	PendingBlockNumber   = BlockNumber(-2)
+	LatestBlockNumber    = BlockNumber(-1)
+	EarliestBlockNumber  = BlockNumber(0)
+	LatestEpochNumber    = EpochNumber(-1)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "latest", "earliest" or "pending" as string arguments
+// - "latest", "earliest", "pending" and "confirmed" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -143,6 +144,9 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 		return nil
 	case "pending":
 		*bn = PendingBlockNumber
+		return nil
+	case "confirmed":
+		*bn = ConfirmedBlockNumber
 		return nil
 	}
 
