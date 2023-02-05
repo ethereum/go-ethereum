@@ -26,6 +26,7 @@ var (
 // BlockTrace contains block execution traces and results required for rollers.
 type BlockTrace struct {
 	Coinbase         *AccountWrapper    `json:"coinbase"`
+	FeeVault         *AccountWrapper    `json:"feeVault"`
 	Header           *Header            `json:"header"`
 	Transactions     []*TransactionData `json:"transactions"`
 	StorageTrace     *StorageTrace      `json:"storageTrace"`

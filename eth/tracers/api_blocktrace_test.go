@@ -94,6 +94,7 @@ func TestAPI_GetBlockTraceByNumberOrHash(t *testing.T) {
 	blockTrace, err := api.GetBlockTraceByNumberOrHash(context.Background(), rpc.BlockNumberOrHash{
 		BlockHash: &hash,
 	}, nil)
+	// fmt.Println(blockTrace.FeeVaultAddress.Address)
 	assert.NoError(t, err)
 
 	// check chain status
@@ -110,6 +111,9 @@ func TestAPI_GetBlockTraceByNumberOrHash(t *testing.T) {
 
 	// check coinbase
 	checkCoinbase(t, backend, blockTrace.Coinbase)
+
+	// check feeVault
+	checkFeeVault(t, backend, blockTrace.FeeVault)
 }
 
 func verifyProof(t *testing.T, expect [][]byte, actual []hexutil.Bytes) {
@@ -185,6 +189,11 @@ func checkCoinbase(t *testing.T, b *testBackend, wrapper *types.AccountWrapper) 
 	coinbase, err := b.engine.Author(header)
 	assert.NoError(t, err)
 	assert.Equal(t, true, coinbase.String() == wrapper.Address.String())
+}
+
+func checkFeeVault(t *testing.T, b *testBackend, wrapper *types.AccountWrapper) {
+	feeVault := *b.chainConfig.FeeVaultAddress
+	assert.Equal(t, true, feeVault.String() == wrapper.Address.String())
 }
 
 func createAccounts(n int) (auths []*bind.TransactOpts) {

@@ -26,6 +26,7 @@ type traceEnv struct {
 	config *TraceConfig
 
 	coinbase common.Address
+	feeVault common.Address
 
 	// rMu lock is used to protect txs executed in parallel.
 	signer   types.Signer
@@ -99,9 +100,18 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 		return nil, err
 	}
 
+	// get feeeVaultAddress
+	var feeVault common.Address
+	if api.backend.ChainConfig().FeeVaultAddress != nil {
+		feeVault = *api.backend.ChainConfig().FeeVaultAddress
+	} else {
+		feeVault = coinbase
+	}
+
 	env := &traceEnv{
 		config:   config,
 		coinbase: coinbase,
+		feeVault: feeVault,
 		signer:   types.MakeSigner(api.backend.ChainConfig(), block.Number()),
 		state:    statedb,
 		blockCtx: core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil),
@@ -127,6 +137,21 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 		}
 		env.Proofs[key] = wrappedProof
 	}
+
+	key = feeVault.String()
+	if _, exist := env.Proofs[key]; !exist {
+		proof, err := env.state.GetProof(feeVault)
+		if err != nil {
+			log.Error("Proof for feeVault not available", "feeVault", feeVault, "error", err)
+			// but we still mark the proofs map with nil array
+		}
+		wrappedProof := make([]hexutil.Bytes, len(proof))
+		for i, bt := range proof {
+			wrappedProof[i] = bt
+		}
+		env.Proofs[key] = wrappedProof
+	}
+
 	return env, nil
 }
 
@@ -248,7 +273,11 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		to = &createdAcc.Address
 	}
 	// collect affected account after tx being applied
-	for _, acc := range []common.Address{from, *to, env.coinbase} {
+	afterAccounts := []common.Address{from, *to, env.coinbase}
+	if env.coinbase != env.feeVault {
+		afterAccounts = append(afterAccounts, env.feeVault)
+	}
+	for _, acc := range afterAccounts {
 		after = append(after, &types.AccountWrapper{
 			Address:  acc,
 			Nonce:    state.GetNonce(acc),
@@ -343,6 +372,12 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 			Nonce:    statedb.GetNonce(env.coinbase),
 			Balance:  (*hexutil.Big)(statedb.GetBalance(env.coinbase)),
 			CodeHash: statedb.GetCodeHash(env.coinbase),
+		},
+		FeeVault: &types.AccountWrapper{
+			Address:  env.feeVault,
+			Nonce:    statedb.GetNonce(env.feeVault),
+			Balance:  (*hexutil.Big)(statedb.GetBalance(env.feeVault)),
+			CodeHash: statedb.GetCodeHash(env.feeVault),
 		},
 		Header:           block.Header(),
 		StorageTrace:     env.StorageTrace,
