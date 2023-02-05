@@ -27,8 +27,8 @@ type VerkleStem [31]byte
 
 // Mode specifies how a tree location has been accessed
 // for the byte value:
-//	the first bit is set if the branch has been edited
-//	the second bit is set if the branch has been read
+// * the first bit is set if the branch has been edited
+// * the second bit is set if the branch has been read
 type Mode byte
 
 const (

@@ -117,7 +117,7 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int, isVerkle bool) *testWorkerBackend {
 	var gspec = &core.Genesis{
 		Config: chainConfig,
 		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
@@ -146,10 +146,17 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			t.Fatalf("failed to insert origin chain: %v", err)
 		}
 		parent := chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
-		blocks, _ = core.GenerateChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
-			gen.SetCoinbase(testUserAddress)
-		})
-		uncle = blocks[0]
+		if isVerkle {
+			blocks, _, _, _ = core.GenerateVerkleChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
+				gen.SetCoinbase(testUserAddress)
+			})
+			uncle = blocks[0]
+		} else {
+			blocks, _ = core.GenerateChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
+				gen.SetCoinbase(testUserAddress)
+			})
+			uncle = blocks[0]
+		}
 	} else {
 		_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, gen *core.BlockGen) {
 			gen.SetCoinbase(testUserAddress)
@@ -196,7 +203,7 @@ func (b *testWorkerBackend) newRandomVerkleUncle() *types.Block {
 	} else {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
 	}
-	blocks, _ := core.GenerateVerkleChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
+	blocks, _, _, _ := core.GenerateVerkleChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
 		rand.Read(addr)
 		gen.SetCoinbase(common.BytesToAddress(addr))
@@ -245,7 +252,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		chainConfig = *params.AllEthashProtocolChanges
 		engine = ethash.NewFaker()
 	}
-	w, b := newTestWorker(t, &chainConfig, engine, db, 0)
+	w, b := newTestWorker(t, &chainConfig, engine, db, 0, false)
 	defer w.close()
 
 	// This test chain imports the mined blocks.

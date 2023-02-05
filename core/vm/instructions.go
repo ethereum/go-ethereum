@@ -382,10 +382,6 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-func touchEachChunksOnReadAndChargeGasWithAddress(offset, size uint64, contract *Contract, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
-	return touchEachChunksOnReadAndChargeGas(offset, size, contract, code, accesses, deployment)
-}
-
 // touchChunkOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
 func touchChunkOnReadAndChargeGas(chunks trie.ChunkedCode, offset uint64, evals [][]byte, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
 	// note that in the case where the executed code is outside the range of
