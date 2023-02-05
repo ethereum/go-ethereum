@@ -754,6 +754,12 @@ var (
 		Usage: "Gas price below which gpo will ignore transactions",
 		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
+	// fetcher flag to set arrival timeout
+	TxArrivalWaitFlag = cli.IntFlag{
+		Name:  "txarrivalwait",
+		Usage: "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 100ms)",
+		Value: (int)(node.DefaultConfig.P2P.TxArrivalWait),
+	}
 
 	// Metrics flags
 	MetricsEnabledFlag = cli.BoolFlag{
@@ -1287,6 +1293,10 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NoDial = true
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false
+	}
+
+	if ctx.GlobalIsSet(TxArrivalWaitFlag.Name) {
+		cfg.TxArrivalWait = (time.Duration)(TxArrivalWaitFlag.Value) * time.Millisecond
 	}
 }
 

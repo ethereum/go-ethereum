@@ -266,6 +266,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EthAPI:             ethAPI,
 		PeerRequiredBlocks: config.PeerRequiredBlocks,
 		checker:            checker,
+		txArrivalWait:      eth.p2pServer.TxArrivalWait,
 	}); err != nil {
 		return nil, err
 	}
