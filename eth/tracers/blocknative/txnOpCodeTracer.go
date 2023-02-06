@@ -19,6 +19,7 @@ import (
 // This is intended for Blocknative usage.
 type txnOpCodeTracer struct {
 	env       *vm.EVM     // EVM context for execution of transaction to occur within
+	trace     Trace       // Accumulated execution data the caller is interested in
 	callStack []CallFrame // Data structure for op codes making up our trace
 	interrupt uint32      // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption (not always specific for us)
@@ -42,7 +43,9 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 	// }
 
 	// Only want the top level trace, all other indexes hold subtraces to which we do not particularly need
-	res, err := json.Marshal(t.callStack[0])
+	t.trace.CallFrame = t.callStack[0]
+
+	res, err := json.Marshal(t.trace)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +76,7 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Du
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
 	// Add total time duration for this trace request
-	t.callStack[0].Time = fmt.Sprintf("%v", time)
+	t.trace.Time = fmt.Sprintf("%v", time)
 
 	// This is the final output of a call
 	if err != nil {

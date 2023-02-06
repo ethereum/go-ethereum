@@ -20,11 +20,11 @@ import (
 )
 
 type txnOpCodeTracerTest struct {
-	Genesis      *core.Genesis          `json:"genesis"`
-	Context      *callContext           `json:"context"`
-	Input        string                 `json:"input"`
-	TracerConfig json.RawMessage        `json:"tracerConfig"`
-	Result       *blocknative.CallFrame `json:"result"`
+	Genesis      *core.Genesis      `json:"genesis"`
+	Context      *callContext       `json:"context"`
+	Input        string             `json:"input"`
+	TracerConfig json.RawMessage    `json:"tracerConfig"`
+	Result       *blocknative.Trace `json:"result"`
 }
 
 func TestTxnOpCodeTracer(t *testing.T) {
@@ -93,25 +93,25 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := new(blocknative.CallFrame)
+			ret := new(blocknative.Trace)
 			if err := json.Unmarshal(res, ret); err != nil {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !callFrameJsonEqual(ret, test.Result) {
+			if !tracesEqual(ret, test.Result) {
 				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
 	}
 }
 
-func callFrameJsonEqual(x, y *blocknative.CallFrame) bool {
+func tracesEqual(x, y *blocknative.Trace) bool {
 	// Clear out non-deterministic time
 	x.Time = ""
 	y.Time = ""
 
-	xTrace := new(blocknative.CallFrame)
-	yTrace := new(blocknative.CallFrame)
+	xTrace := new(blocknative.Trace)
+	yTrace := new(blocknative.Trace)
 	if xj, err := json.Marshal(x); err == nil {
 		if json.Unmarshal(xj, xTrace) != nil {
 			return false

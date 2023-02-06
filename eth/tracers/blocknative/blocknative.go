@@ -15,6 +15,12 @@ type Tracer interface {
 	Stop(err error)
 }
 
+// Trace contains all the accumulated details of a transaction execution.
+type Trace struct {
+	CallFrame
+	Time string `json:"time,omitempty"`
+}
+
 type CallFrame struct {
 	Type        string      `json:"type"`
 	From        string      `json:"from"`
@@ -27,5 +33,4 @@ type CallFrame struct {
 	Error       string      `json:"error,omitempty"`
 	ErrorReason string      `json:"errorReason,omitempty"`
 	Calls       []CallFrame `json:"calls,omitempty"`
-	Time        string      `json:"time,omitempty"`
 }
