@@ -118,7 +118,7 @@ The block processing panel tracks the time taken to complete the various tasks i
 
 The transaction processing panel tracks the time taken to complete the various tasks involved in processing each block, measured as a mean rate of events per second:
 
-- known: rate of new transactions arriving at the node.
+- known: rate of new transactions arriving at the node that are ignored because the local node already knows about them.
 - valid: rate that node marks known transactions as valid
 - invalid: rate that node marks known transactions as invalid
 - underpriced: rate that node marks transactions paying insufficient gas as invalid
@@ -133,21 +133,329 @@ The transaction processing panel tracks the time taken to complete the various t
 
 ![The tx processing panel](/public/images/docs/grafana/tx-processing.png)
 
-#### block propagation
-#### transaction propagation
-#### block forwarding
-#### transaction fetcher peers
-#### transaction fecther hashes
-#### reorg meters
-#### reorg total meters
+#### Block propagation
+
+Block propagation metrics track the rate that the local node hears about, receives and broadcasts blocks. This includes:
+
+- ingress announcements: counts the number of inbound announcements processed by the local node. Announcements are messages from peers that signal that they have a block to share.
+- known announcements: counts the announcements that are ignored because the local node is already aware of them.
+- malicious announcements: counts the number of announcements from peers that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
+- ingress broadcasts: Blocks downloaded from peers
+- known broadcasts: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
+- malicious broadcasts: counts all blocks that are determined to be malicious
+
+
+#### Transaction propagation
+
+Transaction propagation tracks the sending and receiving of transactions on the peer-to-peer network. This includes:
+
+- ingress announcements: counts inbound announcements (notifications of a transaction's availability)
+- known announcements: counts announcements that are ignored because the local node is already aware of them
+- underpriced announcements: counts all announcements that never get fetched because they pay too little gas 
+- malicious announcements: counts announcements that are dropped because they appear malicious 
+- ingress broadcasts: counts all transactions fetched from peers
+- known broadcasts: counts transactions that are ignored because they duplicate transactions that the local node already knows about
+- underpriced broadcasts: counts all fetched transactions that are dropped due to paying insufficient gas
+- otherreject broadcasts: counts transactions that are rejected for reasons other than paying too little gas
+- finished requests: counts the successful delivery of a transaction, meaning it has been added to the local transaction pool
+- failed requests: counts the number of failed transaction deliveries, e.g. because a peer disconnected unexpectedly
+- timed out requests: counts the number of transaction requests that time out
+- ingress replies: tracks the total number of inbound replies to requests for transactions
+- known replies: tracks number of replies that are dropped because they are already known to the local node
+- underpriced replies: counts the number of replies that get dropped due to paying too little gas
+- otherreject replies: coutns the number of replies to transaction requests that get dropped for reasons other than paying too little gas
+
+![The tx propagation panel](/public/images/docs/grafana/tx-propagation.png)
+
+#### Block forwarding
+
+The block forwarding panel counts the announcements and the blocks that the local node receives that it should pass on to its peers. 
+
+#### Transaction fetcher peers
+
+The transaction fetcher peers panel shows how many peers the local node is connected to that can serve requests for transactions. The adjacent transaction fetcher hashes panel shows how many transaction hashes are available for fetching. Three statuses are reported in each panel: Waiting, queuing and fetching.
+
+#### Reorg
+
+The `reorg meter` panel simply counts the blocks added and the blocks removed during chain reorgs. The adjacent `Reorg total` panel shows the total number of reorg executions including both additions and removals.
+
 #### Goroutines
-#### ETh fetcher filter bodies
-#### Eth fetcher filter headers
-#### Data rate
-#### Session totals
-#### Persistent size
+
+Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to 
+execute concurrently.
+
+![The goroutine panel](/public/images/docs/grafana/goroutines.png)
+
+#### Eth fetcher filter bodies/headers
+
+Tracks the rate that headers/block bodies arrive from remote peers.
 
 ### Database
-#### Compaction time
-#### Compaction delay
-#### Compaction count
+
+The database section tracks various metrics related to data storage and i/o in the levelDB and ancients databases.
+
+#### Data rate
+
+measures the rate that data is written to, or read from, the levelDB and ancients databases. Includes:
+
+- leveldb read: Rate that data is read to the fast-access levelDB database that stores recent data.
+- leveldb write: Rate that data is written to the fast-access levelDB database that stores recent data.
+- ancient read: Rate that data is read from the freezer (the database storing older data).
+- ancient write: Rate that data is written to the freezer (the database storing older data)
+- compaction read: Rate that data is written to the levelDb database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- compaction write: Rate that data is read from to the levelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+  
+#### Session totals
+
+Instead of the *rate* that data is read from, and written to, the levelDB and ancients databases (as per `Data rate`), this panel tracks the total amount of data read and written across the entire time Geth is running.
+
+#### Persistent size
+
+This panel shows the amount of data, in GB, in the levelDB and ancients databases.
+
+#### Compaction time, delay and count
+
+These panels show the amount of time spent compacting the levelDB database, duration write operations to the database are delayed due to compaction and the frequency of compaction executions.
+
+<Note>
+The current default Geth Grafan dashboard includes panels for light nodes. Light nodes are not currently functional since Ethereum moved to proof-of-stake.
+</Note>
+
+
+## Creating new dashboards
+
+If the default dashboard isn't right for you, you can update it in the browser. Remove panels by clicking on their titles and selectign `remove`. Add a new panelk by clicking the "plus" icon in the upper right of the browser window. There, you will have to define an InfluxDB query for the metric you want to display. The endpoints for the various metrics that Geth reports are listed by Geth at the address/port combination passed to `--metrics.addr` and `metrics.port` on startup - by default `127.0.0.1:6060/debug/metrics`. It is also possible to configure a panel by providing a JSON configuration model. Individial components are defined using the following syntax (the example below is for the CPU panel):
+
+```json
+{
+  "id": 106,
+  "gridPos": {
+    "h": 6,
+    "w": 8,
+    "x": 0,
+    "y": 1
+  },
+  "type": "graph",
+  "title": "CPU",
+  "datasource": {
+    "uid": "s1zWCjvVk",
+    "type": "influxdb"
+  },
+  "thresholds": [],
+  "pluginVersion": "9.3.6",
+  "links": [],
+  "legend": {
+    "alignAsTable": false,
+    "avg": false,
+    "current": false,
+    "max": false,
+    "min": false,
+    "rightSide": false,
+    "show": true,
+    "total": false,
+    "values": false
+  },
+  "aliasColors": {},
+  "bars": false,
+  "dashLength": 10,
+  "dashes": false,
+  "fieldConfig": {
+    "defaults": {
+      "links": []
+    },
+    "overrides": []
+  },
+  "fill": 1,
+  "fillGradient": 0,
+  "hiddenSeries": false,
+  "lines": true,
+  "linewidth": 1,
+  "nullPointMode": "connected",
+  "options": {
+    "alertThreshold": true
+  },
+  "percentage": false,
+  "pointradius": 5,
+  "points": false,
+  "renderer": "flot",
+  "seriesOverrides": [],
+  "spaceLength": 10,
+  "stack": false,
+  "steppedLine": false,
+  "targets": [
+    {
+      "alias": "system",
+      "expr": "system_cpu_sysload",
+      "format": "time_series",
+      "groupBy": [
+        {
+          "params": [
+            "$interval"
+          ],
+          "type": "time"
+        }
+      ],
+      "intervalFactor": 1,
+      "legendFormat": "system",
+      "measurement": "geth.system/cpu/sysload.gauge",
+      "orderByTime": "ASC",
+      "policy": "default",
+      "refId": "A",
+      "resultFormat": "time_series",
+      "select": [
+        [
+          {
+            "params": [
+              "value"
+            ],
+            "type": "field"
+          },
+          {
+            "params": [],
+            "type": "mean"
+          }
+        ]
+      ],
+      "tags": [
+        {
+          "key": "host",
+          "operator": "=~",
+          "value": "/^$host$/"
+        }
+      ],
+      "datasource": {
+        "uid": "s1zWCjvVk",
+        "type": "influxdb"
+      }
+    },
+    {
+      "alias": "iowait",
+      "expr": "system_cpu_syswait",
+      "format": "time_series",
+      "groupBy": [
+        {
+          "params": [
+            "$interval"
+          ],
+          "type": "time"
+        }
+      ],
+      "intervalFactor": 1,
+      "legendFormat": "iowait",
+      "measurement": "geth.system/cpu/syswait.gauge",
+      "orderByTime": "ASC",
+      "policy": "default",
+      "refId": "B",
+      "resultFormat": "time_series",
+      "select": [
+        [
+          {
+            "params": [
+              "value"
+            ],
+            "type": "field"
+          },
+          {
+            "params": [],
+            "type": "mean"
+          }
+        ]
+      ],
+      "tags": [
+        {
+          "key": "host",
+          "operator": "=~",
+          "value": "/^$host$/"
+        }
+      ],
+      "datasource": {
+        "uid": "s1zWCjvVk",
+        "type": "influxdb"
+      }
+    },
+    {
+      "alias": "geth",
+      "expr": "system_cpu_procload",
+      "format": "time_series",
+      "groupBy": [
+        {
+          "params": [
+            "$interval"
+          ],
+          "type": "time"
+        }
+      ],
+      "intervalFactor": 1,
+      "legendFormat": "geth",
+      "measurement": "geth.system/cpu/procload.gauge",
+      "orderByTime": "ASC",
+      "policy": "default",
+      "refId": "C",
+      "resultFormat": "time_series",
+      "select": [
+        [
+          {
+            "params": [
+              "value"
+            ],
+            "type": "field"
+          },
+          {
+            "params": [],
+            "type": "mean"
+          }
+        ]
+      ],
+      "tags": [
+        {
+          "key": "host",
+          "operator": "=~",
+          "value": "/^$host$/"
+        }
+      ],
+      "datasource": {
+        "uid": "s1zWCjvVk",
+        "type": "influxdb"
+      }
+    }
+  ],
+  "timeFrom": null,
+  "timeRegions": [],
+  "timeShift": null,
+  "tooltip": {
+    "shared": true,
+    "sort": 0,
+    "value_type": "individual"
+  },
+  "xaxis": {
+    "buckets": null,
+    "mode": "time",
+    "name": null,
+    "show": true,
+    "values": []
+  },
+  "yaxes": [
+    {
+      "format": "percent",
+      "label": null,
+      "logBase": 1,
+      "max": null,
+      "min": null,
+      "show": true
+    },
+    {
+      "format": "short",
+      "label": null,
+      "logBase": 1,
+      "max": null,
+      "min": null,
+      "show": true
+    }
+  ],
+  "yaxis": {
+    "align": false,
+    "alignLevel": null
+  }
+}
+
+```
