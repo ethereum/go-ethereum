@@ -59,7 +59,7 @@ func TestState(t *testing.T) {
 	// Broken tests:
 	//
 	// The stEOF tests are generated with EOF as part of Shanghai, which
-	// is erroenous. Therefore, these tests are skipped.
+	// is erroneous. Therefore, these tests are skipped.
 	st.skipLoad(`^EIPTests/stEOF/`)
 	// Expected failures:
 
