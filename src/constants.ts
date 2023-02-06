@@ -177,8 +177,7 @@ export const LATEST_GETH_RELEASE_URL =
   'https://api.github.com/repos/ethereum/go-ethereum/releases/latest';
 export const ALL_GETH_COMMITS_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits/';
 export const RELEASE_COMMIT_BASE_URL = 'https://github.com/ethereum/go-ethereum/tree/';
-export const LAST_COMMIT_BASE_URL =
-  'https://api.github.com/repos/ethereum/go-ethereum/commits/website?path=';
+export const LAST_COMMIT_BASE_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits';
 
 // Binaries urls
 export const BINARIES_BASE_URL = 'https://gethstore.blob.core.windows.net/builds/';
