@@ -109,14 +109,14 @@ Then a new encrypted account manager can be created using:
 let ks = GethNewKeyStore("/path/to/keystore", GethLightScryptN, GethLightScryptP);
 ```
 
-The keystore folder needs to be in a location writable by the local mobile application but non-readable for other installed applications such as inside the app's document directory. The document directory shopuld be retrievable using
+The keystore folder needs to be in a location writable by the local mobile application but non-readable for other installed applications such as inside the app's document directory. The document directory should be retrievable using
 `let datadir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]`, so the keystore path could be `datadir + "/keystore"`.
 
 The last two arguments of the `GethNewKeyStore` factory method are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `GethStandardScryptN, GethStandardScryptP`, `GethLightScryptN, GethLightScryptP` or custom numbers. The _light_ version is recommended.
 
 ### Account lifecycle {#account-lifecycle}
 
-The encyrpted keystore can be used for the entire account lifecycle requirements of a mobile application. This includes the basic functionality of creating new accounts and deleting existing ones as well as more advanced functions like updating access credentials and account
+The encrypted keystore can be used for the entire account lifecycle requirements of a mobile application. This includes the basic functionality of creating new accounts and deleting existing ones as well as more advanced functions like updating access credentials and account
 import/export.
 
 Although the keystore defines the encryption strength it uses to store accounts, there is no global master password that can grant access to all of them. Rather each account is maintained individually, and stored on disk in its [encrypted format][secstore] individually, ensuring a much cleaner and stricter separation of credentials.
@@ -189,11 +189,11 @@ There are a few different ways one can authorize the account manager to execute 
 
 - **Single authorization**: The simplest way to sign a transaction via the keystore is to provide the passphrase of the account every time something needs to be signed, which will ephemerally decrypt the private key, execute the signing operation and immediately throw away the decrypted key. The drawbacks are that the passphrase needs to be queried from the user every time, which can become annoying if done frequently; or the application needs to keep the passphrase in memory, which can have security consequences if not done properly; and depending on the keystore's configured strength, constantly decrypting keys can result in non-negligible resource requirements.
 
-- **Multiple authorizations**: A more complex way of signing transactions via the keystore is to unlock the account via its passphrase once, and allow the account manager to cache the decrypted private key, enabling all subsequent signing requests tocomplete without the passphrase. The lifetime of the cached private key may be managed manually (by explicitly locking the account back up) or automatically (by providing a timeout during unlock). This mechanism is useful for scenarios where the user may need to sign many transactions or the application would need to do so without requiring user input. The crucial aspect to remember is that **anyone with access to the account manager can sign transactions while a particular account is unlocked** (e.g. device left unattended; application running untrusted code).
+- **Multiple authorizations**: A more complex way of signing transactions via the keystore is to unlock the account via its passphrase once, and allow the account manager to cache the decrypted private key, enabling all subsequent signing requests to complete without the passphrase. The lifetime of the cached private key may be managed manually (by explicitly locking the account back up) or automatically (by providing a timeout during unlock). This mechanism is useful for scenarios where the user may need to sign many transactions or the application would need to do so without requiring user input. The crucial aspect to remember is that **anyone with access to the account manager can sign transactions while a particular account is unlocked** (e.g. device left unattended; application running untrusted code).
 
 ### Signing on Android (Java) {#signing-on-android}
 
-Assuming an instance of a `KeyStore` called `ks` exists, a new account to sign transactions can be created using its `newAccount` method. For this demonstation a hard-coded example transaction is created to sign:
+Assuming an instance of a `KeyStore` called `ks` exists, a new account to sign transactions can be created using its `newAccount` method. For this demonstration a hard-coded example transaction is created to sign:
 
 ```java
 // Create a new account to sign transactions with
@@ -223,7 +223,7 @@ signed = ks.signTx(signer, tx, chain);
 ### Signing on iOS (Swift 3) {#signing-on-ios}
 
 Assuming an instance of a `GethKeyStore` called `ks` exists, a new account can be created to sign transactions with its `newAccount` method. For
-this demonstation a hard-coded example transaction is created to sign:
+this demonstration a hard-coded example transaction is created to sign:
 
 ```swift
 // Create a new account to sign transactions with
