@@ -120,8 +120,6 @@
       to: /docs/monitoring/ethstats
     - id: Metrics
       to: /docs/monitoring/metrics
-    - id: Understanding Geth dashboards
-      to: /docs/monitoring/understanding-dashboards
 - id: Tools
   items:
     - id: Clef
