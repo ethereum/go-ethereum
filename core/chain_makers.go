@@ -51,20 +51,6 @@ type BlockGen struct {
 	engine consensus.Engine
 }
 
-// AddWithdrawal adds a withdrawal to the generated block.
-func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
-	// The withdrawal will be assigned the next valid index.
-	var idx uint64
-	for i := b.i - 1; i >= 0; i-- {
-		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
-			idx = wd[len(wd)-1].Index + 1
-			break
-		}
-	}
-	w.Index = idx
-	b.withdrawals = append(b.withdrawals, w)
-}
-
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
@@ -224,6 +210,26 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	b.uncles = append(b.uncles, h)
 }
 
+// AddWithdrawal adds a withdrawal to the generated block.
+func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
+	// The withdrawal will be assigned the next valid index.
+	var idx uint64
+	for i := b.i - 1; i >= 0; i-- {
+		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
+			idx = wd[len(wd)-1].Index + 1
+			break
+		}
+		if i == 0 {
+			// Correctly set the index if no parent had withdrawals
+			if wd := b.parent.Withdrawals(); len(wd) != 0 {
+				idx = wd[len(wd)-1].Index + 1
+			}
+		}
+	}
+	w.Index = idx
+	b.withdrawals = append(b.withdrawals, w)
+}
+
 // PrevBlock returns a previously generated block by number. It panics if
 // num is greater or equal to the number of the block being generated.
 // For index -1, PrevBlock returns the parent block given to GenerateChain.
@@ -300,15 +306,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 		if b.engine != nil {
-			// Finalize and seal the block
-			shanghai := config.IsShanghai(b.header.TimeBig())
-			if shanghai && b.withdrawals == nil {
-				// need to make empty list to denote non-nil, but empty withdrawals to calc withdrawals hash
-				b.withdrawals = make([]*types.Withdrawal, 0)
-			} else if !shanghai && b.withdrawals != nil {
-				panic("withdrawals set before activation")
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+			if err != nil {
+				panic(err)
 			}
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))

@@ -158,7 +158,7 @@ func (i *bbInput) ToBlock() *types.Block {
 	if header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
-	return types.NewBlockWithHeader(header).WithBody2(i.Txs, i.Ommers, i.Withdrawals)
+	return types.NewBlockWithHeader(header).WithBody(i.Txs, i.Ommers).WithWithdrawals(i.Withdrawals)
 }
 
 // SealBlock seals the given block using the configured engine.
@@ -264,14 +264,15 @@ func BuildBlock(ctx *cli.Context) error {
 
 func readInput(ctx *cli.Context) (*bbInput, error) {
 	var (
-		headerStr  = ctx.String(InputHeaderFlag.Name)
-		ommersStr  = ctx.String(InputOmmersFlag.Name)
-		txsStr     = ctx.String(InputTxsRlpFlag.Name)
-		cliqueStr  = ctx.String(SealCliqueFlag.Name)
-		ethashOn   = ctx.Bool(SealEthashFlag.Name)
-		ethashDir  = ctx.String(SealEthashDirFlag.Name)
-		ethashMode = ctx.String(SealEthashModeFlag.Name)
-		inputData  = &bbInput{}
+		headerStr      = ctx.String(InputHeaderFlag.Name)
+		ommersStr      = ctx.String(InputOmmersFlag.Name)
+		withdrawalsStr = ctx.String(InputWithdrawalsFlag.Name)
+		txsStr         = ctx.String(InputTxsRlpFlag.Name)
+		cliqueStr      = ctx.String(SealCliqueFlag.Name)
+		ethashOn       = ctx.Bool(SealEthashFlag.Name)
+		ethashDir      = ctx.String(SealEthashDirFlag.Name)
+		ethashMode     = ctx.String(SealEthashModeFlag.Name)
+		inputData      = &bbInput{}
 	)
 	if ethashOn && cliqueStr != "" {
 		return nil, NewError(ErrorConfig, fmt.Errorf("both ethash and clique sealing specified, only one may be chosen"))
@@ -317,6 +318,13 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		}
 		inputData.OmmersRlp = ommers
 	}
+	if withdrawalsStr != stdinSelector && withdrawalsStr != "" {
+		var withdrawals []*types.Withdrawal
+		if err := readFile(withdrawalsStr, "withdrawals", &withdrawals); err != nil {
+			return nil, err
+		}
+		inputData.Withdrawals = withdrawals
+	}
 	if txsStr != stdinSelector {
 		var txs string
 		if err := readFile(txsStr, "txs", &txs); err != nil {
@@ -356,15 +364,14 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 // files
 func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 	raw, _ := rlp.EncodeToBytes(block)
-
 	type blockInfo struct {
 		Rlp  hexutil.Bytes `json:"rlp"`
 		Hash common.Hash   `json:"hash"`
 	}
-	var enc blockInfo
-	enc.Rlp = raw
-	enc.Hash = block.Hash()
-
+	enc := blockInfo{
+		Rlp:  raw,
+		Hash: block.Hash(),
+	}
 	b, err := json.MarshalIndent(enc, "", "  ")
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))

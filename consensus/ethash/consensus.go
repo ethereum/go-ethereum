@@ -306,7 +306,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
-	if !chain.Config().IsSharding(header.TimeBig()) {
+	if !chain.Config().IsSharding(header.Time) {
 		if header.ExcessDataGas != nil {
 			return fmt.Errorf("invalid excessDataGas before fork: have %v, expected 'nil'", header.ExcessDataGas)
 		}
@@ -317,6 +317,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
+	}
+	if chain.Config().IsShanghai(header.Time) {
+		return fmt.Errorf("ethash does not support shanghai fork")
 	}
 	// Verify the engine specific seal securing the block
 	if seal {
@@ -609,7 +612,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	if chain.Config().IsSharding(header.TimeBig()) {
+	if chain.Config().IsSharding(header.Time) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		} else {
@@ -621,9 +624,12 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
+	if len(withdrawals) > 0 {
+		return nil, errors.New("ethash does not support withdrawals")
+	}
+
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles, nil)
-
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
@@ -651,10 +657,10 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		enc = append(enc, header.BaseFee)
 	}
 	if header.WithdrawalsHash != nil {
-		enc = append(enc, header.WithdrawalsHash)
+		panic("withdrawal hash set on ethash")
 	}
 	if header.ExcessDataGas != nil {
-		enc = append(enc, header.ExcessDataGas)
+		panic("excessDataGas set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])

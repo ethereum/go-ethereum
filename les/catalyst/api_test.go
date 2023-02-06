@@ -20,10 +20,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -84,7 +84,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
-	fcState := beacon.ForkchoiceStateV1{
+	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      blocks[5].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -101,7 +101,7 @@ func TestExecutePayloadV1(t *testing.T) {
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
-	fcState := beacon.ForkchoiceStateV1{
+	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      postBlocks[0].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -130,7 +130,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		BaseFee:     block.BaseFee(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(beacon.ExecutableData{
+	_, err := api.ExecutePayloadV1(engine.ExecutableData{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),
@@ -153,7 +153,7 @@ func TestExecutePayloadV1(t *testing.T) {
 	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
 		t.Fatal("Unexpected chain head update")
 	}
-	fcState = beacon.ForkchoiceStateV1{
+	fcState = engine.ForkchoiceStateV1{
 		HeadBlockHash:      fakeBlock.Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},

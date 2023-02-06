@@ -215,7 +215,7 @@ func (st *StateTransition) buyGas() error {
 	if st.evm.ChainConfig().IsSharding(st.evm.Context.Time) {
 		dataGasUsed = st.dataGasUsed()
 		if st.evm.Context.ExcessDataGas == nil {
-			return fmt.Errorf("%w: sharding is active but ExcessDataGas is nil. Time: %v", ErrInternalFailure, st.evm.Context.Time.Uint64())
+			return fmt.Errorf("%w: sharding is active but ExcessDataGas is nil. Time: %v", ErrInternalFailure, st.evm.Context.Time)
 		}
 		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), new(big.Int).SetUint64(dataGasUsed))
 	}

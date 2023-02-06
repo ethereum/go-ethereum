@@ -277,12 +277,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainConfig:        chainConfig,
 		engine:             engine,
 		eth:                eth,
-		mux:                mux,
 		chain:              eth.BlockChain(),
+		mux:                mux,
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		coinbase:           config.Etherbase,
+		extra:              config.ExtraData,
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -291,8 +293,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		getWorkCh:          make(chan *getWorkReq),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
+		exitCh:             make(chan struct{}),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
@@ -339,6 +341,13 @@ func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
+}
+
+// etherbase retrieves the configured etherbase address.
+func (w *worker) etherbase() common.Address {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.coinbase
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -813,7 +822,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	env.tcount = 0
 
 	// Initialize the prestate excess_data_gas field used during state transition
-	if w.chainConfig.IsSharding(header.TimeBig()) {
+	if w.chainConfig.IsSharding(header.Time) {
 		// TODO(EIP-4844): Unit test this
 		env.excessDataGas = new(big.Int)
 		if parentExcessDataGas := parent.Header().ExcessDataGas; parentExcessDataGas != nil {
@@ -974,7 +983,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp   uint64            // The timestamp for sealing task
+	timestamp   uint64            // The timstamp for sealing task
 	forceTime   bool              // Flag whether the given timestamp is immutable or not
 	parentHash  common.Hash       // Parent block hash, empty means the latest chain head
 	coinbase    common.Address    // The fee recipient address for including transaction
@@ -1130,11 +1139,11 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
 	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
+		coinbase = w.etherbase()
+		if coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
 			return
 		}
-		coinbase = w.coinbase // Use the preset address as the fee recipient
 	}
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
@@ -1200,6 +1209,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
+		// Withdrawals are set to nil here, because this is only called in PoW.
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts, nil)
 		if err != nil {
 			return err

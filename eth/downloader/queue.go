@@ -778,7 +778,10 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		if uncleListHashes[index] != header.UncleHash {
 			return errInvalidBody
 		}
-		if header.WithdrawalsHash != nil && (withdrawalListHashes[index] != *header.WithdrawalsHash) {
+		if header.WithdrawalsHash == nil {
+			// discard any withdrawals if we don't have a withdrawal hash set
+			withdrawalLists[index] = nil
+		} else if withdrawalListHashes[index] != *header.WithdrawalsHash {
 			return errInvalidBody
 		}
 		return nil

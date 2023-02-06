@@ -19,7 +19,6 @@ package forkid
 import (
 	"bytes"
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,12 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // TestCreation tests that different genesis and fork rule combinations result in
 // the correct fork ID.
 func TestCreation(t *testing.T) {
 	// Temporary non-existent scenario TODO(karalabe): delete when Shanghai is enabled
 	timestampedConfig := *params.MainnetChainConfig
-	timestampedConfig.ShanghaiTime = big.NewInt(1668000000)
+	timestampedConfig.ShanghaiTime = u64(1668000000)
 
 	type testcase struct {
 		head uint64
@@ -201,7 +202,7 @@ func TestCreation(t *testing.T) {
 func TestValidation(t *testing.T) {
 	// Temporary non-existent scenario TODO(karalabe): delete when Shanghai is enabled
 	timestampedConfig := *params.MainnetChainConfig
-	timestampedConfig.ShanghaiTime = big.NewInt(1668000000)
+	timestampedConfig.ShanghaiTime = u64(1668000000)
 
 	tests := []struct {
 		config *params.ChainConfig

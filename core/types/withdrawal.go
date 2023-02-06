@@ -18,7 +18,6 @@ package types
 
 import (
 	"bytes"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,14 +32,14 @@ type Withdrawal struct {
 	Index     uint64         `json:"index"`          // monotonically increasing identifier issued by consensus layer
 	Validator uint64         `json:"validatorIndex"` // index of validator associated with withdrawal
 	Address   common.Address `json:"address"`        // target address for withdrawn ether
-	Amount    *big.Int       `json:"amount"`         // value of withdrawal in wei
+	Amount    uint64         `json:"amount"`         // value of withdrawal in Gwei
 }
 
 // field type overrides for gencodec
 type withdrawalMarshaling struct {
 	Index     hexutil.Uint64
 	Validator hexutil.Uint64
-	Amount    *hexutil.Big
+	Amount    hexutil.Uint64
 }
 
 // Withdrawals implements DerivableList for withdrawals.
