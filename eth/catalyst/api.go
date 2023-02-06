@@ -88,6 +88,8 @@ var caps = []string{
 	"engine_getPayloadV2",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
+	"engine_getPayloadBodiesByHashV1",
+	"engine_getPayloadBodiesByRangeV1",
 }
 
 type ConsensusAPI struct {
@@ -755,4 +757,62 @@ func (api *ConsensusAPI) heartbeat() {
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
+}
+
+// GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*beacon.ExecutionPayloadBodyV1 {
+	var bodies = make([]*beacon.ExecutionPayloadBodyV1, len(hashes))
+	for i, hash := range hashes {
+		block := api.eth.BlockChain().GetBlockByHash(hash)
+		bodies[i] = getBody(block)
+	}
+	return bodies
+}
+
+// GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) ([]*beacon.ExecutionPayloadBodyV1, error) {
+	if start == 0 || count == 0 || count > 1024 {
+		return nil, beacon.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
+	}
+	// limit count up until current
+	current := api.eth.BlockChain().CurrentBlock().NumberU64()
+	end := start + count
+	if end > current {
+		end = current
+	}
+	var bodies []*beacon.ExecutionPayloadBodyV1
+	for i := start; i < end; i++ {
+		block := api.eth.BlockChain().GetBlockByNumber(i)
+		bodies = append(bodies, getBody(block))
+	}
+	return bodies, nil
+}
+
+func getBody(block *types.Block) *beacon.ExecutionPayloadBodyV1 {
+	if block == nil {
+		return nil
+	}
+
+	var (
+		body        = block.Body()
+		txs         = make([]hexutil.Bytes, len(body.Transactions))
+		withdrawals = body.Withdrawals
+	)
+
+	for j, tx := range body.Transactions {
+		data, _ := tx.MarshalBinary()
+		txs[j] = hexutil.Bytes(data)
+	}
+
+	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
+	if withdrawals == nil && block.Header().WithdrawalsHash != nil {
+		withdrawals = make([]*types.Withdrawal, 0)
+	}
+
+	return &beacon.ExecutionPayloadBodyV1{
+		TransactionData: txs,
+		Withdrawals:     withdrawals,
+	}
 }
