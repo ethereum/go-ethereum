@@ -167,10 +167,10 @@ The output is similar to:
 
 #### Operation Results
 
-One piece of information missing from the function above is the result of a `SLOAD` operation. The state we get inside `log` is the state prior to the execution of the opcode, so that value is not known yet. For more operations we can figure it out for ourselves, but we don't have access to the
+One piece of information missing from the function above is the result of an `SLOAD` operation. The state we get inside `log` is the state prior to the execution of the opcode, so that value is not known yet. For more operations we can figure it out for ourselves, but we don't have access to the
 storage, so here we can't.
 
-The solution is to have a flag, `afterSload`, which is only true in the opcode right after a `SLOAD`, when we can see the result at the top of the stack.
+The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.
 
 ```js
 tracer = function (tx) {
