@@ -5,7 +5,7 @@ description: Introduction to account management in Go native applications.
 
 Geth provides a simple, yet thorough accounts package that includes all the tools developers need to leverage all the security of Geth's crypto implementation in a Go native application. The account management is done client side with all sensitive data held inside the application. This gives the user control over access permissions without relying on any third party.
 
-**Note: Geth's built-in account management is convenient and straightforward to use, but best practise is to use the external tool _Clef_ for key management.**
+**Note: Geth's built-in account management is convenient and straightforward to use, but best practice is to use the external tool _Clef_ for key management.**
 
 ## Encrypted keystores {#encrypted-keystores}
 
@@ -49,11 +49,11 @@ This individuality means that any operation requiring access to an account will 
 
 - When deleting an existing account, the caller must supply a passphrase to verify ownership of the account. This isn't cryptographically necessary, rather a protective measure against accidental loss of accounts.
 
-- When updating an existing account, the caller must supply both current and new passphrases. After completing the operation, the account will not be accessible via the old passphrase any more.
+- When updating an existing account, the caller must supply both current and new passphrases. After completing the operation, the account will not be accessible via the old passphrase anymore.
 
 - When exporting an existing account, the caller must supply both the current passphrase to decrypt the account, as well as an export passphrase to re-encrypt it with before returning the key-file to the user. This is required to allow moving accounts between machines and applications without sharing original credentials.
 
-- When importing a new account, the caller must supply both the encryption passphrase of the key-file being imported, as well as a new passhprase with which to store the account. This is required to allow storing account with different credentials than used for moving them around.
+- When importing a new account, the caller must supply both the encryption passphrase of the key-file being imported, as well as a new passphrase with which to store the account. This is required to allow storing account with different credentials than used for moving them around.
 
 **_Please note, there are no recovery mechanisms for lost passphrases. The cryptographic properties of the encrypted keystore (using the provided parameters) guarantee that account credentials cannot be brute forced in any meaningful time._**
 
@@ -121,4 +121,4 @@ Note that [`SignWithPassphrase`](https://godoc.org/github.com/ethereum/go-ethere
 
 ## Summary {#summary}
 
-Account management is a fundamental pillar of Ethereum development. Geth's Go API provides the tools required to integrate best-practise account security into Go native applications using a simple set of Go functions.
+Account management is a fundamental pillar of Ethereum development. Geth's Go API provides the tools required to integrate best-practice account security into Go native applications using a simple set of Go functions.
