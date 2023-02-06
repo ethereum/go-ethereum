@@ -5,13 +5,13 @@ description: Instructions for disclosing vulnerabilities to the Geth team
 
 In the software world, it is expected for security vulnerabilities to be immediately announced, thus giving operators an opportunity to take protective measure against attackers.
 
-Vulnerabilies typically take two forms:
+Vulnerabilities typically take two forms:
 
-1. Vulnerabilies that, if exploited, would harm the software operator. In the case of Geth, examples would be:
+1. Vulnerabilities that, if exploited, would harm the software operator. In the case of Geth, examples would be:
    - A bug that would allow remote reading or writing of OS files, or
    - Remote command execution, or
    - Bugs that would leak cryptographic keys
-2. Vulnerabilies that, if exploited, would harm the Ethereum mainnet. In the case of Geth, examples would be:
+2. Vulnerabilities that, if exploited, would harm the Ethereum mainnet. In the case of Geth, examples would be:
    - Consensus vulnerabilities, which would cause a chain split,
    - Denial-of-service during block processing, whereby a malicious transaction could cause the geth-portion of the network to crash.
    - Denial-of-service via p2p networking, whereby portions of the network could be made
@@ -43,7 +43,7 @@ In keeping with this policy, we have taken inspiration from [Solidity bug disclo
 
 There is a JSON-formatted list ([`vulnerabilities.json`](/public/docs/vulnerabilities/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
 
-As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](/public/docs/vulnerabilities/vulnerabilities.json.minisig), and cross-check the data against it's own version number.
+As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](/public/docs/vulnerabilities/vulnerabilities.json.minisig), and cross-check the data against its own version number.
 
 The list of vulnerabilities was started in November 2020, and covers mainly `v1.9.7` and forward.
 
@@ -70,7 +70,7 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
   - Takes into account the severity of impact and likelihood of exploitation.
 - `check`
   - This field contains a regular expression, which can be used against the reported `web3_clientVersion` of a node. If the check
-    matches, the node is with a high likelyhood affected by the vulnerability.
+    matches, the node is with a high likelihood affected by the vulnerability.
 - `CVE`
   - The assigned `CVE` identifier, if available (optional)
 
