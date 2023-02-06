@@ -19,8 +19,8 @@ package catalyst
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/miner"
 )
@@ -38,7 +38,7 @@ const maxTrackedHeaders = 10
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
-	id      beacon.PayloadID
+	id      engine.PayloadID
 	payload *miner.Payload
 }
 
@@ -58,7 +58,7 @@ func newPayloadQueue() *payloadQueue {
 }
 
 // put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id beacon.PayloadID, payload *miner.Payload) {
+func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -70,7 +70,7 @@ func (q *payloadQueue) put(id beacon.PayloadID, payload *miner.Payload) {
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutionPayloadEnvelope {
+func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -86,7 +86,7 @@ func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutionPayloadEnvelope
 }
 
 // has checks if a particular payload is already tracked.
-func (q *payloadQueue) has(id beacon.PayloadID) bool {
+func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 

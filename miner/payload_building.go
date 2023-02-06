@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -42,14 +42,14 @@ type BuildPayloadArgs struct {
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
-func (args *BuildPayloadArgs) Id() beacon.PayloadID {
+func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(args.Parent[:])
 	binary.Write(hasher, binary.BigEndian, args.Timestamp)
 	hasher.Write(args.Random[:])
 	hasher.Write(args.FeeRecipient[:])
-	var out beacon.PayloadID
+	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out
 }
@@ -60,7 +60,7 @@ func (args *BuildPayloadArgs) Id() beacon.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id       beacon.PayloadID
+	id       engine.PayloadID
 	empty    *types.Block
 	full     *types.Block
 	fullFees *big.Int
@@ -70,7 +70,7 @@ type Payload struct {
 }
 
 // newPayload initializes the payload object.
-func newPayload(empty *types.Block, id beacon.PayloadID) *Payload {
+func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 	payload := &Payload{
 		id:    id,
 		empty: empty,
@@ -108,7 +108,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 
 // Resolve returns the latest built payload and also terminates the background
 // thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) Resolve() *beacon.ExecutionPayloadEnvelope {
+func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -118,23 +118,23 @@ func (payload *Payload) Resolve() *beacon.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return beacon.BlockToExecutableData(payload.full, payload.fullFees)
+		return engine.BlockToExecutableData(payload.full, payload.fullFees)
 	}
-	return beacon.BlockToExecutableData(payload.empty, big.NewInt(0))
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
 // It's only used in tests.
-func (payload *Payload) ResolveEmpty() *beacon.ExecutionPayloadEnvelope {
+func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return beacon.BlockToExecutableData(payload.empty, big.NewInt(0))
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
 // It's only used in tests.
-func (payload *Payload) ResolveFull() *beacon.ExecutionPayloadEnvelope {
+func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -146,7 +146,7 @@ func (payload *Payload) ResolveFull() *beacon.ExecutionPayloadEnvelope {
 		}
 		payload.cond.Wait()
 	}
-	return beacon.BlockToExecutableData(payload.full, payload.fullFees)
+	return engine.BlockToExecutableData(payload.full, payload.fullFees)
 }
 
 // buildPayload builds the payload according to the provided parameters.
