@@ -3,7 +3,7 @@ title: Understanding Geth's dashboard
 description: How to use a dashboard to understand a Geth node's performance
 ---
 
-Out [dashboards page](/docs/monitoring/dashboards.md) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node. Note that the raw data informing the dashboard can be viewed in JSON format in the browser by navigating to the ip address and port passed to `--metrics.addr` and `--metrics.port` (`127.0.0.1:6060` by default).
+Our [dashboards page](/docs/monitoring/dashboards.md) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node. Note that the raw data informing the dashboard can be viewed in JSON format in the browser by navigating to the ip address and port passed to `--metrics.addr` and `--metrics.port` (`127.0.0.1:6060` by default).
 
 ## What does the dashboard look like?
 
@@ -49,31 +49,31 @@ The Traffic panel shows the rate of data ingress and egress for all subprotocols
 
 #### Peers
 
-The Peers panel shows the number of individual peers the local node is connected to. The number of times the local node dials to find new peers and the number of times information is served from the local  node are also tracked in this panel.
+The Peers panel shows the number of individual peers the local node is connected to. The number of times the local node dials to find new peers and the number of times information is served from the local node are also tracked in this panel.
 
 ![The Peers panel](/public/images/docs/grafana/peers.png)
 
 #### ETH ingress data rate
 
-Ingress is the process of data arriving at the local node from its peers. This panel shows the rate that data specifically using the eth subprotocol is arriving at the local node in units of kB/s (kilobytes per second). The data is subdivided into specific versions of the ETH subprotocol. Be aware that some dashboard templates might not yet include the latest subprotocol versions.
+Ingress is the process of data arriving at the local node from its peers. This panel shows the rate that data specifically using the eth subprotocol is arriving at the local node in units of kB/s (kilobytes per second). The data is subdivided into specific versions of the ETH subprotocol. Make sure your dashboard includes the latest version of the eth subprotocol!
 
 ![The ETH ingress rate panel](/public/images/docs/grafana/eth-ingress-rate.png)
 
 #### ETH egress data rate
 
-Egress is the process of data leaving the local node and being transferred to its peers. This panel shows the rate that data specifically using the eth subprotocol is leaving the local node in units of kB/s (kilobytes per second). Be aware that some dashboard templates might not yet include the latest subprotocol versions.
+Egress is the process of data leaving the local node and being transferred to its peers. This panel shows the rate that data specifically using the eth subprotocol is leaving the local node in units of kB/s (kilobytes per second). Make sure your dashboard includes the latest version of the eth subprotocol!
 
 ![The ETH egress rate panel](/public/images/docs/grafana/eth-egress-rate.png)
 
 #### ETH ingress traffic
 
-Ingress is the process of data arriving at the local node from its peers. This panel shows a moment-by-moment snapshot of the amount of data that is arriving at the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Be aware that some dashboard templates might not yet include the latest subprotocol versions.
+Ingress is the process of data arriving at the local node from its peers. This panel shows a moment-by-moment snapshot of the amount of data that is arriving at the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Make sure your dashboard includes the latest version of the eth subprotocol!
 
 ![The ETH ingress traffic panel](/public/images/docs/grafana/eth-ingress-traffic.png)
 
 #### ETH egress traffic
 
-Egress is the process of data leaving the local node and being transferred to its peers. This panel shows a moment-by-moment snapshot of the amount of data that is leaving the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Be aware that some dashboard templates might not yet include the latest subprotocol versions.
+Egress is the process of data leaving the local node and being transferred to its peers. This panel shows a moment-by-moment snapshot of the amount of data that is leaving the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Make sure your dashboard includes the latest version of the eth subprotocol!
 
 ![The ETH egress traffic panel](/public/images/docs/grafana/eth-egress-traffic.png)
 
