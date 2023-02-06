@@ -138,12 +138,12 @@
           to: /docs/tools/clef/tutorial
         - id: Clique-signing
           to: /docs/tools/clef/clique-signing
-    - id: puppeth
-      to: /docs/tools/puppeth
     - id: abigen
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p
+    - id: puppeth
+      to: /docs/tools/puppeth
 - id: FAQs
   to: /docs/faq
 - id: Resources
