@@ -162,7 +162,7 @@ func (blob *Blob) UnmarshalText(text []byte) error {
 	if !(text[0] == '0' && text[1] == 'x') {
 		return fmt.Errorf("expected '0x' prefix in Blob string")
 	}
-	if _, err := hex.Decode(blob[2:], text); err != nil {
+	if _, err := hex.Decode(blob[:], text[2:]); err != nil {
 		return fmt.Errorf("blob is not formatted correctly: %v", err)
 	}
 
