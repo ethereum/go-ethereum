@@ -27,6 +27,25 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// HashScheme is the legacy hash-based state scheme with which trie nodes are
+// stored in the disk with node hash as the database key. The advantage of this
+// scheme is that different versions of trie nodes can be stored in disk, which
+// is very beneficial for constructing archive nodes. The drawback is it will
+// store different trie nodes on the same path to different locations on the disk
+// with no data locality, and it's unfriendly for designing state pruning.
+//
+// Now this scheme is still kept for backward compatibility, and it will be used
+// for archive node and some other tries(e.g. light trie).
+const HashScheme = "hashScheme"
+
+// PathScheme is the new path-based state scheme with which trie nodes are stored
+// in the disk with node path as the database key. This scheme will only store one
+// version of state data in the disk, which means that the state pruning operation
+// is native. At the same time, this scheme will put adjacent trie nodes in the same
+// area of the disk with good data locality property. But this scheme needs to rely
+// on extra state diffs to survive deep reorg.
+const PathScheme = "pathScheme"
+
 // nodeHasher used to derive the hash of trie node.
 type nodeHasher struct{ sha crypto.KeccakState }
 
@@ -150,25 +169,6 @@ func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// HashScheme is the legacy hash-based state scheme with which trie nodes are
-// stored in the disk with node hash as the database key. The advantage of this
-// scheme is that different versions of trie nodes can be stored in disk, which
-// is very beneficial for constructing archive nodes. The drawback is it will
-// store different trie nodes on the same path to different locations on the disk
-// with no data locality, and it's unfriendly for designing state pruning.
-//
-// Now this scheme is still kept for backward compatibility, and it will be used
-// for archive node and some other tries(e.g. light trie).
-const HashScheme = "hashScheme"
-
-// PathScheme is the new path-based state scheme with which trie nodes are stored
-// in the disk with node path as the database key. This scheme will only store one
-// version of state data in the disk, which means that the state pruning operation
-// is native. At the same time, this scheme will put adjacent trie nodes in the same
-// area of the disk with good data locality property. But this scheme needs to rely
-// on extra state diffs to survive deep reorg.
-const PathScheme = "pathScheme"
-
 // HasTrieNode checks the trie node presence with the provided node info and
 // the associated node hash.
 func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash, scheme string) bool {
@@ -187,6 +187,12 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 
 // ReadTrieNode retrieves the trie node from database with the provided node info
 // and associated node hash.
+// hashScheme-based lookup requires the following:
+//   - hash
+//
+// pathScheme-based lookup requires the following:
+//   - owner
+//   - path
 func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash, scheme string) []byte {
 	switch scheme {
 	case HashScheme:
@@ -212,6 +218,12 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 
 // WriteTrieNode writes the trie node into database with the provided node info
 // and associated node hash.
+// hashScheme-based lookup requires the following:
+//   - hash
+//
+// pathScheme-based lookup requires the following:
+//   - owner
+//   - path
 func WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash, node []byte, scheme string) {
 	switch scheme {
 	case HashScheme:
@@ -229,6 +241,12 @@ func WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash
 
 // DeleteTrieNode deletes the trie node from database with the provided node info
 // and associated node hash.
+// hashScheme-based lookup requires the following:
+//   - hash
+//
+// pathScheme-based lookup requires the following:
+//   - owner
+//   - path
 func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash, scheme string) {
 	switch scheme {
 	case HashScheme:
