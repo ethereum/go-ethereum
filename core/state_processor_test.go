@@ -413,7 +413,7 @@ func TestProcessVerkle(t *testing.T) {
 			tx, _ = types.SignTx(types.NewContractCreation(6, big.NewInt(16), 3000000, big.NewInt(875000000), code), signer, testKey)
 			gen.AddTx(tx)
 
-			tx, _ = types.SignTx(types.NewContractCreation(7, big.NewInt(32), 3000000, big.NewInt(875000000), codeWithExtCodeCopy), signer, testKey)
+			tx, _ = types.SignTx(types.NewContractCreation(7, big.NewInt(0), 3000000, big.NewInt(875000000), codeWithExtCodeCopy), signer, testKey)
 			gen.AddTx(tx)
 		}
 	})
