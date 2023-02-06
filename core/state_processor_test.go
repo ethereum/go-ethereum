@@ -423,5 +423,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
+	if config.IsShanghai(header.Time) {
+		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
+	}
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }
