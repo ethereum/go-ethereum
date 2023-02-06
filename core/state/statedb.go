@@ -529,6 +529,22 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		if err := s.trie.TryUpdate(key, cs); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 		}
+		var (
+			chunks = trie.ChunkifyCode(obj.code)
+			values [][]byte
+		)
+		for i, chunknr := 0, uint64(0); i < len(chunks); i, chunknr = i+32, chunknr+1 {
+			groupOffset := (chunknr + 128) % 256
+			if groupOffset == 128 {
+				values = make([][]byte, verkle.NodeWidth)
+				key = trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(chunknr))
+			}
+			values[groupOffset] = chunks[i : i+32]
+
+			if groupOffset == 255 || len(chunks)-i <= 32 {
+				s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values)
+			}
+		}
 	}
 
 	// If state snapshotting is active, cache the data til commit. Note, this
@@ -1000,25 +1016,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
-				if s.trie.IsVerkle() {
-					var (
-						chunks = trie.ChunkifyCode(obj.code)
-						key    []byte
-						values [][]byte
-					)
-					for i := 0; i < len(chunks); i += 32 {
-						groupOffset := (i / 32) % 256
-						if groupOffset == 0 {
-							values = make([][]byte, verkle.NodeWidth)
-							key = trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32))
-						}
-						values[groupOffset] = chunks[i : i+32]
-
-						if groupOffset == 255 || len(chunks)-1 <= 32 {
-							s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values)
-						}
-					}
-				}
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
