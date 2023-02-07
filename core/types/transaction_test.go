@@ -524,6 +524,33 @@ func TestTransactionCoding(t *testing.T) {
 	}
 }
 
+// Make sure deserialized blob transactions never have nil access lists, even when empty.
+func TestBlobTransactionEmptyAccessList(t *testing.T) {
+	txdata := &SignedBlobTx{
+		Message: BlobTxMessage{
+			ChainID:             view.Uint256View(*uint256.NewInt(1)),
+			Nonce:               view.Uint64View(1),
+			Gas:                 view.Uint64View(123457),
+			GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
+			GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
+			BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x01624652859a6e98ffc1608e2af0147ca4e86e1ce27672d8d3f3c9d4ffd6ef7e")},
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(10000000)),
+		},
+	}
+	tx := NewTx(txdata)
+	data, err := tx.MarshalMinimal()
+	if err != nil {
+		t.Fatalf("ssz encoding failed: %v", err)
+	}
+	var parsedTx = &Transaction{}
+	if err := parsedTx.UnmarshalMinimal(data); err != nil {
+		t.Fatalf("ssz decoding failed: %v", err)
+	}
+	if parsedTx.AccessList() == nil {
+		t.Fatal("Deserialized blob txs should have non-nil access lists")
+	}
+}
+
 func TestBlobTransactionMinimalCodec(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	if err != nil {

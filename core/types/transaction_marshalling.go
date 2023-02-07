@@ -296,10 +296,11 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	case BlobTxType:
 		var itx SignedBlobTx
 		inner = &itx
-		// Access list is optional for now.
-		if dec.AccessList != nil {
-			itx.Message.AccessList = AccessListView(*dec.AccessList)
+		// Access list should always be non-nil
+		if dec.AccessList == nil {
+			return errors.New("found nil access list in blob tx")
 		}
+		itx.Message.AccessList = AccessListView(*dec.AccessList)
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
