@@ -344,18 +344,6 @@ func upperBound(prefix []byte) (limit []byte) {
 	return limit
 }
 
-// NewIterator creates a binary-alphabetical iterator over a subset
-// of database content with a particular key prefix, starting at a particular
-// initial key (or after, if it does not exist).
-func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	iter := d.db.NewIter(&pebble.IterOptions{
-		LowerBound: append(prefix, start...),
-		UpperBound: upperBound(prefix),
-	})
-	iter.First()
-	return &pebbleIterator{iter: iter, moved: true}
-}
-
 // Stat returns a particular internal stat of the database.
 func (d *Database) Stat(property string) (string, error) {
 	return "", nil
@@ -401,15 +389,14 @@ func (d *Database) meter(refresh time.Duration) {
 			compWrite int64
 			compRead  int64
 			nWrite    int64
+
+			metrics            = d.db.Metrics()
+			compTime           = atomic.LoadInt64(&d.compTime)
+			writeDelayCount    = atomic.LoadInt64(&d.writeDelayCount)
+			writeDelayTime     = atomic.LoadInt64(&d.writeDelayTime)
+			nonLevel0CompCount = int64(atomic.LoadUint32(&d.nonLevel0Comp))
+			level0CompCount    = int64(atomic.LoadUint32(&d.level0Comp))
 		)
-
-		metrics := d.db.Metrics()
-		compTime := atomic.LoadInt64(&d.compTime)
-		writeDelayCount := atomic.LoadInt64(&d.writeDelayCount)
-		writeDelayTime := atomic.LoadInt64(&d.writeDelayTime)
-		nonLevel0CompCount := int64(atomic.LoadUint32(&d.nonLevel0Comp))
-		level0CompCount := int64(atomic.LoadUint32(&d.level0Comp))
-
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
@@ -534,6 +521,18 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 type pebbleIterator struct {
 	iter  *pebble.Iterator
 	moved bool
+}
+
+// NewIterator creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix, starting at a particular
+// initial key (or after, if it does not exist).
+func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+	iter := d.db.NewIter(&pebble.IterOptions{
+		LowerBound: append(prefix, start...),
+		UpperBound: upperBound(prefix),
+	})
+	iter.First()
+	return &pebbleIterator{iter: iter, moved: true}
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the
