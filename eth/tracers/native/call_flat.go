@@ -177,18 +177,8 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
 
 	// Child calls must have a value, even if it's zero.
-	if value == nil {
+	if t.tracer.callstack[len(t.tracer.callstack)-1].Value == nil && value == nil {
 		t.tracer.callstack[len(t.tracer.callstack)-1].Value = big.NewInt(0)
-	}
-
-	// Delegatecall has same value as parent call.
-	// CallTracer doesn't report this "inherited" value.
-	if typ == vm.DELEGATECALL {
-		size := len(t.tracer.callstack)
-		if size < 2 {
-			return
-		}
-		t.tracer.callstack[size-1].Value = t.tracer.callstack[size-2].Value
 	}
 }
 
