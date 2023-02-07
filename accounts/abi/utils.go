@@ -38,3 +38,13 @@ func ResolveNameConflict(rawName string, used func(string) bool) string {
 	}
 	return name
 }
+
+// UnpackIntoInterface unpacks a bytes array into an interface
+func UnpackIntoInterface(v interface{}, args Arguments, data []byte) error {
+	unpacked, err := args.Unpack(data)
+	if err != nil {
+		return err
+	}
+
+	return args.Copy(v, unpacked)
+}
