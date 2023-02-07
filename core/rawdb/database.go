@@ -336,7 +336,7 @@ type OpenOptions struct {
 	AncientsDirectory string // the ancients-dir
 	Namespace         string // the namespace for database relevant metrics
 	Cache             int    // the capacity(in megabytes) of the data caching
-	Handles           int    // the capacity of the open files caching
+	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
 }
 
@@ -353,14 +353,16 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	}
 	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
+			log.Info("Using pebble as the backing database")
 			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 		} else {
-			return nil, errors.New("backingdb choice not supported on this platform")
+			return nil, errors.New("backingdb 'pebble' not supported on this platform")
 		}
 	}
 	if len(o.Type) != 0 && o.Type != dbLeveldb {
-		return nil, fmt.Errorf("unknown backend %v", o.Type)
+		return nil, fmt.Errorf("unknown backingdb %v", o.Type)
 	}
+	log.Info("Using leveldb as the backing database")
 	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
 	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 }

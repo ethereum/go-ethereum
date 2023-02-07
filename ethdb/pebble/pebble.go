@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -75,14 +74,14 @@ type Database struct {
 
 	log log.Logger // Contextual logger tracking the database path
 
-	activeComp          int       // current number of active compactions
-	compStartTime       time.Time // the start time of the earliest currently-active compaction
-	compTime            int64     // total time spent in compaction in ns
-	level0Comp          uint32    // total number of level-zero compactions
-	nonLevel0Comp       uint32    // total number of non level-zero compactions
-	writeDelayStartTime time.Time // the start time of the latest write stall
-	writeDelayCount     int64     // total number of write stall counts
-	writeDelayTime      int64     // total time spent in write stalls
+	activeComp          int       // Current number of active compactions
+	compStartTime       time.Time // The start time of the earliest currently-active compaction
+	compTime            int64     // Total time spent in compaction in ns
+	level0Comp          uint32    // Total number of level-zero compactions
+	nonLevel0Comp       uint32    // Total number of non level-zero compactions
+	writeDelayStartTime time.Time // The start time of the latest write stall
+	writeDelayCount     int64     // Total number of write stall counts
+	writeDelayTime      int64     // Total time spent in write stalls
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
@@ -118,7 +117,7 @@ func (d *Database) onWriteStallEnd() {
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
-	var pebbleDb *Database
+	var db *Database
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -129,20 +128,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
-	eventListener := &pebble.EventListener{
-		CompactionBegin: func(info pebble.CompactionInfo) {
-			pebbleDb.onCompactionBegin(info)
-		},
-		CompactionEnd: func(info pebble.CompactionInfo) {
-			pebbleDb.onCompactionEnd(info)
-		},
-		WriteStallBegin: func(info pebble.WriteStallBeginInfo) {
-			pebbleDb.onWriteStallBegin(info)
-		},
-		WriteStallEnd: func() {
-			pebbleDb.onWriteStallEnd()
-		},
-	}
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
@@ -185,42 +170,47 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 		},
-		ReadOnly:      readonly,
-		EventListener: eventListener,
+		ReadOnly: readonly,
+		EventListener: &pebble.EventListener{
+			CompactionBegin: db.onCompactionBegin,
+			CompactionEnd:   db.onCompactionEnd,
+			WriteStallBegin: db.onWriteStallBegin,
+			WriteStallEnd:   db.onWriteStallEnd,
+		},
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
 	opt.Experimental.ReadSamplingMultiplier = -1
 
 	// Open the db and recover any potential corruptions
-	db, err := pebble.Open(file, opt)
+	innerDB, err := pebble.Open(file, opt)
 	if err != nil {
 		return nil, err
 	}
 	// Assemble the wrapper with all the registered metrics
-	pebbleDb = &Database{
+	db = &Database{
 		fn:       file,
-		db:       db,
+		db:       innerDB,
 		log:      logger,
 		quitChan: make(chan chan error),
 	}
-	pebbleDb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
-	pebbleDb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
-	pebbleDb.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
-	pebbleDb.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
-	pebbleDb.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
-	pebbleDb.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
-	pebbleDb.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
-	pebbleDb.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
-	pebbleDb.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
-	pebbleDb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
-	pebbleDb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
-	pebbleDb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
-	pebbleDb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
+	db.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
+	db.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
+	db.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
+	db.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
+	db.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
+	db.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
+	db.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
+	db.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
+	db.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
+	db.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
+	db.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
+	db.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
+	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return
-	go pebbleDb.meter(metricsGatheringInterval)
-	return pebbleDb, nil
+	go db.meter(metricsGatheringInterval)
+	return db, nil
 }
 
 // Close stops the metrics collection, flushes any pending data to disk and closes
@@ -295,6 +285,16 @@ type snapshot struct {
 	db *pebble.Snapshot
 }
 
+// NewSnapshot creates a database snapshot based on the current state.
+// The created snapshot will not be affected by all following mutations
+// happened on the database.
+// Note don't forget to release the snapshot once it's used up, otherwise
+// the stale data will never be cleaned up by the underlying compactor.
+func (d *Database) NewSnapshot() (ethdb.Snapshot, error) {
+	snap := d.db.NewSnapshot()
+	return &snapshot{db: snap}, nil
+}
+
 // Has retrieves if a key is present in the snapshot backing by a key-value
 // data store.
 func (snap *snapshot) Has(key []byte) (bool, error) {
@@ -329,24 +329,28 @@ func (snap *snapshot) Release() {
 	snap.db.Close()
 }
 
-// NewSnapshot creates a database snapshot based on the current state.
-// The created snapshot will not be affected by all following mutations
-// happened on the database.
-// Note don't forget to release the snapshot once it's used up, otherwise
-// the stale data will never be cleaned up by the underlying compactor.
-func (d *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	snap := d.db.NewSnapshot()
-	return &snapshot{db: snap}, nil
+// upperBound returns the upper bound for the given prefix
+func upperBound(prefix []byte) (limit []byte) {
+	for i := len(prefix) - 1; i >= 0; i-- {
+		c := prefix[i]
+		if c == 0xff {
+			continue
+		}
+		limit = make([]byte, i+1)
+		copy(limit, prefix)
+		limit[i] = c + 1
+		break
+	}
+	return limit
 }
 
 // NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
 func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	iterRange := bytesPrefixRange(prefix, start)
 	iter := d.db.NewIter(&pebble.IterOptions{
-		LowerBound: iterRange.Start,
-		UpperBound: iterRange.Limit,
+		LowerBound: append(prefix, start...),
+		UpperBound: upperBound(prefix),
 	})
 	iter.First()
 	return &pebbleIterator{iter: iter, moved: true}
@@ -373,7 +377,7 @@ func (d *Database) Path() string {
 	return d.fn
 }
 
-// meter periodically retrieves internal leveldb counters and reports them to
+// meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
 func (d *Database) meter(refresh time.Duration) {
 	var errc chan error
@@ -467,7 +471,7 @@ func (d *Database) meter(refresh time.Duration) {
 	errc <- nil
 }
 
-// batch is a write-only leveldb batch that commits changes to its host database
+// batch is a write-only batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
 	b    *pebble.Batch
@@ -565,12 +569,3 @@ func (iter *pebbleIterator) Value() []byte {
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
 func (iter *pebbleIterator) Release() { iter.iter.Close() }
-
-// bytesPrefixRange returns key range that satisfy
-// - the given prefix, and
-// - the given seek position
-func bytesPrefixRange(prefix, start []byte) *util.Range {
-	r := util.BytesPrefix(prefix)
-	r.Start = append(r.Start, start...)
-	return r
-}

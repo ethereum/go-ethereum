@@ -21,7 +21,6 @@ package rawdb
 import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Pebble is unsuported on 32bit architecture
@@ -34,6 +33,5 @@ func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, 
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Using Pebble as the backing database")
 	return NewDatabase(db), nil
 }
