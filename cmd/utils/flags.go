@@ -101,7 +101,7 @@ var (
 	}
 	BackingDBFlag = &cli.StringFlag{
 		Name:     "backingdb",
-		Usage:    "Backing database implementation to use ('leveldb' or 'pebble'1)",
+		Usage:    "Backing database implementation to use ('leveldb' or 'pebble')",
 		Value:    "leveldb",
 		Category: flags.EthCategory,
 	}
