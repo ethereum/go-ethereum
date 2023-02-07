@@ -55,11 +55,11 @@ const (
 
 	// txArriveTimeout is the time allowance before an announced transaction is
 	// explicitly requested.
-	txArriveTimeout = 100 * time.Millisecond
+	txArriveTimeout = 500 * time.Millisecond
 
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
-	txGatherSlack = 20 * time.Millisecond
+	txGatherSlack = 100 * time.Millisecond
 )
 
 var (
