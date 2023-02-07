@@ -28,43 +28,18 @@
       }
     },
     "config": {
-      "networkId": 7,
       "chainId": 63,
-      "supportedProtocolVersions": [
-        66
-      ],
-      "eip2FBlock": 0,
-      "eip7FBlock": 0,
+      "daoForkSupport": true,
       "eip150Block": 0,
+      "eip150Hash": "0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d",
       "eip155Block": 0,
-      "eip160Block": 0,
-      "eip161FBlock": 0,
-      "eip170FBlock": 0,
-      "eip100FBlock": 0,
-      "eip140FBlock": 0,
-      "eip198FBlock": 0,
-      "eip211FBlock": 0,
-      "eip212FBlock": 0,
-      "eip213FBlock": 0,
-      "eip214FBlock": 0,
-      "eip658FBlock": 0,
-      "eip145FBlock": 301243,
-      "eip1014FBlock": 301243,
-      "eip1052FBlock": 301243,
-      "eip152FBlock": 999983,
-      "eip1108FBlock": 999983,
-      "eip1344FBlock": 999983,
-      "eip1884FBlock": 999983,
-      "eip2028FBlock": 999983,
-      "eip2200FBlock": 999983,
-      "ecip1017FBlock": 0,
-      "ecip1017EraRounds": 2000000,
-      "disposalBlock": 0,
+      "eip158Block": 0,
       "ethash": {},
-      "requireBlockHashes": {
-          "840013": "0x2ceada2b191879b71a5bcf2241dd9bc50d6d953f1640e62f9c2cee941dc61c9d",
-          "840014": "0x8ec29dd692c8985b82410817bac232fc82805b746538d17bc924624fe74a0fcf"
-        }
+      "homesteadBlock": 0,
+      "byzantiumBlock": 0,
+      "constantinopleBlock": 301243,
+      "petersburgBlock": 999983,
+      "istanbulBlock": 999983
     }
   },
   "context": {
