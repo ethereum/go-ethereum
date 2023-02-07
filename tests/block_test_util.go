@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -87,6 +88,7 @@ type btHeader struct {
 	GasUsed          uint64
 	Timestamp        uint64
 	BaseFeePerGas    *big.Int
+	WithdrawalsRoot  *common.Hash
 }
 
 type btHeaderMarshaling struct {
@@ -274,6 +276,12 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if h.Timestamp != h2.Time {
 		return fmt.Errorf("timestamp: want: %v have: %v", h.Timestamp, h2.Time)
+	}
+	if !reflect.DeepEqual(h.BaseFeePerGas, h2.BaseFee) {
+		return fmt.Errorf("baseFeePerGas: want: %v have: %v", h.BaseFeePerGas, h2.BaseFee)
+	}
+	if !reflect.DeepEqual(h.WithdrawalsRoot, h2.WithdrawalsHash) {
+		return fmt.Errorf("withdrawalsRoot: want: %v have: %v", h.WithdrawalsRoot, h2.WithdrawalsHash)
 	}
 	return nil
 }

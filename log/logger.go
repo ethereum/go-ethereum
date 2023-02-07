@@ -46,7 +46,7 @@ func (l Lvl) AlignedString() string {
 	}
 }
 
-// Strings returns the name of a Lvl.
+// String returns the name of a Lvl.
 func (l Lvl) String() string {
 	switch l {
 	case LvlTrace:

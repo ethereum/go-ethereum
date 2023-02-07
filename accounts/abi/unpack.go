@@ -19,6 +19,7 @@ package abi
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 
@@ -33,43 +34,72 @@ var (
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
-func ReadInteger(typ Type, b []byte) interface{} {
+func ReadInteger(typ Type, b []byte) (interface{}, error) {
+	ret := new(big.Int).SetBytes(b)
+
 	if typ.T == UintTy {
+		u64, isu64 := ret.Uint64(), ret.IsUint64()
 		switch typ.Size {
 		case 8:
-			return b[len(b)-1]
+			if !isu64 || u64 > math.MaxUint8 {
+				return nil, errBadUint8
+			}
+			return byte(u64), nil
 		case 16:
-			return binary.BigEndian.Uint16(b[len(b)-2:])
+			if !isu64 || u64 > math.MaxUint16 {
+				return nil, errBadUint16
+			}
+			return uint16(u64), nil
 		case 32:
-			return binary.BigEndian.Uint32(b[len(b)-4:])
+			if !isu64 || u64 > math.MaxUint32 {
+				return nil, errBadUint32
+			}
+			return uint32(u64), nil
 		case 64:
-			return binary.BigEndian.Uint64(b[len(b)-8:])
+			if !isu64 {
+				return nil, errBadUint64
+			}
+			return u64, nil
 		default:
 			// the only case left for unsigned integer is uint256.
-			return new(big.Int).SetBytes(b)
+			return ret, nil
 		}
 	}
+
+	// big.SetBytes can't tell if a number is negative or positive in itself.
+	// On EVM, if the returned number > max int256, it is negative.
+	// A number is > max int256 if the bit at position 255 is set.
+	if ret.Bit(255) == 1 {
+		ret.Add(MaxUint256, new(big.Int).Neg(ret))
+		ret.Add(ret, common.Big1)
+		ret.Neg(ret)
+	}
+	i64, isi64 := ret.Int64(), ret.IsInt64()
 	switch typ.Size {
 	case 8:
-		return int8(b[len(b)-1])
+		if !isi64 || i64 < math.MinInt8 || i64 > math.MaxInt8 {
+			return nil, errBadInt8
+		}
+		return int8(i64), nil
 	case 16:
-		return int16(binary.BigEndian.Uint16(b[len(b)-2:]))
+		if !isi64 || i64 < math.MinInt16 || i64 > math.MaxInt16 {
+			return nil, errBadInt16
+		}
+		return int16(i64), nil
 	case 32:
-		return int32(binary.BigEndian.Uint32(b[len(b)-4:]))
+		if !isi64 || i64 < math.MinInt32 || i64 > math.MaxInt32 {
+			return nil, errBadInt32
+		}
+		return int32(i64), nil
 	case 64:
-		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
+		if !isi64 {
+			return nil, errBadInt64
+		}
+		return i64, nil
 	default:
 		// the only case left for integer is int256
-		// big.SetBytes can't tell if a number is negative or positive in itself.
-		// On EVM, if the returned number > max int256, it is negative.
-		// A number is > max int256 if the bit at position 255 is set.
-		ret := new(big.Int).SetBytes(b)
-		if ret.Bit(255) == 1 {
-			ret.Add(MaxUint256, new(big.Int).Neg(ret))
-			ret.Add(ret, common.Big1)
-			ret.Neg(ret)
-		}
-		return ret
+
+		return ret, nil
 	}
 }
 
@@ -234,7 +264,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
-		return ReadInteger(t, returnOutput), nil
+		return ReadInteger(t, returnOutput)
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:

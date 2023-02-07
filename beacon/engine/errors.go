@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package beacon
+package engine
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -80,6 +80,7 @@ var (
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
 	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
+	InvalidParams            = &EngineAPIError{code: -32602, msg: "Invalid parameters"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}

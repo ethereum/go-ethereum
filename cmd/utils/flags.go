@@ -785,6 +785,11 @@ var (
 		Usage:    "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
 		Category: flags.APICategory,
 	}
+	EnablePersonal = &cli.BoolFlag{
+		Name:     "rpc.enabledeprecatedpersonal",
+		Usage:    "Enables the (deprecated) personal namespace",
+		Category: flags.APICategory,
+	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
@@ -1466,6 +1471,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
 	}
 
+	if ctx.IsSet(EnablePersonal.Name) {
+		cfg.EnablePersonal = true
+	}
+
 	if ctx.IsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.String(ExternalSignerFlag.Name)
 	}
@@ -1853,6 +1862,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
+
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -1912,6 +1922,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			// when we're definitely concerned with only one account.
 			passphrase = list[0]
 		}
+
 		// Unlock the developer account by local keystore.
 		var ks *keystore.KeyStore
 		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
@@ -1920,6 +1931,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if ks == nil {
 			Fatalf("Keystore is not available")
 		}
+
+		// Figure out the dev account address.
 		// setEtherbase has been called above, configuring the miner address from command line flags.
 		if cfg.Miner.Etherbase != (common.Address{}) {
 			developer = accounts.Account{Address: cfg.Miner.Etherbase}
@@ -1931,6 +1944,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				Fatalf("Failed to create developer account: %v", err)
 			}
 		}
+		// Make sure the address is configured as fee recipient, otherwise
+		// the miner will fail to start.
+		cfg.Miner.Etherbase = developer.Address
+
 		if err := ks.Unlock(developer, passphrase); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
