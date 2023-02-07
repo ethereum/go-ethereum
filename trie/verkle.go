@@ -155,16 +155,16 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 	return nil
 }
 
-func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) {
+func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) error {
 	resolver :=
 		func(h []byte) ([]byte, error) {
 			return trie.db.diskdb.Get(h)
 		}
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
-		root.InsertStem(key, values, resolver)
+		return root.InsertStem(key, values, resolver)
 	case *verkle.StatelessNode:
-		root.InsertAtStem(key, values, resolver, true)
+		return root.InsertAtStem(key, values, resolver, true)
 	default:
 		panic("invalid root type")
 	}

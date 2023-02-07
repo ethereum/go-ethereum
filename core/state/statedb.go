@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
@@ -523,26 +523,30 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 	}
 	if s.trie.IsVerkle() {
-		cs := make([]byte, 32)
-		binary.LittleEndian.PutUint64(cs, uint64(len(obj.code)))
-		key := trieUtils.GetTreeKeyCodeSize(addr[:])
-		if err := s.trie.TryUpdate(key, cs); err != nil {
-			s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
-		}
 		var (
 			chunks = trie.ChunkifyCode(obj.code)
 			values [][]byte
+			key    []byte
 		)
 		for i, chunknr := 0, uint64(0); i < len(chunks); i, chunknr = i+32, chunknr+1 {
 			groupOffset := (chunknr + 128) % 256
 			if groupOffset == 128 {
 				values = make([][]byte, verkle.NodeWidth)
-				key = trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(chunknr))
+				key = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(chunknr))
 			}
 			values[groupOffset] = chunks[i : i+32]
 
+			// Reuse the calculated key to also update the code size.
+			if i == 0 {
+				cs := make([]byte, 32)
+				binary.LittleEndian.PutUint64(cs, uint64(len(obj.code)))
+				values[utils.CodeSizeLeafKey] = cs
+			}
+
 			if groupOffset == 255 || len(chunks)-i <= 32 {
-				s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values)
+				if err := s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values); err != nil {
+					s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
+				}
 			}
 		}
 	}
