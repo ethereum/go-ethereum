@@ -492,7 +492,7 @@ func escapeString(s string) string {
 func escapeMessage(s string) string {
 	needsQuoting := false
 	for _, r := range s {
-		// Carriage return and Line feed are ok
+		// Allow CR/LF/TAB. This is to make multi-line messages work.
 		if r == '\r' || r == '\n' || r == '\t' {
 			continue
 		}
