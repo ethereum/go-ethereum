@@ -22,6 +22,8 @@
       to: /docs/fundamentals/sync-modes
     - id: Account management
       to: /docs/fundamentals/account-management
+    - id: Databases
+      to: /docs/fundamentals/databases
     - id: 'Backup & restore'
       to: /docs/fundamentals/backup-restore
     - id: Logs
