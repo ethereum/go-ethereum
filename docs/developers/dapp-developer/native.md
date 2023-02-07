@@ -189,7 +189,7 @@ SubscribePendingTransactions()
 
 _Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument._
 
-Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [GitHub](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [GitHub](https://github.com/MariusVanDerWijden/web3go).
+Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [GitHub](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more in-depth set of examples available on [GitHub](https://github.com/MariusVanDerWijden/web3go).
 
 ## Summary {#summary}
 

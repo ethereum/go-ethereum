@@ -149,7 +149,7 @@ and the following methods:
 - `getCost()` - returns the cost of the opcode as a Number
 - `getDepth()` - returns the execution depth as a Number
 - `getRefund()` - returns the amount to be refunded as a Number
-- `getError()` - returns information about the error if one occured, otherwise returns `undefined`
+- `getError()` - returns information about the error if one occurred, otherwise returns `undefined`
 
 If error is non-empty, all other fields should be ignored.
 
@@ -249,7 +249,7 @@ And these fields are only available for tracing mined transactions (i.e. not ava
 
 - `getGasUsed()` - returns amount of gas used throughout the frame as a Number
 - `getOutput()` - returns the output as a buffer
-  ` -getError()` - returns an error if one occured during execution and `undefined` otherwise
+  ` -getError()` - returns an error if one occurred during execution and `undefined` otherwise
 
 ### Usage
 

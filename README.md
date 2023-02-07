@@ -30,7 +30,7 @@ To learn more about the stack, take a look at the following resources:
 
 ### Repository structure
 
-The website code is organized with a top-level `docs` folder that contains all the documentation pages as markdown files. Inside `docs` are subdirectories used to divide the docs by theme (e.g. `getting-started`,`fundamentals`, `developers` etc). Website code is in `src`, and assets including images are in `public`.
+The website code is organized with a top-level `docs` folder that contains all the documentation pages as markdown files. Inside `docs` are subdirectories used to divide the docs by theme (e.g. `getting-started`, `fundamentals`, `developers` etc). Website code is in `src`, and assets including images are in `public`.
 
 ### Adding a new documentation page
 
@@ -60,7 +60,7 @@ Images should be saved to `public/images/docs` and included in the markdown as f
 
 #### Frontmatter metadata
 
-`title` and `description` are **required** metadata props for a post: `title` will generate the main heading on the doc page and `description` is used for SEO purposes, to serve as a concise and appropiate description of the content.
+`title` and `description` are **required** metadata props for a post: `title` will generate the main heading on the doc page and `description` is used for SEO purposes, to serve as a concise and appropriate description of the content.
 
 ```
 ---

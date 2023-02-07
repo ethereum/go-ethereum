@@ -20,7 +20,7 @@ Switch to the go-ethereum repository root directory. All code can be built using
 go install -v ./...
 ```
 
-go-ethereum exectuables can be built individually. To build just geth, use:
+go-ethereum executables can be built individually. To build just geth, use:
 
 ```sh
 go install -v ./cmd/geth
@@ -62,7 +62,7 @@ geth attach <path-to-geth.ipc> --exec "debug.stacks()" > stacktrace.txt
 
 Geth logs the location of the IPC endpoint on startup. It is typically under `/home/user/.ethereum/geth.ipc` or `/tmp/geth.ipc`.
 
-`debug.stacks()` also takes an optional `filter` argument. Passing a package name or filepath to `filter` restricts the output to stack traces involcing only that package/file. For example:
+`debug.stacks()` also takes an optional `filter` argument. Passing a package name or filepath to `filter` restricts the output to stack traces involving only that package/file. For example:
 
 ```sh
 debug.stacks("enode")
@@ -144,4 +144,4 @@ This will dump stack traces for each instance to their respective log file.
 
 ## Where to go next {#where-next}
 
-Read the remaning pages in the Geth developer section, and get building!
+Read the remaining pages in the Geth developer section, and get building!

@@ -19,7 +19,7 @@ Geth has many features that support dapp developers. There are many built-in tra
 
 ## Geth developers {#geth-developers}
 
-Geth developers add/remove features and fix bugs in Geth. The `geth-developer` section includes contribution guidelines and documentation relating to testing and disclosing vulnerabilities that willhep you get started with working on Geth.
+Geth developers add/remove features and fix bugs in Geth. The `geth-developer` section includes contribution guidelines and documentation relating to testing and disclosing vulnerabilities that will help you get started with working on Geth.
 
 - [Code review guidelines](/docs/developers/geth-developer/code-review-guidelines)
 - [Contributing to Geth](/docs/developers/geth-developer/contributing)
