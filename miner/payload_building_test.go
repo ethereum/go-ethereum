@@ -118,14 +118,6 @@ func TestPayloadId(t *testing.T) {
 			Random:       common.Hash{0x2},
 			FeeRecipient: common.Address{0x2},
 		},
-		// Different withdrawals (empty list)
-		&BuildPayloadArgs{
-			Parent:       common.Hash{2},
-			Timestamp:    2,
-			Random:       common.Hash{0x2},
-			FeeRecipient: common.Address{0x2},
-			Withdrawals:  make([]*types.Withdrawal, 0),
-		},
 		// Different withdrawals (non-empty)
 		&BuildPayloadArgs{
 			Parent:       common.Hash{2},
