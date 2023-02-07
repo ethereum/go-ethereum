@@ -524,6 +524,36 @@ func TestTransactionCoding(t *testing.T) {
 	}
 }
 
+// Make sure deserialized blob transactions never have nil access lists or versioned hash lists,
+// even when empty.
+func TestBlobTransactionEmptyLists(t *testing.T) {
+	txdata := &SignedBlobTx{
+		Message: BlobTxMessage{
+			ChainID:          view.Uint256View(*uint256.NewInt(1)),
+			Nonce:            view.Uint64View(1),
+			Gas:              view.Uint64View(123457),
+			GasTipCap:        view.Uint256View(*uint256.NewInt(42)),
+			GasFeeCap:        view.Uint256View(*uint256.NewInt(10)),
+			MaxFeePerDataGas: view.Uint256View(*uint256.NewInt(10000000)),
+		},
+	}
+	tx := NewTx(txdata)
+	data, err := tx.MarshalMinimal()
+	if err != nil {
+		t.Fatalf("ssz encoding failed: %v", err)
+	}
+	var parsedTx = &Transaction{}
+	if err := parsedTx.UnmarshalMinimal(data); err != nil {
+		t.Fatalf("ssz decoding failed: %v", err)
+	}
+	if parsedTx.AccessList() == nil {
+		t.Fatal("Deserialized blob txs should have non-nil access lists")
+	}
+	if parsedTx.DataHashes() == nil {
+		t.Fatal("Deserialized blob txs should have non-nil versioned hash lists")
+	}
+}
+
 func TestBlobTransactionMinimalCodec(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
