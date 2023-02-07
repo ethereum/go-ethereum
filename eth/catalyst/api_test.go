@@ -1440,8 +1440,8 @@ func TestEIP4844(t *testing.T) {
 	if ep.ExcessDataGas == nil {
 		t.Fatal("got nil ExcessDataGas")
 	}
-	if len(ep.Transactions) != 1 {
-		t.Fatal("unexpected transactions")
+	if len(ep.Transactions) != 0 {
+		t.Fatal("expected zero transactions")
 	}
 
 	if status, err := api.NewPayloadV3(*ep); err != nil {

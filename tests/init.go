@@ -26,6 +26,8 @@ import (
 
 func u64(val uint64) *uint64 { return &val }
 
+var zeroTime uint64
+
 // Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
 	"Frontier": {
@@ -284,8 +286,8 @@ var Forks = map[string]*params.ChainConfig{
 		ArrowGlacierBlock:       big.NewInt(0),
 		MergeNetsplitBlock:      big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
-		ShanghaiTime:            big.NewInt(0),
-		ShardingForkTime:        big.NewInt(0),
+		ShanghaiTime:            &zeroTime,
+		ShardingForkTime:        &zeroTime,
 	},
 }
 

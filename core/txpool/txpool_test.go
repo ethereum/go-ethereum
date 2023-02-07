@@ -58,7 +58,8 @@ func init() {
 	eip1559Config = &cpy
 	eip1559Config.BerlinBlock = common.Big0
 	eip1559Config.LondonBlock = common.Big0
-	eip1559Config.ShardingForkTime = common.Big0 // for blob tx tests
+	var zeroTime uint64
+	eip1559Config.ShardingForkTime = &zeroTime // for blob tx tests
 }
 
 type testBlockChain struct {
