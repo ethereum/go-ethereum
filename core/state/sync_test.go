@@ -663,14 +663,14 @@ func TestIncompleteStateSync(t *testing.T) {
 	for i, path := range addedPaths {
 		owner, inner := trie.ResolvePath([]byte(path))
 		hash := addedHashes[i]
-		val := scheme.ReadTrieNode(dstDb, owner, inner, hash)
+		val := rawdb.ReadTrieNode(dstDb, owner, inner, hash, scheme)
 		if val == nil {
 			t.Error("missing trie node")
 		}
-		scheme.DeleteTrieNode(dstDb, owner, inner, hash)
+		rawdb.DeleteTrieNode(dstDb, owner, inner, hash, scheme)
 		if err := checkStateConsistency(dstDb, srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %v", path)
 		}
-		scheme.WriteTrieNode(dstDb, owner, inner, hash, val)
+		rawdb.WriteTrieNode(dstDb, owner, inner, hash, val, scheme)
 	}
 }

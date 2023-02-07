@@ -21,7 +21,11 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/math"
 )
+
+func u64(val uint64) *uint64 { return &val }
 
 func TestCheckCompatible(t *testing.T) {
 	type test struct {
@@ -91,19 +95,19 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        &ChainConfig{ShanghaiTime: big.NewInt(10)},
-			new:           &ChainConfig{ShanghaiTime: big.NewInt(20)},
+			stored:        &ChainConfig{ShanghaiTime: u64(10)},
+			new:           &ChainConfig{ShanghaiTime: u64(20)},
 			headTimestamp: 9,
 			wantErr:       nil,
 		},
 		{
-			stored:        &ChainConfig{ShanghaiTime: big.NewInt(10)},
-			new:           &ChainConfig{ShanghaiTime: big.NewInt(20)},
+			stored:        &ChainConfig{ShanghaiTime: u64(10)},
+			new:           &ChainConfig{ShanghaiTime: u64(20)},
 			headTimestamp: 25,
 			wantErr: &ConfigCompatError{
 				What:         "Shanghai fork timestamp",
-				StoredTime:   big.NewInt(10),
-				NewTime:      big.NewInt(20),
+				StoredTime:   u64(10),
+				NewTime:      u64(20),
 				RewindToTime: 9,
 			},
 		},
@@ -114,5 +118,23 @@ func TestCheckCompatible(t *testing.T) {
 		if !reflect.DeepEqual(err, test.wantErr) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nheadBlock: %v\nheadTimestamp: %v\nerr: %v\nwant: %v", test.stored, test.new, test.headBlock, test.headTimestamp, err, test.wantErr)
 		}
+	}
+}
+
+func TestConfigRules(t *testing.T) {
+	c := &ChainConfig{
+		ShanghaiTime: u64(500),
+	}
+	var stamp uint64
+	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
+		t.Errorf("expected %v to not be shanghai", stamp)
+	}
+	stamp = 500
+	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", stamp)
+	}
+	stamp = math.MaxInt64
+	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", stamp)
 	}
 }

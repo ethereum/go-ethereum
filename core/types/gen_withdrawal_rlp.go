@@ -14,14 +14,7 @@ func (obj *Withdrawal) EncodeRLP(_w io.Writer) error {
 	w.WriteUint64(obj.Index)
 	w.WriteUint64(obj.Validator)
 	w.WriteBytes(obj.Address[:])
-	if obj.Amount == nil {
-		w.Write(rlp.EmptyString)
-	} else {
-		if obj.Amount.Sign() == -1 {
-			return rlp.ErrNegativeBigInt
-		}
-		w.WriteBigInt(obj.Amount)
-	}
+	w.WriteUint64(obj.Amount)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

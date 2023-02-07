@@ -47,6 +47,8 @@ var (
 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // testBackend is a mock implementation of the live Ethereum message handler. Its
 // purpose is to allow testing the request/reply workflows and wire serialization
 // in the `eth` protocol without actually doing any data processing.
@@ -90,12 +92,12 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 			ArrowGlacierBlock:             big.NewInt(0),
 			GrayGlacierBlock:              big.NewInt(0),
 			MergeNetsplitBlock:            big.NewInt(0),
-			ShanghaiTime:                  big.NewInt(0),
+			ShanghaiTime:                  u64(0),
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
 			Ethash:                        new(params.EthashConfig),
 		}
-		engine = beacon.New(ethash.NewFaker())
+		engine = beacon.NewFaker()
 	}
 
 	gspec := &core.Genesis{
@@ -343,7 +345,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		if n%2 == 0 {
 			w := &types.Withdrawal{
 				Address: common.Address{0xaa},
-				Amount:  big.NewInt(42),
+				Amount:  42,
 			}
 			g.AddWithdrawal(w)
 		}
@@ -410,9 +412,9 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
 				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
-
 			}
 		}
+
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
 			RequestId:            123,
@@ -522,7 +524,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	// Reconstruct state tree from the received data.
 	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
+		rawdb.WriteLegacyTrieNode(reconstructDB, hashes[i], data[i])
 	}
 
 	// Sanity check whether all state matches.

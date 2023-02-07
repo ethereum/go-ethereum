@@ -70,12 +70,12 @@ func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain Chai
 		GetHash:       GetHashFn(header, chain),
 		Coinbase:      beneficiary,
 		BlockNumber:   new(big.Int).Set(header.Number),
-		Time:          new(big.Int).SetUint64(header.Time),
+		Time:          header.Time,
 		Difficulty:    new(big.Int).Set(header.Difficulty),
 		BaseFee:       baseFee,
-		ExcessDataGas: edg,
 		GasLimit:      header.GasLimit,
 		Random:        random,
+		ExcessDataGas: edg,
 	}
 }
 

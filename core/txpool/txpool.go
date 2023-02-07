@@ -1413,7 +1413,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	now := big.NewInt(time.Now().Unix())
+	now := uint64(time.Now().Unix())
 	pool.shanghai = pool.chainconfig.IsShanghai(now)
 	pool.eip4844 = pool.chainconfig.IsSharding(now)
 }

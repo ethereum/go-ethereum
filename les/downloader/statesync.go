@@ -298,11 +298,10 @@ type codeTask struct {
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	// Hack the node scheme here. It's a dead code is not used
 	// by light client at all. Just aim for passing tests.
-	scheme := trie.NewDatabase(rawdb.NewMemoryDatabase()).Scheme()
 	return &stateSync{
 		d:         d,
 		root:      root,
-		sched:     state.NewStateSync(root, d.stateDB, nil, scheme),
+		sched:     state.NewStateSync(root, d.stateDB, nil, rawdb.HashScheme),
 		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		trieTasks: make(map[string]*trieTask),
 		codeTasks: make(map[common.Hash]*codeTask),

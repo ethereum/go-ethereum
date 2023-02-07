@@ -256,26 +256,30 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(common.Big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	if chain.Config().IsLondon(header.Number) {
-		// Verify the header's EIP-1559 attributes.
-		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
-			return err
-		}
+	// Verify the header's EIP-1559 attributes.
+	if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+		return err
 	}
-	shanghai := chain.Config().IsShanghai(header.TimeBig())
+	// Verify existence / non-existence of withdrawalsHash.
+	shanghai := chain.Config().IsShanghai(header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
 		return fmt.Errorf("missing withdrawalsHash")
 	}
-	// Verify existence / non-existence of withdrawalsHash.
 	if !shanghai && header.WithdrawalsHash != nil {
-		return fmt.Errorf("invalid withdrawalsHash: have %s, expected nil", header.WithdrawalsHash)
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	if chain.Config().IsSharding(header.TimeBig()) {
+	// Verify existence / non-existence of excessDataGas.
+	sharding := chain.Config().IsSharding(header.Time)
+	if sharding {
+		if header.ExcessDataGas == nil {
+			return fmt.Errorf("missing excessDataGas")
+		}
 		// Verify the header's EIP-4844 attributes.
 		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
 			return err
 		}
-	} else if header.ExcessDataGas != nil {
+	}
+	if !sharding && header.ExcessDataGas != nil {
 		return fmt.Errorf("invalied ExcessDataGas: have %v, expected nil", header.ExcessDataGas)
 	}
 	return nil
@@ -338,22 +342,23 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 
 // Finalize implements consensus.Engine, setting the final state on the header
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
-	// If withdrawals have been activated, process each one.
-	if chain.Config().IsShanghai(header.TimeBig()) {
-		for _, w := range withdrawals {
-			state.AddBalance(w.Address, w.Amount)
-		}
-	}
 	// Finalize is different with Prepare, it can be used in both block generation
 	// and verification. So determine the consensus rules by header type.
 	if !beacon.IsPoSHeader(header) {
-		beacon.ethone.Finalize(chain, header, state, txs, uncles, withdrawals)
+		beacon.ethone.Finalize(chain, header, state, txs, uncles, nil)
 		return
+	}
+	// Withdrawals processing.
+	for _, w := range withdrawals {
+		// Convert amount from gwei to wei.
+		amount := new(big.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		state.AddBalance(w.Address, amount)
 	}
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
-	if chain.Config().IsSharding(header.TimeBig()) {
+	if chain.Config().IsSharding(header.Time) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		} else {
@@ -370,9 +375,20 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts, nil)
 	}
-	// Finalize and assemble the block
+	shanghai := chain.Config().IsShanghai(header.Time)
+	if shanghai {
+		// All blocks after Shanghai must include a withdrawals root.
+		if withdrawals == nil {
+			withdrawals = make([]*types.Withdrawal, 0)
+		}
+	} else {
+		if len(withdrawals) > 0 {
+			return nil, errors.New("withdrawals set before Shanghai activation")
+		}
+	}
+	// Finalize and assemble the block.
 	beacon.Finalize(chain, header, state, txs, uncles, withdrawals)
-	return types.NewBlock2(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), nil
+	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes

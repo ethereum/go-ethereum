@@ -17,14 +17,13 @@
 package miner
 
 import (
-	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -48,8 +47,8 @@ func TestBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	verify := func(data *beacon.ExecutableDataV2, txs int, expectedFees *big.Int) {
-		payload := data.ExecutionPayload
+	verify := func(outer *engine.ExecutionPayloadEnvelope, txs int) {
+		payload := outer.ExecutionPayload
 		if payload.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
 		}
@@ -65,15 +64,12 @@ func TestBuildPayload(t *testing.T) {
 		if len(payload.Transactions) != txs {
 			t.Fatal("Unexpect transaction set")
 		}
-		if data.BlockValue.Cmp(expectedFees) != 0 {
-			t.Fatalf("Block value (%v) != expected fees (%v)", data.BlockValue, expectedFees)
-		}
 	}
 	empty := payload.ResolveEmpty()
-	verify(empty, 0, big.NewInt(0))
+	verify(empty, 0)
 
 	full := payload.ResolveFull()
-	verify(full, len(pendingTxs), big.NewInt(2625000000000))
+	verify(full, len(pendingTxs))
 
 	// Ensure resolve can be called multiple times and the
 	// result should be unchanged

@@ -213,7 +213,7 @@ type Block struct {
 	header       *Header
 	uncles       []*Header
 	transactions Transactions
-	withdrawals  []*Withdrawal
+	withdrawals  Withdrawals
 
 	// caches
 	hash atomic.Value
@@ -346,29 +346,26 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	return b
 }
 
-// NewBlock2 creates a new block with withdrawals. The input data
+// NewBlockWithWithdrawals creates a new block with withdrawals. The input data
 // is copied, changes to header and to the field values will not
 // affect the block.
 //
 // The values of TxHash, UncleHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
-func NewBlock2(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, withdrawals []*Withdrawal, hasher TrieHasher) *Block {
+func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, withdrawals []*Withdrawal, hasher TrieHasher) *Block {
 	b := NewBlock(header, txs, uncles, receipts, hasher)
+
 	if withdrawals == nil {
-		return b
-	}
-
-	b.withdrawals = make([]*Withdrawal, len(withdrawals))
-	copy(b.withdrawals, withdrawals)
-
-	if len(withdrawals) == 0 {
+		b.header.WithdrawalsHash = nil
+	} else if len(withdrawals) == 0 {
 		b.header.WithdrawalsHash = &EmptyRootHash
 	} else {
 		h := DeriveSha(Withdrawals(withdrawals), hasher)
 		b.header.WithdrawalsHash = &h
 	}
-	return b
+
+	return b.WithWithdrawals(withdrawals)
 }
 
 // NewBlockWithHeader creates a block with the given header data. The
@@ -399,8 +396,7 @@ func CopyHeader(h *Header) *Header {
 		copy(cpy.Extra, h.Extra)
 	}
 	if h.WithdrawalsHash != nil {
-		cpy.WithdrawalsHash = new(common.Hash)
-		cpy.WithdrawalsHash.SetBytes(h.WithdrawalsHash.Bytes())
+		*cpy.WithdrawalsHash = *h.WithdrawalsHash
 	}
 	return &cpy
 }
@@ -475,15 +471,6 @@ func (b *Block) BaseFee() *big.Int {
 		return nil
 	}
 	return new(big.Int).Set(b.header.BaseFee)
-}
-
-func (b *Block) WithdrawalsHash() *common.Hash {
-	if b.header.WithdrawalsHash == nil {
-		return nil
-	}
-	var h common.Hash
-	h.SetBytes(b.header.WithdrawalsHash.Bytes())
-	return &h
 }
 
 func (b *Block) Withdrawals() Withdrawals {
@@ -561,16 +548,13 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	return block
 }
 
-// WithBody2 returns a new block with the given transaction, uncle, and
-// withdrawal contents.
-func (b *Block) WithBody2(transactions []*Transaction, uncles []*Header, withdrawals []*Withdrawal) *Block {
-	block := b.WithBody(transactions, uncles)
-	if withdrawals == nil {
-		return block
+// WithWithdrawals sets the withdrawal contents of a block, does not return a new block.
+func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
+	if withdrawals != nil {
+		b.withdrawals = make([]*Withdrawal, len(withdrawals))
+		copy(b.withdrawals, withdrawals)
 	}
-	block.withdrawals = make([]*Withdrawal, len(withdrawals))
-	copy(block.withdrawals, withdrawals)
-	return block
+	return b
 }
 
 // Hash returns the keccak256 hash of b's header.
