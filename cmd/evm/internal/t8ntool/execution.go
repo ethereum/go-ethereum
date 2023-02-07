@@ -140,6 +140,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	)
 	// TODO(4844): Add DataGasLimit to prestate
 	gaspool.AddGas(pre.Env.GasLimit)
+	gaspool.AddDataGas(params.MaxDataGasPerBlock)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,

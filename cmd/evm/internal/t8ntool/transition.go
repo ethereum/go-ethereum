@@ -267,14 +267,12 @@ func Transition(ctx *cli.Context) error {
 	}
 	if chainConfig.IsSharding(prestate.Env.Timestamp) {
 		if prestate.Env.ExcessDataGas != nil {
-			// Already set, excess data gas has precedent over parent base fee.
+			// Already set, excess data gas has precedent over parent excess data gas.
 		} else if prestate.Env.ParentExcessDataGas != nil {
 			newBlobs := 0
 			for _, tx := range txs {
-
 				if tx.Type() == types.BlobTxType {
-					hashes, _, _, _ := tx.BlobWrapData()
-					newBlobs += len(hashes)
+					newBlobs += len(tx.DataHashes())
 				}
 			}
 			prestate.Env.ExcessDataGas = misc.CalcExcessDataGas(prestate.Env.ParentExcessDataGas, newBlobs)
