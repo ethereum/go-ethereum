@@ -138,6 +138,8 @@ func (tdv *TxDataView) UnmarshalText(text []byte) error {
 	return conv.DynamicBytesUnmarshalText((*[]byte)(tdv), text[:])
 }
 
+// ReadHashes reads length hashes from dr and returns them through hashes, reusing existing capacity if possible. Hashes will always be
+// non-nil on return.
 func ReadHashes(dr *codec.DecodingReader, hashes *[]common.Hash, length uint64) error {
 	if uint64(len(*hashes)) != length {
 		// re-use space if available (for recycling old state objects)
@@ -146,6 +148,9 @@ func ReadHashes(dr *codec.DecodingReader, hashes *[]common.Hash, length uint64) 
 		} else {
 			*hashes = make([]common.Hash, length)
 		}
+	} else if *hashes == nil {
+		// make sure the output is never nil
+		*hashes = []common.Hash{}
 	}
 	dst := *hashes
 	for i := uint64(0); i < length; i++ {
