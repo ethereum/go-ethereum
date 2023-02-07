@@ -47,7 +47,7 @@ var alphabetSoup = "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffff
 var commonParams []*twoOperandParams
 var twoOpMethods map[string]executionFunc
 var emptyContext BlockContext = BlockContext{
-	Time: big.NewInt(0),
+	Time: 0,
 }
 
 type contractRef struct {
@@ -729,7 +729,7 @@ func TestRandom(t *testing.T) {
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (
-			env            = NewEVM(BlockContext{Random: &tt.random, Time: big.NewInt(0)}, TxContext{}, nil, params.TestChainConfig, Config{})
+			env            = NewEVM(BlockContext{Random: &tt.random, Time: 0}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack          = newstack()
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
