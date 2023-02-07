@@ -1309,8 +1309,8 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 
 	tests := []struct {
 		results []*types.Body
-		start   uint64
-		count   uint64
+		start   hexutil.Uint64
+		count   hexutil.Uint64
 	}{
 		// Genesis
 		{
@@ -1367,8 +1367,8 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	defer node.Close()
 
 	tests := []struct {
-		start uint64
-		count uint64
+		start hexutil.Uint64
+		count hexutil.Uint64
 	}{
 		// Genesis
 		{
