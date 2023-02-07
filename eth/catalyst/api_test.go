@@ -1041,6 +1041,7 @@ func TestWithdrawals(t *testing.T) {
 		Timestamp:    blockParams.Timestamp,
 		FeeRecipient: blockParams.SuggestedFeeRecipient,
 		Random:       blockParams.Random,
+		Withdrawals:  blockParams.Withdrawals,
 	}).Id()
 	execData, err := api.GetPayloadV2(payloadID)
 	if err != nil {
@@ -1087,6 +1088,7 @@ func TestWithdrawals(t *testing.T) {
 		Timestamp:    blockParams.Timestamp,
 		FeeRecipient: blockParams.SuggestedFeeRecipient,
 		Random:       blockParams.Random,
+		Withdrawals:  blockParams.Withdrawals,
 	}).Id()
 	execData, err = api.GetPayloadV2(payloadID)
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -77,5 +78,81 @@ func TestBuildPayload(t *testing.T) {
 	dataTwo := payload.Resolve()
 	if !reflect.DeepEqual(dataOne, dataTwo) {
 		t.Fatal("Unexpected payload data")
+	}
+}
+
+func TestPayloadId(t *testing.T) {
+	ids := make(map[string]int)
+	for i, tt := range []*BuildPayloadArgs{
+		&BuildPayloadArgs{
+			Parent:       common.Hash{1},
+			Timestamp:    1,
+			Random:       common.Hash{0x1},
+			FeeRecipient: common.Address{0x1},
+		},
+		// Different parent
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    1,
+			Random:       common.Hash{0x1},
+			FeeRecipient: common.Address{0x1},
+		},
+		// Different timestamp
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x1},
+			FeeRecipient: common.Address{0x1},
+		},
+		// Different Random
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x2},
+			FeeRecipient: common.Address{0x1},
+		},
+		// Different fee-recipient
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x2},
+			FeeRecipient: common.Address{0x2},
+		},
+		// Different withdrawals (non-empty)
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x2},
+			FeeRecipient: common.Address{0x2},
+			Withdrawals: []*types.Withdrawal{
+				&types.Withdrawal{
+					Index:     0,
+					Validator: 0,
+					Address:   common.Address{},
+					Amount:    0,
+				},
+			},
+		},
+		// Different withdrawals (non-empty)
+		&BuildPayloadArgs{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x2},
+			FeeRecipient: common.Address{0x2},
+			Withdrawals: []*types.Withdrawal{
+				&types.Withdrawal{
+					Index:     2,
+					Validator: 0,
+					Address:   common.Address{},
+					Amount:    0,
+				},
+			},
+		},
+	} {
+		id := tt.Id().String()
+		if prev, exists := ids[id]; exists {
+			t.Errorf("ID collision, case %d and case %d: id %v", prev, i, id)
+		}
+		ids[id] = i
 	}
 }
