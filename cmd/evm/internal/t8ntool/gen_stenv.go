@@ -17,22 +17,24 @@ var _ = (*stEnvMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (s stEnv) MarshalJSON() ([]byte, error) {
 	type stEnv struct {
-		Coinbase         common.UnprefixedAddress            `json:"currentCoinbase"   gencodec:"required"`
-		Difficulty       *math.HexOrDecimal256               `json:"currentDifficulty"`
-		Random           *math.HexOrDecimal256               `json:"currentRandom"`
-		ParentDifficulty *math.HexOrDecimal256               `json:"parentDifficulty"`
-		ParentBaseFee    *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
-		ParentGasUsed    math.HexOrDecimal64                 `json:"parentGasUsed,omitempty"`
-		ParentGasLimit   math.HexOrDecimal64                 `json:"parentGasLimit,omitempty"`
-		GasLimit         math.HexOrDecimal64                 `json:"currentGasLimit"   gencodec:"required"`
-		Number           math.HexOrDecimal64                 `json:"currentNumber"     gencodec:"required"`
-		Timestamp        math.HexOrDecimal64                 `json:"currentTimestamp"  gencodec:"required"`
-		ParentTimestamp  math.HexOrDecimal64                 `json:"parentTimestamp,omitempty"`
-		BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-		Ommers           []ommer                             `json:"ommers,omitempty"`
-		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
-		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
-		ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
+		Coinbase            common.UnprefixedAddress            `json:"currentCoinbase"   gencodec:"required"`
+		Difficulty          *math.HexOrDecimal256               `json:"currentDifficulty"`
+		Random              *math.HexOrDecimal256               `json:"currentRandom"`
+		ParentDifficulty    *math.HexOrDecimal256               `json:"parentDifficulty"`
+		ParentBaseFee       *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
+		ParentGasUsed       math.HexOrDecimal64                 `json:"parentGasUsed,omitempty"`
+		ParentGasLimit      math.HexOrDecimal64                 `json:"parentGasLimit,omitempty"`
+		ParentExcessDataGas *math.HexOrDecimal256               `json:"parentExcessDataGas,omitempty"`
+		GasLimit            math.HexOrDecimal64                 `json:"currentGasLimit"   gencodec:"required"`
+		Number              math.HexOrDecimal64                 `json:"currentNumber"     gencodec:"required"`
+		Timestamp           math.HexOrDecimal64                 `json:"currentTimestamp"  gencodec:"required"`
+		ParentTimestamp     math.HexOrDecimal64                 `json:"parentTimestamp,omitempty"`
+		BlockHashes         map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+		Ommers              []ommer                             `json:"ommers,omitempty"`
+		Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
+		BaseFee             *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
+		ExcessDataGas       *math.HexOrDecimal256               `json:"currentExcessDataGas,omitempty"`
+		ParentUncleHash     common.Hash                         `json:"parentUncleHash"`
 	}
 	var enc stEnv
 	enc.Coinbase = common.UnprefixedAddress(s.Coinbase)
@@ -42,6 +44,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.ParentBaseFee = (*math.HexOrDecimal256)(s.ParentBaseFee)
 	enc.ParentGasUsed = math.HexOrDecimal64(s.ParentGasUsed)
 	enc.ParentGasLimit = math.HexOrDecimal64(s.ParentGasLimit)
+	enc.ParentExcessDataGas = (*math.HexOrDecimal256)(s.ParentExcessDataGas)
 	enc.GasLimit = math.HexOrDecimal64(s.GasLimit)
 	enc.Number = math.HexOrDecimal64(s.Number)
 	enc.Timestamp = math.HexOrDecimal64(s.Timestamp)
@@ -50,6 +53,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Ommers = s.Ommers
 	enc.Withdrawals = s.Withdrawals
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
+	enc.ExcessDataGas = (*math.HexOrDecimal256)(s.ExcessDataGas)
 	enc.ParentUncleHash = s.ParentUncleHash
 	return json.Marshal(&enc)
 }
@@ -57,22 +61,24 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (s *stEnv) UnmarshalJSON(input []byte) error {
 	type stEnv struct {
-		Coinbase         *common.UnprefixedAddress           `json:"currentCoinbase"   gencodec:"required"`
-		Difficulty       *math.HexOrDecimal256               `json:"currentDifficulty"`
-		Random           *math.HexOrDecimal256               `json:"currentRandom"`
-		ParentDifficulty *math.HexOrDecimal256               `json:"parentDifficulty"`
-		ParentBaseFee    *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
-		ParentGasUsed    *math.HexOrDecimal64                `json:"parentGasUsed,omitempty"`
-		ParentGasLimit   *math.HexOrDecimal64                `json:"parentGasLimit,omitempty"`
-		GasLimit         *math.HexOrDecimal64                `json:"currentGasLimit"   gencodec:"required"`
-		Number           *math.HexOrDecimal64                `json:"currentNumber"     gencodec:"required"`
-		Timestamp        *math.HexOrDecimal64                `json:"currentTimestamp"  gencodec:"required"`
-		ParentTimestamp  *math.HexOrDecimal64                `json:"parentTimestamp,omitempty"`
-		BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-		Ommers           []ommer                             `json:"ommers,omitempty"`
-		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
-		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
-		ParentUncleHash  *common.Hash                        `json:"parentUncleHash"`
+		Coinbase            *common.UnprefixedAddress           `json:"currentCoinbase"   gencodec:"required"`
+		Difficulty          *math.HexOrDecimal256               `json:"currentDifficulty"`
+		Random              *math.HexOrDecimal256               `json:"currentRandom"`
+		ParentDifficulty    *math.HexOrDecimal256               `json:"parentDifficulty"`
+		ParentBaseFee       *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
+		ParentGasUsed       *math.HexOrDecimal64                `json:"parentGasUsed,omitempty"`
+		ParentGasLimit      *math.HexOrDecimal64                `json:"parentGasLimit,omitempty"`
+		ParentExcessDataGas *math.HexOrDecimal256               `json:"parentExcessDataGas,omitempty"`
+		GasLimit            *math.HexOrDecimal64                `json:"currentGasLimit"   gencodec:"required"`
+		Number              *math.HexOrDecimal64                `json:"currentNumber"     gencodec:"required"`
+		Timestamp           *math.HexOrDecimal64                `json:"currentTimestamp"  gencodec:"required"`
+		ParentTimestamp     *math.HexOrDecimal64                `json:"parentTimestamp,omitempty"`
+		BlockHashes         map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+		Ommers              []ommer                             `json:"ommers,omitempty"`
+		Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
+		BaseFee             *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
+		ExcessDataGas       *math.HexOrDecimal256               `json:"currentExcessDataGas,omitempty"`
+		ParentUncleHash     *common.Hash                        `json:"parentUncleHash"`
 	}
 	var dec stEnv
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -100,6 +106,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	if dec.ParentGasLimit != nil {
 		s.ParentGasLimit = uint64(*dec.ParentGasLimit)
 	}
+	if dec.ParentExcessDataGas != nil {
+		s.ParentExcessDataGas = (*big.Int)(dec.ParentExcessDataGas)
+	}
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'currentGasLimit' for stEnv")
 	}
@@ -126,6 +135,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BaseFee != nil {
 		s.BaseFee = (*big.Int)(dec.BaseFee)
+	}
+	if dec.ExcessDataGas != nil {
+		s.ExcessDataGas = (*big.Int)(dec.ExcessDataGas)
 	}
 	if dec.ParentUncleHash != nil {
 		s.ParentUncleHash = *dec.ParentUncleHash

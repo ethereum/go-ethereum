@@ -265,6 +265,21 @@ func Transition(ctx *cli.Context) error {
 	if chainConfig.IsShanghai(prestate.Env.Number) && prestate.Env.Withdrawals == nil {
 		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
 	}
+	if chainConfig.IsSharding(prestate.Env.Timestamp) {
+		if prestate.Env.ExcessDataGas != nil {
+			// Already set, excess data gas has precedent over parent base fee.
+		} else if prestate.Env.ParentExcessDataGas != nil {
+			newBlobs := 0
+			for _, tx := range txs {
+
+				if tx.Type() == types.BlobTxType {
+					hashes, _, _, _ := tx.BlobWrapData()
+					newBlobs += len(hashes)
+				}
+			}
+			prestate.Env.ExcessDataGas = misc.CalcExcessDataGas(prestate.Env.ParentExcessDataGas, newBlobs)
+		}
+	}
 	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
 	env := prestate.Env
 	if isMerged {
