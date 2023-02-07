@@ -155,5 +155,4 @@ func TestPayloadId(t *testing.T) {
 		}
 		ids[id] = i
 	}
-
 }
