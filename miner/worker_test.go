@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -40,8 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
-	"github.com/protolambda/ztyp/view"
 )
 
 const (
@@ -202,45 +199,6 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
 		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
-	}
-	return tx
-}
-
-func (b *testWorkerBackend) newRandomBlobTx(chainID *big.Int, nonce uint64) *types.Transaction {
-	var blobs types.Blobs
-	blobs = append(blobs, types.Blob{})
-
-	commitments, versionedHashes, aggregatedProof, err := blobs.ComputeCommitmentsAndAggregatedProof()
-	if err != nil {
-		panic(err)
-	}
-
-	gasPrice := big.NewInt(10 * params.InitialBaseFee).Uint64()
-	txData := &types.SignedBlobTx{
-		Message: types.BlobTxMessage{
-			ChainID:   view.Uint256View(*uint256.NewInt(chainID.Uint64())),
-			Nonce:     view.Uint64View(nonce),
-			Gas:       view.Uint64View(testGas),
-			GasFeeCap: view.Uint256View(*uint256.NewInt(gasPrice)),
-			// fee per data gas needs to be higher than the minimum because this test produces more than one
-			// block and the latter one has non-zero excessDataGas
-			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(params.MinDataGasPrice * 2)),
-			GasTipCap:           view.Uint256View(*uint256.NewInt(gasPrice)),
-			Value:               view.Uint256View(*uint256.NewInt(1000)),
-			To:                  types.AddressOptionalSSZ{Address: (*types.AddressSSZ)(&testUserAddress)},
-			BlobVersionedHashes: versionedHashes,
-		},
-	}
-	wrapData := &types.BlobTxWrapData{
-		BlobKzgs:           commitments,
-		Blobs:              blobs,
-		KzgAggregatedProof: aggregatedProof,
-	}
-	tx := types.NewTx(txData, types.WithTxWrapData(wrapData))
-	signer := types.NewDankSigner(chainID)
-	tx, err = types.SignTx(tx, signer, testBankKey)
-	if err != nil {
-		panic(err)
 	}
 	return tx
 }
@@ -707,76 +665,5 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			}
 			assertBlock(block, c.expectNumber, c.coinbase, c.random)
 		}
-	}
-}
-
-func TestGenerateBlockWithBlobsAndImport(t *testing.T) {
-	t.Skip()
-	// TODO(EIP-4844): Reenable this test
-
-	engine := beacon.NewFaker()
-	chainConfig := params.TestChainConfig
-	db := rawdb.NewMemoryDatabase()
-
-	chainConfig.LondonBlock = big.NewInt(0)
-	timeZero := uint64(0)
-	chainConfig.ShanghaiTime = &timeZero
-	chainConfig.ShardingForkTime = &timeZero
-	chainConfig.TerminalTotalDifficulty = new(big.Int)
-	chainConfig.TerminalTotalDifficultyPassed = true
-	w, b := newTestWorker(t, chainConfig, engine, db, 0)
-	defer w.close()
-
-	// This test chain imports the mined blocks.
-	db2 := rawdb.NewMemoryDatabase()
-	b.genesis.MustCommit(db2)
-	chain, _ := core.NewBlockChain(db2, nil, b.genesis, nil, engine, vm.Config{}, nil, nil)
-	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
-
-	// Wait for mined blocks.
-	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-	defer sub.Unsubscribe()
-
-	// Start mining!
-	w.start()
-
-	nonce := b.txPool.Nonce(testBankAddress)
-
-	var txs []*types.Transaction
-	for i := 0; i < params.MaxBlobsPerBlock+5; i++ {
-		txs = append(txs, b.newRandomBlobTx(chainConfig.ChainID, nonce))
-		nonce += 1
-	}
-	// Batch add blob txs to guarantee single block inclusion
-	errs := b.txPool.AddLocals(txs)
-	for i := range errs {
-		if errs[i] != nil {
-			panic(errs[i])
-		}
-	}
-
-	select {
-	case ev := <-sub.Chan():
-		block := ev.Data.(core.NewMinedBlockEvent).Block
-		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
-		}
-		txs := block.Transactions()
-		var numBlobs int
-		for i := range txs {
-			numBlobs += len(txs[i].DataHashes())
-		}
-		// Assert that there are no more than params.MaxBlobsPerBlock blobs in the block
-		if numBlobs != params.MaxBlobsPerBlock {
-			t.Fatalf("unexpected number of blobs in block: %d", numBlobs)
-		}
-
-	case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
-		t.Fatalf("timeout")
 	}
 }
