@@ -28,7 +28,7 @@ The previous command installs the latest stable release. Developers that wish to
 brew install ethereum --devel
 ```
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/docs/fundamentals/Command-Line-Options) or in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, and `rlpdump`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/docs/fundamentals/Command-Line-Options) or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
@@ -64,7 +64,7 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/docs/fundamentals/Command-Line-Options) or in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm` and `rlpdump`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/docs/fundamentals/Command-Line-Options) or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
@@ -153,7 +153,7 @@ The following standalone bundles are available:
 - 64bit archives (`.tar.gz`) on macOS
 - 32bit and 64bit archives (`.zip`) and installers (`.exe`) on Windows
 
-Some archives contain only Geth, while other archives containing Geth and the various developer tools (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`). More information about these executables is available at the [`README`](https://github.com/ethereum/go-ethereum#executables).
+Some archives contain only Geth, while other archives containing Geth and the various developer tools (`clef`, `devp2p`, `abigen`, `bootnode`, `evm` and `rlpdump`). More information about these executables is available at the [`README`](https://github.com/ethereum/go-ethereum#executables).
 
 The standalone bundles can be downloaded from the [Geth Downloads](/downloads) page. To update an existing installation, download and manually install the latest version.
 
@@ -275,6 +275,6 @@ build/bin/geth
 
 
 
-Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`) can be compiled by running `make all`. More information about these tools can be found [here](https://github.com/ethereum/go-ethereum#executables).
+Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm` and `rlpdump`) can be compiled by running `make all`. More information about these tools can be found [here](https://github.com/ethereum/go-ethereum#executables).
 
 To build a stable release, e.g. v1.9.21, the command `git checkout v1.9.21` retrieves that specific version. Executing that command before running `make geth` switches Geth to a stable branch.

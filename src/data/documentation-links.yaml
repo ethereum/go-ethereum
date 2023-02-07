@@ -22,6 +22,8 @@
       to: /docs/fundamentals/sync-modes
     - id: Account management
       to: /docs/fundamentals/account-management
+    - id: Databases
+      to: /docs/fundamentals/databases
     - id: 'Backup & restore'
       to: /docs/fundamentals/backup-restore
     - id: Logs
@@ -138,12 +140,12 @@
           to: /docs/tools/clef/tutorial
         - id: Clique-signing
           to: /docs/tools/clef/clique-signing
-    - id: puppeth
-      to: /docs/tools/puppeth
     - id: abigen
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p
+    - id: puppeth
+      to: /docs/tools/puppeth
 - id: FAQs
   to: /docs/faq
 - id: Resources
