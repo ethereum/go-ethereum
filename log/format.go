@@ -493,7 +493,7 @@ func escapeMessage(s string) string {
 	needsQuoting := false
 	for _, r := range s {
 		// Carriage return and Line feed are ok
-		if r == 0xa || r == 0xd {
+		if r == '\r' || r == '\n' || r == '\t' {
 			continue
 		}
 		// We quote everything below <space> (0x20) and above~ (0x7E),
