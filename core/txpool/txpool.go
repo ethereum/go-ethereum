@@ -686,7 +686,22 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
+
+	// Verify that replacing transactions will not result in overdraft
 	from, _ := types.Sender(pool.signer, tx) // already validated
+	list := pool.pending[from]
+	if list != nil { // Sender already has pending txs
+		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+		if repl := list.txs.Get(tx.Nonce()); repl != nil {
+			// Deduct the cost of a transaction replaced by this
+			sum.Sub(sum, repl.Cost())
+		}
+		if sum.Cmp(pool.currentState.GetBalance(from)) > 0 {
+			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+			return false, ErrOverdraft
+		}
+	}
+
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 
@@ -695,20 +710,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
-		}
-
-		// Verify that replacing transactions will not result in overdraft
-		list := pool.pending[from]
-		if list != nil { // Sender already has pending txs
-			sum := new(big.Int).Add(tx.Cost(), list.totalcost)
-			if repl := list.txs.Get(tx.Nonce()); repl != nil {
-				// Deduct the cost of a transaction replaced by this
-				sum.Sub(sum, repl.Cost())
-			}
-			if sum.Cmp(pool.currentState.GetBalance(from)) > 0 {
-				log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
-				return false, ErrOverdraft
-			}
 		}
 
 		// We're about to replace a transaction. The reorg does a more thorough
