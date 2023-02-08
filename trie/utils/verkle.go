@@ -31,13 +31,12 @@ const (
 )
 
 var (
-	zero                               = uint256.NewInt(0)
-	HeaderStorageOffset                = uint256.NewInt(64)
-	CodeOffset                         = uint256.NewInt(128)
-	MainStorageOffset                  = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
-	VerkleNodeWidth                    = uint256.NewInt(256)
-	codeStorageDelta                   = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
-	MainStorageMinusStorageDeltaOffset = new(uint256.Int).Sub(MainStorageOffset, codeStorageDelta)
+	zero                = uint256.NewInt(0)
+	HeaderStorageOffset = uint256.NewInt(64)
+	CodeOffset          = uint256.NewInt(128)
+	MainStorageOffset   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
+	VerkleNodeWidth     = uint256.NewInt(256)
+	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 
 	getTreePolyIndex0Point *verkle.Point
 )
@@ -146,7 +145,7 @@ func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
 	if storageKey.Cmp(codeStorageDelta) < 0 {
 		pos.Add(HeaderStorageOffset, storageKey)
 	} else {
-		pos.Add(MainStorageMinusStorageDeltaOffset, storageKey)
+		pos.Add(MainStorageOffset, storageKey)
 	}
 	treeIndex := new(uint256.Int).Div(pos, VerkleNodeWidth)
 
@@ -229,7 +228,7 @@ func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageK
 	if storageKey.Cmp(codeStorageDelta) < 0 {
 		pos.Add(HeaderStorageOffset, storageKey)
 	} else {
-		pos.Add(MainStorageMinusStorageDeltaOffset, storageKey)
+		pos.Add(MainStorageOffset, storageKey)
 	}
 	treeIndex := new(uint256.Int).Div(pos, VerkleNodeWidth)
 	// calculate the sub_index, i.e. the index in the stem tree.

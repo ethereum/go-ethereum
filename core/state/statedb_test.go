@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -955,5 +956,29 @@ func TestFlushOrderDataLoss(t *testing.T) {
 				t.Errorf("account %d: slot %d: state mismatch: have %x, want %x", a, s, have, common.Hash{a, s})
 			}
 		}
+	}
+}
+
+// Test that an account with more than 128 pieces of code overflows
+// correctly into the next group.
+func TestCodeChunkOverflow(t *testing.T) {
+	// Create an empty state database
+	db := rawdb.NewMemoryDatabase()
+	state, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{UseVerkle: true}), nil)
+
+	// Update it with some accounts
+	addr := common.BytesToAddress([]byte{1})
+	state.AddBalance(addr, big.NewInt(int64(11)))
+	state.SetNonce(addr, uint64(42))
+	state.SetState(addr, common.BytesToHash([]byte{1, 1, 1}), common.BytesToHash([]byte{1, 1, 1, 1}))
+	code := make([]byte, 31*256)
+	for i := range code {
+		code[i] = 1
+	}
+	state.SetCode(addr, code)
+
+	root := state.IntermediateRoot(false)
+	if err := state.Database().TrieDB().Commit(root, false, nil); err != nil {
+		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}
 }
