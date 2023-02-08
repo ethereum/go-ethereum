@@ -20,7 +20,6 @@
 package pebble
 
 import (
-	"errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
