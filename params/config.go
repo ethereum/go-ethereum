@@ -42,7 +42,7 @@ var (
 	MainnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			WaitPeriod:           10,
@@ -50,7 +50,7 @@ var (
 		},
 		9999999999: {
 			SwitchRound:          9999999999,
-			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			WaitPeriod:           10,
@@ -87,7 +87,7 @@ var (
 	DevnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           10,
@@ -95,7 +95,7 @@ var (
 		},
 		151919: {
 			SwitchRound:          151919,
-			CertThreshold:        common.MaxMasternodesV2*1/2 + 1,
+			CertThreshold:        55, // based on masternode is 108
 			TimeoutSyncThreshold: 8,
 			TimeoutPeriod:        50,
 			WaitPeriod:           5,
@@ -103,7 +103,7 @@ var (
 		},
 		171000: {
 			SwitchRound:          171000,
-			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           10,
@@ -111,7 +111,7 @@ var (
 		},
 		270000: {
 			SwitchRound:          270000,
-			CertThreshold:        common.MaxMasternodesV2*1/5 + 1,
+			CertThreshold:        21, // based on masternode is 108
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        10,
 			WaitPeriod:           2,
@@ -119,7 +119,7 @@ var (
 		},
 		300000: {
 			SwitchRound:          300000,
-			CertThreshold:        common.MaxMasternodesV2*4/5 + 1,
+			CertThreshold:        86, // based on masternode is 108
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			WaitPeriod:           20,
@@ -127,7 +127,7 @@ var (
 		},
 		310000: {
 			SwitchRound:          310000,
-			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           10,
