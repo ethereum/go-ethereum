@@ -182,10 +182,7 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, nodes, err := trieA.Commit(false)
-	if err != nil {
-		panic(err)
-	}
+	rootA, nodes := trieA.Commit(false)
 	if nodes != nil {
 		dbA.Update(trie.NewWithNodeSet(nodes))
 	}
@@ -201,9 +198,7 @@ func (f *fuzzer) fuzz() int {
 		trieB.Update(kv.k, kv.v)
 	}
 	rootB := trieB.Hash()
-	if _, err := trieB.Commit(); err != nil {
-		panic(err)
-	}
+	trieB.Commit()
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
 	}
