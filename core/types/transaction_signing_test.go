@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
 )
 
 func TestEIP155Signing(t *testing.T) {
@@ -74,6 +76,51 @@ func TestEIP155ChainId(t *testing.T) {
 
 	if tx.ChainId().Sign() != 0 {
 		t.Error("expected chain id to be 0 got", tx.ChainId())
+	}
+}
+
+func TestEIP4844Signing(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	signer := NewDankSigner(big.NewInt(18))
+	txdata := &SignedBlobTx{
+		Message: BlobTxMessage{
+			Nonce:               view.Uint64View(0),
+			Gas:                 view.Uint64View(123457),
+			To:                  AddressOptionalSSZ{Address: (*AddressSSZ)(&addr)},
+			GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
+			GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(10)),
+			Value:               view.Uint256View(*uint256.NewInt(10)),
+			BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014")},
+		},
+	}
+	// This is the identity point serialised
+	var kzgProof KZGProof = [48]byte{192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	wrapData := &BlobTxWrapData{
+		BlobKzgs:           BlobKzgs{KZGCommitment{0: 0xc0}},
+		Blobs:              Blobs{Blob{}},
+		KzgAggregatedProof: kzgProof,
+	}
+	tx := NewTx(txdata, WithTxWrapData(wrapData))
+	tx, err := SignTx(tx, signer, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tx.Protected() {
+		t.Fatal("expected tx to be protected")
+	}
+
+	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
+		t.Error("expected chainId to be", signer.ChainID(), "got", tx.ChainId())
+	}
+	sender, err := Sender(signer, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sender != addr {
+		t.Error("expected sender to be", addr, "got", sender)
 	}
 }
 

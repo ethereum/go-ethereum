@@ -295,6 +295,10 @@ func (tx *BlobTxMessage) FixedLength() uint64 {
 	return 0
 }
 
+func (tx *BlobTxMessage) setChainID(chainID *big.Int) {
+	(*uint256.Int)(&tx.ChainID).SetFromBig(chainID)
+}
+
 func (stx *SignedBlobTx) ByteLength() uint64 {
 	return codec.ContainerLength(&stx.Message, &stx.Signature)
 }
@@ -378,7 +382,7 @@ func (stx *SignedBlobTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 
 func (stx *SignedBlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	(*uint256.Int)(&stx.Message.ChainID).SetFromBig(chainID)
+	stx.Message.setChainID(chainID)
 	stx.Signature.V = Uint8View(v.Uint64())
 	(*uint256.Int)(&stx.Signature.R).SetFromBig(r)
 	(*uint256.Int)(&stx.Signature.S).SetFromBig(s)

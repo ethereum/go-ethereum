@@ -229,7 +229,9 @@ func (s dankSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != BlobTxType {
 		return s.londonSigner.Hash(tx)
 	}
-	return prefixedSSZHash(BlobTxType, &tx.inner.(*SignedBlobTx).Message)
+	messageSigning := tx.inner.(*SignedBlobTx).Message
+	messageSigning.setChainID(s.chainId)
+	return prefixedSSZHash(BlobTxType, &messageSigning)
 }
 
 type londonSigner struct{ eip2930Signer }
