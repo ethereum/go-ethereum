@@ -20,12 +20,12 @@
 package pebble
 
 import (
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"

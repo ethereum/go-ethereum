@@ -147,40 +147,40 @@ func TestCustomBackend(t *testing.T) {
 	}
 	for i, tt := range []backendTest{
 		{ // When not specified, it should default to leveldb
-			execArgs:   []string{"--backingdb", "leveldb"},
+			execArgs:   []string{"--db.engine", "leveldb"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Explicit leveldb
-			initArgs:   []string{"--backingdb", "leveldb"},
-			execArgs:   []string{"--backingdb", "leveldb"},
+			initArgs:   []string{"--db.engine", "leveldb"},
+			execArgs:   []string{"--db.engine", "leveldb"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Explicit leveldb first, then autodiscover
-			initArgs:   []string{"--backingdb", "leveldb"},
+			initArgs:   []string{"--db.engine", "leveldb"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Explicit pebble
-			initArgs:   []string{"--backingdb", "pebble"},
-			execArgs:   []string{"--backingdb", "pebble"},
+			initArgs:   []string{"--db.engine", "pebble"},
+			execArgs:   []string{"--db.engine", "pebble"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Explicit pebble, then auto-discover
-			initArgs:   []string{"--backingdb", "pebble"},
+			initArgs:   []string{"--db.engine", "pebble"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Can't start pebble on top of leveldb
-			initArgs:   []string{"--backingdb", "leveldb"},
-			execArgs:   []string{"--backingdb", "pebble"},
-			execExpect: `Fatal: Failed to register the Ethereum service: backingdb choice was pebble but found pre-existing leveldb database in specified data directory`,
+			initArgs:   []string{"--db.engine", "leveldb"},
+			execArgs:   []string{"--db.engine", "pebble"},
+			execExpect: `Fatal: Failed to register the Ethereum service: db.engine choice was pebble but found pre-existing leveldb database in specified data directory`,
 		},
 		{ // Can't start leveldb on top of pebble
-			initArgs:   []string{"--backingdb", "pebble"},
-			execArgs:   []string{"--backingdb", "leveldb"},
-			execExpect: `Fatal: Failed to register the Ethereum service: backingdb choice was leveldb but found pre-existing pebble database in specified data directory`,
+			initArgs:   []string{"--db.engine", "pebble"},
+			execArgs:   []string{"--db.engine", "leveldb"},
+			execExpect: `Fatal: Failed to register the Ethereum service: db.engine choice was leveldb but found pre-existing pebble database in specified data directory`,
 		},
 		{ // Reject invalid backend choice
-			initArgs:   []string{"--backingdb", "mssql"},
-			initExpect: `Fatal: Invalid choice for backing db 'mssql', allowed 'leveldb' or 'pebble'`,
+			initArgs:   []string{"--db.engine", "mssql"},
+			initExpect: `Fatal: Invalid choice for db.engine 'mssql', allowed 'leveldb' or 'pebble'`,
 			// Since the init fails, this will return the (default) mainnet genesis
 			// block nonce
 			execExpect: `0x0000000000000042`,

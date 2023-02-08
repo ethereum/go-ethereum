@@ -99,8 +99,8 @@ var (
 		Usage:    "URL for remote database",
 		Category: flags.LoggingCategory,
 	}
-	BackingDBFlag = &cli.StringFlag{
-		Name:     "backingdb",
+	DBEngineFlag = &cli.StringFlag{
+		Name:     "db.engine",
 		Usage:    "Backing database implementation to use ('leveldb' or 'pebble')",
 		Value:    "leveldb",
 		Category: flags.EthCategory,
@@ -1023,7 +1023,7 @@ var (
 
 func init() {
 	if rawdb.PebbleEnabled {
-		DatabasePathFlags = append(DatabasePathFlags, BackingDBFlag)
+		DatabasePathFlags = append(DatabasePathFlags, DBEngineFlag)
 	}
 }
 
@@ -1509,13 +1509,13 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.Bool(InsecureUnlockAllowedFlag.Name)
 	}
-	if ctx.IsSet(BackingDBFlag.Name) {
-		backingDB := ctx.String(BackingDBFlag.Name)
-		if backingDB != "leveldb" && backingDB != "pebble" {
-			Fatalf("Invalid choice for backing db '%s', allowed 'leveldb' or 'pebble'", backingDB)
+	if ctx.IsSet(DBEngineFlag.Name) {
+		dbEngine := ctx.String(DBEngineFlag.Name)
+		if dbEngine != "leveldb" && dbEngine != "pebble" {
+			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
 		}
-		log.Info(fmt.Sprintf("Using %s as backing db", backingDB))
-		cfg.BackingDB = backingDB
+		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
+		cfg.DBEngine = dbEngine
 	}
 }
 

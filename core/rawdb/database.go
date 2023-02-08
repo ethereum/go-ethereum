@@ -349,18 +349,18 @@ type OpenOptions struct {
 func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
-		return nil, fmt.Errorf("backingdb choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
+		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
 	}
 	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
 			log.Info("Using pebble as the backing database")
 			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 		} else {
-			return nil, errors.New("backingdb 'pebble' not supported on this platform")
+			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
 	}
 	if len(o.Type) != 0 && o.Type != dbLeveldb {
-		return nil, fmt.Errorf("unknown backingdb %v", o.Type)
+		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
 	}
 	log.Info("Using leveldb as the backing database")
 	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
