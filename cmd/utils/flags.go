@@ -1512,7 +1512,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(BackingDBFlag.Name) {
 		backingDB := ctx.String(BackingDBFlag.Name)
 		if backingDB != "leveldb" && backingDB != "pebble" {
-			Fatalf("Invalid choice for backing db: '%s', allowed: 'leveldb' or 'pebble'", backingDB)
+			Fatalf("Invalid choice for backing db '%s', allowed 'leveldb' or 'pebble'", backingDB)
 		}
 		log.Info(fmt.Sprintf("Using %s as backing db", backingDB))
 		cfg.BackingDB = backingDB

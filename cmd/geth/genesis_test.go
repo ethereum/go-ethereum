@@ -180,7 +180,7 @@ func TestCustomBackend(t *testing.T) {
 		},
 		{ // Reject invalid backend choice
 			initArgs:   []string{"--backingdb", "mssql"},
-			initExpect: `Fatal: invalid choice for backing db: mssql`,
+			initExpect: `Fatal: Invalid choice for backing db 'mssql', allowed 'leveldb' or 'pebble'`,
 			// Since the init fails, this will return the (default) mainnet genesis
 			// block nonce
 			execExpect: `0x0000000000000042`,
