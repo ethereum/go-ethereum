@@ -23,13 +23,24 @@ type txnOpCodeTracer struct {
 	callStack []CallFrame // Data structure for op codes making up our trace
 	interrupt uint32      // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption (not always specific for us)
+	opts      TracerOpts
 }
 
-// NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer.
-func NewTxnOpCodeTracer() (Tracer, error) {
+// NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
+// options applied.
+func NewTxnOpCodeTracer(cfg json.RawMessage) (Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &txnOpCodeTracer{callStack: make([]CallFrame, 1)}, nil
+	t := &txnOpCodeTracer{callStack: make([]CallFrame, 1)}
+
+	// Decode raw json opts into our struct.
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &t.opts); err != nil {
+			return nil, err
+		}
+	}
+
+	return t, nil
 }
 
 // GetResult returns an empty json object.

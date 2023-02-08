@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var Tracers = map[string]func() (Tracer, error){
+var Tracers = map[string]func(cfg json.RawMessage) (Tracer, error){
 	"txnOpCodeTracer": NewTxnOpCodeTracer,
 }
 
@@ -13,6 +13,12 @@ type Tracer interface {
 	vm.EVMLogger
 	GetResult() (json.RawMessage, error)
 	Stop(err error)
+}
+
+// TracerOpts configure the tracer to save or ignore various aspects of a
+// transaction execution.
+type TracerOpts struct {
+	Logs bool `json:"logs"`
 }
 
 // Trace contains all the accumulated details of a transaction execution.
