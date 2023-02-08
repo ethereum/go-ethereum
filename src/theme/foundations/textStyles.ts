@@ -135,17 +135,17 @@ export const textStyles = {
   },
   'docs-nav-dropdown': {
     fontFamily: 'heading',
-    fontWeight: 400,
-    fontSize: '18px',
-    lineHeight: 6,
+    fontWeight: 700,
+    fontSize: '0.875rem',
+    lineHeight: '18.48px',
     letterSpacing: '4%',
     textAlign: 'left'
   },
   'docs-nav-links': {
     fontFamily: 'heading',
     weight: 400,
-    fontSize: 'md',
-    lineHeight: 8,
+    fontSize: '0.875rem',
+    lineHeight: 6,
     letterSpacing: '0.01em'
   },
   'header-button': {
