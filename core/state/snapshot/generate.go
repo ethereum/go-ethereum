@@ -371,7 +371,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		if nodes != nil {
 			snapTrieDb.Update(trie.NewWithNodeSet(nodes))
 		}
-		snapTrieDb.Commit(root, false, nil)
+		snapTrieDb.Commit(root, false)
 	}
 	// Construct the trie for state iteration, reuse the trie
 	// if it's already opened with some nodes resolved.

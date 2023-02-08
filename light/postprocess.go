@@ -221,7 +221,7 @@ func (c *ChtIndexerBackend) Commit() error {
 		if err := c.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
-		if err := c.triedb.Commit(root, false, nil); err != nil {
+		if err := c.triedb.Commit(root, false); err != nil {
 			return err
 		}
 	}
@@ -467,7 +467,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 		if err := b.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
-		if err := b.triedb.Commit(root, false, nil); err != nil {
+		if err := b.triedb.Commit(root, false); err != nil {
 			return err
 		}
 	}
