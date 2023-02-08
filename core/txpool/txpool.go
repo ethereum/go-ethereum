@@ -754,7 +754,8 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
 			underpricedTxMeter.Mark(1)
-			pool.removeTx(tx.Hash(), false)
+			dropped := pool.removeTx(tx.Hash(), false)
+			pool.changesSinceReorg += dropped
 		}
 	}
 
@@ -1057,11 +1058,12 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
-func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
+// Returns the number of transactions moved to the future queue.
+func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
-		return
+		return 0
 	}
 	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
 
@@ -1089,7 +1091,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
-			return
+			return len(invalids)
 		}
 	}
 	// Transaction is in the future queue
@@ -1103,6 +1105,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			delete(pool.beats, addr)
 		}
 	}
+	return 0
 }
 
 // requestReset requests a pool reset to the new head block.
