@@ -758,7 +758,7 @@ var (
 	TxArrivalWaitFlag = cli.IntFlag{
 		Name:  "txarrivalwait",
 		Usage: "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 100ms)",
-		Value: (int)(node.DefaultConfig.P2P.TxArrivalWait),
+		Value: node.DefaultConfig.P2P.TxArrivalWait,
 	}
 
 	// Metrics flags
@@ -1296,7 +1296,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	}
 
 	if ctx.GlobalIsSet(TxArrivalWaitFlag.Name) {
-		cfg.TxArrivalWait = (time.Duration)(TxArrivalWaitFlag.Value) * time.Millisecond
+		cfg.TxArrivalWait = TxArrivalWaitFlag.Value
 	}
 }
 

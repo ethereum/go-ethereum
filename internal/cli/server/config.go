@@ -1051,7 +1051,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
-			TxArrivalWait:   time.Duration(c.P2P.TxArrivalWait),
+			TxArrivalWait:   int(c.P2P.TxArrivalWait),
 		},
 		HTTPModules:         c.JsonRPC.Http.API,
 		HTTPCors:            c.JsonRPC.Http.Cors,
