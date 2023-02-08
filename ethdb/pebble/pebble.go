@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -503,14 +504,14 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 		if !ok {
 			break
 		}
-		// I have no idea whether the iterated key and value
-		// are safe to use, deep copy them temporarily.
+		// The (k,v) slices might be overwritten if the batch is reset/reused,
+		// and the receiver should copy them if they are to be retained long-term.
 		if kind == pebble.InternalKeyKindSet {
-			w.Put(common.CopyBytes(k), common.CopyBytes(v))
+			w.Put(k, v)
 		} else if kind == pebble.InternalKeyKindDelete {
-			w.Delete(common.CopyBytes(k))
+			w.Delete(k)
 		} else {
-			return errors.New("invalid operation") // todo FIX IT
+			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
 	return nil
