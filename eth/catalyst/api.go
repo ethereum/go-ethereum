@@ -782,7 +782,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 	if end > current {
 		end = current
 	}
-	var bodies []engine.ExecutionPayloadBodyV1
+	bodies := make([]*engine.ExecutionPayloadBodyV1, 0, uint64(count))
 	for i := uint64(start); i < end; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		body := getBody(block)
