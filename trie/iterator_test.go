@@ -337,7 +337,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	_, nodes, _ := tr.Commit(false)
 	triedb.Update(NewWithNodeSet(nodes))
 	if !memonly {
-		triedb.Commit(tr.Hash(), true, nil)
+		triedb.Commit(tr.Hash(), false)
 	}
 	wantNodeCount := checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
 
@@ -429,7 +429,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	root, nodes, _ := ctr.Commit(false)
 	triedb.Update(NewWithNodeSet(nodes))
 	if !memonly {
-		triedb.Commit(root, true, nil)
+		triedb.Commit(root, false)
 	}
 	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
 	var (

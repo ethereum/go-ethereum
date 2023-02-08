@@ -78,17 +78,17 @@ func TestHexKeybytes(t *testing.T) {
 }
 
 func TestHexToCompactInPlace(t *testing.T) {
-	for i, keyS := range []string{
+	for i, key := range []string{
 		"00",
 		"060a040c0f000a090b040803010801010900080d090a0a0d0903000b10",
 		"10",
 	} {
-		hexBytes, _ := hex.DecodeString(keyS)
+		hexBytes, _ := hex.DecodeString(key)
 		exp := hexToCompact(hexBytes)
 		sz := hexToCompactInPlace(hexBytes)
 		got := hexBytes[:sz]
 		if !bytes.Equal(exp, got) {
-			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, keyS, got, exp)
+			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, key, got, exp)
 		}
 	}
 }

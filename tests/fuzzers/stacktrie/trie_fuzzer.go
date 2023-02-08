@@ -190,7 +190,7 @@ func (f *fuzzer) fuzz() int {
 		dbA.Update(trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false, nil)
+	dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)

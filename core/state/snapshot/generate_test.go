@@ -203,7 +203,7 @@ func (t *testHelper) Commit() common.Hash {
 		t.nodes.Merge(nodes)
 	}
 	t.triedb.Update(t.nodes)
-	t.triedb.Commit(root, false, nil)
+	t.triedb.Commit(root, false)
 	return root
 }
 
@@ -391,7 +391,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie leaf and ensure the generator chokes
-	helper.triedb.Commit(root, false, nil)
+	helper.triedb.Commit(root, false)
 	helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
