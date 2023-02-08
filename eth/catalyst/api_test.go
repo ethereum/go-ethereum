@@ -1311,9 +1311,14 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 
 	tests := []struct {
 		results []*types.Body
-		start   uint64
-		count   uint64
+		start   hexutil.Uint64
+		count   hexutil.Uint64
 	}{
+		{
+			results: []*types.Body{blocks[9].Body()},
+			start:   10,
+			count:   1,
+		},
 		// Genesis
 		{
 			results: []*types.Body{blocks[0].Body()},
@@ -1334,14 +1339,25 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		},
 		// unavailable block
 		{
-			results: []*types.Body{blocks[18].Body()},
+			results: []*types.Body{blocks[18].Body(), blocks[19].Body()},
 			start:   19,
 			count:   3,
 		},
-		// after range
+		// unavailable block
+		{
+			results: []*types.Body{blocks[19].Body()},
+			start:   20,
+			count:   2,
+		},
+		{
+			results: []*types.Body{blocks[19].Body()},
+			start:   20,
+			count:   1,
+		},
+		// whole range unavailable
 		{
 			results: make([]*types.Body, 0),
-			start:   20,
+			start:   22,
 			count:   2,
 		},
 	}
@@ -1354,11 +1370,11 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		if len(result) == len(test.results) {
 			for i, r := range result {
 				if !equalBody(test.results[i], r) {
-					t.Fatalf("test %v: invalid response: expected %+v got %+v", k, test.results[i], r)
+					t.Fatalf("test %d: invalid response: expected \n%+v\ngot\n%+v", k, test.results[i], r)
 				}
 			}
 		} else {
-			t.Fatalf("invalid length want %v got %v", len(test.results), len(result))
+			t.Fatalf("test %d: invalid length want %v got %v", k, len(test.results), len(result))
 		}
 	}
 }
@@ -1369,8 +1385,8 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	defer node.Close()
 
 	tests := []struct {
-		start uint64
-		count uint64
+		start hexutil.Uint64
+		count hexutil.Uint64
 	}{
 		// Genesis
 		{

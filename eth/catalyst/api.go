@@ -772,18 +772,18 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
 	if start == 0 || count == 0 || count > 1024 {
 		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
 	}
 	// limit count up until current
 	current := api.eth.BlockChain().CurrentBlock().NumberU64()
-	end := start + count
-	if end > current {
-		end = current
+	last := uint64(start) + uint64(count) - 1
+	if last > current {
+		last = current
 	}
-	var bodies []*engine.ExecutionPayloadBodyV1
-	for i := start; i < end; i++ {
+	bodies := make([]*engine.ExecutionPayloadBodyV1, 0, uint64(count))
+	for i := uint64(start); i <= last; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		bodies = append(bodies, getBody(block))
 	}
