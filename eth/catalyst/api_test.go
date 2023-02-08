@@ -1360,7 +1360,7 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		},
 	}
 
-	for k, test := range tests[:] {
+	for k, test := range tests {
 		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
 		if err != nil {
 			t.Fatal(err)
