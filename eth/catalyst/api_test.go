@@ -1367,7 +1367,7 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		}
 		if len(result) == len(test.results) {
 			for i, r := range result {
-				if !equalBody(test.results[i], &r) {
+				if !equalBody(test.results[i], r) {
 					t.Fatalf("test %d: invalid response: expected \n%+v\ngot\n%+v", k, test.results[i], r)
 				}
 			}
