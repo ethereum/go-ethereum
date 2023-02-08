@@ -2,6 +2,7 @@ package blocknative
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -24,6 +25,7 @@ type TracerOpts struct {
 // Trace contains all the accumulated details of a transaction execution.
 type Trace struct {
 	CallFrame
+	Logs []Log  `json:"logs,omitempty"`
 	Time string `json:"time,omitempty"`
 }
 
@@ -39,4 +41,16 @@ type CallFrame struct {
 	Error       string      `json:"error,omitempty"`
 	ErrorReason string      `json:"errorReason,omitempty"`
 	Calls       []CallFrame `json:"calls,omitempty"`
+}
+
+// Log represents a single log entry from the receipt of a transaction.
+type Log struct {
+	// Address is the address of the contract that emitted the log.
+	Address common.Address `json:"address"`
+
+	// Data is the encoded memory provided with the log.
+	Data string `json:"data"`
+
+	// Topics is a slice of up to 4 32byte words provided with the log.
+	Topics []common.Hash `json:"topics"`
 }

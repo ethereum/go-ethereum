@@ -57,6 +57,7 @@
   },
   "input": "0xf88b8271908506fc23ac0083015f90943b873a919aa0512d5a0f09e6dcceaa4a6727fafe80a463e4bff40000000000000000000000000024f658a46fbb89d8ac105e98d7ac7cbbaf27c52aa0bdce0b59e8761854e857fe64015f06dd08a4fbb7624f6094893a79a72e6ad6bea01d9dde033cff7bb235a3163f348a6d7ab8d6b52bc0963a95b91612e40ca766a4",
   "tracerConfig": {
+      "logs": true,
       "onlyTopCall": true
   },
   "result": {
@@ -78,6 +79,16 @@
         "gas": "0x6d05",
         "gasUsed": "0x0",
         "value": "0x6f05b59d3b20000"
+      }
+    ],
+    "logs": [
+      {
+        "address": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",
+        "data": "0x00000000000000000000000000000000000000000000000006f05b59d3b20000",
+        "topics": [
+          "0x9bca65ce52fdef8a470977b51f247a2295123a4807dfa9e502edf0d30722da3b",
+          "0x0000000000000000000000000024f658a46fbb89d8ac105e98d7ac7cbbaf27c5"
+        ]
       }
     ]
   }

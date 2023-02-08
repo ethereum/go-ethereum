@@ -89,6 +89,17 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Du
 	// Add total time duration for this trace request
 	t.trace.Time = fmt.Sprintf("%v", time)
 
+	// If the user wants the logs, grab them from the state
+	if t.opts.Logs {
+		for _, stateLog := range t.env.StateDB.Logs() {
+			t.trace.Logs = append(t.trace.Logs, Log{
+				Address: stateLog.Address,
+				Data:    bytesToHex(stateLog.Data),
+				Topics:  stateLog.Topics,
+			})
+		}
+	}
+
 	// This is the final output of a call
 	if err != nil {
 		t.callStack[0].Error = err.Error()
