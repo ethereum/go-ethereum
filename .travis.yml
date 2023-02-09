@@ -8,15 +8,13 @@ jobs:
       go: 1.17.x
       env:
         - azure-osx
-        - azure-ios
-        - cocoapods-ios
 
   include:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - lint
       git:
@@ -31,7 +29,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -48,7 +46,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -65,7 +63,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -90,7 +88,7 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.19.x
+      go: 1.20.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -120,12 +118,26 @@ jobs:
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
+    # This builder does the OSX Azure uploads
+    - stage: build
+      if: type = push
+      os: osx
+      go: 1.20.x
+      env:
+        - azure-osx
+        - GO111MODULE=on
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go install -dlgo
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+
     # These builders run the tests
     - stage: build
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
@@ -136,7 +148,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.18.x
+      go: 1.19.x
       env:
         - GO111MODULE=on
       script:
@@ -145,7 +157,7 @@ jobs:
     - stage: build
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.19.x
       env:
         - GO111MODULE=on
       script:
@@ -156,7 +168,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - azure-purge
         - GO111MODULE=on
@@ -170,7 +182,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.19.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
