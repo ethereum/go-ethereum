@@ -978,3 +978,32 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		isPrague:         c.IsPrague(timestamp),
 	}
 }
+
+// OverrideConfig returns a copy of original with forks enabled by override enabled,
+// along with a boolean that indicates whether the copy is canonical (equivalent to the original).
+// Note: the Clique-part is _not_ deep copied
+func OverrideConfig(original *ChainConfig, override *ChainConfig) (*ChainConfig, bool) {
+	copy := new(ChainConfig)
+	*copy = *original
+	canon := true
+
+	// Apply forks (after Berlin) to the copy.
+	if block := override.BerlinBlock; block != nil {
+		copy.BerlinBlock = block
+		canon = false
+	}
+	if block := override.LondonBlock; block != nil {
+		copy.LondonBlock = block
+		canon = false
+	}
+	if block := override.ArrowGlacierBlock; block != nil {
+		copy.ArrowGlacierBlock = block
+		canon = false
+	}
+	if block := override.GrayGlacierBlock; block != nil {
+		copy.GrayGlacierBlock = block
+		canon = false
+	}
+
+	return copy, canon
+}
