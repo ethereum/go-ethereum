@@ -169,14 +169,14 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db            ethdb.Database // Low level persistent database to store final content in
-	snaps         *snapshot.Tree // Snapshot tree for fast trie leaf access
-	triegc        *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc        time.Duration  // Accumulates canonical block processing for trie dumping
-	lastWrite     uint64         // Last block when the state was flushed
-	flushInterval int64          // Time interval (processing time) after which to flush a state
-	triedb        *trie.Database // The database handler for maintaining trie nodes.
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
+	db            ethdb.Database                   // Low level persistent database to store final content in
+	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
+	lastWrite     uint64                           // Last block when the state was flushed
+	flushInterval int64                            // Time interval (processing time) after which to flush a state
+	triedb        *trie.Database                   // The database handler for maintaining trie nodes.
+	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -261,7 +261,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		db:            db,
 		triedb:        triedb,
 		flushInterval: int64(cacheConfig.TrieTimeLimit),
-		triegc:        prque.New(nil),
+		triegc:        prque.New[int64, common.Hash](nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
 		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -957,7 +957,7 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+			triedb.Dereference(bc.triegc.PopItem())
 		}
 		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup")
@@ -1391,7 +1391,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.triegc.Push(root, number)
 			break
 		}
-		bc.triedb.Dereference(root.(common.Hash))
+		bc.triedb.Dereference(root)
 	}
 	return nil
 }
