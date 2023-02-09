@@ -63,7 +63,7 @@ var DefaultConfig = Config{
 		ListenAddr:    ":30303",
 		MaxPeers:      50,
 		NAT:           nat.Any(),
-		TxArrivalWait: 100,
+		TxArrivalWait: 500,
 	},
 }
 

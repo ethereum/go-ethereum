@@ -39,7 +39,7 @@ var (
 	}
 	// testTxsHashes is the hashes of the test transactions above
 	testTxsHashes     = []common.Hash{testTxs[0].Hash(), testTxs[1].Hash(), testTxs[2].Hash(), testTxs[3].Hash()}
-	testTxArrivalWait = 100 * time.Millisecond
+	testTxArrivalWait = 500 * time.Millisecond
 )
 
 type doTxNotify struct {

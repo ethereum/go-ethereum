@@ -458,7 +458,7 @@ func DefaultConfig() *Config {
 			Port:          30303,
 			NoDiscover:    false,
 			NAT:           "any",
-			TxArrivalWait: 100,
+			TxArrivalWait: 500,
 			Discovery: &P2PDiscovery{
 				V5Enabled:    false,
 				Bootnodes:    []string{},

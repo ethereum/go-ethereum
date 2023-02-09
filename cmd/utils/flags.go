@@ -757,7 +757,7 @@ var (
 	// fetcher flag to set arrival timeout
 	TxArrivalWaitFlag = cli.IntFlag{
 		Name:  "txarrivalwait",
-		Usage: "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 100ms)",
+		Usage: "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 500ms)",
 		Value: node.DefaultConfig.P2P.TxArrivalWait,
 	}
 
