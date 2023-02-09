@@ -143,4 +143,8 @@ addr = ":3131"
 [developer]
 dev = false
 period = 0
+
+[blockstm]
+enable = false
+procs = 8
 ```

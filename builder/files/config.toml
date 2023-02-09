@@ -136,3 +136,7 @@ syncmode = "full"
 # [developer]
   # dev = false
   # period = 0
+
+# [parallelevm]
+  # enable = false
+  # procs = 8

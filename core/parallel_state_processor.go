@@ -34,6 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type ParallelEVMConfig struct {
+	Enable               bool
+	SpeculativeProcesses int
+}
+
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
@@ -269,6 +274,8 @@ var parallelizabilityTimer = metrics.NewRegisteredTimer("block/parallelizability
 // transactions failed to execute due to insufficient gas it will return an error.
 // nolint:gocognit
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	blockstm.SetProcs(cfg.ParallelSpeculativeProcesses)
+
 	var (
 		receipts    types.Receipts
 		header      = block.Header()

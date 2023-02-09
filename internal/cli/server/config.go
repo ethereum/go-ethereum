@@ -104,6 +104,9 @@ type Config struct {
 
 	// Developer has the developer mode related settings
 	Developer *DeveloperConfig `hcl:"developer,block" toml:"developer,block"`
+
+	// ParallelEVM has the parallel evm related settings
+	ParallelEVM *ParallelEVMConfig `hcl:"parallelevm,block" toml:"parallelevm,block"`
 }
 
 type P2PConfig struct {
@@ -398,6 +401,12 @@ type DeveloperConfig struct {
 	Period uint64 `hcl:"period,optional" toml:"period,optional"`
 }
 
+type ParallelEVMConfig struct {
+	Enable bool `hcl:"enable,optional" toml:"enable,optional"`
+
+	SpeculativeProcesses int `hcl:"procs,optional" toml:"procs,optional"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:          "mainnet",
@@ -530,6 +539,10 @@ func DefaultConfig() *Config {
 		Developer: &DeveloperConfig{
 			Enabled: false,
 			Period:  0,
+		},
+		ParallelEVM: &ParallelEVMConfig{
+			Enable:               false,
+			SpeculativeProcesses: 8,
 		},
 	}
 }
@@ -892,6 +905,9 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
+
+	n.ParallelEVM.Enable = c.ParallelEVM.Enable
+	n.ParallelEVM.SpeculativeProcesses = c.ParallelEVM.SpeculativeProcesses
 
 	return &n, nil
 }

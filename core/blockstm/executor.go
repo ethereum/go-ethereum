@@ -36,6 +36,12 @@ type ExecVersionView struct {
 	sender common.Address
 }
 
+var NumSpeculativeProcs int = 8
+
+func SetProcs(specProcs int) {
+	NumSpeculativeProcs = specProcs
+}
+
 func (ev *ExecVersionView) Execute() (er ExecResult) {
 	er.ver = ev.ver
 	if er.err = ev.et.Execute(ev.mvh, ev.ver.Incarnation); er.err != nil {
@@ -157,8 +163,7 @@ type ParallelExecutionResult struct {
 	AllDeps map[int]map[int]bool
 }
 
-const numGoProcs = 2
-const numSpeculativeProcs = 8
+const numGoProcs = 1
 
 type ParallelExecutor struct {
 	tasks []ExecTask
@@ -315,10 +320,10 @@ func (pe *ParallelExecutor) Prepare() {
 		}
 	}
 
-	pe.workerWg.Add(numSpeculativeProcs + numGoProcs)
+	pe.workerWg.Add(NumSpeculativeProcs + numGoProcs)
 
 	// Launch workers that execute transactions
-	for i := 0; i < numSpeculativeProcs+numGoProcs; i++ {
+	for i := 0; i < NumSpeculativeProcs+numGoProcs; i++ {
 		go func(procNum int) {
 			defer pe.workerWg.Done()
 
@@ -352,7 +357,7 @@ func (pe *ParallelExecutor) Prepare() {
 				}
 			}
 
-			if procNum < numSpeculativeProcs {
+			if procNum < NumSpeculativeProcs {
 				for range pe.chSpeculativeTasks {
 					doWork(pe.specTaskQueue.Pop().(ExecVersionView))
 				}

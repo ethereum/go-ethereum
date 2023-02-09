@@ -34,6 +34,10 @@ type Config struct {
 	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
 
 	ExtraEips []int // Additional EIPS that are to be enabled
+
+	// parallel EVM configs
+	ParallelEnable               bool
+	ParallelSpeculativeProcesses int
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
