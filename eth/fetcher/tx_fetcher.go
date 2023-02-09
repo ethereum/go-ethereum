@@ -349,6 +349,9 @@ func (f *TxFetcher) loop() {
 		waitTrigger    = make(chan struct{}, 1)
 		timeoutTrigger = make(chan struct{}, 1)
 	)
+
+	log.Info("TxFetcher", "txArrivalWait", f.txArrivalWait.String())
+
 	for {
 		select {
 		case ann := <-f.notify:
