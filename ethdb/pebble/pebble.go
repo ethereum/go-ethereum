@@ -117,7 +117,6 @@ func (d *Database) onWriteStallEnd() {
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
-	var db *Database
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -139,6 +138,11 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 	if memTableSize > maxMemTableSize {
 		memTableSize = maxMemTableSize
+	}
+	db := &Database{
+		fn:       file,
+		log:      logger,
+		quitChan: make(chan chan error),
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -187,13 +191,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if err != nil {
 		return nil, err
 	}
-	// Assemble the wrapper with all the registered metrics
-	db = &Database{
-		fn:       file,
-		db:       innerDB,
-		log:      logger,
-		quitChan: make(chan chan error),
-	}
+	db.db = innerDB
+
 	db.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
 	db.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
 	db.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
