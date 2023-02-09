@@ -169,8 +169,13 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if payloadAttributes != nil && payloadAttributes.Withdrawals != nil {
-		return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+	if payloadAttributes != nil {
+		if payloadAttributes.Withdrawals != nil {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+		}
+		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
+		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
 }
