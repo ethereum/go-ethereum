@@ -223,3 +223,38 @@ func BenchmarkZkTrieUpdate(b *testing.B) {
 	}
 	b.StopTimer()
 }
+
+func TestZkTrieDelete(t *testing.T) {
+	key := make([]byte, 32)
+	value := make([]byte, 32)
+	trie1 := newEmptyZkTrie()
+
+	var count int = 6
+	var hashes []common.Hash
+	hashes = append(hashes, trie1.Hash())
+	for i := 0; i < count; i++ {
+		binary.LittleEndian.PutUint64(key, uint64(i))
+		binary.LittleEndian.PutUint64(value, uint64(i))
+		err := trie1.TryUpdate(key, value)
+		assert.NoError(t, err)
+		hashes = append(hashes, trie1.Hash())
+	}
+
+	// binary.LittleEndian.PutUint64(key, uint64(0xffffff))
+	// err := trie1.TryDelete(key)
+	// assert.Equal(t, err, zktrie.ErrKeyNotFound)
+
+	trie1.Commit(nil)
+
+	for i := count - 1; i >= 0; i-- {
+
+		binary.LittleEndian.PutUint64(key, uint64(i))
+		v, err := trie1.TryGet(key)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, v)
+		err = trie1.TryDelete(key)
+		assert.NoError(t, err)
+		hash := trie1.Hash()
+		assert.Equal(t, hashes[i].Hex(), hash.Hex())
+	}
+}
