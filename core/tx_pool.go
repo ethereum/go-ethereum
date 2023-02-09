@@ -1539,6 +1539,7 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 		// remove any transaction that has been included in the block or was invalidated
 		// because of another transaction (e.g. higher gas price).
 
+		//nolint:nestif
 		if reset != nil {
 			tracing.ElapsedTime(ctx, span, "new block", func(_ context.Context, innerSpan trace.Span) {
 
@@ -1573,7 +1574,9 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 				tracing.ElapsedTime(ctx, innerSpan, "09 fill nonces", func(_ context.Context, innerSpan trace.Span) {
 					for addr, list := range pool.pending {
 						highestPending = list.LastElement()
-						nonces[addr] = highestPending.Nonce() + 1
+						if highestPending != nil {
+							nonces[addr] = highestPending.Nonce() + 1
+						}
 					}
 				})
 

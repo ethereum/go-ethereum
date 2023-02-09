@@ -351,9 +351,8 @@ func (m *txSortedMap) lastElement() *types.Transaction {
 
 		m.cacheMu.Unlock()
 
-		cache = make(types.Transactions, 0, len(m.items))
-
 		m.m.RLock()
+		cache = make(types.Transactions, 0, len(m.items))
 
 		for _, tx := range m.items {
 			cache = append(cache, tx)
@@ -371,6 +370,11 @@ func (m *txSortedMap) lastElement() *types.Transaction {
 		missCacheCounter.Inc(1)
 	} else {
 		hitCacheCounter.Inc(1)
+	}
+
+	ln := len(cache)
+	if ln == 0 {
+		return nil
 	}
 
 	return cache[len(cache)-1]
