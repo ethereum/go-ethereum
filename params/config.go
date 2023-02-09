@@ -1004,6 +1004,22 @@ func OverrideConfig(original *ChainConfig, override *ChainConfig) (*ChainConfig,
 		copy.GrayGlacierBlock = block
 		canon = false
 	}
+	if block := override.MergeNetsplitBlock; block != nil {
+		copy.MergeNetsplitBlock = block
+		canon = false
+	}
+	if timestamp := override.ShanghaiTime; timestamp != nil {
+		copy.ShanghaiTime = timestamp
+		canon = false
+	}
+	if timestamp := override.CancunTime; timestamp != nil {
+		copy.CancunTime = timestamp
+		canon = false
+	}
+	if timestamp := override.PragueTime; timestamp != nil {
+		copy.PragueTime = timestamp
+		canon = false
+	}
 
 	return copy, canon
 }
