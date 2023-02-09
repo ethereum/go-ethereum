@@ -548,9 +548,9 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.P2P.Discovery.V5Enabled,
 		Group:   "P2P",
 	})
-	f.Uint64Flag(&flagset.Uint64Flag{
+	f.DurationFlag(&flagset.DurationFlag{
 		Name:    "txarrivalwait",
-		Usage:   "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 500ms)",
+		Usage:   "Maximum duration to wait for a transaction before explicitly requesting it (defaults to 500ms)",
 		Value:   &c.cliConfig.P2P.TxArrivalWait,
 		Default: c.cliConfig.P2P.TxArrivalWait,
 		Group:   "P2P",

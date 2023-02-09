@@ -93,7 +93,7 @@ type handlerConfig struct {
 
 	PeerRequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 	checker            ethereum.ChainValidator
-	txArrivalWait      time.Duration // Max time in milliseconds to wait for an announced tx before requesting it
+	txArrivalWait      time.Duration // Maximum duration to wait for an announced tx before requesting it
 }
 
 type handler struct {

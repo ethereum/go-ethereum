@@ -159,7 +159,7 @@ type Config struct {
 
 	// TxArrivalWait is the duration (ms) that the node will wait after seeing
 	// an announced transaction before explicitly requesting it
-	TxArrivalWait int
+	TxArrivalWait time.Duration
 }
 
 // Server manages all peer connections.

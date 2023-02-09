@@ -132,8 +132,9 @@ type P2PConfig struct {
 	// Discovery has the p2p discovery related settings
 	Discovery *P2PDiscovery `hcl:"discovery,block" toml:"discovery,block"`
 
-	// TxArrivalWait sets the maximum wait for announced transactions
-	TxArrivalWait uint64 `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
+	// TxArrivalWait sets the maximum duration the transaction fetcher will wait for
+	// an announced transaction to arrive before explicitly requesting it
+	TxArrivalWait time.Duration `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
 }
 
 type P2PDiscovery struct {
@@ -458,7 +459,7 @@ func DefaultConfig() *Config {
 			Port:          30303,
 			NoDiscover:    false,
 			NAT:           "any",
-			TxArrivalWait: 500,
+			TxArrivalWait: 500 * time.Millisecond,
 			Discovery: &P2PDiscovery{
 				V5Enabled:    false,
 				Bootnodes:    []string{},
@@ -1051,7 +1052,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
-			TxArrivalWait:   int(c.P2P.TxArrivalWait),
+			TxArrivalWait:   c.P2P.TxArrivalWait,
 		},
 		HTTPModules:         c.JsonRPC.Http.API,
 		HTTPCors:            c.JsonRPC.Http.Cors,

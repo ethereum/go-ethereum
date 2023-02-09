@@ -754,10 +754,11 @@ var (
 		Usage: "Gas price below which gpo will ignore transactions",
 		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
-	// fetcher flag to set arrival timeout
-	TxArrivalWaitFlag = cli.IntFlag{
+	// flag to set the transaction fetcher's txArrivalWait value, which is the maximum waiting
+	// period the fetcher will wait to receive an announced tx before explicitly requesting it
+	TxArrivalWaitFlag = cli.DurationFlag{
 		Name:  "txarrivalwait",
-		Usage: "Maximum number of milliseconds to wait for a transaction before requesting it (defaults to 500ms)",
+		Usage: "Maximum duration to wait for a transaction before requesting it (defaults to 500ms)",
 		Value: node.DefaultConfig.P2P.TxArrivalWait,
 	}
 

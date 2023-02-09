@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -63,7 +64,7 @@ var DefaultConfig = Config{
 		ListenAddr:    ":30303",
 		MaxPeers:      50,
 		NAT:           nat.Any(),
-		TxArrivalWait: 500,
+		TxArrivalWait: 500 * time.Millisecond,
 	},
 }
 
