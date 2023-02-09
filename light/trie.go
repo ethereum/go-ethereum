@@ -70,7 +70,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 }
 
 func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if codeHash == codehash.EmptyCodeHash {
+	if codeHash == codehash.EmptyKeccakCodeHash {
 		return nil, nil
 	}
 	code := rawdb.ReadCode(db.backend.Database(), codeHash)

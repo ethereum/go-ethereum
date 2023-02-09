@@ -593,15 +593,15 @@ func TestTinyTrie(t *testing.T) {
 	_, accounts := makeAccounts(5)
 	trie := newEmpty()
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
-	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("fc516c51c03bf9f1a0eec6ed6f6f5da743c2745dcd5670007519e6ec056f95a8"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
 	}
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
-	if exp, root := common.HexToHash("ec63b967e98a5720e7f720482151963982890d82c9093c0d486b7eb8883a66b1"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("5070d3f144546fd13589ad90cd153954643fa4ca6c1a5f08683cbfbbf76e960c"), trie.Hash(); exp != root {
 		t.Errorf("2: got %x, exp %x", root, exp)
 	}
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
-	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
+	if exp, root := common.HexToHash("aa3fba77e50f6e931d8aacde70912be5bff04c7862f518ae06f3418dd4d37be3"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
 	checktr, _ := New(common.Hash{}, trie.db)
@@ -625,7 +625,7 @@ func TestCommitAfterHash(t *testing.T) {
 	trie.Hash()
 	trie.Commit(nil)
 	root := trie.Hash()
-	exp := common.HexToHash("72f9d3f3fe1e1dd7b8936442e7642aef76371472d94319900790053c493f3fe6")
+	exp := common.HexToHash("f0c0681648c93b347479cd58c61995557f01294425bd031ce1943c2799bbd4ec")
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -650,7 +650,6 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		var (
 			nonce = uint64(random.Int63())
 			root  = emptyRoot
-			code  = codehash.EmptyCodeHash.Bytes()
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
 		// and will consume different amount of data from the rand source.
@@ -660,7 +659,16 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(big.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
+
+		data, _ := rlp.EncodeToBytes(&types.StateAccount{
+			Nonce:            nonce,
+			Balance:          balance,
+			Root:             root,
+			KeccakCodeHash:   codehash.EmptyKeccakCodeHash.Bytes(),
+			PoseidonCodeHash: codehash.EmptyPoseidonCodeHash.Bytes(),
+			CodeSize:         0,
+		})
+
 		accounts[i] = data
 	}
 	return addresses, accounts
@@ -717,12 +725,12 @@ func TestCommitSequence(t *testing.T) {
 		expWriteSeqHash    []byte
 		expCallbackSeqHash []byte
 	}{
-		{20, common.FromHex("873c78df73d60e59d4a2bcf3716e8bfe14554549fea2fc147cb54129382a8066"),
-			common.FromHex("ff00f91ac05df53b82d7f178d77ada54fd0dca64526f537034a5dbe41b17df2a")},
-		{200, common.FromHex("ba03d891bb15408c940eea5ee3d54d419595102648d02774a0268d892add9c8e"),
-			common.FromHex("f3cd509064c8d319bbdd1c68f511850a902ad275e6ed5bea11547e23d492a926")},
-		{2000, common.FromHex("f7a184f20df01c94f09537401d11e68d97ad0c00115233107f51b9c287ce60c7"),
-			common.FromHex("ff795ea898ba1e4cfed4a33b4cf5535a347a02cf931f88d88719faf810f9a1c9")},
+		{20, common.FromHex("7b908cce3bc16abb3eac5dff6c136856526f15225f74ce860a2bec47912a5492"),
+			common.FromHex("fac65cd2ad5e301083d0310dd701b5faaff1364cbe01cdbfaf4ec3609bb4149e")},
+		{200, common.FromHex("55791f6ec2f83fee512a2d3d4b505784fdefaea89974e10440d01d62a18a298a"),
+			common.FromHex("5ab775b64d86a8058bb71c3c765d0f2158c14bbeb9cb32a65eda793a7e95e30f")},
+		{2000, common.FromHex("ccb464abf67804538908c62431b3a6788e8dc6dee62aff9bfe6b10136acfceac"),
+			common.FromHex("b908adff17a5aa9d6787324c39014a74b04cef7fba6a92aeb730f48da1ca665d")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 		// This spongeDb is used to check the sequence of disk-db-writes

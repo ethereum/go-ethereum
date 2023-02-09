@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-iden3-crypto/utils"
 
 	zkt "github.com/scroll-tech/zktrie/types"
@@ -33,73 +32,74 @@ var (
 	ErrInvalidLength = errors.New("StateAccount: invalid input length")
 )
 
-// Hash of StateAccount
-// AccountHash = Hash(
-//	Hash(nonce, balance),
-//  Hash(
-//	  Root,
-//	  Hash(codeHashFirst16, codeHashLast16)
-//  ))
-func (s *StateAccount) Hash() (*big.Int, error) {
-	nonce := new(big.Int).SetUint64(s.Nonce)
-	if s.Balance == nil {
-		s.Balance = new(big.Int)
-	}
-	hash1, err := poseidon.Hash([]*big.Int{nonce, s.Balance})
-	if err != nil {
-		return nil, err
-	}
-
-	codeHashFirst16 := new(big.Int).SetBytes(s.CodeHash[0:16])
-	codeHashLast16 := new(big.Int).SetBytes(s.CodeHash[16:32])
-	hash2, err := poseidon.Hash([]*big.Int{codeHashFirst16, codeHashLast16})
-	if err != nil {
-		return nil, err
-	}
-
-	rootHash := zkt.NewHashFromBytes(s.Root.Bytes())
-	hash3, err := poseidon.Hash([]*big.Int{hash2, rootHash.BigInt()})
-	if err != nil {
-		return nil, err
-	}
-
-	hash4, err := poseidon.Hash([]*big.Int{hash1, hash3})
-	if err != nil {
-		return nil, err
-	}
-	return hash4, nil
-}
-
-// MarshalFields, the bytes scheme is:
-// [0:32] Nonce uint64 big-endian in 32 byte
+// MarshalFields marshalls a StateAccount into a sequence of bytes. The bytes scheme is:
+// [0:32] (bytes in big-endian)
+// 	 [0:16] Reserved with all 0
+// 	 [16:24] CodeSize, uint64 in big-endian
+// 	 [24:32] Nonce, uint64 in big-endian
 // [32:64] Balance
-// [64:96] Root
-// [96:128] CodeHash
+// [64:96] StorageRoot
+// [96:128] KeccakCodeHash
+// [128:160] PoseidonCodehash
+// (total 160 bytes)
 func (s *StateAccount) MarshalFields() ([]zkt.Byte32, uint32) {
-	fields := make([]zkt.Byte32, 4)
-	binary.BigEndian.PutUint64(fields[0][24:], s.Nonce)
+	fields := make([]zkt.Byte32, 5)
+
+	if s.Balance == nil {
+		panic("StateAccount balance nil")
+	}
 
 	if !utils.CheckBigIntInField(s.Balance) {
-		panic("balance overflow")
+		panic("StateAccount balance overflow")
 	}
-	s.Balance.FillBytes(fields[1][:])
 
-	copy(fields[2][:], s.CodeHash)
-	copy(fields[3][:], s.Root.Bytes())
-	return fields, 4
+	if !utils.CheckBigIntInField(s.Root.Big()) {
+		panic("StateAccount root overflow")
+	}
+
+	if !utils.CheckBigIntInField(new(big.Int).SetBytes(s.PoseidonCodeHash)) {
+		panic("StateAccount poseidonCodeHash overflow")
+	}
+
+	binary.BigEndian.PutUint64(fields[0][16:], s.CodeSize)
+	binary.BigEndian.PutUint64(fields[0][24:], s.Nonce)
+	s.Balance.FillBytes(fields[1][:])
+	copy(fields[2][:], s.Root.Bytes())
+	copy(fields[3][:], s.KeccakCodeHash)
+	copy(fields[4][:], s.PoseidonCodeHash)
+
+	// The returned flag shows which items cannot be encoded as field elements.
+	// KeccakCodeHash can be larger than the field size so we set the 3rd (LSB) bit to 1.
+	//
+	// +---+---+---+---+---+
+	// | 0 | 1 | 2 | 3 | 4 |
+	// +---+---+---+---+---+
+	//   0   0   0   1   0
+
+	flag := uint32(8)
+
+	return fields, flag
 }
 
 func UnmarshalStateAccount(bytes []byte) (*StateAccount, error) {
-	if len(bytes) != 128 {
+	if len(bytes) != 160 {
 		return nil, ErrInvalidLength
 	}
+
 	acc := new(StateAccount)
-	acc.Nonce = binary.BigEndian.Uint64(bytes[24:])
+
+	acc.CodeSize = binary.BigEndian.Uint64(bytes[16:24])
+	acc.Nonce = binary.BigEndian.Uint64(bytes[24:32])
 	acc.Balance = new(big.Int).SetBytes(bytes[32:64])
-	acc.CodeHash = make([]byte, 32)
-	copy(acc.CodeHash, bytes[64:96])
+
 	acc.Root = common.Hash{}
-	acc.Root.SetBytes(bytes[96:128])
+	acc.Root.SetBytes(bytes[64:96])
+
+	acc.KeccakCodeHash = make([]byte, 32)
+	copy(acc.KeccakCodeHash, bytes[96:128])
+
+	acc.PoseidonCodeHash = make([]byte, 32)
+	copy(acc.PoseidonCodeHash, bytes[128:160])
 
 	return acc, nil
 }

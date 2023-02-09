@@ -3043,8 +3043,11 @@ func TestPoseidonCodeHash(t *testing.T) {
 
 	// check empty code hash
 	state, _ := blockchain.State()
-	codeHash := state.GetCodeHash(addr1)
-	assert.Equal(t, codeHash, common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"), "code hash mismatch")
+	poseidonCodeHash := state.GetPoseidonCodeHash(addr1)
+	keccakCodeHash := state.GetKeccakCodeHash(addr1)
+
+	assert.Equal(t, common.HexToHash("0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864"), poseidonCodeHash, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"), keccakCodeHash, "code hash mismatch")
 
 	// deploy contract through transaction
 	chain, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, gen *BlockGen) {
@@ -3061,10 +3064,11 @@ func TestPoseidonCodeHash(t *testing.T) {
 	assert.Equal(t, common.HexToAddress("0x3A220f351252089D385b29beca14e27F204c296A"), contractAddress, "address mismatch")
 
 	state, _ = blockchain.State()
-	codeHash = state.GetCodeHash(contractAddress)
+	poseidonCodeHash = state.GetPoseidonCodeHash(contractAddress)
+	keccakCodeHash = state.GetKeccakCodeHash(contractAddress)
 
-	// keccak: 0x089bfd332dfa6117cbc20756f31801ce4f5a175eb258e46bf8123317da54cd96
-	assert.Equal(t, codeHash, common.HexToHash("0x28ec09723b285e17caabc4a8d52dbd097feddf408aee115cbb57c3c9c814d2b2"), "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0x0df04366a061c969e08137570a59536df95672ec21d00cb738fb90cac8e78bcc"), poseidonCodeHash, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0x089bfd332dfa6117cbc20756f31801ce4f5a175eb258e46bf8123317da54cd96"), keccakCodeHash, "code hash mismatch")
 
 	// deploy contract through another contract (CREATE and CREATE2)
 	chain, receipts = GenerateChain(params.TestChainConfig, blockchain.CurrentBlock(), engine, db, 1, func(i int, gen *BlockGen) {
@@ -3086,12 +3090,16 @@ func TestPoseidonCodeHash(t *testing.T) {
 	assert.Equal(t, common.HexToAddress("0x4099734c88B7D091E744da0E849df0e818e7E208"), address2, "address mismatch")
 
 	state, _ = blockchain.State()
-	codeHash1 := state.GetCodeHash(address1)
-	codeHash2 := state.GetCodeHash(address2)
+	poseidonCodeHash1 := state.GetPoseidonCodeHash(address1)
+	poseidonCodeHash2 := state.GetPoseidonCodeHash(address2)
+	keccakCodeHash1 := state.GetKeccakCodeHash(address1)
+	keccakCodeHash2 := state.GetKeccakCodeHash(address2)
 
-	// keccak: 0xfb5cd93a70ce47f91d33fac3afdb7b54680a6b0683506646a108ef4dfc047583
-	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash1, "code hash mismatch")
-	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash2, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0x12eb18061d12f883c4d4c2041925cc2916c86fcfcb9458c8b9a3fb32257215d0"), poseidonCodeHash1, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0x12eb18061d12f883c4d4c2041925cc2916c86fcfcb9458c8b9a3fb32257215d0"), poseidonCodeHash2, "code hash mismatch")
+
+	assert.Equal(t, common.HexToHash("0xfb5cd93a70ce47f91d33fac3afdb7b54680a6b0683506646a108ef4dfc047583"), keccakCodeHash1, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0xfb5cd93a70ce47f91d33fac3afdb7b54680a6b0683506646a108ef4dfc047583"), keccakCodeHash2, "code hash mismatch")
 }
 
 // TestFeeVault tests that the fee vault receives all tx fees correctly.

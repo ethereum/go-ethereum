@@ -59,12 +59,12 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 		acc.nonce = uint64(42 * i)
 
 		if i%3 == 0 {
-			obj.SetCode(codehash.CodeHash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
+			obj.SetCode([]byte{i, i, i, i, i})
 			acc.code = []byte{i, i, i, i, i}
 		}
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
-				hash := codehash.CodeHash([]byte{i, i, i, i, i, j, j})
+				hash := codehash.KeccakCodeHash([]byte{i, i, i, i, i, j, j})
 				obj.SetState(db, hash, hash)
 			}
 		}
@@ -408,10 +408,10 @@ func TestIncompleteStateSync(t *testing.T) {
 	var isCode = make(map[common.Hash]struct{})
 	for _, acc := range srcAccounts {
 		if len(acc.code) > 0 {
-			isCode[codehash.CodeHash(acc.code)] = struct{}{}
+			isCode[codehash.KeccakCodeHash(acc.code)] = struct{}{}
 		}
 	}
-	isCode[common.BytesToHash(emptyCodeHash)] = struct{}{}
+	isCode[common.BytesToHash(emptyKeccakCodeHash)] = struct{}{}
 	checkTrieConsistency(srcDb.TrieDB().DiskDB().(ethdb.Database), srcRoot)
 
 	// Create a destination state and sync with the scheduler

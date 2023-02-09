@@ -23,7 +23,6 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
-	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 )
 
@@ -47,7 +46,7 @@ func TestDump(t *testing.T) {
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
-	obj2.SetCode(codehash.CodeHash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -59,27 +58,33 @@ func TestDump(t *testing.T) {
 	// check that DumpToCollector contains the state objects that are in trie
 	got := string(s.state.Dump(nil))
 	want := `{
-    "root": "bfd17853c56ac63be7327da432ef90a9b04376d71efede2a60765d2c94704cfe",
+    "root": "789955993afb9d2a04b957a91be5d7b139aabb60fb7af63df6405021211c13c4",
     "accounts": {
         "0x0000000000000000000000000000000000000001": {
             "balance": "22",
             "nonce": 0,
             "root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "keccakCodeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "poseidonCodeHash": "0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864",
+            "codeSize": 0,
             "key": "0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d"
         },
         "0x0000000000000000000000000000000000000002": {
             "balance": "44",
             "nonce": 0,
             "root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "keccakCodeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "poseidonCodeHash": "0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864",
+            "codeSize": 0,
             "key": "0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62"
         },
         "0x0000000000000000000000000000000000000102": {
             "balance": "0",
             "nonce": 0,
             "root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "0x2263940ad476ca23bf01a9b033d65cd6b8bf9b7224a7ef2a4f10b61a2c039083",
+            "keccakCodeHash": "0x87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
+            "poseidonCodeHash": "0x1f090de833dd6dee7af5ee49f94fd64d1079aee3df47795eaaf2775d6921458c",
+            "codeSize": 7,
             "code": "0x03030303030303",
             "key": "0xa17eacbc25cda025e81db9c5c62868822c73ce097cee2a63e33a2e41268358a1"
         }
@@ -165,7 +170,7 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.getStateObject(stateobjaddr0)
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
-	so0.SetCode(codehash.CodeHash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
 	so0.suicided = false
 	so0.deleted = false
 	state.setStateObject(so0)
@@ -177,7 +182,7 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.getStateObject(stateobjaddr1)
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
-	so1.SetCode(codehash.CodeHash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
 	so1.suicided = true
 	so1.deleted = true
 	state.setStateObject(so1)
@@ -217,8 +222,14 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.data.Root != so1.data.Root {
 		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
 	}
-	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
-		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
+	if !bytes.Equal(so0.KeccakCodeHash(), so1.KeccakCodeHash()) {
+		t.Fatalf("KeccakCodeHash mismatch: have %v, want %v", so0.KeccakCodeHash(), so1.KeccakCodeHash())
+	}
+	if !bytes.Equal(so0.PoseidonCodeHash(), so1.PoseidonCodeHash()) {
+		t.Fatalf("PoseidonCodeHash mismatch: have %v, want %v", so0.PoseidonCodeHash(), so1.PoseidonCodeHash())
+	}
+	if so0.CodeSize() != so1.CodeSize() {
+		t.Fatalf("CodeSize mismatch: have %v, want %v", so0.CodeSize(), so1.CodeSize())
 	}
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)

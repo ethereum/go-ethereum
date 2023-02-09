@@ -126,10 +126,12 @@ func NewRWTblOrderer(inited map[common.Address]*types.StateAccount) *rwTblOrdere
 			}
 
 			initedAcc[addr] = &types.AccountWrapper{
-				Address:  addr,
-				Nonce:    data.Nonce,
-				Balance:  (*hexutil.Big)(bl),
-				CodeHash: common.BytesToHash(data.CodeHash),
+				Address:          addr,
+				Nonce:            data.Nonce,
+				Balance:          (*hexutil.Big)(bl),
+				KeccakCodeHash:   common.BytesToHash(data.KeccakCodeHash),
+				PoseidonCodeHash: common.BytesToHash(data.PoseidonCodeHash),
+				CodeSize:         data.CodeSize,
 			}
 		}
 
@@ -251,7 +253,9 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 	if traced, existed := od.opAccNonce[addrStr]; !existed {
 		traced = copyAccountState(st)
 		traced.Balance = initedRef.Balance
-		traced.CodeHash = initedRef.CodeHash
+		traced.KeccakCodeHash = initedRef.KeccakCodeHash
+		traced.PoseidonCodeHash = initedRef.PoseidonCodeHash
+		traced.CodeSize = initedRef.CodeSize
 		traced.Storage = nil
 		od.opAccNonce[addrStr] = traced
 	} else {
@@ -260,7 +264,9 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 
 	if traced, existed := od.opAccBalance[addrStr]; !existed {
 		traced = copyAccountState(st)
-		traced.CodeHash = initedRef.CodeHash
+		traced.KeccakCodeHash = initedRef.KeccakCodeHash
+		traced.PoseidonCodeHash = initedRef.PoseidonCodeHash
+		traced.CodeSize = initedRef.CodeSize
 		traced.Storage = nil
 		od.opAccBalance[addrStr] = traced
 	} else {
@@ -275,7 +281,9 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 	} else {
 		traced.Nonce = st.Nonce
 		traced.Balance = st.Balance
-		traced.CodeHash = st.CodeHash
+		traced.KeccakCodeHash = st.KeccakCodeHash
+		traced.PoseidonCodeHash = st.PoseidonCodeHash
+		traced.CodeSize = st.CodeSize
 	}
 
 }

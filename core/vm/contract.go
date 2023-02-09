@@ -55,7 +55,7 @@ type Contract struct {
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
-	CodeHash common.Hash
+	CodeHash common.Hash // Keccak code hash
 	CodeAddr *common.Address
 	Input    []byte
 

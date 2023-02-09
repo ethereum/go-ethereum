@@ -30,9 +30,11 @@ type SMTPath struct {
 // StateAccount is the represent of StateAccount in L2 circuit
 // Notice in L2 we have different hash scheme against StateAccount.MarshalByte
 type StateAccount struct {
-	Nonce    int           `json:"nonce"`
-	Balance  *hexutil.Big  `json:"balance"` //just the common hex expression of integer (big-endian)
-	CodeHash hexutil.Bytes `json:"codeHash,omitempty"`
+	Nonce            int           `json:"nonce"`
+	Balance          *hexutil.Big  `json:"balance"` //just the common hex expression of integer (big-endian)
+	KeccakCodeHash   hexutil.Bytes `json:"keccakCodeHash,omitempty"`
+	PoseidonCodeHash hexutil.Bytes `json:"poseidonCodeHash,omitempty"`
+	CodeSize         uint64        `json:"codeSize,omitempty"`
 }
 
 // StateStorage is the represent of a stored key-value pair for specified account

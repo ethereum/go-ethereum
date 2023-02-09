@@ -113,8 +113,8 @@ type (
 		key, prevalue common.Hash
 	}
 	codeChange struct {
-		account            *common.Address
-		prevcode, prevhash []byte
+		account  *common.Address
+		prevcode []byte
 	}
 
 	// Changes to other state values.
@@ -198,7 +198,7 @@ func (ch nonceChange) dirtied() *common.Address {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	s.getStateObject(*ch.account).setCode(ch.prevcode)
 }
 
 func (ch codeChange) dirtied() *common.Address {

@@ -33,6 +33,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/light"
 	"github.com/scroll-tech/go-ethereum/log"
@@ -1313,7 +1314,7 @@ func key32(i uint64) []byte {
 }
 
 var (
-	codehashes = []common.Hash{
+	keccakCodehashes = []common.Hash{
 		crypto.Keccak256Hash([]byte{0}),
 		crypto.Keccak256Hash([]byte{1}),
 		crypto.Keccak256Hash([]byte{2}),
@@ -1323,20 +1324,37 @@ var (
 		crypto.Keccak256Hash([]byte{6}),
 		crypto.Keccak256Hash([]byte{7}),
 	}
+
+	poseidonCodehashes = []common.Hash{
+		codehash.PoseidonCodeHash([]byte{0}),
+		codehash.PoseidonCodeHash([]byte{1}),
+		codehash.PoseidonCodeHash([]byte{2}),
+		codehash.PoseidonCodeHash([]byte{3}),
+		codehash.PoseidonCodeHash([]byte{4}),
+		codehash.PoseidonCodeHash([]byte{5}),
+		codehash.PoseidonCodeHash([]byte{6}),
+		codehash.PoseidonCodeHash([]byte{7}),
+	}
 )
 
-// getCodeHash returns a pseudo-random code hash
-func getCodeHash(i uint64) []byte {
-	h := codehashes[int(i)%len(codehashes)]
+// getKeccakCodeHash returns a pseudo-random code hash
+func getKeccakCodeHash(i uint64) []byte {
+	h := keccakCodehashes[int(i)%len(keccakCodehashes)]
+	return common.CopyBytes(h[:])
+}
+
+// getPoseidonCodeHash returns a pseudo-random code hash
+func getPoseidonCodeHash(i uint64) []byte {
+	h := poseidonCodehashes[int(i)%len(poseidonCodehashes)]
 	return common.CopyBytes(h[:])
 }
 
 // getCodeByHash convenience function to lookup the code from the code hash
 func getCodeByHash(hash common.Hash) []byte {
-	if hash == emptyCode {
+	if hash == emptyKeccakCodeHash {
 		return nil
 	}
-	for i, h := range codehashes {
+	for i, h := range keccakCodehashes {
 		if h == hash {
 			return []byte{byte(i)}
 		}
@@ -1351,10 +1369,12 @@ func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
 	var entries entrySlice
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(types.StateAccount{
-			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
-			Root:     emptyRoot,
-			CodeHash: getCodeHash(i),
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             emptyRoot,
+			KeccakCodeHash:   getKeccakCodeHash(i),
+			PoseidonCodeHash: getPoseidonCodeHash(i),
+			CodeSize:         1,
 		})
 		key := key32(i)
 		elem := &kv{key, value}
@@ -1396,10 +1416,12 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	// Fill boundary accounts
 	for i := 0; i < len(boundaries); i++ {
 		value, _ := rlp.EncodeToBytes(types.StateAccount{
-			Nonce:    uint64(0),
-			Balance:  big.NewInt(int64(i)),
-			Root:     emptyRoot,
-			CodeHash: getCodeHash(uint64(i)),
+			Nonce:            uint64(0),
+			Balance:          big.NewInt(int64(i)),
+			Root:             emptyRoot,
+			KeccakCodeHash:   getKeccakCodeHash(uint64(i)),
+			PoseidonCodeHash: getPoseidonCodeHash(uint64(i)),
+			CodeSize:         1,
 		})
 		elem := &kv{boundaries[i].Bytes(), value}
 		trie.Update(elem.k, elem.v)
@@ -1408,10 +1430,12 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	// Fill other accounts if required
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(types.StateAccount{
-			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
-			Root:     emptyRoot,
-			CodeHash: getCodeHash(i),
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             emptyRoot,
+			KeccakCodeHash:   getKeccakCodeHash(i),
+			PoseidonCodeHash: getPoseidonCodeHash(i),
+			CodeSize:         1,
 		})
 		elem := &kv{key32(i), value}
 		trie.Update(elem.k, elem.v)
@@ -1435,19 +1459,23 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := emptyCode[:]
+		keccakCodehash := emptyKeccakCodeHash[:]
+		poseidonCodeHash := emptyPoseidonCodeHash[:]
 		if code {
-			codehash = getCodeHash(i)
+			keccakCodehash = getKeccakCodeHash(i)
+			poseidonCodeHash = getPoseidonCodeHash(i)
 		}
 		// Create a storage trie
 		stTrie, stEntries := makeStorageTrieWithSeed(uint64(slots), i, db)
 		stRoot := stTrie.Hash()
 		stTrie.Commit(nil)
 		value, _ := rlp.EncodeToBytes(types.StateAccount{
-			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
-			Root:     stRoot,
-			CodeHash: codehash,
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             stRoot,
+			KeccakCodeHash:   keccakCodehash,
+			PoseidonCodeHash: poseidonCodeHash,
+			CodeSize:         1,
 		})
 		elem := &kv{key, value}
 		accTrie.Update(elem.k, elem.v)
@@ -1486,15 +1514,19 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := emptyCode[:]
+		keccakCodehash := emptyKeccakCodeHash[:]
+		poseidonCodeHash := emptyPoseidonCodeHash[:]
 		if code {
-			codehash = getCodeHash(i)
+			keccakCodehash = getKeccakCodeHash(i)
+			poseidonCodeHash = getPoseidonCodeHash(i)
 		}
 		value, _ := rlp.EncodeToBytes(types.StateAccount{
-			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
-			Root:     stRoot,
-			CodeHash: codehash,
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             stRoot,
+			KeccakCodeHash:   keccakCodehash,
+			PoseidonCodeHash: poseidonCodeHash,
+			CodeSize:         1,
 		})
 		elem := &kv{key, value}
 		accTrie.Update(elem.k, elem.v)
@@ -1594,10 +1626,12 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	accIt := trie.NewIterator(accTrie.NodeIterator(nil))
 	for accIt.Next() {
 		var acc struct {
-			Nonce    uint64
-			Balance  *big.Int
-			Root     common.Hash
-			CodeHash []byte
+			Nonce            uint64
+			Balance          *big.Int
+			Root             common.Hash
+			KeccakCodeHash   []byte
+			PoseidonCodeHash []byte
+			CodeSize         uint64
 		}
 		if err := rlp.DecodeBytes(accIt.Value, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)

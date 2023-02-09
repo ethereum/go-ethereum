@@ -263,16 +263,18 @@ func copyAccountState(st *types.AccountWrapper) *types.AccountWrapper {
 	}
 
 	return &types.AccountWrapper{
-		Nonce:    st.Nonce,
-		Balance:  (*hexutil.Big)(big.NewInt(0).Set(st.Balance.ToInt())),
-		CodeHash: st.CodeHash,
-		Address:  st.Address,
-		Storage:  stg,
+		Nonce:            st.Nonce,
+		Balance:          (*hexutil.Big)(big.NewInt(0).Set(st.Balance.ToInt())),
+		KeccakCodeHash:   st.KeccakCodeHash,
+		PoseidonCodeHash: st.PoseidonCodeHash,
+		CodeSize:         st.CodeSize,
+		Address:          st.Address,
+		Storage:          stg,
 	}
 }
 
 func isDeletedAccount(state *types.AccountWrapper) bool {
-	return state.Nonce == 0 && bytes.Equal(state.CodeHash.Bytes(), common.Hash{}.Bytes())
+	return state.Nonce == 0 && bytes.Equal(state.KeccakCodeHash.Bytes(), common.Hash{}.Bytes())
 }
 
 func getAccountDataFromLogState(state *types.AccountWrapper) *types.StateAccount {
@@ -282,9 +284,12 @@ func getAccountDataFromLogState(state *types.AccountWrapper) *types.StateAccount
 	}
 
 	return &types.StateAccount{
-		Nonce:    state.Nonce,
-		Balance:  (*big.Int)(state.Balance),
-		CodeHash: state.CodeHash.Bytes(),
+		Nonce:            state.Nonce,
+		Balance:          (*big.Int)(state.Balance),
+		KeccakCodeHash:   state.KeccakCodeHash.Bytes(),
+		PoseidonCodeHash: state.PoseidonCodeHash.Bytes(),
+		CodeSize:         state.CodeSize,
+		// Root omitted intentionally
 	}
 }
 
@@ -305,13 +310,14 @@ func verifyAccount(addr common.Address, data *types.StateAccount, leaf *SMTPathN
 			return fmt.Errorf("unmatch leaf node in address: %s", addr)
 		}
 	} else if data != nil {
-		h, err := data.Hash()
+		arr, flag := data.MarshalFields()
+		h, err := zkt.PreHandlingElems(flag, arr)
 		//log.Info("sanity check acc before", "addr", addr.String(), "key", leaf.Sibling.Text(16), "hash", h.Text(16))
 
 		if err != nil {
 			return fmt.Errorf("fail to hash account: %v", err)
 		}
-		if !bytes.Equal(zkt.NewHashFromBigInt(h)[:], leaf.Value) {
+		if !bytes.Equal(h[:], leaf.Value) {
 			return fmt.Errorf("unmatch data in leaf for address %s", addr)
 		}
 	}
@@ -386,18 +392,22 @@ func (w *zktrieProofWriter) traceAccountUpdate(addr common.Address, updateAccDat
 		// we have ensured the nBefore has a key corresponding to the query one
 		out.AccountKey = out.AccountPath[0].Leaf.Sibling
 		out.AccountUpdate[0] = &StateAccount{
-			Nonce:    int(accDataBefore.Nonce),
-			Balance:  (*hexutil.Big)(big.NewInt(0).Set(accDataBefore.Balance)),
-			CodeHash: accDataBefore.CodeHash,
+			Nonce:            int(accDataBefore.Nonce),
+			Balance:          (*hexutil.Big)(big.NewInt(0).Set(accDataBefore.Balance)),
+			KeccakCodeHash:   accDataBefore.KeccakCodeHash,
+			PoseidonCodeHash: accDataBefore.PoseidonCodeHash,
+			CodeSize:         accDataBefore.CodeSize,
 		}
 	}
 
 	accData := updateAccData(accDataBefore)
 	if accData != nil {
 		out.AccountUpdate[1] = &StateAccount{
-			Nonce:    int(accData.Nonce),
-			Balance:  (*hexutil.Big)(big.NewInt(0).Set(accData.Balance)),
-			CodeHash: accData.CodeHash,
+			Nonce:            int(accData.Nonce),
+			Balance:          (*hexutil.Big)(big.NewInt(0).Set(accData.Balance)),
+			KeccakCodeHash:   accData.KeccakCodeHash,
+			PoseidonCodeHash: accData.PoseidonCodeHash,
+			CodeSize:         accData.CodeSize,
 		}
 	}
 
@@ -515,10 +525,12 @@ func (w *zktrieProofWriter) traceStorageUpdate(addr common.Address, key, value [
 				panic(fmt.Errorf("unexpected storage root before: [%s] vs [%x]", acc.Root, accRootFromState))
 			}
 			return &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(zkt.ReverseByteOrder(statePath[1].Root)),
+				Nonce:            acc.Nonce,
+				Balance:          acc.Balance,
+				Root:             common.BytesToHash(zkt.ReverseByteOrder(statePath[1].Root)),
+				KeccakCodeHash:   acc.KeccakCodeHash,
+				PoseidonCodeHash: acc.PoseidonCodeHash,
+				CodeSize:         acc.CodeSize,
 			}
 		})
 	if err != nil {

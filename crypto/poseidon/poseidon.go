@@ -110,7 +110,7 @@ func Hash(inpBI []*big.Int, width int) (*big.Int, error) {
 
 // Hash using possible sponge specs specified by width (rate from 1 to 15), the size of input is applied as capacity
 // (notice we do not include width in the capacity )
-func HashWithCap(inpBI []*big.Int, width int, cap int64) (*big.Int, error) {
+func HashWithCap(inpBI []*big.Int, width int, nBytes int64) (*big.Int, error) {
 	if width < 2 {
 		return nil, fmt.Errorf("width must be ranged from 2 to 16")
 	}
@@ -118,8 +118,13 @@ func HashWithCap(inpBI []*big.Int, width int, cap int64) (*big.Int, error) {
 		return nil, fmt.Errorf("invalid inputs width %d, max %d", width, len(NROUNDSP)+1) //nolint:gomnd,lll
 	}
 
-	capflag := ff.NewElement().SetBigInt(big.NewInt(cap))
+	// capflag = nBytes * 2^64
+	pow64 := big.NewInt(1)
+	pow64.Lsh(pow64, 64)
+	capflag := ff.NewElement().SetBigInt(big.NewInt(nBytes))
+	capflag.Mul(capflag, ff.NewElement().SetBigInt(pow64))
 
+	// initialize the state
 	state := make([]*ff.Element, width)
 	state[0] = capflag
 	for i := 1; i < width; i++ {
@@ -127,40 +132,20 @@ func HashWithCap(inpBI []*big.Int, width int, cap int64) (*big.Int, error) {
 	}
 
 	rate := width - 1
-	var absorb []*ff.Element
-	for len(inpBI) > 0 {
-		// sponge for fully absorb
-		if l := len(absorb); l != 0 {
-			//sanity check
-			if l != rate {
-				panic("unexpected absorption size")
-			}
-
-			for i, elm := range absorb {
-				state[i+1].Add(state[i+1], elm)
-			}
-			state = permute(state, width)
+	i := 0
+	// always perform one round of permutation even when input is empty
+	for {
+		// each round absorb at most `rate` elements from `inpBI`
+		for j := 0; j < rate && i < len(inpBI); i, j = i+1, j+1 {
+			state[j+1].Add(state[j+1], ff.NewElement().SetBigInt(inpBI[i]))
 		}
-
-		// absorb
-		if len(inpBI) < rate {
-			// padding zero() equal to no action on state
-			absorb = utils.BigIntArrayToElementArray(inpBI)
-			inpBI = nil
-		} else {
-			absorb = utils.BigIntArrayToElementArray(inpBI[:rate])
-			inpBI = inpBI[rate:]
+		state = permute(state, width)
+		if i == len(inpBI) {
+			break
 		}
-
 	}
 
-	//last time sponge (padding with unabsorb items)
-	for i, elm := range absorb {
-		state[i+1].Add(state[i+1], elm)
-	}
-	state = permute(state, width)
-
-	//squeeze
+	// squeeze
 	rE := state[0]
 	r := big.NewInt(0)
 	rE.ToBigIntRegular(r)

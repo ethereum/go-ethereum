@@ -206,18 +206,22 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 	}
 
 	sender := &types.AccountWrapper{
-		Address:  from,
-		Nonce:    state.GetNonce(from),
-		Balance:  (*hexutil.Big)(state.GetBalance(from)),
-		CodeHash: state.GetCodeHash(from),
+		Address:          from,
+		Nonce:            state.GetNonce(from),
+		Balance:          (*hexutil.Big)(state.GetBalance(from)),
+		KeccakCodeHash:   state.GetKeccakCodeHash(from),
+		PoseidonCodeHash: state.GetPoseidonCodeHash(from),
+		CodeSize:         state.GetCodeSize(from),
 	}
 	var receiver *types.AccountWrapper
 	if to != nil {
 		receiver = &types.AccountWrapper{
-			Address:  *to,
-			Nonce:    state.GetNonce(*to),
-			Balance:  (*hexutil.Big)(state.GetBalance(*to)),
-			CodeHash: state.GetCodeHash(*to),
+			Address:          *to,
+			Nonce:            state.GetNonce(*to),
+			Balance:          (*hexutil.Big)(state.GetBalance(*to)),
+			KeccakCodeHash:   state.GetKeccakCodeHash(*to),
+			PoseidonCodeHash: state.GetPoseidonCodeHash(*to),
+			CodeSize:         state.GetCodeSize(*to),
 		}
 	}
 
@@ -250,10 +254,12 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 	// collect affected account after tx being applied
 	for _, acc := range []common.Address{from, *to, env.coinbase} {
 		after = append(after, &types.AccountWrapper{
-			Address:  acc,
-			Nonce:    state.GetNonce(acc),
-			Balance:  (*hexutil.Big)(state.GetBalance(acc)),
-			CodeHash: state.GetCodeHash(acc),
+			Address:          acc,
+			Nonce:            state.GetNonce(acc),
+			Balance:          (*hexutil.Big)(state.GetBalance(acc)),
+			KeccakCodeHash:   state.GetKeccakCodeHash(acc),
+			PoseidonCodeHash: state.GetPoseidonCodeHash(acc),
+			CodeSize:         state.GetCodeSize(acc),
 		})
 	}
 
@@ -339,10 +345,12 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 
 	blockTrace := &types.BlockTrace{
 		Coinbase: &types.AccountWrapper{
-			Address:  env.coinbase,
-			Nonce:    statedb.GetNonce(env.coinbase),
-			Balance:  (*hexutil.Big)(statedb.GetBalance(env.coinbase)),
-			CodeHash: statedb.GetCodeHash(env.coinbase),
+			Address:          env.coinbase,
+			Nonce:            statedb.GetNonce(env.coinbase),
+			Balance:          (*hexutil.Big)(statedb.GetBalance(env.coinbase)),
+			KeccakCodeHash:   statedb.GetKeccakCodeHash(env.coinbase),
+			PoseidonCodeHash: statedb.GetPoseidonCodeHash(env.coinbase),
+			CodeSize:         statedb.GetCodeSize(env.coinbase),
 		},
 		Header:           block.Header(),
 		StorageTrace:     env.StorageTrace,
@@ -356,8 +364,8 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 		if len(tx.Data()) != 0 && tx.To() != nil {
 			evmTrace.ByteCode = hexutil.Encode(statedb.GetCode(*tx.To()))
 			// Get tx.to address's code hash.
-			codeHash := statedb.GetCodeHash(*tx.To())
-			evmTrace.CodeHash = &codeHash
+			codeHash := statedb.GetPoseidonCodeHash(*tx.To())
+			evmTrace.PoseidonCodeHash = &codeHash
 		} else if tx.To() == nil { // Contract is created.
 			evmTrace.ByteCode = hexutil.Encode(tx.Data())
 		}
