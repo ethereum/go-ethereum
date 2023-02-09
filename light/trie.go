@@ -164,9 +164,9 @@ func (t *odrTrie) TryDeleteAccount(address common.Address) error {
 	})
 }
 
-func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet, error) {
+func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet) {
 	if t.trie == nil {
-		return t.id.Root, nil, nil
+		return t.id.Root, nil
 	}
 	return t.trie.Commit(collectLeaf)
 }
