@@ -200,15 +200,6 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 		Value: value,
 	}
 	t.callstack = append(t.callstack, call)
-
-	// Delegatecall has same value as parent call.
-	if typ == vm.DELEGATECALL {
-		size := len(t.callstack)
-		if size < 2 {
-			return
-		}
-		t.callstack[size-1].Value = t.callstack[size-2].Value
-	}
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
