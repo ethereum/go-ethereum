@@ -137,8 +137,8 @@ type BlockChain struct {
 
 	db     ethdb.Database // Low level persistent database to store final content in
 	XDCxDb ethdb.XDCxDatabase
-	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration // Accumulates canonical block processing for trie dumping
+	triegc *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration                    // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -209,7 +209,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:         chainConfig,
 		cacheConfig:         cacheConfig,
 		db:                  db,
-		triegc:              prque.New(nil),
+		triegc:              prque.New[int64, common.Hash](nil),
 		stateCache:          state.NewDatabase(db),
 		quit:                make(chan struct{}),
 		bodyCache:           lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -975,17 +975,17 @@ func (bc *BlockChain) saveData() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+			triedb.Dereference(bc.triegc.PopItem())
 		}
 		if tradingTriedb != nil && lendingTriedb != nil {
 			if tradingService.GetTriegc() != nil {
 				for !tradingService.GetTriegc().Empty() {
-					tradingTriedb.Dereference(tradingService.GetTriegc().PopItem().(common.Hash))
+					tradingTriedb.Dereference(tradingService.GetTriegc().PopItem())
 				}
 			}
 			if lendingService.GetTriegc() != nil {
 				for !lendingService.GetTriegc().Empty() {
-					lendingTriedb.Dereference(lendingService.GetTriegc().PopItem().(common.Hash))
+					lendingTriedb.Dereference(lendingService.GetTriegc().PopItem())
 				}
 			}
 		}
@@ -1328,7 +1328,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-				triedb.Dereference(root.(common.Hash))
+				triedb.Dereference(root)
 			}
 			if tradingService != nil {
 				for !tradingService.GetTriegc().Empty() {
@@ -1337,7 +1337,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 						tradingService.GetTriegc().Push(tradingRoot, number)
 						break
 					}
-					tradingTrieDb.Dereference(tradingRoot.(common.Hash))
+					tradingTrieDb.Dereference(tradingRoot)
 				}
 			}
 			if lendingService != nil {
@@ -1347,7 +1347,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 						lendingService.GetTriegc().Push(lendingRoot, number)
 						break
 					}
-					lendingTrieDb.Dereference(lendingRoot.(common.Hash))
+					lendingTrieDb.Dereference(lendingRoot)
 				}
 			}
 		}

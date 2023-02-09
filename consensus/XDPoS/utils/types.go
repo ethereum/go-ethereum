@@ -26,7 +26,7 @@ type TradingService interface {
 	GetEmptyTradingState() (*tradingstate.TradingStateDB, error)
 	HasTradingState(block *types.Block, author common.Address) bool
 	GetStateCache() tradingstate.Database
-	GetTriegc() *prque.Prque
+	GetTriegc() *prque.Prque[int64, common.Hash]
 	ApplyOrder(header *types.Header, coinbase common.Address, chain consensus.ChainContext, statedb *state.StateDB, XDCXstatedb *tradingstate.TradingStateDB, orderBook common.Hash, order *tradingstate.OrderItem) ([]map[string]string, []*tradingstate.OrderItem, error)
 	UpdateMediumPriceBeforeEpoch(epochNumber uint64, tradingStateDB *tradingstate.TradingStateDB, statedb *state.StateDB) error
 	IsSDKNode() bool
@@ -40,7 +40,7 @@ type LendingService interface {
 	GetLendingState(block *types.Block, author common.Address) (*lendingstate.LendingStateDB, error)
 	HasLendingState(block *types.Block, author common.Address) bool
 	GetStateCache() lendingstate.Database
-	GetTriegc() *prque.Prque
+	GetTriegc() *prque.Prque[int64, common.Hash]
 	ApplyOrder(header *types.Header, coinbase common.Address, chain consensus.ChainContext, statedb *state.StateDB, lendingStateDB *lendingstate.LendingStateDB, tradingStateDb *tradingstate.TradingStateDB, lendingOrderBook common.Hash, order *lendingstate.LendingItem) ([]*lendingstate.LendingTrade, []*lendingstate.LendingItem, error)
 	GetCollateralPrices(header *types.Header, chain consensus.ChainContext, statedb *state.StateDB, tradingStateDb *tradingstate.TradingStateDB, collateralToken common.Address, lendingToken common.Address) (*big.Int, *big.Int, error)
 	GetMediumTradePriceBeforeEpoch(chain consensus.ChainContext, statedb *state.StateDB, tradingStateDb *tradingstate.TradingStateDB, baseToken common.Address, quoteToken common.Address) (*big.Int, error)

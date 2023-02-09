@@ -53,6 +53,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/urfave/cli/v2 v2.27.5
+	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

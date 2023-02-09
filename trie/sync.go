@@ -73,7 +73,7 @@ type Sync struct {
 	database ethdb.KeyValueReader     // Persistent database to check for existing entries
 	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
-	queue    *prque.Prque             // Priority queue with the pending requests
+	queue    *prque.Prque[int64, any] // Priority queue with the pending requests
 	bloom    *SyncBloom               // Bloom filter for fast Node existence checks
 }
 
@@ -83,7 +83,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		database: database,
 		membatch: newSyncMemBatch(),
 		requests: make(map[common.Hash]*request),
-		queue:    prque.New(nil),
+		queue:    prque.New[int64, any](nil), // Ugh, can contain both string and hash, whyyy
 		bloom:    bloom,
 	}
 	ts.AddSubTrie(root, 0, common.Hash{}, callback)

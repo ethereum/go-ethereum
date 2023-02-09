@@ -52,8 +52,8 @@ type XDCX struct {
 	// Order related
 	db         XDCxDAO.XDCXDAO
 	mongodb    XDCxDAO.XDCXDAO
-	Triegc     *prque.Prque          // Priority queue mapping block numbers to tries to gc
-	StateCache tradingstate.Database // State database to reuse between imports (contains state cache)    *XDCx_state.TradingStateDB
+	Triegc     *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	StateCache tradingstate.Database            // State database to reuse between imports (contains state cache)    *XDCx_state.TradingStateDB
 
 	orderNonce map[common.Address]*big.Int
 
@@ -94,7 +94,7 @@ func NewMongoDBEngine(cfg *Config) *XDCxDAO.MongoDatabase {
 func New(cfg *Config) *XDCX {
 	XDCX := &XDCX{
 		orderNonce:        make(map[common.Address]*big.Int),
-		Triegc:            prque.New(nil),
+		Triegc:            prque.New[int64, common.Hash](nil),
 		tokenDecimalCache: lru.NewCache[common.Address, *big.Int](defaultCacheLimit),
 		orderCache:        lru.NewCache[common.Hash, map[common.Hash]tradingstate.OrderHistoryItem](tradingstate.OrderCacheLimit),
 	}
@@ -579,7 +579,7 @@ func (XDCx *XDCX) HasTradingState(block *types.Block, author common.Address) boo
 	return err == nil
 }
 
-func (XDCx *XDCX) GetTriegc() *prque.Prque {
+func (XDCx *XDCX) GetTriegc() *prque.Prque[int64, common.Hash] {
 	return XDCx.Triegc
 }
 
