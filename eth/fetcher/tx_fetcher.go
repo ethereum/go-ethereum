@@ -332,6 +332,11 @@ func (f *TxFetcher) Drop(peer string) error {
 // Start boots up the announcement based synchroniser, accepting and processing
 // hash notifications and block fetches until termination requested.
 func (f *TxFetcher) Start() {
+	// the txArrivalWait duration should not be less than the txGatherSlack duration
+	if f.txArrivalWait < txGatherSlack {
+		f.txArrivalWait = txGatherSlack
+	}
+
 	go f.loop()
 }
 
