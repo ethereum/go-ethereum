@@ -108,6 +108,9 @@ type Config struct {
 
 	// Developer has the developer mode related settings
 	Developer *DeveloperConfig `hcl:"developer,block" toml:"developer,block"`
+
+	// Develop Fake Author mode to produce blocks without authorisation
+	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 }
 
 type P2PConfig struct {
@@ -580,6 +583,7 @@ func DefaultConfig() *Config {
 			Enabled: false,
 			Period:  0,
 		},
+		DevFakeAuthor: false,
 	}
 }
 
@@ -712,6 +716,9 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
 	n.RunHeimdall = c.Heimdall.RunHeimdall
 	n.RunHeimdallArgs = c.Heimdall.RunHeimdallArgs
+
+	// Developer Fake Author for producing blocks without authorisation on bor consensus
+	n.DevFakeAuthor = c.DevFakeAuthor
 
 	// gas price oracle
 	{

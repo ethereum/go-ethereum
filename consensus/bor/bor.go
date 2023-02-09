@@ -227,7 +227,8 @@ type Bor struct {
 	HeimdallClient         IHeimdallClient
 
 	// The fields below are for testing only
-	fakeDiff bool // Skip difficulty verifications
+	fakeDiff      bool // Skip difficulty verifications
+	devFakeAuthor bool
 
 	closeOnce sync.Once
 }
@@ -245,6 +246,7 @@ func New(
 	spanner Spanner,
 	heimdallClient IHeimdallClient,
 	genesisContracts GenesisContract,
+	devFakeAuthor bool,
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor
@@ -267,6 +269,7 @@ func New(
 		spanner:                spanner,
 		GenesisContractsClient: genesisContracts,
 		HeimdallClient:         heimdallClient,
+		devFakeAuthor:          devFakeAuthor,
 	}
 
 	c.authorizedSigner.Store(&signer{
@@ -480,6 +483,19 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 // nolint: gocognit
 func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
+
+	signer := common.BytesToAddress(c.authorizedSigner.Load().signer.Bytes())
+	if c.devFakeAuthor && signer.String() != "0x0000000000000000000000000000000000000000" {
+		log.Info("👨‍💻Using DevFakeAuthor", "signer", signer)
+
+		val := valset.NewValidator(signer, 1000)
+		validatorset := valset.NewValidatorSet([]*valset.Validator{val})
+
+		snapshot := newSnapshot(c.config, c.signatures, number, hash, validatorset.Validators)
+
+		return snapshot, nil
+	}
+
 	var snap *Snapshot
 
 	headers := make([]*types.Header, 0, 16)
