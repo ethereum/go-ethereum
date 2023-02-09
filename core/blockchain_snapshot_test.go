@@ -61,7 +61,10 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -250,7 +253,11 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	newdb, err := rawdb.NewLevelDBDatabaseWithFreezer(snaptest.datadir, 0, 0, snaptest.datadir, "", false)
+	newdb, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         snaptest.datadir,
+		AncientsDirectory: snaptest.datadir,
+	})
+
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
