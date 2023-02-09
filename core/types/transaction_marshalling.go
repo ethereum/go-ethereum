@@ -296,11 +296,12 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	case BlobTxType:
 		var itx SignedBlobTx
 		inner = &itx
-		// Access list should always be non-nil
-		if dec.AccessList == nil {
-			return errors.New("found nil access list in blob tx")
+		// Access list is optional for now
+		if dec.AccessList != nil {
+			itx.Message.AccessList = AccessListView(*dec.AccessList)
+		} else {
+			itx.Message.AccessList = AccessListView(AccessList{})
 		}
-		itx.Message.AccessList = AccessListView(*dec.AccessList)
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
@@ -354,6 +355,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxFeePerDataGas' for txdata")
 		}
 		itx.Message.MaxFeePerDataGas.SetFromBig((*big.Int)(dec.MaxFeePerDataGas))
+		if dec.BlobVersionedHashes == nil {
+			return errors.New("missing required field 'blobVersionedHashes' in transaction")
+		}
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
 		// A BlobTx may not contain data
 		if len(dec.Blobs) != 0 || len(dec.BlobKzgs) != 0 {
