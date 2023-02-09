@@ -290,6 +290,7 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		dt := now - lastUpdate
 		// fetch the client that finishes first
 		rcqNode := cm.rcQueue.PopItem() // if sumRecharge > 0 then the queue cannot be empty
+		rcqNode.queueIndex = -1
 		// check whether it has already finished
 		dtNext := mclock.AbsTime(float64(rcqNode.rcFullIntValue-cm.rcLastIntValue) / bonusRatio)
 		if dt < dtNext {
@@ -356,6 +357,7 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		cm.sumRecharge += node.params.MinRecharge
 		if node.queueIndex != -1 {
 			cm.rcQueue.Remove(node.queueIndex)
+			node.queueIndex = -1
 		}
 		node.rcLastIntValue = cm.rcLastIntValue
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)

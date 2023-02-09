@@ -182,14 +182,14 @@ func (q *LazyQueue[P, V]) Size() int {
 
 // setIndex0 translates internal queue item index to the virtual index space of LazyQueue
 func (q *LazyQueue[P, V]) setIndex0(data V, index int) {
-	if index == -1 {
-		q.setIndex(data, -1)
-	} else {
+	if index != -1 {
 		q.setIndex(data, index+index)
 	}
 }
 
 // setIndex1 translates internal queue item index to the virtual index space of LazyQueue
 func (q *LazyQueue[P, V]) setIndex1(data V, index int) {
-	q.setIndex(data, index+index+1)
+	if index != -1 {
+		q.setIndex(data, index+index+1)
+	}
 }

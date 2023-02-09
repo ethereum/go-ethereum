@@ -294,9 +294,11 @@ func (pp *priorityPool) inactivePriority(p *ppNodeInfo) int64 {
 func (pp *priorityPool) removeFromQueues(c *ppNodeInfo) {
 	if c.activeIndex >= 0 {
 		pp.activeQueue.Remove(c.activeIndex)
+		c.activeIndex = -1
 	}
 	if c.inactiveIndex >= 0 {
 		pp.inactiveQueue.Remove(c.inactiveIndex)
+		c.inactiveIndex = -1
 	}
 }
 
@@ -421,6 +423,7 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 		maxActivePriority int64
 	)
 	pp.activeQueue.MultiPop(func(c *ppNodeInfo, priority int64) bool {
+		c.activeIndex = -1
 		lastNode = c
 		pp.setTempState(c)
 		maxActivePriority = priority
@@ -502,6 +505,7 @@ func (pp *priorityPool) updateFlags(updates []capUpdate) {
 func (pp *priorityPool) tryActivate(commit bool) []capUpdate {
 	for pp.inactiveQueue.Size() > 0 {
 		c := pp.inactiveQueue.PopItem()
+		c.inactiveIndex = -1
 		pp.setTempState(c)
 		pp.setTempBias(c, pp.activeBias)
 		pp.setTempCapacity(c, pp.minCap)

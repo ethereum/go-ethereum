@@ -79,9 +79,6 @@ func (s *sstack[P, V]) Pop() (res any) {
 		s.active = s.blocks[s.size/blockSize]
 	}
 	res, s.active[s.offset] = s.active[s.offset], nil
-	if s.setIndex != nil {
-		s.setIndex(res.(*item[P, V]).value, -1)
-	}
 	return
 }
 
