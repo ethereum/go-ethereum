@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package beacon
+package engine
 
 import (
 	"fmt"
@@ -228,4 +228,10 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 		Withdrawals:   block.Withdrawals(),
 	}
 	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
+}
+
+// ExecutionPayloadBodyV1 is used in the response to GetPayloadBodiesByHashV1 and GetPayloadBodiesByRangeV1
+type ExecutionPayloadBodyV1 struct {
+	TransactionData []hexutil.Bytes     `json:"transactions"`
+	Withdrawals     []*types.Withdrawal `json:"withdrawals,omitempty"`
 }
