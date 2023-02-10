@@ -8,7 +8,9 @@ The ```bor server``` command runs the Bor client.
 
 - ```identity```: Name/Identity of the node
 
-- ```log-level```: Set log level for the server (default: INFO)
+- ```verbosity```: Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit), default = 3 (default: 3)
+
+- ```log-level```: Log level for the server (trace|debug|info|warn|error|crit), will be deprecated soon. Use verbosity instead
 
 - ```datadir```: Path of the data directory to store information
 
@@ -33,6 +35,10 @@ The ```bor server``` command runs the Bor client.
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
+
+- ```bor.runheimdall```: Run Heimdall service as a child process (default: false)
+
+- ```bor.runheimdallargs```: Arguments to pass to Heimdall service
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 

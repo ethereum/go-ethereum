@@ -49,6 +49,9 @@ type Config struct {
 	// RequiredBlocks is a list of required (block number, hash) pairs to accept
 	RequiredBlocks map[string]string `hcl:"eth.requiredblocks,optional" toml:"eth.requiredblocks,optional"`
 
+	// Verbosity is the level of the logs to put out
+	Verbosity int `hcl:"verbosity,optional" toml:"verbosity,optional"`
+
 	// LogLevel is the level of the logs to put out
 	LogLevel string `hcl:"log-level,optional" toml:"log-level,optional"`
 
@@ -448,7 +451,8 @@ func DefaultConfig() *Config {
 		Chain:          "mainnet",
 		Identity:       Hostname(),
 		RequiredBlocks: map[string]string{},
-		LogLevel:       "INFO",
+		Verbosity:      3,
+		LogLevel:       "",
 		DataDir:        DefaultDataDir(),
 		Ancient:        "",
 		P2P: &P2PConfig{

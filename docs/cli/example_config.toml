@@ -4,7 +4,7 @@
 
 chain = "mainnet"            # Name of the chain to sync ("mumbai", "mainnet") or path to a genesis file
 identity = "Annon-Identity"  # Name/Identity of the node (default = OS hostname)
-log-level = "INFO"           # Set log level for the server
+verbosity = 3           # Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit) (`log-level` was replaced by `verbosity`, and thus will be deprecated soon)
 datadir = "var/lib/bor"      # Path of the data directory to store information
 ancient = ""                 # Data directory for ancient chain segments (default = inside chaindata)
 keystore = ""                # Path of the directory where keystores are located

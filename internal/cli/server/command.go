@@ -10,6 +10,7 @@ import (
 
 	"github.com/maticnetwork/heimdall/cmd/heimdalld/service"
 	"github.com/mitchellh/cli"
+	"github.com/pelletier/go-toml"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -87,6 +88,32 @@ func (c *Command) extractFlags(args []string) error {
 			c.config = &config
 
 			return err
+		}
+	}
+
+	// nolint: nestif
+	// check for log-level and verbosity here
+	if c.configFile != "" {
+		data, _ := toml.LoadFile(c.configFile)
+		if data.Has("verbosity") && data.Has("log-level") {
+			log.Warn("Config contains both, verbosity and log-level, log-level will be deprecated soon. Use verbosity only.", "using", data.Get("verbosity"))
+		} else if !data.Has("verbosity") && data.Has("log-level") {
+			log.Warn("Config contains log-level only, note that log-level will be deprecated soon. Use verbosity instead.", "using", data.Get("log-level"))
+			config.Verbosity = VerbosityStringToInt(strings.ToLower(data.Get("log-level").(string)))
+		}
+	} else {
+		tempFlag := 0
+		for _, val := range args {
+			if (strings.HasPrefix(val, "-verbosity") || strings.HasPrefix(val, "--verbosity")) && config.LogLevel != "" {
+				tempFlag = 1
+				break
+			}
+		}
+		if tempFlag == 1 {
+			log.Warn("Both, verbosity and log-level flags are provided, log-level will be deprecated soon. Use verbosity only.", "using", config.Verbosity)
+		} else if tempFlag == 0 && config.LogLevel != "" {
+			log.Warn("Only log-level flag is provided, note that log-level will be deprecated soon. Use verbosity instead.", "using", config.LogLevel)
+			config.Verbosity = VerbosityStringToInt(strings.ToLower(config.LogLevel))
 		}
 	}
 

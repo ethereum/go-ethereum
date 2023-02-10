@@ -103,7 +103,7 @@ var flagMap = map[string][]string{
 var nameTagMap = map[string]string{
 	"chain":                   "chain",
 	"identity":                "identity",
-	"log-level":               "log-level",
+	"verbosity":               "verbosity",
 	"datadir":                 "datadir",
 	"keystore":                "keystore",
 	"syncmode":                "syncmode",
@@ -215,15 +215,15 @@ var replacedFlagsMapFlagAndValue = map[string]map[string]map[string]string{
 	},
 	"verbosity": {
 		"flag": {
-			"verbosity": "log-level",
+			"verbosity": "verbosity",
 		},
 		"value": {
-			"0": "SILENT",
+			"0": "CRIT",
 			"1": "ERROR",
 			"2": "WARN",
 			"3": "INFO",
 			"4": "DEBUG",
-			"5": "DETAIL",
+			"5": "TRACE",
 		},
 	},
 }

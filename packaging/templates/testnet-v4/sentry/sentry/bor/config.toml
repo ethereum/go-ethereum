@@ -1,6 +1,6 @@
 chain = "mumbai"
 # identity = "node_name"
-# log-level = "INFO"
+# verbosity = 3
 datadir = "/var/lib/bor/data"
 # ancient = ""
 # keystore = ""

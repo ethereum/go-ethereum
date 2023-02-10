@@ -3,8 +3,8 @@
 
 chain = "mainnet"
 # chain = "mumbai"
-# identity = "Pratiks-MacBook-Pro.local"
-# log-level = "INFO"
+# identity = "Annon-Identity"
+# verbosity = 3
 datadir = "/var/lib/bor/data"
 # ancient = ""
 # keystore = "/var/lib/bor/keystore"
