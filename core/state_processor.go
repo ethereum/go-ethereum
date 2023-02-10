@@ -209,7 +209,7 @@ func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, aut
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
-	tracer, err := blocknative.NewTxnOpCodeTracer()
+	tracer, err := blocknative.NewTxnOpCodeTracer(nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}

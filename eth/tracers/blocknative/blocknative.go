@@ -2,10 +2,11 @@ package blocknative
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var Tracers = map[string]func() (Tracer, error){
+var Tracers = map[string]func(cfg json.RawMessage) (Tracer, error){
 	"txnOpCodeTracer": NewTxnOpCodeTracer,
 }
 
@@ -15,10 +16,17 @@ type Tracer interface {
 	Stop(err error)
 }
 
+// TracerOpts configure the tracer to save or ignore various aspects of a
+// transaction execution.
+type TracerOpts struct {
+	Logs bool `json:"logs"`
+}
+
 // Trace contains all the accumulated details of a transaction execution.
 type Trace struct {
 	CallFrame
-	Time string `json:"time,omitempty"`
+	Logs []CallLog `json:"logs,omitempty"`
+	Time string    `json:"time,omitempty"`
 }
 
 type CallFrame struct {
@@ -33,4 +41,16 @@ type CallFrame struct {
 	Error       string      `json:"error,omitempty"`
 	ErrorReason string      `json:"errorReason,omitempty"`
 	Calls       []CallFrame `json:"calls,omitempty"`
+}
+
+// CallLog represents a single log entry from the receipt of a transaction.
+type CallLog struct {
+	// Address is the address of the contract that emitted the log.
+	Address common.Address `json:"address"`
+
+	// Data is the encoded memory provided with the log.
+	Data string `json:"data"`
+
+	// Topics is a slice of up to 4 32byte words provided with the log.
+	Topics []common.Hash `json:"topics"`
 }

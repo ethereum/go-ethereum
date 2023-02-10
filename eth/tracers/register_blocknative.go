@@ -12,9 +12,9 @@ import (
 // in turn allows us to use the blocknative tracers from inside the geth/core
 // package without causing circular dependency issues.
 func init() {
-	RegisterLookup(false, func(name string, _ *Context, _ json.RawMessage) (Tracer, error) {
+	RegisterLookup(false, func(name string, _ *Context, cfg json.RawMessage) (Tracer, error) {
 		if constructor, ok := blocknative.Tracers[name]; ok {
-			return constructor()
+			return constructor(cfg)
 		}
 		return nil, errors.New("no blocknative tracer found")
 	})
