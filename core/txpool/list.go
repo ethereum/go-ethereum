@@ -304,7 +304,7 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
-		// Old is being replaced, substract old cost
+		// Old is being replaced, subtract old cost
 		l.subTotalCost(old)
 	}
 	// Add new tx cost to totalcost
@@ -434,7 +434,7 @@ func (l *list) LastElement() *types.Transaction {
 	return l.txs.LastElement()
 }
 
-// subTotalCost substracts the cost of the given transactions from the
+// subTotalCost subtracts the cost of the given transactions from the
 // total cost of all transactions.
 func (l *list) subTotalCost(txs ...*types.Transaction) {
 	for _, tx := range txs {
