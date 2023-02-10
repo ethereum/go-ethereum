@@ -180,10 +180,15 @@ func checkStructLogs(t *testing.T, expect []*txTraceResult, actual []*types.Exec
 }
 
 func checkCoinbase(t *testing.T, b *testBackend, wrapper *types.AccountWrapper) {
-	header, err := b.HeaderByNumber(context.Background(), 1)
-	assert.NoError(t, err)
-	coinbase, err := b.engine.Author(header)
-	assert.NoError(t, err)
+	var coinbase common.Address
+	if b.chainConfig.FeeVaultAddress != nil {
+		coinbase = *b.chainConfig.FeeVaultAddress
+	} else {
+		header, err := b.HeaderByNumber(context.Background(), 1)
+		assert.NoError(t, err)
+		coinbase, err = b.engine.Author(header)
+		assert.NoError(t, err)
+	}
 	assert.Equal(t, true, coinbase.String() == wrapper.Address.String())
 }
 

@@ -94,9 +94,14 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 	}
 
 	// get coinbase
-	coinbase, err := api.backend.Engine().Author(block.Header())
-	if err != nil {
-		return nil, err
+	var coinbase common.Address
+	if api.backend.ChainConfig().FeeVaultAddress != nil {
+		coinbase = *api.backend.ChainConfig().FeeVaultAddress
+	} else {
+		coinbase, err = api.backend.Engine().Author(block.Header())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	env := &traceEnv{
@@ -127,6 +132,7 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 		}
 		env.Proofs[key] = wrappedProof
 	}
+
 	return env, nil
 }
 
