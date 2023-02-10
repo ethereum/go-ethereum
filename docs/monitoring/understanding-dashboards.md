@@ -37,6 +37,13 @@ Disk tracks the rate that data is written to (plotted as `write`) or read from (
 
 ![The Disk panel](/images/docs/grafana/disk.png)
 
+#### Goroutines
+
+Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to 
+execute concurrently.
+
+![The goroutine panel](/images/docs/grafana/goroutines.png)
+
 ### Network
 
 Panels in the Network category track the data flow in and out of the local node.
@@ -154,21 +161,21 @@ Block propagation metrics track the rate that the local node hears about, receiv
 
 Transaction propagation tracks the sending and receiving of transactions on the peer-to-peer network. This includes:
 
-- **ingress announcements**: counts inbound announcements (notifications of a transaction's availability) per second
-- **known announcements**: counts announcements that are ignored because the local node is already aware of them, per second
-- **underpriced announcements**: counts announcements per second that do not get fetched because they pay too little gas 
-- **malicious announcements**: counts announcements per second that are dropped because they appear malicious 
-- **ingress broadcasts**: the number of transactions propagated from peers per second
-- **known broadcasts**: counts transactions that are ignored because they duplicate transactions that the local node already knows about
-- **underpriced broadcasts**: counts all fetched transactions that are dropped due to paying insufficient gas
-- **otherreject broadcasts**: counts transactions that are rejected for reasons other than paying too little gas
-- **finished requests**: counts the successful delivery of a transaction, meaning it has been added to the local transaction pool
-- **failed requests**: counts the number of failed transaction deliveries, e.g. because a peer disconnected unexpectedly
-- **timed out requests**: counts the number of transaction requests that time out
-- **ingress replies**: tracks the total number of inbound replies to requests for transactions
-- **known replies**: tracks number of replies that are dropped because they are already known to the local node
-- **underpriced replies**: counts the number of replies that get dropped due to paying too little gas
-- **otherreject replies**: coutns the number of replies to transaction requests that get dropped for reasons other than paying too little gas
+- **ingress announcements**: inbound announcements (notifications of a transaction's availability) per second
+- **known announcements**: announcements that are ignored because the local node is already aware of them, per second
+- **underpriced announcements**: announcements per second that do not get fetched because they pay too little gas 
+- **malicious announcements**: announcements per second that are dropped because they appear malicious 
+- **ingress broadcasts**: number of transactions propagated from peers per second
+- **known broadcasts**: transactions per second that are ignored because they duplicate transactions that the local node already knows about
+- **underpriced broadcasts**: all fetched transactions that are dropped due to paying insufficient gas, per second
+- **otherreject broadcasts**: transactions that are rejected for reasons other than paying too little gas, per second
+- **finished requests**: successful deliveries of transactions per second, meaning they have been added to the local transaction pool
+- **failed requests**: number of failed transaction deliveries per second, e.g. failed because a peer disconnected unexpectedly
+- **timed out requests**: counts the number of transaction requests that time out per second
+- **ingress replies**: total number of inbound replies to requests for transactions per second
+- **known replies**: number of replies that are dropped because they are already known to the local node, per second
+- **underpriced replies**: number of replies per second that get dropped due to paying too little gas
+- **otherreject replies**: number of replies to transaction requests that get dropped for reasons other than paying too little gas, per second
 
 ![The tx propagation panel](/images/docs/grafana/tx-propagation.png)
 
@@ -183,13 +190,6 @@ The transaction fetcher peers panel shows how many peers the local node is conne
 #### Reorg
 
 The `reorg meter` panel simply counts the blocks added and the blocks removed during chain reorgs. The adjacent `Reorg total` panel shows the total number of reorg executions including both additions and removals.
-
-#### Goroutines
-
-Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to 
-execute concurrently.
-
-![The goroutine panel](/images/docs/grafana/goroutines.png)
 
 #### Eth fetcher filter bodies/headers
 
