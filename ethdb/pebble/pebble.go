@@ -272,7 +272,9 @@ func (d *Database) NewBatch() ethdb.Batch {
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
-// TODO can't do this with pebble.  Batches are allocated in a pool so maybe this doesn't matter?
+// It's not supported by pebble, but pebble has better memory allocation strategy
+// which turns out a lot faster than leveldb. It's performant enough to construct
+// batch object without any pre-allocated space.
 func (d *Database) NewBatchWithSize(_ int) ethdb.Batch {
 	return &batch{
 		b: d.db.NewBatch(),
