@@ -37,24 +37,6 @@ func init() {
 	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
 }
 
-var parityErrorMapping = map[string]string{
-	"contract creation code storage out of gas": "Out of gas",
-	"out of gas":                      "Out of gas",
-	"gas uint64 overflow":             "Out of gas",
-	"max code size exceeded":          "Out of gas",
-	"invalid jump destination":        "Bad jump destination",
-	"execution reverted":              "Reverted",
-	"return data out of bounds":       "Out of bounds",
-	"stack limit reached 1024 (1023)": "Out of stack",
-	"precompiled failed":              "Built-in failed",
-	"invalid input length":            "Built-in failed",
-}
-
-var parityErrorMappingStartingWith = map[string]string{
-	"invalid opcode:": "Bad instruction",
-	"stack underflow": "Stack underflow",
-}
-
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
 	Action              flatCallAction  `json:"action"`
