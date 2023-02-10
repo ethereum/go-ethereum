@@ -25,8 +25,8 @@ type TracerOpts struct {
 // Trace contains all the accumulated details of a transaction execution.
 type Trace struct {
 	CallFrame
-	Logs []Log  `json:"logs,omitempty"`
-	Time string `json:"time,omitempty"`
+	Logs []CallLog `json:"logs,omitempty"`
+	Time string    `json:"time,omitempty"`
 }
 
 type CallFrame struct {
@@ -43,8 +43,8 @@ type CallFrame struct {
 	Calls       []CallFrame `json:"calls,omitempty"`
 }
 
-// Log represents a single log entry from the receipt of a transaction.
-type Log struct {
+// CallLog represents a single log entry from the receipt of a transaction.
+type CallLog struct {
 	// Address is the address of the contract that emitted the log.
 	Address common.Address `json:"address"`
 

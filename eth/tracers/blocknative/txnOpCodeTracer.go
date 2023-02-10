@@ -92,7 +92,7 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Du
 	// If the user wants the logs, grab them from the state
 	if t.opts.Logs {
 		for _, stateLog := range t.env.StateDB.Logs() {
-			t.trace.Logs = append(t.trace.Logs, Log{
+			t.trace.Logs = append(t.trace.Logs, CallLog{
 				Address: stateLog.Address,
 				Data:    bytesToHex(stateLog.Data),
 				Topics:  stateLog.Topics,
