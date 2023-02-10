@@ -18,8 +18,10 @@ package vm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"testing"
 	"time"
@@ -89,6 +91,16 @@ var blake2FMalformedInputTests = []precompiledFailureTest{
 		ExpectedError: errBlake2FInvalidFinalFlag.Error(),
 		Name:          "vector 3: malformed final block indicator flag",
 	},
+}
+
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	gasCost := p.RequiredGas(input)
+	if suppliedGas < gasCost {
+		return nil, 0, ErrOutOfGas
+	}
+	suppliedGas -= gasCost
+	output, err := p.Run(context.Background(), input, common.Address{}, new(big.Int), true)
+	return output, suppliedGas, err
 }
 
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
