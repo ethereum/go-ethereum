@@ -17,7 +17,9 @@
 package rpc
 
 import (
+	"compress/flate"
 	"context"
+	"errors"
 	"io"
 	"sync/atomic"
 
@@ -47,6 +49,8 @@ type Server struct {
 	idgen    func() ID
 	run      int32
 	codecs   mapset.Set
+	// Add compressionLevel inorder to enable set it when open websocket server.
+	compressionLevel int
 }
 
 // NewServer creates a new server instance with no registered handlers.
@@ -87,6 +91,15 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	c := initClient(codec, s.idgen, &s.services)
 	<-codec.closed()
 	c.Close()
+}
+
+// SetCompressionLevel set compression level (-2 ~ 9), this function only works on websocket.
+func (s *Server) SetCompressionLevel(level int) error {
+	if !(flate.HuffmanOnly <= level && level <= flate.BestCompression) {
+		return errors.New("websocket: invalid compression level")
+	}
+	s.compressionLevel = level
+	return nil
 }
 
 // serveSingleRequest reads and processes a single RPC request from the given codec. This
