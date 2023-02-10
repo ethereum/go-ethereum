@@ -112,9 +112,10 @@ func (t *ZkTrie) GetKey(kHashBytes []byte) []byte {
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
-
-	return t.db.db.preimage(common.BytesToHash(k.Bytes()))
-
+	if t.db.db.preimages != nil {
+		return t.db.db.preimages.preimage(common.BytesToHash(k.Bytes()))
+	}
+	return nil
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
