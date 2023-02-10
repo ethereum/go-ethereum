@@ -25,8 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-func u64(val uint64) *uint64 { return &val }
-
 func TestCheckCompatible(t *testing.T) {
 	type test struct {
 		stored, new   *ChainConfig
