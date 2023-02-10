@@ -114,11 +114,10 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	tracer            *callTracer
-	config            flatCallTracerConfig
-	ctx               *tracers.Context // Holds tracer context data
-	reason            error            // Textual reason for the interruption
-	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	tracer *callTracer
+	config flatCallTracerConfig
+	ctx    *tracers.Context // Holds tracer context data
+	reason error            // Textual reason for the interruption
 }
 
 type flatCallTracerConfig struct {
@@ -149,9 +148,6 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
-	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -186,19 +182,6 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 // execute any code.
 func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.tracer.CaptureExit(output, gasUsed, err)
-	// Parity traces don't include CALL/STATICCALLs to precompiles.
-	var (
-		// call has been nested in parent
-		parent = t.tracer.callstack[len(t.tracer.callstack)-1]
-		call   = parent.Calls[len(parent.Calls)-1]
-		typ    = call.Type
-		to     = call.To
-	)
-	if typ == vm.CALL || typ == vm.STATICCALL {
-		if t.isPrecompiled(to) {
-			t.tracer.callstack[len(t.tracer.callstack)-1].Calls = parent.Calls[:len(parent.Calls)-1]
-		}
-	}
 }
 
 func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {}
@@ -226,16 +209,6 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
-}
-
-// isPrecompiled returns whether the addr is a precompile.
-func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
-	for _, p := range t.activePrecompiles {
-		if p == addr {
-			return true
-		}
-	}
-	return false
 }
 
 func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
