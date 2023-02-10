@@ -29,7 +29,7 @@ The CPU panel shows how much CPU is being used as a percentage of one processing
 
 ![The Memory panel](/images/docs/grafana/memory.png)
 
-Memory tracks the amount of RAM being used by Geth. Three metrics are plotted: the cache size, i.e. the total RAM reserved for Geth (default 1024 MB) is plotted as `held`; the amount of the cache actually being used by Geth is plotted as `used`; the memory allocations being made is plotted as `alloc`. 
+Memory tracks the amount of RAM being used by Geth. Three metrics are plotted: the cache size, i.e. the total RAM reserved for Geth (default 1024 MB) is plotted as `held`; the amount of the cache actually being used by Geth is plotted as `used`; the number of bytes being allocated by the system per second is plotted as `alloc`. 
 
 #### Disk
 
@@ -49,7 +49,7 @@ The Traffic panel shows the rate of data ingress and egress for all subprotocols
 
 #### Peers
 
-The Peers panel shows the number of individual peers the local node is connected to. The number of times the local node dials to find new peers and the number of times information is served from the local node are also tracked in this panel.
+The Peers panel shows the number of individual peers the local node is connected to. The number of dials issued by Geth per second and the number of external connections received per second are also tracked in this panel.
 
 ![The Peers panel](/images/docs/grafana/peers.png)
 
@@ -73,7 +73,7 @@ Ingress is the process of data arriving at the local node from its peers. This p
 
 #### ETH egress traffic
 
-Egress is the process of data leaving the local node and being transferred to its peers. This panel shows a moment-by-moment snapshot of the amount of data that is leaving the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Make sure your dashboard includes the latest version of the eth subprotocol!
+Egress is the process of data leaving the local node and being transferred to its peers. This panel shows a moment-by-moment snapshot of the amount of data that has left the local node, specifically using the eth subprotocol, in units of GB (gigabytes). Make sure your dashboard includes the latest version of the eth subprotocol!
 
 ![The ETH egress traffic panel](/images/docs/grafana/eth-egress-traffic.png)
 
@@ -101,27 +101,27 @@ The block processing panel tracks the time taken to complete the various tasks i
 - **validation**: time taken to compute a new state root and compare it to the one that arrived in the block
 - **commit**: time taken to write the new block to the chain data
 - **account read**: time taken to access account information from the state trie
-- **account update**: time taken to update a leaf in the state trie
-- **account hash**: time taken to generate a hash of an account's data
-- **account commit**: time taken to write new account data into the state trie
+- **account update**: time taken to incorporate dirty account objects into the state trie (account trie)
+- **account hash**: time taken to re-compute the new root hash of the state trie (account trie)
+- **account commit**: time taken to commit the changes of state trie (account trie) into database
 - **storage read**: time taken to access smart contract storage data from the storage trie
-- **storage update**: time taken to change a piece of smart contract storage data in the storage trie
-- **storage hash**: time taken to generate a new hash for modified smart contract storage data
-- **storage commit**: time taken to write modified smart contract storage data to the storage trie. 
+- **storage update**: time taken to incorporate dirty storage slots into the storage tries
+- **storage hash**: time take to re-compute the new root hash of storage tries
+- **storage commit**: time take to commit the changes of storage tries into database
 - **snapshot account read**: time taken to read account data from a snapshot
-- **snapshot storage read**: time taken to read storage data from a  snapshot
-- **snapshot commit**: time taken to write data to a snapshot
+- **snapshot storage read**: time taken to read storage data from a snapshot
+- **snapshot commit**: time take to flush the dirty state data as a new snapshot
 
 ![The block processing panel](/images/docs/grafana/block-processing.png)
 
 #### Transaction processing
 
-The transaction processing panel tracks the time taken to complete the various tasks involved in processing each block, measured as a mean rate of events per second:
+The transaction processing panel tracks the time taken to complete the various tasks involved in validating the transactions received from the network, measured as a mean rate of events per second:
 
 - **known**: rate of new transactions arriving at the node that are ignored because the local node already knows about them.
-- **valid**: rate that node marks known transactions as valid
-- **invalid**: rate that node marks known transactions as invalid
-- **underpriced**: rate that node marks transactions paying insufficient gas as invalid
+- **valid**: rate that node marks received transactions as valid
+- **invalid**: rate that node marks received transactions as invalid
+- **underpriced**: rate that node marks transactions paying too low gas price as rejected
 - **executable discard**: rate that valid transactions are dropped from the transaction pool, e.g. because it is already known.
 - **executable replace**: rate that valid transactions are replaced with a new one from same sender with same nonce but higher gas
 - **executable ratelimit**: rate that valid transactions are dropped due to rate-limiting
@@ -135,25 +135,30 @@ The transaction processing panel tracks the time taken to complete the various t
 
 #### Block propagation
 
+
+<Note>
+Block propagation was disabled in Geth at The Merge. Block propagation is now the responsibility of the consensus client.  Included here for archival interest.
+</Note>
+ 
 Block propagation metrics track the rate that the local node hears about, receives and broadcasts blocks. This includes:
 
-- **ingress announcements**: counts the number of inbound announcements processed by the local node. Announcements are messages from peers that signal that they have a block to share.
-- **known announcements**: counts the announcements that are ignored because the local node is already aware of them.
-- **malicious announcements**: counts the number of announcements from peers that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
-- **ingress broadcasts**: Blocks downloaded from peers
+- **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share.
+- **known announcements**: the number of announcements per second
+- **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
+- **ingress broadcasts**: the number of blocks directly propagated to local node per second.
 - **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
-- **malicious broadcasts**: counts all blocks that are determined to be malicious
+- **malicious broadcasts**: the number of blocks which are determined to be malicious per second
 
 
 #### Transaction propagation
 
 Transaction propagation tracks the sending and receiving of transactions on the peer-to-peer network. This includes:
 
-- **ingress announcements**: counts inbound announcements (notifications of a transaction's availability)
-- **known announcements**: counts announcements that are ignored because the local node is already aware of them
-- **underpriced announcements**: counts all announcements that never get fetched because they pay too little gas 
-- **malicious announcements**: counts announcements that are dropped because they appear malicious 
-- **ingress broadcasts**: counts all transactions fetched from peers
+- **ingress announcements**: counts inbound announcements (notifications of a transaction's availability) per second
+- **known announcements**: counts announcements that are ignored because the local node is already aware of them, per second
+- **underpriced announcements**: counts announcements per second that do not get fetched because they pay too little gas 
+- **malicious announcements**: counts announcements per second that are dropped because they appear malicious 
+- **ingress broadcasts**: the number of transactions propagated from peers per second
 - **known broadcasts**: counts transactions that are ignored because they duplicate transactions that the local node already knows about
 - **underpriced broadcasts**: counts all fetched transactions that are dropped due to paying insufficient gas
 - **otherreject broadcasts**: counts transactions that are rejected for reasons other than paying too little gas
@@ -215,7 +220,7 @@ This panel shows the amount of data, in GB, in the levelDB and ancients database
 
 #### Compaction time, delay and count
 
-These panels show the amount of time spent compacting the levelDB database, duration write operations to the database are delayed due to compaction and the frequency of compaction executions.
+These panels show the amount of time spent compacting the levelDB database, duration write operations to the database are delayed due to compaction and the count of various types of compaction executions.
 
 <Note>
 The current default Geth Grafana dashboard includes panels for light nodes. Light nodes are not currently functional since Ethereum moved to proof-of-stake.
