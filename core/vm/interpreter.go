@@ -204,6 +204,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 					return nil, ErrGasUintOverflow
 				}
 			}
+			if op == RETURN || op == REVERT {
+				// limit memorySize to max 128KB
+				if max := uint64(128 * 1024); memorySize > max {
+					memorySize = max
+				}
+			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
