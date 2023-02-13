@@ -105,7 +105,7 @@ type NodeSet struct {
 // represents the original value of accessed nodes, it can be optional but would
 // be beneficial for speeding up the construction of trie history.
 func NewNodeSet(owner common.Hash, accessList map[string][]byte) *NodeSet {
-	// Don't panic for lazy users.
+	// Don't panic for lazy users
 	if accessList == nil {
 		accessList = make(map[string][]byte)
 	}

@@ -568,8 +568,9 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 		t.root = hashedNode
 		return rootHash, nil
 	}
-	h := newCommitter(t.owner, t.accessList, collectLeaf)
-	newRoot, nodes := h.Commit(t.root)
+	nodes := NewNodeSet(t.owner, t.accessList)
+	h := newCommitter(nodes, collectLeaf)
+	newRoot := h.Commit(t.root)
 	t.root = newRoot
 	return rootHash, nodes
 }

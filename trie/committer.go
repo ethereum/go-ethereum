@@ -37,18 +37,18 @@ type committer struct {
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(owner common.Hash, accessList map[string][]byte, collectLeaf bool) *committer {
+func newCommitter(nodes *NodeSet, collectLeaf bool) *committer {
 	return &committer{
-		nodes:       NewNodeSet(owner, accessList),
+		nodes:       nodes,
 		collectLeaf: collectLeaf,
 	}
 }
 
 // Commit collapses a node down into a hash node and returns it along with
 // the modified nodeset.
-func (c *committer) Commit(n node) (hashNode, *NodeSet) {
+func (c *committer) Commit(n node) hashNode {
 	h := c.commit(nil, n)
-	return h.(hashNode), c.nodes
+	return h.(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
