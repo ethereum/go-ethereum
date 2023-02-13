@@ -273,8 +273,6 @@ To start the node, the followijng command can be run:
 build/bin/geth
 ```
 
-
-
 Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm` and `rlpdump`) can be compiled by running `make all`. More information about these tools can be found [here](https://github.com/ethereum/go-ethereum#executables).
 
 To build a stable release, e.g. v1.9.21, the command `git checkout v1.9.21` retrieves that specific version. Executing that command before running `make geth` switches Geth to a stable branch.

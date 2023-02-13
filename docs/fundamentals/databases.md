@@ -5,13 +5,12 @@ description: Overview of Geth's database architecture
 
 Since v1.9.0, Geth has divided its database into two parts. Recent blocks and state data are kept in quick-access storage, but older blocks and receipts ("ancients") are stored in a "freezer" database. The point of this separation is to minimize the dependency on expensive, sensitive SSDs, and instead push the less frequently-accessed data into a database that can be supported by cheaper and more durable drives. Storing less data in the faster LevelDB database also enables faster compactions and improves the database performance by allowing more state trie nodes to be held in active memory for a given cache-size.
 
-
 # Recent blocks
 
 Geth stores recent blocks in a LevelDB database. This is a persistent key-value store that can be queried very quickly. The LevelDB database is supposed to be run on top of a fast SSD hard disk so that the disk IO is not bottlenecked by the underlying hardware. In addition to basic storage, the LevelDB database supports batch writes and iterations over the keyspace in binary-alphabetical order.
 The database is periodically compacted to reduce the operational cost of accessing indivdual items. This is achieved by flattening the underlying data store for a given range of keys. Any deleted or overwritte items in that key range are removed and the surviving data is reorganized for efficiency.
 
-Geth also tracks several performance metrics for the LevelDB database that can be monitored via the metrics subsystem. These are: 
+Geth also tracks several performance metrics for the LevelDB database that can be monitored via the metrics subsystem. These are:
 
 | meter                | function                                                                |
 | -------------------- | ----------------------------------------------------------------------- |
@@ -28,10 +27,9 @@ Geth also tracks several performance metrics for the LevelDB database that can b
 | `nonlevel0CompGauge` | Gauge for tracking the number of table compaction in non0 level         |
 | `seekCompGauge`      | Gauge for tracking the number of table compaction caused by read opt    |
 
-
 ## Freezer/ancients
 
-Older segments of the chain are moved out of the fast LevelDB database and into a freezer database the is less performant. Nodes rarely need to access these files so IO speed is less important and the bulk of the chain data can be stored on a cheaper HDD. Once blocks pass some threshold age (90,000 blocks behind the head by default) the block and receipt data is flattened and saved as a raw binary blob of data along with an index entry file used for identification. 
+Older segments of the chain are moved out of the fast LevelDB database and into a freezer database the is less performant. Nodes rarely need to access these files so IO speed is less important and the bulk of the chain data can be stored on a cheaper HDD. Once blocks pass some threshold age (90,000 blocks behind the head by default) the block and receipt data is flattened and saved as a raw binary blob of data along with an index entry file used for identification.
 
 Geth also tracks some basic metrics relating to the ancients database that can be monitored:
 
@@ -41,9 +39,7 @@ Geth also tracks some basic metrics relating to the ancients database that can b
 | `writeMeter` | Meter for measuring the effective amount of data written   |
 | `sizeGauge`  | Gauge for tracking the combined size of all freezer tables |
 
-
-The ancients data is saved entirely separately from the fast-access recent data, meaning it can be stored in a  different location. The default location for the ancient chain segments is inside the `chaindata` directory, which is inside `datadir`, but it can be defined by passing `--datadir.ancient <path>` to Geth on startup. The freezer is designed to have a read operation complexity of O(1), involving only a read for index items (6 bytes) and a read for the data. This design makes the freezer performant enough to run on a slow HDD disk, permitting people to run Ethereum nodes without requiring a huge SSD. The ancient data can also be moved later by manually copying the directory to a new location and then starting Geth passing the new path to `--datadir.ancient`.
-
+The ancients data is saved entirely separately from the fast-access recent data, meaning it can be stored in a different location. The default location for the ancient chain segments is inside the `chaindata` directory, which is inside `datadir`, but it can be defined by passing `--datadir.ancient <path>` to Geth on startup. The freezer is designed to have a read operation complexity of O(1), involving only a read for index items (6 bytes) and a read for the data. This design makes the freezer performant enough to run on a slow HDD disk, permitting people to run Ethereum nodes without requiring a huge SSD. The ancient data can also be moved later by manually copying the directory to a new location and then starting Geth passing the new path to `--datadir.ancient`.
 
 ## Using the freezer
 
