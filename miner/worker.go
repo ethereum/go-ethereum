@@ -1501,9 +1501,9 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 
 		tracing.SetAttributes(
 			span,
-			attribute.Int("number", int(block.Number().Uint64())),
-			attribute.String("hash", block.Hash().String()),
-			attribute.String("sealhash", w.engine.SealHash(block.Header()).String()),
+			attribute.Int("number", int(env.header.Number.Uint64())),
+			attribute.String("hash", env.header.Hash().String()),
+			attribute.String("sealhash", w.engine.SealHash(env.header).String()),
 			attribute.Int("len of env.txs", len(env.txs)),
 			attribute.Bool("error", err != nil),
 		)
