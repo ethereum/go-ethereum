@@ -37,6 +37,24 @@ func init() {
 	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
 }
 
+var parityErrorMapping = map[string]string{
+	"contract creation code storage out of gas": "Out of gas",
+	"out of gas":                      "Out of gas",
+	"gas uint64 overflow":             "Out of gas",
+	"max code size exceeded":          "Out of gas",
+	"invalid jump destination":        "Bad jump destination",
+	"execution reverted":              "Reverted",
+	"return data out of bounds":       "Out of bounds",
+	"stack limit reached 1024 (1023)": "Out of stack",
+	"precompiled failed":              "Built-in failed",
+	"invalid input length":            "Built-in failed",
+}
+
+var parityErrorMappingStartingWith = map[string]string{
+	"invalid opcode:": "Bad instruction",
+	"stack underflow": "Stack underflow",
+}
+
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
 	Action              flatCallAction  `json:"action"`
@@ -97,13 +115,25 @@ type flatCallResultMarshaling struct {
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
 	tracer *callTracer
+	config flatCallTracerConfig
 	ctx    *tracers.Context // Holds tracer context data
 	reason error            // Textual reason for the interruption
 }
 
+type flatCallTracerConfig struct {
+	ConvertParityErrors bool `json:"convertParityErrors"` // If true, call tracer converts errors to parity format
+}
+
 // newFlatCallTracer returns a new flatCallTracer.
-func newFlatCallTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
-	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, nil)
+func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+	var config flatCallTracerConfig
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, err
+		}
+	}
+
+	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +142,7 @@ func newFlatCallTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer,
 		return nil, errors.New("internal error: embedded tracer has wrong type")
 	}
 
-	return &flatCallTracer{tracer: t, ctx: ctx}, nil
+	return &flatCallTracer{tracer: t, ctx: ctx, config: config}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -161,7 +191,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 		return nil, errors.New("invalid number of calls")
 	}
 
-	flat, err := flatFromNested(&t.tracer.callstack[0], []int{}, t.ctx)
+	flat, err := flatFromNested(&t.tracer.callstack[0], []int{}, t.config.ConvertParityErrors, t.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +208,7 @@ func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
 }
 
-func flatFromNested(input *callFrame, traceAddress []int, ctx *tracers.Context) (output []flatCallFrame, err error) {
+func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
 	var frame *flatCallFrame
 	switch input.Type {
 	case vm.CREATE, vm.CREATE2:
@@ -195,9 +225,8 @@ func flatFromNested(input *callFrame, traceAddress []int, ctx *tracers.Context) 
 	frame.Error = input.Error
 	frame.Subtraces = len(input.Calls)
 	fillCallFrameFromContext(frame, ctx)
-
-	if frame.Error != "" {
-		frame.Result = nil
+	if convertErrs {
+		convertErrorToParity(frame)
 	}
 
 	output = append(output, *frame)
@@ -205,7 +234,7 @@ func flatFromNested(input *callFrame, traceAddress []int, ctx *tracers.Context) 
 		for i, childCall := range input.Calls {
 			childAddr := childTraceAddress(traceAddress, i)
 			childCallCopy := childCall
-			flat, err := flatFromNested(&childCallCopy, childAddr, ctx)
+			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -284,6 +313,24 @@ func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
 		callFrame.TransactionHash = &ctx.TxHash
 	}
 	callFrame.TransactionPosition = uint64(ctx.TxIndex)
+}
+
+func convertErrorToParity(call *flatCallFrame) {
+	if call.Error == "" {
+		return
+	}
+
+	if parityError, ok := parityErrorMapping[call.Error]; ok {
+		call.Error = parityError
+		call.Result = nil
+	} else {
+		for gethError, parityError := range parityErrorMappingStartingWith {
+			if strings.HasPrefix(call.Error, gethError) {
+				call.Error = parityError
+				call.Result = nil
+			}
+		}
+	}
 }
 
 func childTraceAddress(a []int, i int) []int {
