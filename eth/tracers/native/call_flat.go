@@ -114,14 +114,16 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	tracer *callTracer
-	config flatCallTracerConfig
-	ctx    *tracers.Context // Holds tracer context data
-	reason error            // Textual reason for the interruption
+	tracer            *callTracer
+	config            flatCallTracerConfig
+	ctx               *tracers.Context // Holds tracer context data
+	reason            error            // Textual reason for the interruption
+	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
 
 type flatCallTracerConfig struct {
 	ConvertParityErrors bool `json:"convertParityErrors"` // If true, call tracer converts errors to parity format
+	IncludePrecompiles  bool `json:"includePrecompiles"`  // If true, call tracer includes calls to precompiled contracts
 }
 
 // newFlatCallTracer returns a new flatCallTracer.
@@ -148,11 +150,18 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
+	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.tracer.CaptureEnd(output, gasUsed, err)
+
+	// Parity trace considers only reports the gas used during the top call frame which doesn't include
+	// tx processing such as intrinsic gas and refunds.
+	t.tracer.callstack[0].GasUsed = gasUsed
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -179,6 +188,24 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 // execute any code.
 func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.tracer.CaptureExit(output, gasUsed, err)
+
+	// Parity traces don't include CALL/STATICCALLs to precompiles.
+	// By default we remove them from the callstack.
+	excludePrecompileCalls := !t.config.IncludePrecompiles
+	if excludePrecompileCalls {
+		var (
+			// call has been nested in parent
+			parent = t.tracer.callstack[len(t.tracer.callstack)-1]
+			call   = parent.Calls[len(parent.Calls)-1]
+			typ    = call.Type
+			to     = call.To
+		)
+		if typ == vm.CALL || typ == vm.STATICCALL {
+			if t.isPrecompiled(to) {
+				t.tracer.callstack[len(t.tracer.callstack)-1].Calls = parent.Calls[:len(parent.Calls)-1]
+			}
+		}
+	}
 }
 
 func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {}
@@ -208,6 +235,16 @@ func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
 }
 
+// isPrecompiled returns whether the addr is a precompile.
+func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
+	for _, p := range t.activePrecompiles {
+		if p == addr {
+			return true
+		}
+	}
+	return false
+}
+
 func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
 	var frame *flatCallFrame
 	switch input.Type {
@@ -227,6 +264,10 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	fillCallFrameFromContext(frame, ctx)
 	if convertErrs {
 		convertErrorToParity(frame)
+	}
+
+	if frame.Error != "" {
+		frame.Result = nil
 	}
 
 	output = append(output, *frame)
@@ -322,12 +363,10 @@ func convertErrorToParity(call *flatCallFrame) {
 
 	if parityError, ok := parityErrorMapping[call.Error]; ok {
 		call.Error = parityError
-		call.Result = nil
 	} else {
 		for gethError, parityError := range parityErrorMappingStartingWith {
 			if strings.HasPrefix(call.Error, gethError) {
 				call.Error = parityError
-				call.Result = nil
 			}
 		}
 	}
