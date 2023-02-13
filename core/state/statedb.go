@@ -86,8 +86,9 @@ type StateDB struct {
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
-	// during a database read is memoized here and will eventually be returned
-	// by StateDB.Commit.
+	// during a database read is memoized here and will eventually be
+	// returned by StateDB.Commit. Specially, this error is used to
+	// represent a failed state trie read.
 	dbErr error
 
 	// The refund counter, also used by state transitioning.
@@ -509,7 +510,7 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 //
 
 // updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
+func (s *StateDB) updateStateObject(obj *stateObject) error {
 	// Track the amount of time wasted on updating the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -517,9 +518,8 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 	if err := s.trie.TryUpdateAccount(addr, &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		return err
 	}
-
 	// If state snapshotting is active, cache the data til commit. Note, this
 	// update mechanism is not symmetric to the deletion, because whereas it is
 	// enough to track account updates at commit time, deletions need tracking
@@ -527,19 +527,17 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if s.snap != nil {
 		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
 	}
+	return nil
 }
 
 // deleteStateObject removes the given object from the state trie.
-func (s *StateDB) deleteStateObject(obj *stateObject) {
+func (s *StateDB) deleteStateObject(obj *stateObject) error {
 	// Track the amount of time wasted on deleting the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 	}
 	// Delete the account from the trie
-	addr := obj.Address()
-	if err := s.trie.TryDeleteAccount(addr); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
-	}
+	return s.trie.TryDeleteAccount(obj.Address())
 }
 
 // getStateObject retrieves a state object given by the address, returning nil if
@@ -709,6 +707,7 @@ func (s *StateDB) Copy() *StateDB {
 		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
 		stateObjectsDestruct: make(map[common.Address]struct{}, len(s.stateObjectsDestruct)),
+		dbErr:                s.dbErr,
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
@@ -883,8 +882,14 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
-// goes into transaction receipts.
-func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+// goes into transaction receipts. An error will be returned in case
+// any failed state read occurs, usually happen because of corrupted
+// database.
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) (common.Hash, error) {
+	// Short circuit because of the memorized database failures.
+	if s.dbErr != nil {
+		return common.Hash{}, fmt.Errorf("hash aborted due to earlier error: %v", s.dbErr)
+	}
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -909,24 +914,30 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+			if err := obj.updateRoot(s.db); err != nil {
+				return common.Hash{}, err
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	if prefetcher != nil {
-		if trie := prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
-			s.trie = trie
+		if tr := prefetcher.trie(common.Hash{}, s.originalRoot); tr != nil {
+			s.trie = tr
 		}
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; obj.deleted {
-			s.deleteStateObject(obj)
+			if err := s.deleteStateObject(obj); err != nil {
+				return common.Hash{}, err
+			}
 			s.AccountDeleted += 1
 		} else {
-			s.updateStateObject(obj)
+			if err := s.updateStateObject(obj); err != nil {
+				return common.Hash{}, err
+			}
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
@@ -941,7 +952,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-	return s.trie.Hash()
+	return s.trie.Hash(), nil
 }
 
 // SetTxContext sets the current transaction hash and index which are
@@ -962,12 +973,14 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	// Short circuit because of the memorized database failures.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	s.IntermediateRoot(deleteEmptyObjects)
-
+	if _, err := s.IntermediateRoot(deleteEmptyObjects); err != nil {
+		return common.Hash{}, err
+	}
 	// Commit objects to the trie, measuring the elapsed time
 	var (
 		accountTrieNodesUpdated int

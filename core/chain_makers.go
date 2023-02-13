@@ -352,8 +352,12 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
+	root, err := state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
+	if err != nil {
+		panic(err) // error shouldn't occur in tests.
+	}
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
+		Root:       root,
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{

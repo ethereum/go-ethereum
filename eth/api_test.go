@@ -85,7 +85,7 @@ func TestAccountRange(t *testing.T) {
 		}
 	}
 	state.Commit(true)
-	root := state.IntermediateRoot(true)
+	root, _ := state.IntermediateRoot(true)
 
 	trie, err := statedb.OpenTrie(root)
 	if err != nil {

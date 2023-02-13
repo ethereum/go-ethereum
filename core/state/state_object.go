@@ -45,7 +45,6 @@ func (s Storage) String() (str string) {
 	for key, value := range s {
 		str += fmt.Sprintf("%X : %X\n", key, value)
 	}
-
 	return
 }
 
@@ -54,7 +53,6 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
-
 	return cpy
 }
 
@@ -73,8 +71,12 @@ type stateObject struct {
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
-	// during a database read is memoized here and will eventually be returned
-	// by StateDB.Commit.
+	// during a database read is memoized here and will eventually be
+	// returned by StateDB.Commit. Specially, this error is used to
+	// represent a failed operation of:
+	// - storage trie read
+	// - contract code read
+	// - trie node decode
 	dbErr error
 
 	// Write caches.
@@ -86,7 +88,7 @@ type stateObject struct {
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
 
 	// Cache flags.
-	// When an object is marked suicided it will be delete from the trie
+	// When an object is marked suicided it will be deleted from the trie
 	// during the "update" phase of the state transition.
 	dirtyCode bool // true if the code was updated
 	suicided  bool
@@ -282,6 +284,10 @@ func (s *stateObject) finalise(prefetch bool) {
 // It will return nil if the trie has not been loaded and no changes have been
 // made. An error will be returned if the trie can't be loaded/updated correctly.
 func (s *stateObject) updateTrie(db Database) (Trie, error) {
+	// Short circuit if any the previous database failure is memorized.
+	if s.dbErr != nil {
+		return nil, s.dbErr
+	}
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
@@ -298,7 +304,6 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	)
 	tr, err := s.getTrie(db)
 	if err != nil {
-		s.setError(err)
 		return nil, err
 	}
 	// Insert all the pending updates into the trie
@@ -313,7 +318,6 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		var v []byte
 		if (value == common.Hash{}) {
 			if err := tr.TryDelete(key[:]); err != nil {
-				s.setError(err)
 				return nil, err
 			}
 			s.db.StorageDeleted += 1
@@ -321,7 +325,6 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 			if err := tr.TryUpdate(key[:], v); err != nil {
-				s.setError(err)
 				return nil, err
 			}
 			s.db.StorageUpdated += 1
@@ -348,34 +351,34 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	return tr, nil
 }
 
-// UpdateRoot sets the trie root to the current root hash of. An error
-// will be returned if trie root hash is not computed correctly.
-func (s *stateObject) updateRoot(db Database) {
+// updateRoot sets the trie root to the current root hash. An error
+// will be returned if case any error occurs because of failed database
+// reads.
+func (s *stateObject) updateRoot(db Database) error {
 	tr, err := s.updateTrie(db)
 	if err != nil {
-		s.setError(fmt.Errorf("updateRoot (%x) error: %w", s.address, err))
-		return
+		return err
 	}
 	// If nothing changed, don't bother with hashing anything
 	if tr == nil {
-		return
+		return nil
 	}
 	// Track the amount of time wasted on hashing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
 	s.data.Root = tr.Hash()
+	return nil
 }
 
 // commitTrie submits the storage changes into the storage trie and re-computes
-// the root. Besides, all trie changes will be collected in a nodeset and returned.
+// the root. Storage trie changes will be wrapped in nodeset and be returned.
+// The error will be non-nil if any error occurs during trie commit operation
+// or memorized in stateObject because of failed database reads.
 func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
 		return nil, err
-	}
-	if s.dbErr != nil {
-		return nil, s.dbErr
 	}
 	// If nothing changed, don't bother with committing anything
 	if tr == nil {
@@ -437,6 +440,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
+	stateObject.dbErr = s.dbErr
 	return stateObject
 }
 
@@ -520,11 +524,4 @@ func (s *stateObject) Balance() *big.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
-}
-
-// Value is never called, but must be present to allow stateObject to be used
-// as a vm.Account interface that also satisfies the vm.ContractRef
-// interface. Interfaces are awesome.
-func (s *stateObject) Value() *big.Int {
-	panic("Value on stateObject should never be called")
 }

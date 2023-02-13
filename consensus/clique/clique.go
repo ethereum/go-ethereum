@@ -569,8 +569,6 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 // rewards given.
 func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	header.UncleHash = types.CalcUncleHash(nil)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
@@ -579,11 +577,17 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	if len(withdrawals) > 0 {
 		return nil, errors.New("clique does not support withdrawals")
 	}
-
-	// Finalize block
+	// Finalize block.
 	c.Finalize(chain, header, state, txs, uncles, nil)
 
-	// Assemble and return the final block for sealing
+	// Assign the final state root to header.
+	root, err := state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if err != nil {
+		return nil, err
+	}
+	header.Root = root
+
+	// Assemble and return the final block for sealing.
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
 }
 

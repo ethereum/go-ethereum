@@ -84,7 +84,11 @@ func TestState(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						snaps, statedb, err := test.Run(subtest, vmconfig, true)
 						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+							root, err := statedb.IntermediateRoot(false)
+							if err != nil {
+								return err
+							}
+							if _, err := snaps.Journal(root); err != nil {
 								return err
 							}
 						}

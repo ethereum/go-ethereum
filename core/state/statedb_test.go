@@ -54,7 +54,7 @@ func TestUpdateLeaks(t *testing.T) {
 		}
 	}
 
-	root := state.IntermediateRoot(false)
+	root, _ := state.IntermediateRoot(false)
 	if err := state.Database().TrieDB().Commit(root, false); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}

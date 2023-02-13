@@ -274,8 +274,11 @@ func runCmd(ctx *cli.Context) error {
 	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		statedb.Commit(true)
-		statedb.IntermediateRoot(true)
+		_, err := statedb.Commit(true)
+		if err != nil {
+			fmt.Println("failed to commit state changes: ", err)
+			os.Exit(1)
+		}
 		fmt.Println(string(statedb.Dump(nil)))
 	}
 

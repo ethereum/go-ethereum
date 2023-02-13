@@ -341,9 +341,6 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount = amount.Mul(amount, big.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount)
 	}
-	// The block reward is no longer handled here. It's done by the
-	// external consensus engine.
-	header.Root = state.IntermediateRoot(true)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
@@ -367,6 +364,15 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	}
 	// Finalize and assemble the block.
 	beacon.Finalize(chain, header, state, txs, uncles, withdrawals)
+
+	// Assign the final state root to header.
+	root, err := state.IntermediateRoot(true)
+	if err != nil {
+		return nil, err
+	}
+	header.Root = root
+
+	// Assemble and return the final block.
 	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), nil
 }
 
