@@ -48,12 +48,12 @@ func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *zktrie.Node {
 		if err != nil {
 			log.Warn("decode proof string fail", "error", err)
 		} else if n != nil {
-			k, err := n.Key()
+			hash, err := n.NodeHash()
 			if err != nil {
-				log.Warn("node has no valid key", "error", err)
+				log.Warn("node has no valid node hash", "error", err)
 			} else {
 				//notice: must consistent with trie/merkletree.go
-				bt := k[:]
+				bt := hash[:]
 				db.Put(bt, buf)
 				if n.Type == zktrie.NodeTypeLeaf || n.Type == zktrie.NodeTypeEmpty {
 					return n
@@ -81,23 +81,23 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 		if err != nil {
 			log.Warn("decode proof string fail", "error", err)
 		} else if n != nil {
-			k, err := n.Key()
+			hash, err := n.NodeHash()
 			if err != nil {
-				log.Warn("node has no valid key", "error", err)
+				log.Warn("node has no valid node hash", "error", err)
 				return
 			}
 			if lastNode == nil {
-				//notice: use little-endian represent inside Hash ([:] or Bytes2())
-				path.Root = k[:]
+				// notice: use little-endian represent inside Hash ([:] or Byte32())
+				path.Root = hash[:]
 			} else {
-				if bytes.Equal(k[:], lastNode.ChildL[:]) {
+				if bytes.Equal(hash[:], lastNode.ChildL[:]) {
 					path.Path = append(path.Path, SMTPathNode{
-						Value:   k[:],
+						Value:   hash[:],
 						Sibling: lastNode.ChildR[:],
 					})
-				} else if bytes.Equal(k[:], lastNode.ChildR[:]) {
+				} else if bytes.Equal(hash[:], lastNode.ChildR[:]) {
 					path.Path = append(path.Path, SMTPathNode{
-						Value:   k[:],
+						Value:   hash[:],
 						Sibling: lastNode.ChildL[:],
 					})
 					keyPath.Add(keyPath, keyCounter)
@@ -107,10 +107,10 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 				keyCounter.Mul(keyCounter, big.NewInt(2))
 			}
 			switch n.Type {
-			case zktrie.NodeTypeMiddle:
+			case zktrie.NodeTypeParent:
 				lastNode = n
 			case zktrie.NodeTypeLeaf:
-				vhash, _ := n.ValueKey()
+				vhash, _ := n.ValueHash()
 				path.Leaf = &SMTPathNode{
 					//here we just return the inner represent of hash (little endian, reversed byte order to common hash)
 					Value:   vhash[:],

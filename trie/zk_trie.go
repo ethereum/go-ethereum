@@ -175,7 +175,7 @@ func (t *ZkTrie) NodeIterator(start []byte) NodeIterator {
 // with the node that proves the absence of the key.
 func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	err := t.ZkTrie.Prove(key, fromLevel, func(n *zktrie.Node) error {
-		key, err := n.Key()
+		nodeHash, err := n.NodeHash()
 		if err != nil {
 			return err
 		}
@@ -188,7 +188,7 @@ func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter)
 				//return fmt.Errorf("key preimage not found for [%x] ref %x", n.NodeKey.Bytes(), k.Bytes())
 			}
 		}
-		return proofDb.Put(key[:], n.Value())
+		return proofDb.Put(nodeHash[:], n.Value())
 	})
 	if err != nil {
 		return err
