@@ -93,20 +93,18 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 
 // NewDatabase initializes the trie database with default settings, namely
 // the legacy hash-based scheme is used by default.
-func NewDatabase(diskdb ethdb.Database) *Database {
-	return NewDatabaseWithConfig(diskdb, nil)
-}
-
-// NewDatabaseWithConfig initializes the trie database with provided configs.
-// The path-based scheme is not activated yet, always initialized with legacy
-// hash-based scheme by default.
-func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
+func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	var cleans int
 	if config != nil && config.Cache != 0 {
 		cleans = config.Cache * 1024 * 1024
 	}
 	db := prepare(diskdb, config)
-	db.backend = hashdb.New(diskdb, cleans, mptResolver{})
+	if config != nil && config.PathDB != nil {
+		config.PathDB.CleanSize = cleans
+		db.backend = pathdb.New(diskdb, config.PathDB)
+	} else {
+		db.backend = hashdb.New(diskdb, cleans, mptResolver{})
+	}
 	return db
 }
 
@@ -239,4 +237,60 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return nil, errors.New("not supported")
 	}
 	return hdb.Node(hash)
+}
+
+// Recover rollbacks the database to a specified historical point. The state is
+// supported as the rollback destination only if it's canonical state and the
+// corresponding trie histories are existent. It's only supported by snap database
+// and will return an error for others.
+func (db *Database) Recover(target common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Recover(target, &trieLoader{db: db})
+}
+
+// Recoverable returns the indicator if the specified state is enabled to be
+// recovered. It's only supported by snap database and will return an error
+// for others.
+func (db *Database) Recoverable(root common.Hash) (bool, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false, errors.New("not supported")
+	}
+	return pdb.Recoverable(root), nil
+}
+
+// Reset wipes all available journal from the persistent database and discard
+// all caches and diff layers. Using the given root to create a new disk layer.
+// It's only supported by path-based database and will return an error for others.
+func (db *Database) Reset(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Reset(root)
+}
+
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
+// This is meant to be used during shutdown to persist the snapshot without
+// flattening everything down (bad for reorgs). It's only supported by path-based
+// database and will return an error for others.
+func (db *Database) Journal(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Journal(root)
+}
+
+// SetCacheSize sets the dirty cache size to the provided value(in mega-bytes).
+// It's only supported by path-based database and will return an error for others.
+func (db *Database) SetCacheSize(size int) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.SetBufferSize(size)
 }

@@ -215,7 +215,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
-			t.trie, err = trie.New(id, trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(id, trie.NewDatabase(t.db.backend.Database(), nil))
 		}
 		if err == nil {
 			err = fn()
@@ -247,7 +247,7 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
-			t, err := trie.New(id, trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(id, trie.NewDatabase(t.db.backend.Database(), nil))
 			if err == nil {
 				it.t.trie = t
 			}

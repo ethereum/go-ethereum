@@ -356,7 +356,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	var resolver trie.NodeResolver
 	if len(result.keys) > 0 {
 		mdb := rawdb.NewMemoryDatabase()
-		tdb := trie.NewDatabase(mdb)
+		tdb := trie.NewDatabase(mdb, nil)
 		snapTrie := trie.NewEmpty(tdb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])

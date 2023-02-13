@@ -180,7 +180,7 @@ func TestFilters(t *testing.T) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err = gspec.Commit(db, trie.NewDatabase(db))
+	_, err = gspec.Commit(db, trie.NewDatabase(db, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

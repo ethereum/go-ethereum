@@ -68,10 +68,10 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
-	StateLimit uint64 // Number of recent blocks to maintain state history for
-	CleanSize  int    // Maximum memory allowance (in bytes) for caching clean nodes
-	DirtySize  int    // Maximum memory allowance (in bytes) for caching dirty nodes
-	ReadOnly   bool   // Flag whether the database is opened in read only mode.
+	StateHistory uint64 // Number of recent blocks to maintain state history for
+	CleanSize    int    // Maximum memory allowance (in bytes) for caching clean nodes
+	DirtySize    int    // Maximum memory allowance (in bytes) for caching dirty nodes
+	ReadOnly     bool   // Flag whether the database is opened in read only mode.
 }
 
 var (
@@ -87,10 +87,13 @@ var (
 
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
-	StateLimit: params.FullImmutabilityThreshold,
-	CleanSize:  defaultCleanSize,
-	DirtySize:  defaultBufferSize,
+	StateHistory: params.FullImmutabilityThreshold,
+	CleanSize:    defaultCleanSize,
+	DirtySize:    defaultBufferSize,
 }
+
+// ReadOnly is the config in order to open database in read only mode.
+var ReadOnly = &Config{ReadOnly: true}
 
 // Database is a multiple-layered structure for maintaining in-memory trie nodes.
 // It consists of one persistent base layer backed by a key-value store, on top

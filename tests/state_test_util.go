@@ -292,7 +292,8 @@ func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 }
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool) (*snapshot.Tree, *state.StateDB) {
-	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+	triedb := trie.NewDatabase(db, &trie.Config{Preimages: true})
+	sdb := state.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
@@ -313,7 +314,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 			NoBuild:    false,
 			AsyncBuild: false,
 		}
-		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root)
+		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb

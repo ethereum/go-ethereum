@@ -273,9 +273,10 @@ func IsLegacyTrieNode(key []byte, val []byte) bool {
 	return bytes.Equal(key, crypto.Keccak256(val))
 }
 
-// IsAccountTrieNode reports whether a provided database entry is an account
-// trie node in path-based state scheme.
-func IsAccountTrieNode(key []byte) (bool, []byte) {
+// ResolveAccountTrieNodeKey reports whether a provided database entry is an
+// account trie node in path-based state scheme, and returns the resolved
+// node path if so.
+func ResolveAccountTrieNodeKey(key []byte) (bool, []byte) {
 	if !bytes.HasPrefix(key, trieNodeAccountPrefix) {
 		return false, nil
 	}
@@ -288,9 +289,17 @@ func IsAccountTrieNode(key []byte) (bool, []byte) {
 	return true, key[len(trieNodeAccountPrefix):]
 }
 
-// IsStorageTrieNode reports whether a provided database entry is a storage
+// IsAccountTrieNode reports whether a provided database entry is an account
 // trie node in path-based state scheme.
-func IsStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
+func IsAccountTrieNode(key []byte) bool {
+	ok, _ := ResolveAccountTrieNodeKey(key)
+	return ok
+}
+
+// ResolveStorageTrieNode reports whether a provided database entry is a storage
+// trie node in path-based state scheme, and returns the resolved account hash
+// and node path if so.
+func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	if !bytes.HasPrefix(key, trieNodeStoragePrefix) {
 		return false, common.Hash{}, nil
 	}
@@ -305,4 +314,11 @@ func IsStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	}
 	accountHash := common.BytesToHash(key[len(trieNodeStoragePrefix) : len(trieNodeStoragePrefix)+common.HashLength])
 	return true, accountHash, key[len(trieNodeStoragePrefix)+common.HashLength:]
+}
+
+// IsStorageTrieNode reports whether a provided database entry is a storage
+// trie node in path-based state scheme.
+func IsStorageTrieNode(key []byte) bool {
+	ok, _, _ := ResolveStorageTrieNode(key)
+	return ok
 }
