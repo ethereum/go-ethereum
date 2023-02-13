@@ -38,8 +38,9 @@ type crawler struct {
 
 const (
 	nodeRemoved = iota
-	nodeIgnoredRecent
-	nodeSkipped
+	nodeSkipRecent
+	nodeSkipIncompat
+	nodeAdded
 	nodeUpdated
 )
 
@@ -81,24 +82,27 @@ func (c *crawler) run(timeout time.Duration) nodeSet {
 	}
 
 	var (
-		updates  int
-		ignored  int
-		skips    int
-		removals int
+		added   int
+		updated int
+		ignored int
+		skipped int
+		removed int
 	)
 loop:
 	for {
 		select {
 		case n := <-c.ch:
 			switch c.updateNode(n) {
-			case nodeIgnoredRecent:
+			case nodeSkipIncompat:
 				ignored++
-			case nodeSkipped:
-				skips++
+			case nodeSkipRecent:
+				skipped++
 			case nodeRemoved:
-				removals++
+				removed++
+			case nodeAdded:
+				added++
 			default:
-				updates++
+				updated++
 			}
 		case it := <-doneCh:
 			if it == c.inputIter {
@@ -115,8 +119,8 @@ loop:
 			break loop
 		case <-statusTicker.C:
 			log.Info("Crawling in progress",
-				"updated", updates, "removals", removals,
-				"ignored (recently checked)", ignored, "ignored (no EIP-868)", skips)
+				"added", added, "updated", updated, "removed", removed,
+				"ignored(recent)", ignored, "ignored(incompatible)", skipped)
 		}
 	}
 
@@ -148,17 +152,18 @@ func (c *crawler) updateNode(n *enode.Node) int {
 
 	// Skip validation of recently-seen nodes.
 	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
-		return nodeIgnoredRecent
+		return nodeSkipRecent
 	}
 
 	// Request the node record.
 	nn, err := c.disc.RequestENR(n)
 	node.LastCheck = truncNow()
+	status := nodeUpdated
 	if err != nil {
 		if node.Score == 0 {
 			// Node doesn't implement EIP-868.
 			log.Debug("Skipping node", "id", n.ID())
-			return nodeSkipped
+			return nodeSkipIncompat
 		}
 		node.Score /= 2
 	} else {
@@ -167,6 +172,7 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		node.Score++
 		if node.FirstResponse.IsZero() {
 			node.FirstResponse = node.LastCheck
+			status = nodeAdded
 		}
 		node.LastResponse = node.LastCheck
 	}
@@ -179,7 +185,7 @@ func (c *crawler) updateNode(n *enode.Node) int {
 	}
 	log.Debug("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
 	c.output[n.ID()] = node
-	return nodeUpdated
+	return status
 }
 
 func truncNow() time.Time {
