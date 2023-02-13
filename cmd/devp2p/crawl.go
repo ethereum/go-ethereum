@@ -84,8 +84,8 @@ func (c *crawler) run(timeout time.Duration) nodeSet {
 	var (
 		added   int
 		updated int
-		ignored int
 		skipped int
+		recent  int
 		removed int
 	)
 loop:
@@ -94,9 +94,9 @@ loop:
 		case n := <-c.ch:
 			switch c.updateNode(n) {
 			case nodeSkipIncompat:
-				ignored++
-			case nodeSkipRecent:
 				skipped++
+			case nodeSkipRecent:
+				recent++
 			case nodeRemoved:
 				removed++
 			case nodeAdded:
@@ -120,7 +120,7 @@ loop:
 		case <-statusTicker.C:
 			log.Info("Crawling in progress",
 				"added", added, "updated", updated, "removed", removed,
-				"ignored(recent)", ignored, "ignored(incompatible)", skipped)
+				"ignored(recent)", recent, "ignored(incompatible)", skipped)
 		}
 	}
 
