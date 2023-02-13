@@ -424,6 +424,15 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		b.withdrawals = make([]*Withdrawal, len(withdrawals))
 		copy(b.withdrawals, withdrawals)
 	}
+	// This is a weird workaround.
+	// Both [] and nil hash to the same emptyRootHash on DeriveSHA.
+	// Thus a node could set withdrawals to nil and withdrawalHash to emptyRootHash and
+	// the block would pass the verification. We require an empty withdrawals list
+	// during block processing though, so the block will be marked as bad even though
+	// the only bad thing is nil instead of [] withdrawals.
+	if b.header.WithdrawalsHash != nil && *b.header.WithdrawalsHash == EmptyRootHash {
+		b.withdrawals = make(Withdrawals, 0)
+	}
 	return b
 }
 
