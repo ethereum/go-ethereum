@@ -1,4 +1,5 @@
 import {
+  Box,
   Flex,
   Heading,
   Link,
@@ -10,16 +11,41 @@ import {
   UnorderedList
 } from '@chakra-ui/react';
 import NextLink from 'next/link';
+import Image from 'next/image';
 
 import { Code, Note } from '.';
 import { textStyles } from '../../../theme/foundations';
 import { parseHeadingId } from '../../../utils/parseHeadingId';
+import { childrenIsAnImage } from '../../../utils';
 
 const { h1, h2, h3, h4 } = textStyles;
 
 const MDComponents = {
-  // paragraphs
+  // paragraphs & images
   p: ({ children }: any) => {
+    // images in markdown are rendered as children of p tags for some reason
+    if (childrenIsAnImage(children)) {
+      const src = children[0].props.src;
+      const alt = children[0].props.alt || src;
+
+      return (
+        <Link href={src} isExternal>
+          <Box position='relative' mb={7}>
+            <Image
+              alt={alt}
+              src={src}
+              width={700}
+              height={475}
+              style={{
+                width: '100%',
+                height: 'auto'
+              }}
+            />
+          </Box>
+        </Link>
+      );
+    }
+
     return (
       <Text mb='7 !important' lineHeight={1.6}>
         {children}
