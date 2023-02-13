@@ -2,6 +2,7 @@ import {
   Box,
   Flex,
   Heading,
+  Image,
   Link,
   ListItem,
   OrderedList,
@@ -11,7 +12,6 @@ import {
   UnorderedList
 } from '@chakra-ui/react';
 import NextLink from 'next/link';
-import Image from 'next/image';
 
 import { Code, Note } from '.';
 import { textStyles } from '../../../theme/foundations';
@@ -30,17 +30,8 @@ const MDComponents = {
 
       return (
         <Link href={src} isExternal>
-          <Box position='relative' mb={7}>
-            <Image
-              alt={alt}
-              src={src}
-              width={700}
-              height={475}
-              style={{
-                width: '100%',
-                height: 'auto'
-              }}
-            />
+          <Box mb={7}>
+            <Image alt={alt} src={src} />
           </Box>
         </Link>
       );
