@@ -249,7 +249,7 @@ And these fields are only available for tracing mined transactions (i.e. not ava
 
 - `getGasUsed()` - returns amount of gas used throughout the frame as a Number
 - `getOutput()` - returns the output as a buffer
-  ` -getError()` - returns an error if one occurred during execution and `undefined` otherwise
+- `getError()` - returns an error if one occurred during execution and `undefined` otherwise
 
 ### Usage
 
