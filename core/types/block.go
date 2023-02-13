@@ -430,7 +430,7 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 	// the block would pass the verification. We require an empty withdrawals list
 	// during block processing though, so the block will be marked as bad even though
 	// the only bad thing is nil instead of [] withdrawals.
-	if b.header.WithdrawalsHash != nil && *b.header.WithdrawalsHash == EmptyRootHash {
+	if withdrawals == nil && b.header.WithdrawalsHash != nil && *b.header.WithdrawalsHash == EmptyRootHash {
 		b.withdrawals = make(Withdrawals, 0)
 	}
 	return b
