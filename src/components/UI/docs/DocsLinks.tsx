@@ -52,7 +52,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         const index = openSections[id] ? 0 : -1;
-
+        const isSectionActive = !!openSections[id];
         return (
           <Accordion key={id} index={index} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
@@ -73,7 +73,8 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                       borderRight={items ? '2px' : 'none'}
                       borderColor='primary'
                       w='100%'
-                      bg='bg'
+                      bg={isSectionActive ? 'secondary' : 'bg'}
+                      color={isSectionActive ? 'body' : 'primary'}
                       _groupHover={{ background: 'primary', color: 'bg', textDecoration: 'none' }}
                     >
                       {to ? (
