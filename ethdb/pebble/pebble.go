@@ -449,11 +449,7 @@ func (d *Database) meter(refresh time.Duration) {
 			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
 		}
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
-		manuallyAllocated := metrics.BlockCache.Size + int64(
-			metrics.MemTable.Size,
-		) + int64(
-			metrics.MemTable.ZombieSize,
-		)
+		manuallyAllocated := metrics.BlockCache.Size + int64(metrics.MemTable.Size) + int64(metrics.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)
 		d.memCompGauge.Update(metrics.Flush.Count)
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
