@@ -39,6 +39,9 @@ const (
 
 	// OptionSubscriptions is an indication that the codec supports RPC notifications
 	OptionSubscriptions = 1 << iota // support pub sub
+
+	BatchRequestLimit    = 100
+	BatchResponseMaxSize = 10 * 1000 * 1000 // 10MB
 )
 
 // Server is an RPC server.
@@ -120,6 +123,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 
 	h := newHandler(ctx, codec, s.idgen, &s.services)
 	h.allowSubscribe = false
+	h.batchRequestLimit = BatchRequestLimit
+	h.batchResponseMaxSize = BatchResponseMaxSize
 	defer h.close(io.EOF, nil)
 
 	reqs, batch, err := codec.readBatch()

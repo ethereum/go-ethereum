@@ -49,17 +49,19 @@ import (
 //		h.removeRequestOp(op) // timeout, etc.
 //	}
 type handler struct {
-	reg            *serviceRegistry
-	unsubscribeCb  *callback
-	idgen          func() ID                      // subscription ID generator
-	respWait       map[string]*requestOp          // active client requests
-	clientSubs     map[string]*ClientSubscription // active client subscriptions
-	callWG         sync.WaitGroup                 // pending call goroutines
-	rootCtx        context.Context                // canceled by close()
-	cancelRoot     func()                         // cancel function for rootCtx
-	conn           jsonWriter                     // where responses will be sent
-	log            log.Logger
-	allowSubscribe bool
+	reg                  *serviceRegistry
+	unsubscribeCb        *callback
+	idgen                func() ID                      // subscription ID generator
+	respWait             map[string]*requestOp          // active client requests
+	clientSubs           map[string]*ClientSubscription // active client subscriptions
+	callWG               sync.WaitGroup                 // pending call goroutines
+	rootCtx              context.Context                // canceled by close()
+	cancelRoot           func()                         // cancel function for rootCtx
+	conn                 jsonWriter                     // where responses will be sent
+	log                  log.Logger
+	allowSubscribe       bool
+	batchRequestLimit    int
+	batchResponseMaxSize int
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -187,7 +189,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		return
 	}
 
-	if len(msgs) > 100 {
+	if len(msgs) > h.batchRequestLimit && h.batchRequestLimit != 0 {
 		h.startCallProc(func(cp *callProc) {
 			resp := errorMessage(&invalidRequestError{"batch too large"})
 			h.conn.writeJSON(cp.ctx, resp, true)
@@ -227,7 +229,6 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 
 		resBytes := 0
-		maxBytes := 10 * 1000 * 1000
 		for {
 			// No need to handle rest of calls if timed out.
 			if cp.ctx.Err() != nil {
@@ -239,8 +240,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			}
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
-			if resp != nil {
-				if resBytes += len(resp.Result); resBytes > maxBytes {
+			if resp != nil && h.batchResponseMaxSize != 0 {
+				if resBytes += len(resp.Result); resBytes > h.batchResponseMaxSize {
 					callBuffer.responseTooLarge(cp.ctx, h.conn)
 					break
 				}
