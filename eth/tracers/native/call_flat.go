@@ -152,10 +152,6 @@ func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.tracer.CaptureEnd(output, gasUsed, err)
-
-	// Parity trace considers only reports the gas used during the top call frame which doesn't include
-	// tx processing such as intrinsic gas and refunds.
-	t.tracer.callstack[0].GasUsed = gasUsed
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -202,9 +198,13 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {}
+func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {
+	t.tracer.CaptureTxStart(gasLimit)
+}
 
-func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {}
+func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
+	t.tracer.CaptureTxEnd(restGas)
+}
 
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
