@@ -116,8 +116,10 @@
       to: /docs/developers/geth-developer/contributing
 - id: Monitoring
   items:
-    - id: Dashboards
+    - id: Creating Dashboards
       to: /docs/monitoring/dashboards
+    - id: Understanding Dashboards
+      to: /docs/monitoring/understanding-dashboards
     - id: Ethstats
       to: /docs/monitoring/ethstats
     - id: Metrics
