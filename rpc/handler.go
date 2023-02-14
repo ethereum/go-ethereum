@@ -149,6 +149,21 @@ func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
 	b.doWrite(ctx, conn, true)
 }
 
+// responseTooLarge sends the responses added so far. For the remaining unanswered call
+// messages, it sends a response too large error response.
+func (b *batchCallBuffer) responseTooLarge(ctx context.Context, conn jsonWriter) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	for _, msg := range b.calls {
+		if !msg.isNotification() {
+			resp := msg.errorResponse(&internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge})
+			b.resp = append(b.resp, resp)
+		}
+	}
+	b.doWrite(ctx, conn, true)
+}
+
 // doWrite actually writes the response.
 // This assumes b.mutex is held.
 func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorResponse bool) {
@@ -211,6 +226,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			})
 		}
 
+		resBytes := 0
+		maxBytes := 10 * 1000 * 1000
 		for {
 			// No need to handle rest of calls if timed out.
 			if cp.ctx.Err() != nil {
@@ -222,6 +239,12 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			}
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
+			if resp != nil {
+				if resBytes += len(resp.Result); resBytes > maxBytes {
+					callBuffer.responseTooLarge(cp.ctx, h.conn)
+					break
+				}
+			}
 		}
 		if timer != nil {
 			timer.Stop()
