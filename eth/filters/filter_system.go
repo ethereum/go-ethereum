@@ -132,8 +132,8 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 }
 
 func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, hash common.Hash, number uint64) (*types.Body, error) {
-	if body, ok := elem.body.Load().(*types.Body); ok && body != nil {
-		return body, nil
+	if body := elem.body.Load(); body != nil {
+		return body.(*types.Body), nil
 	}
 	body, err := sys.backend.GetBody(ctx, hash, rpc.BlockNumber(number))
 	if err != nil {
