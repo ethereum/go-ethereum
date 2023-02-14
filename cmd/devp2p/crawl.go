@@ -21,6 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"sync"
+	"sync/atomic"
 )
 
 type crawler struct {
@@ -34,6 +36,7 @@ type crawler struct {
 
 	// settings
 	revalidateInterval time.Duration
+	mu                 sync.RWMutex
 }
 
 const (
@@ -82,28 +85,35 @@ func (c *crawler) run(timeout time.Duration) nodeSet {
 	}
 
 	var (
-		added   int
-		updated int
-		skipped int
-		recent  int
-		removed int
+		added    uint64
+		updated  uint64
+		skipped  uint64
+		recent   uint64
+		removed  uint64
+		nthreads = 16
 	)
+	for i := 0; i < nthreads; i++ {
+		go func() {
+			for n := range c.ch {
+				switch c.updateNode(n) {
+				case nodeSkipIncompat:
+					atomic.AddUint64(&skipped, 1)
+				case nodeSkipRecent:
+					atomic.AddUint64(&recent, 1)
+				case nodeRemoved:
+					atomic.AddUint64(&removed, 1)
+				case nodeAdded:
+					atomic.AddUint64(&added, 1)
+				default:
+					atomic.AddUint64(&updated, 1)
+				}
+			}
+		}()
+	}
+
 loop:
 	for {
 		select {
-		case n := <-c.ch:
-			switch c.updateNode(n) {
-			case nodeSkipIncompat:
-				skipped++
-			case nodeSkipRecent:
-				recent++
-			case nodeRemoved:
-				removed++
-			case nodeAdded:
-				added++
-			default:
-				updated++
-			}
 		case it := <-doneCh:
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
@@ -119,8 +129,11 @@ loop:
 			break loop
 		case <-statusTicker.C:
 			log.Info("Crawling in progress",
-				"added", added, "updated", updated, "removed", removed,
-				"ignored(recent)", recent, "ignored(incompatible)", skipped)
+				"added", atomic.LoadUint64(&added),
+				"updated", atomic.LoadUint64(&updated),
+				"removed", atomic.LoadUint64(&removed),
+				"ignored(recent)", atomic.LoadUint64(&removed),
+				"ignored(incompatible)", atomic.LoadUint64(&skipped))
 		}
 	}
 
@@ -148,7 +161,9 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 // updateNode updates the info about the given node, and returns a status
 // about what changed
 func (c *crawler) updateNode(n *enode.Node) int {
+	c.mu.RLock()
 	node, ok := c.output[n.ID()]
+	c.mu.RUnlock()
 
 	// Skip validation of recently-seen nodes.
 	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
@@ -178,6 +193,8 @@ func (c *crawler) updateNode(n *enode.Node) int {
 	}
 
 	// Store/update node in output set.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if node.Score <= 0 {
 		log.Debug("Removing node", "id", n.ID())
 		delete(c.output, n.ID())
