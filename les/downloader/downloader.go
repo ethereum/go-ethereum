@@ -226,7 +226,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
-		SnapSyncer:     snap.NewSyncer(stateDb, nil),
+		SnapSyncer:     snap.NewSyncer(stateDb, rawdb.HashScheme),
 		stateSyncStart: make(chan *stateSync),
 		//syncStatsState: stateSyncStats{
 		//	processed: rawdb.ReadFastTrieProgress(stateDb),

@@ -111,7 +111,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 		panic(err)
 	}
 	for _, block := range bs {
-		chain.StateCache().TrieDB().Commit(block.Root(), false, nil)
+		chain.StateCache().TrieDB().Commit(block.Root(), false)
 	}
 	txconfig := txpool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
@@ -524,7 +524,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	// Reconstruct state tree from the received data.
 	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
+		rawdb.WriteLegacyTrieNode(reconstructDB, hashes[i], data[i])
 	}
 
 	// Sanity check whether all state matches.
