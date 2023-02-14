@@ -1,4 +1,5 @@
 export { checkNavLinks } from './checkNavLinks';
+export { childrenIsAnImage } from './childrenIsAnImage';
 export { compareReleasesFn } from './compareReleasesFn';
 export { fetchLatestReleaseCommit } from './fetchLatestReleaseCommit';
 export { fetchLatestReleaseVersionAndName } from './fetchLatestReleaseVersionAndName';
