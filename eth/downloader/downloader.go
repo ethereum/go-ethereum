@@ -480,7 +480,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	var latest, pivot *types.Header
+	var latest, pivot, final *types.Header
 	if !beaconMode {
 		// In legacy mode, use the master peer to retrieve the headers from
 		latest, pivot, err = d.fetchHead(p)
@@ -489,7 +489,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 	} else {
 		// In beacon mode, use the skeleton chain to retrieve the headers from
-		latest, _, err = d.skeleton.Bounds()
+		latest, _, final, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
@@ -499,7 +499,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			// Retrieve the pivot header from the skeleton chain segment but
 			// fallback to local chain if it's not found in skeleton space.
 			if pivot = d.skeleton.Header(number); pivot == nil {
-				_, oldest, _ := d.skeleton.Bounds() // error is already checked
+				_, oldest, _, _ := d.skeleton.Bounds() // error is already checked
 				if number < oldest.Number.Uint64() {
 					count := int(oldest.Number.Uint64() - number) // it's capped by fsMinFullBlocks
 					headers := d.readHeaderRange(oldest, count)
@@ -567,26 +567,41 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		d.committed = 0
 	}
 	if mode == SnapSync {
-		// Set the ancient data limitation.
-		// If we are running snap sync, all block data older than ancientLimit will be
-		// written to the ancient store. More recent data will be written to the active
-		// database and will wait for the freezer to migrate.
+		// Set the ancient data limitation. If we are running snap sync, all block
+		// data older than ancientLimit will be written to the ancient store. More
+		// recent data will be written to the active database and will wait for the
+		// freezer to migrate.
 		//
-		// If there is a checkpoint available, then calculate the ancientLimit through
-		// that. Otherwise calculate the ancient limit through the advertised height
-		// of the remote peer.
+		// If the network is post-merge, use either the last announced finalized
+		// block as the ancient limit, or if we haven't yet received one, the head-
+		// a max fork ancestry limit. One quirky case if we've already passed the
+		// finalized block, in which case the skeleton.Bounds will return nil and
+		// we'll revert to head - 90K. That's fine, we're finishing sync anyway.
 		//
-		// The reason for picking checkpoint first is that a malicious peer can give us
-		// a fake (very high) height, forcing the ancient limit to also be very high.
-		// The peer would start to feed us valid blocks until head, resulting in all of
-		// the blocks might be written into the ancient store. A following mini-reorg
-		// could cause issues.
-		if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
-			d.ancientLimit = d.checkpoint
-		} else if height > fullMaxForkAncestry+1 {
-			d.ancientLimit = height - fullMaxForkAncestry - 1
+		// For non-merged networks, if there is a checkpoint available, then calculate
+		// the ancientLimit through that. Otherwise calculate the ancient limit through
+		// the advertised height of the remote peer. This most is mostly a fallback for
+		// legacy networks, but should eventually be droppped. TODO(karalabe).
+		if beaconMode {
+			// Beacon sync, use the latest finalized block as the ancient limit
+			// or a reasonable height if no finalized block is yet announced.
+			if final != nil {
+				d.ancientLimit = final.Number.Uint64()
+			} else if height > fullMaxForkAncestry+1 {
+				d.ancientLimit = height - fullMaxForkAncestry - 1
+			} else {
+				d.ancientLimit = 0
+			}
 		} else {
-			d.ancientLimit = 0
+			// Legacy sync, use any hardcoded checkpoints or the best announcement
+			// we have from the remote peer. TODO(karalabe): Drop this pathway.
+			if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
+				d.ancientLimit = d.checkpoint
+			} else if height > fullMaxForkAncestry+1 {
+				d.ancientLimit = height - fullMaxForkAncestry - 1
+			} else {
+				d.ancientLimit = 0
+			}
 		}
 		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
 
@@ -1566,7 +1581,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 
 			// In post-merge, notify the engine API of encountered bad chains
 			if d.badBlock != nil {
-				head, _, err := d.skeleton.Bounds()
+				head, _, _, err := d.skeleton.Bounds()
 				if err != nil {
 					log.Error("Failed to retrieve beacon bounds for bad block reporting", "err", err)
 				} else {
@@ -1860,7 +1875,7 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		return
 	}
 	// Retrieve the current chain head and calculate the ETA
-	latest, _, err := d.skeleton.Bounds()
+	latest, _, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// We're going to cheat for non-merged networks, but that's fine
 		latest = d.pivotHeader
