@@ -342,6 +342,8 @@ func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
 	}
 	if ctx.BlockHash != (common.Hash{}) {
 		callFrame.BlockHash = &ctx.BlockHash
+	}
+	if ctx.BlockNumber != nil {
 		callFrame.BlockNumber = ctx.BlockNumber.Uint64()
 	}
 	if ctx.TxHash != (common.Hash{}) {
