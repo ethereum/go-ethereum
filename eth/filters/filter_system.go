@@ -95,7 +95,7 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 
 type logCacheElem struct {
 	logs []*types.Log
-	body atomic.Pointer[types.Body]
+	body atomic.Value
 }
 
 // cachedLogElem loads block logs from the backend and caches the result.
@@ -132,7 +132,7 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 }
 
 func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, hash common.Hash, number uint64) (*types.Body, error) {
-	if body := elem.body.Load(); body != nil {
+	if body := elem.body.Load().(*types.Body); body != nil {
 		return body, nil
 	}
 	body, err := sys.backend.GetBody(ctx, hash, rpc.BlockNumber(number))
