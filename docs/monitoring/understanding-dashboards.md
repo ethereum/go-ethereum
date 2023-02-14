@@ -150,7 +150,7 @@ Block propagation was disabled in Geth at The Merge. Block propagation is now th
 Block propagation metrics track the rate that the local node hears about, receives and broadcasts blocks. This includes:
 
 - **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share.
-- **known announcements**: the number of announcements per second
+- **known announcements**: the number of announcements per second the local node is already aware of them
 - **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
 - **ingress broadcasts**: the number of blocks directly propagated to local node per second.
 - **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
