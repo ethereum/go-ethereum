@@ -129,8 +129,9 @@ func (d *DebugPprofCommand) Run(args []string) int {
 
 	// Only take cpu and heap profiles by default
 	profiles := map[string]string{
-		"heap": "heap",
-		"cpu":  "cpu",
+		"heap":  "heap",
+		"cpu":   "cpu",
+		"mutex": "mutex",
 	}
 
 	if !d.skiptrace {

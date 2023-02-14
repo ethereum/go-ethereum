@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -96,6 +97,8 @@ func VerbosityStringToInt(loglevel string) int {
 
 //nolint:gocognit
 func NewServer(config *Config, opts ...serverOption) (*Server, error) {
+	runtime.SetMutexProfileFraction(5)
+
 	srv := &Server{
 		config: config,
 	}
