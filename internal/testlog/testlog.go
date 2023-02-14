@@ -148,3 +148,35 @@ func (l *logger) flush() {
 	}
 	l.h.buf = nil
 }
+
+func (l *logger) OnTrace(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlTrace {
+		fn(l.Trace)
+	}
+}
+
+func (l *logger) OnDebug(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlDebug {
+		fn(l.Debug)
+	}
+}
+func (l *logger) OnInfo(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlInfo {
+		fn(l.Info)
+	}
+}
+func (l *logger) OnWarn(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlWarn {
+		fn(l.Warn)
+	}
+}
+func (l *logger) OnError(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlError {
+		fn(l.Error)
+	}
+}
+func (l *logger) OnCrit(fn func(l log.Logging)) {
+	if l.GetHandler().Level() >= log.LvlCrit {
+		fn(l.Crit)
+	}
+}

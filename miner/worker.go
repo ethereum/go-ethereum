@@ -39,6 +39,7 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -952,12 +953,14 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	var breakCause string
 
 	defer func() {
-		log.Warn("commitTransactions-stats",
-			"initialTxsCount", initialTxs,
-			"initialGasLimit", initialGasLimit,
-			"resultTxsCount", txs.GetTxs(),
-			"resultGapPool", env.gasPool.Gas(),
-			"exitCause", breakCause)
+		log.OnDebug(func(lg log.Logging) {
+			lg("commitTransactions-stats",
+				"initialTxsCount", initialTxs,
+				"initialGasLimit", initialGasLimit,
+				"resultTxsCount", txs.GetTxs(),
+				"resultGapPool", env.gasPool.Gas(),
+				"exitCause", breakCause)
+		})
 	}()
 
 	for {
@@ -1012,7 +1015,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		start := time.Now()
+		var start time.Time
+
+		log.OnDebug(func(log.Logging) {
+			start = time.Now()
+		})
 
 		logs, err := w.commitTransaction(env, tx)
 
@@ -1037,7 +1044,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 			txs.Shift()
-			log.Info("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
+
+			log.OnDebug(func(lg log.Logging) {
+				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
+			})
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
@@ -1136,7 +1146,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for sealing", "err", err)
+		switch err.(type) {
+		case *bor.UnauthorizedSignerError:
+			log.Debug("Failed to prepare header for sealing", "err", err)
+		default:
+			log.Error("Failed to prepare header for sealing", "err", err)
+		}
 		return nil, err
 	}
 	// Could potentially happen if starting to mine in an odd state.
