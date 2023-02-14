@@ -105,7 +105,7 @@ Geth has a capacity for pending transactions defined by `--txpool.globalslots` (
 The block processing panel tracks the time taken to complete the various tasks involved in processing each block, measured in microseconds or nanoseconds. Specifically, this includes:
 
 - **execution**: time taken to execute the transactions in the block
-- **validation**: time taken to compute a new state root and compare it to the one that arrived in the block
+- **validation**: time taken to validate that the information in a received block body matches what is described in the block header. 
 - **commit**: time taken to write the new block to the chain data
 - **account read**: time taken to access account information from the state trie
 - **account update**: time taken to incorporate dirty account objects into the state trie (account trie)
