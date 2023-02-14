@@ -63,7 +63,7 @@
       "blockHash": "0xf641c3b0f82b07cd3a528adb9927dd83eeb4f1682e2bd523ed36888e0d82c9a9",
       "blockNumber": 553154,
       "result": {
-        "gasUsed": "0x15db",
+        "gasUsed": "0x347a",
         "output": "0x"
       },
       "subtraces": 1,

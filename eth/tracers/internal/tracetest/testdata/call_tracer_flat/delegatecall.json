@@ -73,7 +73,7 @@
       },
       "blockNumber": 11495,
       "result": {
-        "gasUsed": "0x64bd",
+        "gasUsed": "0xbd55",
         "output": "0x"
       },
       "subtraces": 1,

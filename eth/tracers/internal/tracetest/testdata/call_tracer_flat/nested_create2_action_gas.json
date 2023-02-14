@@ -58,7 +58,7 @@
         "init": "0x6000600060006000f500"
       },
       "result": {
-        "gasUsed": "0x7d0c",
+        "gasUsed": "0x14c78",
         "code": "0x",
         "address": "0x2e8eded627eead210cb6143eb39ef7a3e44e4f00"
       },

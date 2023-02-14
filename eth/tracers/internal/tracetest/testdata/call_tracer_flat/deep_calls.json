@@ -120,7 +120,7 @@
       },
       "blockNumber": 25001,
       "result": {
-        "gasUsed": "0x12bb3",
+        "gasUsed": "0x1810b",
         "output": "0x"
       },
       "subtraces": 2,
