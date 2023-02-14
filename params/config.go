@@ -157,10 +157,10 @@ var (
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 344,
-		SectionHead:  common.HexToHash("0x06bb973aecce633df8cda532ff75b9d0b38c16de2545f52eaf745f858d0fe616"),
-		CHTRoot:      common.HexToHash("0xf1c80b9270ef9fb7907362bca006f8349f0c38d45b83167b57638f54211c6aca"),
-		BloomRoot:    common.HexToHash("0xd72187253f49bce9d471f5e0ddf2b5008ba695d7a1be1192d52fb4d8b01970c6"),
+		SectionIndex: 373,
+		SectionHead:  common.HexToHash("0x09f6d8f0d08d61025ccf4578dc214220b78013841470d445ed86faab4a5a885a"),
+		CHTRoot:      common.HexToHash("0xef72902b944a111e9fdfee5fb69a5e46f68bf11a1f0bd430321f92d6b66987df"),
+		BloomRoot:    common.HexToHash("0xd0120268729c51dd6fa2714f7f88527adfecbdb08592c671233ad2e0ad7cd835"),
 	}
 
 	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
