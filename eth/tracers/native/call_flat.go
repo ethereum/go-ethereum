@@ -191,19 +191,19 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
 	// By default we remove them from the callstack.
-	excludePrecompileCalls := !t.config.IncludePrecompiles
-	if excludePrecompileCalls {
-		var (
-			// call has been nested in parent
-			parent = t.tracer.callstack[len(t.tracer.callstack)-1]
-			call   = parent.Calls[len(parent.Calls)-1]
-			typ    = call.Type
-			to     = call.To
-		)
-		if typ == vm.CALL || typ == vm.STATICCALL {
-			if t.isPrecompiled(to) {
-				t.tracer.callstack[len(t.tracer.callstack)-1].Calls = parent.Calls[:len(parent.Calls)-1]
-			}
+	if t.config.IncludePrecompiles {
+		return
+	}
+	var (
+		// call has been nested in parent
+		parent = t.tracer.callstack[len(t.tracer.callstack)-1]
+		call   = parent.Calls[len(parent.Calls)-1]
+		typ    = call.Type
+		to     = call.To
+	)
+	if typ == vm.CALL || typ == vm.STATICCALL {
+		if t.isPrecompiled(to) {
+			t.tracer.callstack[len(t.tracer.callstack)-1].Calls = parent.Calls[:len(parent.Calls)-1]
 		}
 	}
 }
