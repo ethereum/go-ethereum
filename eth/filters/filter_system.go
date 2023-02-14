@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -93,9 +92,29 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	}
 }
 
+// atomicPointer is a hack to replace atomic.Pointer -- it's not available in
+// go 1.18. We can replace this thing with atomic.Pointer when we decide to drop
+// 1.18.
+type atomicPointer struct {
+	body *types.Body
+	mu   sync.RWMutex
+}
+
+func (a *atomicPointer) Load() *types.Body {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.body
+}
+
+func (a *atomicPointer) Store(b *types.Body) {
+	a.mu.Lock()
+	a.body = b
+	a.mu.Unlock()
+}
+
 type logCacheElem struct {
 	logs []*types.Log
-	body atomic.Pointer[types.Body]
+	body atomicPointer
 }
 
 // cachedLogElem loads block logs from the backend and caches the result.
