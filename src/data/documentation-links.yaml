@@ -28,12 +28,14 @@
       to: /docs/fundamentals/backup-restore
     - id: Logs
       to: /docs/fundamentals/logs
-    - id: Peer-to-peer
+    - id: Connecting to peers
       to: /docs/fundamentals/peer-to-peer
     - id: Pruning
       to: /docs/fundamentals/pruning
     - id: Private networks
       to: /docs/fundamentals/private-network
+    - id: Config files
+      to: /docs/fundamentals/config-files
     - id: Light client
       to: /docs/fundamentals/les
     - id: Mining
