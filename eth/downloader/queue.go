@@ -783,6 +783,10 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		if header.WithdrawalsHash == nil {
 			// discard any withdrawals if we don't have a withdrawal hash set
 			withdrawalLists[index] = nil
+		} else if *header.WithdrawalsHash == types.EmptyRootHash && withdrawalLists[index] == nil {
+			// if the withdrawal hash is the emptyRootHash,
+			// we expect withdrawals to be [] instead of nil
+			withdrawalLists[index] = make([]*types.Withdrawal, 0)
 		} else if withdrawalListHashes[index] != *header.WithdrawalsHash {
 			return errInvalidBody
 		}
