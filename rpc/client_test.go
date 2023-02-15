@@ -37,6 +37,34 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type nullTest struct{}
+
+func (s *nullTest) ReturnNull() json.RawMessage {
+	// An example where null results are returned is calling eth_getTransactionReceipt on a non-existent
+	// transaction. The result is null, but the call is not an error.
+	return json.RawMessage("null")
+}
+
+func TestNullResponse(t *testing.T) {
+	server := NewServer()
+	err := server.RegisterName("test", new(nullTest))
+	if err != nil {
+		panic(err)
+	}
+
+	client := DialInProc(server)
+	result := &jsonrpcMessage{}
+
+	err = client.Call(&result.Result, "test_returnNull")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Result == nil {
+		t.Errorf("Expected null, got nil")
+	}
+}
+
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
