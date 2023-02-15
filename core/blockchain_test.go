@@ -3177,3 +3177,64 @@ func TestFeeVault(t *testing.T) {
 		t.Fatalf("fee vault balance incorrect: expected %d, got %d", expected, actual)
 	}
 }
+
+// TestTransactionCountLimit tests that the chain reject blocks with too many transactions.
+func TestTransactionCountLimit(t *testing.T) {
+	// Create config that allows at most 1 transaction per block
+	config := params.TestChainConfig
+	config.MaxTxPerBlock = new(int)
+	*config.MaxTxPerBlock = 1
+
+	var (
+		engine  = ethash.NewFaker()
+		db      = rawdb.NewMemoryDatabase()
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000000000)
+		gspec   = &Genesis{Config: config, Alloc: GenesisAlloc{address: {Balance: funds}}}
+		genesis = gspec.MustCommit(db)
+	)
+
+	addTx := func(b *BlockGen) {
+		tx := types.NewTransaction(b.TxNonce(address), address, big.NewInt(0), 50000, b.header.BaseFee, nil)
+		signed, _ := types.SignTx(tx, types.HomesteadSigner{}, key)
+		b.AddTx(signed)
+	}
+
+	// Initialize blockchain
+	blockchain, err := NewBlockChain(db, nil, config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create new chain manager: %v", err)
+	}
+	defer blockchain.Stop()
+
+	// Insert empty block
+	block1, _ := GenerateChain(config, genesis, ethash.NewFaker(), db, 1, func(i int, b *BlockGen) {
+		// empty
+	})
+
+	if _, err := blockchain.InsertChain(block1); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// Insert block with 1 transaction
+	block2, _ := GenerateChain(config, genesis, ethash.NewFaker(), db, 1, func(i int, b *BlockGen) {
+		addTx(b)
+	})
+
+	if _, err := blockchain.InsertChain(block2); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// Insert block with 2 transactions
+	block3, _ := GenerateChain(config, genesis, ethash.NewFaker(), db, 1, func(i int, b *BlockGen) {
+		addTx(b)
+		addTx(b)
+	})
+
+	_, err = blockchain.InsertChain(block3)
+
+	if !errors.Is(err, consensus.ErrInvalidTxCount) {
+		t.Fatalf("error mismatch: have: %v, want: %v", err, consensus.ErrInvalidTxCount)
+	}
+}
