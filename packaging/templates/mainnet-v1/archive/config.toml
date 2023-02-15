@@ -18,6 +18,7 @@ gcmode = "archive"
     # bind = "0.0.0.0"
     # nodiscover = false
     # nat = "any"
+    # txarrivalwait = "500ms"
     # [p2p.discovery]
         # v5disc = false
         # bootnodes = []

@@ -20,6 +20,7 @@ syncmode = "full"
     # maxpendpeers = 50
     # bind = "0.0.0.0"
     # nat = "any"
+    # txarrivalwait = "500ms"
     # [p2p.discovery]
         # v5disc = false
         # bootnodes = []

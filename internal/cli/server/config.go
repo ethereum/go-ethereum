@@ -134,7 +134,8 @@ type P2PConfig struct {
 
 	// TxArrivalWait sets the maximum duration the transaction fetcher will wait for
 	// an announced transaction to arrive before explicitly requesting it
-	TxArrivalWait time.Duration `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
+	TxArrivalWait    time.Duration `hcl:"-,optional" toml:"-"`
+	TxArrivalWaitRaw string        `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
 }
 
 type P2PDiscovery struct {
@@ -636,6 +637,7 @@ func (c *Config) fillTimeDurations() error {
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
 		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
 		{"cache.timeout", &c.Cache.TrieTimeout, &c.Cache.TrieTimeoutRaw},
+		{"p2p.txarrivalwait", &c.P2P.TxArrivalWait, &c.P2P.TxArrivalWaitRaw},
 	}
 
 	for _, x := range tds {

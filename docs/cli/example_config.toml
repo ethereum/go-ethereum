@@ -19,12 +19,13 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
   "32000000" = "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68"
 
 [p2p]
-  maxpeers = 50       # Maximum number of network peers (network disabled if set to 0)
-  maxpendpeers = 50   # Maximum number of pending connection attempts
-  bind = "0.0.0.0"    # Network binding address
-  port = 30303        # Network listening port
-  nodiscover = false  # Disables the peer discovery mechanism (manual peer addition)
-  nat = "any"         # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
+  maxpeers = 50           # Maximum number of network peers (network disabled if set to 0)
+  maxpendpeers = 50       # Maximum number of pending connection attempts
+  bind = "0.0.0.0"        # Network binding address
+  port = 30303            # Network listening port
+  nodiscover = false      # Disables the peer discovery mechanism (manual peer addition)
+  nat = "any"             # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
+  txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
