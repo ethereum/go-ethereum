@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -473,18 +474,21 @@ func TestFullAPI(t *testing.T) {
 		ethservice.TxPool().AddLocal(tx)
 	}
 
-	setupBlocks(t, ethservice, 10, parent, callback)
+	setupBlocks(t, ethservice, 10, parent, callback, nil)
 }
 
-func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header)) []*types.Header {
+func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header), withdrawals [][]*types.Withdrawal) []*types.Header {
 	api := NewConsensusAPI(ethservice)
 	var blocks []*types.Header
 	for i := 0; i < n; i++ {
 		callback(parent)
+		var w []*types.Withdrawal
+		if withdrawals != nil {
+			w = withdrawals[i]
+		}
 
-		payload := getNewPayload(t, api, parent)
-
-		execResp, err := api.NewPayloadV1(*payload)
+		payload := getNewPayload(t, api, parent, w)
+		execResp, err := api.NewPayloadV2(*payload)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
@@ -676,10 +680,10 @@ func TestEmptyBlocks(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {})
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil)
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
-	payload := getNewPayload(t, api, commonAncestor)
+	payload := getNewPayload(t, api, commonAncestor, nil)
 
 	status, err := api.NewPayloadV1(*payload)
 	if err != nil {
@@ -693,7 +697,7 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 
 	// (2) Now send P1' which is invalid
-	payload = getNewPayload(t, api, commonAncestor)
+	payload = getNewPayload(t, api, commonAncestor, nil)
 	payload.GasUsed += 1
 	payload = setBlockhash(payload)
 	// Now latestValidHash should be the common ancestor
@@ -711,7 +715,7 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 
 	// (3) Now send a payload with unknown parent
-	payload = getNewPayload(t, api, commonAncestor)
+	payload = getNewPayload(t, api, commonAncestor, nil)
 	payload.ParentHash = common.Hash{1}
 	payload = setBlockhash(payload)
 	// Now latestValidHash should be the common ancestor
@@ -727,11 +731,12 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header) *engine.ExecutableData {
+func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal) *engine.ExecutableData {
 	params := engine.PayloadAttributes{
 		Timestamp:             parent.Time + 1,
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
 		SuggestedFeeRecipient: parent.Coinbase,
+		Withdrawals:           withdrawals,
 	}
 
 	payload, err := assembleBlock(api, parent.Hash(), &params)
@@ -799,7 +804,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	commonAncestor := ethserviceA.BlockChain().CurrentBlock()
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {})
+	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {}, nil)
 	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
 
 	var invalidChain []*engine.ExecutableData
@@ -808,7 +813,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	//invalidChain = append(invalidChain, payload1)
 
 	// create an invalid payload2 (P2)
-	payload2 := getNewPayload(t, apiA, commonAncestor)
+	payload2 := getNewPayload(t, apiA, commonAncestor, nil)
 	//payload2.ParentHash = payload1.BlockHash
 	payload2.GasUsed += 1
 	payload2 = setBlockhash(payload2)
@@ -817,7 +822,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	head := payload2
 	// create some valid payloads on top
 	for i := 0; i < 10; i++ {
-		payload := getNewPayload(t, apiA, commonAncestor)
+		payload := getNewPayload(t, apiA, commonAncestor, nil)
 		payload.ParentHash = head.BlockHash
 		payload = setBlockhash(payload)
 		invalidChain = append(invalidChain, payload)
@@ -855,10 +860,10 @@ func TestInvalidBloom(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {})
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil)
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
-	payload := getNewPayload(t, api, commonAncestor)
+	payload := getNewPayload(t, api, commonAncestor, nil)
 	payload.LogsBloom = append(payload.LogsBloom, byte(1))
 	status, err := api.NewPayloadV1(*payload)
 	if err != nil {
@@ -1233,8 +1238,10 @@ func TestNilWithdrawals(t *testing.T) {
 }
 
 func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
-	genesis, preMergeBlocks := generateMergeChain(10, false)
+	genesis, preMergeBlocks := generateMergeChain(10, true)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	// enable shanghai on the last block
+	ethservice.BlockChain().Config().ShanghaiTime = &preMergeBlocks[len(preMergeBlocks)-1].Header().Time
 
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -1249,12 +1256,38 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 		ethservice.TxPool().AddLocal(tx)
 	}
 
-	postMergeHeaders := setupBlocks(t, ethservice, 10, parent, callback)
+	withdrawals := make([][]*types.Withdrawal, 10)
+	withdrawals[0] = nil // should be filtered out by miner
+	withdrawals[1] = make([]*types.Withdrawal, 0)
+	for i := 2; i < len(withdrawals); i++ {
+		addr := make([]byte, 20)
+		rand.Read(addr)
+		withdrawals[i] = []*types.Withdrawal{
+			{Index: rand.Uint64(), Validator: rand.Uint64(), Amount: rand.Uint64(), Address: common.BytesToAddress(addr)},
+		}
+	}
+
+	postMergeHeaders := setupBlocks(t, ethservice, 10, parent, callback, withdrawals)
 	postMergeBlocks := make([]*types.Block, len(postMergeHeaders))
 	for i, header := range postMergeHeaders {
 		postMergeBlocks[i] = ethservice.BlockChain().GetBlock(header.Hash(), header.Number.Uint64())
 	}
 	return n, ethservice, append(preMergeBlocks, postMergeBlocks...)
+}
+
+func allHashes(blocks []*types.Block) []common.Hash {
+	var hashes []common.Hash
+	for _, b := range blocks {
+		hashes = append(hashes, b.Hash())
+	}
+	return hashes
+}
+func allBodies(blocks []*types.Block) []*types.Body {
+	var bodies []*types.Body
+	for _, b := range blocks {
+		bodies = append(bodies, b.Body())
+	}
+	return bodies
 }
 
 func TestGetBlockBodiesByHash(t *testing.T) {
@@ -1295,6 +1328,11 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 		{
 			results: []*types.Body{blocks[0].Body(), nil, blocks[0].Body(), blocks[0].Body()},
 			hashes:  []common.Hash{blocks[0].Hash(), {1, 2}, blocks[0].Hash(), blocks[0].Hash()},
+		},
+		// all blocks
+		{
+			results: allBodies(blocks),
+			hashes:  allHashes(blocks),
 		},
 	}
 
@@ -1363,6 +1401,12 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 			results: make([]*types.Body, 0),
 			start:   22,
 			count:   2,
+		},
+		// allBlocks
+		{
+			results: allBodies(blocks),
+			start:   1,
+			count:   hexutil.Uint64(len(blocks)),
 		},
 	}
 
@@ -1441,6 +1485,19 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 	}
 	aBytes, errA := rlp.EncodeToBytes(want)
 	bBytes, errB := rlp.EncodeToBytes(b.TransactionData)
+	if errA != errB {
+		return false
+	}
+	if !bytes.Equal(aBytes, bBytes) {
+		return false
+	}
+	if a.Withdrawals == nil && b.Withdrawals == nil {
+		return true
+	} else if a.Withdrawals == nil || b.Withdrawals == nil {
+		return false
+	}
+	aBytes, errA = rlp.EncodeToBytes(a.Withdrawals)
+	bBytes, errB = rlp.EncodeToBytes(b.Withdrawals)
 	if errA != errB {
 		return false
 	}
