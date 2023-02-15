@@ -101,10 +101,11 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-
+	server := rpc.NewServer()
+	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer(),
+		inprocHandler: server,
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
@@ -412,7 +413,7 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-		}); err != nil {
+		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
 			return err
 		}
 		servers = append(servers, server)
@@ -428,7 +429,7 @@ func (n *Node) startRPC() error {
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
 			prefix:  n.config.WSPathPrefix,
-		}); err != nil {
+		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
 			return err
 		}
 		servers = append(servers, server)
@@ -447,7 +448,7 @@ func (n *Node) startRPC() error {
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
 			jwtSecret:          secret,
-		}); err != nil {
+		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
 			return err
 		}
 		servers = append(servers, server)
@@ -461,7 +462,7 @@ func (n *Node) startRPC() error {
 			Origins:   DefaultAuthOrigins,
 			prefix:    DefaultAuthPrefix,
 			jwtSecret: secret,
-		}); err != nil {
+		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
 			return err
 		}
 		servers = append(servers, server)

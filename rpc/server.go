@@ -46,9 +46,11 @@ type Server struct {
 	services serviceRegistry
 	idgen    func() ID
 
-	mutex  sync.Mutex
-	codecs map[ServerCodec]struct{}
-	run    int32
+	mutex                sync.Mutex
+	codecs               map[ServerCodec]struct{}
+	run                  int32
+	batchRequestLimit    int
+	batchResponseMaxSize int
 }
 
 // NewServer creates a new server instance with no registered handlers.
@@ -63,6 +65,12 @@ func NewServer() *Server {
 	rpcService := &RPCService{server}
 	server.RegisterName(MetadataApi, rpcService)
 	return server
+}
+
+// SetBatchLimits set maximum number of requests in a batch and maximum number of bytes returned from calls
+func (s *Server) SetBatchLimits(limit int, size int) {
+	s.batchRequestLimit = limit
+	s.batchResponseMaxSize = size
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
@@ -118,7 +126,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchRequestLimit, s.batchResponseMaxSize)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

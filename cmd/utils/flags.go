@@ -786,6 +786,16 @@ var (
 		Usage:    "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
 		Category: flags.APICategory,
 	}
+	BatchRequestLimit = &cli.IntFlag{
+		Name:  "batch.request-limit",
+		Usage: "Maximum number of requests in a batch",
+		Value: 100,
+	}
+	BatchResponseMaxSize = &cli.IntFlag{
+		Name:  "batch.response-max-size",
+		Usage: "Maximum number of bytes returned from calls (10MB)",
+		Value: 10 * 1000 * 1000,
+	}
 	EnablePersonal = &cli.BoolFlag{
 		Name:     "rpc.enabledeprecatedpersonal",
 		Usage:    "Enables the (deprecated) personal namespace",
@@ -1208,6 +1218,14 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.IsSet(AllowUnprotectedTxs.Name) {
 		cfg.AllowUnprotectedTxs = ctx.Bool(AllowUnprotectedTxs.Name)
+	}
+
+	if ctx.IsSet(BatchRequestLimit.Name) {
+		cfg.BatchRequestLimit = ctx.Int(BatchRequestLimit.Name)
+	}
+
+	if ctx.IsSet(BatchResponseMaxSize.Name) {
+		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
 	}
 }
 

@@ -28,11 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	BatchRequestLimit    = 100              // Maximum number of requests in a batch
-	BatchResponseMaxSize = 10 * 1000 * 1000 // Maximum number of bytes returned from calls (10MB)
-)
-
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
 // because RPCs are processed on background goroutines launched by handler.
@@ -77,7 +72,7 @@ type callProc struct {
 	notifiers []*Notifier
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
@@ -90,8 +85,8 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		allowSubscribe:       true,
 		serverSubs:           make(map[ID]*Subscription),
 		log:                  log.Root(),
-		batchRequestLimit:    BatchRequestLimit,
-		batchResponseMaxSize: BatchResponseMaxSize,
+		batchRequestLimit:    batchRequestLimit,
+		batchResponseMaxSize: batchResponseMaxSize,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())

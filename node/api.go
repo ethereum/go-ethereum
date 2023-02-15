@@ -199,7 +199,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	if err := api.node.http.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
+	if err := api.node.http.enableRPC(api.node.rpcAPIs, config, api.node.config.BatchRequestLimit, api.node.config.BatchResponseMaxSize); err != nil {
 		return false, err
 	}
 	if err := api.node.http.start(); err != nil {
@@ -270,7 +270,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 		return false, err
 	}
 	openApis, _ := api.node.getAPIs()
-	if err := server.enableWS(openApis, config); err != nil {
+	if err := server.enableWS(openApis, config, api.node.config.BatchRequestLimit, api.node.config.BatchResponseMaxSize); err != nil {
 		return false, err
 	}
 	if err := server.start(); err != nil {
