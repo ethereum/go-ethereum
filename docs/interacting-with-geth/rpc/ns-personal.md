@@ -3,7 +3,7 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
-<Note>The personal namespace has now been deprecated. It is still available by providing `rpc.enablepersonal` flag on startup. However, it is not recommended to use these methods - use Clef instead! </Note>
+<Note>The personal namespace has now been deprecated. It is still available by providing `rpc.enabledeprecatedpersonal` flag on startup. However, it is not recommended to use these methods - use Clef instead! </Note>
 
 The personal API managed private keys in the key store. It is now deprecated in favour of using [Clef](/docs/tools/clef/introduction) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns-personal-deprecation) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate to using Clef for account interactions.
 
