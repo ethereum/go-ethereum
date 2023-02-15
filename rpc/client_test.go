@@ -49,7 +49,7 @@ func TestNullResponse(t *testing.T) {
 	server := NewServer()
 	err := server.RegisterName("test", new(nullTest))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	client := DialInProc(server)
@@ -61,7 +61,11 @@ func TestNullResponse(t *testing.T) {
 	}
 
 	if result.Result == nil {
-		t.Errorf("Expected null, got nil")
+		t.Fatal("Expected non-nil result")
+	}
+
+	if !reflect.DeepEqual(result.Result, json.RawMessage("null")) {
+		t.Errorf("Expected null, got %s", result.Result)
 	}
 }
 
