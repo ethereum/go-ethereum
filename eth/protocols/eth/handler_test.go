@@ -424,7 +424,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			RequestId:         123,
 			BlockBodiesPacket: bodies,
 		}); err != nil {
-			t.Errorf("test %d: bodies mismatch: %v", i, err)
+			t.Fatalf("test %d: bodies mismatch: %v", i, err)
 		}
 	}
 }
