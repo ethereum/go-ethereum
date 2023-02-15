@@ -825,7 +825,7 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 	var (
 		body        = block.Body()
 		txs         = make([]hexutil.Bytes, len(body.Transactions))
-		withdrawals = body.Withdrawals
+		withdrawals = make([]*types.Withdrawal, 0)
 	)
 
 	for j, tx := range body.Transactions {
@@ -834,8 +834,8 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
-	if withdrawals == nil {
-		withdrawals = make([]*types.Withdrawal, 0)
+	if body.Withdrawals != nil {
+		withdrawals = body.Withdrawals
 	}
 
 	return &engine.ExecutionPayloadBodyV1{
