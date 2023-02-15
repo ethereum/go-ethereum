@@ -47,12 +47,14 @@ func (s *nullTest) ReturnNull() json.RawMessage {
 
 func TestNullResponse(t *testing.T) {
 	server := NewServer()
+	defer server.Stop()
 	err := server.RegisterName("test", new(nullTest))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	client := DialInProc(server)
+	defer client.Close()
 	result := &jsonrpcMessage{}
 
 	err = client.Call(&result.Result, "test_returnNull")
