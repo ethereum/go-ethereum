@@ -255,7 +255,7 @@ type JsonRPCConfig struct {
 
 	HttpTimeout *HttpTimeouts `hcl:"timeouts,block" toml:"timeouts,block"`
 
-	AllowUnprotectedTxs bool `hcl:"unprotectedtxs,optional" toml:"unprotectedtxs,optional"`
+	AllowUnprotectedTxs bool `hcl:"allow-unprotected-txs,optional" toml:"allow-unprotected-txs,optional"`
 }
 
 type GRPCConfig struct {

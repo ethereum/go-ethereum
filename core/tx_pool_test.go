@@ -954,6 +954,53 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 	}
 }
 
+// Test that txpool rejects unprotected txs by default
+// FIXME: The below test causes some tests to fail randomly (probably due to parallel execution)
+//
+//nolint:paralleltest
+func TestRejectUnprotectedTransaction(t *testing.T) {
+	//nolint:paralleltest
+	t.Skip()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool.chainconfig.ChainID = big.NewInt(5)
+	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
+	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
+
+	if err := pool.AddRemote(tx); !errors.Is(err, types.ErrInvalidChainId) {
+		t.Error("expected", types.ErrInvalidChainId, "got", err)
+	}
+}
+
+// Test that txpool allows unprotected txs when AllowUnprotectedTxs flag is set
+// FIXME: The below test causes some tests to fail randomly (probably due to parallel execution)
+//
+//nolint:paralleltest
+func TestAllowUnprotectedTransactionWhenSet(t *testing.T) {
+	t.Skip()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	// Allow unprotected txs
+	pool.config.AllowUnprotectedTxs = true
+	pool.chainconfig.ChainID = big.NewInt(5)
+	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
+	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
+
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+}
+
 // Tests that if the transaction count belonging to multiple accounts go above
 // some threshold, the higher transactions are dropped to prevent DOS attacks.
 //
