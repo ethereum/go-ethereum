@@ -865,7 +865,7 @@ func TestInvalidBloom(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status.Status != engine.INVALID {
-		t.Errorf("invalid status: expected VALID got: %v", status.Status)
+		t.Errorf("invalid status: expected INVALID got: %v", status.Status)
 	}
 }
 
