@@ -21,11 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"path/filepath"
-	"runtime/pprof"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -1013,7 +1009,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(ctx, globalGasCap, header.BaseFee)
+	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
@@ -1036,81 +1032,13 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}
 
 	// If the timer caused an abort, return an appropriate error message
-	timeoutMu.Lock()
 	if evm.Cancelled() {
-		timeoutErrors++
-
-		if timeoutErrors >= pprofThreshold {
-			timeoutNoErrors = 0
-
-			if !isRunning {
-				runProfile()
-			}
-
-			log.Warn("[eth_call] timeout",
-				"timeoutErrors", timeoutErrors,
-				"timeoutNoErrors", timeoutNoErrors,
-				"args", args,
-				"blockNrOrHash", blockNrOrHash,
-				"overrides", overrides,
-				"timeout", timeout,
-				"globalGasCap", globalGasCap)
-		}
-
-		timeoutMu.Unlock()
-
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
-	} else {
-		if timeoutErrors >= pprofStopThreshold {
-			timeoutErrors = 0
-			timeoutNoErrors = 0
-
-			if isRunning {
-				pprof.StopCPUProfile()
-				isRunning = false
-			}
-		}
 	}
-
-	if isRunning && time.Since(pprofTime) >= pprofDuration {
-		timeoutErrors = 0
-		timeoutNoErrors = 0
-
-		pprof.StopCPUProfile()
-
-		isRunning = false
-	}
-
-	timeoutMu.Unlock()
-
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
-
 	return result, nil
-}
-
-func runProfile() {
-	pprofTime = time.Now()
-
-	name := fmt.Sprintf("profile_eth_call-count-%d-time-%s.prof",
-		number, pprofTime.Format("2006-01-02-15-04-05"))
-
-	name = filepath.Join(os.TempDir(), name)
-
-	f, err := os.Create(name)
-	if err != nil {
-		log.Error("[eth_call] can't create profile file", "name", name, "err", err)
-		return
-	}
-
-	if err = pprof.StartCPUProfile(f); err != nil {
-		log.Error("[eth_call] can't start profiling", "name", name, "err", err)
-		return
-	}
-
-	isRunning = true
-	number++
 }
 
 func newRevertError(result *core.ExecutionResult) *revertError {
@@ -1142,21 +1070,6 @@ func (e *revertError) ErrorCode() int {
 func (e *revertError) ErrorData() interface{} {
 	return e.reason
 }
-
-var (
-	number          int
-	timeoutErrors   int // count for timeout errors
-	timeoutNoErrors int
-	timeoutMu       sync.Mutex
-	isRunning       bool
-	pprofTime       time.Time
-)
-
-const (
-	pprofThreshold     = 3
-	pprofStopThreshold = 3
-	pprofDuration      = time.Minute
-)
 
 // Call executes the given transaction on the state for the given block number.
 //
@@ -1664,7 +1577,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(ctx, b.RPCGasCap(), header.BaseFee)
+		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
 		if err != nil {
 			return nil, 0, nil, err
 		}
