@@ -157,7 +157,10 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 		// MemTableStopWritesThreshold places a hard limit on the size
 		// of the existent MemTables(including the frozen one).
-		MemTableStopWritesThreshold: memTableLimit * memTableSize,
+		// Note, this must be the number of tables not the size of all memtables
+		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
+		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
+		MemTableStopWritesThreshold: memTableLimit,
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.

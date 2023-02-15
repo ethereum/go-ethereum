@@ -465,10 +465,12 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
+	var withdrawals []*types.Withdrawal
 	if g.Config != nil && g.Config.IsShanghai(g.Timestamp) {
 		head.WithdrawalsHash = &types.EmptyRootHash
+		withdrawals = make([]*types.Withdrawal, 0)
 	}
-	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
 }
 
 // Commit writes the block and state of a genesis specification to the database.
