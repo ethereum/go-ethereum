@@ -139,7 +139,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.19.5"
+	dlgoVersion = "1.20.1"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
