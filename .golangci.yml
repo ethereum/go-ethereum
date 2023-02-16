@@ -62,3 +62,6 @@ issues:
     - 'SA1019: strings.Title is deprecated'
     - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
     - 'SA1029: should not use built-in type string as key for value'
+    - 'SA1019: rand.Read has been deprecated'
+    - 'SA1019: rand.Seed has been deprecated'
+    - 'SA1019: mrand.Read has been deprecated'
