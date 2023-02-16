@@ -31,6 +31,7 @@ type BlockTrace struct {
 	StorageTrace     *StorageTrace      `json:"storageTrace"`
 	ExecutionResults []*ExecutionResult `json:"executionResults"`
 	MPTWitness       *json.RawMessage   `json:"mptwitness,omitempty"`
+	WithdrawTrieRoot common.Hash        `json:"withdraw_trie_root,omitempty"`
 }
 
 // StorageTrace stores proofs of storage needed by storage circuit
