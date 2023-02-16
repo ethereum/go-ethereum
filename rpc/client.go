@@ -132,7 +132,8 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 }
 
 // SetBatchLimits set maximum number of requests in a batch and maximum number of bytes returned from calls
-func (c *Client) SetBatchLimits(limit int, size int) {
+// And update non-http connection with limit
+func (c *Client) SetBatchLimits(limit, size int) {
 	c.batchRequestLimit = limit
 	c.batchResponseMaxSize = size
 	select {
@@ -254,27 +255,33 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	return c, nil
 }
 
-func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+func initClientWithBatchLimits(conn ServerCodec, idgen func() ID, services *serviceRegistry, limit, size int) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
-		isHTTP:      isHTTP,
-		idgen:       idgen,
-		services:    services,
-		writeConn:   conn,
-		close:       make(chan struct{}),
-		closing:     make(chan struct{}),
-		didClose:    make(chan struct{}),
-		reconnected: make(chan ServerCodec),
-		readOp:      make(chan readOp),
-		readErr:     make(chan error),
-		reqInit:     make(chan *requestOp),
-		reqSent:     make(chan error, 1),
-		reqTimeout:  make(chan *requestOp),
+		isHTTP:               isHTTP,
+		idgen:                idgen,
+		services:             services,
+		writeConn:            conn,
+		close:                make(chan struct{}),
+		closing:              make(chan struct{}),
+		didClose:             make(chan struct{}),
+		reconnected:          make(chan ServerCodec),
+		readOp:               make(chan readOp),
+		readErr:              make(chan error),
+		reqInit:              make(chan *requestOp),
+		reqSent:              make(chan error, 1),
+		reqTimeout:           make(chan *requestOp),
+		batchRequestLimit:    limit,
+		batchResponseMaxSize: size,
 	}
 	if !isHTTP {
 		go c.dispatch(conn)
 	}
 	return c
+}
+
+func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+	return initClientWithBatchLimits(conn, idgen, services, 0, 0)
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no

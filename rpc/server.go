@@ -68,7 +68,7 @@ func NewServer() *Server {
 }
 
 // SetBatchLimits set maximum number of requests in a batch and maximum number of bytes returned from calls
-func (s *Server) SetBatchLimits(limit int, size int) {
+func (s *Server) SetBatchLimits(limit, size int) {
 	s.batchRequestLimit = limit
 	s.batchResponseMaxSize = size
 }
@@ -94,8 +94,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	}
 	defer s.untrackCodec(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
-	c.SetBatchLimits(s.batchRequestLimit, s.batchResponseMaxSize)
+	c := initClientWithBatchLimits(codec, s.idgen, &s.services, s.batchRequestLimit, s.batchResponseMaxSize)
 	<-codec.closed()
 	c.Close()
 }
