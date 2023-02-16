@@ -339,7 +339,7 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(size / mixBytes)
 
-	// Combine header+nonce into a 64 byte seed
+	// Combine header+nonce into a 40 byte seed
 	seed := make([]byte, 40)
 	copy(seed, hash)
 	binary.LittleEndian.PutUint64(seed[32:], nonce)

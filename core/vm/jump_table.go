@@ -55,6 +55,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,9 +79,16 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable3855(&instructionSet) // PUSH0 instruction
+	enable3860(&instructionSet) // Limit and meter initcode
+	return validate(instructionSet)
+}
+
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[RANDOM] = &operation{
+	instructionSet[PREVRANDAO] = &operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -1042,4 +1050,15 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	return validate(tbl)
+}
+
+func copyJumpTable(source *JumpTable) *JumpTable {
+	dest := *source
+	for i, op := range source {
+		if op != nil {
+			opCopy := *op
+			dest[i] = &opCopy
+		}
+	}
+	return &dest
 }

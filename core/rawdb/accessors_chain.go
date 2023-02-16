@@ -259,8 +259,7 @@ func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 }
 
 // ReadTxIndexTail retrieves the number of oldest indexed block
-// whose transaction indices has been indexed. If the corresponding entry
-// is non-existent in database it means the indexing has been finished.
+// whose transaction indices has been indexed.
 func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(txIndexTailKey)
 	if len(data) != 8 {
@@ -670,10 +669,11 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
+// TODO: Re-use the existing definition.
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
-	Logs              []*types.LogForStorage
+	Logs              []*types.Log
 }
 
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
@@ -689,10 +689,7 @@ func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&stored); err != nil {
 		return err
 	}
-	r.Logs = make([]*types.Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*types.Log)(log)
-	}
+	r.Logs = stored.Logs
 	return nil
 }
 
@@ -717,9 +714,9 @@ func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, t
 	return nil
 }
 
-// ReadLogs retrieves the logs for all transactions in a block. The log fields
-// are populated with metadata. In case the receipts or the block body
-// are not found, a nil is returned.
+// ReadLogs retrieves the logs for all transactions in a block. In case
+// receipts is not found, a nil is returned.
+// Note: ReadLogs does not derive unstored log fields.
 func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -728,39 +725,10 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		// Receipts might be in the legacy format, try decoding that.
-		// TODO: to be removed after users migrated
-		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
-			return logs
-		}
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 
-	body := ReadBody(db, hash, number)
-	if body == nil {
-		log.Error("Missing body but have receipt", "hash", hash, "number", number)
-		return nil
-	}
-	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
-		return nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs
-}
-
-// readLegacyLogs is a temporary workaround for when trying to read logs
-// from a block which has its receipt stored in the legacy format. It'll
-// be removed after users have migrated their freezer databases.
-func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
-	receipts := ReadReceipts(db, hash, number, config)
-	if receipts == nil {
-		return nil
-	}
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
@@ -783,7 +751,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles).WithWithdrawals(body.Withdrawals)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
@@ -883,7 +851,7 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	}
 	for _, bad := range badBlocks {
 		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles)
+			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals)
 		}
 	}
 	return nil
@@ -902,7 +870,7 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	}
 	var blocks []*types.Block
 	for _, bad := range badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles))
+		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals))
 	}
 	return blocks
 }

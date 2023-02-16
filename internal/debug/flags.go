@@ -54,6 +54,11 @@ var (
 		Usage:    "Format logs with JSON",
 		Category: flags.LoggingCategory,
 	}
+	logFileFlag = &cli.StringFlag{
+		Name:     "log.file",
+		Usage:    "Write logs to a file",
+		Category: flags.LoggingCategory,
+	}
 	backtraceAtFlag = &cli.StringFlag{
 		Name:     "log.backtrace",
 		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
@@ -110,6 +115,7 @@ var Flags = []cli.Flag{
 	verbosityFlag,
 	vmoduleFlag,
 	logjsonFlag,
+	logFileFlag,
 	backtraceAtFlag,
 	debugFlag,
 	pprofFlag,
@@ -121,7 +127,10 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
-var glogger *log.GlogHandler
+var (
+	glogger         *log.GlogHandler
+	logOutputStream log.Handler
+)
 
 func init() {
 	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
@@ -132,18 +141,30 @@ func init() {
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
-	var ostream log.Handler
-	output := io.Writer(os.Stderr)
+	logFile := ctx.String(logFileFlag.Name)
+	useColor := logFile == "" && os.Getenv("TERM") != "dumb" && (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd()))
+
+	var logfmt log.Format
 	if ctx.Bool(logjsonFlag.Name) {
-		ostream = log.StreamHandler(output, log.JSONFormat())
+		logfmt = log.JSONFormat()
 	} else {
-		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		if usecolor {
+		logfmt = log.TerminalFormat(useColor)
+	}
+
+	if logFile != "" {
+		var err error
+		logOutputStream, err = log.FileHandler(logFile, logfmt)
+		if err != nil {
+			return err
+		}
+	} else {
+		output := io.Writer(os.Stderr)
+		if useColor {
 			output = colorable.NewColorableStderr()
 		}
-		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
+		logOutputStream = log.StreamHandler(output, logfmt)
 	}
-	glogger.SetHandler(ostream)
+	glogger.SetHandler(logOutputStream)
 
 	// logging
 	verbosity := ctx.Int(verbosityFlag.Name)
@@ -217,4 +238,7 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
+	if closer, ok := logOutputStream.(io.Closer); ok {
+		closer.Close()
+	}
 }

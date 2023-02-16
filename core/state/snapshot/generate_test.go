@@ -117,12 +117,12 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 	accIt := snap.AccountIterator(common.Hash{})
 	defer accIt.Release()
 
-	snapRoot, err := generateTrieRoot(nil, accIt, common.Hash{}, stackTrieGenerate,
+	snapRoot, err := generateTrieRoot(nil, "", accIt, common.Hash{}, stackTrieGenerate,
 		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
 			defer storageIt.Release()
 
-			hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+			hash, err := generateTrieRoot(nil, "", storageIt, accountHash, stackTrieGenerate, nil, stat, false)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -149,7 +149,7 @@ type testHelper struct {
 func newHelper() *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(diskdb)
-	accTrie, _ := trie.NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(common.Hash{}), triedb)
 	return &testHelper{
 		diskdb:  diskdb,
 		triedb:  triedb,
@@ -182,14 +182,15 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 }
 
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
-	stTrie, _ := trie.NewStateTrie(owner, common.Hash{}, t.triedb)
+	id := trie.StorageTrieID(stateRoot, owner, common.Hash{})
+	stTrie, _ := trie.NewStateTrie(id, t.triedb)
 	for i, k := range keys {
 		stTrie.Update([]byte(k), []byte(vals[i]))
 	}
 	if !commit {
 		return stTrie.Hash().Bytes()
 	}
-	root, nodes, _ := stTrie.Commit(false)
+	root, nodes := stTrie.Commit(false)
 	if nodes != nil {
 		t.nodes.Merge(nodes)
 	}
@@ -197,12 +198,12 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 }
 
 func (t *testHelper) Commit() common.Hash {
-	root, nodes, _ := t.accTrie.Commit(true)
+	root, nodes := t.accTrie.Commit(true)
 	if nodes != nil {
 		t.nodes.Merge(nodes)
 	}
 	t.triedb.Update(t.nodes)
-	t.triedb.Commit(root, false, nil)
+	t.triedb.Commit(root, false)
 	return root
 }
 
@@ -220,10 +221,12 @@ func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 //   - miss in the beginning
 //   - miss in the middle
 //   - miss in the end
+//
 // - the contract(non-empty storage) has wrong storage slots
 //   - wrong slots in the beginning
 //   - wrong slots in the middle
 //   - wrong slots in the end
+//
 // - the contract(non-empty storage) has extra storage slots
 //   - extra slots in the beginning
 //   - extra slots in the middle
@@ -388,7 +391,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie leaf and ensure the generator chokes
-	helper.triedb.Commit(root, false, nil)
+	helper.triedb.Commit(root, false)
 	helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
@@ -491,12 +494,12 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 
 		// Identical in the snap
 		key := hashData([]byte("acc-1"))
-		rawdb.WriteAccountSnapshot(helper.triedb.DiskDB(), key, val)
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("key-1")), []byte("val-1"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("key-2")), []byte("val-2"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("key-3")), []byte("val-3"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("key-4")), []byte("val-4"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("key-5")), []byte("val-5"))
+		rawdb.WriteAccountSnapshot(helper.diskdb, key, val)
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("key-1")), []byte("val-1"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("key-2")), []byte("val-2"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("key-3")), []byte("val-3"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("key-4")), []byte("val-4"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("key-5")), []byte("val-5"))
 	}
 	{
 		// Account two exists only in the snapshot
@@ -508,15 +511,15 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 		acc := &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
 		key := hashData([]byte("acc-2"))
-		rawdb.WriteAccountSnapshot(helper.triedb.DiskDB(), key, val)
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("b-key-1")), []byte("b-val-1"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("b-key-2")), []byte("b-val-2"))
-		rawdb.WriteStorageSnapshot(helper.triedb.DiskDB(), key, hashData([]byte("b-key-3")), []byte("b-val-3"))
+		rawdb.WriteAccountSnapshot(helper.diskdb, key, val)
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("b-key-1")), []byte("b-val-1"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("b-key-2")), []byte("b-val-2"))
+		rawdb.WriteStorageSnapshot(helper.diskdb, key, hashData([]byte("b-key-3")), []byte("b-val-3"))
 	}
 	root := helper.Commit()
 
 	// To verify the test: If we now inspect the snap db, there should exist extraneous storage items
-	if data := rawdb.ReadStorageSnapshot(helper.triedb.DiskDB(), hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
+	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
 		t.Fatalf("expected snap storage to exist")
 	}
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
@@ -534,7 +537,7 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	snap.genAbort <- stop
 	<-stop
 	// If we now inspect the snap db, there should exist no extraneous storage items
-	if data := rawdb.ReadStorageSnapshot(helper.triedb.DiskDB(), hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
+	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
 		t.Fatalf("expected slot to be removed, got %v", string(data))
 	}
 }

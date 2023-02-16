@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -54,15 +55,13 @@ var (
 )
 
 func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
-	db := rawdb.NewMemoryDatabase()
-	gspec := core.Genesis{
+	gspec := &core.Genesis{
 		Config:   params.TestChainConfig,
 		Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
 		GasLimit: 100000000,
 	}
-	genesis := gspec.MustCommit(db)
 	signer := types.HomesteadSigner{}
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, testChainLen,
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), testChainLen,
 		func(i int, gen *core.BlockGen) {
 			var (
 				tx   *types.Transaction
@@ -80,7 +79,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
 			txHashes = append(txHashes, tx.Hash())
 		})
-	bc, _ = core.NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	bc, _ = core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}
@@ -113,7 +112,7 @@ func init() {
 
 type fuzzer struct {
 	chain *core.BlockChain
-	pool  *core.TxPool
+	pool  *txpool.TxPool
 
 	chainLen  int
 	addr, txs []common.Hash
@@ -139,7 +138,7 @@ func newFuzzer(input []byte) *fuzzer {
 		chtKeys:   chtKeys,
 		bloomKeys: bloomKeys,
 		nonce:     uint64(len(txHashes)),
-		pool:      core.NewTxPool(core.DefaultTxPoolConfig, params.TestChainConfig, chain),
+		pool:      txpool.NewTxPool(txpool.DefaultConfig, params.TestChainConfig, chain),
 		input:     bytes.NewReader(input),
 	}
 }
@@ -231,7 +230,7 @@ func (f *fuzzer) BlockChain() *core.BlockChain {
 	return f.chain
 }
 
-func (f *fuzzer) TxPool() *core.TxPool {
+func (f *fuzzer) TxPool() *txpool.TxPool {
 	return f.pool
 }
 
