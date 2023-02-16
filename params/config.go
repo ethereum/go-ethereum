@@ -57,6 +57,7 @@ var (
 			MinePeriod:           10,
 		},
 	}
+
 	TestnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
@@ -65,32 +66,6 @@ var (
 			TimeoutPeriod:        4,
 			WaitPeriod:           1,
 			MinePeriod:           2,
-		},
-	}
-	UnitTestV2Configs = map[uint64]*V2Config{
-		Default: {
-			SwitchRound:          0,
-			CertThreshold:        3,
-			TimeoutSyncThreshold: 2,
-			TimeoutPeriod:        4,
-			WaitPeriod:           1,
-			MinePeriod:           2,
-		},
-		10: {
-			SwitchRound:          10,
-			CertThreshold:        5,
-			TimeoutSyncThreshold: 2,
-			TimeoutPeriod:        4,
-			WaitPeriod:           2,
-			MinePeriod:           3,
-		},
-		899: {
-			SwitchRound:          899,
-			CertThreshold:        5,
-			TimeoutSyncThreshold: 4,
-			TimeoutPeriod:        5,
-			WaitPeriod:           2,
-			MinePeriod:           3,
 		},
 	}
 
@@ -142,6 +117,33 @@ var (
 			TimeoutPeriod:        25,
 			WaitPeriod:           10,
 			MinePeriod:           10,
+		},
+	}
+
+	UnitTestV2Configs = map[uint64]*V2Config{
+		Default: {
+			SwitchRound:          0,
+			CertThreshold:        3,
+			TimeoutSyncThreshold: 2,
+			TimeoutPeriod:        4,
+			WaitPeriod:           1,
+			MinePeriod:           2,
+		},
+		10: {
+			SwitchRound:          10,
+			CertThreshold:        5,
+			TimeoutSyncThreshold: 2,
+			TimeoutPeriod:        4,
+			WaitPeriod:           2,
+			MinePeriod:           3,
+		},
+		899: {
+			SwitchRound:          899,
+			CertThreshold:        5,
+			TimeoutSyncThreshold: 4,
+			TimeoutPeriod:        5,
+			WaitPeriod:           2,
+			MinePeriod:           3,
 		},
 	}
 
