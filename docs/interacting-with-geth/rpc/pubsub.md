@@ -34,8 +34,11 @@ to cancel the subscription:
 ## Considerations {#considerations}
 
 1. Notifications are sent for current events and not for past events. For use cases that cannot afford to miss any notifications, subscriptions are probably not the best option.
+   
 2. Subscriptions require a full duplex connection. Geth offers such connections in the form of WebSocket and IPC (enabled by default).
+   
 3. Subscriptions are coupled to a connection. If the connection is closed all subscriptions that are created over this connection are removed.
+   
 4. Notifications are stored in an internal buffer and sent from this buffer to the client. If the client is unable to keep up and the number of buffered notifications reaches a limit (currently 10k) the connection is closed. Keep in mind that subscribing to some events can cause a flood of notifications, e.g. listening for all logs/blocks when the node starts to synchronize.
 
 ## Create subscription {#create-subscriptions}
