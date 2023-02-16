@@ -18,7 +18,7 @@ package dbtest
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"sort"
 	"testing"
