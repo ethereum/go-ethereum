@@ -65,23 +65,24 @@ func NewBeaconLightApi(url string, customHeaders map[string]string, stateProofVe
 	}
 }
 
-func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
+func (api *BeaconLightApi) httpGet(path string) ([]byte, int, error) {
 	req, err := http.NewRequest("GET", api.url+path, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for k, v := range api.customHeaders {
 		req.Header.Set(k, v)
 	}
 	resp, err := api.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Error from API endpoint \"%s\": status code %d", path, resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("Error from API endpoint \"%s\": status code %d", path, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, err
 }
 
 // Header defines a beacon header and supports JSON encoding according to the
@@ -121,7 +122,7 @@ func (h *jsonBeaconHeader) header() types.Header {
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
 func (api *BeaconLightApi) GetBestUpdateAndCommittee(period uint64) (types.LightClientUpdate, []byte, error) {
-	resp, err := api.httpGet("/eth/v1/beacon/light_client/updates?start_period=" + strconv.Itoa(int(period)) + "&count=1")
+	resp, _, err := api.httpGet("/eth/v1/beacon/light_client/updates?start_period=" + strconv.Itoa(int(period)) + "&count=1")
 	if err != nil {
 		return types.LightClientUpdate{}, nil, err
 	}
@@ -195,7 +196,7 @@ type syncAggregate struct {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 func (api *BeaconLightApi) GetOptimisticHeadUpdate() (sync.SignedHead, error) {
-	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
+	resp, _, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
 	if err != nil {
 		return sync.SignedHead{}, err
 	}
@@ -271,7 +272,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 	} else {
 		path += blockRoot.Hex()
 	}
-	resp, err := api.httpGet(path)
+	resp, _, err := api.httpGet(path)
 	if err != nil {
 		return types.Header{}, err
 	}
@@ -324,8 +325,11 @@ func (api *BeaconLightApi) SubscribeStateProof(format merkle.ProofFormat, paths 
 	}
 	encFormat, bitLength := EncodeCompactProofFormat(format)
 	if api.stateProofVersion >= 2 {
-		_, err := api.httpGet("/eth/v0/beacon/proof/subscribe/states?format=0x" + hex.EncodeToString(encFormat) + "&first=" + strconv.Itoa(first) + "&period=" + strconv.Itoa(period))
-		if err != nil {
+		_, status, err := api.httpGet("/eth/v0/beacon/proof/subscribe/states?format=0x" + hex.EncodeToString(encFormat) + "&first=" + strconv.Itoa(first) + "&period=" + strconv.Itoa(period))
+		// do not return error if the remote node works but endpoint does not exist;
+		// in this case we can assume that the required proof will be available to
+		// request from recent states without explicit subscription
+		if err != nil && status != 404 {
 			return nil, err
 		}
 	}
@@ -363,7 +367,7 @@ func (sub *StateProofSub) Get(stateRoot common.Hash) (merkle.MultiProof, error) 
 }
 
 func (api *BeaconLightApi) getStateProof(stateId string, format merkle.ProofFormat, encFormat []byte, bitLength int) (merkle.MultiProof, error) {
-	resp, err := api.httpGet("/eth/v0/beacon/proof/state/" + stateId + "?format=0x" + hex.EncodeToString(encFormat))
+	resp, _, err := api.httpGet("/eth/v0/beacon/proof/state/" + stateId + "?format=0x" + hex.EncodeToString(encFormat))
 	if err != nil {
 		return merkle.MultiProof{}, err
 	}
@@ -387,7 +391,7 @@ func (api *BeaconLightApi) getOldStateProof(stateId string, expFormat merkle.Pro
 	for i := 1; i < len(paths); i++ {
 		path += "&paths=" + paths[i]
 	}
-	resp, err := api.httpGet(path)
+	resp, _, err := api.httpGet(path)
 	if err != nil {
 		return merkle.MultiProof{}, common.Hash{}, err
 	}
@@ -479,8 +483,9 @@ func encodeProofFormatSubtree(format merkle.ProofFormat, target *[]byte, bitLeng
 	if bytePtr == len(*target) {
 		*target = append(*target, byte(0))
 	}
-	if left, right := format.Children(); left != nil {
+	if left, right := format.Children(); left == nil {
 		(*target)[bytePtr] += bitMask
+	} else {
 		encodeProofFormatSubtree(left, target, bitLength)
 		encodeProofFormatSubtree(right, target, bitLength)
 	}
@@ -488,7 +493,7 @@ func encodeProofFormatSubtree(format merkle.ProofFormat, target *[]byte, bitLeng
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
 func (api *BeaconLightApi) GetCheckpointData(ctx context.Context, checkpoint common.Hash) (types.Header, sync.CheckpointData, []byte, error) {
-	resp, err := api.httpGet("/eth/v1/beacon/light_client/bootstrap/" + checkpoint.String())
+	resp, _, err := api.httpGet("/eth/v1/beacon/light_client/bootstrap/" + checkpoint.String())
 	if err != nil {
 		return types.Header{}, sync.CheckpointData{}, nil, err
 	}
@@ -532,7 +537,7 @@ func (api *BeaconLightApi) GetCheckpointData(ctx context.Context, checkpoint com
 // GetExecutionPayload fetches the execution block belonging to the beacon block
 // specified by beaconRoot and validates its block hash against the expected execRoot.
 func (api *BeaconLightApi) GetExecutionPayload(header types.Header) (*ctypes.Block, error) {
-	resp, err := api.httpGet("/eth/v2/beacon/blocks/" + header.Hash().Hex())
+	resp, _, err := api.httpGet("/eth/v2/beacon/blocks/" + header.Hash().Hex())
 	if err != nil {
 		return nil, err
 	}
