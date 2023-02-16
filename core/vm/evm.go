@@ -43,8 +43,6 @@ type (
 
 // `PrecompileManager` allows the EVM to execute a precompiled contract.
 type PrecompileManager interface {
-	// `Reset` sets the native precompile context before beginning a state
-	// transition.
 	Reset(ctx context.Context)
 
 	// `Has` returns if a precompiled contract was found at `addr`.
@@ -55,7 +53,7 @@ type PrecompileManager interface {
 	Get(addr common.Address) PrecompiledContract
 
 	// `Run` runs a precompiled contract and returns the remaining gas.
-	Run(p PrecompiledContract, input []byte, caller common.Address,
+	Run(sdb StateDB, p PrecompiledContract, input []byte, caller common.Address,
 		value *big.Int, suppliedGas uint64, readonly bool,
 	) (ret []byte, remainingGas uint64, err error)
 }
@@ -226,9 +224,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-
 		ret, gas, err = evm.PrecompileManager.Run(
-			evm.PrecompileManager.Get(addr), input, caller.Address(), value, gas, false,
+			evm.StateDB, evm.PrecompileManager.Get(addr), input, caller.Address(), value, gas, false,
 		)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -293,7 +290,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// It is allowed to call precompiles, even via delegatecall
 	if isPrecompile := evm.PrecompileManager.Has(addr); isPrecompile {
 		ret, gas, err = evm.PrecompileManager.Run(
-			evm.PrecompileManager.Get(addr), input, caller.Address(), value, gas, true,
+			evm.StateDB, evm.PrecompileManager.Get(addr), input, caller.Address(), value, gas, true,
 		)
 	} else {
 		addrCopy := addr
@@ -341,7 +338,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if isPrecompile := evm.PrecompileManager.Has(addr); isPrecompile {
 		parent := caller.(*Contract)
 		ret, gas, err = evm.PrecompileManager.Run(
-			evm.PrecompileManager.Get(addr), input, parent.CallerAddress, parent.value, gas, false,
+			evm.StateDB, evm.PrecompileManager.Get(addr), input, parent.CallerAddress, parent.value, gas, false,
 		)
 	} else {
 		addrCopy := addr
@@ -392,7 +389,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 	if isPrecompile := evm.PrecompileManager.Has(addr); isPrecompile {
 		ret, gas, err = evm.PrecompileManager.Run(
-			evm.PrecompileManager.Get(addr), input, caller.Address(), new(big.Int), gas, true,
+			evm.StateDB, evm.PrecompileManager.Get(addr), input, caller.Address(), new(big.Int), gas, true,
 		)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
