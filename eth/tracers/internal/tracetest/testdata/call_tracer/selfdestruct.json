@@ -58,16 +58,15 @@
         "gas": "0x0",
         "gasUsed": "0x0",
         "input": "0x",
-        "to": "0x000000000000000000000000000000000000dEaD",
+        "to": "0x000000000000000000000000000000000000dead",
         "type": "SELFDESTRUCT",
         "value": "0x4d87094125a369d9bd5"
       }
     ],
     "from": "0xb436ba50d378d4bbc8660d312a13df6af6e89dfb",
     "gas": "0x10738",
-    "gasUsed": "0x7533",
+    "gasUsed": "0x6fcb",
     "input": "0x63e4bff40000000000000000000000000024f658a46fbb89d8ac105e98d7ac7cbbaf27c5",
-    "output": "0x",
     "to": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",
     "type": "CALL",
     "value": "0x0"

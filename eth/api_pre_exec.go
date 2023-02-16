@@ -134,7 +134,11 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	gas := d.tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
+	sender = vm.AccountRef(cfg.Origin)
+	rules = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
+
 	d.stateDb.Prepare(d.tx.Hash(), 0)
+	st.state.Prepare(rules, msg.From(), st.evm.Context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	receipt, err := core.ApplyTransactionForPreExec(
 		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
 	if err != nil {

@@ -36,7 +36,7 @@ var (
 	snapAccountProveCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/prove", nil)
 	// snapAccountTrieReadCounter measures time spent on the account trie iteration
 	snapAccountTrieReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/trieread", nil)
-	// snapAccountSnapReadCounter measues time spent on the snapshot account iteration
+	// snapAccountSnapReadCounter measures time spent on the snapshot account iteration
 	snapAccountSnapReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/snapread", nil)
 	// snapAccountWriteCounter measures time spent on writing/updating/deleting accounts
 	snapAccountWriteCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/account/write", nil)

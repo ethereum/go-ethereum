@@ -612,7 +612,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 				return
 
 			case <-time.After(wait):
-				// Throttling up, fetch whatever's available
+				// Throttling up, fetch whatever is available
 			}
 		}
 		// Allocate as much as we can handle and request servicing

@@ -28,13 +28,6 @@ import (
 )
 
 var (
-	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
-	gitDate   = ""
-
-	app = flags.NewApp(gitCommit, gitDate, "the evm command line interface")
-)
-
-var (
 	DebugFlag = &cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
@@ -183,6 +176,7 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.OutputBlockFlag,
 		t8ntool.InputHeaderFlag,
 		t8ntool.InputOmmersFlag,
+		t8ntool.InputWithdrawalsFlag,
 		t8ntool.InputTxsRlpFlag,
 		t8ntool.SealCliqueFlag,
 		t8ntool.SealEthashFlag,
@@ -191,6 +185,8 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.VerbosityFlag,
 	},
 }
+
+var app = flags.NewApp("the evm command line interface")
 
 func init() {
 	app.Flags = []cli.Flag{
@@ -222,6 +218,7 @@ func init() {
 		compileCommand,
 		disasmCommand,
 		runCommand,
+		blockTestCommand,
 		stateTestCommand,
 		stateTransitionCommand,
 		transactionCommand,

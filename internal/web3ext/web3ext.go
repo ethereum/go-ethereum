@@ -224,18 +224,23 @@ web3._extend({
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
-			name: 'getHeaderRlp',
-			call: 'debug_getHeaderRlp',
+			name: 'getRawHeader',
+			call: 'debug_getRawHeader',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getBlockRlp',
-			call: 'debug_getBlockRlp',
+			name: 'getRawBlock',
+			call: 'debug_getRawBlock',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getRawReceipts',
 			call: 'debug_getRawReceipts',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getRawTransaction',
+			call: 'debug_getRawTransaction',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -485,6 +490,11 @@ web3._extend({
 			call: 'debug_dbAncients',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'setTrieFlushInterval',
+			call: 'debug_setTrieFlushInterval',
+			params: 1
+		}),
 	],
 	properties: []
 });
@@ -594,6 +604,12 @@ web3._extend({
 			name: 'getLogs',
 			call: 'eth_getLogs',
 			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'call',
+			call: 'eth_call',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null],
 		}),
 	],
 	properties: [

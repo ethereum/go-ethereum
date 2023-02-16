@@ -227,10 +227,10 @@ func U256Bytes(n *big.Int) []byte {
 // S256 interprets x as a two's complement number.
 // x must not exceed 256 bits (the result is undefined if it does) and is not modified.
 //
-//   S256(0)        = 0
-//   S256(1)        = 1
-//   S256(2**255)   = -2**255
-//   S256(2**256-1) = -1
+//	S256(0)        = 0
+//	S256(1)        = 1
+//	S256(2**255)   = -2**255
+//	S256(2**256-1) = -1
 func S256(x *big.Int) *big.Int {
 	if x.Cmp(tt255) < 0 {
 		return x
