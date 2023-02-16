@@ -783,7 +783,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			return errInvalidBody
 		}
 		if header.WithdrawalsHash == nil {
-			// nil hash means there withdrawals should not be present in body
+			// nil hash means that withdrawals should not be present in body
 			if withdrawalLists[index] != nil {
 				return errInvalidBody
 			}
