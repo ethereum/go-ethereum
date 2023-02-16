@@ -135,6 +135,10 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 func (c *Client) SetBatchLimits(limit int, size int) {
 	c.batchRequestLimit = limit
 	c.batchResponseMaxSize = size
+	select {
+	case c.reconnected <- c.writeConn.(ServerCodec):
+	default:
+	}
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {
