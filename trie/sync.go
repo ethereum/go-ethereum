@@ -160,7 +160,7 @@ type Sync struct {
 	membatch *syncMemBatch                // Memory buffer to avoid frequent database writes
 	nodeReqs map[string]*nodeRequest      // Pending requests pertaining to a trie node path
 	codeReqs map[common.Hash]*codeRequest // Pending requests pertaining to a code hash
-	queue    *prque.Prque                 // Priority queue with the pending requests
+	queue    *prque.Prque[int64, any]     // Priority queue with the pending requests
 	fetches  map[int]int                  // Number of active fetches per trie node depth
 }
 
@@ -172,7 +172,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		membatch: newSyncMemBatch(),
 		nodeReqs: make(map[string]*nodeRequest),
 		codeReqs: make(map[common.Hash]*codeRequest),
-		queue:    prque.New(nil),
+		queue:    prque.New[int64, any](nil), // Ugh, can contain both string and hash, whyyy
 		fetches:  make(map[int]int),
 	}
 	ts.AddSubTrie(root, nil, common.Hash{}, nil, callback)

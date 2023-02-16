@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -97,6 +98,13 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 		return nil, nil
 	}
 	return rawdb.ReadHeader(b.db, hash, *number), nil
+}
+
+func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := rawdb.ReadBody(b.db, hash, uint64(number)); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
@@ -672,6 +680,143 @@ func TestPendingLogsSubscription(t *testing.T) {
 			t.Fatalf("test %d failed: %v", i, err)
 		}
 		<-testCases[i].sub.Err()
+	}
+}
+
+func TestLightFilterLogs(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{})
+		api          = NewFilterAPI(sys, true)
+		signer       = types.HomesteadSigner{}
+
+		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
+		thirdAddress   = common.HexToAddress("0x3333333333333333333333333333333333333333")
+		notUsedAddress = common.HexToAddress("0x9999999999999999999999999999999999999999")
+		firstTopic     = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		secondTopic    = common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+
+		// posted twice, once as regular logs and once as pending logs.
+		allLogs = []*types.Log{
+			// Block 1
+			{Address: firstAddr, Topics: []common.Hash{}, Data: []byte{}, BlockNumber: 2, Index: 0},
+			// Block 2
+			{Address: firstAddr, Topics: []common.Hash{firstTopic}, Data: []byte{}, BlockNumber: 3, Index: 0},
+			{Address: secondAddr, Topics: []common.Hash{firstTopic}, Data: []byte{}, BlockNumber: 3, Index: 1},
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, Data: []byte{}, BlockNumber: 3, Index: 2},
+			// Block 3
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, Data: []byte{}, BlockNumber: 4, Index: 0},
+		}
+
+		testCases = []struct {
+			crit     FilterCriteria
+			expected []*types.Log
+			id       rpc.ID
+		}{
+			// match all
+			0: {FilterCriteria{}, allLogs, ""},
+			// match none due to no matching addresses
+			1: {FilterCriteria{Addresses: []common.Address{{}, notUsedAddress}, Topics: [][]common.Hash{nil}}, []*types.Log{}, ""},
+			// match logs based on addresses, ignore topics
+			2: {FilterCriteria{Addresses: []common.Address{firstAddr}}, allLogs[:2], ""},
+			// match logs based on addresses and topics
+			3: {FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}}, allLogs[3:5], ""},
+			// all logs with block num >= 3
+			4: {FilterCriteria{FromBlock: big.NewInt(3), ToBlock: big.NewInt(5)}, allLogs[1:], ""},
+			// all logs
+			5: {FilterCriteria{FromBlock: big.NewInt(0), ToBlock: big.NewInt(5)}, allLogs, ""},
+			// all logs with 1>= block num <=2 and topic secondTopic
+			6: {FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(3), Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
+		}
+
+		key, _  = crypto.GenerateKey()
+		addr    = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		receipts = []*types.Receipt{{
+			Logs: []*types.Log{allLogs[0]},
+		}, {
+			Logs: []*types.Log{allLogs[1], allLogs[2], allLogs[3]},
+		}, {
+			Logs: []*types.Log{allLogs[4]},
+		}}
+	)
+
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 4, func(i int, b *core.BlockGen) {
+		if i == 0 {
+			return
+		}
+		receipts[i-1].Bloom = types.CreateBloom(types.Receipts{receipts[i-1]})
+		b.AddUncheckedReceipt(receipts[i-1])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i - 1), To: &common.Address{}, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, key)
+		b.AddTx(tx)
+	})
+	for i, block := range blocks {
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		if i > 0 {
+			rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), []*types.Receipt{receipts[i-1]})
+		}
+	}
+	// create all filters
+	for i := range testCases {
+		id, err := api.NewFilter(testCases[i].crit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testCases[i].id = id
+	}
+
+	// raise events
+	time.Sleep(1 * time.Second)
+	for _, block := range blocks {
+		backend.chainFeed.Send(core.ChainEvent{Block: block, Hash: common.Hash{}, Logs: allLogs})
+	}
+
+	for i, tt := range testCases {
+		var fetched []*types.Log
+		timeout := time.Now().Add(1 * time.Second)
+		for { // fetch all expected logs
+			results, err := api.GetFilterChanges(tt.id)
+			if err != nil {
+				t.Fatalf("Unable to fetch logs: %v", err)
+			}
+			fetched = append(fetched, results.([]*types.Log)...)
+			if len(fetched) >= len(tt.expected) {
+				break
+			}
+			// check timeout
+			if time.Now().After(timeout) {
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		if len(fetched) != len(tt.expected) {
+			t.Errorf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched))
+			return
+		}
+
+		for l := range fetched {
+			if fetched[l].Removed {
+				t.Errorf("expected log not to be removed for log %d in case %d", l, i)
+			}
+			expected := *tt.expected[l]
+			blockNum := expected.BlockNumber - 1
+			expected.BlockHash = blocks[blockNum].Hash()
+			expected.TxHash = blocks[blockNum].Transactions()[0].Hash()
+			if !reflect.DeepEqual(fetched[l], &expected) {
+				t.Errorf("invalid log on index %d for case %d", l, i)
+			}
+		}
 	}
 }
 

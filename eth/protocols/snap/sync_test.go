@@ -1388,7 +1388,7 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
-	root, nodes, _ := accTrie.Commit(false)
+	root, nodes := accTrie.Commit(false)
 	db.Update(trie.NewWithNodeSet(nodes))
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1450,7 +1450,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, entrySlice) {
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
-	root, nodes, _ := accTrie.Commit(false)
+	root, nodes := accTrie.Commit(false)
 	db.Update(trie.NewWithNodeSet(nodes))
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1496,7 +1496,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 	sort.Sort(entries)
 
 	// Commit account trie
-	root, set, _ := accTrie.Commit(true)
+	root, set := accTrie.Commit(true)
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
@@ -1561,7 +1561,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 	sort.Sort(entries)
 
 	// Commit account trie
-	root, set, _ := accTrie.Commit(true)
+	root, set := accTrie.Commit(true)
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
@@ -1603,7 +1603,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
 
@@ -1654,7 +1654,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
 

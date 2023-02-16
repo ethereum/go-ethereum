@@ -169,8 +169,13 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if payloadAttributes != nil && payloadAttributes.Withdrawals != nil {
-		return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+	if payloadAttributes != nil {
+		if payloadAttributes.Withdrawals != nil {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+		}
+		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
+		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
 }
@@ -423,10 +428,10 @@ func (api *ConsensusAPI) GetBlobsBundleV1(payloadID engine.PayloadID) (*engine.B
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, fmt.Errorf("withdrawals not supported in V1")
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
 	}
 	if params.ExcessDataGas != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, fmt.Errorf("excessDataGas not supported in V1")
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("excessDataGas not supported in V1"))
 	}
 	return api.newPayload(params)
 }
@@ -434,13 +439,29 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.ExcessDataGas != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, fmt.Errorf("excessDataGas not supported in V2")
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("excessDataGas not supported in V2"))
 	}
+	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
+		if params.Withdrawals == nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
+		}
+	} else if params.Withdrawals != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
+	}
+
 	return api.newPayload(params)
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	if api.eth.BlockChain().Config().IsSharding(params.Timestamp) {
+		if params.ExcessDataGas == nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil excessDataGas post-sharding"))
+		}
+	} else if params.ExcessDataGas != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil excessDataGas pre-sharding"))
+	}
+
 	return api.newPayload(params)
 }
 
@@ -803,18 +824,18 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
 	if start == 0 || count == 0 || count > 1024 {
 		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
 	}
 	// limit count up until current
 	current := api.eth.BlockChain().CurrentBlock().NumberU64()
-	end := start + count
-	if end > current {
-		end = current
+	last := uint64(start) + uint64(count) - 1
+	if last > current {
+		last = current
 	}
-	var bodies []*engine.ExecutionPayloadBodyV1
-	for i := start; i < end; i++ {
+	bodies := make([]*engine.ExecutionPayloadBodyV1, 0, uint64(count))
+	for i := uint64(start); i <= last; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		bodies = append(bodies, getBody(block))
 	}

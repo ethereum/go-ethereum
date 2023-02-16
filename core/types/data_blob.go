@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	api "github.com/crate-crypto/go-proto-danksharding-crypto"
 	"github.com/crate-crypto/go-proto-danksharding-crypto/eth"
+	api "github.com/crate-crypto/go-proto-danksharding-crypto/serialisation"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"

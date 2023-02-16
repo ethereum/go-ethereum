@@ -48,25 +48,22 @@ func newCommitter(owner common.Hash, tracer *tracer, collectLeaf bool) *committe
 
 // Commit collapses a node down into a hash node and returns it along with
 // the modified nodeset.
-func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
-	h, err := c.commit(nil, n)
-	if err != nil {
-		return nil, nil, err
-	}
+func (c *committer) Commit(n node) (hashNode, *NodeSet) {
+	h := c.commit(nil, n)
 	// Some nodes can be deleted from trie which can't be captured
 	// by committer itself. Iterate all deleted nodes tracked by
 	// tracer and marked them as deleted only if they are present
 	// in database previously.
 	c.tracer.markDeletions(c.nodes)
-	return h.(hashNode), c.nodes, nil
+	return h.(hashNode), c.nodes
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node) (node, error) {
+func (c *committer) commit(path []byte, n node) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
-		return hash, nil
+		return hash
 	}
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
@@ -77,10 +74,8 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV, err := c.commit(append(path, cn.Key...), cn.Val)
-			if err != nil {
-				return nil, err
-			}
+			childV := c.commit(append(path, cn.Key...), cn.Val)
+
 			collapsed.Val = childV
 		}
 		// The key needs to be copied, since we're adding it to the
@@ -88,7 +83,7 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
 		// The short node now is embedded in its parent. Mark the node as
 		// deleted if it's present in database previously. It's equivalent
@@ -96,18 +91,15 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		if prev := c.tracer.getPrev(path); len(prev) != 0 {
 			c.nodes.markDeleted(path, prev)
 		}
-		return collapsed, nil
+		return collapsed
 	case *fullNode:
-		hashedKids, err := c.commitChildren(path, cn)
-		if err != nil {
-			return nil, err
-		}
+		hashedKids := c.commitChildren(path, cn)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
 		// The full node now is embedded in its parent. Mark the node as
 		// deleted if it's present in database previously. It's equivalent
@@ -115,9 +107,9 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		if prev := c.tracer.getPrev(path); len(prev) != 0 {
 			c.nodes.markDeleted(path, prev)
 		}
-		return collapsed, nil
+		return collapsed
 	case hashNode:
-		return cn, nil
+		return cn
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -125,7 +117,7 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
+func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -142,17 +134,14 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, err := c.commit(append(path, byte(i)), child)
-		if err != nil {
-			return children, err
-		}
+		hashed := c.commit(append(path, byte(i)), child)
 		children[i] = hashed
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
-	return children, nil
+	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection

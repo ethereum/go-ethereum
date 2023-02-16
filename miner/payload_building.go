@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // BuildPayloadArgs contains the provided parameters for building payload.
@@ -49,6 +50,7 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	binary.Write(hasher, binary.BigEndian, args.Timestamp)
 	hasher.Write(args.Random[:])
 	hasher.Write(args.FeeRecipient[:])
+	rlp.Encode(hasher, args.Withdrawals)
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out

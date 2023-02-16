@@ -132,19 +132,6 @@ called [*Rinkeby*](https://www.rinkeby.io) which is operated by members of the c
 $ geth --rinkeby console
 ```
 
-### Full node on the Ropsten test network
-
-In addition to Görli and Rinkeby, Geth also supports the ancient Ropsten testnet. The
-Ropsten test network is based on the Ethash proof-of-work consensus algorithm. As such,
-it has certain extra overhead and is more susceptible to reorganization attacks due to the
-network's low difficulty/security.
-
-```shell
-$ geth --ropsten console
-```
-
-*Note: Older Geth configurations store the Ropsten database in the `testnet` subdirectory.*
-
 ### Configuration
 
 As an alternative to passing the numerous flags to the `geth` binary, you can also pass a
