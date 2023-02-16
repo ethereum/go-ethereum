@@ -179,7 +179,7 @@ func TestExpDecaySampleRescale(t *testing.T) {
 
 func TestExpDecaySampleSnapshot(t *testing.T) {
 	now := time.Now()
-	s := NewExpDecaySample(100, 0.99)
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -190,7 +190,7 @@ func TestExpDecaySampleSnapshot(t *testing.T) {
 
 func TestExpDecaySampleStatistics(t *testing.T) {
 	now := time.Now()
-	s := NewExpDecaySample(100, 0.99)
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -236,7 +236,7 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 }
 
 func TestUniformSampleSnapshot(t *testing.T) {
-	s := NewUniformSample(100)
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
@@ -246,7 +246,7 @@ func TestUniformSampleSnapshot(t *testing.T) {
 }
 
 func TestUniformSampleStatistics(t *testing.T) {
-	s := NewUniformSample(100)
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
