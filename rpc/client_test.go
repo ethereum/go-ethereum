@@ -37,18 +37,18 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type nullTest struct{}
+type nullTestService struct{}
 
-func (s *nullTest) ReturnNull() json.RawMessage {
+func (s *nullTestService) ReturnNull() json.RawMessage {
 	// An example where null results are returned is calling eth_getTransactionReceipt on a non-existent
 	// transaction. The result is null, but the call is not an error.
 	return json.RawMessage("null")
 }
 
 func TestNullResponse(t *testing.T) {
-	server := NewServer()
+	server := newTestServer()
 	defer server.Stop()
-	err := server.RegisterName("test", new(nullTest))
+	err := server.RegisterName("test", new(nullTestService))
 	if err != nil {
 		t.Fatal(err)
 	}
