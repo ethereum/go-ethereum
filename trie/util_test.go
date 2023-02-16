@@ -69,7 +69,7 @@ func TestTrieTracer(t *testing.T) {
 	}
 
 	// Commit the changes and re-create with new root
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestTrieTracePrevValue(t *testing.T) {
 	}
 
 	// Commit the changes and re-create with new root
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
@@ -261,10 +261,7 @@ func TestDeleteAll(t *testing.T) {
 	for _, val := range vals {
 		trie.Update([]byte(val.k), []byte(val.v))
 	}
-	root, set, err := trie.Commit(false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	root, set := trie.Commit(false)
 	if err := db.Update(NewWithNodeSet(set)); err != nil {
 		t.Fatal(err)
 	}
@@ -288,10 +285,7 @@ func TestDeleteAll(t *testing.T) {
 	for _, val := range vals {
 		trie.Delete([]byte(val.k))
 	}
-	root, set, err = trie.Commit(false)
-	if err != nil {
-		t.Fatalf("Failed to delete trie %v", err)
-	}
+	root, set = trie.Commit(false)
 	if root != emptyRoot {
 		t.Fatalf("Invalid trie root %v", root)
 	}

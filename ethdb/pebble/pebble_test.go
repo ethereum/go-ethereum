@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,21 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package leveldb
+//go:build arm64 || amd64
+
+package pebble
 
 import (
 	"testing"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/vfs"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/dbtest"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
-func TestLevelDB(t *testing.T) {
+func TestPebbleDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
 		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
-			db, err := leveldb.Open(storage.NewMemStorage(), nil)
+			db, err := pebble.Open("", &pebble.Options{
+				FS: vfs.NewMem(),
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,9 +43,11 @@ func TestLevelDB(t *testing.T) {
 	})
 }
 
-func BenchmarkLevelDB(b *testing.B) {
+func BenchmarkPebbleDB(b *testing.B) {
 	dbtest.BenchDatabaseSuite(b, func() ethdb.KeyValueStore {
-		db, err := leveldb.Open(storage.NewMemStorage(), nil)
+		db, err := pebble.Open("", &pebble.Options{
+			FS: vfs.NewMem(),
+		})
 		if err != nil {
 			b.Fatal(err)
 		}

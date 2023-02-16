@@ -56,11 +56,11 @@ func TestState(t *testing.T) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
-	// Not yet supported TODO
-	st.skipLoad(`^stEIP3540/`)
-	st.skipLoad(`^stEIP3860/`)
-
 	// Broken tests:
+	//
+	// The stEOF tests are generated with EOF as part of Shanghai, which
+	// is erroneous. Therefore, these tests are skipped.
+	st.skipLoad(`^EIPTests/stEOF/`)
 	// Expected failures:
 
 	// For Istanbul, older tests were moved into LegacyTests
