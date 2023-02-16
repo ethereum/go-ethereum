@@ -21,13 +21,14 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -129,7 +130,7 @@ func makedag(ctx *cli.Context) error {
 func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
-	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println(cases.Title(language.English).String(clientIdentifier))
 	fmt.Println("Version:", params.VersionWithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)

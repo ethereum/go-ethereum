@@ -23,7 +23,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
@@ -561,9 +562,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	}
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
+			ancientName := cases.Title(language.English).String(ancient.name)
+			tableName := cases.Title(language.English).String(table.name)
 			stats = append(stats, []string{
-				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
-				strings.Title(table.name),
+				fmt.Sprintf("Ancient store (%s)", ancientName),
+				tableName,
 				table.size.String(),
 				fmt.Sprintf("%d", ancient.count()),
 			})
