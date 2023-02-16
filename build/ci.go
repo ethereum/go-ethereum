@@ -317,6 +317,7 @@ func doTest(cmdline []string) {
 // doLint runs golangci-lint on requested packages.
 func doLint(cmdline []string) {
 	var (
+		dlgo     = flag.Bool("dlgo", false, "Download Go and lint with it")
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -324,10 +325,19 @@ func doLint(cmdline []string) {
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
+	// Configure the toolchain.
+	linter := exec.Command(downloadLinter(*cachedir), append([]string{"run", "--config", ".golangci.yml"}, packages...)...)
+	if *dlgo {
+		csdb := build.MustLoadChecksums("build/checksums.txt")
 
-	linter := downloadLinter(*cachedir)
-	lflags := []string{"run", "--config", ".golangci.yml"}
-	build.MustRunCommand(linter, append(lflags, packages...)...)
+		var tc build.GoToolchain
+		tc.Root = build.DownloadGo(csdb, dlgoVersion)
+		gopath, _ := tc.Go("env", "GOPATH").Output()
+
+		linter.Env = append(tc.Go("").Env, "GOPATH="+string(gopath))
+		linter.Env = append(linter.Env, "PATH="+filepath.Join(tc.Root, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+	build.MustRun(linter)
 	fmt.Println("You have achieved perfection.")
 }
 
