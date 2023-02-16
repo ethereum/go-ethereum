@@ -134,11 +134,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	gas := d.tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
-	sender = vm.AccountRef(cfg.Origin)
-	rules = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
-
-	d.stateDb.Prepare(d.tx.Hash(), 0)
-	st.state.Prepare(rules, msg.From(), st.evm.Context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+	d.stateDb.SetTxHashAndIndex(d.tx.Hash(), 0)
 	receipt, err := core.ApplyTransactionForPreExec(
 		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
 	if err != nil {
@@ -166,10 +162,10 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	vmenv := vm.NewEVM(core.NewEVMBlockContext(d.header, bc, nil), txContext, d.stateDb, bc.Config(), vm.Config{Debug: true, Tracer: tracer, PreExec: true})
 	vmenv.Context.BaseFee = big.NewInt(0)
 	vmenv.Context.BlockNumber.Add(vmenv.Context.BlockNumber, big.NewInt(rand.Int63n(6)+6))
-	vmenv.Context.Time.Add(vmenv.Context.Time, big.NewInt(rand.Int63n(60)+30))
+	vmenv.Context.Time += uint64(rand.Int63n(60) + 30)
 
 	// Call Prepare to clear out the statedb access list
-	d.stateDb.Prepare(d.tx.Hash(), txIndex)
+	d.stateDb.SetTxHashAndIndex(d.tx.Hash(), 0)
 
 	tracer.SetMessage(d.block.Number(), d.block.Hash(), d.tx.Hash(), uint(txIndex), d.msg.From(), d.msg.To(), *d.msg.Value())
 
@@ -300,7 +296,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer, PreExec: true})
 		evm.Context.BaseFee = big.NewInt(0)
 		evm.Context.BlockNumber.Add(evm.Context.BlockNumber, big.NewInt(rand.Int63n(6)+6))
-		evm.Context.Time.Add(evm.Context.Time, big.NewInt(rand.Int63n(60)+30))
+		evm.Context.Time += uint64(rand.Int63n(60) + 30)
 		if err != nil {
 			preResList = append(preResList, PreResult{
 				Error: PreError{
@@ -312,7 +308,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		// Execute the message.
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		state.Prepare(txHash, i)
+		state.SetTxHashAndIndex(txHash, i)
 		result, err := core.ApplyMessage(evm, msg, gp)
 		if err := vmError(); err != nil {
 			preRes := PreResult{
@@ -336,7 +332,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		preRes := PreResult{
 			Trace:     tracer.GetTraces(),
-			Logs:      state.GetLogs(txHash, header.Hash()),
+			Logs:      state.GetLogs(txHash, header.Number.Uint64(), header.Hash()),
 			StateDiff: tracer.GetStateDiff(),
 		}
 		if result != nil {
