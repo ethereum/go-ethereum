@@ -787,14 +787,16 @@ var (
 		Category: flags.APICategory,
 	}
 	BatchRequestLimit = &cli.IntFlag{
-		Name:  "batch.request-limit",
-		Usage: "Maximum number of requests in a batch",
-		Value: 100,
+		Name:     "batch.request-limit",
+		Usage:    "Maximum number of requests in a batch",
+		Value:    rpc.BatchRequestLimit,
+		Category: flags.APICategory,
 	}
 	BatchResponseMaxSize = &cli.IntFlag{
-		Name:  "batch.response-max-size",
-		Usage: "Maximum number of bytes returned from calls (10MB)",
-		Value: 10 * 1000 * 1000,
+		Name:     "batch.response-max-size",
+		Usage:    "Maximum number of bytes returned from calls (10MB)",
+		Value:    rpc.BatchResponseMaxSize,
+		Category: flags.APICategory,
 	}
 	EnablePersonal = &cli.BoolFlag{
 		Name:     "rpc.enabledeprecatedpersonal",

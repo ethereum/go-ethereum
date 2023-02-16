@@ -44,6 +44,10 @@ const (
 	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
 	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+
+	// Batch limits
+	BatchRequestLimit    = 100              // Maximum number of requests in a batch
+	BatchResponseMaxSize = 10 * 1000 * 1000 // Maximum number of bytes returned from calls (10MB)
 )
 
 const (
@@ -99,6 +103,9 @@ type Client struct {
 	reqInit     chan *requestOp  // register response IDs, takes write lock
 	reqSent     chan error       // signals write completion, releases write lock
 	reqTimeout  chan *requestOp  // removes response IDs when call timeout expires
+
+	batchRequestLimit    int
+	batchResponseMaxSize int
 }
 
 type reconnectFunc func(context.Context) (ServerCodec, error)
@@ -114,8 +121,20 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, clientContextKey{}, c)
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, conn.peerInfo())
-	handler := newHandler(ctx, conn, c.idgen, c.services, 0, 0)
+	if c.batchRequestLimit == 0 {
+		c.batchRequestLimit = BatchRequestLimit
+	}
+	if c.batchResponseMaxSize == 0 {
+		c.batchResponseMaxSize = BatchResponseMaxSize
+	}
+	handler := newHandler(ctx, conn, c.idgen, c.services, c.batchRequestLimit, c.batchResponseMaxSize)
 	return &clientConn{conn, handler}
+}
+
+// SetBatchLimits set maximum number of requests in a batch and maximum number of bytes returned from calls
+func (c *Client) SetBatchLimits(limit int, size int) {
+	c.batchRequestLimit = limit
+	c.batchResponseMaxSize = size
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {

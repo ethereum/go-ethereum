@@ -95,6 +95,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer s.untrackCodec(codec)
 
 	c := initClient(codec, s.idgen, &s.services)
+	c.SetBatchLimits(s.batchRequestLimit, s.batchResponseMaxSize)
 	<-codec.closed()
 	c.Close()
 }
