@@ -864,8 +864,8 @@ func TestInvalidBloom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Status != engine.INVALIDBLOCKHASH {
-		t.Errorf("invalid status: expected VALID got: %v", status.Status)
+	if status.Status != engine.INVALID {
+		t.Errorf("invalid status: expected INVALID got: %v", status.Status)
 	}
 }
 
