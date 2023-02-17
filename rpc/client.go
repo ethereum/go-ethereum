@@ -46,8 +46,8 @@ const (
 	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
 
 	// Batch limits
-	BatchRequestLimit    = 100              // Maximum number of requests in a batch
-	BatchResponseMaxSize = 10 * 1000 * 1000 // Maximum number of bytes returned from calls (10MB)
+	DefaultBatchRequestLimit    = 100              // Maximum number of requests in a batch
+	DefaultBatchResponseMaxSize = 10 * 1000 * 1000 // Maximum number of bytes returned from calls (10MB)
 )
 
 const (
@@ -88,6 +88,10 @@ type Client struct {
 	// This function, if non-nil, is called when the connection is lost.
 	reconnectFunc reconnectFunc
 
+	// config fields
+	batchItemLimit       int
+	batchResponseMaxSize int
+
 	// writeConn is used for writing to the connection on the caller's goroutine. It should
 	// only be accessed outside of dispatch, with the write lock held. The write lock is
 	// taken by sending on reqInit and released by sending on reqSent.
@@ -103,9 +107,6 @@ type Client struct {
 	reqInit     chan *requestOp  // register response IDs, takes write lock
 	reqSent     chan error       // signals write completion, releases write lock
 	reqTimeout  chan *requestOp  // removes response IDs when call timeout expires
-
-	batchRequestLimit    int
-	batchResponseMaxSize int
 }
 
 type reconnectFunc func(context.Context) (ServerCodec, error)
@@ -121,25 +122,8 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, clientContextKey{}, c)
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, conn.peerInfo())
-	if c.batchRequestLimit == 0 {
-		c.batchRequestLimit = BatchRequestLimit
-	}
-	if c.batchResponseMaxSize == 0 {
-		c.batchResponseMaxSize = BatchResponseMaxSize
-	}
-	handler := newHandler(ctx, conn, c.idgen, c.services, c.batchRequestLimit, c.batchResponseMaxSize)
+	handler := newHandler(ctx, conn, c.idgen, c.services, c.batchItemLimit, c.batchResponseMaxSize)
 	return &clientConn{conn, handler}
-}
-
-// SetBatchLimits set maximum number of requests in a batch and maximum number of bytes returned from calls
-// And update non-http connection with limit
-func (c *Client) SetBatchLimits(limit, size int) {
-	c.batchRequestLimit = limit
-	c.batchResponseMaxSize = size
-	select {
-	case c.reconnected <- c.writeConn.(ServerCodec):
-	default:
-	}
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {
@@ -235,7 +219,7 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
 
-	return newClient(ctx, reconnect)
+	return newClient(ctx, cfg, reconnect)
 }
 
 // ClientFromContext retrieves the client from the context, if any. This can be used to perform
@@ -245,22 +229,24 @@ func ClientFromContext(ctx context.Context) (*Client, bool) {
 	return client, ok
 }
 
-func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) {
+func newClient(initctx context.Context, cfg *clientConfig, connect reconnectFunc) (*Client, error) {
 	conn, err := connect(initctx)
 	if err != nil {
 		return nil, err
 	}
-	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
+	c := initClient(conn, new(serviceRegistry), cfg)
 	c.reconnectFunc = connect
 	return c, nil
 }
 
-func initClientWithBatchLimits(conn ServerCodec, idgen func() ID, services *serviceRegistry, limit, size int) *Client {
+func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
 		isHTTP:               isHTTP,
-		idgen:                idgen,
 		services:             services,
+		idgen:                cfg.idgen,
+		batchItemLimit:       cfg.batchItemLimit,
+		batchResponseMaxSize: cfg.batchResponseLimit,
 		writeConn:            conn,
 		close:                make(chan struct{}),
 		closing:              make(chan struct{}),
@@ -271,17 +257,24 @@ func initClientWithBatchLimits(conn ServerCodec, idgen func() ID, services *serv
 		reqInit:              make(chan *requestOp),
 		reqSent:              make(chan error, 1),
 		reqTimeout:           make(chan *requestOp),
-		batchRequestLimit:    limit,
-		batchResponseMaxSize: size,
 	}
+
+	// Set defaults.
+	if c.idgen == nil {
+		c.idgen = randomIDGenerator()
+	}
+	if c.batchItemLimit == 0 {
+		c.batchItemLimit = DefaultBatchRequestLimit
+	}
+	if c.batchResponseMaxSize == 0 {
+		c.batchResponseMaxSize = DefaultBatchResponseMaxSize
+	}
+
+	// Launch the main loop.
 	if !isHTTP {
 		go c.dispatch(conn)
 	}
 	return c
-}
-
-func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
-	return initClientWithBatchLimits(conn, idgen, services, 0, 0)
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no

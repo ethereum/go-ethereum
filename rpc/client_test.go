@@ -467,7 +467,8 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 	defer srv.Stop()
 
 	// Create the client on the other end of the pipe.
-	client, _ := newClient(context.Background(), func(context.Context) (ServerCodec, error) {
+	cfg := new(clientConfig)
+	client, _ := newClient(context.Background(), cfg, func(context.Context) (ServerCodec, error) {
 		return NewCodec(p2), nil
 	})
 	defer client.Close()

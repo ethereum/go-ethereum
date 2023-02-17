@@ -139,7 +139,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	var cfg clientConfig
 	cfg.httpClient = client
 	fn := newClientTransportHTTP(endpoint, &cfg)
-	return newClient(context.Background(), fn)
+	return newClient(context.Background(), &cfg, fn)
 }
 
 func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
