@@ -404,6 +404,11 @@ func (n *Node) startRPC() error {
 		openAPIs, allAPIs = n.getAPIs()
 	)
 
+	rpcConfig := rpcEndpointConfig{
+		batchItemLimit:         n.config.BatchRequestLimit,
+		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
+	}
+
 	initHttp := func(server *httpServer, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
@@ -413,7 +418,8 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
+			rpcEndpointConfig:  rpcConfig,
+		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
@@ -426,10 +432,11 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(openAPIs, wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
-		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
+			Modules:           n.config.WSModules,
+			Origins:           n.config.WSOrigins,
+			prefix:            n.config.WSPathPrefix,
+			rpcEndpointConfig: rpcConfig,
+		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
@@ -442,27 +449,30 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
+		sharedConfig := rpcConfig
+		sharedConfig.jwtSecret = secret
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
-			jwtSecret:          secret,
-		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
+			rpcEndpointConfig:  sharedConfig,
+		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
+
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(allAPIs, wsConfig{
-			Modules:   DefaultAuthModules,
-			Origins:   DefaultAuthOrigins,
-			prefix:    DefaultAuthPrefix,
-			jwtSecret: secret,
-		}, n.config.BatchRequestLimit, n.config.BatchResponseMaxSize); err != nil {
+			Modules:           DefaultAuthModules,
+			Origins:           DefaultAuthOrigins,
+			prefix:            DefaultAuthPrefix,
+			rpcEndpointConfig: sharedConfig,
+		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)

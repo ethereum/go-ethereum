@@ -242,9 +242,9 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 		timeouts = &rpc.DefaultHTTPTimeouts
 	}
 	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), *timeouts)
-	assert.NoError(t, srv.enableRPC(apis(), *conf, 0, 0))
+	assert.NoError(t, srv.enableRPC(apis(), *conf))
 	if ws {
-		assert.NoError(t, srv.enableWS(nil, *wsConf, 0, 0))
+		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}
 	assert.NoError(t, srv.setListenAddr("localhost", 0))
 	assert.NoError(t, srv.start())
@@ -338,8 +338,10 @@ func TestJWT(t *testing.T) {
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
 		return ss
 	}
-	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")}, nil)
+	cfg := rpcEndpointConfig{jwtSecret: []byte("secret")}
+	httpcfg := &httpConfig{rpcEndpointConfig: cfg}
+	wscfg := &wsConfig{Origins: []string{"*"}, rpcEndpointConfig: cfg}
+	srv := createAndStartServer(t, httpcfg, true, wscfg, nil)
 	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
 	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 

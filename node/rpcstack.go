@@ -41,15 +41,21 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
-	jwtSecret          []byte // optional JWT secret
+	rpcEndpointConfig
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins   []string
-	Modules   []string
-	prefix    string // path prefix on which to mount ws handler
-	jwtSecret []byte // optional JWT secret
+	Origins []string
+	Modules []string
+	prefix  string // path prefix on which to mount ws handler
+	rpcEndpointConfig
+}
+
+type rpcEndpointConfig struct {
+	jwtSecret              []byte // optional JWT secret
+	batchItemLimit         int
+	batchResponseSizeLimit int
 }
 
 type rpcHandler struct {
@@ -287,7 +293,7 @@ func (h *httpServer) doStop() {
 }
 
 // enableRPC turns on JSON-RPC over HTTP on the server.
-func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig, batchRequestLimit, batchResponseMaxSize int) error {
+func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -297,7 +303,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig, batchRequestLi
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	srv.SetBatchLimits(batchRequestLimit, batchResponseMaxSize)
+	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
@@ -320,7 +326,7 @@ func (h *httpServer) disableRPC() bool {
 }
 
 // enableWS turns on JSON-RPC over WebSocket on the server.
-func (h *httpServer) enableWS(apis []rpc.API, config wsConfig, batchRequestLimit, batchResponseMaxSize int) error {
+func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -329,7 +335,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig, batchRequestLimit
 	}
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	srv.SetBatchLimits(batchRequestLimit, batchResponseMaxSize)
+	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
