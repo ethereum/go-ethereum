@@ -138,31 +138,15 @@ func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
 	b.doWrite(ctx, conn, false)
 }
 
-// timeout sends the responses added so far. For the remaining unanswered call
-// messages, it sends a timeout error response.
-func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
+// respondWithError sends the responses added so far. For the remaining unanswered call
+// messages, it responds with the given error.
+func (b *batchCallBuffer) respondWithError(ctx context.Context, conn jsonWriter, err error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	for _, msg := range b.calls {
 		if !msg.isNotification() {
-			resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
-			b.resp = append(b.resp, resp)
-		}
-	}
-	b.doWrite(ctx, conn, true)
-}
-
-// responseTooLarge sends the responses added so far. For the remaining unanswered call
-// messages, it sends a response too large error response.
-func (b *batchCallBuffer) responseTooLarge(ctx context.Context, conn jsonWriter) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
-	for _, msg := range b.calls {
-		if !msg.isNotification() {
-			resp := msg.errorResponse(&internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge})
-			b.resp = append(b.resp, resp)
+			b.resp = append(b.resp, msg.errorResponse(err))
 		}
 	}
 	b.doWrite(ctx, conn, true)
@@ -226,7 +210,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
 			timer = time.AfterFunc(timeout, func() {
 				cancel()
-				callBuffer.timeout(cp.ctx, h.conn)
+				err := &internalServerError{errcodeTimeout, errMsgTimeout}
+				callBuffer.respondWithError(cp.ctx, h.conn, err)
 			})
 		}
 
@@ -244,7 +229,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
 				if resBytes += len(resp.Result); resBytes > h.batchResponseMaxSize {
-					callBuffer.responseTooLarge(cp.ctx, h.conn)
+					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
+					callBuffer.respondWithError(cp.ctx, h.conn, err)
 					break
 				}
 			}
