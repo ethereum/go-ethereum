@@ -1383,37 +1383,43 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	node, eth, _ := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
-
 	tests := []struct {
 		start hexutil.Uint64
 		count hexutil.Uint64
+		want  *engine.EngineAPIError
 	}{
 		// Genesis
 		{
 			start: 0,
 			count: 1,
+			want:  engine.InvalidParams,
 		},
 		// No block requested
 		{
 			start: 1,
 			count: 0,
+			want:  engine.InvalidParams,
 		},
 		// Genesis & no block
 		{
 			start: 0,
 			count: 0,
+			want:  engine.InvalidParams,
 		},
 		// More than 1024 blocks
 		{
 			start: 1,
 			count: 1025,
+			want:  engine.TooLargeRequest,
 		},
 	}
-
-	for _, test := range tests {
-		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
+	for i, tc := range tests {
+		result, err := api.GetPayloadBodiesByRangeV1(tc.start, tc.count)
 		if err == nil {
-			t.Fatalf("expected error, got %v", result)
+			t.Fatalf("test %d: expected error, got %v", i, result)
+		}
+		if have, want := err.Error(), tc.want.Error(); have != want {
+			t.Fatalf("test %d: have %s, want %s", i, have, want)
 		}
 	}
 }
