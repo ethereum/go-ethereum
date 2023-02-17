@@ -3,10 +3,8 @@ package native
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,7 +14,7 @@ import (
 )
 
 func init() {
-	register("txnOpCodeTracer", newtxnOpCodeTracer)
+	tracers.DefaultDirectory.Register("txnOpCodeTracer", newtxnOpCodeTracer, false)
 }
 
 type callFrameBN struct {
@@ -91,12 +89,12 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Duration, err error) {
+func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Collect final gasUsed
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
-	// Add total time duration for this trace request
-	t.callStack[0].Time = fmt.Sprintf("%v", time)
+	// // Add total time duration for this trace request
+	// t.callStack[0].Time = fmt.Sprintf("%v", time)
 
 	// This is the final output of a call
 	if err != nil {

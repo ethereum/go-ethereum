@@ -191,7 +191,7 @@ func validateEvents(events chan core.NewTxsEvent, count int) error {
 
 // validateDroppedEvents checks that the correct number of transaction rejection
 // and drop events were fired.
-func validateDroppedEvents(reject chan RejectedTxEvent, rcount int, dropped chan DropTxsEvent, dcount int) error {
+func validateDroppedEvents(reject chan core.RejectedTxEvent, rcount int, dropped chan core.DropTxsEvent, dcount int) error {
 	count := 0
 	for count < rcount {
 		select {
@@ -824,10 +824,10 @@ func TestGapFilling(t *testing.T) {
 	events := make(chan core.NewTxsEvent, testTxPoolConfig.AccountQueue+5)
 	sub := pool.txFeed.Subscribe(events)
 	defer sub.Unsubscribe()
-	revents := make(chan RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
+	revents := make(chan core.RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
 	rsub := pool.rejectTxFeed.Subscribe(revents)
 	defer rsub.Unsubscribe()
-	devents := make(chan DropTxsEvent, testTxPoolConfig.AccountQueue+5)
+	devents := make(chan core.DropTxsEvent, testTxPoolConfig.AccountQueue+5)
 	dsub := pool.dropTxFeed.Subscribe(devents)
 	defer dsub.Unsubscribe()
 
@@ -1428,10 +1428,10 @@ func TestRepricing(t *testing.T) {
 	if err := validateEvents(events, 7); err != nil {
 		t.Fatalf("original event firing failed: %v", err)
 	}
-	revents := make(chan RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
+	revents := make(chan core.RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
 	rsub := pool.rejectTxFeed.Subscribe(revents)
 	defer rsub.Unsubscribe()
-	devents := make(chan DropTxsEvent, testTxPoolConfig.AccountQueue+5)
+	devents := make(chan core.DropTxsEvent, testTxPoolConfig.AccountQueue+5)
 	dsub := pool.dropTxFeed.Subscribe(devents)
 	defer dsub.Unsubscribe()
 	if err := validatePoolInternals(pool); err != nil {
@@ -1733,10 +1733,10 @@ func TestUnderpricing(t *testing.T) {
 	events := make(chan core.NewTxsEvent, 32)
 	sub := pool.txFeed.Subscribe(events)
 	defer sub.Unsubscribe()
-	revents := make(chan RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
+	revents := make(chan core.RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
 	rsub := pool.rejectTxFeed.Subscribe(revents)
 	defer rsub.Unsubscribe()
-	devents := make(chan DropTxsEvent, testTxPoolConfig.AccountQueue+5)
+	devents := make(chan core.DropTxsEvent, testTxPoolConfig.AccountQueue+5)
 	dsub := pool.dropTxFeed.Subscribe(devents)
 	defer dsub.Unsubscribe()
 
@@ -1854,10 +1854,10 @@ func TestStableUnderpricing(t *testing.T) {
 	events := make(chan core.NewTxsEvent, 32)
 	sub := pool.txFeed.Subscribe(events)
 	defer sub.Unsubscribe()
-	revents := make(chan RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
+	revents := make(chan core.RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
 	rsub := pool.rejectTxFeed.Subscribe(revents)
 	defer rsub.Unsubscribe()
-	devents := make(chan DropTxsEvent, testTxPoolConfig.AccountQueue+5)
+	devents := make(chan core.DropTxsEvent, testTxPoolConfig.AccountQueue+5)
 	dsub := pool.dropTxFeed.Subscribe(devents)
 	defer dsub.Unsubscribe()
 
@@ -2160,10 +2160,10 @@ func TestReplacement(t *testing.T) {
 	events := make(chan core.NewTxsEvent, 32)
 	sub := pool.txFeed.Subscribe(events)
 	defer sub.Unsubscribe()
-	revents := make(chan RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
+	revents := make(chan core.RejectedTxEvent, testTxPoolConfig.AccountQueue+5)
 	rsub := pool.rejectTxFeed.Subscribe(revents)
 	defer rsub.Unsubscribe()
-	devents := make(chan DropTxsEvent, testTxPoolConfig.AccountQueue+5)
+	devents := make(chan core.DropTxsEvent, testTxPoolConfig.AccountQueue+5)
 	dsub := pool.dropTxFeed.Subscribe(devents)
 	defer dsub.Unsubscribe()
 

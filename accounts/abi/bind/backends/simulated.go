@@ -922,10 +922,6 @@ func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.Matche
 	panic("not supported")
 }
 
-func (fb *filterBackend) ChainConfig() *params.ChainConfig {
-	panic("not supported")
-}
-
 func (fb *filterBackend) CurrentHeader() *types.Header {
 	panic("not supported")
 }

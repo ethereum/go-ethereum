@@ -73,7 +73,6 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 
 	BlockByHash(ctx context.Context, blockHash common.Hash) (*types.Block, error)
-	ChainConfig() *params.ChainConfig
 	SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription
 	SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription
 	GetPoolTransaction(txHash common.Hash) *types.Transaction

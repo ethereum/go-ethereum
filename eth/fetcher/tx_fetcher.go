@@ -321,9 +321,11 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			default:
 				otherreject++
 			}
-			if err != nil { 
+			if err != nil {
 				filters.ClearTxTimestamp(txs[i].Hash())
 			}
+			added = append(added, batch[j].Hash())
+		}
 		knownMeter.Mark(duplicate)
 		underpricedMeter.Mark(underpriced)
 		otherRejectMeter.Mark(otherreject)

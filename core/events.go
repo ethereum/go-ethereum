@@ -54,17 +54,3 @@ type ChainSideEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
-
-
-const (
-	dropUnderpriced = "underpriced-txs"
-	dropLowNonce = "low-nonce-txs"
-	dropUnpayable = "unpayable-txs"
-
-	dropAccountCap = "account-cap-txs" // Accounts exceeding txpool.accountslots transactions
-	dropReplaced = "replaced-txs"
-	dropUnexecutable = "unexecutable-txs"
-	dropTruncating = "truncating-txs"
-	dropOld = "old-txs"
-	dropGasPriceUpdated = "updated-gas-price"
-)

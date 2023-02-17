@@ -203,6 +203,18 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
+func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	receipt, result, _, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, nil)
+	return receipt, result, err
+}
+
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create call tracer to get JSON stack traces
 	tracer := NewCallTracer(statedb)
@@ -322,9 +334,9 @@ func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to comm
 		Calls: []*call{},
 	}}
 }
-func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	tracer.callStack[tracer.i()].GasUsed = hexutil.Uint64(gasUsed)
-	tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
+	// tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
 	tracer.callStack[tracer.i()].Output = hexutil.Bytes(output)
 }
 
