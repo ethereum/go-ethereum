@@ -141,7 +141,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       if: type = pull_request
@@ -152,7 +152,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
@@ -161,7 +161,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test $TEST_PACKAGES
 
     # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
@@ -186,5 +186,5 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test  -race -coverage $TEST_PACKAGES
+        - go run build/ci.go test  -race $TEST_PACKAGES
 
