@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	blockvalidationapi "github.com/ethereum/go-ethereum/eth/block-validation"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -186,6 +187,15 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
+
+	bvConfig := blockvalidationapi.BlockValidationConfig{}
+	if ctx.IsSet(utils.BuilderBlockValidationBlacklistSourceFilePath.Name) {
+		bvConfig.BlacklistSourceFilePath = ctx.String(utils.BuilderBlockValidationBlacklistSourceFilePath.Name)
+	}
+
+	if err := blockvalidationapi.Register(stack, eth, bvConfig); err != nil {
+		utils.Fatalf("Failed to register the Block Validation API: %v", err)
+	}
 
 	// Configure GraphQL if requested.
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
