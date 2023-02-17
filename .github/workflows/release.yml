@@ -31,3 +31,10 @@ jobs:
           goarch: amd64
           project_path: ./cmd/geth
           binary_name: geth
+      - uses: wangyoucao577/go-release-action@v1.26
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: linux
+          goarch: amd64
+          project_path: ./cmd/bootnode
+          binary_name: bootnode

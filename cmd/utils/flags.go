@@ -994,6 +994,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Builder API flags
+	BuilderBlockValidationBlacklistSourceFilePath = &cli.StringFlag{
+		Name:     "builder.validation_blacklist",
+		Usage:    "Path to file containing blacklisted addresses, json-encoded list of strings. Default assumes CWD is repo's root",
+		Value:    "ofac_blacklist.json",
+		Category: flags.EthCategory,
+	}
 )
 
 var (

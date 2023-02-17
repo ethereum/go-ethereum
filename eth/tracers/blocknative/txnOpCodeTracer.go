@@ -1,4 +1,4 @@
-package native
+package blocknative
 
 import (
 	"encoding/json"
@@ -9,13 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-func init() {
-	tracers.DefaultDirectory.Register("txnOpCodeTracer", newtxnOpCodeTracer, false)
-}
 
 type callFrameBN struct {
 	Type        string        `json:"type"`
@@ -52,7 +47,7 @@ type txnOpCodeTracer struct {
 }
 
 // newtxnOpCodeTracer returns a new txnOpCodeTracer tracer.
-func newtxnOpCodeTracer(ctx *tracers.Context, ctor json.RawMessage) (tracers.Tracer, error) {
+func newtxnOpCodeTracer(ctor json.RawMessage) (Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	return &txnOpCodeTracer{callStack: make([]callFrameBN, 1)}, nil

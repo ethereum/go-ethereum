@@ -1,0 +1,12 @@
+name: Test
+on: [pull_request]
+jobs:
+  test_tracers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.x
+      - name: Test tracers
+        run: go test -v ./eth/tracers/...
