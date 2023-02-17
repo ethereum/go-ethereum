@@ -1383,57 +1383,44 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	node, eth, _ := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
-
 	tests := []struct {
 		start hexutil.Uint64
 		count hexutil.Uint64
+		want  *engine.EngineAPIError
 	}{
 		// Genesis
 		{
 			start: 0,
 			count: 1,
+			want:  engine.InvalidParams,
 		},
 		// No block requested
 		{
 			start: 1,
 			count: 0,
+			want:  engine.InvalidParams,
 		},
 		// Genesis & no block
 		{
 			start: 0,
 			count: 0,
+			want:  engine.InvalidParams,
+		},
+		// More than 1024 blocks
+		{
+			start: 1,
+			count: 1025,
+			want:  engine.TooLargeRequest,
 		},
 	}
-
-	for _, test := range tests {
-		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
+	for i, tc := range tests {
+		result, err := api.GetPayloadBodiesByRangeV1(tc.start, tc.count)
 		if err == nil {
-			t.Fatalf("expected error, got %v", result)
-		} else if err.Error() != engine.InvalidParams.Error() {
-			t.Fatalf("expected invalid params error, got %v", err.Error())
+			t.Fatalf("test %d: expected error, got %v", i, result)
 		}
-	}
-}
-
-func TestGetBlockBodiesByRangeRequestTooLarge(t *testing.T) {
-	node, eth, _ := setupBodies(t)
-	api := NewConsensusAPI(eth)
-	defer node.Close()
-
-	// More than 1024 blocks
-	test := struct {
-		start hexutil.Uint64
-		count hexutil.Uint64
-	}{
-		start: 1,
-		count: 1025,
-	}
-
-	result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
-	if err == nil {
-		t.Fatalf("expected error, got %v", result)
-	} else if err.Error() != engine.TooLargeRequest.Error() {
-		t.Fatalf("expected request too large error, got %v", err.Error())
+		if have, want := err.Error(), tc.want.Error(); have != want {
+			t.Fatalf("test %d: have %s, want %s", i, have, want)
+		}
 	}
 }
 
