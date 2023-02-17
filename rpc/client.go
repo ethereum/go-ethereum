@@ -40,14 +40,16 @@ var (
 	errDead                      = errors.New("connection lost")
 )
 
+// Timeouts
 const (
-	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
 	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+)
 
-	// Batch limits
-	DefaultBatchRequestLimit    = 100              // Maximum number of requests in a batch
-	DefaultBatchResponseMaxSize = 10 * 1000 * 1000 // Maximum number of bytes returned from calls (10MB)
+// Batch limits
+const (
+	DefaultBatchRequestLimit    = 1000             // Maximum number of items in a batch.
+	DefaultBatchResponseMaxSize = 25 * 1000 * 1000 // Maximum number of bytes returned from calls.
 )
 
 const (
