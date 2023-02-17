@@ -215,7 +215,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			})
 		}
 
-		resBytes := 0
+		responseBytes := 0
 		for {
 			// No need to handle rest of calls if timed out.
 			if cp.ctx.Err() != nil {
@@ -228,7 +228,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			callBuffer.pushResponse(resp)
 			if resp != nil && h.batchResponseMaxSize != 0 {
-				if resBytes += len(resp.Result); resBytes > h.batchResponseMaxSize {
+				responseBytes += len(resp.Result)
+				if responseBytes > h.batchResponseMaxSize {
 					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
 					break
