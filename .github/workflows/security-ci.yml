@@ -13,6 +13,7 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          GOFLAGS: "-buildvcs=false"
         with:
           args: --org=${{ secrets.SNYK_ORG }} --severity-threshold=medium --sarif-file-output=snyk.sarif
       - name: Upload result to GitHub Code Scanning
