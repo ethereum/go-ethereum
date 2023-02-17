@@ -152,3 +152,38 @@ func TestServerShortLivedConn(t *testing.T) {
 		}
 	}
 }
+
+func TestServerBatchResponseSizeLimit(t *testing.T) {
+	server := newTestServer()
+	server.SetBatchLimits(100, 60)
+	defer server.Stop()
+
+	client := DialInProc(server)
+	batch := make([]BatchElem, 3)
+	for i := range batch {
+		batch[i].Method = "test_echo"
+		batch[i].Result = new(echoResult)
+		batch[i].Args = []any{"x", 1}
+	}
+	err := client.BatchCall(batch)
+
+	if err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+	for i := range batch {
+		if i < 2 {
+			if batch[i].Error != nil {
+				t.Errorf("batch elem %d has unexpected error: %v", i, batch[i].Error)
+			}
+		} else {
+			re, ok := batch[i].Error.(Error)
+			if !ok {
+				t.Errorf("batch elem %d has wrong error: %v", i, batch[i].Error)
+				continue
+			}
+			if re.ErrorCode() != errcodeResponseTooLarge {
+				t.Errorf("batch elem %d has wrong error code %d", i, re.ErrorCode())
+			}
+		}
+	}
+}
