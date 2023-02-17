@@ -1403,18 +1403,37 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 			start: 0,
 			count: 0,
 		},
-		// More than 1024 blocks
-		{
-			start: 1,
-			count: 1025,
-		},
 	}
 
 	for _, test := range tests {
 		result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
 		if err == nil {
 			t.Fatalf("expected error, got %v", result)
+		} else if err.Error() != engine.InvalidParams.Error() {
+			t.Fatalf("expected invalid params error, got %v", err.Error())
 		}
+	}
+}
+
+func TestGetBlockBodiesByRangeRequestTooLarge(t *testing.T) {
+	node, eth, _ := setupBodies(t)
+	api := NewConsensusAPI(eth)
+	defer node.Close()
+
+	// More than 1024 blocks
+	test := struct {
+		start hexutil.Uint64
+		count hexutil.Uint64
+	}{
+		start: 1,
+		count: 1025,
+	}
+
+	result, err := api.GetPayloadBodiesByRangeV1(test.start, test.count)
+	if err == nil {
+		t.Fatalf("expected error, got %v", result)
+	} else if err.Error() != engine.TooLargeRequest.Error() {
+		t.Fatalf("expected request too large error, got %v", err.Error())
 	}
 }
 

@@ -78,6 +78,7 @@ var (
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
 	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
+	TooLargeRequest          = &EngineAPIError{code: -38004, msg: "Too large request"}
 	InvalidParams            = &EngineAPIError{code: -32602, msg: "Invalid parameters"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
