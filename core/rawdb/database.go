@@ -249,15 +249,15 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
-					for number = head; number >= frozen; number -= 1 {
-						data, _ := db.Get(headerHashKey(number))
-						if len(data) == 0 {
+					for number = frozen; number <= head; number++ {
+						if present, _ := db.Has(headerHashKey(number)); present {
 							break
 						}
 					}
 					// We are about to exit on error. Print database metdata beore exiting
 					PrintChainMetadata(db)
-					return nil, fmt.Errorf("gap in the chain between ancients (#%d) and leveldb (#%d) ", frozen, number)
+					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
+						frozen-1, number, head)
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
