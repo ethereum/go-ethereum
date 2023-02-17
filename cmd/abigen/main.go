@@ -34,14 +34,6 @@ import (
 )
 
 var (
-	// Git SHA1 commit hash of the release (set via linker flags)
-	gitCommit = ""
-	gitDate   = ""
-
-	app *cli.App
-)
-
-var (
 	// Flags needed by abigen
 	abiFlag = &cli.StringFlag{
 		Name:  "abi",
@@ -73,7 +65,7 @@ var (
 	}
 	langFlag = &cli.StringFlag{
 		Name:  "lang",
-		Usage: "Destination language for the bindings (go, java, objc)",
+		Usage: "Destination language for the bindings (go)",
 		Value: "go",
 	}
 	aliasFlag = &cli.StringFlag{
@@ -82,8 +74,9 @@ var (
 	}
 )
 
+var app = flags.NewApp("Ethereum ABI wrapper code generator")
+
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
 	app.Name = "abigen"
 	app.Flags = []cli.Flag{
 		abiFlag,
@@ -109,11 +102,6 @@ func abigen(c *cli.Context) error {
 	switch c.String(langFlag.Name) {
 	case "go":
 		lang = bind.LangGo
-	case "java":
-		lang = bind.LangJava
-	case "objc":
-		lang = bind.LangObjC
-		utils.Fatalf("Objc binding generation is uncompleted")
 	default:
 		utils.Fatalf("Unsupported destination language \"%s\" (--lang)", c.String(langFlag.Name))
 	}
@@ -161,9 +149,12 @@ func abigen(c *cli.Context) error {
 		types = append(types, kind)
 	} else {
 		// Generate the list of types to exclude from binding
-		exclude := make(map[string]bool)
-		for _, kind := range strings.Split(c.String(excFlag.Name), ",") {
-			exclude[strings.ToLower(kind)] = true
+		var exclude *nameFilter
+		if c.IsSet(excFlag.Name) {
+			var err error
+			if exclude, err = newNameFilter(strings.Split(c.String(excFlag.Name), ",")...); err != nil {
+				utils.Fatalf("Failed to parse excludes: %v", err)
+			}
 		}
 		var contracts map[string]*compiler.Contract
 
@@ -188,7 +179,11 @@ func abigen(c *cli.Context) error {
 		}
 		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
-			if exclude[strings.ToLower(name)] {
+			// fully qualified name is of the form <solFilePath>:<type>
+			nameParts := strings.Split(name, ":")
+			typeName := nameParts[len(nameParts)-1]
+			if exclude != nil && exclude.Matches(name) {
+				fmt.Fprintf(os.Stderr, "excluding: %v\n", name)
 				continue
 			}
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
@@ -198,15 +193,14 @@ func abigen(c *cli.Context) error {
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
 			sigs = append(sigs, contract.Hashes)
-			nameParts := strings.Split(name, ":")
-			types = append(types, nameParts[len(nameParts)-1])
+			types = append(types, typeName)
 
 			// Derive the library placeholder which is a 34 character prefix of the
 			// hex encoding of the keccak256 hash of the fully qualified library name.
 			// Note that the fully qualified library name is the path of its source
 			// file and the library name separated by ":".
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
-			libs[libPattern] = nameParts[len(nameParts)-1]
+			libs[libPattern] = typeName
 		}
 	}
 	// Extract all aliases from the flags

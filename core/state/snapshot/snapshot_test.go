@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -33,7 +34,7 @@ import (
 // randomHash generates a random blob of data and returns it as a hash.
 func randomHash() common.Hash {
 	var hash common.Hash
-	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
+	if n, err := crand.Read(hash[:]); n != common.HashLength || err != nil {
 		panic(err)
 	}
 	return hash
@@ -166,7 +167,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x03"), 1); err != nil {
 		t.Fatalf("failed to merge accumulator onto disk: %v", err)
 	}
-	// Since the base layer was modified, ensure that data retrievald on the external reference fail
+	// Since the base layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %#x (err: %v)", acc, err)
 	}
@@ -224,7 +225,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x04"), 1); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
 	}
-	// Since the accumulator diff layer was modified, ensure that data retrievald on the external reference fail
+	// Since the accumulator diff layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %#x (err: %v)", acc, err)
 	}

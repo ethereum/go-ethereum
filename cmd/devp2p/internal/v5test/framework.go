@@ -44,6 +44,8 @@ func (p *readError) Unwrap() error       { return p.err }
 func (p *readError) RequestID() []byte   { return nil }
 func (p *readError) SetRequestID([]byte) {}
 
+func (p *readError) AppendLogInfo(ctx []interface{}) []interface{} { return ctx }
+
 // readErrorf creates a readError with the given text.
 func readErrorf(format string, args ...interface{}) *readError {
 	return &readError{fmt.Errorf(format, args...)}
@@ -86,7 +88,7 @@ func newConn(dest *enode.Node, log logger) *conn {
 		localNode:  ln,
 		remote:     dest,
 		remoteAddr: &net.UDPAddr{IP: dest.IP(), Port: dest.UDP()},
-		codec:      v5wire.NewCodec(ln, key, mclock.System{}),
+		codec:      v5wire.NewCodec(ln, key, mclock.System{}, nil),
 		log:        log,
 	}
 }
@@ -171,16 +173,16 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			// Check total count. It should be greater than one
 			// and needs to be the same across all responses.
 			if first {
-				if resp.Total == 0 || resp.Total > 6 {
-					return nil, fmt.Errorf("invalid NODES response 'total' %d (not in (0,7))", resp.Total)
+				if resp.RespCount == 0 || resp.RespCount > 6 {
+					return nil, fmt.Errorf("invalid NODES response count %d (not in (0,7))", resp.RespCount)
 				}
-				total = resp.Total
+				total = resp.RespCount
 				n = int(total) - 1
 				first = false
 			} else {
 				n--
-				if resp.Total != total {
-					return nil, fmt.Errorf("invalid NODES response 'total' %d (!= %d)", resp.Total, total)
+				if resp.RespCount != total {
+					return nil, fmt.Errorf("invalid NODES response count %d (!= %d)", resp.RespCount, total)
 				}
 			}
 			// Check nodes.

@@ -252,6 +252,9 @@ func TestStartRPC(t *testing.T) {
 			config := test.cfg
 			// config.Logger = testlog.Logger(t, log.LvlDebug)
 			config.P2P.NoDiscovery = true
+			if config.HTTPTimeouts == (rpc.HTTPTimeouts{}) {
+				config.HTTPTimeouts = rpc.DefaultHTTPTimeouts
+			}
 
 			// Create Node.
 			stack, err := New(&config)

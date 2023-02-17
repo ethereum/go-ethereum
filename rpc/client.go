@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -100,7 +101,7 @@ type Client struct {
 	reqTimeout  chan *requestOp  // removes response IDs when call timeout expires
 }
 
-type reconnectFunc func(ctx context.Context) (ServerCodec, error)
+type reconnectFunc func(context.Context) (ServerCodec, error)
 
 type clientContextKey struct{}
 
@@ -154,14 +155,16 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 //
 // The currently supported URL schemes are "http", "https", "ws" and "wss". If rawurl is a
 // file name with no URL scheme, a local socket connection is established using UNIX
-// domain sockets on supported platforms and named pipes on Windows. If you want to
-// configure transport options, use DialHTTP, DialWebsocket or DialIPC instead.
+// domain sockets on supported platforms and named pipes on Windows.
+//
+// If you want to further configure the transport, use DialOptions instead of this
+// function.
 //
 // For websocket connections, the origin is set to the local host name.
 //
-// The client reconnects automatically if the connection is lost.
+// The client reconnects automatically when the connection is lost.
 func Dial(rawurl string) (*Client, error) {
-	return DialContext(context.Background(), rawurl)
+	return DialOptions(context.Background(), rawurl)
 }
 
 // DialContext creates a new RPC client, just like Dial.
@@ -169,22 +172,46 @@ func Dial(rawurl string) (*Client, error) {
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
+	return DialOptions(ctx, rawurl)
+}
+
+// DialOptions creates a new RPC client for the given URL. You can supply any of the
+// pre-defined client options to configure the underlying transport.
+//
+// The context is used to cancel or time out the initial connection establishment. It does
+// not affect subsequent interactions with the client.
+//
+// The client reconnects automatically when the connection is lost.
+func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
 	}
+
+	cfg := new(clientConfig)
+	for _, opt := range options {
+		opt.applyOption(cfg)
+	}
+
+	var reconnect reconnectFunc
 	switch u.Scheme {
 	case "http", "https":
-		return DialHTTP(rawurl)
+		reconnect = newClientTransportHTTP(rawurl, cfg)
 	case "ws", "wss":
-		return DialWebsocket(ctx, rawurl, "")
+		rc, err := newClientTransportWS(rawurl, cfg)
+		if err != nil {
+			return nil, err
+		}
+		reconnect = rc
 	case "stdio":
-		return DialStdIO(ctx)
+		reconnect = newClientTransportIO(os.Stdin, os.Stdout)
 	case "":
-		return DialIPC(ctx, rawurl)
+		reconnect = newClientTransportIPC(rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
+
+	return newClient(ctx, reconnect)
 }
 
 // ClientFromContext retrieves the client from the context, if any. This can be used to perform
@@ -500,7 +527,7 @@ func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 			return err
 		}
 	}
-	err := c.writeConn.writeJSON(ctx, msg)
+	err := c.writeConn.writeJSON(ctx, msg, false)
 	if err != nil {
 		c.writeConn = nil
 		if !retry {
@@ -633,7 +660,8 @@ func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {
-			codec.writeJSON(context.Background(), errorMessage(&parseError{err.Error()}))
+			msg := errorMessage(&parseError{err.Error()})
+			codec.writeJSON(context.Background(), msg, true)
 		}
 		if err != nil {
 			c.readErr <- err
