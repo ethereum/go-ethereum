@@ -58,13 +58,11 @@
             to: /docs/interacting-with-geth/rpc/ns-eth
           - id: les
             to: /docs/interacting-with-geth/rpc/ns-les
-          - id: miner
+          - id: miner (deprecated)
             to: /docs/interacting-with-geth/rpc/ns-miner
           - id: net
             to: /docs/interacting-with-geth/rpc/ns-net
-          - id: Personal (deprecation notes)
-            to: /docs/interacting-with-geth/rpc/ns-personal-deprecation
-          - id: Personal (deprecated)
+          - id: personal (deprecated)
             to: /docs/interacting-with-geth/rpc/ns-personal
           - id: txpool
             to: /docs/interacting-with-geth/rpc/ns-txpool
