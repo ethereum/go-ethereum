@@ -460,6 +460,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Start tx indexer/unindexer if required.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
+		if bc.cacheConfig.AncientPrune {
+			bc.txLookupLimit = params.FullImmutabilityThreshold
+		}
 
 		bc.wg.Add(1)
 		go bc.maintainTxIndex()
