@@ -37,40 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type nullTestService struct{}
-
-func (s *nullTestService) ReturnNull() json.RawMessage {
-	// An example where null results are returned is calling eth_getTransactionReceipt on a non-existent
-	// transaction. The result is null, but the call is not an error.
-	return json.RawMessage("null")
-}
-
-func TestNullResponse(t *testing.T) {
-	server := newTestServer()
-	defer server.Stop()
-	err := server.RegisterName("test", new(nullTestService))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	client := DialInProc(server)
-	defer client.Close()
-	result := &jsonrpcMessage{}
-
-	err = client.Call(&result.Result, "test_returnNull")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Result == nil {
-		t.Fatal("Expected non-nil result")
-	}
-
-	if !reflect.DeepEqual(result.Result, json.RawMessage("null")) {
-		t.Errorf("Expected null, got %s", result.Result)
-	}
-}
-
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
@@ -100,6 +66,26 @@ func TestClientResponseType(t *testing.T) {
 	err := client.Call(resultVar, "test_echo", "hello", 10, &echoArgs{"world"})
 	if err == nil {
 		t.Error("Passing a var as result should be an error")
+	}
+}
+
+// This test checks calling a method that returns 'null'.
+func TestClientNullResponse(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+
+	client := DialInProc(server)
+	defer client.Close()
+
+	var result json.RawMessage
+	if err := client.Call(&result, "test_null"); err != nil {
+		t.Fatal(err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if !reflect.DeepEqual(result, json.RawMessage("null")) {
+		t.Errorf("Expected null, got %s", result)
 	}
 }
 
