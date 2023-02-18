@@ -433,6 +433,9 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		// only sends valid IDs to our channel.
 		elem := &b[byID[string(resp.ID)]]
 		if resp.Error != nil {
+			if resp.Error.Message == errMsgBatchTooLarge {
+				return resp.Error
+			}
 			elem.Error = resp.Error
 			continue
 		}

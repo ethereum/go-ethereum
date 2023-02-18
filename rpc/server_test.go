@@ -187,3 +187,22 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestServerBatchRequestLimit(t *testing.T) {
+	server := newTestServer()
+	server.SetBatchLimits(2, 100000)
+	defer server.Stop()
+
+	client := DialInProc(server)
+	batch := make([]BatchElem, 3)
+	for i := range batch {
+		batch[i].Method = "test_echo"
+		batch[i].Result = new(echoResult)
+		batch[i].Args = []any{"x", 1}
+	}
+	err := client.BatchCall(batch)
+
+	if err.Error() != errMsgBatchTooLarge {
+		t.Errorf("error mismatch: %v", err)
+	}
+}

@@ -69,6 +69,7 @@ const (
 const (
 	errMsgTimeout          = "request timed out"
 	errMsgResponseTooLarge = "response too large"
+	errMsgBatchTooLarge    = "batch too large"
 )
 
 type methodNotFoundError struct{ method string }
