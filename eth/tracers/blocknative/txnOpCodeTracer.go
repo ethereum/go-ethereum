@@ -66,6 +66,21 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+
+	// Blocks only contain `Random` post-merge, but we still have pre-merge tests.
+	random := ""
+	if env.Context.Random != nil {
+		random = bytesToHex(env.Context.Random.Bytes())
+	}
+
+	// Populate the block context from the vm environment.
+	t.trace.BlockContext.Number = uintToHex(env.Context.BlockNumber.Uint64())
+	t.trace.BlockContext.BaseFee = uintToHex(env.Context.BaseFee.Uint64())
+	t.trace.BlockContext.Time = uintToHex(env.Context.Time.Uint64())
+	t.trace.BlockContext.Coinbase = addrToHex(env.Context.Coinbase)
+	t.trace.BlockContext.GasLimit = uintToHex(env.Context.GasLimit)
+	t.trace.BlockContext.Random = random
+
 	// This is the initial call
 	t.callStack[0] = CallFrame{
 		Type:  "CALL",
