@@ -310,6 +310,7 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 }
 
 const (
+	dbRedis   = "redis"
 	dbPebble  = "pebble"
 	dbLeveldb = "leveldb"
 )
@@ -339,6 +340,8 @@ type OpenOptions struct {
 	Namespace         string // the namespace for database relevant metrics
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
+	RemoteEndpoint    string // the endpoint of the remote database (used for redis)
+	RemotePassword    string // the password of the remote database (used for redis)
 	ReadOnly          bool
 }
 
@@ -375,7 +378,13 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
 func Open(o OpenOptions) (ethdb.Database, error) {
-	kvdb, err := openKeyValueDatabase(o)
+	var kvdb ethdb.Database
+	var err error
+	if o.Type == dbRedis {
+		kvdb, err = NewRedisDatabase(o.RemoteEndpoint, o.RemotePassword)
+	} else {
+		kvdb, err = openKeyValueDatabase(o)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -398,22 +407,6 @@ func NewRedisDatabase(endpoint string, password string) (ethdb.Database, error) 
 		return nil, err
 	}
 	return NewDatabase(db), nil
-}
-
-// NewRedisDatabaseWithFreezer creates a persistent key-value database with a
-// freezer moving immutable chain segments into cold storage.
-func NewRedisDatabaseWithFreezer(endpoint string, password string, ancientsDirectory string, namespace string, readonly bool) (ethdb.Database, error) {
-	kvdb, err := redisdb.New(endpoint, password)
-	if err != nil {
-		log.Error("Error initializing Redis", err)
-		return nil, err
-	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, ancientsDirectory, namespace, readonly)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-	return frdb, nil
 }
 
 type counter uint64

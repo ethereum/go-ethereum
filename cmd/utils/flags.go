@@ -111,7 +111,7 @@ var (
 	}
 	DBEngineFlag = &cli.StringFlag{
 		Name:     "db.engine",
-		Usage:    "Backing database implementation to use ('leveldb' or 'pebble')",
+		Usage:    "Backing database implementation to use: leveldb or redis",
 		Value:    "leveldb",
 		Category: flags.EthCategory,
 	}
@@ -1019,6 +1019,7 @@ var (
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
+		DBEngineFlag,
 		RedisEndpointFlag,
 		AncientFlag,
 		RemoteDBFlag,
@@ -1028,7 +1029,7 @@ var (
 
 func init() {
 	if rawdb.PebbleEnabled {
-		DatabasePathFlags = append(DatabasePathFlags, DBEngineFlag)
+		DBEngineFlag.Usage += " or pebble"
 	}
 }
 
@@ -1475,7 +1476,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 	SetDataDir(ctx, cfg)
-	SetRedisEndpoint(ctx, cfg)
 	setSmartCard(ctx, cfg)
 
 	if ctx.IsSet(JWTSecretFlag.Name) {
@@ -1510,12 +1510,17 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
-		if dbEngine != "leveldb" && dbEngine != "pebble" {
-			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+		if dbEngine != "leveldb" && dbEngine != "redis" && (!rawdb.PebbleEnabled || dbEngine != "pebble") {
+			if rawdb.PebbleEnabled {
+				Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb', 'pebble' or 'redis'", dbEngine)
+			} else {
+				Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'redis'", dbEngine)
+			}
 		}
 		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
 		cfg.DBEngine = dbEngine
 	}
+	SetRedisEndpoint(ctx, cfg)
 }
 
 func setSmartCard(ctx *cli.Context, cfg *node.Config) {
@@ -1554,20 +1559,21 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 }
 
 func SetRedisEndpoint(ctx *cli.Context, cfg *node.Config) {
-	url := ctx.String(RedisEndpointFlag.Name)
-	if url == "" {
-		return
+	if cfg.DBEngine == "redis" {
+		url := ctx.String(RedisEndpointFlag.Name)
+		if url == "" {
+			Fatalf("Redis endpoint must be specified when using redis as db engine")
+		}
+		cfg.RedisEndpoint = url
+		cfg.RedisPassword = ctx.String(RedisPasswordFlag.Name)
+	} else {
+		if ctx.IsSet(RedisEndpointFlag.Name) {
+			log.Warn("Redis endpoint is only used when using redis as db engine")
+		}
+		if ctx.IsSet(RedisPasswordFlag.Name) {
+			log.Warn("Redis password is only used when using redis as db engine")
+		}
 	}
-
-	if ctx.Bool(DeveloperFlag.Name) {
-		log.Warn("The --"+RedisEndpointFlag.Name+" flag will be ignored because it's in dev mode",
-			RedisEndpointFlag.Name, url,
-		)
-		return
-	}
-
-	cfg.RedisEndpoint = url
-	cfg.RedisPassword = ctx.String(RedisPasswordFlag.Name)
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {

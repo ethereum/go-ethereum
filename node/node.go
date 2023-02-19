@@ -708,16 +708,16 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
-	} else if n.config.RedisEndpoint != "" {
-		db, err = rawdb.NewRedisDatabase(n.config.RedisEndpoint, n.config.RedisPassword)
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
-			Type:      n.config.DBEngine,
-			Directory: n.ResolvePath(name),
-			Namespace: namespace,
-			Cache:     cache,
-			Handles:   handles,
-			ReadOnly:  readonly,
+			Type:           n.config.DBEngine,
+			Directory:      n.ResolvePath(name),
+			Namespace:      namespace,
+			Cache:          cache,
+			Handles:        handles,
+			RemoteEndpoint: n.config.RedisEndpoint,
+			RemotePassword: n.config.RedisPassword,
+			ReadOnly:       readonly,
 		})
 	}
 
@@ -742,8 +742,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
-	} else if n.config.RedisEndpoint != "" {
-		db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, n.config.RedisPassword, n.ResolveAncient(name, ancient), namespace, readonly)
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
@@ -752,6 +750,8 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,
+			RemoteEndpoint:    n.config.RedisEndpoint,
+			RemotePassword:    n.config.RedisPassword,
 			ReadOnly:          readonly,
 		})
 	}
