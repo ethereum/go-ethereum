@@ -51,12 +51,11 @@ type Trie struct {
 	// actually unhashed nodes.
 	unhashed int
 
+	// accessList tracks the loaded nodes from database.
+	accessList map[string][]byte
+
 	// reader is the handler trie can retrieve nodes from.
 	reader *trieReader
-
-	// tracer is the tool to track the trie changes.
-	// It will be reset after each commit operation.
-	tracer *tracer
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -66,12 +65,16 @@ func (t *Trie) newFlag() nodeFlag {
 
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
+	accessList := make(map[string][]byte)
+	for path, blob := range t.accessList {
+		accessList[path] = common.CopyBytes(blob)
+	}
 	return &Trie{
-		root:     t.root,
-		owner:    t.owner,
-		unhashed: t.unhashed,
-		reader:   t.reader,
-		tracer:   t.tracer.copy(),
+		root:       t.root,
+		owner:      t.owner,
+		unhashed:   t.unhashed,
+		reader:     t.reader,
+		accessList: accessList,
 	}
 }
 
@@ -87,9 +90,9 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 		return nil, err
 	}
 	trie := &Trie{
-		owner:  id.Owner,
-		reader: reader,
-		//tracer: newTracer(),
+		owner:      id.Owner,
+		reader:     reader,
+		accessList: make(map[string][]byte),
 	}
 	if id.Root != (common.Hash{}) && id.Root != emptyRoot {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
@@ -326,11 +329,6 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if matchlen == 0 {
 			return true, branch, nil
 		}
-		// New branch node is created as a child of the original short node.
-		// Track the newly inserted node in the tracer. The node identifier
-		// passed is the path from the root node.
-		t.tracer.onInsert(append(prefix, key[:matchlen]...))
-
 		// Replace it with a short node leading up to the branch.
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
@@ -345,11 +343,6 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, n, nil
 
 	case nil:
-		// New short node is created and track it in the tracer. The node identifier
-		// passed is the path from the root node. Note the valueNode won't be tracked
-		// since it's always embedded in its parent.
-		t.tracer.onInsert(prefix)
-
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
 	case hashNode:
@@ -402,11 +395,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, nil // don't replace n on mismatch
 		}
 		if matchlen == len(key) {
-			// The matched short node is deleted entirely and track
-			// it in the deletion set. The same the valueNode doesn't
-			// need to be tracked at all since it's always embedded.
-			t.tracer.onDelete(prefix)
-
 			return true, nil, nil // remove n entirely for whole matches
 		}
 		// The key is longer than n.Key. Remove the remaining suffix
@@ -419,10 +407,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		}
 		switch child := child.(type) {
 		case *shortNode:
-			// The child shortNode is merged into its parent, track
-			// is deleted as well.
-			t.tracer.onDelete(append(prefix, n.Key...))
-
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
 			// shortNode{..., shortNode{...}}. Use concat (which
@@ -484,11 +468,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					return false, nil, err
 				}
 				if cnode, ok := cnode.(*shortNode); ok {
-					// Replace the entire full node with the short node.
-					// Mark the original short node as deleted since the
-					// value is embedded into the parent now.
-					t.tracer.onDelete(append(prefix, byte(pos)))
-
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
 				}
@@ -548,7 +527,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.onRead(prefix, blob)
+	t.accessList[string(prefix)] = blob
 	return mustDecodeNode(n, blob), nil
 }
 
@@ -567,16 +546,15 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
-	defer t.tracer.reset()
-
+	// Reset accessList at the end of commit
+	defer func() {
+		t.accessList = make(map[string][]byte)
+	}()
 	// Trie is empty and can be classified into two types of situations:
 	// - The trie was empty and no update happens
 	// - The trie was non-empty and all nodes are dropped
 	if t.root == nil {
-		// Wrap tracked deletions as the return
-		set := NewNodeSet(t.owner)
-		t.tracer.markDeletions(set)
-		return emptyRoot, set
+		return emptyRoot, nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
@@ -590,8 +568,9 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 		t.root = hashedNode
 		return rootHash, nil
 	}
-	h := newCommitter(t.owner, t.tracer, collectLeaf)
-	newRoot, nodes := h.Commit(t.root)
+	nodes := NewNodeSet(t.owner, t.accessList)
+	h := newCommitter(nodes, collectLeaf)
+	newRoot := h.Commit(t.root)
 	t.root = newRoot
 	return rootHash, nodes
 }
@@ -614,5 +593,5 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
-	t.tracer.reset()
+	t.accessList = make(map[string][]byte)
 }
