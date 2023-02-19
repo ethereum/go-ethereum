@@ -135,7 +135,6 @@ func alwaysTrueFn() bool {
 }
 
 func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, randomDisconnect bool) {
-	rand.Seed(time.Now().UnixNano())
 	var (
 		clock     mclock.Simulated
 		db        = rawdb.NewMemoryDatabase()
@@ -410,7 +409,6 @@ func TestFreeClientKickedOut(t *testing.T) {
 	clock.Run(5 * time.Minute)
 	for i := 0; i < 10; i++ {
 		connect(pool, newPoolTestPeer(i+10, kicked))
-
 	}
 	clock.Run(0)
 

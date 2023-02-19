@@ -35,15 +35,12 @@ func (n *Node) apis() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "admin",
-			Version:   "1.0",
 			Service:   &adminAPI{n},
 		}, {
 			Namespace: "debug",
-			Version:   "1.0",
 			Service:   debug.Handler,
 		}, {
 			Namespace: "web3",
-			Version:   "1.0",
 			Service:   &web3API{n},
 		},
 	}
@@ -272,7 +269,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	openApis, _ := api.node.GetAPIs()
+	openApis, _ := api.node.getAPIs()
 	if err := server.enableWS(openApis, config); err != nil {
 		return false, err
 	}

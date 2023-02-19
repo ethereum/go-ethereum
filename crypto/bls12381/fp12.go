@@ -96,7 +96,6 @@ func (e *fp12) add(c, a, b *fe12) {
 	fp6 := e.fp6
 	fp6.add(&c[0], &a[0], &b[0])
 	fp6.add(&c[1], &a[1], &b[1])
-
 }
 
 func (e *fp12) double(c, a *fe12) {
@@ -109,7 +108,6 @@ func (e *fp12) sub(c, a, b *fe12) {
 	fp6 := e.fp6
 	fp6.sub(&c[0], &a[0], &b[0])
 	fp6.sub(&c[1], &a[1], &b[1])
-
 }
 
 func (e *fp12) neg(c, a *fe12) {

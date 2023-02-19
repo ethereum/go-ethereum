@@ -27,16 +27,11 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/quick"
-	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
-
-func init() {
-	rand.Seed(time.Now().Unix())
-}
 
 // TestFreezerBasics test initializing a freezertable from scratch, writing to the table,
 // and reading it back.
@@ -902,7 +897,7 @@ func TestSequentialRead(t *testing.T) {
 		}
 		// Write 15 bytes 30 times
 		writeChunks(t, f, 30, 15)
-		f.DumpIndex(0, 30)
+		f.dumpIndexStdout(0, 30)
 		f.Close()
 	}
 	{ // Open it, iterate, verify iteration

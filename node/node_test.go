@@ -559,13 +559,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 	}
 
 	for _, path := range test.wantHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp := rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 200 {
 			t.Errorf("Error: %s: bad status code %d, want 200", path, resp.StatusCode)
 		}
 	}
 	for _, path := range test.wantNoHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp := rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 404 {
 			t.Errorf("Error: %s: bad status code %d, want 404", path, resp.StatusCode)
 		}
@@ -581,16 +581,16 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}
-
 	}
 }
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
-		HTTPHost: "127.0.0.1",
-		HTTPPort: httpPort,
-		WSHost:   "127.0.0.1",
-		WSPort:   wsPort,
+		HTTPHost:     "127.0.0.1",
+		HTTPPort:     httpPort,
+		WSHost:       "127.0.0.1",
+		WSPort:       wsPort,
+		HTTPTimeouts: rpc.DefaultHTTPTimeouts,
 	}
 	node, err := New(conf)
 	if err != nil {
@@ -614,7 +614,6 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
-
 	}
 	return resp
 }

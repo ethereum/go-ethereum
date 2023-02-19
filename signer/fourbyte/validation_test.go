@@ -53,7 +53,6 @@ func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
 	if t.i != "" {
 		a := hexutil.Bytes(common.FromHex(t.i))
 		input = &a
-
 	}
 	return &apitypes.SendTxArgs{
 		From:     *from,

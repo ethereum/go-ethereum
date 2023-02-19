@@ -35,7 +35,7 @@ import (
 // scratchHeaders is the number of headers to store in a scratch space to allow
 // concurrent downloads. A header is about 0.5KB in size, so there is no worry
 // about using too much memory. The only catch is that we can only validate gaps
-// afer they're linked to the head, so the bigger the scratch space, the larger
+// after they're linked to the head, so the bigger the scratch space, the larger
 // potential for invalid headers.
 //
 // The current scratch space of 131072 headers is expected to use 64MB RAM.
@@ -51,7 +51,7 @@ const requestHeaders = 512
 // errSyncLinked is an internal helper error to signal that the current sync
 // cycle linked up to the genesis block, this the skeleton syncer should ping
 // the backfiller to resume. Since we already have that logic on sync start,
-// piggie-back on that instead of 2 entrypoints.
+// piggy-back on that instead of 2 entrypoints.
 var errSyncLinked = errors.New("sync linked")
 
 // errSyncMerged is an internal helper error to signal that the current sync
@@ -148,7 +148,7 @@ type backfiller interface {
 	// suspend requests the backfiller to abort any running full or snap sync
 	// based on the skeleton chain as it might be invalid. The backfiller should
 	// gracefully handle multiple consecutive suspends without a resume, even
-	// on initial sartup.
+	// on initial startup.
 	//
 	// The method should return the last block header that has been successfully
 	// backfilled, or nil if the backfiller was not resumed.
@@ -209,7 +209,7 @@ type skeleton struct {
 
 	headEvents chan *headUpdate // Notification channel for new heads
 	terminate  chan chan error  // Termination channel to abort sync
-	terminated chan struct{}    // Channel to signal that the syner is dead
+	terminated chan struct{}    // Channel to signal that the syncer is dead
 
 	// Callback hooks used during testing
 	syncStarting func() // callback triggered after a sync cycle is inited but before started
@@ -358,6 +358,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// If the sync is already done, resume the backfiller. When the loop stops,
 	// terminate the backfiller too.
 	linked := len(s.progress.Subchains) == 1 &&
+		rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
 	if linked {
@@ -519,7 +520,7 @@ func (s *skeleton) initSync(head *types.Header) {
 				}
 				break
 			}
-			// If the last subchain can be extended, we're lucky. Otherwise create
+			// If the last subchain can be extended, we're lucky. Otherwise, create
 			// a new subchain sync task.
 			var extended bool
 			if n := len(s.progress.Subchains); n > 0 {
@@ -553,7 +554,7 @@ func (s *skeleton) initSync(head *types.Header) {
 			return
 		}
 	}
-	// Either we've failed to decode the previus state, or there was none. Start
+	// Either we've failed to decode the previous state, or there was none. Start
 	// a fresh sync with a single subchain represented by the currently sent
 	// chain head.
 	s.progress = &skeletonProgress{
@@ -823,7 +824,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 	}
 }
 
-// revertRequests locates all the currently pending reuqests from a particular
+// revertRequests locates all the currently pending requests from a particular
 // peer and reverts them, rescheduling for others to fulfill.
 func (s *skeleton) revertRequests(peer string) {
 	// Gather the requests first, revertals need the lock too
@@ -871,7 +872,7 @@ func (s *skeleton) revertRequest(req *headerRequest) {
 	delete(s.requests, req.id)
 
 	// Remove the request from the tracked set and mark the task as not-pending,
-	// ready for resheduling
+	// ready for rescheduling
 	s.scratchOwners[(s.scratchHead-req.head)/requestHeaders] = ""
 }
 
@@ -946,12 +947,12 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// In the case of full sync it would be enough to check for the body,
 				// but even a full syncing node will generate a receipt once block
 				// processing is done, so it's just one more "needless" check.
-				var (
-					hasBody    = rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1)
-					hasReceipt = rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
-				)
-				if hasBody && hasReceipt {
-					linked = true
+				//
+				// The weird cascading checks are done to minimize the database reads.
+				linked = rawdb.HasHeader(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
+				if linked {
 					break
 				}
 			}
@@ -976,8 +977,14 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// the expected new sync cycle after some propagated blocks. Log
 				// it for debugging purposes, explicitly clean and don't escalate.
 				case subchains == 2 && s.progress.Subchains[1].Head == s.progress.Subchains[1].Tail:
-					log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
-					rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					// Remove the leftover skeleton header associated with old
+					// skeleton chain only if it's not covered by the current
+					// skeleton range.
+					if s.progress.Subchains[1].Head < s.progress.Subchains[0].Tail {
+						log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
+						rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					}
+					// Drop the leftover skeleton chain since it's stale.
 					s.progress.Subchains = s.progress.Subchains[:1]
 
 				// If we have more than one header or more than one leftover chain,
@@ -1095,6 +1102,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	var (
 		start = s.progress.Subchains[0].Tail // start deleting from the first known header
 		end   = number                       // delete until the requested threshold
+		batch = s.db.NewBatch()
 	)
 	s.progress.Subchains[0].Tail = number
 	s.progress.Subchains[0].Next = filled.ParentHash
@@ -1104,16 +1112,13 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		// subchain forward to keep tracking the node's block imports
 		end = s.progress.Subchains[0].Head + 1 // delete the entire original range, including the head
 		s.progress.Subchains[0].Head = number  // assign a new head (tail is already assigned to this)
-	}
-	// Execute the trimming and the potential rewiring of the progress
-	batch := s.db.NewBatch()
 
-	if end != number {
 		// The entire original skeleton chain was deleted and a new one
 		// defined. Make sure the new single-header chain gets pushed to
 		// disk to keep internal state consistent.
 		rawdb.WriteSkeletonHeader(batch, filled)
 	}
+	// Execute the trimming and the potential rewiring of the progress
 	s.saveSyncStatus(batch)
 	for n := start; n < end; n++ {
 		// If the batch grew too big, flush it and continue with a new batch.
@@ -1169,8 +1174,13 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, err error) 
 		return nil, nil, err
 	}
 	head = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head)
+	if head == nil {
+		return nil, nil, fmt.Errorf("head skeleton header %d is missing", progress.Subchains[0].Head)
+	}
 	tail = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Tail)
-
+	if tail == nil {
+		return nil, nil, fmt.Errorf("tail skeleton header %d is missing", progress.Subchains[0].Tail)
+	}
 	return head, tail, nil
 }
 

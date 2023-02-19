@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -114,7 +115,6 @@ func TestEIP2718TransactionSigHash(t *testing.T) {
 
 // This test checks signature operations on access list transactions.
 func TestEIP2930Signer(t *testing.T) {
-
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		keyAddr = crypto.PubkeyToAddress(key.PublicKey)
@@ -171,14 +171,14 @@ func TestEIP2930Signer(t *testing.T) {
 			t.Errorf("test %d: wrong sig hash: got %x, want %x", i, sigHash, test.wantSignerHash)
 		}
 		sender, err := Sender(test.signer, test.tx)
-		if err != test.wantSenderErr {
+		if !errors.Is(err, test.wantSenderErr) {
 			t.Errorf("test %d: wrong Sender error %q", i, err)
 		}
 		if err == nil && sender != keyAddr {
 			t.Errorf("test %d: wrong sender address %x", i, sender)
 		}
 		signedTx, err := SignTx(test.tx, test.signer, key)
-		if err != test.wantSignErr {
+		if !errors.Is(err, test.wantSignErr) {
 			t.Fatalf("test %d: wrong SignTx error %q", i, err)
 		}
 		if signedTx != nil {
@@ -530,4 +530,72 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 		}
 	}
 	return nil
+}
+
+func TestTransactionSizes(t *testing.T) {
+	signer := NewLondonSigner(big.NewInt(123))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	to := common.HexToAddress("0x01")
+	for i, txdata := range []TxData{
+		&AccessListTx{
+			ChainID:  big.NewInt(123),
+			Nonce:    0,
+			To:       nil,
+			Value:    big.NewInt(1000),
+			Gas:      21000,
+			GasPrice: big.NewInt(100000),
+		},
+		&LegacyTx{
+			Nonce:    1,
+			GasPrice: big.NewInt(500),
+			Gas:      1000000,
+			To:       &to,
+			Value:    big.NewInt(1),
+		},
+		&AccessListTx{
+			ChainID:  big.NewInt(123),
+			Nonce:    1,
+			GasPrice: big.NewInt(500),
+			Gas:      1000000,
+			To:       &to,
+			Value:    big.NewInt(1),
+			AccessList: AccessList{
+				AccessTuple{
+					Address:     common.HexToAddress("0x01"),
+					StorageKeys: []common.Hash{common.HexToHash("0x01")},
+				}},
+		},
+		&DynamicFeeTx{
+			ChainID:   big.NewInt(123),
+			Nonce:     1,
+			Gas:       1000000,
+			To:        &to,
+			Value:     big.NewInt(1),
+			GasTipCap: big.NewInt(500),
+			GasFeeCap: big.NewInt(500),
+		},
+	} {
+		tx, err := SignNewTx(key, signer, txdata)
+		if err != nil {
+			t.Fatalf("test %d: %v", i, err)
+		}
+		bin, _ := tx.MarshalBinary()
+
+		// Check initial calc
+		if have, want := int(tx.Size()), len(bin); have != want {
+			t.Errorf("test %d: size wrong, have %d want %d", i, have, want)
+		}
+		// Check cached version too
+		if have, want := int(tx.Size()), len(bin); have != want {
+			t.Errorf("test %d: (cached) size wrong, have %d want %d", i, have, want)
+		}
+		// Check unmarshalled version too
+		utx := new(Transaction)
+		if err := utx.UnmarshalBinary(bin); err != nil {
+			t.Fatalf("test %d: failed to unmarshal tx: %v", i, err)
+		}
+		if have, want := int(utx.Size()), len(bin); have != want {
+			t.Errorf("test %d: (unmarshalled) size wrong, have %d want %d", i, have, want)
+		}
+	}
 }

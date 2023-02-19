@@ -76,7 +76,7 @@ func (c *Chain) RootAt(height int) common.Hash {
 
 // ForkID gets the fork id of the chain.
 func (c *Chain) ForkID() forkid.ID {
-	return forkid.NewID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()))
+	return forkid.NewID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()), c.blocks[0].Time())
 }
 
 // Shorten returns a copy chain of a desired height from the imported
@@ -96,12 +96,12 @@ func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
 }
 
-func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
+func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
 		return nil, fmt.Errorf("no block headers requested")
 	}
 
-	headers := make(BlockHeaders, req.Amount)
+	headers := make([]*types.Header, req.Amount)
 	var blockNumber uint64
 
 	// range over blocks to check if our chain has the requested header
@@ -119,7 +119,6 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 		for i := 1; i < int(req.Amount); i++ {
 			blockNumber -= (1 - req.Skip)
 			headers[i] = c.blocks[blockNumber].Header()
-
 		}
 
 		return headers, nil
@@ -140,7 +139,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock := gen.ToBlock(nil)
+	gblock := gen.ToBlock()
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {

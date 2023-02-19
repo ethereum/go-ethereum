@@ -155,7 +155,6 @@ func BenchmarkAddressHex(b *testing.B) {
 }
 
 func TestMixedcaseAccount_Address(t *testing.T) {
-
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
 	// Note: 0X{checksum_addr} is not valid according to spec above
 
@@ -192,9 +191,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		if err := json.Unmarshal([]byte(r), &r2); err == nil {
 			t.Errorf("Expected failure, input %v", r)
 		}
-
 	}
-
 }
 
 func TestHash_Scan(t *testing.T) {

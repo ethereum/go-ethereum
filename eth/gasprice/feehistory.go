@@ -56,7 +56,12 @@ type blockFees struct {
 	err     error
 }
 
-// processedFees contains the results of a processed block and is also used for caching
+type cacheKey struct {
+	number      uint64
+	percentiles string
+}
+
+// processedFees contains the results of a processed block.
 type processedFees struct {
 	reward               []*big.Int
 	baseFee, nextBaseFee *big.Int
@@ -137,44 +142,68 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 // also returned if requested and available.
 // Note: an error is only returned if retrieving the head header has failed. If there are no
 // retrievable blocks in the specified range then zero block count is returned with no error.
-func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.BlockNumber, blocks int) (*types.Block, []*types.Receipt, uint64, int, error) {
+func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNumber, blocks int) (*types.Block, []*types.Receipt, uint64, int, error) {
 	var (
-		headBlock       rpc.BlockNumber
+		headBlock       *types.Header
 		pendingBlock    *types.Block
 		pendingReceipts types.Receipts
+		err             error
 	)
-	// query either pending block or head header and set headBlock
-	if lastBlock == rpc.PendingBlockNumber {
-		if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
-			lastBlock = rpc.BlockNumber(pendingBlock.NumberU64())
-			headBlock = lastBlock - 1
-		} else {
-			// pending block not supported by backend, process until latest block
-			lastBlock = rpc.LatestBlockNumber
-			blocks--
-			if blocks == 0 {
-				return nil, nil, 0, 0, nil
-			}
-		}
+
+	// Get the chain's current head.
+	if headBlock, err = oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err != nil {
+		return nil, nil, 0, 0, err
 	}
-	if pendingBlock == nil {
-		// if pending block is not fetched then we retrieve the head header to get the head block number
-		if latestHeader, err := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err == nil {
-			headBlock = rpc.BlockNumber(latestHeader.Number.Uint64())
-		} else {
+	head := rpc.BlockNumber(headBlock.Number.Uint64())
+
+	// Fail if request block is beyond the chain's current head.
+	if head < reqEnd {
+		return nil, nil, 0, 0, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, reqEnd, head)
+	}
+
+	// Resolve block tag.
+	if reqEnd < 0 {
+		var (
+			resolved *types.Header
+			err      error
+		)
+		switch reqEnd {
+		case rpc.PendingBlockNumber:
+			if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
+				resolved = pendingBlock.Header()
+			} else {
+				// Pending block not supported by backend, process only until latest block.
+				resolved = headBlock
+
+				// Update total blocks to return to account for this.
+				blocks--
+			}
+		case rpc.LatestBlockNumber:
+			// Retrieved above.
+			resolved = headBlock
+		case rpc.SafeBlockNumber:
+			resolved, err = oracle.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+		case rpc.FinalizedBlockNumber:
+			resolved, err = oracle.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+		case rpc.EarliestBlockNumber:
+			resolved, err = oracle.backend.HeaderByNumber(ctx, rpc.EarliestBlockNumber)
+		}
+		if resolved == nil || err != nil {
 			return nil, nil, 0, 0, err
 		}
+		// Absolute number resolved.
+		reqEnd = rpc.BlockNumber(resolved.Number.Uint64())
 	}
-	if lastBlock == rpc.LatestBlockNumber {
-		lastBlock = headBlock
-	} else if pendingBlock == nil && lastBlock > headBlock {
-		return nil, nil, 0, 0, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, lastBlock, headBlock)
+
+	// If there are no blocks to return, short circuit.
+	if blocks == 0 {
+		return nil, nil, 0, 0, nil
 	}
-	// ensure not trying to retrieve before genesis
-	if rpc.BlockNumber(blocks) > lastBlock+1 {
-		blocks = int(lastBlock + 1)
+	// Ensure not trying to retrieve before genesis.
+	if int(reqEnd+1) < blocks {
+		blocks = int(reqEnd + 1)
 	}
-	return pendingBlock, pendingReceipts, uint64(lastBlock), blocks, nil
+	return pendingBlock, pendingReceipts, uint64(reqEnd), blocks, nil
 }
 
 // FeeHistory returns data relevant for fee estimation based on the specified range of blocks.
@@ -184,10 +213,11 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 // actually processed range is returned to avoid ambiguity when parts of the requested range
 // are not available or when the head has changed during processing this request.
 // Three arrays are returned based on the processed blocks:
-// - reward: the requested percentiles of effective priority fees per gas of transactions in each
-//   block, sorted in ascending order and weighted by gas used.
-// - baseFee: base fee per gas in the given block
-// - gasUsedRatio: gasUsed/gasLimit in the given block
+//   - reward: the requested percentiles of effective priority fees per gas of transactions in each
+//     block, sorted in ascending order and weighted by gas used.
+//   - baseFee: base fee per gas in the given block
+//   - gasUsedRatio: gasUsed/gasLimit in the given block
+//
 // Note: baseFee includes the next block after the newest of the returned range, because this
 // value can be derived from the newest block.
 func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
@@ -245,13 +275,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 					oracle.processBlock(fees, rewardPercentiles)
 					results <- fees
 				} else {
-					cacheKey := struct {
-						number      uint64
-						percentiles string
-					}{blockNumber, string(percentileKey)}
+					cacheKey := cacheKey{number: blockNumber, percentiles: string(percentileKey)}
 
 					if p, ok := oracle.historyCache.Get(cacheKey); ok {
-						fees.results = p.(processedFees)
+						fees.results = p
 						results <- fees
 					} else {
 						if len(rewardPercentiles) != 0 {

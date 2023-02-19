@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -137,6 +138,13 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	b.resume()
 }
 
+// SetBadBlockCallback sets the callback to run when a bad block is hit by the
+// block processor. This method is not thread safe and should be set only once
+// on startup before system events are fired.
+func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
+	d.badBlock = onBadBlock
+}
+
 // BeaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
@@ -229,7 +237,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	// Binary search to find the ancestor
 	start, end := beaconTail.Number.Uint64()-1, number
 	if number := beaconHead.Number.Uint64(); end > number {
-		// This shouldn't really happen in a healty network, but if the consensus
+		// This shouldn't really happen in a healthy network, but if the consensus
 		// clients feeds us a shorter chain as the canonical, we should not attempt
 		// to access non-existent skeleton items.
 		log.Warn("Beacon head lower than local chain", "beacon", number, "local", end)
@@ -263,7 +271,8 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
-	head, tail, err := d.skeleton.Bounds()
+	var head *types.Header
+	_, tail, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -281,6 +290,47 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
 	for {
+		// Some beacon headers might have appeared since the last cycle, make
+		// sure we're always syncing to all available ones
+		head, _, err = d.skeleton.Bounds()
+		if err != nil {
+			return err
+		}
+		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
+		// move it ahead to HEAD-64
+		d.pivotLock.Lock()
+		if d.pivotHeader != nil {
+			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
+				// Retrieve the next pivot header, either from skeleton chain
+				// or the filled chain
+				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+
+				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
+				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
+					if number < tail.Number.Uint64() {
+						dist := tail.Number.Uint64() - number
+						if len(localHeaders) >= int(dist) {
+							d.pivotHeader = localHeaders[dist-1]
+							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
+						}
+					}
+				}
+				// Print an error log and return directly in case the pivot header
+				// is still not found. It means the skeleton chain is not linked
+				// correctly with local chain.
+				if d.pivotHeader == nil {
+					log.Error("Pivot header is not found", "number", number)
+					d.pivotLock.Unlock()
+					return errNoPivotHeader
+				}
+				// Write out the pivot into the database so a rollback beyond
+				// it will reenable snap sync and update the state root that
+				// the state syncer will be downloading
+				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
+			}
+		}
+		d.pivotLock.Unlock()
+
 		// Retrieve a batch of headers and feed it to the header processor
 		var (
 			headers = make([]*types.Header, 0, maxHeadersProcess)
@@ -335,10 +385,6 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		case <-time.After(fsHeaderContCheck):
 		case <-d.cancelCh:
 			return errCanceled
-		}
-		head, _, err = d.skeleton.Bounds()
-		if err != nil {
-			return err
 		}
 	}
 }

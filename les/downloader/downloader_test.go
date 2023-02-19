@@ -229,7 +229,7 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.GetBlockByHash(hash); block != nil {
-		_, err := trie.NewSecure(common.Hash{}, block.Root(), trie.NewDatabase(dl.stateDb))
+		_, err := trie.NewStateTrie(trie.StateTrieID(block.Root()), trie.NewDatabase(dl.stateDb))
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])
@@ -621,7 +621,6 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("block synchronization failed: %v", err)
 	}
 	tester.terminate()
-
 }
 
 // Tests that simple synchronization against a forked chain works correctly. In
@@ -654,8 +653,8 @@ func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnForkedChain(t, tester, testChainBase.len(), []int{chainA.len(), chainB.len()})
 }
 
-// Tests that synchronising against a much shorter but much heavyer fork works
-// corrently and is not dropped.
+// Tests that synchronising against a much shorter but much heavier fork works
+// correctly and is not dropped.
 func TestHeavyForkedSync66Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FullSync) }
 func TestHeavyForkedSync66Fast(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FastSync) }
 func TestHeavyForkedSync66Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH66, LightSync) }

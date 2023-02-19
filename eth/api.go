@@ -157,7 +157,7 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	}
 	if _, err := os.Stat(file); err == nil {
 		// File already exists. Allowing overwrite could be a DoS vector,
-		// since the 'file' may point to arbitrary paths on the drive
+		// since the 'file' may point to arbitrary paths on the drive.
 		return false, errors.New("location would overwrite an existing file")
 	}
 	// Make sure we can create the file to export into
@@ -272,6 +272,8 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		block = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
 		block = api.eth.blockchain.CurrentFinalizedBlock()
+	} else if blockNr == rpc.SafeBlockNumber {
+		block = api.eth.blockchain.CurrentSafeBlock()
 	} else {
 		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 	}
@@ -350,6 +352,8 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 				block = api.eth.blockchain.CurrentBlock()
 			} else if number == rpc.FinalizedBlockNumber {
 				block = api.eth.blockchain.CurrentFinalizedBlock()
+			} else if number == rpc.SafeBlockNumber {
+				block = api.eth.blockchain.CurrentSafeBlock()
 			} else {
 				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
 			}
@@ -401,17 +405,22 @@ type storageEntry struct {
 }
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
-func (api *DebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	// Retrieve the block
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
-	_, _, statedb, err := api.eth.stateAtTransaction(block, txIndex, 0)
+	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	st := statedb.StorageTrie(contractAddress)
+	defer release()
+
+	st, err := statedb.StorageTrie(contractAddress)
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
 	if st == nil {
 		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
 	}
@@ -502,11 +511,11 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
+	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
+	newTrie, err := trie.NewStateTrie(trie.StateTrieID(endBlock.Root()), triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -582,5 +591,16 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
-	return 0, fmt.Errorf("No state found")
+	return 0, errors.New("no state found")
+}
+
+// SetTrieFlushInterval configures how often in-memory tries are persisted
+// to disk. The value is in terms of block processing time, not wall clock.
+func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
+	t, err := time.ParseDuration(interval)
+	if err != nil {
+		return err
+	}
+	api.eth.blockchain.SetTrieFlushInterval(t)
+	return nil
 }

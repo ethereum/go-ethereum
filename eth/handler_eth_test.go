@@ -61,8 +61,12 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		h.blockBroadcasts.Send(packet.Block)
 		return nil
 
-	case *eth.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket66:
 		h.txAnnounces.Send(([]common.Hash)(*packet))
+		return nil
+
+	case *eth.NewPooledTransactionHashesPacket68:
+		h.txAnnounces.Send(packet.Hashes)
 		return nil
 
 	case *eth.TransactionsPacket:
@@ -81,6 +85,8 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 // Tests that peers are correctly accepted (or rejected) based on the advertised
 // fork IDs in the protocol handshake.
 func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, eth.ETH66) }
+func TestForkIDSplit67(t *testing.T) { testForkIDSplit(t, eth.ETH67) }
+func TestForkIDSplit68(t *testing.T) { testForkIDSplit(t, eth.ETH68) }
 
 func testForkIDSplit(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -102,14 +108,11 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}
 
-		genesisNoFork  = gspecNoFork.MustCommit(dbNoFork)
-		genesisProFork = gspecProFork.MustCommit(dbProFork)
+		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil, nil)
+		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil, nil)
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil)
-
-		blocksNoFork, _  = core.GenerateChain(configNoFork, genesisNoFork, engine, dbNoFork, 2, nil)
-		blocksProFork, _ = core.GenerateChain(configProFork, genesisProFork, engine, dbProFork, 2, nil)
+		_, blocksNoFork, _  = core.GenerateChainWithGenesis(gspecNoFork, engine, 2, nil)
+		_, blocksProFork, _ = core.GenerateChainWithGenesis(gspecProFork, engine, 2, nil)
 
 		ethNoFork, _ = newHandler(&handlerConfig{
 			Database:   dbNoFork,
@@ -238,6 +241,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 
 // Tests that received transactions are added to the local pool.
 func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, eth.ETH66) }
+func TestRecvTransactions67(t *testing.T) { testRecvTransactions(t, eth.ETH67) }
+func TestRecvTransactions68(t *testing.T) { testRecvTransactions(t, eth.ETH68) }
 
 func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -295,6 +300,8 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 
 // This test checks that pending transactions are sent.
 func TestSendTransactions66(t *testing.T) { testSendTransactions(t, eth.ETH66) }
+func TestSendTransactions67(t *testing.T) { testSendTransactions(t, eth.ETH67) }
+func TestSendTransactions68(t *testing.T) { testSendTransactions(t, eth.ETH68) }
 
 func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -353,7 +360,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	seen := make(map[common.Hash]struct{})
 	for len(seen) < len(insert) {
 		switch protocol {
-		case 66:
+		case 66, 67, 68:
 			select {
 			case hashes := <-anns:
 				for _, hash := range hashes {
@@ -380,6 +387,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
 func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, eth.ETH66) }
+func TestTransactionPropagation67(t *testing.T) { testTransactionPropagation(t, eth.ETH67) }
+func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -442,7 +451,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 			select {
 			case event := <-txChs[i]:
 				arrived += len(event.Txs)
-			case <-time.After(time.Second):
+			case <-time.After(2 * time.Second):
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
 				timeout = true
 			}
@@ -490,7 +499,6 @@ func TestCheckpointChallenge(t *testing.T) {
 }
 
 func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpoint bool, timeout bool, empty bool, match bool, drop bool) {
-
 	// Reduce the checkpoint handshake challenge timeout
 	defer func(old time.Duration) { syncChallengeTimeout = old }(syncChallengeTimeout)
 	syncChallengeTimeout = 250 * time.Millisecond
@@ -682,6 +690,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 // Tests that a propagated malformed block (uncles or transactions don't match
 // with the hashes in the header) gets discarded and not broadcast forward.
 func TestBroadcastMalformedBlock66(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH66) }
+func TestBroadcastMalformedBlock67(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH67) }
+func TestBroadcastMalformedBlock68(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH68) }
 
 func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	t.Parallel()

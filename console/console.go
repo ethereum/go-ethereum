@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
@@ -198,14 +199,23 @@ func (c *Console) initWeb3(bridge *bridge) error {
 	return err
 }
 
+var defaultAPIs = map[string]string{"eth": "1.0", "net": "1.0", "debug": "1.0"}
+
 // initExtensions loads and registers web3.js extensions.
 func (c *Console) initExtensions() error {
-	// Compute aliases from server-provided modules.
+	const methodNotFound = -32601
 	apis, err := c.client.SupportedModules()
 	if err != nil {
-		return fmt.Errorf("api modules: %v", err)
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == methodNotFound {
+			log.Warn("Server does not support method rpc_modules, using default API list.")
+			apis = defaultAPIs
+		} else {
+			return err
+		}
 	}
-	aliases := map[string]struct{}{"eth": {}, "personal": {}}
+
+	// Compute aliases from server-provided modules.
+	aliases := map[string]struct{}{"eth": {}}
 	for api := range apis {
 		if api == "web3" {
 			continue
@@ -250,6 +260,7 @@ func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	if personal == nil || c.prompter == nil {
 		return
 	}
+	log.Warn("Enabling deprecated personal namespace")
 	jeth := vm.NewObject()
 	vm.Set("jeth", jeth)
 	jeth.Set("openWallet", personal.Get("openWallet"))
@@ -290,17 +301,13 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	if len(line) == 0 || pos == 0 {
 		return "", nil, ""
 	}
-	// Chunck data to relevant part for autocompletion
+	// Chunk data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
-		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
-			continue
-		}
-		// Handle web3 in a special way (i.e. other numbers aren't auto completed)
-		if start >= 3 && line[start-3:start] == "web3" {
-			start -= 3
+		c := line[start]
+		if c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '1' && c <= '9') {
 			continue
 		}
 		// We've hit an unexpected character, autocomplete form here
@@ -407,7 +414,7 @@ func (c *Console) StopInteractive() {
 	}
 }
 
-// Interactive starts an interactive user session, where in.put is propted from
+// Interactive starts an interactive user session, where input is prompted from
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
@@ -497,7 +504,7 @@ func (c *Console) readLines(input chan<- string, errc chan<- error, prompt <-cha
 	}
 }
 
-// countIndents returns the number of identations for the given input.
+// countIndents returns the number of indentations for the given input.
 // In case of invalid input such as var a = } the result can be negative.
 func countIndents(input string) int {
 	var (

@@ -68,9 +68,12 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
-
-	chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -270,8 +273,9 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		rlp.DecodeBytes(blob, bodies[i])
 	}
 	var (
-		txsHashes   = make([]common.Hash, len(bodies))
-		uncleHashes = make([]common.Hash, len(bodies))
+		txsHashes        = make([]common.Hash, len(bodies))
+		uncleHashes      = make([]common.Hash, len(bodies))
+		withdrawalHashes = make([]common.Hash, len(bodies))
 	)
 	hasher := trie.NewStackTrie(nil)
 	for i, body := range bodies {
@@ -284,7 +288,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	res := &eth.Response{
 		Req:  req,
 		Res:  (*eth.BlockBodiesPacket)(&bodies),
-		Meta: [][]common.Hash{txsHashes, uncleHashes},
+		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes},
 		Time: 1,
 		Done: make(chan error, 1), // Ignore the returned status
 	}
@@ -356,7 +360,7 @@ func (dlp *downloadTesterPeer) RequestAccountRange(id uint64, root, origin, limi
 }
 
 // RequestStorageRanges fetches a batch of storage slots belonging to one or
-// more accounts. If slots from only one accout is requested, an origin marker
+// more accounts. If slots from only one account is requested, an origin marker
 // may also be used to retrieve from there.
 func (dlp *downloadTesterPeer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {
 	// Create the request and service it
@@ -395,7 +399,7 @@ func (dlp *downloadTesterPeer) RequestByteCodes(id uint64, hashes []common.Hash,
 }
 
 // RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
-// a specificstate trie.
+// a specific state trie.
 func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, paths []snap.TrieNodePathSet, bytes uint64) error {
 	req := &snap.GetTrieNodesPacket{
 		ID:    id,
@@ -567,8 +571,8 @@ func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, len(chainB.blocks))
 }
 
-// Tests that synchronising against a much shorter but much heavyer fork works
-// corrently and is not dropped.
+// Tests that synchronising against a much shorter but much heavier fork works
+// currently and is not dropped.
 func TestHeavyForkedSync66Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FullSync) }
 func TestHeavyForkedSync66Snap(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, SnapSync) }
 func TestHeavyForkedSync66Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH66, LightSync) }

@@ -285,7 +285,7 @@ func TestTdStorage(t *testing.T) {
 func TestCanonicalMappingStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
-	// Create a test canonical number and assinged hash to move around
+	// Create a test canonical number and assigned hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
 	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)
@@ -750,10 +750,6 @@ func TestReadLogs(t *testing.T) {
 		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
 	}
 
-	// Fill in log fields so we can compare their rlp encoding
-	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
-		t.Fatal(err)
-	}
 	for i, pr := range receipts {
 		for j, pl := range pr.Logs {
 			rlpHave, err := rlp.EncodeToBytes(newFullLogRLP(logs[i][j]))

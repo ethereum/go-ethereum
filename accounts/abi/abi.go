@@ -87,7 +87,7 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	var args Arguments
 	if method, ok := abi.Methods[name]; ok {
 		if len(data)%32 != 0 {
-			return nil, fmt.Errorf("abi: improperly formatted output: %s - Bytes: [%+v]", string(data), data)
+			return nil, fmt.Errorf("abi: improperly formatted output: %q - Bytes: %+v", data, data)
 		}
 		args = method.Outputs
 	}
@@ -95,7 +95,7 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 		args = event.Inputs
 	}
 	if args == nil {
-		return nil, errors.New("abi: could not locate named method or event")
+		return nil, fmt.Errorf("abi: could not locate named method or event: %s", name)
 	}
 	return args, nil
 }

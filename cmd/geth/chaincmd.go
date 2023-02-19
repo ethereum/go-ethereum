@@ -35,9 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -47,7 +49,7 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags:     utils.DatabasePathFlags,
+		Flags:     flags.Merge([]cli.Flag{utils.CachePreimagesFlag}, utils.DatabasePathFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -60,16 +62,17 @@ It expects the genesis file as argument.`,
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
-		Flags:     utils.NetworkFlags,
+		Flags:     append([]cli.Flag{utils.DataDirFlag}, utils.NetworkFlags...),
 		Description: `
-The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
+The dumpgenesis command prints the genesis configuration of the network preset
+if one is set.  Otherwise it prints the genesis from the datadir.`,
 	}
 	importCommand = &cli.Command{
 		Action:    importChain,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Flags: append([]cli.Flag{
+		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
@@ -91,7 +94,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
 			utils.TxLookupLimitFlag,
-		}, utils.DatabasePathFlags...),
+		}, utils.DatabasePathFlags),
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
@@ -104,10 +107,10 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: append([]cli.Flag{
+		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags...),
+		}, utils.DatabasePathFlags),
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
@@ -120,10 +123,10 @@ be gzipped.`,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: append([]cli.Flag{
+		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags...),
+		}, utils.DatabasePathFlags),
 		Description: `
 The import-preimages command imports hash preimages from an RLP encoded stream.
 It's deprecated, please use "geth db import" instead.
@@ -134,10 +137,10 @@ It's deprecated, please use "geth db import" instead.
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
-		Flags: append([]cli.Flag{
+		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags...),
+		}, utils.DatabasePathFlags),
 		Description: `
 The export-preimages command exports hash preimages to an RLP encoded stream.
 It's deprecated, please use "geth db export" instead.
@@ -148,7 +151,7 @@ It's deprecated, please use "geth db export" instead.
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[? <blockHash> | <blockNum>]",
-		Flags: append([]cli.Flag{
+		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
@@ -156,7 +159,7 @@ It's deprecated, please use "geth db export" instead.
 			utils.IncludeIncompletesFlag,
 			utils.StartKeyFlag,
 			utils.DumpLimitFlag,
-		}, utils.DatabasePathFlags...),
+		}, utils.DatabasePathFlags),
 		Description: `
 This command dumps out the state for a given block (or latest, if none provided).
 `,
@@ -186,12 +189,16 @@ func initGenesis(ctx *cli.Context) error {
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
-		_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
+		triedb := trie.NewDatabaseWithConfig(chaindb, &trie.Config{
+			Preimages: ctx.Bool(utils.CachePreimagesFlag.Name),
+		})
+		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
@@ -202,14 +209,39 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func dumpGenesis(ctx *cli.Context) error {
-	// TODO(rjl493456442) support loading from the custom datadir
-	genesis := utils.MakeGenesis(ctx)
-	if genesis == nil {
-		genesis = core.DefaultGenesisBlock()
+	// if there is a testnet preset enabled, dump that
+	if utils.IsNetworkPreset(ctx) {
+		genesis := utils.MakeGenesis(ctx)
+		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
+			utils.Fatalf("could not encode genesis: %s", err)
+		}
+		return nil
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
-		utils.Fatalf("could not encode genesis")
+	// dump whatever already exists in the datadir
+	stack, _ := makeConfigNode(ctx)
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		db, err := stack.OpenDatabase(name, 0, 0, "", true)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			continue
+		}
+		genesis, err := core.ReadGenesis(db)
+		if err != nil {
+			utils.Fatalf("failed to read genesis: %s", err)
+		}
+		db.Close()
+
+		if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
+			utils.Fatalf("could not encode stored genesis: %s", err)
+		}
+		return nil
 	}
+	if ctx.IsSet(utils.DataDirFlag.Name) {
+		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
+	}
+	utils.Fatalf("no network preset provided.  no exisiting genesis in the default datadir")
 	return nil
 }
 
@@ -225,7 +257,7 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack)
+	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
@@ -300,7 +332,7 @@ func exportChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack)
+	chain, _ := utils.MakeChain(ctx, stack, true)
 	start := time.Now()
 
 	var err error
@@ -383,12 +415,12 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
 			}
 		} else {
-			number, err := strconv.Atoi(arg)
+			number, err := strconv.ParseUint(arg, 10, 64)
 			if err != nil {
 				return nil, nil, common.Hash{}, err
 			}
-			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
-				header = rawdb.ReadHeader(db, hash, uint64(number))
+			if hash := rawdb.ReadCanonicalHash(db, number); hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash, number)
 			} else {
 				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
 			}
@@ -433,7 +465,10 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	state, err := state.New(root, state.NewDatabase(db), nil)
+	config := &trie.Config{
+		Preimages: true, // always enable preimage lookup
+	}
+	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
 	if err != nil {
 		return err
 	}

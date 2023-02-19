@@ -138,7 +138,7 @@ func runCmd(ctx *cli.Context) error {
 		gen := readGenesis(ctx.String(GenesisFlag.Name))
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
-		genesis := gen.ToBlock(db)
+		genesis := gen.MustCommit(db)
 		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), nil)
 		chainConfig = gen.Config
 	} else {
@@ -209,7 +209,7 @@ func runCmd(ctx *cli.Context) error {
 		GasPrice:    flags.GlobalBig(ctx, PriceFlag.Name),
 		Value:       flags.GlobalBig(ctx, ValueFlag.Name),
 		Difficulty:  genesisConfig.Difficulty,
-		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
+		Time:        genesisConfig.Timestamp,
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
