@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethdb/redisdb"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/ethdb/redisdb"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -401,13 +402,13 @@ func NewRedisDatabase(endpoint string, password string) (ethdb.Database, error) 
 
 // NewRedisDatabaseWithFreezer creates a persistent key-value database with a
 // freezer moving immutable chain segments into cold storage.
-func NewRedisDatabaseWithFreezer(endpoint string, password string, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+func NewRedisDatabaseWithFreezer(endpoint string, password string, ancientsDirectory string, namespace string, readonly bool) (ethdb.Database, error) {
 	kvdb, err := redisdb.New(endpoint, password)
 	if err != nil {
 		log.Error("Error initializing Redis", err)
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)
+	frdb, err := NewDatabaseWithFreezer(kvdb, ancientsDirectory, namespace, readonly)
 	if err != nil {
 		kvdb.Close()
 		return nil, err

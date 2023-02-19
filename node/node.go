@@ -742,6 +742,8 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
+	} else if n.config.RedisEndpoint != "" {
+		db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, n.config.RedisPassword, n.ResolveAncient(name, ancient), namespace, readonly)
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
