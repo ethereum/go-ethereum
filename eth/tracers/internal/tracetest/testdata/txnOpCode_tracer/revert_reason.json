@@ -53,6 +53,7 @@
   "result": {
     "blockContext": {
       "number": "0x31056b",
+      "stateRoot": "0x501570aea48caad27b7d77bb645cbc0dfcf4f41e363db3742fd2f856af1e1429",
       "baseFee": "0xff0000",
       "time": "0x5f340c33",
       "coinbase": "0x0000000000000000000000000000000000000000",

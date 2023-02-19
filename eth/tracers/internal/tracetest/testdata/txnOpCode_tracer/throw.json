@@ -52,6 +52,7 @@
   "result": {
     "blockContext": {
       "number": "0x61b1",
+      "stateRoot": "0xc43bb0e79e9ce75877029588bf5fee2ff08170fbe10cabaf6b834df2338a2fb0",
       "baseFee": "0xff0000",
       "time": "0x58355ad2",
       "coinbase": "0x294e5d6c39a36ce38af1dca70c1060f78dee8070",
