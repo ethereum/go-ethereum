@@ -62,4 +62,4 @@ It is possible to configure Geth to use [Pebble](https://www.cockroachlabs.com/b
 --db.engine=pebble
 ```
 
-This also requires resyncing from scratch in a fresh data directory, because if an existing LevelDB database is detected on startup, Geth will default to using that, overriding the `--db.engine=pebble` flag. Pebble only work son 64 bit systems.
+This also requires resyncing from scratch in a fresh data directory, because if an existing LevelDB database is detected on startup, Geth will default to using that, overriding the `--db.engine=pebble` flag. Pebble only works on 64 bit systems.
