@@ -1,13 +1,12 @@
-import { IconProps } from '@chakra-ui/react';
 import { createIcon } from '@chakra-ui/icons';
 
 const [w, h] = [214, 243];
 
-const Icon = createIcon({
+export const GopherHomeNodes = createIcon({
   displayName: 'GopherHomeNodes',
   viewBox: `0 0 ${w} ${h}`,
   path: (
-    <svg width={w} height={h} fill='none' xmlns='http://www.w3.org/2000/svg'>
+    <>
       <path
         d='m31.43 192.946 3.953 6.305M30.644 183.323l5.733 19.27-9.892 6.116M110.152 101.171l8.493 17.23-6.535 23.879-.801 5.495M66.28 228.573l-13.273-8.967M36.377 202.593l11.875-4.674M43.993 209.994l1.113 2.986-15.538 1.799-9.518 1.101M20.05 215.88l11.078-2.788 12.865-3.098'
         stroke='currentColor'
@@ -214,10 +213,12 @@ const Icon = createIcon({
         d='m212.956 151.512-35.753 16.484-33.995-17.141M177.331 218.81l-.128-50.814'
         stroke='currentColor'
       />
-    </svg>
-  )
+    </>
+  ),
+  defaultProps: {
+    color: 'primary',
+    fill: 'none',
+    h,
+    w
+  }
 });
-
-export const GopherHomeNodes: React.FC<IconProps> = props => (
-  <Icon h={h} w={w} color='primary' {...props} />
-);
