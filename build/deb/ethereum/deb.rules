@@ -21,6 +21,7 @@ override_dh_auto_build:
 	# requirements opposed to older versions of Go.
 	(mv .goboot ../ && cd ../.goboot/src && ./make.bash)
 	export GOROOT_BOOTSTRAP=`pwd`/../.goboot
+	echo $GOROOT_BOOTSTRAP
 	(mv .go ../ && cd ../.go/src && ./make.bash)
 
 	# We can't download external go modules within Launchpad, so we're shipping the
