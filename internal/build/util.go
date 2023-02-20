@@ -176,7 +176,6 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 				time.Sleep(500 * time.Millisecond)
 				aborted = true
 				sftp.Process.Kill()
-				return
 			}
 		}
 	}()

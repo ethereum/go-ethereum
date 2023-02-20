@@ -147,7 +147,7 @@ var (
 	// to build the latest Go. Don't change it. If it ever becomes infufficient,
 	// we need to switch over to a recursive builder to jumpt across supported
 	// versions.
-	gobootVersion = "1.19"
+	gobootVersion = "1.19.6"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
