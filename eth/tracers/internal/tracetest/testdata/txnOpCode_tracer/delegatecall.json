@@ -62,6 +62,13 @@
   },
   "input": "0xf889448504a817c800832dc6c094269296dddce321a6bcbaa2f0181127593d732cba80a47065cb480000000000000000000000001523e55a1ca4efbae03355775ae89f8d7699ad9e29a080ed81e4c5e9971a730efab4885566e2c868cd80bd4166d0ed8c287fdf181650a069d7c49215e3d4416ad239cd09dbb71b9f04c16b33b385d14f40b618a7a65115",
   "result": {
+    "blockContext": {
+      "number": "0x2ce7",
+      "baseFee": "0xff0000",
+      "time": "0x5832fa6d",
+      "coinbase": "0x5659922ce141eedbc2733678f9806c77b4eebee8",
+      "gasLimit": "0x47d5cc"
+    },
     "calls": [
       {
         "calls": [
@@ -88,6 +95,7 @@
     "from": "0xa529806c67cc6486d4d62024471772f47f6fd672",
     "gas": "0x2d6e28",
     "gasUsed": "0x64bd",
+    "baseFee": "0xff0000",
     "input": "0x7065cb480000000000000000000000001523e55a1ca4efbae03355775ae89f8d7699ad9e",
     "output": "0x",
     "to": "0x269296dddce321a6bcbaa2f0181127593d732cba",

@@ -57,6 +57,13 @@
   },
   "input": "0xf86d808504e3b292008307dfa69433056b5dcac09a9b4becad0e1dcf92c19bd0af76880e92596fd62900008029a0e5f27bb66431f7081bb7f1f242003056d7f3f35414c352cd3d1848b52716dac2a07d0be78980edb0bd2a0678fc53aa90ea9558ce346b0d947967216918ac74ccea",
   "result": {
+    "blockContext": {
+      "number": "0x230540",
+      "baseFee": "0xff0000",
+      "time": "0x5a38f168",
+      "coinbase": "0x00d8ae40d9a06d0e7a2877b62e32eb959afbe16d",
+      "gasLimit": "0x529980"
+    },
     "calls": [
       {
         "error": "invalid opcode: INVALID",
@@ -73,6 +80,7 @@
     "from": "0xd4fcab9f0a6dc0493af47c864f6f17a8a5e2e826",
     "gas": "0x78d9e",
     "gasUsed": "0x76fc0",
+    "baseFee": "0xff0000",
     "input": "0x",
     "to": "0x33056b5dcac09a9b4becad0e1dcf92c19bd0af76",
     "type": "CALL",

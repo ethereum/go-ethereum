@@ -25,8 +25,19 @@ type TracerOpts struct {
 // Trace contains all the accumulated details of a transaction execution.
 type Trace struct {
 	CallFrame
-	Logs []CallLog `json:"logs,omitempty"`
-	Time string    `json:"time,omitempty"`
+	BlockContext BlockContext `json:"blockContext"`
+	Logs         []CallLog    `json:"logs,omitempty"`
+	Time         string       `json:"time,omitempty"`
+}
+
+// BlockContext contains information about the block we simulate transactions in.
+type BlockContext struct {
+	Number   string `json:"number"`
+	BaseFee  string `json:"baseFee"`
+	Time     string `json:"time"`
+	Coinbase string `json:"coinbase"`
+	GasLimit string `json:"gasLimit"`
+	Random   string `json:"random,omitempty"`
 }
 
 type CallFrame struct {

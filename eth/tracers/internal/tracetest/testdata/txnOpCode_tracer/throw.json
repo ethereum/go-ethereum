@@ -50,10 +50,18 @@
   },
   "input": "0xf88b8206668504a817c8008303d09094c212e03b9e060e36facad5fd8f4435412ca22e6b80a451a34eb8000000000000000000000000000000000000000000000027fad02094277c000029a0692a3b4e7b2842f8dd7832e712c21e09f451f416c8976d5b8d02e8c0c2b4bea9a07645e90fc421b63dd755767fd93d3c03b4ec0c4d8fafa059558d08cf11d59750",
   "result": {
+    "blockContext": {
+      "number": "0x61b1",
+      "baseFee": "0xff0000",
+      "time": "0x58355ad2",
+      "coinbase": "0x294e5d6c39a36ce38af1dca70c1060f78dee8070",
+      "gasLimit": "0x47e7c4"
+    },
     "error": "invalid jump destination",
     "from": "0x70c9217d814985faef62b124420f8dfbddd96433",
     "gas": "0x37b38",
     "gasUsed": "0x37b38",
+    "baseFee": "0xff0000",
     "input": "0x51a34eb8000000000000000000000000000000000000000000000027fad02094277c0000",
     "to": "0xc212e03b9e060e36facad5fd8f4435412ca22e6b",
     "type": "CALL",
