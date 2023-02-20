@@ -617,6 +617,10 @@ func (c *BorConfig) IsDelhi(number *big.Int) bool {
 	return isForked(c.DelhiBlock, number)
 }
 
+func (c *BorConfig) IsSprintStart(number uint64) bool {
+	return number%c.CalculateSprint(number) == 0
+}
+
 func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {
 	keys := make([]string, 0, len(field))
 	for k := range field {

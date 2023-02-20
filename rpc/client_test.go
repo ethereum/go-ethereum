@@ -33,12 +33,14 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
+
 	client := DialInProc(server)
 	defer client.Close()
 
@@ -46,6 +48,7 @@ func TestClientRequest(t *testing.T) {
 	if err := client.Call(&resp, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
 		t.Fatal(err)
 	}
+
 	if !reflect.DeepEqual(resp, echoResult{"hello", 10, &echoArgs{"world"}}) {
 		t.Errorf("incorrect result %#v", resp)
 	}
@@ -407,7 +410,7 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 	t.Parallel()
 
 	// Create the server.
-	srv := NewServer()
+	srv := NewServer(0, 0)
 	srv.RegisterName("nftest", new(notificationTestService))
 	p1, p2 := net.Pipe()
 	recorder := &unsubscribeRecorder{ServerCodec: NewCodec(p1)}
@@ -443,7 +446,7 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	t.Parallel()
 
 	var (
-		srv     = NewServer()
+		srv     = NewServer(0, 0)
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)

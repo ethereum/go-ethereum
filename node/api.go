@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -341,4 +342,92 @@ func (s *publicWeb3API) ClientVersion() string {
 // It assumes the input is hex encoded.
 func (s *publicWeb3API) Sha3(input hexutil.Bytes) hexutil.Bytes {
 	return crypto.Keccak256(input)
+}
+
+type ExecutionPoolSize struct {
+	HttpLimit int
+	WSLimit   int
+}
+
+type ExecutionPoolRequestTimeout struct {
+	HttpLimit time.Duration
+	WSLimit   time.Duration
+}
+
+func (api *privateAdminAPI) GetExecutionPoolSize() *ExecutionPoolSize {
+	var httpLimit int
+	if api.node.http.host != "" {
+		httpLimit = api.node.http.httpHandler.Load().(*rpcHandler).server.GetExecutionPoolSize()
+	}
+
+	var wsLimit int
+	if api.node.ws.host != "" {
+		wsLimit = api.node.ws.wsHandler.Load().(*rpcHandler).server.GetExecutionPoolSize()
+	}
+
+	executionPoolSize := &ExecutionPoolSize{
+		HttpLimit: httpLimit,
+		WSLimit:   wsLimit,
+	}
+
+	return executionPoolSize
+}
+
+func (api *privateAdminAPI) GetExecutionPoolRequestTimeout() *ExecutionPoolRequestTimeout {
+	var httpLimit time.Duration
+	if api.node.http.host != "" {
+		httpLimit = api.node.http.httpHandler.Load().(*rpcHandler).server.GetExecutionPoolRequestTimeout()
+	}
+
+	var wsLimit time.Duration
+	if api.node.ws.host != "" {
+		wsLimit = api.node.ws.wsHandler.Load().(*rpcHandler).server.GetExecutionPoolRequestTimeout()
+	}
+
+	executionPoolRequestTimeout := &ExecutionPoolRequestTimeout{
+		HttpLimit: httpLimit,
+		WSLimit:   wsLimit,
+	}
+
+	return executionPoolRequestTimeout
+}
+
+// func (api *privateAdminAPI) SetWSExecutionPoolRequestTimeout(n int) *ExecutionPoolRequestTimeout {
+// 	if api.node.ws.host != "" {
+// 		api.node.ws.wsConfig.executionPoolRequestTimeout = time.Duration(n) * time.Millisecond
+// 		api.node.ws.wsHandler.Load().(*rpcHandler).server.SetExecutionPoolRequestTimeout(time.Duration(n) * time.Millisecond)
+// 		log.Warn("updating ws execution pool request timeout", "timeout", n)
+// 	}
+
+// 	return api.GetExecutionPoolRequestTimeout()
+// }
+
+// func (api *privateAdminAPI) SetHttpExecutionPoolRequestTimeout(n int) *ExecutionPoolRequestTimeout {
+// 	if api.node.http.host != "" {
+// 		api.node.http.httpConfig.executionPoolRequestTimeout = time.Duration(n) * time.Millisecond
+// 		api.node.http.httpHandler.Load().(*rpcHandler).server.SetExecutionPoolRequestTimeout(time.Duration(n) * time.Millisecond)
+// 		log.Warn("updating http execution pool request timeout", "timeout", n)
+// 	}
+
+// 	return api.GetExecutionPoolRequestTimeout()
+// }
+
+func (api *privateAdminAPI) SetWSExecutionPoolSize(n int) *ExecutionPoolSize {
+	if api.node.ws.host != "" {
+		api.node.ws.wsConfig.executionPoolSize = uint64(n)
+		api.node.ws.wsHandler.Load().(*rpcHandler).server.SetExecutionPoolSize(n)
+		log.Warn("updating ws execution pool size", "threads", n)
+	}
+
+	return api.GetExecutionPoolSize()
+}
+
+func (api *privateAdminAPI) SetHttpExecutionPoolSize(n int) *ExecutionPoolSize {
+	if api.node.http.host != "" {
+		api.node.http.httpConfig.executionPoolSize = uint64(n)
+		api.node.http.httpHandler.Load().(*rpcHandler).server.SetExecutionPoolSize(n)
+		log.Warn("updating http execution pool size", "threads", n)
+	}
+
+	return api.GetExecutionPoolSize()
 }

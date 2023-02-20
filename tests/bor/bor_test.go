@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -458,7 +459,19 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	_bor.SetHeimdallClient(h)
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
+
+	// Validate the state sync transactions set by consensus
+	validateStateSyncEvents(t, eventRecords, chain.GetStateSync())
+
 	insertNewBlock(t, chain, block)
+}
+
+func validateStateSyncEvents(t *testing.T, expected []*clerk.EventRecordWithTime, got []*types.StateSyncData) {
+	require.Equal(t, len(expected), len(got), "number of state sync events should be equal")
+
+	for i := 0; i < len(expected); i++ {
+		require.Equal(t, expected[i].ID, got[i].ID, fmt.Sprintf("state sync ids should be equal - index: %d, expected: %d, got: %d", i, expected[i].ID, got[i].ID))
+	}
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {

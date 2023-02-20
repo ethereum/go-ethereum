@@ -192,6 +192,34 @@ web3._extend({
 			name: 'stopWS',
 			call: 'admin_stopWS'
 		}),
+		new web3._extend.Method({
+			name: 'getExecutionPoolSize',
+			call: 'admin_getExecutionPoolSize'
+		}),
+		new web3._extend.Method({
+			name: 'getExecutionPoolRequestTimeout',
+			call: 'admin_getExecutionPoolRequestTimeout'
+		}),
+		// new web3._extend.Method({
+		// 	name: 'setWSExecutionPoolRequestTimeout',
+		// 	call: 'admin_setWSExecutionPoolRequestTimeout',
+		// 	params: 1
+		// }),
+		// new web3._extend.Method({
+		// 	name: 'setHttpExecutionPoolRequestTimeout',
+		// 	call: 'admin_setHttpExecutionPoolRequestTimeout',
+		// 	params: 1
+		// }),
+		new web3._extend.Method({
+			name: 'setWSExecutionPoolSize',
+			call: 'admin_setWSExecutionPoolSize',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setHttpExecutionPoolSize',
+			call: 'admin_setHttpExecutionPoolSize',
+			params: 1
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

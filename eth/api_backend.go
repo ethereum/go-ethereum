@@ -317,6 +317,10 @@ func (b *EthAPIBackend) RPCGasCap() uint64 {
 	return b.eth.config.RPCGasCap
 }
 
+func (b *EthAPIBackend) RPCRpcReturnDataLimit() uint64 {
+	return b.eth.config.RPCReturnDataLimit
+}
+
 func (b *EthAPIBackend) RPCEVMTimeout() time.Duration {
 	return b.eth.config.RPCEVMTimeout
 }

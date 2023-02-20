@@ -1161,7 +1161,7 @@ func (c *Bor) CommitStates(
 	processStart := time.Now()
 	totalGas := 0 /// limit on gas for state sync per block
 	chainID := c.chainConfig.ChainID.String()
-	stateSyncs := make([]*types.StateSyncData, len(eventRecords))
+	stateSyncs := make([]*types.StateSyncData, 0, len(eventRecords))
 
 	var gasUsed uint64
 

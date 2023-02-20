@@ -360,7 +360,7 @@ func generateFakeStateSyncEvents(sample *clerk.EventRecordWithTime, count int) [
 	*events[0] = event
 
 	for i := 1; i < count; i++ {
-		event.ID = uint64(i)
+		event.ID = uint64(i + 1)
 		event.Time = event.Time.Add(1 * time.Second)
 		events[i] = &clerk.EventRecordWithTime{}
 		*events[i] = event

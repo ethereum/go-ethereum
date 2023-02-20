@@ -1,7 +1,6 @@
 package filters
 
 import (
-	"bytes"
 	"context"
 	"errors"
 
@@ -19,7 +18,7 @@ func (api *PublicFilterAPI) SetChainConfig(chainConfig *params.ChainConfig) {
 
 func (api *PublicFilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	if api.chainConfig == nil {
-		return nil, errors.New("No chain config found. Proper PublicFilterAPI initialization required")
+		return nil, errors.New("no chain config found. Proper PublicFilterAPI initialization required")
 	}
 
 	// get sprint from bor config
@@ -67,8 +66,8 @@ func (api *PublicFilterAPI) NewDeposits(ctx context.Context, crit ethereum.State
 		for {
 			select {
 			case h := <-stateSyncData:
-				if crit.ID == h.ID || bytes.Compare(crit.Contract.Bytes(), h.Contract.Bytes()) == 0 ||
-					(crit.ID == 0 && crit.Contract == common.Address{}) {
+				if h != nil && (crit.ID == h.ID || crit.Contract == h.Contract ||
+					(crit.ID == 0 && crit.Contract == common.Address{})) {
 					notifier.Notify(rpcSub.ID, h)
 				}
 			case <-rpcSub.Err():

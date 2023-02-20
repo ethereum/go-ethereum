@@ -8,6 +8,8 @@ log-level = "INFO"           # Set log level for the server
 datadir = "var/lib/bor"      # Path of the data directory to store information
 ancient = ""                 # Data directory for ancient chain segments (default = inside chaindata)
 keystore = ""                # Path of the directory where keystores are located
+"rpc.batchlimit" = 100          # Maximum number of messages in a batch (default=100, use 0 for no limits)
+"rpc.returndatalimit" = 100000  # Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)
 syncmode = "full"            # Blockchain sync mode (only "full" sync supported)
 gcmode = "full"              # Blockchain garbage collection mode ("full", "archive")
 snapshot = true              # Enables the snapshot-database mode
@@ -72,24 +74,29 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
     api = ["eth", "net", "web3", "txpool", "bor"]  # API's offered over the HTTP-RPC interface
     vhosts = ["localhost"]                         # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
     corsdomain = ["localhost"]                     # Comma separated list of domains from which to accept cross origin requests (browser enforced)
+    ep-size = 40                                   # Maximum size of workers to run in rpc execution pool for HTTP requests (default: 40)
+    ep-requesttimeout = "0s"                      # Request Timeout for rpc execution pool for HTTP requests (default: 0s, 0s = disabled)
   [jsonrpc.ws]
-    enabled = false          # Enable the WS-RPC server
-    port = 8546              # WS-RPC server listening port
-    prefix = ""              # HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
-    host = "localhost"       # ws.addr
-    api = ["net", "web3"]    # API's offered over the WS-RPC interface
-    origins = ["localhost"]  # Origins from which to accept websockets requests
+    enabled = false             # Enable the WS-RPC server
+    port = 8546                 # WS-RPC server listening port
+    prefix = ""                 # HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
+    host = "localhost"          # ws.addr
+    api = ["net", "web3"]       # API's offered over the WS-RPC interface
+    origins = ["localhost"]     # Origins from which to accept websockets requests
+    ep-size = 40                # Maximum size of workers to run in rpc execution pool for WS requests (default: 40)
+    ep-requesttimeout = "0s"   # Request Timeout for rpc execution pool for WS requests (default: 0s, 0s = disabled)
   [jsonrpc.graphql]
     enabled = false             # Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
-    port = 0                    # 
-    prefix = ""                 # 
-    host = ""                   # 
+    port = 0                    #
+    prefix = ""                 #
+    host = ""                   #
     vhosts = ["localhost"]      # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
     corsdomain = ["localhost"]  # Comma separated list of domains from which to accept cross origin requests (browser enforced)
   [jsonrpc.timeouts]
     read = "30s"
     write = "30s"
     idle = "2m0s"
+
 
 [gpo]
   blocks = 20                 # Number of recent blocks to check for gas prices
