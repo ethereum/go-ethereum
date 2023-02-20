@@ -19,8 +19,10 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestGenerateWithdrawalChain() {
+func TestGenerateWithdrawalChain(t *testing.T) {
 	var (
 		keyHex  = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
 		key, _  = crypto.HexToECDSA(keyHex)
@@ -74,12 +76,12 @@ func TestGenerateWithdrawalChain() {
 	genesis := gspec.MustCommit(gendb)
 
 	// sealingEngine := sealingEngine{engine}
-	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
+	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
 		gen.AddTx(tx)
 		if i == 1 {
 			// first index for the withdrawal block
-			idxOne := uint64(123)
+			idxOne := uint64(0)
 
 			gen.AddWithdrawal(&types.Withdrawal{
 				Index:     idxOne,
@@ -97,12 +99,31 @@ func TestGenerateWithdrawalChain() {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
+	}
+
+	// enforce that withdrawal indexes are monotonically increasing from 0
+	head := blockchain.CurrentBlock().NumberU64()
+	for i := 0; i < int(head); i++ {
+		block := blockchain.GetBlockByNumber(uint64(i))
+		if block == nil {
+			t.Fatalf("block %d not found", i)
+		}
+
+		if block.Withdrawals() == nil {
+			continue
+		}
+
+		for j := 0; j < len(block.Withdrawals()); j++ {
+			if block.Withdrawals()[j].Index != uint64(j) {
+				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, j)
+			}
+		}
 	}
 }
 
