@@ -20,7 +20,7 @@ override_dh_auto_build:
 	# We're also shipping the bootstrapper as of Go 1.20 as it had minimum version
 	# requirements opposed to older versions of Go.
 	(mv .goboot ../ && cd ../.goboot/src && ./make.bash)
-	(cd ../.goboot/bin && export GOROOT_BOOTSTRAP=`pwd`)
+	export GOROOT_BOOTSTRAP=`pwd`/../.goboot/bin
 	(mv .go ../ && cd ../.go/src && ./make.bash)
 
 	# We can't download external go modules within Launchpad, so we're shipping the
