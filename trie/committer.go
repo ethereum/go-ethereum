@@ -33,22 +33,29 @@ type leaf struct {
 // insertion order.
 type committer struct {
 	nodes       *NodeSet
+	tracer      *tracer
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodes *NodeSet, collectLeaf bool) *committer {
+func newCommitter(owner common.Hash, tracer *tracer, collectLeaf bool) *committer {
 	return &committer{
-		nodes:       nodes,
+		nodes:       NewNodeSet(owner),
+		tracer:      tracer,
 		collectLeaf: collectLeaf,
 	}
 }
 
 // Commit collapses a node down into a hash node and returns it along with
 // the modified nodeset.
-func (c *committer) Commit(n node) hashNode {
+func (c *committer) Commit(n node) (hashNode, *NodeSet) {
 	h := c.commit(nil, n)
-	return h.(hashNode)
+	// Some nodes can be deleted from trie which can't be captured
+	// by committer itself. Iterate all deleted nodes tracked by
+	// tracer and marked them as deleted only if they are present
+	// in database previously.
+	c.tracer.markDeletions(c.nodes)
+	return h.(hashNode), c.nodes
 }
 
 // commit collapses a node down into a hash node and returns it.
@@ -78,6 +85,12 @@ func (c *committer) commit(path []byte, n node) node {
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
+		// The short node now is embedded in its parent. Mark the node as
+		// deleted if it's present in database previously. It's equivalent
+		// as deletion from database's perspective.
+		if prev := c.tracer.getPrev(path); len(prev) != 0 {
+			c.nodes.markDeleted(path, prev)
+		}
 		return collapsed
 	case *fullNode:
 		hashedKids := c.commitChildren(path, cn)
@@ -87,6 +100,12 @@ func (c *committer) commit(path []byte, n node) node {
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
+		}
+		// The full node now is embedded in its parent. Mark the node as
+		// deleted if it's present in database previously. It's equivalent
+		// as deletion from database's perspective.
+		if prev := c.tracer.getPrev(path); len(prev) != 0 {
+			c.nodes.markDeleted(path, prev)
 		}
 		return collapsed
 	case hashNode:
@@ -150,7 +169,7 @@ func (c *committer) store(path []byte, n node) node {
 		}
 	)
 	// Collect the dirty node to nodeset for return.
-	c.nodes.markUpdated(path, mnode)
+	c.nodes.markUpdated(path, mnode, c.tracer.getPrev(path))
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
