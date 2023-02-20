@@ -52,6 +52,7 @@ type StorageTrace struct {
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
+	L1Fee       uint64 `json:"l1Fee,omitempty"`
 	Gas         uint64 `json:"gas"`
 	Failed      bool   `json:"failed"`
 	ReturnValue string `json:"returnValue"`
