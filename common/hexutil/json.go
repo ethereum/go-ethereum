@@ -283,6 +283,8 @@ func (b *Uint64) UnmarshalGraphQL(input interface{}) error {
 		return b.UnmarshalText([]byte(input))
 	case int32:
 		*b = Uint64(input)
+	case float64:
+		*b = Uint64(input)
 	default:
 		err = fmt.Errorf("unexpected type %T for Long", input)
 	}
