@@ -792,12 +792,13 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	for _, owner := range order {
 		subset := nodes.sets[owner]
-		subset.forEachWithOrder(false, func(path string, n *memoryNode) {
-			if n.isDeleted() {
-				return // ignore deletion
+		for _, path := range subset.updates.order {
+			n, ok := subset.updates.nodes[path]
+			if !ok {
+				return fmt.Errorf("missing node %x %v", owner, path)
 			}
 			db.insert(n.hash, int(n.size), n.node)
-		})
+		}
 	}
 	// Link up the account trie and storage trie if the node points
 	// to an account trie leaf.
@@ -807,7 +808,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err
 			}
-			if account.Root != emptyRoot {
+			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.parent)
 			}
 		}

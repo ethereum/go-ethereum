@@ -113,8 +113,8 @@ func TestBlockStorage(t *testing.T) {
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
@@ -161,8 +161,8 @@ func TestPartialBlockStorage(t *testing.T) {
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	// Store a header and check that it's not recognized as a block
 	WriteHeader(db, block.Header())
@@ -198,8 +198,8 @@ func TestBadBlockStorage(t *testing.T) {
 		Number:      big.NewInt(1),
 		Extra:       []byte("bad block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	if entry := ReadBadBlock(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
@@ -216,8 +216,8 @@ func TestBadBlockStorage(t *testing.T) {
 		Number:      big.NewInt(2),
 		Extra:       []byte("bad block two"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	WriteBadBlock(db, blockTwo)
 
@@ -235,8 +235,8 @@ func TestBadBlockStorage(t *testing.T) {
 			Number:      big.NewInt(int64(n)),
 			Extra:       []byte("bad block"),
 			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
 		})
 		WriteBadBlock(db, block)
 	}
@@ -446,8 +446,8 @@ func TestAncientStorage(t *testing.T) {
 		Number:      big.NewInt(0),
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
 	})
 	// Ensure nothing non-existent will be read
 	hash, number := block.Hash(), block.NumberU64()
@@ -889,8 +889,8 @@ func TestHeadersRLPStorage(t *testing.T) {
 			Number:      big.NewInt(int64(i)),
 			Extra:       []byte("test block"),
 			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
 			ParentHash:  pHash,
 		})
 		chain = append(chain, block)

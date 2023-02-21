@@ -47,7 +47,7 @@ func init() {
 func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	res := trie.Hash()
-	exp := emptyRoot
+	exp := types.EmptyRootHash
 	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
@@ -410,6 +410,7 @@ func runRandTest(rt randTest) bool {
 		values   = make(map[string]string) // tracks content of the trie
 		origTrie = NewEmpty(triedb)
 	)
+	tr.tracer = newTracer()
 
 	for i, step := range rt {
 		// fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
@@ -430,7 +431,7 @@ func runRandTest(rt randTest) bool {
 			}
 		case opProve:
 			hash := tr.Hash()
-			if hash == emptyRoot {
+			if hash == types.EmptyRootHash {
 				continue
 			}
 			proofDb := rawdb.NewMemoryDatabase()
@@ -448,12 +449,19 @@ func runRandTest(rt randTest) bool {
 			root, nodes := tr.Commit(true)
 			// Validity the returned nodeset
 			if nodes != nil {
-				for path := range nodes.nodes {
+				for path, node := range nodes.updates.nodes {
 					blob, _, _ := origTrie.TryGetNode(hexToCompact([]byte(path)))
-					got := nodes.accessList[path]
+					got := node.prev
 					if !bytes.Equal(blob, got) {
 						rt[i].err = fmt.Errorf("prevalue mismatch for 0x%x, got 0x%x want 0x%x", path, got, blob)
 						panic(rt[i].err)
+					}
+				}
+				for path, prev := range nodes.deletes {
+					blob, _, _ := origTrie.TryGetNode(hexToCompact([]byte(path)))
+					if !bytes.Equal(blob, prev) {
+						rt[i].err = fmt.Errorf("prevalue mismatch for 0x%x, got 0x%x want 0x%x", path, prev, blob)
+						return false
 					}
 				}
 			}
@@ -469,6 +477,7 @@ func runRandTest(rt randTest) bool {
 
 			// Enable node tracing. Resolve the root node again explicitly
 			// since it's not captured at the beginning.
+			tr.tracer = newTracer()
 			tr.resolveAndTrack(root.Bytes(), nil)
 
 			origTrie = tr.Copy()
@@ -480,6 +489,59 @@ func runRandTest(rt randTest) bool {
 			}
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
+			}
+		case opNodeDiff:
+			var (
+				inserted = tr.tracer.insertList()
+				deleted  = tr.tracer.deleteList()
+				origIter = origTrie.NodeIterator(nil)
+				curIter  = tr.NodeIterator(nil)
+				origSeen = make(map[string]struct{})
+				curSeen  = make(map[string]struct{})
+			)
+			for origIter.Next(true) {
+				if origIter.Leaf() {
+					continue
+				}
+				origSeen[string(origIter.Path())] = struct{}{}
+			}
+			for curIter.Next(true) {
+				if curIter.Leaf() {
+					continue
+				}
+				curSeen[string(curIter.Path())] = struct{}{}
+			}
+			var (
+				insertExp = make(map[string]struct{})
+				deleteExp = make(map[string]struct{})
+			)
+			for path := range curSeen {
+				_, present := origSeen[path]
+				if !present {
+					insertExp[path] = struct{}{}
+				}
+			}
+			for path := range origSeen {
+				_, present := curSeen[path]
+				if !present {
+					deleteExp[path] = struct{}{}
+				}
+			}
+			if len(insertExp) != len(inserted) {
+				rt[i].err = fmt.Errorf("insert set mismatch")
+			}
+			if len(deleteExp) != len(deleted) {
+				rt[i].err = fmt.Errorf("delete set mismatch")
+			}
+			for _, insert := range inserted {
+				if _, present := insertExp[string(insert)]; !present {
+					rt[i].err = fmt.Errorf("missing inserted node")
+				}
+			}
+			for _, del := range deleted {
+				if _, present := deleteExp[string(del)]; !present {
+					rt[i].err = fmt.Errorf("missing deleted node")
+				}
 			}
 		}
 		// Abort the test on error.
@@ -656,7 +718,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	for i := 0; i < len(accounts); i++ {
 		var (
 			nonce = uint64(random.Int63())
-			root  = emptyRoot
+			root  = types.EmptyRootHash
 			code  = crypto.Keccak256(nil)
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,

@@ -55,8 +55,8 @@ type chainFreezer struct {
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
-func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*chainFreezer, error) {
-	freezer, err := NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
+func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFreezer, error) {
+	freezer, err := NewChainFreezer(datadir, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
@@ -280,19 +280,19 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 
 			// Write to the batch.
-			if err := op.AppendRaw(chainFreezerHashTable, number, hash[:]); err != nil {
+			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerHeaderTable, number, header); err != nil {
+			if err := op.AppendRaw(ChainFreezerHeaderTable, number, header); err != nil {
 				return fmt.Errorf("can't write header to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerBodiesTable, number, body); err != nil {
+			if err := op.AppendRaw(ChainFreezerBodiesTable, number, body); err != nil {
 				return fmt.Errorf("can't write body to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerReceiptTable, number, receipts); err != nil {
+			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerDifficultyTable, number, td); err != nil {
+			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 
