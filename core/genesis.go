@@ -467,7 +467,7 @@ func (g *Genesis) ToBlock() *types.Block {
 	}
 	var withdrawals []*types.Withdrawal
 	if g.Config != nil && g.Config.IsShanghai(g.Timestamp) {
-		head.WithdrawalsHash = &types.EmptyRootHash
+		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
