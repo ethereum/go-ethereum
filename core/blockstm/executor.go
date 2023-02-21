@@ -290,6 +290,8 @@ func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool) *Paralle
 
 // nolint: gocognit
 func (pe *ParallelExecutor) Prepare() {
+	prevSenderTx := make(map[common.Address]int)
+
 	for i, t := range pe.tasks {
 		clearPendingFlag := false
 
@@ -309,8 +311,6 @@ func (pe *ParallelExecutor) Prepare() {
 				clearPendingFlag = false
 			}
 		} else {
-			prevSenderTx := make(map[common.Address]int)
-
 			if tx, ok := prevSenderTx[t.Sender()]; ok {
 				pe.execTasks.addDependencies(tx, i)
 				pe.execTasks.clearPending(i)
