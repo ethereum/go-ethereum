@@ -50,7 +50,9 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.Number = math.HexOrDecimal64(g.Number)
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHash = g.ParentHash
-	enc.BaseFee = (*math.HexOrDecimal256)(g.BaseFee)
+	if g.BaseFee != nil {
+		enc.BaseFee = (*math.HexOrDecimal256)(g.BaseFee)
+	}
 	return json.Marshal(&enc)
 }
 

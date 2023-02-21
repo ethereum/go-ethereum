@@ -315,8 +315,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
-		} else {
+		} else if g.Config.EnableEIP2718 && g.Config.EnableEIP1559 {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+		} else {
+			head.BaseFee = nil
 		}
 	}
 	statedb.Commit(false)
