@@ -308,7 +308,8 @@ func (c *Client) SetHeader(key, value string) {
 // The result must be a pointer so that package json can unmarshal into it. You
 // can also pass nil, in which case the result is ignored.
 func (c *Client) Call(result interface{}, method string, args ...interface{}) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
+	defer cancel()
 	return c.CallContext(ctx, result, method, args...)
 }
 
@@ -360,7 +361,8 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 //
 // Note that batch calls may not be executed atomically on the server side.
 func (c *Client) BatchCall(b []BatchElem) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
+	defer cancel()
 	return c.BatchCallContext(ctx, b)
 }
 
