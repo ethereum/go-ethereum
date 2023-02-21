@@ -47,10 +47,10 @@ var (
 	dumpConfigCommand = &cli.Command{
 		Action:      dumpConfig,
 		Name:        "dumpconfig",
-		Usage:       "Show configuration values",
-		ArgsUsage:   "",
+		Usage:       "Export configuration values in a TOML format",
+		ArgsUsage:   "<dumpfile (optional)>",
 		Flags:       flags.Merge(nodeFlags, rpcFlags),
-		Description: `The dumpconfig command shows configuration values.`,
+		Description: `Export configuration values in TOML format (to stdout by default).`,
 	}
 
 	configFileFlag = &cli.StringFlag{
