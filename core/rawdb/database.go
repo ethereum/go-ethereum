@@ -315,6 +315,13 @@ const (
 	dbLeveldb = "leveldb"
 )
 
+func SupportedEngines() []string {
+	if PebbleEnabled {
+		return []string{dbLeveldb, dbPebble, dbRedis}
+	}
+	return []string{dbLeveldb, dbRedis}
+}
+
 // hasPreexistingDb checks the given data directory whether a database is already
 // instantiated at that location, and if so, returns the type of database (or the
 // empty string).
@@ -372,9 +379,9 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 }
 
-// Open opens both a disk-based key-value database such as leveldb or pebble, but also
-// integrates it with a freezer database -- if the AncientDir option has been
-// set on the provided OpenOptions.
+// Open opens both a disk-based key-value database such as leveldb or pebble, a remote
+// database like redis but also integrates it with a freezer database -- if the AncientDir
+// option has been set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
 func Open(o OpenOptions) (ethdb.Database, error) {

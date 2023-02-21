@@ -715,8 +715,8 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 			Namespace:      namespace,
 			Cache:          cache,
 			Handles:        handles,
-			RemoteEndpoint: n.config.RedisEndpoint,
-			RemotePassword: n.config.RedisPassword,
+			RemoteEndpoint: n.config.DBRemoteEndpoint,
+			RemotePassword: n.config.DBRemotePassword,
 			ReadOnly:       readonly,
 		})
 	}
@@ -750,8 +750,8 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,
-			RemoteEndpoint:    n.config.RedisEndpoint,
-			RemotePassword:    n.config.RedisPassword,
+			RemoteEndpoint:    n.config.DBRemoteEndpoint,
+			RemotePassword:    n.config.DBRemotePassword,
 			ReadOnly:          readonly,
 		})
 	}

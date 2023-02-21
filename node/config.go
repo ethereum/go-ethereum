@@ -63,13 +63,6 @@ type Config struct {
 	// in memory.
 	DataDir string
 
-	// RedisEndpoint is the endpoint to connect to Redis. Redis database will be
-	// used if, and only if, DataDir is empty and RedisEndpoint is not empty.
-	RedisEndpoint string
-
-	// RedisPassword is the password to connect to Redis.
-	RedisPassword string
-
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 
@@ -210,7 +203,14 @@ type Config struct {
 	// EnablePersonal enables the deprecated personal namespace.
 	EnablePersonal bool `toml:"-"`
 
+	// DBEngine is the database engine to use: leveldb, peddle, redis, etc.
 	DBEngine string `toml:",omitempty"`
+
+	// DBRemoteEndpoint is the endpoint to connect to any remote db engine, like Redis.
+	DBRemoteEndpoint string `toml:",omitempty"`
+
+	// DBRemotePassword is the password to connect to any remote db engine, like Redis.
+	DBRemotePassword string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

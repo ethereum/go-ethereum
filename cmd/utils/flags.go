@@ -94,16 +94,6 @@ var (
 		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
-	RedisEndpointFlag = &cli.StringFlag{
-		Name:     "redis",
-		Usage:    "URL for Redis database",
-		Category: flags.EthCategory,
-	}
-	RedisPasswordFlag = &cli.StringFlag{
-		Name:     "redis-pass",
-		Usage:    "Password for Redis database, if necessary",
-		Category: flags.EthCategory,
-	}
 	RemoteDBFlag = &cli.StringFlag{
 		Name:     "remotedb",
 		Usage:    "URL for remote database",
@@ -111,8 +101,18 @@ var (
 	}
 	DBEngineFlag = &cli.StringFlag{
 		Name:     "db.engine",
-		Usage:    "Backing database implementation to use: leveldb or redis",
+		Usage:    "Backing database implementation to use: " + strings.Join(rawdb.SupportedEngines(), ", "),
 		Value:    "leveldb",
+		Category: flags.EthCategory,
+	}
+	DBRemoteEndpointFlag = &cli.StringFlag{
+		Name:     "db.remote.endpoint",
+		Usage:    "URL for Redis database (required if " + DBEngineFlag.Name + "=redis)",
+		Category: flags.EthCategory,
+	}
+	DBRemotePasswordFlag = &cli.StringFlag{
+		Name:     "db.remote.password",
+		Usage:    "Password for Redis database, if necessary (used only if " + DBEngineFlag.Name + "=redis)",
 		Category: flags.EthCategory,
 	}
 	AncientFlag = &flags.DirectoryFlag{
@@ -1020,18 +1020,13 @@ var (
 	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
 		DBEngineFlag,
-		RedisEndpointFlag,
+		DBRemoteEndpointFlag,
+		DBRemotePasswordFlag,
 		AncientFlag,
 		RemoteDBFlag,
 		HttpHeaderFlag,
 	}
 )
-
-func init() {
-	if rawdb.PebbleEnabled {
-		DBEngineFlag.Usage += " or pebble"
-	}
-}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
@@ -1512,9 +1507,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
 		if dbEngine != "leveldb" && dbEngine != "redis" && (!rawdb.PebbleEnabled || dbEngine != "pebble") {
 			if rawdb.PebbleEnabled {
-				Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb', 'pebble' or 'redis'", dbEngine)
+				Fatalf("Invalid choice for %s '%s', allowed 'leveldb', 'pebble' or 'redis'", DBEngineFlag.Name, dbEngine)
 			} else {
-				Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'redis'", dbEngine)
+				Fatalf("Invalid choice for %s '%s', allowed 'leveldb' or 'redis'", DBEngineFlag.Name, dbEngine)
 			}
 		}
 		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
@@ -1560,18 +1555,17 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 
 func SetRedisEndpoint(ctx *cli.Context, cfg *node.Config) {
 	if cfg.DBEngine == "redis" {
-		url := ctx.String(RedisEndpointFlag.Name)
+		url := ctx.String(DBRemoteEndpointFlag.Name)
 		if url == "" {
-			Fatalf("Redis endpoint must be specified when using redis as db engine")
+			Fatalf("%s must be specified when using %s=redis", DBRemoteEndpointFlag.Name, DBEngineFlag.Name)
 		}
-		cfg.RedisEndpoint = url
-		cfg.RedisPassword = ctx.String(RedisPasswordFlag.Name)
+		cfg.DBRemoteEndpoint = url
+		cfg.DBRemotePassword = ctx.String(DBRemotePasswordFlag.Name)
 	} else {
-		if ctx.IsSet(RedisEndpointFlag.Name) {
-			log.Warn("Redis endpoint is only used when using redis as db engine")
-		}
-		if ctx.IsSet(RedisPasswordFlag.Name) {
-			log.Warn("Redis password is only used when using redis as db engine")
+		for _, flag := range []string{DBRemoteEndpointFlag.Name, DBRemotePasswordFlag.Name} {
+			if ctx.IsSet(flag) {
+				log.Warn("%s will be ignored with %s=%s", flag, DBEngineFlag.Name, cfg.DBEngine)
+			}
 		}
 	}
 }
