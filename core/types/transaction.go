@@ -85,6 +85,7 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+	GetChainID() *big.Int
 }
 
 // EncodeRLP implements rlp.Encoder
