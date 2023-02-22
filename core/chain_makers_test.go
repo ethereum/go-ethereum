@@ -80,17 +80,12 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
 		gen.AddTx(tx)
 		if i == 1 {
-			// first index for the withdrawal block
-			idxOne := uint64(0)
-
 			gen.AddWithdrawal(&types.Withdrawal{
-				Index:     idxOne,
 				Validator: 42,
 				Address:   common.Address{0xee},
 				Amount:    1337,
 			})
 			gen.AddWithdrawal(&types.Withdrawal{
-				Index:     idxOne + 1,
 				Validator: 13,
 				Address:   common.Address{0xee},
 				Amount:    1,
