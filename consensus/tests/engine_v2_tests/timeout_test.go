@@ -140,7 +140,7 @@ func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
 
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
-	params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig = params.TestV2Configs[0]
+	params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig = params.UnitTestV2Configs[0]
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 

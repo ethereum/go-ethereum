@@ -57,7 +57,8 @@ var (
 			MinePeriod:           10,
 		},
 	}
-	TestV2Configs = map[uint64]*V2Config{
+
+	TestnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
 			CertThreshold:        3,
@@ -65,22 +66,6 @@ var (
 			TimeoutPeriod:        4,
 			WaitPeriod:           1,
 			MinePeriod:           2,
-		},
-		10: {
-			SwitchRound:          10,
-			CertThreshold:        5,
-			TimeoutSyncThreshold: 2,
-			TimeoutPeriod:        4,
-			WaitPeriod:           2,
-			MinePeriod:           3,
-		},
-		899: {
-			SwitchRound:          899,
-			CertThreshold:        5,
-			TimeoutSyncThreshold: 4,
-			TimeoutPeriod:        5,
-			WaitPeriod:           2,
-			MinePeriod:           3,
 		},
 	}
 
@@ -135,6 +120,33 @@ var (
 		},
 	}
 
+	UnitTestV2Configs = map[uint64]*V2Config{
+		Default: {
+			SwitchRound:          0,
+			CertThreshold:        3,
+			TimeoutSyncThreshold: 2,
+			TimeoutPeriod:        4,
+			WaitPeriod:           1,
+			MinePeriod:           2,
+		},
+		10: {
+			SwitchRound:          10,
+			CertThreshold:        5,
+			TimeoutSyncThreshold: 2,
+			TimeoutPeriod:        4,
+			WaitPeriod:           2,
+			MinePeriod:           3,
+		},
+		899: {
+			SwitchRound:          899,
+			CertThreshold:        5,
+			TimeoutSyncThreshold: 4,
+			TimeoutPeriod:        5,
+			WaitPeriod:           2,
+			MinePeriod:           3,
+		},
+	}
+
 	// XDPoSChain mainnet config
 	XDCMainnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(50),
@@ -152,7 +164,7 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2: &V2{
-				SwitchBlock:   big.NewInt(9999999999),
+				SwitchBlock:   common.TIPV2SwitchBlock,
 				CurrentConfig: MainnetV2Configs[0],
 				AllConfigs:    MainnetV2Configs,
 			},
@@ -194,9 +206,9 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				SwitchBlock:      big.NewInt(900),
-				CurrentConfig:    TestV2Configs[0],
-				AllConfigs:       TestV2Configs,
+				SwitchBlock:      common.TIPV2SwitchBlock,
+				CurrentConfig:    TestnetV2Configs[0],
+				AllConfigs:       TestnetV2Configs,
 				SkipV2Validation: true,
 			},
 		},
@@ -219,7 +231,7 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("0x746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				SwitchBlock:   big.NewInt(7074000),
+				SwitchBlock:   common.TIPV2SwitchBlock,
 				CurrentConfig: DevnetV2Configs[0],
 				AllConfigs:    DevnetV2Configs,
 			},
@@ -286,8 +298,8 @@ var (
 			Reward:              250,
 			V2: &V2{
 				SwitchBlock:   big.NewInt(900),
-				CurrentConfig: TestV2Configs[0],
-				AllConfigs:    TestV2Configs,
+				CurrentConfig: UnitTestV2Configs[0],
+				AllConfigs:    UnitTestV2Configs,
 			},
 		},
 	}
