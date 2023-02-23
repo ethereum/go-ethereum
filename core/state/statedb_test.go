@@ -763,7 +763,7 @@ func TestStateDBAccessList(t *testing.T) {
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	state, _ := New(common.Hash{}, db, nil)
-	state.accessList = newAccessList()
+	state.accessList = NewAccessList()
 
 	verifyAddrs := func(astrings ...string) {
 		t.Helper()

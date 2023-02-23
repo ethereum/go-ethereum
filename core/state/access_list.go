@@ -47,8 +47,8 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	return true, slotPresent
 }
 
-// newAccessList creates a new accessList.
-func newAccessList() *accessList {
+// NewAccessList creates a new accessList.
+func NewAccessList() *accessList {
 	return &accessList{
 		addresses: make(map[common.Address]int),
 	}
@@ -56,7 +56,7 @@ func newAccessList() *accessList {
 
 // Copy creates an independent copy of an accessList.
 func (a *accessList) Copy() *accessList {
-	cp := newAccessList()
+	cp := NewAccessList()
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
 	}

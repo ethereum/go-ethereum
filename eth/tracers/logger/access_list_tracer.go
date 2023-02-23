@@ -32,8 +32,8 @@ type accessList map[common.Address]accessListSlots
 // contract that an EVM contract execution touches.
 type accessListSlots map[common.Hash]struct{}
 
-// newAccessList creates a new accessList.
-func newAccessList() accessList {
+// NewAccessList creates a new accessList.
+func NewAccessList() accessList {
 	return make(map[common.Address]accessListSlots)
 }
 
@@ -117,7 +117,7 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	for _, addr := range precompiles {
 		excl[addr] = struct{}{}
 	}
-	list := newAccessList()
+	list := NewAccessList()
 	for _, al := range acl {
 		if _, ok := excl[al.Address]; !ok {
 			list.addAddress(al.Address)
