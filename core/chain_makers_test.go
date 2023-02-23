@@ -75,11 +75,22 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 
 	genesis := gspec.MustCommit(gendb)
 
-	// sealingEngine := sealingEngine{engine}
 	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
 		gen.AddTx(tx)
 		if i == 1 {
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 42,
+				Address:   common.Address{0xee},
+				Amount:    1337,
+			})
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 13,
+				Address:   common.Address{0xee},
+				Amount:    1,
+			})
+		}
+		if i == 3 {
 			gen.AddWithdrawal(&types.Withdrawal{
 				Validator: 42,
 				Address:   common.Address{0xee},
@@ -103,21 +114,23 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 	}
 
 	// enforce that withdrawal indexes are monotonically increasing from 0
-	head := blockchain.CurrentBlock().NumberU64()
+	var (
+		withdrawalIndex uint64
+		head            = blockchain.CurrentBlock().NumberU64()
+	)
 	for i := 0; i < int(head); i++ {
 		block := blockchain.GetBlockByNumber(uint64(i))
 		if block == nil {
 			t.Fatalf("block %d not found", i)
 		}
-
-		if block.Withdrawals() == nil {
+		if len(block.Withdrawals()) == 0 {
 			continue
 		}
-
 		for j := 0; j < len(block.Withdrawals()); j++ {
-			if block.Withdrawals()[j].Index != uint64(j) {
-				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, j)
+			if block.Withdrawals()[j].Index != withdrawalIndex {
+				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, withdrawalIndex)
 			}
+			withdrawalIndex += 1
 		}
 	}
 }

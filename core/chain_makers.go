@@ -211,7 +211,7 @@ func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
 	// The withdrawal will be assigned the next valid index.
 	var idx uint64
 
-	// set the initial index to the last withdrawal index in the block + 1, if
+	// Set the initial index to the last withdrawal index in the block + 1, if
 	// it exists. otherwise, determine the proper index from parent blocks
 	if len(b.withdrawals) != 0 {
 		idx = b.withdrawals[len(b.withdrawals)-1].Index + 1
@@ -219,7 +219,6 @@ func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
 		b.withdrawals = append(b.withdrawals, w)
 		return
 	}
-
 	for i := b.i - 1; i >= 0; i-- {
 		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
 			idx = wd[len(wd)-1].Index + 1
