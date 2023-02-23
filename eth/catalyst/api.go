@@ -237,6 +237,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			log.Warn("Forkchoice requested unknown head", "hash", update.HeadBlockHash)
 			return engine.STATUS_SYNCING, nil
 		}
+		// If the finalized hash is known, we can direct the downloader to move
+		// potentially more data to the freezer from the get go.
+		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
+
 		// Header advertised via a past newPayload request. Start syncing to it.
 		// Before we do however, make sure any legacy sync in switched off so we
 		// don't accidentally have 2 cycles running.
@@ -244,8 +248,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			merger.ReachTTD()
 			api.eth.Downloader().Cancel()
 		}
-		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
-		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
+		context := []interface{}{"number", header.Number, "hash", header.Hash()}
+		if update.FinalizedBlockHash != (common.Hash{}) {
+			if finalized == nil {
+				context = append(context, []interface{}{"finalized", "unknown"}...)
+			} else {
+				context = append(context, []interface{}{"finalized", finalized.Number}...)
+			}
+		}
+		log.Info("Forkchoice requested sync to new head", context...)
+		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header, finalized); err != nil {
 			return engine.STATUS_SYNCING, err
 		}
 		return engine.STATUS_SYNCING, nil

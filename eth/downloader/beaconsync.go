@@ -151,8 +151,8 @@ func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, true)
+func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.Header) error {
+	return d.beaconSync(mode, head, final, true)
 }
 
 // BeaconExtend is an optimistic version of BeaconSync, where an attempt is made
@@ -162,7 +162,7 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
 // This is useful if a beacon client is feeding us large chunks of payloads to run,
 // but is not setting the head after each.
 func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, false)
+	return d.beaconSync(mode, head, nil, false)
 }
 
 // beaconSync is the post-merge version of the chain synchronization, where the
@@ -171,7 +171,7 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) error {
+func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.Header, force bool) error {
 	// When the downloader starts a sync cycle, it needs to be aware of the sync
 	// mode to use (full, snap). To keep the skeleton chain oblivious, inject the
 	// mode into the backfiller directly.
@@ -181,7 +181,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) e
 	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
 
 	// Signal the skeleton sync to switch to a new head, however it wants
-	if err := d.skeleton.Sync(head, force); err != nil {
+	if err := d.skeleton.Sync(head, final, force); err != nil {
 		return err
 	}
 	return nil
@@ -207,7 +207,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	number := chainHead.Number.Uint64()
 
 	// Retrieve the skeleton bounds and ensure they are linked to the local chain
-	beaconHead, beaconTail, err := d.skeleton.Bounds()
+	beaconHead, beaconTail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// This is a programming error. The chain backfiller was called with an
 		// invalid beacon sync state. Ideally we would panic here, but erroring
@@ -272,7 +272,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 	var head *types.Header
-	_, tail, err := d.skeleton.Bounds()
+	_, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
 		// sure we're always syncing to all available ones
-		head, _, err = d.skeleton.Bounds()
+		head, _, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
