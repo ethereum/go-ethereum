@@ -46,36 +46,36 @@
       items:
         - id: Introduction
           to: /docs/interacting-with-geth/rpc
+        - id: RPC Namespaces
+          items:
+          - id: admin
+            to: /docs/interacting-with-geth/rpc/ns-admin
+          - id: clique
+            to: /docs/interacting-with-geth/rpc/ns-clique
+          - id: debug
+            to: /docs/interacting-with-geth/rpc/ns-debug
+          - id: eth
+            to: /docs/interacting-with-geth/rpc/ns-eth
+          - id: les
+            to: /docs/interacting-with-geth/rpc/ns-les
+          - id: miner (deprecated)
+            to: /docs/interacting-with-geth/rpc/ns-miner
+          - id: net
+            to: /docs/interacting-with-geth/rpc/ns-net
+          - id: personal (deprecated)
+            to: /docs/interacting-with-geth/rpc/ns-personal
+          - id: txpool
+            to: /docs/interacting-with-geth/rpc/ns-txpool
         - id: Batch requests
           to: /docs/interacting-with-geth/rpc/batch
-        - id: GraphQL server
-          to: /docs/interacting-with-geth/rpc/graphql
-        - id: admin Namespace
-          to: /docs/interacting-with-geth/rpc/ns-admin
-        - id: clique Namespace
-          to: /docs/interacting-with-geth/rpc/ns-clique
-        - id: debug Namespace
-          to: /docs/interacting-with-geth/rpc/ns-debug
-        - id: eth Namespace
-          to: /docs/interacting-with-geth/rpc/ns-eth
-        - id: les Namespace
-          to: /docs/interacting-with-geth/rpc/ns-les
-        - id: miner Namespace
-          to: /docs/interacting-with-geth/rpc/ns-miner
-        - id: net Namespace
-          to: /docs/interacting-with-geth/rpc/ns-net
-        - id: Personal namespace deprecation notes
-          to: /docs/interacting-with-geth/rpc/ns-personal-deprecation
-        - id: Personal Namespace
-          to: /docs/interacting-with-geth/rpc/ns-personal
-        - id: txpool Namespace
-          to: /docs/interacting-with-geth/rpc/ns-txpool
         - id: Real-time Events
           to: /docs/interacting-with-geth/rpc/pubsub
-    - id: JavaScript Console
+    - id: JS Console
       to: /docs/interacting-with-geth/javascript-console
-    - id: 'JavaScript Console 2: Contracts'
+    - id: 'JS Console 2: Contracts'
       to: /docs/interacting-with-geth/javascript-console-contracts
+    - id: GraphQL server
+      to: /docs/interacting-with-geth/rpc/graphql
 - id: Developers
   items:
     - id: Introduction

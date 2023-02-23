@@ -288,6 +288,11 @@ const redirects = [
     source: '/docs/developers/contributing',
     destination: '/docs/developers/geth-developer/contributing',
     permanent: true
+  },
+  {
+    source: '/docs/interacting-with-geth/rpc/ns-personal-deprecation',
+    destination: '/docs/interacting-with-geth/rpc/ns-personal',
+    permanent: true
   }
 ];
 
