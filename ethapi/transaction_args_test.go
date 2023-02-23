@@ -291,10 +291,10 @@ func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc
 func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return nil, nil
 }
-func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (state.StateDBI, *types.Header, error) {
 	return nil, nil, nil
 }
-func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (state.StateDBI, *types.Header, error) {
 	return nil, nil, nil
 }
 func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) { return nil, nil }
@@ -305,7 +305,7 @@ func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number
 	return nil, nil
 }
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
-func (b *backendMock) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+func (b *backendMock) GetEVM(ctx context.Context, msg core.Message, state state.StateDBI, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	return nil, nil, nil
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
