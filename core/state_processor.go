@@ -88,13 +88,21 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		statedb.SetTxContext(tx.Hash(), i)
 		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+
+		// Finalize trace logger result and save to underlying database if necessary.
+		switch t := cfg.Tracer.(type) {
+		case *txtracelib.OeTracer:
+			log.Debug("Persist oe-style trace result to database", "blockNumber", header.Number.Int64(), "txHash", tx.Hash())
+			t.PersistTrace()
+		default:
+		}
+
 	}
 
 	if tracing {
