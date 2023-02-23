@@ -145,7 +145,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
-		accessList:           NewaccessList(),
+		accessList:           NewAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
@@ -1093,10 +1093,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Reset access list (Berlin)
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
-func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.accessList) {
+func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
-		al := NewaccessList()
+		al := NewAccessList()
 		s.accessList = al
 
 		al.AddAddress(sender)
@@ -1121,15 +1121,15 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.transientStorage = newTransientStorage()
 }
 
-// AddAddressToaccessList adds the given address to the access list
-func (s *StateDB) AddAddressToaccessList(addr common.Address) {
+// AddAddressToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
 }
 
-// AddSlotToaccessList adds the given (address, slot)-tuple to the access list
-func (s *StateDB) AddSlotToaccessList(addr common.Address, slot common.Hash) {
+// AddSlotToAccessList adds the given (address, slot)-tuple to the access list
+func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
 	if addrMod {
 		// In practice, this should not happen, since there is no way to enter the
@@ -1146,13 +1146,13 @@ func (s *StateDB) AddSlotToaccessList(addr common.Address, slot common.Hash) {
 	}
 }
 
-// AddressInaccessList returns true if the given address is in the access list.
-func (s *StateDB) AddressInaccessList(addr common.Address) bool {
+// AddressInAccessList returns true if the given address is in the access list.
+func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 	return s.accessList.ContainsAddress(addr)
 }
 
-// SlotInaccessList returns true if the given (address, slot)-tuple is in the access list.
-func (s *StateDB) SlotInaccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
+func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
 }
 

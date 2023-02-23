@@ -266,7 +266,7 @@ func (ch accessListAddAccountChange) revert(s *StateDB) {
 		(addr) at this point, since no storage adds can remain when come upon
 		a single (addr) change.
 	*/
-	s.AccessList.DeleteAddress(*ch.address)
+	s.accessList.DeleteAddress(*ch.address)
 }
 
 func (ch accessListAddAccountChange) dirtied() *common.Address {
@@ -274,7 +274,7 @@ func (ch accessListAddAccountChange) dirtied() *common.Address {
 }
 
 func (ch accessListAddSlotChange) revert(s *StateDB) {
-	s.AccessList.DeleteSlot(*ch.address, *ch.slot)
+	s.accessList.DeleteSlot(*ch.address, *ch.slot)
 }
 
 func (ch accessListAddSlotChange) dirtied() *common.Address {
