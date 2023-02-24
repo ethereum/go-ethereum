@@ -3,7 +3,6 @@ package fees
 import (
 	"bytes"
 	"errors"
-	"math"
 	"math/big"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -93,27 +92,18 @@ func rlpEncode(tx *types.Transaction) ([]byte, error) {
 	return b[:len(b)-3], nil
 }
 
-func readGPOStorageSlots(addr common.Address, state StateDB) (*big.Int, *big.Int, *big.Float) {
+func readGPOStorageSlots(addr common.Address, state StateDB) (*big.Int, *big.Int, *big.Int) {
 	l1BaseFee := state.GetState(addr, rcfg.L1BaseFeeSlot)
 	overhead := state.GetState(addr, rcfg.OverheadSlot)
 	scalar := state.GetState(addr, rcfg.ScalarSlot)
-	scaled := ScalePrecision(scalar.Big(), rcfg.Precision)
-	return l1BaseFee.Big(), overhead.Big(), scaled
-}
-
-// ScalePrecision will scale a value by precision
-func ScalePrecision(scalar, precision *big.Int) *big.Float {
-	fscalar := new(big.Float).SetInt(scalar)
-	fdivisor := new(big.Float).SetInt(precision)
-	// fscalar / fdivisor
-	return new(big.Float).Quo(fscalar, fdivisor)
+	return l1BaseFee.Big(), overhead.Big(), scalar.Big()
 }
 
 // CalculateL1Fee computes the L1 fee
-func CalculateL1Fee(data []byte, overhead, l1GasPrice *big.Int, scalar *big.Float) *big.Int {
+func CalculateL1Fee(data []byte, overhead, l1GasPrice *big.Int, scalar *big.Int) *big.Int {
 	l1GasUsed := CalculateL1GasUsed(data, overhead)
 	l1Fee := new(big.Int).Mul(l1GasUsed, l1GasPrice)
-	return mulByFloat(l1Fee, scalar)
+	return mulAndScale(l1Fee, scalar, rcfg.Precision)
 }
 
 // CalculateL1GasUsed computes the L1 gas used based on the calldata and
@@ -142,12 +132,9 @@ func zeroesAndOnes(data []byte) (uint64, uint64) {
 	return zeroes, ones
 }
 
-// mulByFloat multiplies a big.Int by a float and returns the
-// big.Int rounded upwards
-func mulByFloat(num *big.Int, float *big.Float) *big.Int {
-	n := new(big.Float).SetUint64(num.Uint64())
-	product := n.Mul(n, float)
-	pfloat, _ := product.Float64()
-	rounded := math.Ceil(pfloat)
-	return new(big.Int).SetUint64(uint64(rounded))
+// mulAndScale multiplies a big.Int by a big.Int and then scale it by precision,
+// rounded towards zero
+func mulAndScale(x *big.Int, y *big.Int, precision *big.Int) *big.Int {
+	z := new(big.Int).Mul(x, y)
+	return new(big.Int).Quo(z, precision)
 }
