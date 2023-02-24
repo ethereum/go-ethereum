@@ -56,13 +56,13 @@ func (s Storage) Copy() Storage {
 	return cpy
 }
 
-// stateObject represents an Ethereum account which is being modified.
+// StateObject represents an Ethereum account which is being modified.
 //
 // The usage pattern is as follows:
 // First you need to obtain a state object.
 // Account values can be accessed and modified through the object.
 // Finally, call commitTrie to write the modified storage trie into a database.
-type stateObject struct {
+type StateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
 	data     types.StateAccount
@@ -97,7 +97,7 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
+func newObject(db *StateDB, address common.Address, data types.StateAccount) *StateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -107,7 +107,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	if data.Root == (common.Hash{}) {
 		data.Root = types.EmptyRootHash
 	}
-	return &stateObject{
+	return &StateObject{
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
@@ -119,22 +119,22 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 }
 
 // EncodeRLP implements rlp.Encoder.
-func (s *stateObject) EncodeRLP(w io.Writer) error {
+func (s *StateObject) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &s.data)
 }
 
 // setError remembers the first non-nil error it is called with.
-func (s *stateObject) setError(err error) {
+func (s *StateObject) setError(err error) {
 	if s.dbErr == nil {
 		s.dbErr = err
 	}
 }
 
-func (s *stateObject) markSuicided() {
+func (s *StateObject) markSuicided() {
 	s.suicided = true
 }
 
-func (s *stateObject) touch() {
+func (s *StateObject) touch() {
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
@@ -148,7 +148,7 @@ func (s *stateObject) touch() {
 // getTrie returns the associated storage trie. The trie will be opened
 // if it's not loaded previously. An error will be returned if trie can't
 // be loaded.
-func (s *stateObject) getTrie(db Database) (Trie, error) {
+func (s *StateObject) getTrie(db Database) (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
 		// We don't prefetch empty tries
@@ -169,7 +169,7 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 }
 
 // GetState retrieves a value from the account storage trie.
-func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
+func (s *StateObject) GetState(db Database, key common.Hash) common.Hash {
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
@@ -180,7 +180,7 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
-func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
+func (s *StateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
@@ -239,7 +239,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 }
 
 // SetState updates a value in account storage.
-func (s *stateObject) SetState(db Database, key, value common.Hash) {
+func (s *StateObject) SetState(db Database, key, value common.Hash) {
 	// If the new value is the same as old, don't set
 	prev := s.GetState(db, key)
 	if prev == value {
@@ -254,13 +254,13 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
-func (s *stateObject) setState(key, value common.Hash) {
+func (s *StateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
-func (s *stateObject) finalise(prefetch bool) {
+func (s *StateObject) finalise(prefetch bool) {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		s.pendingStorage[key] = value
@@ -279,7 +279,7 @@ func (s *stateObject) finalise(prefetch bool) {
 // updateTrie writes cached storage modifications into the object's storage trie.
 // It will return nil if the trie has not been loaded and no changes have been
 // made. An error will be returned if the trie can't be loaded/updated correctly.
-func (s *stateObject) updateTrie(db Database) (Trie, error) {
+func (s *StateObject) updateTrie(db Database) (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
@@ -348,7 +348,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 
 // UpdateRoot sets the trie root to the current root hash of. An error
 // will be returned if trie root hash is not computed correctly.
-func (s *stateObject) updateRoot(db Database) {
+func (s *StateObject) updateRoot(db Database) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
 		s.setError(fmt.Errorf("updateRoot (%x) error: %w", s.address, err))
@@ -367,7 +367,7 @@ func (s *stateObject) updateRoot(db Database) {
 
 // commitTrie submits the storage changes into the storage trie and re-computes
 // the root. Besides, all trie changes will be collected in a nodeset and returned.
-func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
+func (s *StateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
 		return nil, err
@@ -390,7 +390,7 @@ func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *big.Int) {
+func (s *StateObject) AddBalance(amount *big.Int) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.Sign() == 0 {
@@ -404,14 +404,14 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *big.Int) {
+func (s *StateObject) SubBalance(amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
 }
 
-func (s *stateObject) SetBalance(amount *big.Int) {
+func (s *StateObject) SetBalance(amount *big.Int) {
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),
@@ -419,23 +419,23 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 	s.setBalance(amount)
 }
 
-func (s *stateObject) setBalance(amount *big.Int) {
+func (s *StateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
-	stateObject := newObject(db, s.address, s.data)
+func (s *StateObject) deepCopy(db *StateDB) *StateObject {
+	StateObject := newObject(db, s.address, s.data)
 	if s.trie != nil {
-		stateObject.trie = db.db.CopyTrie(s.trie)
+		StateObject.trie = db.db.CopyTrie(s.trie)
 	}
-	stateObject.code = s.code
-	stateObject.dirtyStorage = s.dirtyStorage.Copy()
-	stateObject.originStorage = s.originStorage.Copy()
-	stateObject.pendingStorage = s.pendingStorage.Copy()
-	stateObject.suicided = s.suicided
-	stateObject.dirtyCode = s.dirtyCode
-	stateObject.deleted = s.deleted
-	return stateObject
+	StateObject.code = s.code
+	StateObject.dirtyStorage = s.dirtyStorage.Copy()
+	StateObject.originStorage = s.originStorage.Copy()
+	StateObject.pendingStorage = s.pendingStorage.Copy()
+	StateObject.suicided = s.suicided
+	StateObject.dirtyCode = s.dirtyCode
+	StateObject.deleted = s.deleted
+	return StateObject
 }
 
 //
@@ -443,12 +443,12 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 //
 
 // Address returns the address of the contract/account
-func (s *stateObject) Address() common.Address {
+func (s *StateObject) Address() common.Address {
 	return s.address
 }
 
 // Code returns the contract code associated with this object, if any.
-func (s *stateObject) Code(db Database) []byte {
+func (s *StateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
@@ -466,7 +466,7 @@ func (s *stateObject) Code(db Database) []byte {
 // CodeSize returns the size of the contract code associated with this object,
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
-func (s *stateObject) CodeSize(db Database) int {
+func (s *StateObject) CodeSize(db Database) int {
 	if s.code != nil {
 		return len(s.code)
 	}
@@ -480,7 +480,7 @@ func (s *stateObject) CodeSize(db Database) int {
 	return size
 }
 
-func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
+func (s *StateObject) SetCode(codeHash common.Hash, code []byte) {
 	prevcode := s.Code(s.db.db)
 	s.db.journal.append(codeChange{
 		account:  &s.address,
@@ -490,13 +490,13 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	s.setCode(codeHash, code)
 }
 
-func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
+func (s *StateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
 	s.dirtyCode = true
 }
 
-func (s *stateObject) SetNonce(nonce uint64) {
+func (s *StateObject) SetNonce(nonce uint64) {
 	s.db.journal.append(nonceChange{
 		account: &s.address,
 		prev:    s.data.Nonce,
@@ -504,25 +504,25 @@ func (s *stateObject) SetNonce(nonce uint64) {
 	s.setNonce(nonce)
 }
 
-func (s *stateObject) setNonce(nonce uint64) {
+func (s *StateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
 }
 
-func (s *stateObject) CodeHash() []byte {
+func (s *StateObject) CodeHash() []byte {
 	return s.data.CodeHash
 }
 
-func (s *stateObject) Balance() *big.Int {
+func (s *StateObject) Balance() *big.Int {
 	return s.data.Balance
 }
 
-func (s *stateObject) Nonce() uint64 {
+func (s *StateObject) Nonce() uint64 {
 	return s.data.Nonce
 }
 
-// Value is never called, but must be present to allow stateObject to be used
+// Value is never called, but must be present to allow StateObject to be used
 // as a vm.Account interface that also satisfies the vm.ContractRef
 // interface. Interfaces are awesome.
-func (s *stateObject) Value() *big.Int {
-	panic("Value on stateObject should never be called")
+func (s *StateObject) Value() *big.Int {
+	panic("Value on StateObject should never be called")
 }

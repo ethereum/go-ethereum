@@ -77,10 +77,21 @@ type StateDBI interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
+	Logs() []*types.Log
+	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
+	TxIndex() int
 	AddPreimage(common.Hash, []byte)
+	Preimages() map[common.Hash][]byte
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
 
+	GetOrNewStateObject(addr common.Address) *StateObject
+
+	DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte)
+	Dump(opts *DumpConfig) []byte
+	RawDump(opts *DumpConfig) Dump
+	IteratorDump(opts *DumpConfig) IteratorDump
+	Database() Database
 	StorageTrie(addr common.Address) (Trie, error)
 	Error() error
 	GetStorageProof(a common.Address, key common.Hash) ([][]byte, error)
@@ -88,6 +99,10 @@ type StateDBI interface {
 	SetBalance(addr common.Address, amount *big.Int)
 	SetStorage(addr common.Address, storage map[common.Hash]common.Hash)
 	Finalise(deleteEmptyObjects bool)
+	Commit(deleteEmptyObjects bool) (common.Hash, error)
 	Copy() StateDBI
 	SetTxContext(thash common.Hash, ti int)
+	StopPrefetcher()
+	StartPrefetcher(namespace string)
+	IntermediateRoot(deleteEmptyObjects bool) common.Hash
 }

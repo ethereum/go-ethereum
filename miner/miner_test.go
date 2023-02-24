@@ -55,12 +55,12 @@ func (m *mockBackend) TxPool() *txpool.TxPool {
 	return m.txPool
 }
 
-func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base state.StateDBI, checkLive bool, preferDisk bool) (statedb state.StateDBI, err error) {
 	return nil, errors.New("not supported")
 }
 
 type testBlockChain struct {
-	statedb       *state.StateDB
+	statedb       state.StateDBI
 	gasLimit      uint64
 	chainHeadFeed *event.Feed
 }
@@ -75,7 +75,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return bc.CurrentBlock()
 }
 
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(common.Hash) (state.StateDBI, error) {
 	return bc.statedb, nil
 }
 
