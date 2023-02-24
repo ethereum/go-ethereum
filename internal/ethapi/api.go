@@ -1137,7 +1137,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo  uint64 = params.TxGas - 1
+		lo  uint64
 		hi  uint64
 		cap uint64
 	)
@@ -1204,8 +1204,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	cap = hi
 
+	iter := 0
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64, state *state.StateDB, header *types.Header) (bool, *core.ExecutionResult, error) {
+		iter++
+		log.Trace("Estimate Gas - calling executable", "calls", iter, "gas", gas)
 		args.Gas = (*hexutil.Uint64)(&gas)
 
 		result, err := doCall(ctx, b, args, state, header, nil, nil, 0, gasCap)
@@ -1221,10 +1224,42 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
+	_, result, err := executable(hi, state, header)
+
+	// If the error is not nil(consensus error), it means the provided message
+	// call or transaction will never be accepted no matter how much gas it is
+	// assigned. Return the error directly, don't struggle any more.
+	if err != nil {
+		return 0, err
+	}
+
+	// Perform a second run with the UsedGas from the first to see if the transaction needs
+	// any additional gas to cover stipends, 65/64, refunds required etc
+	failed, _, _ := executable(result.UsedGas, state, header)
+
+	if !failed {
+		log.Trace("Estimate Gas - using used gas", "result", result.UsedGas)
+		return hexutil.Uint64(result.UsedGas), nil
+	}
+
+	theoreticalMax := (result.UsedGas + params.CallStipend) * (64 / 63)
+
+	// Sanity check that the theoreticalMax is enough to cover the transaction
+	failed, _, _ = executable(theoreticalMax, state, header)
+	if !failed && hi > theoreticalMax {
+		log.Trace("Estimate Gas - reduced upper bound", "hi", theoreticalMax)
+		hi = theoreticalMax
+	} else {
+		log.Error("theoreticalMax calculation incorrect", "hi", theoreticalMax)
+	}
+
+	lo = result.UsedGas
+
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		s := state.Copy()
 		mid := (hi + lo) / 2
+
 		failed, _, err := executable(mid, s, header)
 
 		// If the error is not nil(consensus error), it means the provided message
@@ -1233,6 +1268,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err != nil {
 			return 0, err
 		}
+
 		if failed {
 			lo = mid
 		} else {
@@ -1256,6 +1292,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
+	log.Trace("Estimate Gas - using binary search", "result", hi)
 	return hexutil.Uint64(hi), nil
 }
 
