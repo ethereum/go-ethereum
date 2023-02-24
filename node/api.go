@@ -61,6 +61,30 @@ type privateAdminAPI struct {
 	node *Node // Node interfaced by this API
 }
 
+// This function sets the param maxPeers for the node. If there are excess peers attached to the node, it will remove the difference.
+func (api *privateAdminAPI) SetMaxPeers(maxPeers int) (bool, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return false, ErrNodeStopped
+	}
+
+	server.SetMaxPeers(maxPeers)
+
+	return true, nil
+}
+
+// This function gets the maxPeers param for the node.
+func (api *privateAdminAPI) GetMaxPeers() (int, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return 0, ErrNodeStopped
+	}
+
+	return server.MaxPeers, nil
+}
+
 // AddPeer requests connecting to a remote node, and also maintaining the new
 // connection at all times, even reconnecting if it is lost.
 func (api *privateAdminAPI) AddPeer(url string) (bool, error) {
