@@ -1,10 +1,12 @@
 package redisdb
 
 import (
+	"context"
 	"errors"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"sync"
 )
 
 var (
@@ -62,7 +64,8 @@ func (snap *snapshot) Release() {
 }
 
 func newSnapshot(db *Database) (ethdb.Snapshot, error) {
-	keys, err := db.client.Keys("*").Result()
+	ctx := context.Background()
+	keys, err := db.client.Keys(ctx, "*").Result()
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +74,7 @@ func newSnapshot(db *Database) (ethdb.Snapshot, error) {
 		return snap, nil
 	}
 
-	values, err2 := db.client.MGet(keys...).Result()
+	values, err2 := db.client.MGet(ctx, keys...).Result()
 	if err2 != nil {
 		return nil, err2
 	}

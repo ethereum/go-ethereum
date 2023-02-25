@@ -1,15 +1,30 @@
 package redisdb
 
 import (
+	"context"
+	"time"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/go-redis/redis"
-	"time"
+	"github.com/redis/go-redis/v9"
 )
+
+type simpleClient interface {
+	Exists(ctx context.Context, keys ...string) *redis.IntCmd
+	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
+	MGet(ctx context.Context, keys ...string) *redis.SliceCmd
+	MSet(ctx context.Context, pairs ...interface{}) *redis.StatusCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	ConfigGet(ctx context.Context, parameter string) *redis.MapStringStringCmd
+	Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd
+	Close() error
+}
 
 // Database is a key-value lookup for redis.
 type Database struct {
-	client *redis.Client
+	client simpleClient
 	log    log.Logger // Contextual logger tracking the database endpoint
 }
 
@@ -19,7 +34,7 @@ func (db *Database) key(key []byte) string {
 }
 
 func (db *Database) Has(key []byte) (bool, error) {
-	val, err := db.client.Exists(db.key(key)).Result()
+	val, err := db.client.Exists(context.Background(), db.key(key)).Result()
 	if err != nil {
 		return false, err
 	}
@@ -27,7 +42,7 @@ func (db *Database) Has(key []byte) (bool, error) {
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {
-	val, err := db.client.Get(db.key(key)).Result()
+	val, err := db.client.Get(context.Background(), db.key(key)).Result()
 	if err != nil {
 		if err == redis.Nil {
 			//TODO return nil or empty slice?
@@ -40,11 +55,11 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 }
 
 func (db *Database) Put(key []byte, value []byte) error {
-	return db.client.Set(db.key(key), value, time.Duration(0)).Err()
+	return db.client.Set(context.Background(), db.key(key), value, time.Duration(0)).Err()
 }
 
 func (db *Database) Delete(key []byte) error {
-	return db.client.Del(db.key(key)).Err()
+	return db.client.Del(context.Background(), db.key(key)).Err()
 }
 
 func (db *Database) Close() error {
@@ -52,7 +67,7 @@ func (db *Database) Close() error {
 }
 
 func (db *Database) Stat(property string) (string, error) {
-	config := db.client.ConfigGet(property)
+	config := db.client.ConfigGet(context.Background(), property)
 	if err := config.Err(); err != nil {
 		return "", err
 	}
@@ -87,5 +102,10 @@ func New(endpoint, password string) (*Database, error) {
 		DB:       0,        // use default DB
 	})
 	logger := log.New("endpoint", endpoint)
+	_, err := rdb.Ping(context.Background()).Result()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Database{rdb, logger}, nil
 }

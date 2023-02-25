@@ -1,9 +1,11 @@
 package redisdb
 
 import (
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/go-redis/redis"
+	"context"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/redis/go-redis/v9"
 )
 
 type iter struct {
@@ -19,18 +21,20 @@ func (i *iter) Next() bool {
 	i.lock.Lock()
 	defer i.lock.Unlock()
 
+	ctx := context.Background()
 	if i.scanIterator == nil {
-		i.scanIterator = i.db.client.Scan(0, i.match, -1).Iterator()
+		i.scanIterator = i.db.client.Scan(ctx, 0, i.match, -1).Iterator()
 
 		if i.start != "" {
 			return nextUntilStart(i.start, i.scanIterator)
 		}
 	}
-	return i.scanIterator.Next()
+	return i.scanIterator.Next(ctx)
 }
 
 func nextUntilStart(start string, iter *redis.ScanIterator) bool {
-	for next := iter.Next(); next; next = iter.Next() {
+	ctx := context.Background()
+	for next := iter.Next(ctx); next; next = iter.Next(ctx) {
 		if iter.Val() > start {
 			return true
 		}
@@ -63,8 +67,9 @@ func (i *iter) Value() []byte {
 		return nil
 	}
 
+	ctx := context.Background()
 	key := i.scanIterator.Val()
-	value, err := i.db.client.Get(key).Bytes()
+	value, err := i.db.client.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil
 	}
