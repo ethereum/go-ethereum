@@ -18,12 +18,16 @@
 package core
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -2241,6 +2245,35 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		// len(newChain) == 0 && len(oldChain) > 0
 		// rewind the canonical chain to a lower point.
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Println("Impossible reorg : Unable to get user home dir", "Error", err)
+		}
+		outPath := filepath.Join(home, "impossible-reorgs", fmt.Sprintf("%v-impossibleReorg", time.Now().Format(time.RFC3339)))
+
+		if _, err := os.Stat(outPath); errors.Is(err, os.ErrNotExist) {
+			err := os.MkdirAll(outPath, os.ModePerm)
+			if err != nil {
+				log.Error("Impossible reorg : Unable to create Dir", "Error", err)
+			}
+		} else {
+			err = ExportBlocks(oldChain, filepath.Join(outPath, "oldChain.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export oldChain", "Error", err)
+			}
+
+			err = ExportBlocks([]*types.Block{oldBlock}, filepath.Join(outPath, "oldBlock.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export oldBlock", "Error", err)
+			}
+
+			err = ExportBlocks([]*types.Block{newBlock}, filepath.Join(outPath, "newBlock.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export newBlock", "Error", err)
+			}
+		}
+
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
 	// Insert the new chain(except the head block(reverse order)),
@@ -2290,6 +2323,44 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 		}
 	}
+	return nil
+}
+
+// ExportBlocks exports blocks into the specified file, truncating any data
+// already present in the file.
+func ExportBlocks(blocks []*types.Block, fn string) error {
+	log.Info("Exporting blockchain", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the blocks and export them
+	if err := ExportN(writer, blocks); err != nil {
+		return err
+	}
+
+	log.Info("Exported blocks", "file", fn)
+
+	return nil
+}
+
+// ExportBlock writes a block to the given writer.
+func ExportN(w io.Writer, blocks []*types.Block) error {
+	for _, block := range blocks {
+		if err := block.EncodeRLP(w); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
