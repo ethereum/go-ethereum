@@ -42,7 +42,7 @@ type callLog struct {
 }
 
 type callFrame struct {
-	Type         vm.OpCode      `json:"type"`
+	Type         vm.OpCode      `json:"-"`
 	From         common.Address `json:"from"`
 	Gas          uint64         `json:"gas"`
 	GasUsed      uint64         `json:"gasUsed"`
@@ -88,30 +88,13 @@ func (f *callFrame) processOutput(output []byte, err error) {
 	}
 }
 
-// stringOpCode is being used to marshal/unmarshal OpCode to/from string which is used by gencodec
-type stringOpCode vm.OpCode
-
-func (c stringOpCode) String() string {
-	return vm.OpCode(c).String()
-}
-
-func (c stringOpCode) MarshalText() ([]byte, error) {
-	return []byte(c.String()), nil
-}
-
-func (c *stringOpCode) UnmarshalJSON(input []byte) error {
-	code := vm.StringToOp(string(input[1 : len(input)-1]))
-	*c = stringOpCode(code)
-	return nil
-}
-
 type callFrameMarshaling struct {
-	Type    stringOpCode `json:"type"`
-	Gas     hexutil.Uint64
-	GasUsed hexutil.Uint64
-	Value   *hexutil.Big
-	Input   hexutil.Bytes
-	Output  hexutil.Bytes
+	TypeString string `json:"type"`
+	Gas        hexutil.Uint64
+	GasUsed    hexutil.Uint64
+	Value      *hexutil.Big
+	Input      hexutil.Bytes
+	Output     hexutil.Bytes
 }
 
 type callTracer struct {

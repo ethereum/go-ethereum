@@ -55,7 +55,6 @@ type callLog struct {
 
 // callTrace is the result of a callTracer run.
 type callTrace struct {
-	Type         string          `json:"type"`
 	From         common.Address  `json:"from"`
 	Gas          *hexutil.Uint64 `json:"gas"`
 	GasUsed      *hexutil.Uint64 `json:"gasUsed"`
@@ -67,6 +66,8 @@ type callTrace struct {
 	Calls        []callTrace     `json:"calls,omitempty"`
 	Logs         []callLog       `json:"logs,omitempty"`
 	Value        *hexutil.Big    `json:"value,omitempty"`
+	// Gencodec adds overridden fields at the end
+	Type string `json:"type"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.
@@ -326,7 +327,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve trace result: %v", err)
 	}
-	wantStr := `{"type":"CALL","from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"type":"CALL","from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0"}],"value":"0x0"}`
+	wantStr := `{"from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`
 	if string(res) != wantStr {
 		t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), wantStr)
 	}
