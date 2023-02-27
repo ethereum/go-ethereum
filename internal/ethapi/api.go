@@ -1457,27 +1457,28 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig, db ethdb.Database) *RPCTransaction {
 	txs := b.Transactions()
 
-	if index >= uint64(len(txs)+1) {
-		return nil
-	}
-
-	// If the index out of the range of transactions defined in block body, it means that the transaction is a bor state sync transaction, and we need to fetch it from the database
-	if index == uint64(len(txs)) {
-		borReceipt := rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
-		if borReceipt != nil {
-			tx, _, _, _ := rawdb.ReadBorTransaction(db, borReceipt.TxHash)
-
-			if tx != nil {
-				txs = append(txs, tx)
+	borReceipt := rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
+	if borReceipt != nil {
+		if borReceipt.TxHash != (common.Hash{}) {
+			borTx, _, _, _ := rawdb.ReadBorTransactionWithBlockHash(db, borReceipt.TxHash, b.Hash())
+			if borTx != nil {
+				txs = append(txs, borTx)
 			}
 		}
 	}
 
-	// If the index is still out of the range after checking bor state sync transaction, it means that the transaction index is invalid
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
+	if borReceipt != nil && int(index) == len(txs)-1 {
+		rpcTx.Hash = borReceipt.TxHash
+	}
+
+	return rpcTx
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
