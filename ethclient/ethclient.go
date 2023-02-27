@@ -118,7 +118,10 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	// Decode header and transactions.
 	var head *types.Header
 	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
+	if err := json.Unmarshal(raw, &head); err != nil || head ==nil {
+		if err==nil {
+			return nil ,fmt.Errorf("this head ptr is null,maybe raw is [0x6e,0x75,0x6c,0x6c] string")
+		}
 		return nil, err
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
