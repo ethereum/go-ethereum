@@ -207,9 +207,12 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 }
 
 // AddWithdrawal adds a withdrawal to the generated block.
-func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
-	w.Index = b.nextWithdrawalIndex()
-	b.withdrawals = append(b.withdrawals, w)
+// It returns the withdrawal index.
+func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) uint64 {
+	cpy := *w
+	cpy.Index = b.nextWithdrawalIndex()
+	b.withdrawals = append(b.withdrawals, &cpy)
+	return cpy.Index
 }
 
 // nextWithdrawalIndex computes the index of the next withdrawal.
