@@ -248,8 +248,8 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 		shouldErr bool
 	}{
 		{0, true},
-		{parent.Time(), true},
-		{parent.Time() - 1, true},
+		{parent.Time, true},
+		{parent.Time - 1, true},
 
 		// TODO (MariusVanDerWijden) following tests are currently broken,
 		// fixed in upcoming merge-kiln-v2 pr
@@ -262,7 +262,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 			params := engine.PayloadAttributes{
 				Timestamp:             test.time,
 				Random:                crypto.Keccak256Hash([]byte{byte(123)}),
-				SuggestedFeeRecipient: parent.Coinbase(),
+				SuggestedFeeRecipient: parent.Coinbase,
 			}
 			fcState := engine.ForkchoiceStateV1{
 				HeadBlockHash:      parent.Hash(),
@@ -319,7 +319,7 @@ func TestEth2NewBlock(t *testing.T) {
 			t.Fatalf("Failed to insert block: %v", err)
 		case newResp.Status != "VALID":
 			t.Fatalf("Failed to insert block: %v", newResp.Status)
-		case ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1:
+		case ethservice.BlockChain().CurrentBlock().Number.Uint64() != block.NumberU64()-1:
 			t.Fatalf("Chain head shouldn't be updated")
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
@@ -331,7 +331,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
+		if have, want := ethservice.BlockChain().CurrentBlock().Number.Uint64(), block.NumberU64(); have != want {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 1, 0)
@@ -341,7 +341,7 @@ func TestEth2NewBlock(t *testing.T) {
 
 	// Introduce fork chain
 	var (
-		head = ethservice.BlockChain().CurrentBlock().NumberU64()
+		head = ethservice.BlockChain().CurrentBlock().Number.Uint64()
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
@@ -359,7 +359,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil || newResp.Status != "VALID" {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != head {
 			t.Fatalf("Chain head shouldn't be updated")
 		}
 
@@ -371,7 +371,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != block.NumberU64() {
 			t.Fatalf("Chain head should be updated")
 		}
 		parent, head = block, block.NumberU64()
@@ -389,7 +389,7 @@ func TestEth2DeepReorg(t *testing.T) {
 		var (
 			api    = NewConsensusAPI(ethservice, nil)
 			parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
-			head   = ethservice.BlockChain().CurrentBlock().NumberU64()
+			head   = ethservice.BlockChain().CurrentBlock().Number.Uint64()()
 		)
 		if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
 			t.Errorf("Block %d not pruned", parent.NumberU64())
@@ -410,13 +410,13 @@ func TestEth2DeepReorg(t *testing.T) {
 			if err != nil || newResp.Status != "VALID" {
 				t.Fatalf("Failed to insert block: %v", err)
 			}
-			if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
+			if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != head {
 				t.Fatalf("Chain head shouldn't be updated")
 			}
 			if err := api.setHead(block.Hash()); err != nil {
 				t.Fatalf("Failed to set head: %v", err)
 			}
-			if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
+			if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != block.NumberU64() {
 				t.Fatalf("Chain head should be updated")
 			}
 			parent, head = block, block.NumberU64()
@@ -466,8 +466,8 @@ func TestFullAPI(t *testing.T) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 
-	callback := func(parent *types.Block) {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+	callback := func(parent *types.Header) {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
@@ -476,9 +476,9 @@ func TestFullAPI(t *testing.T) {
 	setupBlocks(t, ethservice, 10, parent, callback)
 }
 
-func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Block, callback func(parent *types.Block)) []*types.Block {
+func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header)) []*types.Header {
 	api := NewConsensusAPI(ethservice)
-	var blocks []*types.Block
+	var blocks []*types.Header
 	for i := 0; i < n; i++ {
 		callback(parent)
 
@@ -499,10 +499,10 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Bl
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.Number {
 			t.Fatal("Chain head should be updated")
 		}
-		if ethservice.BlockChain().CurrentFinalizedBlock().NumberU64() != payload.Number-1 {
+		if ethservice.BlockChain().CurrentFinalBlock().Number.Uint64() != payload.Number-1 {
 			t.Fatal("Finalized block should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -585,7 +585,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
 			Nonce:    statedb.GetNonce(testAddr),
 			Value:    new(big.Int),
@@ -596,9 +596,9 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		ethservice.TxPool().AddRemotesSync([]*types.Transaction{tx})
 		var (
 			params = engine.PayloadAttributes{
-				Timestamp:             parent.Time() + 1,
+				Timestamp:             parent.Time + 1,
 				Random:                crypto.Keccak256Hash([]byte{byte(i)}),
-				SuggestedFeeRecipient: parent.Coinbase(),
+				SuggestedFeeRecipient: parent.Coinbase,
 			}
 			fcState = engine.ForkchoiceStateV1{
 				HeadBlockHash:      parent.Hash(),
@@ -645,7 +645,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.Number {
 			t.Fatalf("Chain head should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -676,7 +676,7 @@ func TestEmptyBlocks(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {})
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
 	payload := getNewPayload(t, api, commonAncestor)
@@ -727,11 +727,11 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *engine.ExecutableData {
+func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header) *engine.ExecutableData {
 	params := engine.PayloadAttributes{
-		Timestamp:             parent.Time() + 1,
+		Timestamp:             parent.Time + 1,
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
-		SuggestedFeeRecipient: parent.Coinbase(),
+		SuggestedFeeRecipient: parent.Coinbase,
 	}
 
 	payload, err := assembleBlock(api, parent.Hash(), &params)
@@ -799,7 +799,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	commonAncestor := ethserviceA.BlockChain().CurrentBlock()
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Block) {})
+	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {})
 	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
 
 	var invalidChain []*engine.ExecutableData
@@ -855,7 +855,7 @@ func TestInvalidBloom(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {})
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
 	payload := getNewPayload(t, api, commonAncestor)
@@ -966,7 +966,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1 {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != block.NumberU64()-1 {
 			t.Fatalf("Chain head shouldn't be updated")
 		}
 		fcState := engine.ForkchoiceStateV1{
@@ -997,7 +997,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				t.Fatal(testErr)
 			}
 		}
-		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
+		if have, want := ethservice.BlockChain().CurrentBlock().Number.Uint64(), block.NumberU64(); have != want {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
 		parent = block
@@ -1242,14 +1242,18 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 
-	callback := func(parent *types.Block) {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+	callback := func(parent *types.Header) {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 	}
 
-	postMergeBlocks := setupBlocks(t, ethservice, 10, parent, callback)
+	postMergeHeaders := setupBlocks(t, ethservice, 10, parent, callback)
+	postMergeBlocks := make([]*types.Block, len(postMergeHeaders))
+	for i, header := range postMergeHeaders {
+		postMergeBlocks[i] = ethservice.BlockChain().GetBlock(header.Hash(), header.Number.Uint64())
+	}
 	return n, ethservice, append(preMergeBlocks, postMergeBlocks...)
 }
 
