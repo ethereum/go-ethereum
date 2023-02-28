@@ -53,10 +53,10 @@ func BenchmarkFilters(b *testing.B) {
 		gspec = &core.Genesis{
 			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
+			Config:  params.TestChainConfig,
 		}
 	)
 	defer db.Close()
-
 	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
@@ -77,6 +77,11 @@ func BenchmarkFilters(b *testing.B) {
 			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		}
 	})
+	// The test txs are not properly signed, can't simply create a chain
+	// and then import blocks. TODO(rjl493456442) try to get rid of the
+	// manual database writes.
+	gspec.MustCommit(db)
+
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())

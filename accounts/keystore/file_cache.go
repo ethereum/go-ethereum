@@ -23,20 +23,20 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
-	all     mapset.Set // Set of all files from the keystore folder
-	lastMod time.Time  // Last time instance when a file was modified
+	all     mapset.Set[string] // Set of all files from the keystore folder
+	lastMod time.Time          // Last time instance when a file was modified
 	mu      sync.Mutex
 }
 
 // scan performs a new scan on the given directory, compares against the already
 // cached filenames, and returns file sets: creates, deletes, updates.
-func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, error) {
+func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string], mapset.Set[string], error) {
 	t0 := time.Now()
 
 	// List all the files from the keystore folder
@@ -50,8 +50,8 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 	defer fc.mu.Unlock()
 
 	// Iterate all the files and gather their metadata
-	all := mapset.NewThreadUnsafeSet()
-	mods := mapset.NewThreadUnsafeSet()
+	all := mapset.NewThreadUnsafeSet[string]()
+	mods := mapset.NewThreadUnsafeSet[string]()
 
 	var newLastMod time.Time
 	for _, fi := range files {

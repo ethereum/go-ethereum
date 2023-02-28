@@ -282,7 +282,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	peer.cpeer.sendAnnounce(announce)
 	<-done // Wait syncing
 
-	// Ensure the bad peer is evicited
+	// Ensure the bad peer is evicted
 	if c.handler.backend.peers.len() != 0 {
 		t.Fatalf("Failed to evict invalid peer")
 	}

@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Tests if the trie diffs are tracked correctly.
@@ -69,7 +70,7 @@ func TestTrieTracer(t *testing.T) {
 	}
 
 	// Commit the changes and re-create with new root
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestTrieTracePrevValue(t *testing.T) {
 	}
 
 	// Commit the changes and re-create with new root
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
@@ -240,5 +241,65 @@ func TestTrieTracePrevValue(t *testing.T) {
 		if !bytes.Equal(blob, prev) {
 			t.Fatalf("Unexpected value path: %v, want: %v, got: %v", path, prev, blob)
 		}
+	}
+}
+
+func TestDeleteAll(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	trie := NewEmpty(db)
+	trie.tracer = newTracer()
+
+	// Insert a batch of entries, all the nodes should be marked as inserted
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		trie.Update([]byte(val.k), []byte(val.v))
+	}
+	root, set := trie.Commit(false)
+	if err := db.Update(NewWithNodeSet(set)); err != nil {
+		t.Fatal(err)
+	}
+	// Delete entries from trie, ensure all values are detected
+	trie, _ = New(TrieID(root), db)
+	trie.tracer = newTracer()
+	trie.resolveAndTrack(root.Bytes(), nil)
+
+	// Iterate all existent nodes
+	var (
+		it    = trie.NodeIterator(nil)
+		nodes = make(map[string][]byte)
+	)
+	for it.Next(true) {
+		if it.Hash() != (common.Hash{}) {
+			nodes[string(it.Path())] = common.CopyBytes(it.NodeBlob())
+		}
+	}
+
+	// Perform deletion to purge the entire trie
+	for _, val := range vals {
+		trie.Delete([]byte(val.k))
+	}
+	root, set = trie.Commit(false)
+	if root != types.EmptyRootHash {
+		t.Fatalf("Invalid trie root %v", root)
+	}
+	for path, blob := range set.deletes {
+		prev, ok := nodes[path]
+		if !ok {
+			t.Fatalf("Extra node deleted %v", []byte(path))
+		}
+		if !bytes.Equal(prev, blob) {
+			t.Fatalf("Unexpected previous value %v", []byte(path))
+		}
+	}
+	if len(set.deletes) != len(nodes) {
+		t.Fatalf("Unexpected deletion set")
 	}
 }

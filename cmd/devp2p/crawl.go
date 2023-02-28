@@ -17,6 +17,8 @@
 package main
 
 import (
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -34,7 +36,16 @@ type crawler struct {
 
 	// settings
 	revalidateInterval time.Duration
+	mu                 sync.RWMutex
 }
+
+const (
+	nodeRemoved = iota
+	nodeSkipRecent
+	nodeSkipIncompat
+	nodeAdded
+	nodeUpdated
+)
 
 type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
@@ -59,23 +70,59 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration) nodeSet {
+func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
+		statusTicker = time.NewTicker(time.Second * 8)
 		doneCh       = make(chan enode.Iterator, len(c.iters))
 		liveIters    = len(c.iters)
 	)
+	if nthreads < 1 {
+		nthreads = 1
+	}
 	defer timeoutTimer.Stop()
+	defer statusTicker.Stop()
 	for _, it := range c.iters {
 		go c.runIterator(doneCh, it)
+	}
+	var (
+		added   uint64
+		updated uint64
+		skipped uint64
+		recent  uint64
+		removed uint64
+		wg      sync.WaitGroup
+	)
+	wg.Add(nthreads)
+	for i := 0; i < nthreads; i++ {
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case n := <-c.ch:
+					switch c.updateNode(n) {
+					case nodeSkipIncompat:
+						atomic.AddUint64(&skipped, 1)
+					case nodeSkipRecent:
+						atomic.AddUint64(&recent, 1)
+					case nodeRemoved:
+						atomic.AddUint64(&removed, 1)
+					case nodeAdded:
+						atomic.AddUint64(&added, 1)
+					default:
+						atomic.AddUint64(&updated, 1)
+					}
+				case <-c.closed:
+					return
+				}
+			}
+		}()
 	}
 
 loop:
 	for {
 		select {
-		case n := <-c.ch:
-			c.updateNode(n)
 		case it := <-doneCh:
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
@@ -89,6 +136,13 @@ loop:
 			}
 		case <-timeoutCh:
 			break loop
+		case <-statusTicker.C:
+			log.Info("Crawling in progress",
+				"added", atomic.LoadUint64(&added),
+				"updated", atomic.LoadUint64(&updated),
+				"removed", atomic.LoadUint64(&removed),
+				"ignored(recent)", atomic.LoadUint64(&removed),
+				"ignored(incompatible)", atomic.LoadUint64(&skipped))
 		}
 	}
 
@@ -99,6 +153,7 @@ loop:
 	for ; liveIters > 0; liveIters-- {
 		<-doneCh
 	}
+	wg.Wait()
 	return c.output
 }
 
@@ -113,22 +168,26 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	}
 }
 
-func (c *crawler) updateNode(n *enode.Node) {
+// updateNode updates the info about the given node, and returns a status
+// about what changed
+func (c *crawler) updateNode(n *enode.Node) int {
+	c.mu.RLock()
 	node, ok := c.output[n.ID()]
+	c.mu.RUnlock()
 
 	// Skip validation of recently-seen nodes.
 	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
-		return
+		return nodeSkipRecent
 	}
 
 	// Request the node record.
-	nn, err := c.disc.RequestENR(n)
+	status := nodeUpdated
 	node.LastCheck = truncNow()
-	if err != nil {
+	if nn, err := c.disc.RequestENR(n); err != nil {
 		if node.Score == 0 {
 			// Node doesn't implement EIP-868.
 			log.Debug("Skipping node", "id", n.ID())
-			return
+			return nodeSkipIncompat
 		}
 		node.Score /= 2
 	} else {
@@ -137,18 +196,21 @@ func (c *crawler) updateNode(n *enode.Node) {
 		node.Score++
 		if node.FirstResponse.IsZero() {
 			node.FirstResponse = node.LastCheck
+			status = nodeAdded
 		}
 		node.LastResponse = node.LastCheck
 	}
-
 	// Store/update node in output set.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if node.Score <= 0 {
-		log.Info("Removing node", "id", n.ID())
+		log.Debug("Removing node", "id", n.ID())
 		delete(c.output, n.ID())
-	} else {
-		log.Info("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
-		c.output[n.ID()] = node
+		return nodeRemoved
 	}
+	log.Debug("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
+	c.output[n.ID()] = node
+	return status
 }
 
 func truncNow() time.Time {

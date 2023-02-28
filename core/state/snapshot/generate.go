@@ -27,21 +27,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
-	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode = crypto.Keccak256Hash(nil)
-
 	// accountCheckRange is the upper limit of the number of accounts involved in
 	// each range check. This is a value estimated based on experience. If this
 	// range is too large, the failure rate of range proof will increase. Otherwise,
@@ -360,19 +353,22 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	}
 	// We use the snap data to build up a cache which can be used by the
 	// main account trie as a primary lookup when resolving hashes
-	var snapNodeCache ethdb.KeyValueStore
+	var resolver trie.NodeResolver
 	if len(result.keys) > 0 {
-		snapNodeCache = memorydb.New()
-		snapTrieDb := trie.NewDatabase(snapNodeCache)
-		snapTrie := trie.NewEmpty(snapTrieDb)
+		mdb := rawdb.NewMemoryDatabase()
+		tdb := trie.NewDatabase(mdb)
+		snapTrie := trie.NewEmpty(tdb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes, _ := snapTrie.Commit(false)
+		root, nodes := snapTrie.Commit(false)
 		if nodes != nil {
-			snapTrieDb.Update(trie.NewWithNodeSet(nodes))
+			tdb.Update(trie.NewWithNodeSet(nodes))
+			tdb.Commit(root, false)
 		}
-		snapTrieDb.Commit(root, false, nil)
+		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
+			return rawdb.ReadTrieNode(mdb, owner, path, hash, tdb.Scheme())
+		}
 	}
 	// Construct the trie for state iteration, reuse the trie
 	// if it's already opened with some nodes resolved.
@@ -401,7 +397,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		start    = time.Now()
 		internal time.Duration
 	)
-	nodeIt.AddResolver(snapNodeCache)
+	nodeIt.AddResolver(resolver)
 
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
@@ -589,10 +585,10 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if accMarker == nil || !bytes.Equal(account[:], accMarker) {
 			dataLen := len(val) // Approximate size, saves us a round of RLP-encoding
 			if !write {
-				if bytes.Equal(acc.CodeHash, emptyCode[:]) {
+				if bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
 					dataLen -= 32
 				}
-				if acc.Root == emptyRoot {
+				if acc.Root == types.EmptyRootHash {
 					dataLen -= 32
 				}
 				snapRecoveredAccountMeter.Mark(1)
@@ -619,7 +615,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
-		if acc.Root == emptyRoot {
+		if acc.Root == types.EmptyRootHash {
 			ctx.removeStorageAt(account)
 		} else {
 			var storeMarker []byte

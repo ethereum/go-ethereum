@@ -101,6 +101,9 @@ func (r *reporter) run() {
 	intervalTicker := time.NewTicker(r.interval)
 	pingTicker := time.NewTicker(time.Second * 5)
 
+	defer intervalTicker.Stop()
+	defer pingTicker.Stop()
+
 	for {
 		select {
 		case <-intervalTicker.C:
@@ -160,27 +163,28 @@ func (r *reporter) send() error {
 			})
 		case metrics.Histogram:
 			ms := metric.Snapshot()
-
 			if ms.Count() > 0 {
-				ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
+				ps := ms.Percentiles([]float64{0.25, 0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
+				fields := map[string]interface{}{
+					"count":    ms.Count(),
+					"max":      ms.Max(),
+					"mean":     ms.Mean(),
+					"min":      ms.Min(),
+					"stddev":   ms.StdDev(),
+					"variance": ms.Variance(),
+					"p25":      ps[0],
+					"p50":      ps[1],
+					"p75":      ps[2],
+					"p95":      ps[3],
+					"p99":      ps[4],
+					"p999":     ps[5],
+					"p9999":    ps[6],
+				}
 				pts = append(pts, client.Point{
 					Measurement: fmt.Sprintf("%s%s.histogram", namespace, name),
 					Tags:        r.tags,
-					Fields: map[string]interface{}{
-						"count":    ms.Count(),
-						"max":      ms.Max(),
-						"mean":     ms.Mean(),
-						"min":      ms.Min(),
-						"stddev":   ms.StdDev(),
-						"variance": ms.Variance(),
-						"p50":      ps[0],
-						"p75":      ps[1],
-						"p95":      ps[2],
-						"p99":      ps[3],
-						"p999":     ps[4],
-						"p9999":    ps[5],
-					},
-					Time: now,
+					Fields:      fields,
+					Time:        now,
 				})
 			}
 		case metrics.Meter:

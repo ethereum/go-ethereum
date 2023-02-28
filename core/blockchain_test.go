@@ -1959,7 +1959,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			Alloc:   GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer = types.LatestSigner(gspec.Config)
+		signer     = types.LatestSigner(gspec.Config)
+		mergeBlock = math.MaxInt32
 	)
 	// Generate and import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil)
@@ -1970,6 +1971,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Activate the transition since genesis if required
 	if mergePoint == 0 {
+		mergeBlock = 0
 		merger.ReachTTD()
 		merger.FinalizePoS()
 
@@ -1982,6 +1984,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
+		if int(gen.header.Number.Uint64()) >= mergeBlock {
+			gen.SetPoS()
+		}
 		nonce++
 	})
 	if n, err := chain.InsertChain(blocks); err != nil {
@@ -2006,7 +2011,10 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		merger.ReachTTD()
 		merger.FinalizePoS()
 		// Set the terminal total difficulty in the config
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
+		ttd := big.NewInt(int64(len(blocks)))
+		ttd.Mul(ttd, params.GenesisDifficulty)
+		gspec.Config.TerminalTotalDifficulty = ttd
+		mergeBlock = len(blocks)
 	}
 
 	// Generate the sidechain
@@ -2018,6 +2026,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	parent := blocks[parentIndex]
 	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
+		if int(b.header.Number.Uint64()) >= mergeBlock {
+			b.SetPoS()
+		}
 	})
 	// Prepend the parent(s)
 	var sidechain []*types.Block
@@ -2226,25 +2237,45 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  &chainConfig,
 		}
-		engine = beacon.New(ethash.NewFaker())
+		engine     = beacon.New(ethash.NewFaker())
+		mergeBlock = uint64(math.MaxUint64)
 	)
 	// Apply merging since genesis
 	if mergeHeight == 0 {
 		genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+		mergeBlock = uint64(0)
 	}
-	genDb, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	genDb, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 32,
+		func(i int, b *BlockGen) {
+			if b.header.Number.Uint64() >= mergeBlock {
+				b.SetPoS()
+			}
+			b.SetCoinbase(common.Address{1})
+		})
 
 	// Apply merging after the first segment
 	if mergeHeight == 1 {
-		genesis.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
+		// TTD is genesis diff + blocks
+		ttd := big.NewInt(1 + int64(len(blocks)))
+		ttd.Mul(ttd, params.GenesisDifficulty)
+		genesis.Config.TerminalTotalDifficulty = ttd
+		mergeBlock = uint64(len(blocks))
 	}
 	// Longer chain and shorter chain
-	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		if b.header.Number.Uint64() >= mergeBlock {
+			b.SetPoS()
+		}
+	})
 	blocks3, receipts3 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9) // Time shifted, difficulty shouldn't be changed
+		if b.header.Number.Uint64() >= mergeBlock {
+			b.SetPoS()
+		}
 	})
-
 	// Import the shared chain and the original canonical one
 	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	if err != nil {
@@ -2268,7 +2299,10 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers, 1)
+			if err != nil {
+				return fmt.Errorf("index %d, number %d: %w", i, headers[i].Number, err)
+			}
 			return err
 		}
 		asserter = func(t *testing.T, block *types.Block) {
@@ -2282,9 +2316,9 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers, 1)
 			if err != nil {
-				return err
+				return fmt.Errorf("index %d: %w", i, err)
 			}
 			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
 			return err
@@ -2296,8 +2330,11 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		}
 	} else {
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
-			_, err := chain.InsertChain(blocks)
-			return err
+			i, err := chain.InsertChain(blocks)
+			if err != nil {
+				return fmt.Errorf("index %d: %w", i, err)
+			}
+			return nil
 		}
 		asserter = func(t *testing.T, block *types.Block) {
 			if chain.CurrentBlock().Hash() != block.Hash() {
@@ -4005,5 +4042,300 @@ func TestTxIndexer(t *testing.T) {
 		chain.Stop()
 		db.Close()
 		os.RemoveAll(frdir)
+	}
+}
+
+func TestCreateThenDeletePreByzantium(t *testing.T) {
+	// We use Ropsten chain config instead of Testchain config, this is
+	// deliberate: we want to use pre-byz rules where we have intermediate state roots
+	// between transactions.
+	testCreateThenDelete(t, &params.ChainConfig{
+		ChainID:        big.NewInt(3),
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(10),
+		EIP158Block:    big.NewInt(10),
+		ByzantiumBlock: big.NewInt(1_700_000),
+	})
+}
+func TestCreateThenDeletePostByzantium(t *testing.T) {
+	testCreateThenDelete(t, params.TestChainConfig)
+}
+
+// testCreateThenDelete tests a creation and subsequent deletion of a contract, happening
+// within the same block.
+func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
+	var (
+		engine = ethash.NewFaker()
+		// A sender who makes transactions, has some funds
+		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address     = crypto.PubkeyToAddress(key.PublicKey)
+		destAddress = crypto.CreateAddress(address, 0)
+		funds       = big.NewInt(1000000000000000)
+	)
+
+	// runtime code is 	0x60ffff : PUSH1 0xFF SELFDESTRUCT, a.k.a SELFDESTRUCT(0xFF)
+	code := append([]byte{0x60, 0xff, 0xff}, make([]byte, 32-3)...)
+	initCode := []byte{
+		// SSTORE 1:1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.PUSH1), 0x1,
+		byte(vm.SSTORE),
+		// Get the runtime-code on the stack
+		byte(vm.PUSH32)}
+	initCode = append(initCode, code...)
+	initCode = append(initCode, []byte{
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x3, // size
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.RETURN), // return 3 bytes of zero-code
+	}...)
+	gspec := &Genesis{
+		Config: config,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+		},
+	}
+	nonce := uint64(0)
+	signer := types.HomesteadSigner{}
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
+		fee := big.NewInt(1)
+		if b.header.BaseFee != nil {
+			fee = b.header.BaseFee
+		}
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			Data:     initCode,
+		})
+		nonce++
+		b.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			To:       &destAddress,
+		})
+		b.AddTx(tx)
+		nonce++
+	})
+	// Import the canonical chain
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{
+		//Debug:  true,
+		//Tracer: logger.NewJSONLogger(nil, os.Stdout),
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	// Import the blocks
+	for _, block := range blocks {
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+		}
+	}
+}
+
+// TestTransientStorageReset ensures the transient storage is wiped correctly
+// between transactions.
+func TestTransientStorageReset(t *testing.T) {
+	var (
+		engine      = ethash.NewFaker()
+		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address     = crypto.PubkeyToAddress(key.PublicKey)
+		destAddress = crypto.CreateAddress(address, 0)
+		funds       = big.NewInt(1000000000000000)
+		vmConfig    = vm.Config{
+			ExtraEips: []int{1153}, // Enable transient storage EIP
+		}
+	)
+	code := append([]byte{
+		// TLoad value with location 1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.TLOAD),
+
+		// PUSH location
+		byte(vm.PUSH1), 0x1,
+
+		// SStore location:value
+		byte(vm.SSTORE),
+	}, make([]byte, 32-6)...)
+	initCode := []byte{
+		// TSTORE 1:1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.PUSH1), 0x1,
+		byte(vm.TSTORE),
+
+		// Get the runtime-code on the stack
+		byte(vm.PUSH32)}
+	initCode = append(initCode, code...)
+	initCode = append(initCode, []byte{
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x6, // size
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.RETURN), // return 6 bytes of zero-code
+	}...)
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+		},
+	}
+	nonce := uint64(0)
+	signer := types.HomesteadSigner{}
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		fee := big.NewInt(1)
+		if b.header.BaseFee != nil {
+			fee = b.header.BaseFee
+		}
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			Data:     initCode,
+		})
+		nonce++
+		b.AddTxWithVMConfig(tx, vmConfig)
+
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			To:       &destAddress,
+		})
+		b.AddTxWithVMConfig(tx, vmConfig)
+		nonce++
+	})
+
+	// Initialize the blockchain with 1153 enabled.
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vmConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	// Import the blocks
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert into chain: %v", err)
+	}
+	// Check the storage
+	state, err := chain.StateAt(chain.CurrentHeader().Root)
+	if err != nil {
+		t.Fatalf("Failed to load state %v", err)
+	}
+	loc := common.BytesToHash([]byte{1})
+	slot := state.GetState(destAddress, loc)
+	if slot != (common.Hash{}) {
+		t.Fatalf("Unexpected dirty storage slot")
+	}
+}
+
+func TestEIP3651(t *testing.T) {
+	var (
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config  = *params.AllEthashProtocolChanges
+		gspec   = &Genesis{
+			Config: &config,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				addr2: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code: []byte{
+						byte(vm.PC),
+						byte(vm.PC),
+						byte(vm.SLOAD),
+						byte(vm.SLOAD),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+				// The address 0xBBBB calls 0xAAAA
+				bb: {
+					Code: []byte{
+						byte(vm.PUSH1), 0, // out size
+						byte(vm.DUP1),  // out offset
+						byte(vm.DUP1),  // out insize
+						byte(vm.DUP1),  // in offset
+						byte(vm.PUSH2), // address
+						byte(0xaa),
+						byte(0xaa),
+						byte(vm.GAS), // gas
+						byte(vm.DELEGATECALL),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+		// One transaction to Coinbase
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &bb,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       []byte{},
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr)}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	block := chain.GetBlockByNumber(1)
+
+	// 1+2: Ensure EIP-1559 access lists are accounted for via gas usage.
+	innerGas := vm.GasQuickStep*2 + params.ColdSloadCostEIP2929*2
+	expectedGas := params.TxGas + 5*vm.GasFastestStep + vm.GasQuickStep + 100 + innerGas // 100 because 0xaaaa is in access list
+	if block.GasUsed() != expectedGas {
+		t.Fatalf("incorrect amount of gas spent: expected %d, got %d", expectedGas, block.GasUsed())
+	}
+
+	state, _ := chain.State()
+
+	// 3: Ensure that miner received only the tx's tip.
+	actual := state.GetBalance(block.Coinbase())
+	expected := new(big.Int).SetUint64(block.GasUsed() * block.Transactions()[0].GasTipCap().Uint64())
+	if actual.Cmp(expected) != 0 {
+		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
+	}
+
+	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
+	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
+	if actual.Cmp(expected) != 0 {
+		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
 }

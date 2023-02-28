@@ -249,6 +249,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
+	if t.json.Env.Difficulty != nil {
+		context.Difficulty = new(big.Int).Set(t.json.Env.Difficulty)
+	}
 	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd

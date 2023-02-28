@@ -57,13 +57,11 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Broken tests:
+	//
+	// The stEOF tests are generated with EOF as part of Shanghai, which
+	// is erroneous. Therefore, these tests are skipped.
+	st.skipLoad(`^EIPTests/stEOF/`)
 	// Expected failures:
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/3`, "bug in test")
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/0`, "bug in test")
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/3`, "bug in test")
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
-	// st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
 
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
@@ -185,7 +183,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.Error(err)
 				return
 			}
-			var rules = config.Rules(new(big.Int), false)
+			var rules = config.Rules(new(big.Int), false, 0)
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
@@ -241,9 +239,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				snapshot := statedb.Snapshot()
-				if rules.IsBerlin {
-					statedb.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
-				}
+				statedb.Prepare(rules, msg.From(), context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 				b.StartTimer()
 				start := time.Now()
 

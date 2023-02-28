@@ -24,11 +24,13 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -86,6 +88,7 @@ type btHeader struct {
 	GasUsed          uint64
 	Timestamp        uint64
 	BaseFeePerGas    *big.Int
+	WithdrawalsRoot  *common.Hash
 }
 
 type btHeaderMarshaling struct {
@@ -107,10 +110,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	// import pre accounts & construct test genesis block & state root
 	db := rawdb.NewMemoryDatabase()
 	gspec := t.genesis(config)
-	gblock, err := gspec.Commit(db)
-	if err != nil {
-		return err
-	}
+	gblock := gspec.MustCommit(db)
 	if gblock.Hash() != t.json.Genesis.Hash {
 		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
 	}
@@ -123,6 +123,9 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	} else {
 		engine = ethash.NewShared()
 	}
+	// Wrap the original engine within the beacon-engine
+	engine = beacon.New(engine)
+
 	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {
 		cache.SnapshotLimit = 1
@@ -273,6 +276,12 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if h.Timestamp != h2.Time {
 		return fmt.Errorf("timestamp: want: %v have: %v", h.Timestamp, h2.Time)
+	}
+	if !reflect.DeepEqual(h.BaseFeePerGas, h2.BaseFee) {
+		return fmt.Errorf("baseFeePerGas: want: %v have: %v", h.BaseFeePerGas, h2.BaseFee)
+	}
+	if !reflect.DeepEqual(h.WithdrawalsRoot, h2.WithdrawalsHash) {
+		return fmt.Errorf("withdrawalsRoot: want: %v have: %v", h.WithdrawalsRoot, h2.WithdrawalsHash)
 	}
 	return nil
 }

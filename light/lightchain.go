@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -61,9 +61,9 @@ type LightChain struct {
 	genesisBlock  *types.Block
 	forker        *core.ForkChoice
 
-	bodyCache    *lru.Cache // Cache for the most recent block bodies
-	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
-	blockCache   *lru.Cache // Cache for the most recent entire blocks
+	bodyCache    *lru.Cache[common.Hash, *types.Body]
+	bodyRLPCache *lru.Cache[common.Hash, rlp.RawValue]
+	blockCache   *lru.Cache[common.Hash, *types.Block]
 
 	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
@@ -79,18 +79,14 @@ type LightChain struct {
 // available in the database. It initialises the default Ethereum header
 // validator.
 func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
-	bodyCache, _ := lru.New(bodyCacheLimit)
-	bodyRLPCache, _ := lru.New(bodyCacheLimit)
-	blockCache, _ := lru.New(blockCacheLimit)
-
 	bc := &LightChain{
 		chainDb:       odr.Database(),
 		indexerConfig: odr.IndexerConfig(),
 		odr:           odr,
 		quit:          make(chan struct{}),
-		bodyCache:     bodyCache,
-		bodyRLPCache:  bodyRLPCache,
-		blockCache:    blockCache,
+		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		engine:        engine,
 	}
 	bc.forker = core.NewForkChoice(bc, nil)
@@ -182,6 +178,17 @@ func (lc *LightChain) SetHead(head uint64) error {
 	return lc.loadLastState()
 }
 
+// SetHeadWithTimestamp rewinds the local chain to a new head that has at max
+// the given timestamp. Everything above the new head will be deleted and the
+// new one set.
+func (lc *LightChain) SetHeadWithTimestamp(timestamp uint64) error {
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
+
+	lc.hc.SetHeadWithTimestamp(timestamp, nil, nil)
+	return lc.loadLastState()
+}
+
 // GasLimit returns the gas limit of the current HEAD block.
 func (lc *LightChain) GasLimit() uint64 {
 	return lc.hc.CurrentHeader().GasLimit
@@ -233,8 +240,7 @@ func (lc *LightChain) StateCache() state.Database {
 func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Body, error) {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := lc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
-		return body, nil
+		return cached, nil
 	}
 	number := lc.hc.GetBlockNumber(hash)
 	if number == nil {
@@ -254,7 +260,7 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.RawValue, error) {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := lc.bodyRLPCache.Get(hash); ok {
-		return cached.(rlp.RawValue), nil
+		return cached, nil
 	}
 	number := lc.hc.GetBlockNumber(hash)
 	if number == nil {
@@ -281,7 +287,7 @@ func (lc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
 func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uint64) (*types.Block, error) {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := lc.blockCache.Get(hash); ok {
-		return block.(*types.Block), nil
+		return block, nil
 	}
 	block, err := GetBlock(ctx, lc.odr, hash, number)
 	if err != nil {

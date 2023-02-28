@@ -24,10 +24,10 @@ import (
 	"sort"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -148,13 +148,13 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	underpriced mapset.Set // Transactions discarded as too cheap (don't re-fetch)
+	underpriced mapset.Set[common.Hash] // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
 	waitlist  map[common.Hash]map[string]struct{} // Transactions waiting for an potential broadcast
 	waittime  map[common.Hash]mclock.AbsTime      // Timestamps when transactions were added to the waitlist
-	waitslots map[string]map[common.Hash]struct{} // Waiting announcement sgroupped by peer (DoS protection)
+	waitslots map[string]map[common.Hash]struct{} // Waiting announcements grouped by peer (DoS protection)
 
 	// Stage 2: Queue of transactions that waiting to be allocated to some peer
 	// to be retrieved directly.
@@ -202,7 +202,7 @@ func NewTxFetcherForTests(
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
 		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: mapset.NewSet(),
+		underpriced: mapset.NewSet[common.Hash](),
 		hasTx:       hasTx,
 		addTxs:      addTxs,
 		fetchTxs:    fetchTxs,
@@ -218,7 +218,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
 	// Skip any transaction announcements that we already know of, or that we've
-	// previously marked as cheap and discarded. This check is of course racey,
+	// previously marked as cheap and discarded. This check is of course racy,
 	// because multiple concurrent notifies will still manage to pass it, but it's
 	// still valuable to check here because it runs concurrent  to the internal
 	// loop, so anything caught here is time saved internally.
@@ -298,7 +298,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
-			if errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced) {
+			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
 				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
 					f.underpriced.Pop()
 				}
@@ -308,10 +308,10 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			switch {
 			case err == nil: // Noop, but need to handle to not count these
 
-			case errors.Is(err, core.ErrAlreadyKnown):
+			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
 
-			case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
+			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced):
 				underpriced++
 
 			default:

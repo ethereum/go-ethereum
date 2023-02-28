@@ -96,6 +96,11 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		StorageProof []storageResult `json:"storageProof"`
 	}
 
+	// Avoid keys being 'null'.
+	if keys == nil {
+		keys = []string{}
+	}
+
 	var res accountResult
 	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
 	// Turn hexutils back to normal datatypes
@@ -166,7 +171,12 @@ func (ec *Client) GetNodeInfo(ctx context.Context) (*p2p.NodeInfo, error) {
 	return &result, err
 }
 
-// SubscribePendingTransactions subscribes to new pending transactions.
+// SubscribeFullPendingTransactions subscribes to new pending transactions.
+func (ec *Client) SubscribeFullPendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (*rpc.ClientSubscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions", true)
+}
+
+// SubscribePendingTransactions subscribes to new pending transaction hashes.
 func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }

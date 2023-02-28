@@ -527,7 +527,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
 			if call.Value.Cmp(available) >= 0 {
-				return 0, errors.New("insufficient funds for transfer")
+				return 0, core.ErrInsufficientFundsForTransfer
 			}
 			available.Sub(available, call.Value)
 		}
@@ -872,6 +872,13 @@ func (fb *filterBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*t
 	return fb.bc.GetHeaderByHash(hash), nil
 }
 
+func (fb *filterBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := fb.bc.GetBody(hash); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 func (fb *filterBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return fb.backend.pendingBlock, fb.backend.pendingReceipts
 }
@@ -912,6 +919,14 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
+	panic("not supported")
+}
+
+func (fb *filterBackend) ChainConfig() *params.ChainConfig {
+	panic("not supported")
+}
+
+func (fb *filterBackend) CurrentHeader() *types.Header {
 	panic("not supported")
 }
 

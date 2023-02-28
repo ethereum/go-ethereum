@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -139,7 +140,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 	start := time.Now()
-	// Track the emount of time it takes to serve the request and run the handler
+	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
@@ -343,7 +344,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		req.Bytes = softResponseLimit
 	}
 	// TODO(karalabe): Do we want to enforce > 0 accounts and 1 account if origin is set?
-	// TODO(karalabe):   - Logging locally is not ideal as remote faulst annoy the local user
+	// TODO(karalabe):   - Logging locally is not ideal as remote faults annoy the local user
 	// TODO(karalabe):   - Dropping the remote peer is less flexible wrt client bugs (slow is better than non-functional)
 
 	// Calculate the hard limit at which to abort, even if mid storage trie
@@ -417,7 +418,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err != nil {
 				return nil, nil
 			}
-			acc, err := accTrie.TryGetAccountWithPreHashedKey(account[:])
+			acc, err := accTrie.TryGetAccountByHash(account)
 			if err != nil || acc == nil {
 				return nil, nil
 			}
@@ -464,7 +465,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 		bytes uint64
 	)
 	for _, hash := range req.Hashes {
-		if hash == emptyCode {
+		if hash == types.EmptyCodeHash {
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
@@ -523,7 +524,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if snap == nil {
 				// We don't have the requested state snapshotted yet (or it is stale),
 				// but can look up the account via the trie instead.
-				account, err := accTrie.TryGetAccountWithPreHashedKey(pathset[0])
+				account, err := accTrie.TryGetAccountByHash(common.BytesToHash(pathset[0]))
 				loads += 8 // We don't know the exact cost of lookup, this is an estimate
 				if err != nil || account == nil {
 					break

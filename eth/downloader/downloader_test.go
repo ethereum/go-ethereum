@@ -273,8 +273,9 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		rlp.DecodeBytes(blob, bodies[i])
 	}
 	var (
-		txsHashes   = make([]common.Hash, len(bodies))
-		uncleHashes = make([]common.Hash, len(bodies))
+		txsHashes        = make([]common.Hash, len(bodies))
+		uncleHashes      = make([]common.Hash, len(bodies))
+		withdrawalHashes = make([]common.Hash, len(bodies))
 	)
 	hasher := trie.NewStackTrie(nil)
 	for i, body := range bodies {
@@ -287,7 +288,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	res := &eth.Response{
 		Req:  req,
 		Res:  (*eth.BlockBodiesPacket)(&bodies),
-		Meta: [][]common.Hash{txsHashes, uncleHashes},
+		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes},
 		Time: 1,
 		Done: make(chan error, 1), // Ignore the returned status
 	}
@@ -1477,7 +1478,7 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 			if c.local > 0 {
 				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
 			}
-			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header()); err != nil {
+			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
 			}
 			select {

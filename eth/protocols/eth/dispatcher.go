@@ -203,7 +203,7 @@ func (p *Peer) dispatcher() {
 			}
 
 		case cancelOp := <-p.reqCancel:
-			// Retrieve the pendign request to cancel and short circuit if it
+			// Retrieve the pending request to cancel and short circuit if it
 			// has already been serviced and is not available anymore
 			req := pending[cancelOp.id]
 			if req == nil {

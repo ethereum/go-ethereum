@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -88,11 +88,11 @@ var (
 type environment struct {
 	signer types.Signer
 
-	state     *state.StateDB // apply state changes here
-	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family    mapset.Set     // family set (used for checking uncle invalidity)
-	tcount    int            // tx count in cycle
-	gasPool   *core.GasPool  // available gas used to pack transactions
+	state     *state.StateDB          // apply state changes here
+	ancestors mapset.Set[common.Hash] // ancestor set (used for checking uncle parent validity)
+	family    mapset.Set[common.Hash] // family set (used for checking uncle invalidity)
+	tcount    int                     // tx count in cycle
+	gasPool   *core.GasPool           // available gas used to pack transactions
 	coinbase  common.Address
 
 	header   *types.Header
@@ -169,11 +169,17 @@ type newWorkReq struct {
 	timestamp int64
 }
 
+// newPayloadResult represents a result struct corresponds to payload generation.
+type newPayloadResult struct {
+	err   error
+	block *types.Block
+	fees  *big.Int
+}
+
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
 	params *generateParams
-	result chan *types.Block // non-blocking channel
-	err    chan error
+	result chan *newPayloadResult // non-blocking channel
 }
 
 // intervalAdjust represents a resubmitting interval adjustment.
@@ -250,6 +256,10 @@ type worker struct {
 	// in case there are some computation expensive transactions in txpool.
 	newpayloadTimeout time.Duration
 
+	// recommit is the time interval to re-create sealing work or to re-build
+	// payload in proof-of-stake stage.
+	recommit time.Duration
+
 	// External functions
 	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
@@ -266,12 +276,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainConfig:        chainConfig,
 		engine:             engine,
 		eth:                eth,
-		mux:                mux,
 		chain:              eth.BlockChain(),
+		mux:                mux,
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		coinbase:           config.Etherbase,
+		extra:              config.ExtraData,
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -280,8 +292,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		getWorkCh:          make(chan *getWorkReq),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
+		exitCh:             make(chan struct{}),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
@@ -297,6 +309,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+	worker.recommit = recommit
+
 	// Sanitize the timeout config for creating payload.
 	newpayloadTimeout := worker.config.NewPayloadTimeout
 	if newpayloadTimeout == 0 {
@@ -326,6 +340,13 @@ func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
+}
+
+// etherbase retrieves the configured etherbase address.
+func (w *worker) etherbase() common.Address {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.coinbase
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -553,13 +574,11 @@ func (w *worker) mainLoop() {
 			w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
-			block, err := w.generateWork(req.params)
-			if err != nil {
-				req.err <- err
-				req.result <- nil
-			} else {
-				req.err <- nil
-				req.result <- block
+			block, fees, err := w.generateWork(req.params)
+			req.result <- &newPayloadResult{
+				err:   err,
+				block: block,
+				fees:  fees,
 			}
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
@@ -785,8 +804,8 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
-		ancestors: mapset.NewSet(),
-		family:    mapset.NewSet(),
+		ancestors: mapset.NewSet[common.Hash](),
+		family:    mapset.NewSet[common.Hash](),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
 	}
@@ -892,7 +911,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		logs, err := w.commitTransaction(env, tx)
 		switch {
@@ -917,7 +936,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			env.tcount++
 			txs.Shift()
 
-		case errors.Is(err, core.ErrTxTypeNotSupported):
+		case errors.Is(err, types.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
@@ -949,14 +968,14 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp  uint64         // The timstamp for sealing task
-	forceTime  bool           // Flag whether the given timestamp is immutable or not
-	parentHash common.Hash    // Parent block hash, empty means the latest chain head
-	coinbase   common.Address // The fee recipient address for including transaction
-	random     common.Hash    // The randomness generated by beacon chain, empty before the merge
-	noUncle    bool           // Flag whether the uncle block inclusion is allowed
-	noExtra    bool           // Flag whether the extra field assignment is allowed
-	noTxs      bool           // Flag whether an empty block without any transaction is expected
+	timestamp   uint64            // The timstamp for sealing task
+	forceTime   bool              // Flag whether the given timestamp is immutable or not
+	parentHash  common.Hash       // Parent block hash, empty means the latest chain head
+	coinbase    common.Address    // The fee recipient address for including transaction
+	random      common.Hash       // The randomness generated by beacon chain, empty before the merge
+	withdrawals types.Withdrawals // List of withdrawals to include in block.
+	noUncle     bool              // Flag whether the uncle block inclusion is allowed
+	noTxs       bool              // Flag whether an empty block without any transaction is expected
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -991,8 +1010,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
-	// Set the extra field if it's allowed.
-	if !genParams.noExtra && len(w.extra) != 0 {
+	// Set the extra field.
+	if len(w.extra) != 0 {
 		header.Extra = w.extra
 	}
 	// Set the randomness field from the beacon chain if it's available.
@@ -1003,7 +1022,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
 		if !w.chainConfig.IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
+			parentGasLimit := parent.GasLimit() * w.chainConfig.ElasticityMultiplier()
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
 	}
@@ -1071,10 +1090,10 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
+func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, error) {
 	work, err := w.prepareWork(params)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer work.discard()
 
@@ -1090,7 +1109,11 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts, params.withdrawals)
+	if err != nil {
+		return nil, nil, err
+	}
+	return block, totalFees(block, work.receipts), nil
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1101,11 +1124,11 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
 	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
+		coinbase = w.etherbase()
+		if coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
 			return
 		}
-		coinbase = w.coinbase // Use the preset address as the fee recipient
 	}
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
@@ -1171,7 +1194,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		// Withdrawals are set to nil here, because this is only called in PoW.
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts, nil)
 		if err != nil {
 			return err
 		}
@@ -1180,9 +1204,12 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			select {
 			case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 				w.unconfirmed.Shift(block.NumberU64() - 1)
+
+				fees := totalFees(block, env.receipts)
+				feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 					"uncles", len(env.uncles), "txs", env.tcount,
-					"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+					"gas", block.GasUsed(), "fees", feesInEther,
 					"elapsed", common.PrettyDuration(time.Since(start)))
 
 			case <-w.exitCh:
@@ -1199,28 +1226,27 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
-	var (
-		resCh = make(chan *types.Block, 1)
-		errCh = make(chan error, 1)
-	)
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, withdrawals types.Withdrawals, noTxs bool) (*types.Block, *big.Int, error) {
 	req := &getWorkReq{
 		params: &generateParams{
-			timestamp:  timestamp,
-			forceTime:  true,
-			parentHash: parent,
-			coinbase:   coinbase,
-			random:     random,
-			noUncle:    true,
-			noExtra:    true,
-			noTxs:      noTxs,
+			timestamp:   timestamp,
+			forceTime:   true,
+			parentHash:  parent,
+			coinbase:    coinbase,
+			random:      random,
+			withdrawals: withdrawals,
+			noUncle:     true,
+			noTxs:       noTxs,
 		},
-		result: resCh,
-		err:    errCh,
+		result: make(chan *newPayloadResult, 1),
 	}
 	select {
 	case w.getWorkCh <- req:
-		return resCh, errCh, nil
+		result := <-req.result
+		if result.err != nil {
+			return nil, nil, result.err
+		}
+		return result.block, result.fees, nil
 	case <-w.exitCh:
 		return nil, nil, errors.New("miner closed")
 	}
@@ -1251,14 +1277,14 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
-func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
+// totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
+func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+	return feesWei
 }
 
 // signalToErr converts the interruption signal to a concrete error type for return.

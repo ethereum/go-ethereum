@@ -88,7 +88,7 @@ type feeHistoryResult struct {
 }
 
 // FeeHistory returns the fee market history.
-func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecimal64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
 	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func (s *TxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		}
 		content["pending"][account.Hex()] = dump
 	}
@@ -179,7 +179,7 @@ func (s *TxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 	for account, txs := range queue {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		}
 		content["queued"][account.Hex()] = dump
 	}
@@ -195,14 +195,14 @@ func (s *TxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCT
 	// Build the pending transactions
 	dump := make(map[string]*RPCTransaction, len(pending))
 	for _, tx := range pending {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 	}
 	content["pending"] = dump
 
 	// Build the queued transactions
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range queue {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 	}
 	content["queued"] = dump
 
@@ -456,7 +456,7 @@ func (s *PersonalAccountAPI) signTransaction(ctx context.Context, args *Transact
 // passwd isn't able to decrypt the key it fails.
 func (s *PersonalAccountAPI) SendTransaction(ctx context.Context, args TransactionArgs, passwd string) (common.Hash, error) {
 	if args.Nonce == nil {
-		// Hold the addresse's mutex around signing to prevent concurrent assignment of
+		// Hold the mutex around signing to prevent concurrent assignment of
 		// the same nonce to multiple accounts.
 		s.nonceLock.LockAddr(args.from())
 		defer s.nonceLock.UnlockAddr(args.from())
@@ -660,8 +660,10 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	if state == nil || err != nil {
 		return nil, err
 	}
-
-	storageTrie := state.StorageTrie(address)
+	storageTrie, err := state.StorageTrie(address)
+	if err != nil {
+		return nil, err
+	}
 	storageHash := types.EmptyRootHash
 	codeHash := state.GetCodeHash(address)
 	storageProof := make([]StorageResult, len(storageKeys))
@@ -907,6 +909,10 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 			}
 		}
 	}
+	// Now finalize the changes. Finalize is normally performed between transactions.
+	// By using finalize, the overrides are semantically behaving as
+	// if they were created in a transaction just before the tracing occur.
+	state.Finalise(false)
 	return nil
 }
 
@@ -914,7 +920,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 type BlockOverrides struct {
 	Number     *hexutil.Big
 	Difficulty *hexutil.Big
-	Time       *hexutil.Big
+	Time       *hexutil.Uint64
 	GasLimit   *hexutil.Uint64
 	Coinbase   *common.Address
 	Random     *common.Hash
@@ -933,7 +939,7 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 		blockCtx.Difficulty = diff.Difficulty.ToInt()
 	}
 	if diff.Time != nil {
-		blockCtx.Time = diff.Time.ToInt()
+		blockCtx.Time = uint64(*diff.Time)
 	}
 	if diff.GasLimit != nil {
 		blockCtx.GasLimit = uint64(*diff.GasLimit)
@@ -1098,7 +1104,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
-				return 0, errors.New("insufficient funds for transfer")
+				return 0, core.ErrInsufficientFundsForTransfer
 			}
 			available.Sub(available, args.Value.ToInt())
 		}
@@ -1208,6 +1214,10 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
 
+	if head.WithdrawalsHash != nil {
+		result["withdrawalsRoot"] = head.WithdrawalsHash
+	}
+
 	return result
 }
 
@@ -1243,7 +1253,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
-
+	if block.Header().WithdrawalsHash != nil {
+		fields["withdrawals"] = block.Withdrawals()
+	}
 	return fields, nil
 }
 
@@ -1344,8 +1356,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	return result
 }
 
-// newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
-func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
+// NewRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
+func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
 	var baseFee *big.Int
 	blockNumber := uint64(0)
 	if current != nil {
@@ -1438,7 +1450,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	isPostMerge := header.Difficulty.Cmp(common.Big0) == 0
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge))
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
 
 	// Create an initial tracer
 	prevTracer := logger.NewAccessListTracer(nil, args.from(), to, precompiles)
@@ -1577,7 +1589,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
-		return newRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
+		return NewRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
 	}
 
 	// Transaction unknown, return as such
@@ -1719,7 +1731,7 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 	}
 
 	if args.Nonce == nil {
-		// Hold the addresse's mutex around signing to prevent concurrent assignment of
+		// Hold the mutex around signing to prevent concurrent assignment of
 		// the same nonce to multiple accounts.
 		s.nonceLock.LockAddr(args.from())
 		defer s.nonceLock.UnlockAddr(args.from())
@@ -1847,7 +1859,7 @@ func (s *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()))
+			transactions = append(transactions, NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()))
 		}
 	}
 	return transactions, nil

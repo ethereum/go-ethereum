@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,16 +32,20 @@ import (
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
-	register("prestateTracer", newPrestateTracer)
+	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
 type state = map[common.Address]*account
 
 type account struct {
 	Balance *big.Int                    `json:"balance,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
 	Code    []byte                      `json:"code,omitempty"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+}
+
+func (a *account) exists() bool {
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
@@ -51,6 +54,7 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
+	noopTracer
 	env       *vm.EVM
 	pre       state
 	post      state
@@ -65,12 +69,10 @@ type prestateTracer struct {
 }
 
 type prestateTracerConfig struct {
-	DiffMode bool `json:"diffMode"` // If true, this tracer will return all diff states
+	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	// First callframe contains tx context info
-	// and is populated on start and end.
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -115,10 +117,17 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if t.create && !t.config.DiffMode {
-		// Exclude created contract.
-		delete(t.pre, t.to)
+func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	if t.config.DiffMode {
+		return
+	}
+
+	if t.create {
+		// Keep existing account prior to contract creation at that address
+		if s := t.pre[t.to]; s != nil && !s.exists() {
+			// Exclude newly created contract.
+			delete(t.pre, t.to)
+		}
 	}
 }
 
@@ -158,19 +167,6 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *prestateTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-}
-
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-}
-
 func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
@@ -181,7 +177,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	}
 
 	for addr, state := range t.pre {
-		// the deleted account's state is pruned
+		// The deleted account's state is pruned from `post` but kept in `pre`
 		if _, ok := t.deleted[addr]; ok {
 			continue
 		}
@@ -211,7 +207,10 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 			}
 
 			newVal := t.env.StateDB.GetState(addr, key)
-			if val != newVal {
+			if val == newVal {
+				// Omit unchanged slots
+				delete(t.pre[addr].Storage, key)
+			} else {
 				modified = true
 				if newVal != (common.Hash{}) {
 					postAccount.Storage[key] = newVal
@@ -229,7 +228,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s.Balance.Cmp(big.NewInt(0)) == 0 && len(s.Storage) == 0 && len(s.Code) == 0 {
+		if s := t.pre[a]; s != nil && !s.exists() {
 			delete(t.pre, a)
 		}
 	}
@@ -242,9 +241,9 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	var err error
 	if t.config.DiffMode {
 		res, err = json.Marshal(struct {
-			Pre  state `json:"pre"`
 			Post state `json:"post"`
-		}{t.pre, t.post})
+			Pre  state `json:"pre"`
+		}{t.post, t.pre})
 	} else {
 		res, err = json.Marshal(t.pre)
 	}

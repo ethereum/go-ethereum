@@ -288,6 +288,9 @@ func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	return nil, nil
 }
+func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	return nil, nil
+}
 func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
