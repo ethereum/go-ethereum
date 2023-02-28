@@ -68,7 +68,9 @@
       },
       "blockNumber": 2295104,
       "error": "execution reverted",
-      "result": {},
+      "result": {
+        "gasUsed": "0x7c1c8"
+      },
       "subtraces": 1,
       "traceAddress": [],
       "type": "call"

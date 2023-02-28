@@ -57,7 +57,9 @@
       },
       "blockNumber": 2294501,
       "error": "execution reverted",
-      "result": {},
+      "result": {
+        "gasUsed": "0x719b"
+      },
       "subtraces": 0,
       "traceAddress": [],
       "type": "call"

@@ -73,7 +73,7 @@
       },
       "error": "execution reverted",
       "result": {
-        "address": "0x0000000000000000000000000000000000000000"
+        "gasUsed": "0x947c"
       },
       "subtraces": 0,
       "traceAddress": [],
