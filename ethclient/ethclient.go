@@ -112,16 +112,13 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	err := ec.c.CallContext(ctx, &raw, method, args...)
 	if err != nil {
 		return nil, err
-	} else if len(raw) == 0 {
+	} else if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		return nil, ethereum.NotFound
 	}
 	// Decode header and transactions.
 	var head *types.Header
 	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil || head ==nil {
-		if err==nil {
-			return nil ,fmt.Errorf("this head ptr is null,maybe raw is [0x6e,0x75,0x6c,0x6c] string")
-		}
+	if err := json.Unmarshal(raw, &head); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
