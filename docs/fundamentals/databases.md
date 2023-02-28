@@ -52,3 +52,14 @@ This can be used to deliberately clean up a node. Passing `--datadir --removedb`
 If Geth stops unexpectedly the database can be corrupted. This is known as an "unclean shutdown" and it can lead to a variety of problems for the node when it is restarted. It is always best to shut down Geth gracefully, i.e. using a shutdown command such as `ctrl-c`, `docker stop -t 300 <container ID>` or `systemctl stop` (although please note that `systemctl stop` has a default timeout of 90s - if Geth takes longer than this to gracefully shut down it will quit forcefully. Update the `TimeoutSecs` variable in `systemd.service` to override this value to something larger, at least 300s). This way, Geth knows to write all relevant information into the database to allow the node to restart properly later. This can involve >1GB of information being written to the LevelDB database which can take several minutes.
 
 If an unexpected shutdown does occur, the `removedb` subcommand can be used to delete the state database and resync it from the ancient database. This should get the database back up and running.
+
+
+## Pebble
+
+It is possible to configure Geth to use [Pebble](https://www.cockroachlabs.com/blog/pebble-rocksdb-kv-store/) instead of LevelDB for recent data. The main reason to include the alternative database is that the Go implementation of LevelDB is not actively maintained; Pebble is an actively maintained replacement that should offer a better long term option. There is no urgent reason to switch the database type yet - LevelDB works well and Pebble is still being evaluated for potentially replacing LevelDB as the default option some time in the future. However, if you wish to experiment with running Geth with Pebble, add the following flag to your Geth startup commands:
+
+```sh
+--db.engine=pebble
+```
+
+This also requires resyncing from scratch in a fresh data directory, because if an existing LevelDB database is detected on startup, Geth will default to using that, overriding the `--db.engine=pebble` flag. Pebble only works on 64 bit systems.
