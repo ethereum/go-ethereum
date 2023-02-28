@@ -131,7 +131,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
-	maxMemTableSize := 4 << 30 // 4 GB
+	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
 
 	// Two memory tables is configured which is identical to leveldb,
 	// including a frozen memory table and another live one.
