@@ -20,6 +20,7 @@
 package pebble
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"sync"
@@ -361,6 +362,17 @@ func (d *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (d *Database) Compact(start []byte, limit []byte) error {
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	// Note any prefixed database entry will be smaller than this
+	// flag, as for trie nodes we need the 32 byte 0xff because
+	// there might be a shared prefix starting with a number of
+	// 0xff-s, so 32 ensures than only a hash collision could touch it.
+	// https://github.com/cockroachdb/pebble/issues/2359#issuecomment-1443995833
+	if limit == nil {
+		limit = bytes.Repeat([]byte{0xff}, 32)
+	}
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
 
