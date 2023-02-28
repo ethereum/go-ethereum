@@ -1038,6 +1038,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			return
 		}
 	}
+
+	// do not produce empty blocks
+	if w.current.tcount == 0 {
+		return
+	}
+
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
