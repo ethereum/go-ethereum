@@ -25,6 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// ContractInstance provides means to interact with
+// a deployed contract.
+type ContractInstance interface {
+	Address() common.Address
+	Backend() ContractBackend
+}
+
 func DeployContract2(opts *TransactOpts, bytecode []byte, input []byte, backend ContractBackend) (common.Address, *types.Transaction, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 	tx, err := c.transact(opts, nil, append(bytecode, input...))
@@ -35,32 +42,39 @@ func DeployContract2(opts *TransactOpts, bytecode []byte, input []byte, backend 
 	return address, tx, nil
 }
 
-func Call2[T any](opts *CallOpts, addr common.Address, input []byte, backend ContractBackend, unpack func([]byte) (T, error)) (arg T, err error) {
+func Call2[T any](instance ContractInstance, opts *CallOpts, input []byte, unpack func([]byte) (T, error)) (arg T, err error) {
 	var data []byte
-	data, err = CallRaw(opts, addr, input, backend)
+	data, err = CallRaw(instance, opts, input)
 	if err != nil {
 		return
 	}
 	return unpack(data)
 }
 
-func CallRaw(opts *CallOpts, addr common.Address, input []byte, backend ContractBackend) ([]byte, error) {
-	c := NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
+func CallRaw(instance ContractInstance, opts *CallOpts, input []byte) ([]byte, error) {
+	backend := instance.Backend()
+	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	return c.call(opts, input)
 }
 
-func Transact2(opts *TransactOpts, addr common.Address, input []byte, backend ContractBackend) (*types.Transaction, error) {
+func Transact2(instance ContractInstance, opts *TransactOpts, input []byte) (*types.Transaction, error) {
+	var (
+		addr    = instance.Address()
+		backend = instance.Backend()
+	)
 	c := NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
 	return c.transact(opts, &addr, input)
 }
 
-func Transfer2(opts *TransactOpts, addr common.Address, backend ContractBackend) (*types.Transaction, error) {
-	c := NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
+func Transfer2(instance ContractInstance, opts *TransactOpts) (*types.Transaction, error) {
+	backend := instance.Backend()
+	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	return c.Transfer(opts)
 }
 
-func FilterLogs[T any](opts *FilterOpts, addr common.Address, backend ContractBackend, eventID common.Hash, unpack func(types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
-	c := NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
+func FilterLogs[T any](instance ContractInstance, opts *FilterOpts, eventID common.Hash, unpack func(types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
+	backend := instance.Backend()
+	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	logs, sub, err := c.filterLogs(opts, eventID, topics...)
 	if err != nil {
 		return nil, err
@@ -68,8 +82,9 @@ func FilterLogs[T any](opts *FilterOpts, addr common.Address, backend ContractBa
 	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-func WatchLogs[T any](opts *WatchOpts, addr common.Address, backend ContractBackend, eventID common.Hash, unpack func(types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
-	c := NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
+func WatchLogs[T any](instance ContractInstance, opts *WatchOpts, eventID common.Hash, unpack func(types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+	backend := instance.Backend()
+	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	logs, sub, err := c.watchLogs(opts, eventID, topics...)
 	if err != nil {
 		return nil, err
