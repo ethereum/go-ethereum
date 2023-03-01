@@ -51,12 +51,12 @@
   "input": "0xf889038504a81557008301f97e946c06b16512b332e6cd8293a2974872674716ce1880a42e1a7d4d00000000000000000000000000000000000000000000000014d1120d7b1600002aa0e2a6558040c5d72bc59f2fb62a38993a314c849cd22fb393018d2c5af3112095a01bdb6d7ba32263ccc2ecc880d38c49d9f0c5a72d8b7908e3122b31356d349745",
   "result": {
     "blockContext": {
-      "number": "0x618e",
+      "number": 24974,
       "stateRoot": "0x95a3d9dea55458b2e2fdff5bf16b69371c7195019fbe1e72dd76350d85717216",
-      "baseFee": "0xff0000",
-      "time": "0x583558da",
-      "coinbase": "0xc822ef32e6d26e170b70cf761e204c1806265914",
-      "gasLimit": "0x47e7c4"
+      "baseFee": 16711680,
+      "time": 1479891162,
+      "gasLimit": 4712388,
+      "coinbase": "0xc822ef32e6d26e170b70cf761e204c1806265914"
     },
     "type": "CALL",
     "from": "0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
@@ -64,7 +64,6 @@
     "value": "0x0",
     "gas": "0x1a466",
     "gasUsed": "0x1dc6",
-    "baseFee": "0xff0000",
     "input": "0x2e1a7d4d00000000000000000000000000000000000000000000000014d1120d7b160000",
     "output": "0x",
     "calls": []

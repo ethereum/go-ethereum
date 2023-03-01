@@ -74,11 +74,11 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	}
 
 	// Populate the block context from the vm environment.
-	t.trace.BlockContext.Number = uintToHex(env.Context.BlockNumber.Uint64())
-	t.trace.BlockContext.BaseFee = uintToHex(env.Context.BaseFee.Uint64())
-	t.trace.BlockContext.Time = uintToHex(env.Context.Time.Uint64())
+	t.trace.BlockContext.Number = env.Context.BlockNumber.Uint64()
+	t.trace.BlockContext.BaseFee = env.Context.BaseFee.Uint64()
+	t.trace.BlockContext.Time = env.Context.Time.Uint64()
 	t.trace.BlockContext.Coinbase = addrToHex(env.Context.Coinbase)
-	t.trace.BlockContext.GasLimit = uintToHex(env.Context.GasLimit)
+	t.trace.BlockContext.GasLimit = env.Context.GasLimit
 	t.trace.BlockContext.Random = random
 
 	// This is the initial call
