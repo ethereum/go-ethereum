@@ -9,7 +9,6 @@ const tmplSourceGoV2 = `
 package {{.Package}}
 
 import (
-	"fmt"
 	"math/big"
 	"errors"
 
