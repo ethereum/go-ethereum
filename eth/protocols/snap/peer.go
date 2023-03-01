@@ -86,7 +86,7 @@ func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit co
 	})
 }
 
-// RequestStorageRange fetches a batch of storage slots belonging to one or more
+// RequestStorageRanges fetches a batch of storage slots belonging to one or more
 // accounts. If slots from only one account is requested, an origin marker may also
 // be used to retrieve from there.
 func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {

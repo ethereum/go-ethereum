@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,34 +51,34 @@ var (
 		Usage:     "Sends ping to a node",
 		Action:    discv4Ping,
 		ArgsUsage: "<node>",
-		Flags:     v4NodeFlags,
+		Flags:     discoveryNodeFlags,
 	}
 	discv4RequestRecordCommand = &cli.Command{
 		Name:      "requestenr",
 		Usage:     "Requests a node record using EIP-868 enrRequest",
 		Action:    discv4RequestRecord,
 		ArgsUsage: "<node>",
-		Flags:     v4NodeFlags,
+		Flags:     discoveryNodeFlags,
 	}
 	discv4ResolveCommand = &cli.Command{
 		Name:      "resolve",
 		Usage:     "Finds a node in the DHT",
 		Action:    discv4Resolve,
 		ArgsUsage: "<node>",
-		Flags:     v4NodeFlags,
+		Flags:     discoveryNodeFlags,
 	}
 	discv4ResolveJSONCommand = &cli.Command{
 		Name:      "resolve-json",
 		Usage:     "Re-resolves nodes in a nodes.json file",
 		Action:    discv4ResolveJSON,
-		Flags:     v4NodeFlags,
+		Flags:     discoveryNodeFlags,
 		ArgsUsage: "<nodes.json file>",
 	}
 	discv4CrawlCommand = &cli.Command{
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
-		Flags:  flags.Merge(v4NodeFlags, []cli.Flag{crawlTimeoutFlag}),
+		Flags:  flags.Merge(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag}),
 	}
 	discv4TestCommand = &cli.Command{
 		Name:   "test",
@@ -110,6 +111,10 @@ var (
 		Name:  "addr",
 		Usage: "Listening address",
 	}
+	extAddrFlag = &cli.StringFlag{
+		Name:  "extaddr",
+		Usage: "UDP endpoint announced in ENR. You can provide a bare IP address or IP:port as the value of this flag.",
+	}
 	crawlTimeoutFlag = &cli.DurationFlag{
 		Name:  "timeout",
 		Usage: "Time limit for the crawl.",
@@ -122,11 +127,12 @@ var (
 	}
 )
 
-var v4NodeFlags = []cli.Flag{
+var discoveryNodeFlags = []cli.Flag{
 	bootnodesFlag,
 	nodekeyFlag,
 	nodedbFlag,
 	listenAddrFlag,
+	extAddrFlag,
 }
 
 func discv4Ping(ctx *cli.Context) error {
@@ -228,7 +234,7 @@ func discv4Test(ctx *cli.Context) error {
 // startV4 starts an ephemeral discovery V4 node.
 func startV4(ctx *cli.Context) *discover.UDPv4 {
 	ln, config := makeDiscoveryConfig(ctx)
-	socket := listen(ln, ctx.String(listenAddrFlag.Name))
+	socket := listen(ctx, ln)
 	disc, err := discover.ListenV4(socket, ln, config)
 	if err != nil {
 		exit(err)
@@ -266,7 +272,28 @@ func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
 	return ln, cfg
 }
 
-func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
+func parseExtAddr(spec string) (ip net.IP, port int, ok bool) {
+	ip = net.ParseIP(spec)
+	if ip != nil {
+		return ip, 0, true
+	}
+	host, portstr, err := net.SplitHostPort(spec)
+	if err != nil {
+		return nil, 0, false
+	}
+	ip = net.ParseIP(host)
+	if ip == nil {
+		return nil, 0, false
+	}
+	port, err = strconv.Atoi(portstr)
+	if err != nil {
+		return nil, 0, false
+	}
+	return ip, port, true
+}
+
+func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
+	addr := ctx.String(listenAddrFlag.Name)
 	if addr == "" {
 		addr = "0.0.0.0:0"
 	}
@@ -274,6 +301,8 @@ func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
 	if err != nil {
 		exit(err)
 	}
+
+	// Configure UDP endpoint in ENR from listener address.
 	usocket := socket.(*net.UDPConn)
 	uaddr := socket.LocalAddr().(*net.UDPAddr)
 	if uaddr.IP.IsUnspecified() {
@@ -282,6 +311,22 @@ func listen(ln *enode.LocalNode, addr string) *net.UDPConn {
 		ln.SetFallbackIP(uaddr.IP)
 	}
 	ln.SetFallbackUDP(uaddr.Port)
+
+	// If an ENR endpoint is set explicitly on the command-line, override
+	// the information from the listening address. Note this is careful not
+	// to set the UDP port if the external address doesn't have it.
+	extAddr := ctx.String(extAddrFlag.Name)
+	if extAddr != "" {
+		ip, port, ok := parseExtAddr(extAddr)
+		if !ok {
+			exit(fmt.Errorf("-%s: invalid external address %q", extAddrFlag.Name, extAddr))
+		}
+		ln.SetStaticIP(ip)
+		if port != 0 {
+			ln.SetFallbackUDP(port)
+		}
+	}
+
 	return usocket
 }
 

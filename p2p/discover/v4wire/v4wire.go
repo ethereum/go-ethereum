@@ -102,7 +102,7 @@ type (
 	}
 )
 
-// This number is the maximum number of neighbor nodes in a Neighbors packet.
+// MaxNeighbors is the maximum number of neighbor nodes in a Neighbors packet.
 const MaxNeighbors = 12
 
 // This code computes the MaxNeighbors constant value.
@@ -161,8 +161,9 @@ func NewEndpoint(addr *net.UDPAddr, tcpPort uint16) Endpoint {
 }
 
 type Packet interface {
-	// packet name and type for logging purposes.
+	// Name is the name of the package, for logging purposes.
 	Name() string
+	// Kind is the packet type, for logging purposes.
 	Kind() byte
 }
 
