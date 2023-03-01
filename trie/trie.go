@@ -158,7 +158,7 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		value, newnode, _, err := t.tryGet(child, key, pos)
 		return value, newnode, true, err
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+		panic(any(fmt.Sprintf("%T: invalid node: %v", origNode, origNode)))
 	}
 }
 
@@ -235,7 +235,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		return item, newnode, resolved + 1, err
 
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+		panic(any(fmt.Sprintf("%T: invalid node: %v", origNode, origNode)))
 	}
 }
 
@@ -359,7 +359,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, nn, nil
 
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
+		panic(any(fmt.Sprintf("%T: invalid node: %v", n, n)))
 	}
 }
 
@@ -513,7 +513,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		return true, nn, nil
 
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
+		panic(any(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key)))
 	}
 }
 

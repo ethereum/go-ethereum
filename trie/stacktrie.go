@@ -202,7 +202,7 @@ const (
 func (st *StackTrie) TryUpdate(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {
-		panic("deletion not supported")
+		panic(any("deletion not supported"))
 	}
 	st.insert(k[:len(k)-1], value, nil)
 	return nil
@@ -332,7 +332,7 @@ func (st *StackTrie) insert(key, value []byte, prefix []byte) {
 		// keys differ, and 3) one leaf for the differentiated
 		// component of each key.
 		if diffidx >= len(st.key) {
-			panic("Trying to insert into existing key")
+			panic(any("Trying to insert into existing key"))
 		}
 
 		// Check if the split occurs at the first nibble of the
@@ -374,10 +374,10 @@ func (st *StackTrie) insert(key, value []byte, prefix []byte) {
 		st.val = value
 
 	case hashedNode:
-		panic("trying to insert into hash")
+		panic(any("trying to insert into hash"))
 
 	default:
-		panic("invalid type")
+		panic(any("invalid type"))
 	}
 }
 
@@ -460,7 +460,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 		encodedNode = hasher.encodedBytes()
 
 	default:
-		panic("invalid node type")
+		panic(any("invalid node type"))
 	}
 
 	st.nodeType = hashedNode

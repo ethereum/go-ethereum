@@ -205,7 +205,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if parent != (common.Hash{}) {
 		ancestor := s.nodeReqs[string(parentPath)]
 		if ancestor == nil {
-			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+			panic(any(fmt.Sprintf("sub-trie ancestor not found: %x", parent)))
 		}
 		ancestor.deps++
 		req.parent = ancestor
@@ -241,7 +241,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	if parent != (common.Hash{}) {
 		ancestor := s.nodeReqs[string(parentPath)] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
-			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+			panic(any(fmt.Sprintf("raw-entry ancestor not found: %x", parent)))
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -435,7 +435,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			}
 		}
 	default:
-		panic(fmt.Sprintf("unknown node: %+v", node))
+		panic(any(fmt.Sprintf("unknown node: %+v", node)))
 	}
 	// Iterate over the children, and request all unknown ones
 	var (
