@@ -89,27 +89,30 @@ var (
 			return _{{$contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
-		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
-			out, err := _{{$contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
-			{{if .Structured}}
-			outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
-			if err != nil {
-				return *outstruct, err
-			}
-			{{range $i, $t := .Normalized.Outputs}} 
-			outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+		{{/* Unpack method is needed only when there are return args */}}
+		{{if .Normalized.Outputs }}
+			func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
+				out, err := _{{$contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
+				{{if .Structured}}
+				outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+				if err != nil {
+					return *outstruct, err
+				}
+				{{range $i, $t := .Normalized.Outputs}}
+				outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 
-			return *outstruct, err
-			{{else}}
-			if err != nil {
-				return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
+				return *outstruct, err
+				{{else}}
+				if err != nil {
+					return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
+				}
+				{{range $i, $t := .Normalized.Outputs}}
+				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+
+				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
+				{{end}}
 			}
-			{{range $i, $t := .Normalized.Outputs}}
-			out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
-			
-			return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
-			{{end}}
-		}
+		{{end}}
 	{{end}}
 
 	{{range .Events}}

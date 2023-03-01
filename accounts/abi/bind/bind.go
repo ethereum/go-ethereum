@@ -129,7 +129,7 @@ func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[strin
 			if call.Structured {
 				continue
 			}
-			if len(call.Normalized.Outputs) == 1 {
+			if len(call.Normalized.Outputs) < 2 {
 				continue
 			}
 			// Build up dictionary of existing arg names.
