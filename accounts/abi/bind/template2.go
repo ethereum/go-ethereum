@@ -61,10 +61,19 @@ var (
 	type {{.Type}}Instance struct {
 		{{.Type}}
 		address common.Address
+		backend bind.ContractBackend
+	}
+
+	func New{{.Type}}Instance(c *{{.Type}}, address common.Address, backend bind.ContractBackend) *{{.Type}}Instance {
+		return &{{.Type}}Instance{Db: *c, address: address, backend: backend}
 	}
 
 	func (i *{{$contract.Type}}Instance) Address() common.Address {
 		return i.address
+	}
+
+	func (i *{{$contract.Type}}Instance) Backend() bind.ContractBackend {
+		return i.backend
 	}
 
 	// New{{.Type}} creates a new instance of {{.Type}}.
