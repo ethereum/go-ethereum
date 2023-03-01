@@ -127,8 +127,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		return
 	}
 
-	refreshFreq := int64(refresh / time.Second)
-
 	// Create the various data collectors
 	var (
 		cpustats  = make([]CPUStats, 2)
@@ -163,9 +161,15 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 
+	// Avoid divide-by-zero the first time through the loop.
+	lastCollectionTime := time.Now().Add(-refresh)
+
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
 	for ; ; now, prev = prev, now {
+
+		refreshFreq := int64(time.Since(lastCollectionTime) / time.Second)
+
 		// CPU
 		ReadCPUStats(&cpustats[now])
 		cpuSysLoad.Update((cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq)
@@ -199,6 +203,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 			diskWriteBytesCounter.Inc(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 		}
 
+		lastCollectionTime = time.Now()
 		time.Sleep(refresh)
 	}
 }
