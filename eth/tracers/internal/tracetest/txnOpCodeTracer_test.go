@@ -2,6 +2,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -107,7 +108,11 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			if !tracesEqual(ret, test.Result) {
-				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+				x, _ := json.MarshalIndent(test.Result, "", "")
+				//y, _ := json.MarshalIndent(test.Result, "", "")
+				fmt.Println(string(x))
+				t.Fatal("traces mismatch")
+				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
 	}
