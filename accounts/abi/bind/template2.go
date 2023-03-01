@@ -126,7 +126,7 @@ var (
 		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Normalized.Name}}"
 			if log.Topics[0] != _{{$contract.Type}}.abi.Events[event].ID {
-				return nil, fmt.Errorf("event signature mismatch")
+				return nil, errors.New("event signature mismatch")
 			}
 			out := new({{$contract.Type}}{{.Normalized.Name}})
 			if len(log.Data) > 0 {
