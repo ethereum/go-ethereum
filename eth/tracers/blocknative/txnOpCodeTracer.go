@@ -212,6 +212,11 @@ func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 func (*txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
 }
 
+// SetStateRoot implements core.stateRootSetter and stores the given root in the trace's BlockContext.
+func (t *txnOpCodeTracer) SetStateRoot(root common.Hash) {
+	t.trace.BlockContext.StateRoot = bytesToHex(root.Bytes())
+}
+
 func (*txnOpCodeTracer) CaptureTxEnd(restGas uint64) {}
 
 // Stop terminates execution of the tracer at the first opportune moment.

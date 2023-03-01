@@ -32,12 +32,13 @@ type Trace struct {
 
 // BlockContext contains information about the block we simulate transactions in.
 type BlockContext struct {
-	Number   string `json:"number"`
-	BaseFee  string `json:"baseFee"`
-	Time     string `json:"time"`
-	Coinbase string `json:"coinbase"`
-	GasLimit string `json:"gasLimit"`
-	Random   string `json:"random,omitempty"`
+	Number    string `json:"number"`
+	StateRoot string `json:"stateRoot,omitempty"`
+	BaseFee   string `json:"baseFee"`
+	Time      string `json:"time"`
+	Coinbase  string `json:"coinbase"`
+	GasLimit  string `json:"gasLimit"`
+	Random    string `json:"random,omitempty"`
 }
 
 type CallFrame struct {

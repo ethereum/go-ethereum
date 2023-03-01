@@ -31,6 +31,11 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
+// stateRootSetter gives the blocknative tracer access to the state root we're tracing on.
+type stateRootSetter interface {
+	SetStateRoot(stateRoot common.Hash)
+}
+
 /*
 The State Transitioning Model
 
@@ -290,6 +295,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	if st.evm.Config.Debug {
 		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
+
+		// If this tracer implements stateRootSetter then call it now
+		if t, ok := st.evm.Config.Tracer.(stateRootSetter); ok {
+			t.SetStateRoot(st.state.IntermediateRoot(false))
+		}
+
 		defer func() {
 			st.evm.Config.Tracer.CaptureTxEnd(st.gas)
 		}()
