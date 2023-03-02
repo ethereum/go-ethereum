@@ -52,11 +52,6 @@ var (
 		{{end}}
 	}
 
-	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
-	type {{.Type}} struct {
-		abi abi.ABI
-	}
-
 	// {{.Type}}Instance represents a deployed instance of the {{.Type}} contract.
 	type {{.Type}}Instance struct {
 		{{.Type}}
@@ -76,14 +71,24 @@ var (
 		return i.backend
 	}
 
+	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
+	type {{.Type}} struct {
+		abi abi.ABI
+		deployCode []byte
+	}
+
 	// New{{.Type}} creates a new instance of {{.Type}}.
 	func New{{.Type}}() (*{{.Type}}, error) {
-	  parsed, err := {{.Type}}MetaData.GetAbi()
-	  if err != nil {
-	    return nil, err
-	  }
+		parsed, err := {{.Type}}MetaData.GetAbi()
+		if err != nil {
+			return nil, err
+		}
+		code := common.Hex2Bytes({{.Type}}MetaData.Bin)
+		return &{{.Type}}{abi: *parsed, deployCode: code}, nil
+	}
 
-	  return &{{.Type}}{abi: *parsed}, nil
+	func (_{{$contract.Type}} *{{$contract.Type}}) DeployCode() []byte {
+		return _{{$contract.Type}}.deployCode
 	}
 
 	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
