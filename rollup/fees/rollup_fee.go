@@ -3,6 +3,7 @@ package fees
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -35,6 +36,7 @@ type Message interface {
 // required to compute the L1 fee
 type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
+	GetBalance(addr common.Address) *big.Int
 }
 
 // CalculateL1MsgFee computes the L1 portion of the fee given
@@ -137,4 +139,62 @@ func zeroesAndOnes(data []byte) (uint64, uint64) {
 func mulAndScale(x *big.Int, y *big.Int, precision *big.Int) *big.Int {
 	z := new(big.Int).Mul(x, y)
 	return new(big.Int).Quo(z, precision)
+}
+
+// copyTransaction copies the transaction, removing the signature
+func copyTransaction(tx *types.Transaction) *types.Transaction {
+	if tx.To() == nil {
+		return types.NewContractCreation(
+			tx.Nonce(),
+			tx.Value(),
+			tx.Gas(),
+			tx.GasPrice(),
+			tx.Data(),
+		)
+	}
+	return types.NewTransaction(
+		tx.Nonce(),
+		*tx.To(),
+		tx.Value(),
+		tx.Gas(),
+		tx.GasPrice(),
+		tx.Data(),
+	)
+}
+
+func CalculateTotalFee(tx *types.Transaction, state StateDB) (*big.Int, error) {
+	unsigned := copyTransaction(tx)
+	raw, err := rlpEncode(unsigned)
+	if err != nil {
+		return nil, err
+	}
+
+	l1BaseFee, overhead, scalar := readGPOStorageSlots(rcfg.L1GasPriceOracleAddress, state)
+	l1Fee := CalculateL1Fee(raw, overhead, l1BaseFee, scalar)
+
+	l2GasLimit := new(big.Int).SetUint64(tx.Gas())
+	l2Fee := new(big.Int).Mul(tx.GasPrice(), l2GasLimit)
+	fee := new(big.Int).Add(l1Fee, l2Fee)
+	return fee, nil
+}
+
+func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error {
+	fee, err := CalculateTotalFee(tx, state)
+	if err != nil {
+		return fmt.Errorf("invalid transaction: %w", err)
+	}
+
+	cost := tx.Value()
+	cost = cost.Add(cost, fee)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return errors.New("invalid transaction: invalid sender")
+	}
+	if state.GetBalance(from).Cmp(cost) < 0 {
+		return errors.New("invalid transaction: insufficient funds for gas * price + value")
+	}
+
+	// TODO: check GasPrice is in an expected range
+
+	return nil
 }

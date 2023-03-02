@@ -196,6 +196,7 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	// will `VerifyFee` & `validateTx` in txPool.Add
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 
