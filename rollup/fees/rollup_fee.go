@@ -162,11 +162,11 @@ func copyTransaction(tx *types.Transaction) *types.Transaction {
 	)
 }
 
-func CalculateTotalFee(tx *types.Transaction, state StateDB) (*big.Int, error) {
+func CalculateFees(tx *types.Transaction, state StateDB) (*big.Int, *big.Int, *big.Int, error) {
 	unsigned := copyTransaction(tx)
 	raw, err := rlpEncode(unsigned)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	l1BaseFee, overhead, scalar := readGPOStorageSlots(rcfg.L1GasPriceOracleAddress, state)
@@ -175,23 +175,31 @@ func CalculateTotalFee(tx *types.Transaction, state StateDB) (*big.Int, error) {
 	l2GasLimit := new(big.Int).SetUint64(tx.Gas())
 	l2Fee := new(big.Int).Mul(tx.GasPrice(), l2GasLimit)
 	fee := new(big.Int).Add(l1Fee, l2Fee)
-	return fee, nil
+	return l1Fee, l2Fee, fee, nil
 }
 
 func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error {
-	fee, err := CalculateTotalFee(tx, state)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return errors.New("invalid transaction: invalid sender")
+	}
+
+	balance := state.GetBalance(from)
+
+	l1Fee, l2Fee, _, err := CalculateFees(tx, state)
 	if err != nil {
 		return fmt.Errorf("invalid transaction: %w", err)
 	}
 
 	cost := tx.Value()
-	cost = cost.Add(cost, fee)
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return errors.New("invalid transaction: invalid sender")
-	}
-	if state.GetBalance(from).Cmp(cost) < 0 {
+	cost = cost.Add(cost, l2Fee)
+	if balance.Cmp(cost) < 0 {
 		return errors.New("invalid transaction: insufficient funds for gas * price + value")
+	}
+
+	cost = cost.Add(cost, l1Fee)
+	if balance.Cmp(cost) < 0 {
+		return errors.New("invalid transaction: insufficient funds for l1fee + gas * price + value")
 	}
 
 	// TODO: check GasPrice is in an expected range
