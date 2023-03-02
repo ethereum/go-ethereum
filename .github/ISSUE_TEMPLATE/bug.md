@@ -6,7 +6,7 @@ labels: 'type:bug'
 assignees: ''
 ---
 
-Our support team has aggregated some common issues and their solutions from past which are faced while running or interacting with a bor client. In order to prevent redundant efforts, we would encourage you to have a look at the [FAQ's section](https://docs.polygon.technology/docs/faq/technical-faqs) of our documentation mentioning the same, before filing an issue here. In case of additional support, you can also join our [discord](https://discord.com/invite/zdwkdvMNY2) server
+Our support team has aggregated some common issues and their solutions from past which are faced while running or interacting with a bor client. In order to prevent redundant efforts, we would encourage you to have a look at the [FAQ's section](https://wiki.polygon.technology/docs/faq/technical-faqs/) of our documentation mentioning the same, before filing an issue here. In case of additional support, you can also join our [discord](https://discord.com/invite/zdwkdvMNY2) server
 
 <!--
 NOTE: Please make sure to check of any addresses / private keys / rpc url's / IP's before sharing the logs or anything from the additional information section (start.sh or heimdall config).
