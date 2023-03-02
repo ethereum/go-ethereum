@@ -133,13 +133,14 @@ var (
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
-			Raw types.Log // Blockchain specific contextual infos
+			Raw *types.Log // Blockchain specific contextual infos
 		}
+
 		func (_{{$contract.Type}} *{{$contract.Type}}) {{.Normalized.Name}}EventID() common.Hash {
 			return common.HexToHash("{{.Original.ID}}")
 		}
 
-		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Normalized.Name}}"
 			if log.Topics[0] != _{{$contract.Type}}.abi.Events[event].ID {
 				return nil, errors.New("event signature mismatch")

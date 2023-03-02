@@ -72,7 +72,7 @@ func Transfer2(instance ContractInstance, opts *TransactOpts) (*types.Transactio
 	return c.Transfer(opts)
 }
 
-func FilterLogs[T any](instance ContractInstance, opts *FilterOpts, eventID common.Hash, unpack func(types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
+func FilterLogs[T any](instance ContractInstance, opts *FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend()
 	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	logs, sub, err := c.filterLogs(opts, eventID, topics...)
@@ -82,7 +82,7 @@ func FilterLogs[T any](instance ContractInstance, opts *FilterOpts, eventID comm
 	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-func WatchLogs[T any](instance ContractInstance, opts *WatchOpts, eventID common.Hash, unpack func(types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchLogs[T any](instance ContractInstance, opts *WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend()
 	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	logs, sub, err := c.watchLogs(opts, eventID, topics...)
@@ -95,7 +95,7 @@ func WatchLogs[T any](instance ContractInstance, opts *WatchOpts, eventID common
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				ev, err := unpack(log)
+				ev, err := unpack(&log)
 				if err != nil {
 					return err
 				}
@@ -120,7 +120,7 @@ func WatchLogs[T any](instance ContractInstance, opts *WatchOpts, eventID common
 type EventIterator[T any] struct {
 	Event *T // Event containing the contract specifics and raw log
 
-	unpack func(types.Log) (*T, error) // Unpack function for the event
+	unpack func(*types.Log) (*T, error) // Unpack function for the event
 
 	logs chan types.Log        // Log channel receiving the found contract events
 	sub  ethereum.Subscription // Subscription for errors, completion and termination
@@ -140,7 +140,7 @@ func (it *EventIterator[T]) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			res, err := it.unpack(log)
+			res, err := it.unpack(&log)
 			if err != nil {
 				it.fail = err
 				return false
@@ -155,7 +155,7 @@ func (it *EventIterator[T]) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		res, err := it.unpack(log)
+		res, err := it.unpack(&log)
 		if err != nil {
 			it.fail = err
 			return false
