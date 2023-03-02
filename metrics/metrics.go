@@ -167,11 +167,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
 	for ; ; now, prev = prev, now {
-
-		refreshFreq := int64(time.Since(lastCollectionTime) / time.Second)
-
 		// CPU
 		ReadCPUStats(&cpustats[now])
+		refreshFreq := int64(time.Since(lastCollectionTime) / time.Second)
 		cpuSysLoad.Update((cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq)
 		cpuSysWait.Update((cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq)
 		cpuProcLoad.Update((cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq)
