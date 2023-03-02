@@ -443,12 +443,13 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
 	}
-	if err := n.Start(); err != nil {
-		t.Fatal("can't start node:", err)
-	}
 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
+	}
+
+	if err := n.Start(); err != nil {
+		t.Fatal("can't start node:", err)
 	}
 
 	ethservice.SetEtherbase(testAddr)
@@ -874,7 +875,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
-	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
+	ethservice.BlockChain().Config().TerminalTotalDifficulty = preMergeBlocks[len(preMergeBlocks)-1].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
 	var (
 		api    = NewConsensusAPI(ethservice)

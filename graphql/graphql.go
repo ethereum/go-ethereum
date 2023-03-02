@@ -457,22 +457,26 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if t.block == nil {
 		return nil, nil
 	}
-	if _, ok := t.block.numberOrHash.Hash(); !ok {
+	hash, ok := t.block.numberOrHash.Hash()
+	if !ok {
 		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
 		if err != nil {
 			return nil, err
 		}
-		hash := header.Hash()
-		t.block.numberOrHash.BlockHash = &hash
+		hash = header.Hash()
+		// TODO: (Marius) not setting the blockhash here
+		// prevents a race condition (since multiple calls of Logs can set the blockhash)
+		// It however also means that every subsequent call for logs of the same block hash to
+		// query the node again. Solution would be to mutex numberOrHash
+		// t.block.numberOrHash.BlockHash = &hash
 	}
-	return t.getLogs(ctx)
+	return t.getLogs(ctx, hash)
 }
 
 // getLogs returns log objects for the given tx.
 // Assumes block hash is resolved.
-func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
+func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, error) {
 	var (
-		hash, _   = t.block.numberOrHash.Hash()
 		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
 		logs, err = filter.Logs(ctx)
 	)
