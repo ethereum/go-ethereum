@@ -1,8 +1,8 @@
 package bind
 
-// tmplSourceGo is the Go source template that the generated Go contract binding
-// is based on.
-const tmplSourceGoV2 = `
+// tmplSourceV2 is the Go source template that the generated
+// Go contract binding V2 is based on.
+const tmplSourceV2 = `
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
