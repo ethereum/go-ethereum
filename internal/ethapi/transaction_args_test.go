@@ -278,7 +278,7 @@ func (b *backendMock) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 func (b *backendMock) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	return nil, nil
 }
-func (b *backendMock) CurrentBlock() *types.Block { return nil }
+func (b *backendMock) CurrentBlock() *types.Header { return nil }
 func (b *backendMock) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	return nil, nil
 }

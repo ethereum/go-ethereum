@@ -225,24 +225,24 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			[]common.Hash{backend.chain.GetBlockByNumber(0).Hash()},
 		},
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64()}, Amount: 1},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		{ // If the peer requests a bit into the future, we deliver what we have
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 10},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64()}, Amount: 10},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			getHashes(backend.chain.CurrentBlock().NumberU64(), limit),
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 1}, Amount: limit + 10, Reverse: true},
+			getHashes(backend.chain.CurrentBlock().Number.Uint64(), limit),
 		},
 		// Check that requesting more than available is handled gracefully
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64()).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64()).Hash(),
 			},
 		}, {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
@@ -253,10 +253,10 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 1).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 1).Hash(),
 			},
 		}, {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
@@ -293,7 +293,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -394,7 +394,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		)
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(backend.chain.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(backend.chain.CurrentBlock().Number.Uint64()))
 				if !seen[num] {
 					seen[num] = true
 
@@ -529,7 +529,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 
 	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		root := backend.chain.GetBlockByNumber(i).Root()
 		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
 		for j, acc := range accounts {
@@ -602,7 +602,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		hashes   []common.Hash
 		receipts [][]*types.Receipt
 	)
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())

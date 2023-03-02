@@ -197,7 +197,7 @@ func ExampleGenerateChain() {
 	}
 
 	state, _ := blockchain.State()
-	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
+	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number)
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))
