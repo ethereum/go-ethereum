@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NodeResolver is used for looking up trie nodes before reaching into the real
@@ -160,7 +161,7 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == emptyRoot {
+	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
 			trie: trie,
 			err:  errIteratorEnd,
@@ -302,7 +303,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 func (it *nodeIterator) init() (*nodeIteratorState, error) {
 	root := it.trie.Hash()
 	state := &nodeIteratorState{node: it.trie.root, index: -1}
-	if root != emptyRoot {
+	if root != types.EmptyRootHash {
 		state.hash = root
 	}
 	return state, state.resolve(it, nil)

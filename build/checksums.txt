@@ -41,3 +41,6 @@ c4f58b7e227b9fd41f0e9310dc83f4a4e7d026598e2f6e95b78761081a6d9bd2  golangci-lint-
 eb57f9bcb56646f2e3d6ccaf02ec227815fb05077b2e0b1bf9e755805acdc2b9  golangci-lint-1.51.1-windows-arm64.zip
 bce02f7232723cb727755ee11f168a700a00896a25d37f87c4b173bce55596b4  golangci-lint-1.51.1-windows-armv6.zip
 cf6403f84707ce8c98664736772271bc8874f2e760c2fd0f00cf3e85963507e9  golangci-lint-1.51.1-windows-armv7.zip
+
+# This is the builder on PPA that will build Go itself (inception-y), don't modify!
+d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz

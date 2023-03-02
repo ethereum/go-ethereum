@@ -808,7 +808,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err
 			}
-			if account.Root != emptyRoot {
+			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.parent)
 			}
 		}
