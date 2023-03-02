@@ -63,11 +63,6 @@ var (
 		Name:  "out",
 		Usage: "Output file for the generated binding (default = stdout)",
 	}
-	langFlag = &cli.StringFlag{
-		Name:  "lang",
-		Usage: "Destination language for the bindings (go)",
-		Value: "go",
-	}
 	aliasFlag = &cli.StringFlag{
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
@@ -90,7 +85,6 @@ func init() {
 		excFlag,
 		pkgFlag,
 		outFlag,
-		langFlag,
 		aliasFlag,
 		v2Flag,
 	}
@@ -102,13 +96,6 @@ func abigen(c *cli.Context) error {
 
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
-	}
-	var lang bind.Lang
-	switch c.String(langFlag.Name) {
-	case "go":
-		lang = bind.LangGo
-	default:
-		utils.Fatalf("Unsupported destination language \"%s\" (--lang)", c.String(langFlag.Name))
 	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
@@ -226,9 +213,9 @@ func abigen(c *cli.Context) error {
 		err  error
 	)
 	if c.IsSet(v2Flag.Name) {
-		code, err = bind.BindV2(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
+		code, err = bind.BindV2(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
 	} else {
-		code, err = bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
+		code, err = bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
 	}
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)
