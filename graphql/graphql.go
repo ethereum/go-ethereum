@@ -457,8 +457,13 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if t.block == nil {
 		return nil, nil
 	}
-	hash, ok := t.block.numberOrHash.Hash()
-	if !ok {
+	hash, err := t.block.Hash(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// This is a sanity check. Practically block hash
+	// should be filled already.
+	if (hash == common.Hash{}) {
 		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
 		if err != nil {
 			return nil, err
@@ -474,7 +479,6 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 }
 
 // getLogs returns log objects for the given tx.
-// Assumes block hash is resolved.
 func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, error) {
 	var (
 		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
@@ -591,10 +595,10 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	}
 	var err error
 	b.block, err = b.r.backend.BlockByNumberOrHash(ctx, *b.numberOrHash)
-	if b.block != nil && b.header == nil {
-		b.header = b.block.Header()
-		if hash, ok := b.numberOrHash.Hash(); ok {
-			b.hash = hash
+	if b.block != nil {
+		b.hash = b.block.Hash()
+		if b.header == nil {
+			b.header = b.block.Header()
 		}
 	}
 	return b.block, err
@@ -613,6 +617,7 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 			b.header, err = b.r.backend.HeaderByHash(ctx, b.hash)
 		} else {
 			b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
+			b.hash = b.header.Hash()
 		}
 	}
 	return b.header, err
