@@ -19,13 +19,14 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	logger "github.com/ethereum/go-ethereum/log"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -58,7 +59,7 @@ type handler struct {
 	rootCtx              context.Context                // canceled by close()
 	cancelRoot           func()                         // cancel function for rootCtx
 	conn                 jsonWriter                     // where responses will be sent
-	log                  log.Logger
+	log                  logger.Logger
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
@@ -84,7 +85,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		cancelRoot:           cancelRoot,
 		allowSubscribe:       true,
 		serverSubs:           make(map[ID]*Subscription),
-		log:                  log.Root(),
+		log:                  logger.Root(),
 		batchRequestLimit:    batchRequestLimit,
 		batchResponseMaxSize: batchResponseMaxSize,
 	}
@@ -175,6 +176,15 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		return
 	}
 
+	if len(msgs) > h.batchRequestLimit && h.batchRequestLimit != 0 {
+		h.startCallProc(func(cp *callProc) {
+			resp := msgs[0].errorResponse(&invalidRequestError{errMsgBatchTooLarge})
+			h.conn.writeJSON(cp.ctx, resp, true)
+		})
+		log.Println("return for batch too large")
+		return
+	}
+
 	// Handle non-call messages first:
 	calls := make([]*jsonrpcMessage, 0, len(msgs))
 	for _, msg := range msgs {
@@ -183,14 +193,6 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 	}
 	if len(calls) == 0 {
-		return
-	}
-
-	if len(calls) > h.batchRequestLimit && h.batchRequestLimit != 0 {
-		h.startCallProc(func(cp *callProc) {
-			resp := calls[0].errorResponse(&invalidRequestError{errMsgBatchTooLarge})
-			h.conn.writeJSON(cp.ctx, resp, true)
-		})
 		return
 	}
 

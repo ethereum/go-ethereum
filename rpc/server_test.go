@@ -19,7 +19,10 @@ package rpc
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -204,5 +207,47 @@ func TestServerBatchRequestLimit(t *testing.T) {
 
 	if err.Error() != errMsgBatchTooLarge {
 		t.Errorf("error mismatch: %v", err)
+	}
+}
+
+func mockLogger(t *testing.T) (*bufio.Scanner, *os.File, *os.File) {
+	// rm time prefix in test
+	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("couldn't get os Pipe: %v", err)
+	}
+	log.SetOutput(writer)
+	return bufio.NewScanner(reader), reader, writer
+}
+
+func resetLogger(reader *os.File, writer *os.File) {
+	err := reader.Close()
+	if err != nil {
+		fmt.Println("error closing reader was ", err)
+	}
+	if err = writer.Close(); err != nil {
+		fmt.Println("error closing writer was ", err)
+	}
+	log.SetOutput(os.Stderr)
+}
+
+func TestServerBatchRequestLimitForNonCall(t *testing.T) {
+	scanner, reader, writer := mockLogger(t)
+	defer resetLogger(reader, writer)
+
+	server := newTestServer()
+	server.SetBatchLimits(2, 100000)
+	defer server.Stop()
+
+	client := DialInProc(server)
+	args := make([][]interface{}, 3)
+	for i := range args {
+		args[i] = make([]interface{}, 0)
+	}
+	client.BatchNotify(context.Background(), "ex_subscription", args)
+	scanner.Scan()
+	if scanner.Text() != "return for batch too large" {
+		t.Error("missing return")
 	}
 }
