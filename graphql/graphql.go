@@ -202,6 +202,7 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 			t.block = &Block{
 				r:            t.r,
 				numberOrHash: &blockNrOrHash,
+				hash:         blockHash,
 			}
 			t.index = index
 			return t.tx, nil
