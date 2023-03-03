@@ -5,7 +5,6 @@ jobs:
   allow_failures:
     - stage: build
       os: osx
-      go: 1.17.x
       env:
         - azure-osx
 
