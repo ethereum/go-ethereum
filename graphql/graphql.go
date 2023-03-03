@@ -458,9 +458,9 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if t.block == nil {
 		return nil, nil
 	}
-	hash, err := t.block.Hash(ctx)
-	if err != nil {
-		return nil, err
+	hash := t.block.readHash()
+	if hash == (common.Hash{}) {
+		return nil, errors.New("block hash not available")
 	}
 	return t.getLogs(ctx, hash)
 }
@@ -649,6 +649,19 @@ func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 		b.hash = header.Hash()
 	}
 	return b.hash, nil
+}
+
+func (b *Block) readHash() common.Hash {
+	if b.hash != (common.Hash{}) {
+		return b.hash
+	}
+	if h, ok := b.numberOrHash.Hash(); ok {
+		return h
+	}
+	if b.header != nil {
+		return b.header.Hash()
+	}
+	return common.Hash{}
 }
 
 func (b *Block) GasLimit(ctx context.Context) (Long, error) {
