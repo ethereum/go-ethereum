@@ -462,20 +462,6 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	// This is a sanity check. Practically block hash
-	// should be filled already.
-	if (hash == common.Hash{}) {
-		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
-		if err != nil {
-			return nil, err
-		}
-		hash = header.Hash()
-		// TODO: (Marius) not setting the blockhash here
-		// prevents a race condition (since multiple calls of Logs can set the blockhash)
-		// It however also means that every subsequent call for logs of the same block hash to
-		// query the node again. Solution would be to mutex numberOrHash
-		// t.block.numberOrHash.BlockHash = &hash
-	}
 	return t.getLogs(ctx, hash)
 }
 
