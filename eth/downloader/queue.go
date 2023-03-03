@@ -76,6 +76,8 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	}
 	if !header.EmptyBody() {
 		item.pending |= (1 << bodyType)
+	} else if header.WithdrawalsHash != nil {
+		item.Withdrawals = make(types.Withdrawals, 0)
 	}
 	if fastSync && !header.EmptyReceipts() {
 		item.pending |= (1 << receiptType)
@@ -142,7 +144,7 @@ type queue struct {
 	active *sync.Cond
 	closed bool
 
-	lastStatLog time.Time
+	logTime time.Time // Time instance when status was last reported
 }
 
 // newQueue creates a new download queue for scheduling block retrieval.
@@ -388,11 +390,12 @@ func (q *queue) Results(block bool) []*fetchResult {
 		}
 	}
 	// Log some info at certain times
-	if time.Since(q.lastStatLog) > 60*time.Second {
-		q.lastStatLog = time.Now()
+	if time.Since(q.logTime) >= 60*time.Second {
+		q.logTime = time.Now()
+
 		info := q.Stats()
 		info = append(info, "throttle", throttleThreshold)
-		log.Info("Downloader queue stats", info...)
+		log.Debug("Downloader queue stats", info...)
 	}
 	return results
 }
@@ -781,14 +784,17 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			return errInvalidBody
 		}
 		if header.WithdrawalsHash == nil {
-			// discard any withdrawals if we don't have a withdrawal hash set
-			withdrawalLists[index] = nil
-		} else if *header.WithdrawalsHash == types.EmptyRootHash && withdrawalLists[index] == nil {
-			// if the withdrawal hash is the emptyRootHash,
-			// we expect withdrawals to be [] instead of nil
-			withdrawalLists[index] = make([]*types.Withdrawal, 0)
-		} else if withdrawalListHashes[index] != *header.WithdrawalsHash {
-			return errInvalidBody
+			// nil hash means that withdrawals should not be present in body
+			if withdrawalLists[index] != nil {
+				return errInvalidBody
+			}
+		} else { // non-nil hash: body must have withdrawals
+			if withdrawalLists[index] == nil {
+				return errInvalidBody
+			}
+			if withdrawalListHashes[index] != *header.WithdrawalsHash {
+				return errInvalidBody
+			}
 		}
 		return nil
 	}

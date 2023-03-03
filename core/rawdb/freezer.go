@@ -79,6 +79,12 @@ type Freezer struct {
 	closeOnce    sync.Once
 }
 
+// NewChainFreezer is a small utility method around NewFreezer that sets the
+// default parameters for the chain storage.
+func NewChainFreezer(datadir string, namespace string, readonly bool) (*Freezer, error) {
+	return NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+}
+
 // NewFreezer creates a freezer instance for maintaining immutable ordered
 // data according to the given parameters.
 //
