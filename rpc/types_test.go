@@ -43,9 +43,10 @@ func TestBlockNumberJSONUnmarshal(t *testing.T) {
 		11: {`"pending"`, false, PendingBlockNumber},
 		12: {`"latest"`, false, LatestBlockNumber},
 		13: {`"earliest"`, false, EarliestBlockNumber},
-		14: {`someString`, true, BlockNumber(0)},
-		15: {`""`, true, BlockNumber(0)},
-		16: {``, true, BlockNumber(0)},
+		14: {`"committed"`, false, CommittedBlockNumber},
+		15: {`someString`, true, BlockNumber(0)},
+		16: {`""`, true, BlockNumber(0)},
+		17: {``, true, BlockNumber(0)},
 	}
 
 	for i, test := range tests {

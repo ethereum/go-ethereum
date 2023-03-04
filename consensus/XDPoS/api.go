@@ -16,12 +16,14 @@
 package XDPoS
 
 import (
+	"encoding/base64"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
@@ -31,6 +33,17 @@ type API struct {
 	chain consensus.ChainReader
 	XDPoS *XDPoS
 }
+
+type V2BlockInfo struct {
+	Hash       common.Hash
+	Round      types.Round
+	Number     *big.Int
+	ParentHash common.Hash
+	Committed  bool
+	EncodedRLP string
+	Error      string
+}
+
 type NetworkInformation struct {
 	NetworkId                  *big.Int
 	XDCValidatorAddress        common.Address
@@ -94,6 +107,89 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 // Get the latest v2 committed block information. Note: This only applies to v2 engine. it doesn't make sense for v1
 func (api *API) GetLatestCommittedBlockHeader() *types.BlockInfo {
 	return api.XDPoS.EngineV2.GetLatestCommittedBlockInfo()
+}
+
+func (api *API) GetV2BlockByHeader(header *types.Header, uncle bool) *V2BlockInfo {
+	committed := false
+	latestCommittedBlock := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo()
+	if latestCommittedBlock == nil {
+		return &V2BlockInfo{
+			Hash:  header.Hash(),
+			Error: "can not find latest committed block from consensus",
+		}
+	}
+	if header.Number.Uint64() <= latestCommittedBlock.Number.Uint64() {
+		committed = true && !uncle
+	}
+
+	round, err := api.XDPoS.EngineV2.GetRoundNumber(header)
+
+	if err != nil {
+		return &V2BlockInfo{
+			Hash:  header.Hash(),
+			Error: err.Error(),
+		}
+	}
+
+	encodeBytes, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		return &V2BlockInfo{
+			Hash:  header.Hash(),
+			Error: err.Error(),
+		}
+	}
+
+	block := &V2BlockInfo{
+		Hash:       header.Hash(),
+		ParentHash: header.ParentHash,
+		Number:     header.Number,
+		Round:      round,
+		Committed:  committed,
+		EncodedRLP: base64.StdEncoding.EncodeToString(encodeBytes),
+	}
+	return block
+}
+
+func (api *API) GetV2BlockByNumber(number *rpc.BlockNumber) *V2BlockInfo {
+	var header *types.Header
+	if number == nil || *number == rpc.LatestBlockNumber {
+		header = api.chain.CurrentHeader()
+	} else if *number == rpc.CommittedBlockNumber {
+		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
+		header = api.chain.GetHeaderByHash(hash)
+	} else {
+		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+
+	if header == nil {
+		return &V2BlockInfo{
+			Number: big.NewInt(number.Int64()),
+			Error:  "can not find block from this number",
+		}
+	}
+
+	uncle := false
+	return api.GetV2BlockByHeader(header, uncle)
+}
+
+// Confirm V2 Block Committed Status
+func (api *API) GetV2BlockByHash(blockHash common.Hash) *V2BlockInfo {
+	header := api.chain.GetHeaderByHash(blockHash)
+	if header == nil {
+		return &V2BlockInfo{
+			Hash:  blockHash,
+			Error: "can not find block from this hash",
+		}
+	}
+
+	// confirm this is on the main chain
+	chainHeader := api.chain.GetHeaderByNumber(header.Number.Uint64())
+	uncle := false
+	if header.Hash() != chainHeader.Hash() {
+		uncle = true
+	}
+
+	return api.GetV2BlockByHeader(header, uncle)
 }
 
 func (api *API) NetworkInformation() NetworkInformation {

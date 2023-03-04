@@ -120,7 +120,7 @@ type BlockNumber int64
 type EpochNumber int64
 
 const (
-	ConfirmedBlockNumber = BlockNumber(-3)
+	CommittedBlockNumber = BlockNumber(-3)
 	PendingBlockNumber   = BlockNumber(-2)
 	LatestBlockNumber    = BlockNumber(-1)
 	EarliestBlockNumber  = BlockNumber(0)
@@ -128,7 +128,7 @@ const (
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "latest", "earliest", "pending" and "confirmed" as string arguments
+// - "latest", "earliest", "pending" and "committed" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -145,8 +145,8 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case "pending":
 		*bn = PendingBlockNumber
 		return nil
-	case "confirmed":
-		*bn = ConfirmedBlockNumber
+	case "committed":
+		*bn = CommittedBlockNumber
 		return nil
 	}
 
