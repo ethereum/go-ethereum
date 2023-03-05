@@ -170,9 +170,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		// CPU
 		ReadCPUStats(&cpustats[now])
 		refreshFreq := time.Since(lastCollectionTime).Seconds()
-		cpuSysLoad.Update(int64(float64(cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq))
-		cpuSysWait.Update(int64(float64(cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq))
-		cpuProcLoad.Update(int64(float64(cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq))
+		cpuSysLoad.Update(int64(float64(cpustats[now].GlobalTime-cpustats[prev].GlobalTime) / refreshFreq))
+		cpuSysWait.Update(int64(float64(cpustats[now].GlobalWait-cpustats[prev].GlobalWait) / refreshFreq))
+		cpuProcLoad.Update(int64(float64(cpustats[now].LocalTime-cpustats[prev].LocalTime) / refreshFreq))
 
 		// Threads
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
