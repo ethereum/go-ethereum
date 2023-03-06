@@ -57,15 +57,19 @@ func TestClientSyncTree(t *testing.T) {
 
 	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	stree, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
+
 	if err != nil {
 		t.Fatal("sync error:", err)
 	}
+
 	if !reflect.DeepEqual(sortByID(stree.Nodes()), sortByID(wantNodes)) {
 		t.Errorf("wrong nodes in synced tree:\nhave %v\nwant %v", spew.Sdump(stree.Nodes()), spew.Sdump(wantNodes))
 	}
+
 	if !reflect.DeepEqual(stree.Links(), wantLinks) {
 		t.Errorf("wrong links in synced tree: %v", stree.Links())
 	}
+
 	if stree.Seq() != wantSeq {
 		t.Errorf("synced tree has wrong seq: %d", stree.Seq())
 	}
@@ -295,7 +299,7 @@ func TestIteratorEmptyTree(t *testing.T) {
 
 // updateSomeNodes applies ENR updates to some of the given nodes.
 func updateSomeNodes(keySeed int64, nodes []*enode.Node) {
-	keys := testKeys(nodesSeed1, len(nodes))
+	keys := testKeys(keySeed, len(nodes))
 	for i, n := range nodes[:len(nodes)/2] {
 		r := n.Record()
 		r.Set(enr.IP{127, 0, 0, 1})
@@ -384,10 +388,12 @@ func makeTestTree(domain string, nodes []*enode.Node, links []string) (*Tree, st
 	if err != nil {
 		panic(err)
 	}
+
 	url, err := tree.Sign(testKey(signingKeySeed), domain)
 	if err != nil {
 		panic(err)
 	}
+
 	return tree, url
 }
 
