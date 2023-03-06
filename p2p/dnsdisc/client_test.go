@@ -20,12 +20,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
@@ -34,25 +34,23 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-var signingKeyForTesting, _ = crypto.ToECDSA(hexutil.MustDecode("0xdc599867fc513f8f5e2c2c9c489cde5e71362d1d9ec6e693e0de063236ed1240"))
+const (
+	signingKeySeed = 0x111111
+	nodesSeed1     = 0x2945237
+	nodesSeed2     = 0x4567299
+)
 
 func TestClientSyncTree(t *testing.T) {
-
-	nodes := []string{
-		"enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA",
-		"enr:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI",
-		"enr:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o",
-	}
-
 	r := mapResolver{
 		"n":                            "enrtree-root:v1 e=JWXYDBPXYWG6FX3GMDIBFA6CJ4 l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=1 sig=o908WmNp7LibOfPsr4btQwatZJ5URBr2ZAuxvK4UWHlsB9sUOTJQaGAlLPVAhM__XJesCHxLISo94z5Z2a463gA",
 		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
 		"JWXYDBPXYWG6FX3GMDIBFA6CJ4.n": "enrtree-branch:2XS2367YHAXJFGLZHVAWLQD4ZY,H4FHT4B454P6UXFD7JCYQ5PWDY,MHTDO6TMUBRIA2XWG5LUDACK24",
-		"2XS2367YHAXJFGLZHVAWLQD4ZY.n": nodes[0],
-		"H4FHT4B454P6UXFD7JCYQ5PWDY.n": nodes[1],
-		"MHTDO6TMUBRIA2XWG5LUDACK24.n": nodes[2]}
+		"2XS2367YHAXJFGLZHVAWLQD4ZY.n": "enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA",
+		"H4FHT4B454P6UXFD7JCYQ5PWDY.n": "enr:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI",
+		"MHTDO6TMUBRIA2XWG5LUDACK24.n": "enr:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o",
+	}
 	var (
-		wantNodes = sortByID(parseNodes(nodes))
+		wantNodes = testNodes(0x29452, 3)
 		wantLinks = []string{"enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org"}
 		wantSeq   = uint(1)
 	)
@@ -62,7 +60,7 @@ func TestClientSyncTree(t *testing.T) {
 	if err != nil {
 		t.Fatal("sync error:", err)
 	}
-	if !reflect.DeepEqual(sortByID(stree.Nodes()), wantNodes) {
+	if !reflect.DeepEqual(sortByID(stree.Nodes()), sortByID(wantNodes)) {
 		t.Errorf("wrong nodes in synced tree:\nhave %v\nwant %v", spew.Sdump(stree.Nodes()), spew.Sdump(wantNodes))
 	}
 	if !reflect.DeepEqual(stree.Links(), wantLinks) {
@@ -101,13 +99,9 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 
 // This test checks that randomIterator finds all entries.
 func TestIterator(t *testing.T) {
-	var (
-		keys      = testKeys(30)
-		nodes     = testNodes(keys)
-		tree, url = makeTestTree("n", nodes, nil)
-		r         = mapResolver(tree.ToTXT("n"))
-	)
-
+	nodes := testNodes(nodesSeed1, 30)
+	tree, url := makeTestTree("n", nodes, nil)
+	r := mapResolver(tree.ToTXT("n"))
 	c := NewClient(Config{
 		Resolver:  r,
 		Logger:    testlog.Logger(t, log.LvlTrace),
@@ -138,11 +132,8 @@ func TestIteratorCloseWithoutNext(t *testing.T) {
 
 // This test checks if closing randomIterator races.
 func TestIteratorClose(t *testing.T) {
-	var (
-		keys        = testKeys(500)
-		nodes       = testNodes(keys)
-		tree1, url1 = makeTestTree("t1", nodes, nil)
-	)
+	nodes := testNodes(nodesSeed1, 500)
+	tree1, url1 := makeTestTree("t1", nodes, nil)
 	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
 	it, err := c.NewIterator(url1)
 	if err != nil {
@@ -164,12 +155,9 @@ func TestIteratorClose(t *testing.T) {
 
 // This test checks that randomIterator traverses linked trees as well as explicitly added trees.
 func TestIteratorLinks(t *testing.T) {
-	var (
-		keys        = testKeys(40)
-		nodes       = testNodes(keys)
-		tree1, url1 = makeTestTree("t1", nodes[:10], nil)
-		tree2, url2 = makeTestTree("t2", nodes[10:], []string{url1})
-	)
+	nodes := testNodes(nodesSeed1, 40)
+	tree1, url1 := makeTestTree("t1", nodes[:10], nil)
+	tree2, url2 := makeTestTree("t2", nodes[10:], []string{url1})
 	c := NewClient(Config{
 		Resolver:  newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
 		Logger:    testlog.Logger(t, log.LvlTrace),
@@ -188,8 +176,7 @@ func TestIteratorLinks(t *testing.T) {
 func TestIteratorNodeUpdates(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
-		keys     = testKeys(30)
-		nodes    = testNodes(keys)
+		nodes    = testNodes(nodesSeed1, 30)
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
@@ -210,7 +197,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 	checkIterator(t, it, nodes[:25])
 
 	// Ensure RandomNode returns the new nodes after the tree is updated.
-	updateSomeNodes(keys, nodes)
+	updateSomeNodes(nodesSeed1, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
 	resolver.clear()
 	resolver.add(tree2.ToTXT("n"))
@@ -226,8 +213,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 func TestIteratorRootRecheckOnFail(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
-		keys     = testKeys(30)
-		nodes    = testNodes(keys)
+		nodes    = testNodes(nodesSeed1, 30)
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
@@ -251,7 +237,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 	checkIterator(t, it, nodes[:25])
 
 	// Ensure RandomNode returns the new nodes after the tree is updated.
-	updateSomeNodes(keys, nodes)
+	updateSomeNodes(nodesSeed1, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
 	resolver.clear()
 	resolver.add(tree2.ToTXT("n"))
@@ -264,8 +250,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 func TestIteratorEmptyTree(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
-		keys     = testKeys(1)
-		nodes    = testNodes(keys)
+		nodes    = testNodes(nodesSeed1, 1)
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
@@ -309,7 +294,8 @@ func TestIteratorEmptyTree(t *testing.T) {
 }
 
 // updateSomeNodes applies ENR updates to some of the given nodes.
-func updateSomeNodes(keys []*ecdsa.PrivateKey, nodes []*enode.Node) {
+func updateSomeNodes(keySeed int64, nodes []*enode.Node) {
+	keys := testKeys(nodesSeed1, len(nodes))
 	for i, n := range nodes[:len(nodes)/2] {
 		r := n.Record()
 		r.Set(enr.IP{127, 0, 0, 1})
@@ -325,8 +311,7 @@ func updateSomeNodes(keys []*ecdsa.PrivateKey, nodes []*enode.Node) {
 func TestIteratorLinkUpdates(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
-		keys     = testKeys(30)
-		nodes    = testNodes(keys)
+		nodes    = testNodes(nodesSeed1, 30)
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
@@ -399,7 +384,7 @@ func makeTestTree(domain string, nodes []*enode.Node, links []string) (*Tree, st
 	if err != nil {
 		panic(err)
 	}
-	url, err := tree.Sign(signingKeyForTesting, domain)
+	url, err := tree.Sign(testKey(signingKeySeed), domain)
 	if err != nil {
 		panic(err)
 	}
@@ -407,10 +392,11 @@ func makeTestTree(domain string, nodes []*enode.Node, links []string) (*Tree, st
 }
 
 // testKeys creates deterministic private keys for testing.
-func testKeys(n int) []*ecdsa.PrivateKey {
+func testKeys(seed int64, n int) []*ecdsa.PrivateKey {
+	rand := rand.New(rand.NewSource(seed))
 	keys := make([]*ecdsa.PrivateKey, n)
 	for i := 0; i < n; i++ {
-		key, err := crypto.GenerateKey()
+		key, err := ecdsa.GenerateKey(crypto.S256(), rand)
 		if err != nil {
 			panic("can't generate key: " + err.Error())
 		}
@@ -419,8 +405,13 @@ func testKeys(n int) []*ecdsa.PrivateKey {
 	return keys
 }
 
-func testNodes(keys []*ecdsa.PrivateKey) []*enode.Node {
-	nodes := make([]*enode.Node, len(keys))
+func testKey(seed int64) *ecdsa.PrivateKey {
+	return testKeys(seed, 1)[0]
+}
+
+func testNodes(seed int64, n int) []*enode.Node {
+	keys := testKeys(seed, n)
+	nodes := make([]*enode.Node, n)
 	for i, key := range keys {
 		record := new(enr.Record)
 		record.SetSeq(uint64(i))
@@ -432,6 +423,10 @@ func testNodes(keys []*ecdsa.PrivateKey) []*enode.Node {
 		nodes[i] = n
 	}
 	return nodes
+}
+
+func testNode(seed int64) *enode.Node {
+	return testNodes(seed, 1)[0]
 }
 
 type mapResolver map[string]string
@@ -461,16 +456,4 @@ func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, err
 		return []string{record}, nil
 	}
 	return nil, errors.New("not found")
-}
-
-func parseNodes(rec []string) []*enode.Node {
-	var ns []*enode.Node
-	for _, r := range rec {
-		var n enode.Node
-		if err := n.UnmarshalText([]byte(r)); err != nil {
-			panic(err)
-		}
-		ns = append(ns, &n)
-	}
-	return ns
 }
