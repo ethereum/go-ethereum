@@ -202,6 +202,7 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 			t.block = &Block{
 				r:            t.r,
 				numberOrHash: &blockNrOrHash,
+				hash:         blockHash,
 			}
 			t.index = index
 			return t.tx, nil
@@ -587,10 +588,10 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	}
 	var err error
 	b.block, err = b.r.backend.BlockByNumberOrHash(ctx, *b.numberOrHash)
-	if b.block != nil && b.header == nil {
-		b.header = b.block.Header()
-		if hash, ok := b.numberOrHash.Hash(); ok {
-			b.hash = hash
+	if b.block != nil {
+		b.hash = b.block.Hash()
+		if b.header == nil {
+			b.header = b.block.Header()
 		}
 	}
 	return b.block, err
@@ -609,6 +610,7 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 			b.header, err = b.r.backend.HeaderByHash(ctx, b.hash)
 		} else {
 			b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
+			b.hash = b.header.Hash()
 		}
 	}
 	return b.header, err
