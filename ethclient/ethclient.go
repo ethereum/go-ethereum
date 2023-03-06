@@ -31,6 +31,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	ErrNonEmptyUncles       = errors.New("server returned non-empty uncle list but block header indicates no uncles")
+	ErrEmptyUncles          = errors.New("server returned empty uncle list but block header indicates uncles")
+	ErrNonEmptyTransactions = errors.New("server returned non-empty transaction list but block header indicates no transactions")
+	ErrEmptyTransactions    = errors.New("server returned empty transaction list but block header indicates transactions")
+)
+
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
 	c *rpc.Client
@@ -127,16 +134,16 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
 	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+		return nil, ErrNonEmptyUncles
 	}
 	if head.UncleHash != types.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+		return nil, ErrEmptyUncles
 	}
 	if head.TxHash == types.EmptyTxsHash && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+		return nil, ErrNonEmptyTransactions
 	}
 	if head.TxHash != types.EmptyTxsHash && len(body.Transactions) == 0 {
-		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+		return nil, ErrEmptyTransactions
 	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
