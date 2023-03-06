@@ -388,6 +388,8 @@ func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
 	ckkey[31] = utils.CodeKeccakLeafKey
 
 	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnReadAndComputeGas(cskey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(ckkey[:])
 	gas += aw.TouchAddressOnWriteAndComputeGas(noncekey[:])
 	gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 
