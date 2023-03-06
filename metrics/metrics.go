@@ -170,6 +170,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		// Gather CPU times.
 		ReadCPUStats(&cpustats[now])
 		refreshFreq := time.Since(lastCollectionTime).Seconds()
+		lastCollectionTime = time.Now()
 		sysLoad := (cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq
 		sysWait := (cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq
 		procLoad := (cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq
@@ -205,7 +206,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 			diskWriteBytesCounter.Inc(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 		}
 
-		lastCollectionTime = time.Now()
 		time.Sleep(refresh)
 	}
 }
