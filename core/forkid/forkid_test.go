@@ -107,14 +107,16 @@ func TestCreation(t *testing.T) {
 			params.GoerliChainConfig,
 			params.GoerliGenesisHash,
 			[]testcase{
-				{0, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},       // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
-				{1561650, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}}, // Last Petersburg block
-				{1561651, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}}, // First Istanbul block
-				{4460643, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}}, // Last Istanbul block
-				{4460644, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}}, // First Berlin block
-				{5000000, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}}, // Last Berlin block
-				{5062605, 0, ID{Hash: checksumToBytes(0xB8C6299D), Next: 0}},       // First London block
-				{6000000, 0, ID{Hash: checksumToBytes(0xB8C6299D), Next: 0}},       // Future London block
+				{0, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
+				{1561650, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},             // Last Petersburg block
+				{1561651, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}},             // First Istanbul block
+				{4460643, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}},             // Last Istanbul block
+				{4460644, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}},             // First Berlin block
+				{5000000, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}},             // Last Berlin block
+				{5062605, 0, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}},          // First London block
+				{6000000, 1678832735, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}}, // Last London block
+				{6000001, 1678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 0}},          // First Shanghai block
+				{6500000, 2678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 0}},          // Future Shanghai block
 			},
 		},
 		// Sepolia test cases
