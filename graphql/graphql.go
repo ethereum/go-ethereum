@@ -202,7 +202,6 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 			t.block = &Block{
 				r:            t.r,
 				numberOrHash: &blockNrOrHash,
-				hash:         blockHash,
 			}
 			t.index = index
 			return t.tx, nil
@@ -458,16 +457,22 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if t.block == nil {
 		return nil, nil
 	}
-	hash := t.block.readHash()
-	if hash == (common.Hash{}) {
-		return nil, errors.New("block hash not available")
+	if _, ok := t.block.numberOrHash.Hash(); !ok {
+		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash := header.Hash()
+		t.block.numberOrHash.BlockHash = &hash
 	}
-	return t.getLogs(ctx, hash)
+	return t.getLogs(ctx)
 }
 
 // getLogs returns log objects for the given tx.
-func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, error) {
+// Assumes block hash is resolved.
+func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
 	var (
+		hash, _   = t.block.numberOrHash.Hash()
 		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
 		logs, err = filter.Logs(ctx)
 	)
@@ -582,10 +587,10 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	}
 	var err error
 	b.block, err = b.r.backend.BlockByNumberOrHash(ctx, *b.numberOrHash)
-	if b.block != nil {
-		b.hash = b.block.Hash()
-		if b.header == nil {
-			b.header = b.block.Header()
+	if b.block != nil && b.header == nil {
+		b.header = b.block.Header()
+		if hash, ok := b.numberOrHash.Hash(); ok {
+			b.hash = hash
 		}
 	}
 	return b.block, err
@@ -604,7 +609,6 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 			b.header, err = b.r.backend.HeaderByHash(ctx, b.hash)
 		} else {
 			b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
-			b.hash = b.header.Hash()
 		}
 	}
 	return b.header, err
@@ -649,19 +653,6 @@ func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 		b.hash = header.Hash()
 	}
 	return b.hash, nil
-}
-
-func (b *Block) readHash() common.Hash {
-	if b.hash != (common.Hash{}) {
-		return b.hash
-	}
-	if h, ok := b.numberOrHash.Hash(); ok {
-		return h
-	}
-	if b.header != nil {
-		return b.header.Hash()
-	}
-	return common.Hash{}
 }
 
 func (b *Block) GasLimit(ctx context.Context) (Long, error) {
