@@ -1,6 +1,6 @@
 module github.com/ethereum/go-ethereum
 
-go 1.20
+go 1.19
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
@@ -71,7 +71,7 @@ require (
 	go.uber.org/goleak v1.1.12
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
+	golang.org/x/sys v0.0.0-20221013171732-95e765b1cc43
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.12
@@ -85,7 +85,10 @@ require (
 	pgregory.net/rapid v0.4.8
 )
 
-require github.com/gammazero/deque v0.2.1 // indirect
+require (
+	github.com/gammazero/deque v0.2.1 // indirect
+	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e // indirect
+)
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1 // indirect

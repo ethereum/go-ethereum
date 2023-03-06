@@ -29,7 +29,7 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.20.x
+            go-version: 1.19.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -51,10 +51,9 @@ jobs:
         - name: Build
           run: make all
 
-        # # TODO: fix LINT not working with go 1.20.x
-        # - name: Lint
-        #   if: runner.os == 'Linux'
-        #   run: make lint
+        - name: Lint
+          if: runner.os == 'Linux'
+          run: make lint
 
         - name: Test
           run: make test
@@ -99,7 +98,7 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.20.x
+            go-version: 1.18.x
 
         - name: Checkout matic-cli
           uses: actions/checkout@v3
