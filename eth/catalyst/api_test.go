@@ -874,7 +874,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
-	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
+	ethservice.BlockChain().Config().TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
 	var (
 		api    = NewConsensusAPI(ethservice)
