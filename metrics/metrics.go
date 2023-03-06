@@ -141,9 +141,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 	// Define the various metrics to collect
 	var (
-		cpuSysLoad            = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
-		cpuSysWait            = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
-		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
+		cpuSysLoad            = GetOrRegisterGaugeFloat64("system/cpu/sysload", DefaultRegistry)
+		cpuSysWait            = GetOrRegisterGaugeFloat64("system/cpu/syswait", DefaultRegistry)
+		cpuProcLoad           = GetOrRegisterGaugeFloat64("system/cpu/procload", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
 		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
@@ -170,9 +170,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		// CPU
 		ReadCPUStats(&cpustats[now])
 		refreshFreq := time.Since(lastCollectionTime).Seconds()
-		cpuSysLoad.Update(int64(float64(cpustats[now].GlobalTime-cpustats[prev].GlobalTime) / refreshFreq))
-		cpuSysWait.Update(int64(float64(cpustats[now].GlobalWait-cpustats[prev].GlobalWait) / refreshFreq))
-		cpuProcLoad.Update(int64(float64(cpustats[now].LocalTime-cpustats[prev].LocalTime) / refreshFreq))
+		cpuSysLoad.Update(float64(cpustats[now].GlobalTime-cpustats[prev].GlobalTime) / refreshFreq)
+		cpuSysWait.Update(float64(cpustats[now].GlobalWait-cpustats[prev].GlobalWait) / refreshFreq)
+		cpuProcLoad.Update(float64(cpustats[now].LocalTime-cpustats[prev].LocalTime) / refreshFreq)
 
 		// Threads
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
