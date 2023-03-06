@@ -177,6 +177,9 @@ type HeimdallConfig struct {
 
 	// RunHeimdal args are the arguments to run heimdall with
 	RunHeimdallArgs string `hcl:"bor.runheimdallargs,optional" toml:"bor.runheimdallargs,optional"`
+
+	// UseHeimdallApp is used to fetch data from heimdall app when running heimdall as a child process
+	UseHeimdallApp bool `hcl:"bor.useheimdallapp,optional" toml:"bor.useheimdallapp,optional"`
 }
 
 type TxPoolConfig struct {
@@ -720,6 +723,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
 	n.RunHeimdall = c.Heimdall.RunHeimdall
 	n.RunHeimdallArgs = c.Heimdall.RunHeimdallArgs
+	n.UseHeimdallApp = c.Heimdall.UseHeimdallApp
 
 	// Developer Fake Author for producing blocks without authorisation on bor consensus
 	n.DevFakeAuthor = c.DevFakeAuthor

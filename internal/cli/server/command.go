@@ -130,13 +130,6 @@ func (c *Command) Run(args []string) int {
 		return 1
 	}
 
-	srv, err := NewServer(c.config, WithGRPCAddress())
-	if err != nil {
-		c.UI.Error(err.Error())
-		return 1
-	}
-	c.srv = srv
-
 	if c.config.Heimdall.RunHeimdall {
 		shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
@@ -145,6 +138,13 @@ func (c *Command) Run(args []string) int {
 			service.NewHeimdallService(shutdownCtx, c.getHeimdallArgs())
 		}()
 	}
+
+	srv, err := NewServer(c.config, WithGRPCAddress())
+	if err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+	c.srv = srv
 
 	return c.handleSignals()
 }

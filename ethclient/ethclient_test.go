@@ -33,9 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -211,31 +208,31 @@ var testTx2 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &
 	To:       &common.Address{2},
 })
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
-	// Generate test chain.
-	blocks := generateTestChain()
+// func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+// 	// Generate test chain.
+// 	blocks := generateTestChain()
 
-	// Create node
-	n, err := node.New(&node.Config{})
-	if err != nil {
-		t.Fatalf("can't create new node: %v", err)
-	}
-	// Create Ethereum Service
-	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
-	ethservice, err := eth.New(n, config)
-	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
-	}
-	// Import the test chain.
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
-	return n, blocks
-}
+// 	// Create node
+// 	n, err := node.New(&node.Config{})
+// 	if err != nil {
+// 		t.Fatalf("can't create new node: %v", err)
+// 	}
+// 	// Create Ethereum Service
+// 	config := &ethconfig.Config{Genesis: genesis}
+// 	config.Ethash.PowMode = ethash.ModeFake
+// 	ethservice, err := eth.New(n, config)
+// 	if err != nil {
+// 		t.Fatalf("can't create new ethereum service: %v", err)
+// 	}
+// 	// Import the test chain.
+// 	if err := n.Start(); err != nil {
+// 		t.Fatalf("can't start test node: %v", err)
+// 	}
+// 	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
+// 		t.Fatalf("can't import test blocks: %v", err)
+// 	}
+// 	return n, blocks
+// }
 
 func generateTestChain() []*types.Block {
 	db := rawdb.NewMemoryDatabase()
@@ -258,50 +255,50 @@ func generateTestChain() []*types.Block {
 func TestEthClient(t *testing.T) {
 	t.Skip("bor due to burn contract")
 
-	backend, chain := newTestBackend(t)
-	client, _ := backend.Attach()
-	defer backend.Close()
-	defer client.Close()
+	// backend, chain := newTestBackend(t)
+	// client, _ := backend.Attach()
+	// defer backend.Close()
+	// defer client.Close()
 
-	tests := map[string]struct {
-		test func(t *testing.T)
-	}{
-		"Header": {
-			func(t *testing.T) { testHeader(t, chain, client) },
-		},
-		"BalanceAt": {
-			func(t *testing.T) { testBalanceAt(t, client) },
-		},
-		"TxInBlockInterrupted": {
-			func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
-		},
-		"ChainID": {
-			func(t *testing.T) { testChainID(t, client) },
-		},
-		"GetBlock": {
-			func(t *testing.T) { testGetBlock(t, client) },
-		},
-		"StatusFunctions": {
-			func(t *testing.T) { testStatusFunctions(t, client) },
-		},
-		"CallContract": {
-			func(t *testing.T) { testCallContract(t, client) },
-		},
-		"CallContractAtHash": {
-			func(t *testing.T) { testCallContractAtHash(t, client) },
-		},
-		"AtFunctions": {
-			func(t *testing.T) { testAtFunctions(t, client) },
-		},
-		"TransactionSender": {
-			func(t *testing.T) { testTransactionSender(t, client) },
-		},
-	}
+	// tests := map[string]struct {
+	// 	test func(t *testing.T)
+	// }{
+	// 	"Header": {
+	// 		func(t *testing.T) { testHeader(t, chain, client) },
+	// 	},
+	// 	"BalanceAt": {
+	// 		func(t *testing.T) { testBalanceAt(t, client) },
+	// 	},
+	// 	"TxInBlockInterrupted": {
+	// 		func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
+	// 	},
+	// 	"ChainID": {
+	// 		func(t *testing.T) { testChainID(t, client) },
+	// 	},
+	// 	"GetBlock": {
+	// 		func(t *testing.T) { testGetBlock(t, client) },
+	// 	},
+	// 	"StatusFunctions": {
+	// 		func(t *testing.T) { testStatusFunctions(t, client) },
+	// 	},
+	// 	"CallContract": {
+	// 		func(t *testing.T) { testCallContract(t, client) },
+	// 	},
+	// 	"CallContractAtHash": {
+	// 		func(t *testing.T) { testCallContractAtHash(t, client) },
+	// 	},
+	// 	"AtFunctions": {
+	// 		func(t *testing.T) { testAtFunctions(t, client) },
+	// 	},
+	// 	"TransactionSender": {
+	// 		func(t *testing.T) { testTransactionSender(t, client) },
+	// 	},
+	// }
 
-	t.Parallel()
-	for name, tt := range tests {
-		t.Run(name, tt.test)
-	}
+	// t.Parallel()
+	// for name, tt := range tests {
+	// 	t.Run(name, tt.test)
+	// }
 }
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {

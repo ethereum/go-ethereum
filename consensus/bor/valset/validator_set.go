@@ -706,6 +706,14 @@ func (vals *ValidatorSet) StringIndented(indent string) string {
 		indent)
 }
 
+func (vals *ValidatorSet) SetTotalVotingPower(totalVotingPower int64) {
+	vals.totalVotingPower = totalVotingPower
+}
+
+func (vals *ValidatorSet) SetMap(validatorsMap map[common.Address]int) {
+	vals.validatorsMap = validatorsMap
+}
+
 //-------------------------------------
 // Implements sort for sorting validators by address.
 
