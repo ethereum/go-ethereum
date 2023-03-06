@@ -161,23 +161,25 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 
-	// Avoid divide-by-zero the first time through the loop.
-	lastCollectionTime := time.Now().Add(-refresh)
+	var lastCollectTime time.Time
 
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
 	for ; ; now, prev = prev, now {
 		// Gather CPU times.
 		ReadCPUStats(&cpustats[now])
-		refreshFreq := time.Since(lastCollectionTime).Seconds()
-		lastCollectionTime = time.Now()
-		sysLoad := (cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq
-		sysWait := (cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq
-		procLoad := (cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq
-		// Convert to integer percentage.
-		cpuSysLoad.Update(int64(sysLoad * 100))
-		cpuSysWait.Update(int64(sysWait * 100))
-		cpuProcLoad.Update(int64(procLoad * 100))
+		collectTime := time.Now()
+		secondsSinceLastCollect := collectTime.Sub(lastCollectTime).Seconds()
+		lastCollectTime = collectTime
+		if secondsSinceLastCollect > 0 {
+			sysLoad := (cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / secondsSinceLastCollect
+			sysWait := (cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / secondsSinceLastCollect
+			procLoad := (cpustats[now].LocalTime - cpustats[prev].LocalTime) / secondsSinceLastCollect
+			// Convert to integer percentage.
+			cpuSysLoad.Update(int64(sysLoad * 100))
+			cpuSysWait.Update(int64(sysWait * 100))
+			cpuProcLoad.Update(int64(procLoad * 100))
+		}
 
 		// Threads
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
