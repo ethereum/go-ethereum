@@ -40,7 +40,7 @@ func addressToKey(addr common.Address) *zkt.Hash {
 	return zkt.NewHashFromBigInt(h)
 }
 
-//resume the proof bytes into db and return the leaf node
+// resume the proof bytes into db and return the leaf node
 func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *zktrie.Node {
 	for _, buf := range proof {
 

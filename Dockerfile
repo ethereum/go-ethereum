@@ -4,7 +4,7 @@ ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
-FROM golang:1.17-alpine as builder
+FROM golang:1.18-alpine as builder
 
 ENV GOPROXY https://proxy.golang.org,direct
 

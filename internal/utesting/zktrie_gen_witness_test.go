@@ -160,7 +160,7 @@ func TestFailedCallTx(t *testing.T) {
 
 }
 
-//notice: now only work with OP_ORDER=2
+// notice: now only work with OP_ORDER=2
 func TestDeleteTx(t *testing.T) {
 	trace := loadStaff(t, "blocktraces/mpt_witness/delete.json")
 	traces, err := zkproof.HandleBlockTrace(trace)
@@ -171,7 +171,7 @@ func TestDeleteTx(t *testing.T) {
 	}
 }
 
-//notice: now only work with OP_ORDER=2
+// notice: now only work with OP_ORDER=2
 func TestDestructTx(t *testing.T) {
 	trace := loadStaff(t, "blocktraces/mpt_witness/destruct.json")
 	traces, err := zkproof.HandleBlockTrace(trace)

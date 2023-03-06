@@ -34,9 +34,11 @@ var (
 
 // MarshalFields marshalls a StateAccount into a sequence of bytes. The bytes scheme is:
 // [0:32] (bytes in big-endian)
-// 	 [0:16] Reserved with all 0
-// 	 [16:24] CodeSize, uint64 in big-endian
-// 	 [24:32] Nonce, uint64 in big-endian
+//
+//	[0:16] Reserved with all 0
+//	[16:24] CodeSize, uint64 in big-endian
+//	[24:32] Nonce, uint64 in big-endian
+//
 // [32:64] Balance
 // [64:96] StorageRoot
 // [96:128] KeccakCodeHash
