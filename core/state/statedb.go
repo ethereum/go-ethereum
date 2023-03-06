@@ -522,7 +522,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if err := s.trie.TryUpdateAccount(addr[:], &obj.data); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 	}
-	if s.trie.IsVerkle() {
+	if s.trie.IsVerkle() && obj.dirtyCode {
 		var (
 			chunks = trie.ChunkifyCode(obj.code)
 			values [][]byte
