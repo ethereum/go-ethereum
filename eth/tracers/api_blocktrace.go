@@ -14,6 +14,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 	"github.com/scroll-tech/go-ethereum/rpc"
@@ -357,6 +358,8 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 	}
 
 	blockTrace := &types.BlockTrace{
+		ChainID: api.backend.ChainConfig().ChainID.Uint64(),
+		Version: params.ArchiveVersion(params.CommitHash),
 		Coinbase: &types.AccountWrapper{
 			Address:          env.coinbase,
 			Nonce:            statedb.GetNonce(env.coinbase),
