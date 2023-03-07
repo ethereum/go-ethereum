@@ -40,7 +40,7 @@ type CheckpointOracle struct {
 	config   *params.CheckpointOracleConfig
 	contract *checkpointoracle.CheckpointOracle
 
-	running  int32                                 // Flag whether the contract backend is set or not
+	running  atomic.Bool                           // Flag whether the contract backend is set or not
 	getLocal func(uint64) params.TrustedCheckpoint // Function used to retrieve local checkpoint
 
 	checkMu              sync.Mutex                // Mutex to sync access to the fields below
@@ -65,7 +65,7 @@ func (oracle *CheckpointOracle) Start(backend bind.ContractBackend) {
 		log.Error("Oracle contract binding failed", "err", err)
 		return
 	}
-	if !atomic.CompareAndSwapInt32(&oracle.running, 0, 1) {
+	if !oracle.running.CompareAndSwap(false, true) {
 		log.Error("Already bound and listening to registrar")
 		return
 	}
@@ -74,7 +74,7 @@ func (oracle *CheckpointOracle) Start(backend bind.ContractBackend) {
 
 // IsRunning returns an indicator whether the oracle is running.
 func (oracle *CheckpointOracle) IsRunning() bool {
-	return atomic.LoadInt32(&oracle.running) == 1
+	return oracle.running.Load()
 }
 
 // Contract returns the underlying raw checkpoint oracle contract.

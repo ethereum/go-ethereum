@@ -54,7 +54,7 @@ type testService struct {
 	id enode.ID
 
 	// peerCount is incremented once a peer handshake has been performed
-	peerCount int64
+	peerCount atomic.Int64
 
 	peers    map[enode.ID]*testPeer
 	peersMtx sync.Mutex
@@ -170,8 +170,8 @@ func (t *testService) RunTest(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	close(peer.testReady)
 
 	// track the peer
-	atomic.AddInt64(&t.peerCount, 1)
-	defer atomic.AddInt64(&t.peerCount, -1)
+	t.peerCount.Add(1)
+	defer t.peerCount.Add(-1)
 
 	// block until the peer is dropped
 	for {
@@ -235,21 +235,21 @@ func (t *testService) Snapshot() ([]byte, error) {
 // * subscribe to counter increment events
 type TestAPI struct {
 	state     *atomic.Value
-	peerCount *int64
-	counter   int64
+	peerCount *atomic.Int64
+	counter   atomic.Int64
 	feed      event.Feed
 }
 
 func (t *TestAPI) PeerCount() int64 {
-	return atomic.LoadInt64(t.peerCount)
+	return t.peerCount.Load()
 }
 
 func (t *TestAPI) Get() int64 {
-	return atomic.LoadInt64(&t.counter)
+	return t.counter.Load()
 }
 
 func (t *TestAPI) Add(delta int64) {
-	atomic.AddInt64(&t.counter, delta)
+	t.counter.Add(delta)
 	t.feed.Send(delta)
 }
 

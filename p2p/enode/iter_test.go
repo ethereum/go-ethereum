@@ -248,8 +248,9 @@ func approxEqual(x, y, ε int) bool {
 
 // genIter creates fake nodes with numbered IDs based on 'index' and 'gen'
 type genIter struct {
-	node       *Node
-	index, gen uint32
+	node  *Node
+	index uint32
+	gen   uint32
 }
 
 func (s *genIter) Next() bool {

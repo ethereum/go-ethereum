@@ -43,10 +43,7 @@ const (
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
 type chainFreezer struct {
-	// WARNING: The `threshold` field is accessed atomically. On 32 bit platforms, only
-	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
-	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
+	threshold atomic.Uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	*Freezer
 	quit    chan struct{}
@@ -60,12 +57,14 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if err != nil {
 		return nil, err
 	}
-	return &chainFreezer{
+	f := &chainFreezer{
 		Freezer:   freezer,
-		threshold: params.FullImmutabilityThreshold,
+		threshold: atomic.Uint64{},
 		quit:      make(chan struct{}),
 		trigger:   make(chan chan struct{}),
-	}, nil
+	}
+	f.threshold.Store(params.FullImmutabilityThreshold)
+	return f, nil
 }
 
 // Close closes the chain freezer instance and terminates the background thread.
@@ -124,8 +123,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
-		threshold := atomic.LoadUint64(&f.threshold)
-		frozen := atomic.LoadUint64(&f.frozen)
+		threshold := f.threshold.Load()
+		frozen := f.frozen.Load()
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
@@ -186,7 +185,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
-		frozen = atomic.LoadUint64(&f.frozen) // Needs reload after during freezeRange
+		frozen = f.frozen.Load() // Needs reload after during freezeRange
 		for number := first; number < frozen; number++ {
 			// Always keep the genesis block in active database
 			if number != 0 {

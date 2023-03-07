@@ -481,11 +481,7 @@ func (h *priceHeap) Pop() interface{} {
 // better candidates for inclusion while in other cases (at the top of the baseFee peak)
 // the floating heap is better. When baseFee is decreasing they behave similarly.
 type pricedList struct {
-	// Number of stale price points to (re-heap trigger).
-	// This field is accessed atomically, and must be the first field
-	// to ensure it has correct alignment for atomic.AddInt64.
-	// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
-	stales int64
+	stales atomic.Int64
 
 	all              *lookup    // Pointer to the map of all transactions
 	urgent, floating priceHeap  // Heaps of prices of all the stored **remote** transactions
@@ -519,7 +515,7 @@ func (l *pricedList) Put(tx *types.Transaction, local bool) {
 // the heap if a large enough ratio of transactions go stale.
 func (l *pricedList) Removed(count int) {
 	// Bump the stale counter, but exit if still too low (< 25%)
-	stales := atomic.AddInt64(&l.stales, int64(count))
+	stales := l.stales.Add(int64(count))
 	if int(stales) <= (len(l.urgent.list)+len(l.floating.list))/4 {
 		return
 	}
@@ -544,7 +540,7 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 	for len(h.list) > 0 {
 		head := h.list[0]
 		if l.all.GetRemote(head.Hash()) == nil { // Removed or migrated
-			atomic.AddInt64(&l.stales, -1)
+			l.stales.Add(-1)
 			heap.Pop(h)
 			continue
 		}
@@ -570,7 +566,7 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
-				atomic.AddInt64(&l.stales, -1)
+				l.stales.Add(-1)
 				continue
 			}
 			// Non stale transaction found, move to floating heap
@@ -583,7 +579,7 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.floating).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
-				atomic.AddInt64(&l.stales, -1)
+				l.stales.Add(-1)
 				continue
 			}
 			// Non stale transaction found, discard it
@@ -606,7 +602,7 @@ func (l *pricedList) Reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
 	start := time.Now()
-	atomic.StoreInt64(&l.stales, 0)
+	l.stales.Store(0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
 	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
 		l.urgent.list = append(l.urgent.list, tx)

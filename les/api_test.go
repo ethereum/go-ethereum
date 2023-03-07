@@ -149,7 +149,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		var wg sync.WaitGroup
 		stop := make(chan struct{})
 
-		reqCount := make([]uint64, len(clientRpcClients))
+		reqCount := make([]atomic.Uint64, len(clientRpcClients))
 
 		// Send light request like crazy.
 		for i, c := range clientRpcClients {
@@ -159,7 +159,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				defer wg.Done()
 
 				queue := make(chan struct{}, 100)
-				reqCount[i] = 0
+				reqCount[i].Store(0)
 				for {
 					select {
 					case queue <- struct{}{}:
@@ -175,7 +175,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 								wg.Done()
 								<-queue
 								if ok {
-									count := atomic.AddUint64(&reqCount[i], 1)
+									count := reqCount[i].Add(1)
 									if count%10000 == 0 {
 										freezeClient(ctx, t, serverRpcClient, clients[i].ID())
 									}
@@ -194,7 +194,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		processedSince := func(start []uint64) []uint64 {
 			res := make([]uint64, len(reqCount))
 			for i := range reqCount {
-				res[i] = atomic.LoadUint64(&reqCount[i])
+				res[i] = reqCount[i].Load()
 				if start != nil {
 					res[i] -= start[i]
 				}
@@ -294,8 +294,8 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		close(stop)
 		wg.Wait()
 
-		for i, count := range reqCount {
-			t.Log("client", i, "processed", count)
+		for i := range reqCount {
+			t.Log("client", i, "processed", reqCount[i].Load())
 		}
 		return true
 	}) {

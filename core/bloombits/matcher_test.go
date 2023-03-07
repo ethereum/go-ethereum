@@ -160,7 +160,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 		}
 	}
 	// Track the number of retrieval requests made
-	var requested uint32
+	var requested atomic.Uint32
 
 	// Start the matching session for the filter and the retriever goroutines
 	quit := make(chan struct{})
@@ -208,15 +208,15 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	session.Close()
 	close(quit)
 
-	if retrievals != 0 && requested != retrievals {
-		t.Errorf("filter = %v  blocks = %v  intermittent = %v: request count mismatch, have #%v, want #%v", filter, blocks, intermittent, requested, retrievals)
+	if retrievals != 0 && requested.Load() != retrievals {
+		t.Errorf("filter = %v  blocks = %v  intermittent = %v: request count mismatch, have #%v, want #%v", filter, blocks, intermittent, requested.Load(), retrievals)
 	}
-	return requested
+	return requested.Load()
 }
 
 // startRetrievers starts a batch of goroutines listening for section requests
 // and serving them.
-func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *uint32, batch int) {
+func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *atomic.Uint32, batch int) {
 	requests := make(chan chan *Retrieval)
 
 	for i := 0; i < 10; i++ {
@@ -238,7 +238,7 @@ func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *ui
 					for i, section := range task.Sections {
 						if rand.Int()%4 != 0 { // Handle occasional missing deliveries
 							task.Bitsets[i] = generateBitset(task.Bit, section)
-							atomic.AddUint32(retrievals, 1)
+							retrievals.Add(1)
 						}
 					}
 					request <- task

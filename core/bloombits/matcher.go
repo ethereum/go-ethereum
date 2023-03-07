@@ -83,7 +83,7 @@ type Matcher struct {
 	retrievals chan chan *Retrieval // Retriever processes waiting for task allocations
 	deliveries chan *Retrieval      // Retriever processes waiting for task response deliveries
 
-	running uint32 // Atomic flag whether a session is live or not
+	running atomic.Bool // Atomic flag whether a session is live or not
 }
 
 // NewMatcher creates a new pipeline for retrieving bloom bit streams and doing
@@ -146,10 +146,10 @@ func (m *Matcher) addScheduler(idx uint) {
 // channel is closed.
 func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uint64) (*MatcherSession, error) {
 	// Make sure we're not creating concurrent sessions
-	if atomic.SwapUint32(&m.running, 1) == 1 {
+	if m.running.Swap(true) {
 		return nil, errors.New("matcher already running")
 	}
-	defer atomic.StoreUint32(&m.running, 0)
+	defer m.running.Store(false)
 
 	// Initiate a new matching round
 	session := &MatcherSession{

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -251,7 +250,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	handler.handler.acceptTxs = 1 // mark synced to accept transactions
+	handler.handler.acceptTxs.Store(true) // mark synced to accept transactions
 
 	txs := make(chan core.NewTxsEvent)
 	sub := handler.txpool.SubscribeNewTxsEvent(txs)
@@ -397,7 +396,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// to receive them. We need multiple sinks since a one-to-one peering would
 	// broadcast all transactions without announcement.
 	source := newTestHandler()
-	source.handler.snapSync = 0 // Avoid requiring snap, otherwise some will be dropped below
+	source.handler.snapSync.Store(false) // Avoid requiring snap, otherwise some will be dropped below
 	defer source.close()
 
 	sinks := make([]*testHandler, 10)
@@ -405,7 +404,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		sinks[i] = newTestHandler()
 		defer sinks[i].close()
 
-		sinks[i].handler.acceptTxs = 1 // mark synced to accept transactions
+		sinks[i].handler.acceptTxs.Store(true) // mark synced to accept transactions
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
@@ -510,9 +509,9 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	defer handler.close()
 
 	if syncmode == downloader.SnapSync {
-		atomic.StoreUint32(&handler.handler.snapSync, 1)
+		handler.handler.snapSync.Store(true)
 	} else {
-		atomic.StoreUint32(&handler.handler.snapSync, 0)
+		handler.handler.snapSync.Store(false)
 	}
 	var response *types.Header
 	if checkpoint {

@@ -60,7 +60,7 @@ type ServerPoolTest struct {
 	input                enode.Iterator
 	testNodes            []spTestNode
 	trusted              []string
-	waitCount, waitEnded int32
+	waitCount, waitEnded atomic.Int32
 
 	// preNegLock protects the cycle counter, testNodes list and its connected field
 	// (accessed from both the main thread and the preNeg callback)
@@ -97,15 +97,15 @@ func newServerPoolTest(preNeg, preNegFail bool) *ServerPoolTest {
 
 func (s *ServerPoolTest) beginWait() {
 	// ensure that dialIterator and the maximal number of pre-neg queries are not all stuck in a waiting state
-	for atomic.AddInt32(&s.waitCount, 1) > preNegLimit {
-		atomic.AddInt32(&s.waitCount, -1)
+	for s.waitCount.Add(1) > preNegLimit {
+		s.waitCount.Add(-1)
 		s.clock.Run(time.Second)
 	}
 }
 
 func (s *ServerPoolTest) endWait() {
-	atomic.AddInt32(&s.waitCount, -1)
-	atomic.AddInt32(&s.waitEnded, 1)
+	s.waitCount.Add(-1)
+	s.waitEnded.Add(1)
 }
 
 func (s *ServerPoolTest) addTrusted(i int) {
@@ -177,7 +177,7 @@ func (s *ServerPoolTest) start() {
 		for {
 			select {
 			case <-time.After(time.Millisecond * 100):
-				c := atomic.LoadInt32(&s.waitEnded)
+				c := s.waitEnded.Load()
 				if c == last {
 					// advance clock if test is stuck (might happen in rare cases)
 					s.clock.Run(time.Second)

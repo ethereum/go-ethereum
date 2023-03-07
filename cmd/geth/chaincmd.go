@@ -261,16 +261,16 @@ func importChain(ctx *cli.Context) error {
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
-	var peakMemAlloc, peakMemSys uint64
+	var peakMemAlloc, peakMemSys atomic.Uint64
 	go func() {
 		stats := new(runtime.MemStats)
 		for {
 			runtime.ReadMemStats(stats)
-			if atomic.LoadUint64(&peakMemAlloc) < stats.Alloc {
-				atomic.StoreUint64(&peakMemAlloc, stats.Alloc)
+			if peakMemAlloc.Load() < stats.Alloc {
+				peakMemAlloc.Store(stats.Alloc)
 			}
-			if atomic.LoadUint64(&peakMemSys) < stats.Sys {
-				atomic.StoreUint64(&peakMemSys, stats.Sys)
+			if peakMemSys.Load() < stats.Sys {
+				peakMemSys.Store(stats.Sys)
 			}
 			time.Sleep(5 * time.Second)
 		}
@@ -303,8 +303,8 @@ func importChain(ctx *cli.Context) error {
 	mem := new(runtime.MemStats)
 	runtime.ReadMemStats(mem)
 
-	fmt.Printf("Object memory: %.3f MB current, %.3f MB peak\n", float64(mem.Alloc)/1024/1024, float64(atomic.LoadUint64(&peakMemAlloc))/1024/1024)
-	fmt.Printf("System memory: %.3f MB current, %.3f MB peak\n", float64(mem.Sys)/1024/1024, float64(atomic.LoadUint64(&peakMemSys))/1024/1024)
+	fmt.Printf("Object memory: %.3f MB current, %.3f MB peak\n", float64(mem.Alloc)/1024/1024, float64(peakMemAlloc.Load())/1024/1024)
+	fmt.Printf("System memory: %.3f MB current, %.3f MB peak\n", float64(mem.Sys)/1024/1024, float64(peakMemSys.Load())/1024/1024)
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 

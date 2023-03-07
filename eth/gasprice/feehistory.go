@@ -252,9 +252,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 	oldestBlock := lastBlock + 1 - uint64(blocks)
 
 	var (
-		next    = oldestBlock
+		next    = atomic.Uint64{}
 		results = make(chan *blockFees, blocks)
 	)
+	next.Store(oldestBlock)
 	percentileKey := make([]byte, 8*len(rewardPercentiles))
 	for i, p := range rewardPercentiles {
 		binary.LittleEndian.PutUint64(percentileKey[i*8:(i+1)*8], math.Float64bits(p))
@@ -263,7 +264,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 		go func() {
 			for {
 				// Retrieve the next block number to fetch with this goroutine
-				blockNumber := atomic.AddUint64(&next, 1) - 1
+				blockNumber := next.Add(1) - 1
 				if blockNumber > lastBlock {
 					return
 				}
