@@ -134,7 +134,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 	gas := d.tx.Gas()
 	gp := new(core.GasPool).AddGas(gas)
 
-	d.stateDb.SetTxHashAndIndex(d.tx.Hash(), 0)
+	d.stateDb.SetTxContext(d.tx.Hash(), 0)
 	receipt, err := core.ApplyTransactionForPreExec(
 		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
 	if err != nil {
@@ -165,7 +165,7 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	vmenv.Context.Time += uint64(rand.Int63n(60) + 30)
 
 	// Call Prepare to clear out the statedb access list
-	d.stateDb.SetTxHashAndIndex(d.tx.Hash(), 0)
+	d.stateDb.SetTxContext(d.tx.Hash(), 0)
 
 	tracer.SetMessage(d.block.Number(), d.block.Hash(), d.tx.Hash(), uint(txIndex), d.msg.From(), d.msg.To(), *d.msg.Value())
 
@@ -308,7 +308,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		// Execute the message.
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		state.SetTxHashAndIndex(txHash, i)
+		state.SetTxContext(txHash, i)
 		result, err := core.ApplyMessage(evm, msg, gp)
 		if err := vmError(); err != nil {
 			preRes := PreResult{
