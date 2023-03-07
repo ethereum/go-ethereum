@@ -319,7 +319,7 @@ func TestGraphQLTransactionLogs(t *testing.T) {
 	}
 }
 
-func TestGraphQLTransactions(t *testing.T) {
+func TestGraphQLBlockTransactions(t *testing.T) {
 	var (
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
@@ -366,6 +366,58 @@ func TestGraphQLTransactions(t *testing.T) {
 		t.Fatalf("failed to encode graphql response: %s", err)
 	}
 	want := `{"block":{"transactions":[{"status":1,"gasUsed":21768},{"status":1,"gasUsed":21768},{"status":1,"gasUsed":21768}]}}`
+	if string(have) != want {
+		t.Errorf("response unmatch. expected %s, got %s", want, have)
+	}
+}
+
+func TestGraphQLBlock(t *testing.T) {
+	var (
+		key, _  = crypto.GenerateKey()
+		addr    = crypto.PubkeyToAddress(key.PublicKey)
+		dadStr  = "0x0000000000000000000000000000000000000dad"
+		dad     = common.HexToAddress(dadStr)
+		genesis = &core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   11500000,
+			Difficulty: big.NewInt(1048576),
+			Alloc: core.GenesisAlloc{
+				addr: {Balance: big.NewInt(params.Ether)},
+				dad: {
+					// LOG0(0, 0), LOG0(0, 0), RETURN(0, 0)
+					Code:    common.Hex2Bytes("60006000a060006000a060006000f3"),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+		signer = types.LatestSigner(genesis.Config)
+		stack  = createNode(t)
+	)
+	defer stack.Close()
+
+	handler := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 2, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+	})
+	// start node
+	if err := stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	query := `{ block { ommerCount transactionCount } }`
+	res := handler.Schema.Exec(context.Background(), query, "", map[string]interface{}{})
+	if res.Errors != nil {
+		t.Fatalf("graphql query failed: %v", res.Errors)
+	}
+	have, err := json.Marshal(res.Data)
+	if err != nil {
+		t.Fatalf("failed to encode graphql response: %s", err)
+	}
+	want := `{"transaction":{"inputData":"0x","gas":"0x186a0","gasPrice":"0x3b9aca00"}}`
 	if string(have) != want {
 		t.Errorf("response unmatch. expected %s, got %s", want, have)
 	}
