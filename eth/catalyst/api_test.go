@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -42,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -1238,10 +1238,10 @@ func TestNilWithdrawals(t *testing.T) {
 }
 
 func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
-	genesis, preMergeBlocks := generateMergeChain(10, true)
-	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
 	// enable shanghai on the last block
-	ethservice.BlockChain().Config().ShanghaiTime = &preMergeBlocks[len(preMergeBlocks)-1].Header().Time
+	ethservice.BlockChain().Config().ShanghaiTime = &blocks[len(blocks)-1].Header().Time
 
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -1267,12 +1267,12 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 		}
 	}
 
-	postMergeHeaders := setupBlocks(t, ethservice, 10, parent, callback, withdrawals)
-	postMergeBlocks := make([]*types.Block, len(postMergeHeaders))
-	for i, header := range postMergeHeaders {
-		postMergeBlocks[i] = ethservice.BlockChain().GetBlock(header.Hash(), header.Number.Uint64())
+	postShanghaiHeaders := setupBlocks(t, ethservice, 10, parent, callback, withdrawals)
+	postShanghaiBlocks := make([]*types.Block, len(postShanghaiHeaders))
+	for i, header := range postShanghaiHeaders {
+		postShanghaiBlocks[i] = ethservice.BlockChain().GetBlock(header.Hash(), header.Number.Uint64())
 	}
-	return n, ethservice, append(preMergeBlocks, postMergeBlocks...)
+	return n, ethservice, append(blocks, postShanghaiBlocks...)
 }
 
 func allHashes(blocks []*types.Block) []common.Hash {
@@ -1478,28 +1478,14 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 	} else if a == nil || b == nil {
 		return false
 	}
-	var want []hexutil.Bytes
-	for _, tx := range a.Transactions {
+	if len(a.Transactions) != len(b.TransactionData) {
+		return false
+	}
+	for i, tx := range a.Transactions {
 		data, _ := tx.MarshalBinary()
-		want = append(want, hexutil.Bytes(data))
+		if !reflect.DeepEqual(hexutil.Bytes(data), b.TransactionData[i]) {
+			return false
+		}
 	}
-	aBytes, errA := rlp.EncodeToBytes(want)
-	bBytes, errB := rlp.EncodeToBytes(b.TransactionData)
-	if errA != errB {
-		return false
-	}
-	if !bytes.Equal(aBytes, bBytes) {
-		return false
-	}
-	if a.Withdrawals == nil && b.Withdrawals == nil {
-		return true
-	} else if a.Withdrawals == nil || b.Withdrawals == nil {
-		return false
-	}
-	aBytes, errA = rlp.EncodeToBytes(a.Withdrawals)
-	bBytes, errB = rlp.EncodeToBytes(b.Withdrawals)
-	if errA != errB {
-		return false
-	}
-	return bytes.Equal(aBytes, bBytes)
+	return reflect.DeepEqual(a.Withdrawals, b.Withdrawals)
 }
