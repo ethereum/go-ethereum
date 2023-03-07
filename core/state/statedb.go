@@ -1121,11 +1121,6 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.transientStorage = newTransientStorage()
 }
 
-func (s *StateDB) SetTxHashAndIndex(txhash common.Hash, ti int) {
-	s.thash = txhash
-	s.txIndex = ti
-}
-
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
