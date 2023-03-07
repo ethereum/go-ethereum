@@ -1483,7 +1483,7 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 	}
 	for i, tx := range a.Transactions {
 		data, _ := tx.MarshalBinary()
-		if !reflect.DeepEqual(hexutil.Bytes(data), b.TransactionData[i]) {
+		if !bytes.Equal(data, b.TransactionData[i]) {
 			return false
 		}
 	}
