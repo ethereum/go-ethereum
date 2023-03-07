@@ -31,11 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = rlpHash([]*Header(nil))
-)
-
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
@@ -155,14 +150,14 @@ func (h *Header) SanityCheck() error {
 // that is: no transactions, no uncles and no withdrawals.
 func (h *Header) EmptyBody() bool {
 	if h.WithdrawalsHash == nil {
-		return h.TxHash == EmptyRootHash && h.UncleHash == EmptyUncleHash
+		return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
 	}
-	return h.TxHash == EmptyRootHash && h.UncleHash == EmptyUncleHash && *h.WithdrawalsHash == EmptyRootHash
+	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return h.ReceiptHash == EmptyRootHash
+	return h.ReceiptHash == EmptyReceiptsHash
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -210,7 +205,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
+		b.header.TxHash = EmptyTxsHash
 	} else {
 		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
 		b.transactions = make(Transactions, len(txs))
@@ -218,7 +213,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyRootHash
+		b.header.ReceiptHash = EmptyReceiptsHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
 		b.header.Bloom = CreateBloom(receipts)
@@ -250,7 +245,7 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	if withdrawals == nil {
 		b.header.WithdrawalsHash = nil
 	} else if len(withdrawals) == 0 {
-		b.header.WithdrawalsHash = &EmptyRootHash
+		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
 	} else {
 		h := DeriveSha(Withdrawals(withdrawals), hasher)
 		b.header.WithdrawalsHash = &h

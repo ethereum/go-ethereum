@@ -95,6 +95,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+
+		// Finalize trace logger result and save to underlying database if necessary.
+		switch t := cfg.Tracer.(type) {
+		case *txtracelib.OeTracer:
+			log.Debug("Persist oe-style trace result to database", "blockNumber", header.Number.Int64(), "txHash", tx.Hash())
+			t.PersistTrace()
+		default:
+		}
+
 	}
 
 	if tracing {
