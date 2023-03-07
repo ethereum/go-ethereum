@@ -19,6 +19,7 @@ package catalyst
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -1261,7 +1262,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	withdrawals[1] = make([]*types.Withdrawal, 0)
 	for i := 2; i < len(withdrawals); i++ {
 		addr := make([]byte, 20)
-		rand.Read(addr)
+		crand.Read(addr)
 		withdrawals[i] = []*types.Withdrawal{
 			{Index: rand.Uint64(), Validator: rand.Uint64(), Amount: rand.Uint64(), Address: common.BytesToAddress(addr)},
 		}
