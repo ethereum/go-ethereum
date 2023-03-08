@@ -142,8 +142,8 @@ type Message struct {
 	SkipAccountChecks bool
 }
 
-// txToMessage returns the transaction as a core.Message.
-func txToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+// TransactionToMessage converts a transaction into a Message.
+func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
 		Nonce:             tx.Nonce(),
 		GasLimit:          tx.Gas(),

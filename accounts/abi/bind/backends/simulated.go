@@ -644,30 +644,33 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	if call.Value == nil {
 		call.Value = new(big.Int)
 	}
+
 	// Set infinite balance to the fake caller account.
 	from := stateDB.GetOrNewStateObject(call.From)
 	from.SetBalance(math.MaxBig256)
+
 	// Execute the call.
 	msg := &core.Message{
-		From:       call.From,
-		To:         call.To,
-		Value:      call.Value,
-		GasLimit:   call.Gas,
-		GasPrice:   call.GasPrice,
-		GasFeeCap:  call.GasFeeCap,
-		GasTipCap:  call.GasTipCap,
-		Data:       call.Data,
-		AccessList: call.AccessList,
-		IsFake:     true,
+		From:              call.From,
+		To:                call.To,
+		Value:             call.Value,
+		GasLimit:          call.Gas,
+		GasPrice:          call.GasPrice,
+		GasFeeCap:         call.GasFeeCap,
+		GasTipCap:         call.GasTipCap,
+		Data:              call.Data,
+		AccessList:        call.AccessList,
+		SkipAccountChecks: true,
 	}
-	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
+
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
+	txContext := core.NewEVMTxContext(msg)
+	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
+	return core.ApplyMessage(vmEnv, msg, gasPool)
 }
 
 // SendTransaction updates the pending block to include the given transaction.
