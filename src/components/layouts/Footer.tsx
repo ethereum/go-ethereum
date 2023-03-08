@@ -133,7 +133,12 @@ export const Footer: FC = () => {
         borderColor='primary'
         flex={1}
       >
-        <Text textStyle='footer-text'>{`© 2013–${new Date().getFullYear()}. The go-ethereum Authors.`}</Text>
+        <Text textStyle='footer-text'>
+          {`© 2013–${new Date().getFullYear()}. The go-ethereum Authors`} |{' '}
+          <Link isExternal variant='light' href={process.env.NEXT_PUBLIC_MATOMO_OPT_OUT_URL}>
+            Do-not-Track
+          </Link>
+        </Text>
       </Center>
     </Flex>
   );

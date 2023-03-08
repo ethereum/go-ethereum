@@ -3,7 +3,6 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
-
 The JSON-RPC API's `personal` namespace has historically been used to manage accounts and sign transactions and data over RPC. However, it has **now been deprecated** in favour of using [Clef](/docs/tools/clef/introduction) as an external signer and account manager. One of the major changes is moving away from indiscriminate locking and unlocking of accounts and instead using Clef to explicitly approve or deny specific actions. The first section on this page shows the suggested replacement for each method in `personal`. The second section shows the deprecated methods for archival purposes.
 
 ## Method replacements
@@ -224,8 +223,6 @@ Unpair deletes a pairing between some specific types of smartcard wallet and Get
 ### personal_initializeWallet
 
 InitializeWallet is for initializing some specific types of smartcard wallet at a provided URL. There is not yet a corresponding method in Clef.
-
-
 
 ## Deprecated method documentation
 

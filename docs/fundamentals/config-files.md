@@ -3,10 +3,9 @@ title: Config files
 description: How to configure geth using config files
 ---
 
-There are many flags and commands that can be provided to Geth on startup to influence how your node will behave. It is often convenient to configure these options in a file rather than typing them out on the command line every time you start your node. This can be done using a simple shell script to start Geth. 
+There are many flags and commands that can be provided to Geth on startup to influence how your node will behave. It is often convenient to configure these options in a file rather than typing them out on the command line every time you start your node. This can be done using a simple shell script to start Geth.
 
 There are also other configuration options that are not accessible from the command line but can be adjusted by providing Geth with a config file. This gives access to lower level configuration that influences how some of Geth's internal components behave.
-
 
 ## Shell scripts
 
