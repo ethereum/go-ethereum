@@ -2075,11 +2075,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
 			for _, tx := range oldBlock.Transactions() {
-				hash := tx.Hash()
-				if _, ok := bc.droppedTxCache.Get(hash); ok {
-					log.Warn("Transaction with hash %v reorged twice", hash)
-				}
-				bc.droppedTxCache.Add(hash, struct{}{})
 				deletedTxs = append(deletedTxs, tx.Hash())
 			}
 		}
@@ -2160,6 +2155,11 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
 	for _, tx := range types.HashDifference(deletedTxs, addedTxs) {
+		if bc.droppedTxCache.Contains(tx) {
+			log.Warn("Transaction reorged twice", "hash", tx)
+		} else {
+			bc.droppedTxCache.Add(tx, struct{}{})
+		}
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}
 
