@@ -25,42 +25,11 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/c\rypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
-
-// StateTransition represents a state transition.
-//
-// == The State Transitioning Model
-//
-// A state transition is a change made when a transaction is applied to the current world
-// state. The state transitioning model does all the necessary work to work out a valid new
-// state root.
-//
-//  1. Nonce handling
-//  2. Pre pay gas
-//  3. Create a new state object if the recipient is nil
-//  4. Value transfer
-//
-// == If contract creation ==
-//
-//	4a. Attempt to run transaction data
-//	4b. If valid, use result as code for the new state object
-//
-// == end ==
-//
-//  5. Run Script section
-//  6. Derive new state root
-type StateTransition struct {
-	gp           *GasPool
-	msg          *Message
-	gasRemaining uint64
-	initialGas   uint64
-	state        vm.StateDB
-	evm          *vm.EVM
-}
 
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
@@ -156,14 +125,47 @@ func toWordSize(size uint64) uint64 {
 	return (size + 31) / 32
 }
 
-// NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
-	return &StateTransition{
-		gp:    gp,
-		evm:   evm,
-		msg:   msg,
-		state: evm.StateDB,
+// A Message contains the data derived from a single transaction that is relevant to state
+// processing.
+type Message struct {
+	To         *common.Address
+	From       common.Address
+	Nonce      uint64
+	Value      *big.Int
+	GasLimit   uint64
+	GasPrice   *big.Int
+	GasFeeCap  *big.Int
+	GasTipCap  *big.Int
+	Data       []byte
+	AccessList types.AccessList
+
+	// When SkipAccountCheckss is true, the message nonce is not checked against the
+	// account nonce in state. It also disables checking that the sender is an EOA.
+	// This field will be set to true for operations like RPC eth_call.
+	SkipAccountChecks bool
+}
+
+// txToMessage returns the transaction as a core.Message.
+func txToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+	msg := &Message{
+		Nonce:             tx.Nonce(),
+		GasLimit:          tx.Gas(),
+		GasPrice:          new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:         new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:         new(big.Int).Set(tx.GasTipCap()),
+		To:                tx.To(),
+		Value:             tx.Value(),
+		Data:              tx.Data(),
+		AccessList:        tx.AccessList(),
+		SkipAccountChecks: false,
 	}
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		msg.GasPrice = math.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+	}
+	var err error
+	msg.From, err = types.Sender(s, tx)
+	return msg, err
 }
 
 // ApplyMessage computes the new state by applying the given message
@@ -175,6 +177,47 @@ func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb()
+}
+
+// StateTransition represents a state transition.
+//
+// == The State Transitioning Model
+//
+// A state transition is a change made when a transaction is applied to the current world
+// state. The state transitioning model does all the necessary work to work out a valid new
+// state root.
+//
+//  1. Nonce handling
+//  2. Pre pay gas
+//  3. Create a new state object if the recipient is nil
+//  4. Value transfer
+//
+// == If contract creation ==
+//
+//	4a. Attempt to run transaction data
+//	4b. If valid, use result as code for the new state object
+//
+// == end ==
+//
+//  5. Run Script section
+//  6. Derive new state root
+type StateTransition struct {
+	gp           *GasPool
+	msg          *Message
+	gasRemaining uint64
+	initialGas   uint64
+	state        vm.StateDB
+	evm          *vm.EVM
+}
+
+// NewStateTransition initialises and returns a new state transition object.
+func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+	return &StateTransition{
+		gp:    gp,
+		evm:   evm,
+		msg:   msg,
+		state: evm.StateDB,
+	}
 }
 
 // to returns the recipient of the message.
