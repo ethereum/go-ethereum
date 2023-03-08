@@ -742,212 +742,30 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		primitiveType == "bool" ||
 		primitiveType == "bool[]" ||
 		primitiveType == "string" ||
-		primitiveType == "string[]" {
-		return true
-	}
-	if primitiveType == "bytes" ||
+		primitiveType == "string[]" ||
+		primitiveType == "bytes" ||
 		primitiveType == "bytes[]" ||
-		primitiveType == "bytes1" ||
-		primitiveType == "bytes1[]" ||
-		primitiveType == "bytes2" ||
-		primitiveType == "bytes2[]" ||
-		primitiveType == "bytes3" ||
-		primitiveType == "bytes3[]" ||
-		primitiveType == "bytes4" ||
-		primitiveType == "bytes4[]" ||
-		primitiveType == "bytes5" ||
-		primitiveType == "bytes5[]" ||
-		primitiveType == "bytes6" ||
-		primitiveType == "bytes6[]" ||
-		primitiveType == "bytes7" ||
-		primitiveType == "bytes7[]" ||
-		primitiveType == "bytes8" ||
-		primitiveType == "bytes8[]" ||
-		primitiveType == "bytes9" ||
-		primitiveType == "bytes9[]" ||
-		primitiveType == "bytes10" ||
-		primitiveType == "bytes10[]" ||
-		primitiveType == "bytes11" ||
-		primitiveType == "bytes11[]" ||
-		primitiveType == "bytes12" ||
-		primitiveType == "bytes12[]" ||
-		primitiveType == "bytes13" ||
-		primitiveType == "bytes13[]" ||
-		primitiveType == "bytes14" ||
-		primitiveType == "bytes14[]" ||
-		primitiveType == "bytes15" ||
-		primitiveType == "bytes15[]" ||
-		primitiveType == "bytes16" ||
-		primitiveType == "bytes16[]" ||
-		primitiveType == "bytes17" ||
-		primitiveType == "bytes17[]" ||
-		primitiveType == "bytes18" ||
-		primitiveType == "bytes18[]" ||
-		primitiveType == "bytes19" ||
-		primitiveType == "bytes19[]" ||
-		primitiveType == "bytes20" ||
-		primitiveType == "bytes20[]" ||
-		primitiveType == "bytes21" ||
-		primitiveType == "bytes21[]" ||
-		primitiveType == "bytes22" ||
-		primitiveType == "bytes22[]" ||
-		primitiveType == "bytes23" ||
-		primitiveType == "bytes23[]" ||
-		primitiveType == "bytes24" ||
-		primitiveType == "bytes24[]" ||
-		primitiveType == "bytes25" ||
-		primitiveType == "bytes25[]" ||
-		primitiveType == "bytes26" ||
-		primitiveType == "bytes26[]" ||
-		primitiveType == "bytes27" ||
-		primitiveType == "bytes27[]" ||
-		primitiveType == "bytes28" ||
-		primitiveType == "bytes28[]" ||
-		primitiveType == "bytes29" ||
-		primitiveType == "bytes29[]" ||
-		primitiveType == "bytes30" ||
-		primitiveType == "bytes30[]" ||
-		primitiveType == "bytes31" ||
-		primitiveType == "bytes31[]" ||
-		primitiveType == "bytes32" ||
-		primitiveType == "bytes32[]" {
-		return true
-	}
-	if primitiveType == "int" ||
+		primitiveType == "int" ||
 		primitiveType == "int[]" ||
-		primitiveType == "int8" ||
-		primitiveType == "int8[]" ||
-		primitiveType == "int16" ||
-		primitiveType == "int16[]" ||
-		primitiveType == "int24" ||
-		primitiveType == "int24[]" ||
-		primitiveType == "int32" ||
-		primitiveType == "int32[]" ||
-		primitiveType == "int40" ||
-		primitiveType == "int40[]" ||
-		primitiveType == "int48" ||
-		primitiveType == "int48[]" ||
-		primitiveType == "int56" ||
-		primitiveType == "int56[]" ||
-		primitiveType == "int64" ||
-		primitiveType == "int64[]" ||
-		primitiveType == "int72" ||
-		primitiveType == "int72[]" ||
-		primitiveType == "int80" ||
-		primitiveType == "int80[]" ||
-		primitiveType == "int88" ||
-		primitiveType == "int88[]" ||
-		primitiveType == "int96" ||
-		primitiveType == "int96[]" ||
-		primitiveType == "int104" ||
-		primitiveType == "int104[]" ||
-		primitiveType == "int112" ||
-		primitiveType == "int112[]" ||
-		primitiveType == "int120" ||
-		primitiveType == "int120[]" ||
-		primitiveType == "int128" ||
-		primitiveType == "int128[]" ||
-		primitiveType == "int136" ||
-		primitiveType == "int136[]" ||
-		primitiveType == "int144" ||
-		primitiveType == "int144[]" ||
-		primitiveType == "int152" ||
-		primitiveType == "int152[]" ||
-		primitiveType == "int160" ||
-		primitiveType == "int160[]" ||
-		primitiveType == "int168" ||
-		primitiveType == "int168[]" ||
-		primitiveType == "int176" ||
-		primitiveType == "int176[]" ||
-		primitiveType == "int184" ||
-		primitiveType == "int184[]" ||
-		primitiveType == "int192" ||
-		primitiveType == "int192[]" ||
-		primitiveType == "int200" ||
-		primitiveType == "int200[]" ||
-		primitiveType == "int208" ||
-		primitiveType == "int208[]" ||
-		primitiveType == "int216" ||
-		primitiveType == "int216[]" ||
-		primitiveType == "int224" ||
-		primitiveType == "int224[]" ||
-		primitiveType == "int232" ||
-		primitiveType == "int232[]" ||
-		primitiveType == "int240" ||
-		primitiveType == "int240[]" ||
-		primitiveType == "int248" ||
-		primitiveType == "int248[]" ||
-		primitiveType == "int256" ||
-		primitiveType == "int256[]" {
+		primitiveType == "uint" ||
+		primitiveType == "uint[]" {
 		return true
 	}
-	if primitiveType == "uint" ||
-		primitiveType == "uint[]" ||
-		primitiveType == "uint8" ||
-        primitiveType == "uint8[]" ||
-        primitiveType == "uint16" ||
-        primitiveType == "uint16[]" ||
-        primitiveType == "uint24" ||
-        primitiveType == "uint24[]" ||
-        primitiveType == "uint32" ||
-        primitiveType == "uint32[]" ||
-        primitiveType == "uint40" ||
-        primitiveType == "uint40[]" ||
-        primitiveType == "uint48" ||
-        primitiveType == "uint48[]" ||
-        primitiveType == "uint56" ||
-        primitiveType == "uint56[]" ||
-        primitiveType == "uint64" ||
-        primitiveType == "uint64[]" ||
-        primitiveType == "uint72" ||
-        primitiveType == "uint72[]" ||
-        primitiveType == "uint80" ||
-        primitiveType == "uint80[]" ||
-        primitiveType == "uint88" ||
-        primitiveType == "uint88[]" ||
-        primitiveType == "uint96" ||
-        primitiveType == "uint96[]" ||
-        primitiveType == "uint104" ||
-        primitiveType == "uint104[]" ||
-        primitiveType == "uint112" ||
-        primitiveType == "uint112[]" ||
-        primitiveType == "uint120" ||
-        primitiveType == "uint120[]" ||
-        primitiveType == "uint128" ||
-        primitiveType == "uint128[]" ||
-        primitiveType == "uint136" ||
-        primitiveType == "uint136[]" ||
-        primitiveType == "uint144" ||
-        primitiveType == "uint144[]" ||
-        primitiveType == "uint152" ||
-        primitiveType == "uint152[]" ||
-        primitiveType == "uint160" ||
-        primitiveType == "uint160[]" ||
-        primitiveType == "uint168" ||
-        primitiveType == "uint168[]" ||
-        primitiveType == "uint176" ||
-        primitiveType == "uint176[]" ||
-        primitiveType == "uint184" ||
-        primitiveType == "uint184[]" ||
-        primitiveType == "uint192" ||
-        primitiveType == "uint192[]" ||
-        primitiveType == "uint200" ||
-        primitiveType == "uint200[]" ||
-        primitiveType == "uint208" ||
-        primitiveType == "uint208[]" ||
-        primitiveType == "uint216" ||
-        primitiveType == "uint216[]" ||
-        primitiveType == "uint224" ||
-        primitiveType == "uint224[]" ||
-        primitiveType == "uint232" ||
-        primitiveType == "uint232[]" ||
-        primitiveType == "uint240" ||
-        primitiveType == "uint240[]" ||
-        primitiveType == "uint248" ||
-        primitiveType == "uint248[]" ||
-        primitiveType == "uint256" ||
-        primitiveType == "uint256[]" {
-		return true
+	// For 'bytesN', 'bytesN[]', we allow N from 1 to 32
+	for n := 1; n <= 32; n++ {
+		// e.g. 'bytes28' or 'bytes28[]'
+		if primitiveType == fmt.Sprintf("bytes%d", n) || primitiveType == fmt.Sprintf("bytes%d[]", n) {
+			return true
+		}
+	}
+	// For 'intN','intN[]' and 'uintN','uintN[]' we allow N in increments of 8, from 8 up to 256
+	for n := 8; n <= 256; n += 8 {
+		if primitiveType == fmt.Sprintf("int%d", n) || primitiveType == fmt.Sprintf("int%d[]", n) {
+			return true
+		}
+		if primitiveType == fmt.Sprintf("uint%d", n) || primitiveType == fmt.Sprintf("uint%d[]", n) {
+			return true
+		}
 	}
 	return false
 }
