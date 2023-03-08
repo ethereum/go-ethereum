@@ -38,22 +38,26 @@ type Message struct {
 	GasTipCap  *big.Int
 	Data       []byte
 	AccessList types.AccessList
-	IsFake     bool
+
+	// When SkipAccountCheckss is true, the message nonce is not checked against the
+	// account nonce in state. It also disables checking that the sender is an EOA.
+	// This field will be set to true for operations like RPC eth_call.
+	SkipAccountChecks bool
 }
 
-// AsMessage returns the transaction as a core.Message.
-func AsMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+// txToMessage returns the transaction as a core.Message.
+func txToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
-		Nonce:      tx.Nonce(),
-		GasLimit:   tx.Gas(),
-		GasPrice:   new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-		To:         tx.To(),
-		Value:      tx.Value(),
-		Data:       tx.Data(),
-		AccessList: tx.AccessList(),
-		IsFake:     false,
+		Nonce:             tx.Nonce(),
+		GasLimit:          tx.Gas(),
+		GasPrice:          new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:         new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:         new(big.Int).Set(tx.GasTipCap()),
+		To:                tx.To(),
+		Value:             tx.Value(),
+		Data:              tx.Data(),
+		AccessList:        tx.AccessList(),
+		SkipAccountChecks: false,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
