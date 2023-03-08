@@ -161,7 +161,7 @@ func txToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Mess
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		msg.GasPrice = math.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
 	}
 	var err error
 	msg.From, err = types.Sender(s, tx)
