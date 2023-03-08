@@ -96,6 +96,7 @@ const (
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
 	txLookupCacheLimit  = 1024
+	droppedTxCacheLimit = 1024 * 10 // 10 blocks a 1024 txs
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
@@ -213,6 +214,9 @@ type BlockChain struct {
 	// future blocks are blocks added for later processing
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 
+	// Reorged transactions
+	droppedTxCache *lru.Cache[common.Hash, struct{}]
+
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
 	stopping      atomic.Bool    // false if chain is running, true when stopped
@@ -254,21 +258,22 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:   chainConfig,
-		cacheConfig:   cacheConfig,
-		db:            db,
-		triedb:        triedb,
-		triegc:        prque.New[int64, common.Hash](nil),
-		quit:          make(chan struct{}),
-		chainmu:       syncx.NewClosableMutex(),
-		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
-		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
-		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache: lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
-		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
-		engine:        engine,
-		vmConfig:      vmConfig,
+		chainConfig:    chainConfig,
+		cacheConfig:    cacheConfig,
+		db:             db,
+		triedb:         triedb,
+		triegc:         prque.New[int64, common.Hash](nil),
+		quit:           make(chan struct{}),
+		chainmu:        syncx.NewClosableMutex(),
+		bodyCache:      lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:   lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		receiptsCache:  lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:     lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache:  lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
+		futureBlocks:   lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
+		droppedTxCache: lru.NewCache[common.Hash, struct{}](droppedTxCacheLimit),
+		engine:         engine,
+		vmConfig:       vmConfig,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -2070,6 +2075,11 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
 			for _, tx := range oldBlock.Transactions() {
+				hash := tx.Hash()
+				if _, ok := bc.droppedTxCache.Get(hash); ok {
+					log.Warn("Transaction with hash %v reorged twice", hash)
+				}
+				bc.droppedTxCache.Add(hash, struct{}{})
 				deletedTxs = append(deletedTxs, tx.Hash())
 			}
 		}
