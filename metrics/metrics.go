@@ -182,6 +182,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 			cpuSysLoad.Update(int64(sysLoad / secondsSinceLastCollect * 100))
 			cpuSysWait.Update(int64(sysWait / secondsSinceLastCollect * 100))
 			cpuProcLoad.Update(int64(procLoad / secondsSinceLastCollect * 100))
+			// increment counters
 			cpuSysLoadTotal.Inc(int64(sysLoad * 100))
 			cpuSysWaitTotal.Inc(int64(sysWait * 100))
 			cpuProcLoadTotal.Inc(int64(procLoad * 100))
