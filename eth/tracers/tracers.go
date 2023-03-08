@@ -19,6 +19,7 @@ package tracers
 
 import (
 	"encoding/json"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -27,9 +28,10 @@ import (
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
-	BlockHash common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
-	TxIndex   int         // Index of the transaction within a block (zero if dangling tx or call)
-	TxHash    common.Hash // Hash of the transaction being traced (zero if dangling call)
+	BlockHash   common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
+	BlockNumber *big.Int    // Number of the block the tx is contained within (zero if dangling tx or call)
+	TxIndex     int         // Index of the transaction within a block (zero if dangling tx or call)
+	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
 // Tracer interface extends vm.EVMLogger and additionally
