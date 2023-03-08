@@ -53,7 +53,6 @@ If Geth stops unexpectedly the database can be corrupted. This is known as an "u
 
 If an unexpected shutdown does occur, the `removedb` subcommand can be used to delete the state database and resync it from the ancient database. This should get the database back up and running.
 
-
 ## Pebble
 
 It is possible to configure Geth to use [Pebble](https://www.cockroachlabs.com/blog/pebble-rocksdb-kv-store/) instead of LevelDB for recent data. The main reason to include the alternative database is that the Go implementation of LevelDB is not actively maintained; Pebble is an actively maintained replacement that should offer a better long term option. There is no urgent reason to switch the database type yet - LevelDB works well and Pebble is still being evaluated for potentially replacing LevelDB as the default option some time in the future. However, if you wish to experiment with running Geth with Pebble, add the following flag to your Geth startup commands:

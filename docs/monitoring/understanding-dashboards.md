@@ -29,7 +29,7 @@ The CPU panel shows how much CPU is being used as a percentage of one processing
 
 ![The Memory panel](/images/docs/grafana/memory.png)
 
-Memory tracks the amount of RAM being used by Geth. Three metrics are plotted: the cache size, i.e. the total RAM reserved for Geth (default 1024 MB) is plotted as `held`; the amount of the cache actually being used by Geth is plotted as `used`; the number of bytes being allocated by the system per second is plotted as `alloc`. 
+Memory tracks the amount of RAM being used by Geth. Three metrics are plotted: the cache size, i.e. the total RAM reserved for Geth (default 1024 MB) is plotted as `held`; the amount of the cache actually being used by Geth is plotted as `used`; the number of bytes being allocated by the system per second is plotted as `alloc`.
 
 #### Disk
 
@@ -39,7 +39,7 @@ Disk tracks the rate that data is written to (plotted as `write`) or read from (
 
 #### Goroutines
 
-Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to 
+Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to
 execute concurrently.
 
 ![The goroutine panel](/images/docs/grafana/goroutines.png)
@@ -105,7 +105,7 @@ Geth has a capacity for pending transactions defined by `--txpool.globalslots` (
 The block processing panel tracks the time taken to complete the various tasks involved in processing each block, measured in microseconds or nanoseconds. Specifically, this includes:
 
 - **execution**: time taken to execute the transactions in the block
-- **validation**: time taken to validate that the information in a received block body matches what is described in the block header. 
+- **validation**: time taken to validate that the information in a received block body matches what is described in the block header.
 - **commit**: time taken to write the new block to the chain data
 - **account read**: time taken to access account information from the state trie
 - **account update**: time taken to incorporate dirty account objects into the state trie (account trie)
@@ -142,7 +142,6 @@ The transaction processing panel tracks the time taken to complete the various t
 
 #### Block propagation
 
-
 <Note>
 Block propagation was disabled in Geth at The Merge. Block propagation is now the responsibility of the consensus client.  Included here for archival interest.
 </Note>
@@ -156,15 +155,14 @@ Block propagation metrics track the rate that the local node hears about, receiv
 - **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
 - **malicious broadcasts**: the number of blocks which are determined to be malicious per second
 
-
 #### Transaction propagation
 
 Transaction propagation tracks the sending and receiving of transactions on the peer-to-peer network. This includes:
 
 - **ingress announcements**: inbound announcements (notifications of a transaction's availability) per second
 - **known announcements**: announcements that are ignored because the local node is already aware of them, per second
-- **underpriced announcements**: announcements per second that do not get fetched because they pay too little gas 
-- **malicious announcements**: announcements per second that are dropped because they appear malicious 
+- **underpriced announcements**: announcements per second that do not get fetched because they pay too little gas
+- **malicious announcements**: announcements per second that are dropped because they appear malicious
 - **ingress broadcasts**: number of transactions propagated from peers per second
 - **known broadcasts**: transactions per second that are ignored because they duplicate transactions that the local node already knows about
 - **underpriced broadcasts**: all fetched transactions that are dropped due to paying insufficient gas, per second
@@ -181,7 +179,7 @@ Transaction propagation tracks the sending and receiving of transactions on the 
 
 #### Block forwarding
 
-The block forwarding panel counts the announcements and the blocks that the local node receives that it should pass on to its peers. 
+The block forwarding panel counts the announcements and the blocks that the local node receives that it should pass on to its peers.
 
 #### Transaction fetcher peers
 
@@ -209,10 +207,10 @@ measures the rate that data is written to, or read from, the levelDB and ancient
 - **ancient write**: Rate that data is written to the freezer (the database storing older data)
 - **compaction read**: Rate that data is written to the levelDb database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
 - **compaction write**: Rate that data is read from to the levelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
-  
+
 #### Session totals
 
-Instead of the *rate* that data is read from, and written to, the levelDB and ancients databases (as per `Data rate`), this panel tracks the total amount of data read and written across the entire time Geth is running.
+Instead of the _rate_ that data is read from, and written to, the levelDB and ancients databases (as per `Data rate`), this panel tracks the total amount of data read and written across the entire time Geth is running.
 
 #### Persistent size
 
@@ -225,7 +223,6 @@ These panels show the amount of time spent compacting the levelDB database, dura
 <Note>
 The current default Geth Grafana dashboard includes panels for light nodes. Light nodes are not currently functional since Ethereum moved to proof-of-stake.
 </Note>
-
 
 ## Creating new dashboards
 
@@ -294,9 +291,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "format": "time_series",
       "groupBy": [
         {
-          "params": [
-            "$interval"
-          ],
+          "params": ["$interval"],
           "type": "time"
         }
       ],
@@ -310,9 +305,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "select": [
         [
           {
-            "params": [
-              "value"
-            ],
+            "params": ["value"],
             "type": "field"
           },
           {
@@ -339,9 +332,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "format": "time_series",
       "groupBy": [
         {
-          "params": [
-            "$interval"
-          ],
+          "params": ["$interval"],
           "type": "time"
         }
       ],
@@ -355,9 +346,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "select": [
         [
           {
-            "params": [
-              "value"
-            ],
+            "params": ["value"],
             "type": "field"
           },
           {
@@ -384,9 +373,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "format": "time_series",
       "groupBy": [
         {
-          "params": [
-            "$interval"
-          ],
+          "params": ["$interval"],
           "type": "time"
         }
       ],
@@ -400,9 +387,7 @@ If the default dashboard isn't right for you, you can update it in the browser. 
       "select": [
         [
           {
-            "params": [
-              "value"
-            ],
+            "params": ["value"],
             "type": "field"
           },
           {
