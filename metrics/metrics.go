@@ -175,17 +175,17 @@ func CollectProcessMetrics(refresh time.Duration) {
 		secondsSinceLastCollect := collectTime.Sub(lastCollectTime).Seconds()
 		lastCollectTime = collectTime
 		if secondsSinceLastCollect > 0 {
-			sysLoad := cpustats[now].GlobalTime - cpustats[prev].GlobalTime
-			sysWait := cpustats[now].GlobalWait - cpustats[prev].GlobalWait
-			procLoad := cpustats[now].LocalTime - cpustats[prev].LocalTime
+			sysLoad := (cpustats[now].GlobalTime - cpustats[prev].GlobalTime) * 100
+			sysWait := (cpustats[now].GlobalWait - cpustats[prev].GlobalWait) * 100
+			procLoad := (cpustats[now].LocalTime - cpustats[prev].LocalTime) * 100
 			// Convert to integer percentage.
-			cpuSysLoad.Update(int64(sysLoad / secondsSinceLastCollect * 100))
-			cpuSysWait.Update(int64(sysWait / secondsSinceLastCollect * 100))
-			cpuProcLoad.Update(int64(procLoad / secondsSinceLastCollect * 100))
+			cpuSysLoad.Update(int64(sysLoad / secondsSinceLastCollect))
+			cpuSysWait.Update(int64(sysWait / secondsSinceLastCollect))
+			cpuProcLoad.Update(int64(procLoad / secondsSinceLastCollect))
 			// increment counters
-			cpuSysLoadTotal.Inc(int64(sysLoad * 100))
-			cpuSysWaitTotal.Inc(int64(sysWait * 100))
-			cpuProcLoadTotal.Inc(int64(procLoad * 100))
+			cpuSysLoadTotal.Inc(int64(sysLoad))
+			cpuSysWaitTotal.Inc(int64(sysWait))
+			cpuProcLoadTotal.Inc(int64(procLoad))
 		}
 
 		// Threads
