@@ -25,11 +25,8 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/c\rypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
@@ -267,7 +264,8 @@ func (st *StateTransition) preCheck() error {
 				msg.From.Hex(), stNonce)
 		}
 		// Make sure the sender is an EOA
-		if codeHash := st.state.GetCodeHash(msg.From); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+		codeHash := st.state.GetCodeHash(msg.From)
+		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
 			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 				msg.From.Hex(), codeHash)
 		}
