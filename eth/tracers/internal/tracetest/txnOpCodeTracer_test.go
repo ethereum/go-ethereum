@@ -2,6 +2,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -57,6 +58,12 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
+
+			baseFee := big.NewInt(0xFF0000)
+			if test.Context.BaseFee != 0 {
+				baseFee = new(big.Int).SetUint64(uint64(test.Context.BaseFee))
+			}
+
 			// Configure a blockchain with the given prestate
 			var (
 				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
@@ -73,6 +80,8 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 					Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
+					BaseFee:     baseFee,
+					Random:      test.Context.Random,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
@@ -99,7 +108,11 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			if !tracesEqual(ret, test.Result) {
-				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+				x, _ := json.MarshalIndent(test.Result, "", "")
+				//y, _ := json.MarshalIndent(test.Result, "", "")
+				fmt.Println(string(x))
+				t.Fatal("traces mismatch")
+				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
 	}

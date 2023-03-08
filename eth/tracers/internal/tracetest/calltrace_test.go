@@ -43,6 +43,8 @@ type callContext struct {
 	Difficulty *math.HexOrDecimal256 `json:"difficulty"`
 	Time       math.HexOrDecimal64   `json:"timestamp"`
 	GasLimit   math.HexOrDecimal64   `json:"gasLimit"`
+	BaseFee    math.HexOrDecimal64   `json:"baseFee"`
+	Random     *common.Hash          `json:"random"`
 	Miner      common.Address        `json:"miner"`
 }
 

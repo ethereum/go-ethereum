@@ -61,6 +61,14 @@
       "onlyTopCall": true
   },
   "result": {
+    "blockContext": {
+      "number": 2289806,
+      "stateRoot": "0x3bdabcac016a32fe557a05a50c0fc8b9959fa25b167cea3c8f81b77c12ee5ca6",
+      "baseFee": 16711680,
+      "time": 1513601314,
+      "gasLimit": 4722976,
+      "coinbase": "0x1585936b53834b021f68cc13eeefdec2efc8e724"
+    },
     "from": "0xb436ba50d378d4bbc8660d312a13df6af6e89dfb",
     "gas": "0x10738",
     "gasUsed": "0x3ef9",

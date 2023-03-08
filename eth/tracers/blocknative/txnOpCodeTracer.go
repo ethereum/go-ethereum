@@ -2,63 +2,66 @@ package blocknative
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-type callFrameBN struct {
-	Type        string        `json:"type"`
-	From        string        `json:"from"`
-	To          string        `json:"to,omitempty"`
-	Value       string        `json:"value,omitempty"`
-	Gas         string        `json:"gas"`
-	GasUsed     string        `json:"gasUsed"`
-	Input       string        `json:"input"`
-	Output      string        `json:"output,omitempty"`
-	Error       string        `json:"error,omitempty"`
-	ErrorReason string        `json:"errorReason,omitempty"`
-	Calls       []callFrameBN `json:"calls,omitempty"`
-
-	// Added fields from 'callFrame' in 'call.go'
-	gasIn   uint64
-	gasCost uint64
-	Time    string `json:"time,omitempty"`
-
-	// TODO: Investigate precompiles usage, could reduce latency as they are "those are just fancy opcodes" - 4byte.go
-	// activePrecompiles []common.Address // Updated on CaptureStart based on given rules
-
-}
 
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
 // op codes and relevant gas data.
 // This is intended for Blocknative usage.
 type txnOpCodeTracer struct {
-	env       *vm.EVM       // EVM context for execution of transaction to occur within
-	callStack []callFrameBN // Data structure for op codes making up our trace
-	interrupt uint32        // Atomic flag to signal execution interruption
-	reason    error         // Textual reason for the interruption (not always specific for us)
+	env       *vm.EVM     // EVM context for execution of transaction to occur within
+	trace     Trace       // Accumulated execution data the caller is interested in
+	callStack []CallFrame // Data structure for op codes making up our trace
+	interrupt uint32      // Atomic flag to signal execution interruption
+	reason    error       // Textual reason for the interruption (not always specific for us)
+	opts      TracerOpts
 }
 
-// newtxnOpCodeTracer returns a new txnOpCodeTracer tracer.
-func newtxnOpCodeTracer(ctor json.RawMessage) (Tracer, error) {
+// NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
+// options applied.
+func newTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &txnOpCodeTracer{callStack: make([]callFrameBN, 1)}, nil
+	t := &txnOpCodeTracer{callStack: make([]CallFrame, 1)}
+
+	// Decode raw json opts into our struct.
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &t.opts); err != nil {
+			return nil, err
+		}
+	}
+
+	return t, nil
+}
+
+func init() {
+	tracers.DefaultDirectory.Register("txnOpCodeTracer", newTxnOpCodeTracer, false)
 }
 
 // GetResult returns an empty json object.
 func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
-	if len(t.callStack) != 1 {
-		return nil, errors.New("incorrect number of top-level calls")
-	}
-	res, err := json.Marshal(t.callStack[0])
+
+	// This block used to trip on subtraces being discovered, for this tracer we do not need this,
+	// however we would like to keep this here in a possible future where we do care about such cases.
+
+	// if len(t.callStack) != 1 {
+	// 	return nil, errors.New("incorrect number of top-level calls")
+	// }
+
+	// Only want the top level trace, all other indexes hold subtraces to which we do not particularly need
+	t.trace.CallFrame = t.callStack[0]
+
+	res, err := json.Marshal(t.trace)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +71,23 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+
+	// Blocks only contain `Random` post-merge, but we still have pre-merge tests.
+	random := ""
+	if env.Context.Random != nil {
+		random = bytesToHex(env.Context.Random.Bytes())
+	}
+
+	// Populate the block context from the vm environment.
+	t.trace.BlockContext.Number = env.Context.BlockNumber.Uint64()
+	t.trace.BlockContext.BaseFee = env.Context.BaseFee.Uint64()
+	t.trace.BlockContext.Time = env.Context.Time // todo alex: check this removal -> .Uint64()
+	t.trace.BlockContext.Coinbase = addrToHex(env.Context.Coinbase)
+	t.trace.BlockContext.GasLimit = env.Context.GasLimit
+	t.trace.BlockContext.Random = random
+
 	// This is the initial call
-	t.callStack[0] = callFrameBN{
+	t.callStack[0] = CallFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
@@ -88,8 +106,21 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Collect final gasUsed
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
-	// // Add total time duration for this trace request
-	// t.callStack[0].Time = fmt.Sprintf("%v", time)
+	// Add total time duration for this trace request
+	// todo alex: need to find a better place to get time from the evm execution
+	// we can use t.trace.BlockContext.Time and current time to calculate this here!
+	t.trace.Time = fmt.Sprintf("%v", time)
+
+	// If the user wants the logs, grab them from the state
+	if t.opts.Logs {
+		for _, stateLog := range t.env.StateDB.Logs() {
+			t.trace.Logs = append(t.trace.Logs, CallLog{
+				Address: stateLog.Address,
+				Data:    bytesToHex(stateLog.Data),
+				Topics:  stateLog.Topics,
+			})
+		}
+	}
 
 	// This is the final output of a call
 	if err != nil {
@@ -141,7 +172,7 @@ func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	}
 
 	// Apart from the starting call detected by CaptureStart, here we track every new transaction opcode
-	call := callFrameBN{
+	call := CallFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
 		To:    addrToHex(to),
@@ -172,6 +203,12 @@ func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 		call.Output = bytesToHex(output)
 	} else {
 		call.Error = err.Error()
+		if err.Error() == "execution reverted" && len(output) > 0 {
+			call.Output = bytesToHex(output)
+			revertReason, _ := abi.UnpackRevert(output)
+			call.ErrorReason = revertReason
+		}
+
 		if call.Type == "CREATE" || call.Type == "CREATE2" {
 			call.To = ""
 		}
@@ -180,6 +217,11 @@ func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 }
 
 func (*txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
+}
+
+// SetStateRoot implements core.stateRootSetter and stores the given root in the trace's BlockContext.
+func (t *txnOpCodeTracer) SetStateRoot(root common.Hash) {
+	t.trace.BlockContext.StateRoot = bytesToHex(root.Bytes())
 }
 
 func (*txnOpCodeTracer) CaptureTxEnd(restGas uint64) {}

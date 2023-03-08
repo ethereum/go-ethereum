@@ -80,6 +80,8 @@ type StateDB interface {
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
 
 	Logs() []*types.Log
+
+	IntermediateRoot(bool) common.Hash
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

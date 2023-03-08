@@ -1,20 +1,19 @@
 package blocknative
 
 import (
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var Tracers = map[string]func(cfg json.RawMessage) (Tracer, error){
-	"txnOpCodeTracer": newtxnOpCodeTracer,
-}
+// todo alex: experiment with removing these in favour of common geth usage, and tracer interface which copies this from the tracers lib
+// var Tracers = map[string]func(cfg json.RawMessage) (Tracer, error){
+// 	"txnOpCodeTracer": NewTxnOpCodeTracer,
+// }
 
-type Tracer interface {
-	vm.EVMLogger
-	GetResult() (json.RawMessage, error)
-	Stop(err error)
-}
+// type Tracer interface {
+// 	vm.EVMLogger
+// 	GetResult() (json.RawMessage, error)
+// 	Stop(err error)
+// }
 
 // TracerOpts configure the tracer to save or ignore various aspects of a
 // transaction execution.
@@ -25,8 +24,20 @@ type TracerOpts struct {
 // Trace contains all the accumulated details of a transaction execution.
 type Trace struct {
 	CallFrame
-	Logs []CallLog `json:"logs,omitempty"`
-	Time string    `json:"time,omitempty"`
+	BlockContext BlockContext `json:"blockContext"`
+	Logs         []CallLog    `json:"logs,omitempty"`
+	Time         string       `json:"time,omitempty"`
+}
+
+// BlockContext contains information about the block we simulate transactions in.
+type BlockContext struct {
+	Number    uint64 `json:"number"`
+	StateRoot string `json:"stateRoot,omitempty"`
+	BaseFee   uint64 `json:"baseFee"`
+	Time      uint64 `json:"time"`
+	Coinbase  string `json:"coinbase"`
+	GasLimit  uint64 `json:"gasLimit"`
+	Random    string `json:"random,omitempty"`
 }
 
 type CallFrame struct {
