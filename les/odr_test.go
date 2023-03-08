@@ -131,15 +131,15 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				from.SetBalance(math.MaxBig256)
 
 				msg := &core.Message{
-					From:      from.Address(),
-					To:        &testContractAddr,
-					Value:     new(big.Int),
-					GasLimit:  100000,
-					GasPrice:  big.NewInt(params.InitialBaseFee),
-					GasFeeCap: big.NewInt(params.InitialBaseFee),
-					GasTipCap: new(big.Int),
-					Data:      data,
-					IsFake:    true,
+					From:              from.Address(),
+					To:                &testContractAddr,
+					Value:             new(big.Int),
+					GasLimit:          100000,
+					GasPrice:          big.NewInt(params.InitialBaseFee),
+					GasFeeCap:         big.NewInt(params.InitialBaseFee),
+					GasTipCap:         new(big.Int),
+					Data:              data,
+					SkipAccountChecks: true,
 				}
 
 				context := core.NewEVMBlockContext(header, bc, nil)
@@ -156,15 +156,15 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			state := light.NewState(ctx, header, lc.Odr())
 			state.SetBalance(bankAddr, math.MaxBig256)
 			msg := &core.Message{
-				From:      bankAddr,
-				To:        &testContractAddr,
-				Value:     new(big.Int),
-				GasLimit:  100000,
-				GasPrice:  big.NewInt(params.InitialBaseFee),
-				GasFeeCap: big.NewInt(params.InitialBaseFee),
-				GasTipCap: new(big.Int),
-				Data:      data,
-				IsFake:    true,
+				From:              bankAddr,
+				To:                &testContractAddr,
+				Value:             new(big.Int),
+				GasLimit:          100000,
+				GasPrice:          big.NewInt(params.InitialBaseFee),
+				GasFeeCap:         big.NewInt(params.InitialBaseFee),
+				GasTipCap:         new(big.Int),
+				Data:              data,
+				SkipAccountChecks: true,
 			}
 			context := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)

@@ -200,15 +200,15 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		// Perform read-only call.
 		st.SetBalance(testBankAddress, math.MaxBig256)
 		msg := &core.Message{
-			From:      testBankAddress,
-			To:        &testContractAddr,
-			Value:     new(big.Int),
-			GasLimit:  1000000,
-			GasPrice:  big.NewInt(params.InitialBaseFee),
-			GasFeeCap: big.NewInt(params.InitialBaseFee),
-			GasTipCap: new(big.Int),
-			Data:      data,
-			IsFake:    true,
+			From:              testBankAddress,
+			To:                &testContractAddr,
+			Value:             new(big.Int),
+			GasLimit:          1000000,
+			GasPrice:          big.NewInt(params.InitialBaseFee),
+			GasFeeCap:         big.NewInt(params.InitialBaseFee),
+			GasTipCap:         new(big.Int),
+			Data:              data,
+			SkipAccountChecks: true,
 		}
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(header, chain, nil)

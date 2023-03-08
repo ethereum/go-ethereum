@@ -408,7 +408,6 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		GasTipCap:  tx.MaxPriorityFeePerGas,
 		Data:       data,
 		AccessList: accessList,
-		IsFake:     false,
 	}
 	return msg, nil
 }
