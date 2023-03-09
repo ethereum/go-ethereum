@@ -19,6 +19,7 @@ package tracers
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -94,4 +95,37 @@ func (d *directory) IsJS(name string) bool {
 	}
 	// JS eval will execute JS code
 	return true
+}
+
+const (
+	memoryPadLimit = 1024 * 1024
+)
+
+// GetMemoryCopyPadded returns offset + size as a new slice.
+// It zero-pads the slice if it extends beyond memory bounds.
+func GetMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
+	if offset < 0 {
+		return nil, fmt.Errorf("offset cannot be smaller than zero")
+	}
+
+    if int(offset) >= m.Len() {
+        // case 1: the slice falls entirely outside memory bounds
+        if size > memoryPadLimit {
+            return nil, fmt.Errorf("reached limit for padding memory slice: offset %d, size %d", offset, size)
+        }
+        padded := make([]byte, size)
+        return padded, nil
+    } else if int(offset+size) >= m.Len() {
+        // case 2: the slice overlaps memory bounds
+        if int(offset+size)-m.Len() > memoryPadLimit {
+            return nil, fmt.Errorf("reached limit for padding memory slice: offset %d, size %d", offset, size)
+        }
+        padded := make([]byte, size)
+        memSlice := m.GetCopy(offset, int64(m.Len()) - offset)
+        copy(padded[0:len(memSlice)], memSlice)
+        return padded, nil
+    }
+    // case 3: the slice falls inside memory bounds
+    memSlice := m.GetCopy(offset, size)
+    return memSlice, nil
 }

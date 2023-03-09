@@ -32,10 +32,6 @@ import (
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 )
 
-const (
-	memoryPadLimit = 1024 * 1024
-)
-
 var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
@@ -258,7 +254,7 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	if !t.traceStep {
 		return
 	}
-	if t.err != nil {
+	if t.err != nil || err != nil {
 		return
 	}
 
@@ -572,13 +568,12 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
 	mlen := mo.memory.Len()
-	if end-int64(mlen) > memoryPadLimit {
-		return nil, fmt.Errorf("tracer reached limit for padding memory slice: end %d, memorySize %d", end, mlen)
-	}
 	slice := make([]byte, end-begin)
-	end = min(end, int64(mo.memory.Len()))
-	ptr := mo.memory.GetPtr(begin, end-begin)
-	copy(slice[:], ptr[:])
+	end = min(end, int64(mlen))
+	slice, err := tracers.GetMemoryCopyPadded(mo.memory, begin, end-begin)
+	if err != nil {
+		return nil, err
+	}
 	return slice, nil
 }
 

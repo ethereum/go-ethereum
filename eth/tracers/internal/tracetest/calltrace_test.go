@@ -332,3 +332,71 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 		t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), wantStr)
 	}
 }
+
+func TestMemExpansion(t *testing.T) {
+	var (
+		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")
+		txContext = vm.TxContext{
+			Origin:   origin,
+			GasPrice: big.NewInt(1),
+		}
+		context = vm.BlockContext{
+			CanTransfer: core.CanTransfer,
+			Transfer:    core.Transfer,
+			Coinbase:    common.Address{},
+			BlockNumber: new(big.Int).SetUint64(8000000),
+			Time:        5,
+			Difficulty:  big.NewInt(0x30000),
+			GasLimit:    uint64(6000000),
+		}
+		alloc = core.GenesisAlloc{
+			to: core.GenesisAccount{
+				Code: []byte{
+					byte(vm.PUSH1), 0x1,
+					byte(vm.PUSH1), 0x0,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1), 0xff,
+					byte(vm.PUSH1), 0x0,
+					byte(vm.LOG0),
+				},
+			},
+			origin: core.GenesisAccount{
+				Nonce:   0,
+				Balance: big.NewInt(500000000000000),
+			},
+		}
+	)
+	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
+	// Create the tracer, the EVM environment and run it
+	tracer, err := tracers.DefaultDirectory.New("callTracer", nil, json.RawMessage(`{ "withLog": true }`))
+	if err != nil {
+		t.Fatalf("failed to create call tracer: %v", err)
+	}
+	evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
+
+	var nonce uint64 = 0
+	var gasLimit uint64 = 50000
+	value := big.NewInt(0)
+	gasPrice := big.NewInt(1)
+	gasFeeCap := big.NewInt(0)
+	gasTipCap := big.NewInt(0)
+	data := make([]byte, 0)
+	accessList := types.AccessList{}
+	isFake := false
+
+	msg := types.NewMessage(origin, &to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data, accessList, isFake)
+	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(gasLimit))
+	if _, err = st.TransitionDb(); err != nil {
+		t.Fatalf("failed to execute transaction: %v", err)
+	}
+	// Retrieve the trace result and compare against the etalon
+	res, err := tracer.GetResult()
+	if err != nil {
+		t.Fatalf("failed to retrieve trace result: %v", err)
+	}
+	wantStr := `TODO fix this`
+	if string(res) != wantStr {
+		t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), wantStr)
+	}
+}
