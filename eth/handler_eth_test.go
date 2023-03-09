@@ -274,7 +274,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := src.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
@@ -337,7 +337,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := sink.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
@@ -545,7 +545,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := remote.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
@@ -661,7 +661,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	}
 	// Initiate a block propagation across the peers
 	time.Sleep(100 * time.Millisecond)
-	source.handler.BroadcastBlock(source.chain.CurrentBlock(), true)
+	header := source.chain.CurrentBlock()
+	source.handler.BroadcastBlock(source.chain.GetBlock(header.Hash(), header.Number.Uint64()), true)
 
 	// Iterate through all the sinks and ensure the correct number got the block
 	done := make(chan struct{}, peers)
@@ -734,18 +735,19 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 
 	// Create various combinations of malformed blocks
 	head := source.chain.CurrentBlock()
+	block := source.chain.GetBlock(head.Hash(), head.Number.Uint64())
 
-	malformedUncles := head.Header()
+	malformedUncles := head
 	malformedUncles.UncleHash[0]++
-	malformedTransactions := head.Header()
+	malformedTransactions := head
 	malformedTransactions.TxHash[0]++
-	malformedEverything := head.Header()
+	malformedEverything := head
 	malformedEverything.UncleHash[0]++
 	malformedEverything.TxHash[0]++
 
 	// Try to broadcast all malformations and ensure they all get discarded
 	for _, header := range []*types.Header{malformedUncles, malformedTransactions, malformedEverything} {
-		block := types.NewBlockWithHeader(header).WithBody(head.Transactions(), head.Uncles())
+		block := types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles())
 		if err := src.SendNewBlock(block, big.NewInt(131136)); err != nil {
 			t.Fatalf("failed to broadcast block: %v", err)
 		}

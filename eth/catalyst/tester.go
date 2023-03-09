@@ -75,7 +75,7 @@ func (tester *FullSyncTester) Start() error {
 				}
 				// Trigger beacon sync with the provided block header as
 				// trusted chain head.
-				err := tester.api.eth.Downloader().BeaconSync(downloader.FullSync, tester.block.Header())
+				err := tester.api.eth.Downloader().BeaconSync(downloader.FullSync, tester.block.Header(), nil)
 				if err != nil {
 					log.Info("Failed to beacon sync", "err", err)
 				}
