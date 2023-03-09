@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -81,7 +82,7 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	// Populate the block context from the vm environment.
 	t.trace.BlockContext.Number = env.Context.BlockNumber.Uint64()
 	t.trace.BlockContext.BaseFee = env.Context.BaseFee.Uint64()
-	t.trace.BlockContext.Time = env.Context.Time // todo alex: check this removal -> .Uint64()
+	t.trace.BlockContext.Time = env.Context.Time
 	t.trace.BlockContext.Coinbase = addrToHex(env.Context.Coinbase)
 	t.trace.BlockContext.GasLimit = env.Context.GasLimit
 	t.trace.BlockContext.Random = random
@@ -107,9 +108,8 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
 	// Add total time duration for this trace request
-	// todo alex: need to find a better place to get time from the evm execution
-	// we can use t.trace.BlockContext.Time and current time to calculate this here!
-	t.trace.Time = fmt.Sprintf("%v", time)
+	// Use uint64(time.Now().Unix()) pattern to get uint64 unix time to calculate elapased time
+	t.trace.Time = fmt.Sprintf("%v", uint64(time.Now().Unix())-t.trace.BlockContext.Time)
 
 	// If the user wants the logs, grab them from the state
 	if t.opts.Logs {

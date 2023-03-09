@@ -2,7 +2,13 @@ package tracetest
 
 import (
 	"encoding/json"
-	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -12,12 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/blocknative"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-	"math/big"
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 type txnOpCodeTracerTest struct {
@@ -77,7 +77,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
 					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+					Time:        uint64(test.Context.Time),
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     baseFee,
@@ -85,7 +85,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			tracer, err := tracers.New(tracerName, new(tracers.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -108,9 +108,13 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			if !tracesEqual(ret, test.Result) {
-				x, _ := json.MarshalIndent(test.Result, "", "")
-				//y, _ := json.MarshalIndent(test.Result, "", "")
-				fmt.Println(string(x))
+				// Below are prints to show differences if we fail, can always just check against the specific test json files too!
+				// x, _ := json.MarshalIndent(ret, "", "")
+				// y, _ := json.MarshalIndent(test.Result, "", "")
+				// fmt.Println("x")
+				// fmt.Println(string(x))
+				// fmt.Println("y")
+				// fmt.Println(string(y))
 				t.Fatal("traces mismatch")
 				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}

@@ -4,19 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// todo alex: experiment with removing these in favour of common geth usage, and tracer interface which copies this from the tracers lib
-// var Tracers = map[string]func(cfg json.RawMessage) (Tracer, error){
-// 	"txnOpCodeTracer": NewTxnOpCodeTracer,
-// }
-
-// type Tracer interface {
-// 	vm.EVMLogger
-// 	GetResult() (json.RawMessage, error)
-// 	Stop(err error)
-// }
-
-// TracerOpts configure the tracer to save or ignore various aspects of a
-// transaction execution.
+// TracerOpts configure the tracer to save or ignore various aspects of a transaction execution.
 type TracerOpts struct {
 	Logs bool `json:"logs"`
 }
