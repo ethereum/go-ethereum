@@ -14,7 +14,7 @@ type Trace struct {
 	CallFrame
 	BlockContext BlockContext `json:"blockContext"`
 	Logs         []CallLog    `json:"logs,omitempty"`
-	Time         string       `json:"time"`
+	Time         string       `json:"time,omitempty"`
 }
 
 // BlockContext contains information about the block we simulate transactions in.
