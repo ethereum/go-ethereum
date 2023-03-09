@@ -14,6 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+func init() {
+	tracers.DefaultDirectory.Register("txnOpCodeTracer", NewTxnOpCodeTracer, false)
+}
+
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
 // op codes and relevant gas data.
@@ -30,7 +34,7 @@ type txnOpCodeTracer struct {
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
 // options applied.
-func newTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
 
 	// First callframe contains tx context info
 	// and is populated on start and end.
@@ -44,10 +48,6 @@ func newTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trac
 	}
 
 	return t, nil
-}
-
-func init() {
-	tracers.DefaultDirectory.Register("txnOpCodeTracer", newTxnOpCodeTracer, false)
 }
 
 // GetResult returns an empty json object.
