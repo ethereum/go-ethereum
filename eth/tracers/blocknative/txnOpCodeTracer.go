@@ -25,6 +25,7 @@ type txnOpCodeTracer struct {
 	interrupt uint32      // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption (not always specific for us)
 	opts      TracerOpts
+	beginTime time.Time // Time object for start of trace for stats
 }
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
@@ -87,6 +88,9 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	t.trace.BlockContext.GasLimit = env.Context.GasLimit
 	t.trace.BlockContext.Random = random
 
+	// Start tracing timer
+	t.beginTime = time.Now()
+
 	// This is the initial call
 	t.callStack[0] = CallFrame{
 		Type:  "CALL",
@@ -108,8 +112,7 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
 	// Add total time duration for this trace request
-	// Use uint64(time.Now().Unix()) pattern to get uint64 unix time to calculate elapased time
-	t.trace.Time = fmt.Sprintf("%v", uint64(time.Now().Unix())-t.trace.BlockContext.Time)
+	t.trace.Time = fmt.Sprintf("%v", time.Since(t.beginTime))
 
 	// If the user wants the logs, grab them from the state
 	if t.opts.Logs {

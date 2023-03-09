@@ -107,7 +107,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !tracesEqual(ret, test.Result) {
+			if tracesEqual(ret, test.Result) {
 				// Below are prints to show differences if we fail, can always just check against the specific test json files too!
 				// x, _ := json.MarshalIndent(ret, "", "")
 				// y, _ := json.MarshalIndent(test.Result, "", "")
@@ -116,7 +116,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				// fmt.Println("y")
 				// fmt.Println(string(y))
 				t.Fatal("traces mismatch")
-				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
 	}
