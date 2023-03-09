@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	_ "net/http/pprof" // nolint: gosec
+	_ "net/http/pprof"
 	"os"
+	"path"
+	"path/filepath"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -32,6 +34,7 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Memsize memsizeui.Handler
@@ -74,6 +77,36 @@ var (
 	debugFlag = &cli.BoolFlag{
 		Name:     "log.debug",
 		Usage:    "Prepends log messages with call-site location (file and line number)",
+		Category: flags.LoggingCategory,
+	}
+	logLocationFlag = &flags.DirectoryFlag{
+		Name:     "log.folder",
+		Usage:    "Location where the log files should be placed",
+		Value:    flags.DirectoryString("./logs/"),
+		Category: flags.LoggingCategory,
+	}
+	logMaxSizeMBsFlag = &cli.IntFlag{
+		Name:     "log.maxsize",
+		Usage:    "Maximum size in MBs of a single log file",
+		Value:    100,
+		Category: flags.LoggingCategory,
+	}
+	logMaxBackupsFlag = &cli.IntFlag{
+		Name:     "log.maxbackups",
+		Usage:    "Maximum number of log files to retain",
+		Value:    10,
+		Category: flags.LoggingCategory,
+	}
+	logMaxAgeFlag = &cli.IntFlag{
+		Name:     "log.maxage",
+		Usage:    "Maximum number of days to retain a log file",
+		Value:    30,
+		Category: flags.LoggingCategory,
+	}
+	logCompressFlag = &cli.BoolFlag{
+		Name:     "log.compress",
+		Usage:    "Compress the log files",
+		Value:    false,
 		Category: flags.LoggingCategory,
 	}
 	pprofFlag = &cli.BoolFlag{
@@ -125,6 +158,11 @@ var Flags = []cli.Flag{
 	logFileFlag,
 	backtraceAtFlag,
 	debugFlag,
+	logLocationFlag,
+	logMaxSizeMBsFlag,
+	logMaxBackupsFlag,
+	logMaxAgeFlag,
+	logCompressFlag,
 	pprofFlag,
 	pprofAddrFlag,
 	pprofPortFlag,
@@ -148,24 +186,24 @@ func init() {
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
-	logFile := ctx.String(logFileFlag.Name)
-	useColor := logFile == "" && os.Getenv("TERM") != "dumb" && (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd()))
-
+	output := io.Writer(os.Stderr)
 	var logfmt log.Format
+	ttyHasColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+
 	switch ctx.String(logFormatFlag.Name) {
 	case "json":
 		logfmt = log.JSONFormat()
 	case "logfmt":
 		logfmt = log.LogfmtFormat()
 	case "terminal":
-		logfmt = log.TerminalFormat(useColor)
+		logfmt = log.TerminalFormat(ttyHasColor)
 	case "":
 		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
 		if ctx.Bool(logjsonFlag.Name) {
 			defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
 			logfmt = log.JSONFormat()
 		} else {
-			logfmt = log.TerminalFormat(useColor)
+			logfmt = log.TerminalFormat(ttyHasColor)
 		}
 	default:
 		// Unknown log format specified
@@ -179,13 +217,29 @@ func Setup(ctx *cli.Context) error {
 			return err
 		}
 	} else {
-		output := io.Writer(os.Stderr)
-		if useColor {
+		if ttyHasColor {
 			output = colorable.NewColorableStderr()
 		}
-		logOutputStream = log.StreamHandler(output, logfmt)
+		logfmt = log.TerminalFormat(ttyHasColor)
 	}
-	glogger.SetHandler(logOutputStream)
+
+	stdHandler := log.StreamHandler(output, logfmt)
+	ostream := stdHandler
+	if folder := ctx.String(logLocationFlag.Name); folder != "" {
+		if err := validateLogLocation(folder); err != nil {
+			return fmt.Errorf("failed to initiatilize file logger: %v", err)
+		}
+		lumberjackHandler := log.StreamHandler(&lumberjack.Logger{
+			Filename:   path.Join(folder, "log.log"),
+			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
+			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
+			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
+			Compress:   ctx.Bool(logCompressFlag.Name),
+		}, logfmt)
+		ostream = log.MultiHandler(lumberjackHandler, stdHandler)
+	}
+
+	glogger.SetHandler(ostream)
 
 	// logging
 	verbosity := ctx.Int(verbosityFlag.Name)
@@ -262,4 +316,18 @@ func Exit() {
 	if closer, ok := logOutputStream.(io.Closer); ok {
 		closer.Close()
 	}
+}
+
+func validateLogLocation(path string) error {
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating the directory: %w", err)
+	}
+	// Check if the path is writable by trying to create a temporary file
+	tmp := filepath.Join(path, "tmp")
+	if f, err := os.Create(tmp); err != nil {
+		return err
+	} else {
+		f.Close()
+	}
+	return os.Remove(tmp)
 }
