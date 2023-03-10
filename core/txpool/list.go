@@ -305,7 +305,7 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 			return false, nil
 		}
 		// Old is being replaced, subtract old cost
-		l.subTotalCost(old)
+		l.subTotalCost([]*types.Transaction{old})
 	}
 	// Add new tx cost to totalcost
 	l.totalcost.Add(l.totalcost, tx.Cost())
@@ -325,7 +325,7 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 // maintenance.
 func (l *list) Forward(threshold uint64) types.Transactions {
 	txs := l.txs.Forward(threshold)
-	l.subTotalCost(txs...)
+	l.subTotalCost(txs)
 	return txs
 }
 
@@ -366,8 +366,8 @@ func (l *list) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
 	}
 	// Reset total cost
-	l.subTotalCost(removed...)
-	l.subTotalCost(invalids...)
+	l.subTotalCost(removed)
+	l.subTotalCost(invalids)
 	l.txs.reheap()
 	return removed, invalids
 }
@@ -376,7 +376,7 @@ func (l *list) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 // exceeding that limit.
 func (l *list) Cap(threshold int) types.Transactions {
 	txs := l.txs.Cap(threshold)
-	l.subTotalCost(txs...)
+	l.subTotalCost(txs)
 	return txs
 }
 
@@ -389,11 +389,11 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
-	l.subTotalCost(tx)
+	l.subTotalCost([]*types.Transaction{tx})
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
-		l.subTotalCost(txs...)
+		l.subTotalCost(txs)
 		return true, txs
 	}
 	return true, nil
@@ -408,7 +408,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // happen but better to be self correcting than failing!
 func (l *list) Ready(start uint64) types.Transactions {
 	txs := l.txs.Ready(start)
-	l.subTotalCost(txs...)
+	l.subTotalCost(txs)
 	return txs
 }
 
@@ -437,7 +437,7 @@ func (l *list) LastElement() *types.Transaction {
 
 // subTotalCost subtracts the cost of the given transactions from the
 // total cost of all transactions.
-func (l *list) subTotalCost(txs ...*types.Transaction) {
+func (l *list) subTotalCost(txs []*types.Transaction) {
 	for _, tx := range txs {
 		l.totalcost.Sub(l.totalcost, tx.Cost())
 	}
