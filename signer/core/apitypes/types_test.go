@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,27 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package apitypes
 
-import (
-	"fmt"
-	"os"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/modexp"
-)
-
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
-		fmt.Fprintf(os.Stderr, "Example\n")
-		fmt.Fprintf(os.Stderr, "	$ debug ../crashers/4bbef6857c733a87ecf6fd8b9e7238f65eb9862a\n")
-		os.Exit(1)
+func TestIsPrimitive(t *testing.T) {
+	// Expected positives
+	for i, tc := range []string{
+		"int24", "int24[]", "uint88", "uint88[]", "uint", "uint[]", "int256", "int256[]",
+		"uint96", "uint96[]", "int96", "int96[]", "bytes17[]", "bytes17",
+	} {
+		if !isPrimitiveTypeValid(tc) {
+			t.Errorf("test %d: expected '%v' to be a valid primitive", i, tc)
+		}
 	}
-	crasher := os.Args[1]
-	data, err := os.ReadFile(crasher)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
-		os.Exit(1)
+	// Expected negatives
+	for i, tc := range []string{
+		"int257", "int257[]", "uint88 ", "uint88 []", "uint257", "uint-1[]",
+		"uint0", "uint0[]", "int95", "int95[]", "uint1", "uint1[]", "bytes33[]", "bytess",
+	} {
+		if isPrimitiveTypeValid(tc) {
+			t.Errorf("test %d: expected '%v' to not be a valid primitive", i, tc)
+		}
 	}
-	modexp.Fuzz(data)
 }

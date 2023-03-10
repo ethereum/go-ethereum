@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
+		msg, err := TransactionToMessage(tx, types.MakeSigner(p.config, header.Number), header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -103,7 +103,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -135,7 +135,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
@@ -148,7 +148,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 	return receipt, err
 }
 
-func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx types.Message, usedGas *uint64, evm *vm.EVM, tracer TracerResult) (*types.Receipt, *ExecutionResult, interface{}, error) {
+func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM, tracer TracerResult) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -193,7 +193,7 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 }
 
 func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -215,7 +215,7 @@ func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, aut
 	return receipt, result, err
 }
 
-func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
+func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg *Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
 	// Create call tracer to get JSON stack traces
 	tracer := NewCallTracer(statedb)
 
