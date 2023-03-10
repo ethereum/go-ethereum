@@ -56,7 +56,7 @@ tracer = function (tx) {
 
 More information about the `JSON.stringify` function is available [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify).
 
-The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](/docs/developers/evm-tracing/basic-traces), but with a new parameter, `tracer`. This parameter takes the JavaScript object formated as a string. In the case of the trace above, it is:
+The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](/docs/developers/evm-tracing/basic-traces), but with a new parameter, `tracer`. This parameter takes the JavaScript object formatted as a string. In the case of the trace above, it is:
 
 ```js
 {
@@ -167,7 +167,7 @@ The output is similar to:
 
 #### Operation Results
 
-One piece of information missing from the function above is the result on an `SLOAD` operation. The state we get inside `log` is the state prior to the execution of the opcode, so that value is not known yet. For more operations we can figure it out for ourselves, but we don't have access to the
+One piece of information missing from the function above is the result of an `SLOAD` operation. The state we get inside `log` is the state prior to the execution of the opcode, so that value is not known yet. For more operations we can figure it out for ourselves, but we don't have access to the
 storage, so here we can't.
 
 The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.

@@ -5,7 +5,7 @@ description: Instructions for setting up DNS discovery
 
 This document explains how to set up an [EIP 1459](https://eips.ethereum.org/EIPS/eip-1459) node list using the devp2p developer tool. The focus of this guide is creating a public list for the Ethereum mainnet and public testnets, but it may also be helpful for setting up DNS-based discovery for a private network.
 
-DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT is unavailable. In this guide, node lists will be reated by crawling the discovery DHT, then publishing the resulting node sets under chosen DNS names.
+DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT is unavailable. In this guide, node lists will be created by crawling the discovery DHT, then publishing the resulting node sets under chosen DNS names.
 
 ## Installing the devp2p command {#installing-devp2p}
 
@@ -23,7 +23,7 @@ go get github.com/ethereum/go-ethereum/cmd/ethkey
 
 ## Crawling the v4 DHT {#crawling-v4-dht}
 
-Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p is a batch process which runs for a set amount of time. You should should schedule this command to run at a regular interval. To create a node list, run
+Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p is a batch process which runs for a set amount of time. You should schedule this command to run at a regular interval. To create a node list, run
 
 ```sh
 devp2p discv4 crawl -timeout 30m all-nodes.json
@@ -71,7 +71,7 @@ To turn a node list into a DNS node tree, the list needs to be signed. To do thi
 ethkey generate dnskey.json
 ```
 
-Now use `devp2p dns sign` to update the signature of the node list. If the list's directory name differs from the name it will be published at,specify the DNS name the using the `-domain` flag. This command will prompt for the key file password and update the tree signature.
+Now use `devp2p dns sign` to update the signature of the node list. If the list's directory name differs from the name it will be published at, specify the DNS name using the `-domain` flag. This command will prompt for the key file password and update the tree signature.
 
 ```sh
 devp2p dns sign mainnet.nodes.example.org dnskey.json

@@ -130,7 +130,7 @@ var (
 	_ = event.NewSubscription
 )
 
-// StorageMetaData contains all meta data concerning the Storage contract.
+// StorageMetaData contains all metadata concerning the Storage contract.
 var StorageMetaData = &bind.MetaData{
 	ABI: "[{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"number\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }

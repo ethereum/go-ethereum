@@ -2,6 +2,7 @@ import { Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui
 import { FC, useMemo } from 'react';
 
 import { DataTable } from '../../UI';
+import { BuildsDeprecationNote } from './BuildsDeprecationNote';
 
 import { DOWNLOADS_TABLE_TABS, DOWNLOADS_TABLE_TAB_COLUMN_HEADERS } from '../../../constants';
 import { ReleaseData } from '../../../types';
@@ -102,12 +103,16 @@ export const DownloadsTable: FC<Props> = ({
             />
           </TabPanel>
           <TabPanel p={0}>
+            <BuildsDeprecationNote os='iOS' />
+
             <DataTable
               columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
               data={iOSData.slice(0, amountOfReleasesToShow)}
             />
           </TabPanel>
           <TabPanel p={0}>
+            <BuildsDeprecationNote os='Android' />
+
             <DataTable
               columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
               data={androidData.slice(0, amountOfReleasesToShow)}

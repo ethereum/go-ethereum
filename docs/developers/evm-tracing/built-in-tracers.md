@@ -24,7 +24,7 @@ The struct logger (aka opcode logger) is a native Go tracer which executes a tra
 | refund     | uint64        | Refund counter                                                                                                                   |
 | error      | string        | Error message if any                                                                                                             |
 
-Note that the fields `memory`, `stack`, `returnData`, and `storage` have dynamic size and depending on the exact transaction they could grow large in size. This is specially true for `memory` which could blow up the trace size. It is recommended to keep them disabled unless they are explicitly required for a given use-case.
+Note that the fields `memory`, `stack`, `returnData`, and `storage` have dynamic size and depending on the exact transaction they could grow large in size. This is specially true for `memory` which could blow up the trace size. It is recommended to keep them disabled unless they are explicitly required for a given use case.
 
 It is also possible to configure the trace by passing Boolean (true/false) values for four parameters that tweak the verbosity of the trace. By default, the _EVM memory_ and _Return data_ are not reported but the _EVM stack_ and _EVM storage_ are. To report the maximum amount of data:
 
@@ -96,9 +96,9 @@ The following tracers are implement in Go. This means they are much more perform
 ### 4byteTracer {#4byte-tracer}
 
 Solidity contract functions are
-[addressed](https://docs.soliditylang.org/en/develop/abi-spec.html#function-selector) using the first four four byte of the Keccak-256 hash of their signature. Therefore when calling the function of a contract, the caller must send this function selector as well as the ABI-encoded arguments as call data.
+[addressed](https://docs.soliditylang.org/en/develop/abi-spec.html#function-selector) using the first four byte of the Keccak-256 hash of their signature. Therefore when calling the function of a contract, the caller must send this function selector as well as the ABI-encoded arguments as call data.
 
-The `4byteTracer` collects the function selectors of every function executed in the lifetime of a transaction, along with the size of the supplied call data. The result is a `map[string]int` where the keys are `SELECTOR-CALLDATASIZE` and the values are number of occurances of this key. For example:
+The `4byteTracer` collects the function selectors of every function executed in the lifetime of a transaction, along with the size of the supplied call data. The result is a `map[string]int` where the keys are `SELECTOR-CALLDATASIZE` and the values are number of occurrences of this key. For example:
 
 Example call:
 
@@ -446,7 +446,7 @@ Returns:
 
 ### unigram {#unigram}
 
-`unigramTracer` counts the frequency of occurrance of each opcode.
+`unigramTracer` counts the frequency of occurrence of each opcode.
 
 Example:
 
@@ -477,7 +477,7 @@ Returns:
 
 ## State overrides {#state-overrides}
 
-It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address _temporarily just for the duration of the execution_ and then a transaction interacting with that address canm be traced. This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
+It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new bytecode could be deployed to some address _temporarily just for the duration of the execution_ and then a transaction interacting with that address can be traced. This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
 
 To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode.
 

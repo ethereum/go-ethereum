@@ -2,3 +2,8 @@
 
 [functions]
   included_files = ["src/**"]
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "https://matomo.ethereum.org"

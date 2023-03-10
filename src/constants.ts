@@ -19,6 +19,10 @@ export const GETH_TWITTER_URL = 'https://twitter.com/go_ethereum';
 export const GETH_DISCORD_URL = 'https://discord.com/invite/nthXNEv';
 export const GO_URL = 'https://go.dev/';
 
+// analytics
+export const DO_NOT_TRACK_URL =
+  'http://matomo.ethereum.org/piwik/index.php?module=CoreAdminHome&action=optOut';
+
 // Downloads
 export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 12;
 export const DOWNLOAD_HEADER_BUTTONS: {
@@ -173,8 +177,7 @@ export const LATEST_GETH_RELEASE_URL =
   'https://api.github.com/repos/ethereum/go-ethereum/releases/latest';
 export const ALL_GETH_COMMITS_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits/';
 export const RELEASE_COMMIT_BASE_URL = 'https://github.com/ethereum/go-ethereum/tree/';
-export const LAST_COMMIT_BASE_URL =
-  'https://api.github.com/repos/ethereum/geth-website/commits?path=';
+export const LAST_COMMIT_BASE_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits';
 
 // Binaries urls
 export const BINARIES_BASE_URL = 'https://gethstore.blob.core.windows.net/builds/';

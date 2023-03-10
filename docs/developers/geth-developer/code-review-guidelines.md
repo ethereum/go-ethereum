@@ -60,7 +60,7 @@ issue notices, e.g. "Fixes #42353".
 
 ### Special Situations And How To Deal With Them {#special-situations}
 
-Reviewers may find themselves in one of the sitations below. Here's how to deal with them:
+Reviewers may find themselves in one of the situations below. Here's how to deal with them:
 
 - The author doesn't follow up: ping them after a while (i.e. after a few days). If there is no further response, close the PR or complete the work yourself.
 

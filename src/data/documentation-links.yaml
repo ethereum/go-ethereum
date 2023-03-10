@@ -22,16 +22,20 @@
       to: /docs/fundamentals/sync-modes
     - id: Account management
       to: /docs/fundamentals/account-management
+    - id: Databases
+      to: /docs/fundamentals/databases
     - id: 'Backup & restore'
       to: /docs/fundamentals/backup-restore
     - id: Logs
       to: /docs/fundamentals/logs
-    - id: Peer-to-peer
+    - id: Connecting to peers
       to: /docs/fundamentals/peer-to-peer
     - id: Pruning
       to: /docs/fundamentals/pruning
     - id: Private networks
       to: /docs/fundamentals/private-network
+    - id: Config files
+      to: /docs/fundamentals/config-files
     - id: Light client
       to: /docs/fundamentals/les
     - id: Mining
@@ -44,34 +48,34 @@
           to: /docs/interacting-with-geth/rpc
         - id: Batch requests
           to: /docs/interacting-with-geth/rpc/batch
-        - id: GraphQL server
-          to: /docs/interacting-with-geth/rpc/graphql
-        - id: admin Namespace
-          to: /docs/interacting-with-geth/rpc/ns-admin
-        - id: clique Namespace
-          to: /docs/interacting-with-geth/rpc/ns-clique
-        - id: debug Namespace
-          to: /docs/interacting-with-geth/rpc/ns-debug
-        - id: eth Namespace
-          to: /docs/interacting-with-geth/rpc/ns-eth
-        - id: les Namespace
-          to: /docs/interacting-with-geth/rpc/ns-les
-        - id: miner Namespace
-          to: /docs/interacting-with-geth/rpc/ns-miner
-        - id: net Namespace
-          to: /docs/interacting-with-geth/rpc/ns-net
-        - id: Personal namespace deprecation notes
-          to: /docs/interacting-with-geth/rpc/ns-personal-deprecation
-        - id: Personal Namespace
-          to: /docs/interacting-with-geth/rpc/ns-personal
-        - id: txpool Namespace
-          to: /docs/interacting-with-geth/rpc/ns-txpool
         - id: Real-time Events
           to: /docs/interacting-with-geth/rpc/pubsub
-    - id: JavaScript Console
+    - id: JSON-RPC Namespaces
+      items:
+      - id: admin
+        to: /docs/interacting-with-geth/rpc/ns-admin
+      - id: clique
+        to: /docs/interacting-with-geth/rpc/ns-clique
+      - id: debug
+        to: /docs/interacting-with-geth/rpc/ns-debug
+      - id: eth
+        to: /docs/interacting-with-geth/rpc/ns-eth
+      - id: les
+        to: /docs/interacting-with-geth/rpc/ns-les
+      - id: miner (deprecated)
+        to: /docs/interacting-with-geth/rpc/ns-miner
+      - id: net
+        to: /docs/interacting-with-geth/rpc/ns-net
+      - id: personal (deprecated)
+        to: /docs/interacting-with-geth/rpc/ns-personal
+      - id: txpool
+        to: /docs/interacting-with-geth/rpc/ns-txpool
+    - id: JS Console
       to: /docs/interacting-with-geth/javascript-console
-    - id: 'JavaScript Console 2: Contracts'
+    - id: 'JS Console 2: Contracts'
       to: /docs/interacting-with-geth/javascript-console-contracts
+    - id: GraphQL server
+      to: /docs/interacting-with-geth/rpc/graphql
 - id: Developers
   items:
     - id: Introduction
@@ -114,8 +118,10 @@
       to: /docs/developers/geth-developer/contributing
 - id: Monitoring
   items:
-    - id: Dashboards
+    - id: Creating Dashboards
       to: /docs/monitoring/dashboards
+    - id: Understanding Dashboards
+      to: /docs/monitoring/understanding-dashboards
     - id: Ethstats
       to: /docs/monitoring/ethstats
     - id: Metrics
@@ -138,12 +144,12 @@
           to: /docs/tools/clef/tutorial
         - id: Clique-signing
           to: /docs/tools/clef/clique-signing
-    - id: puppeth
-      to: /docs/tools/puppeth
     - id: abigen
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p
+    - id: puppeth
+      to: /docs/tools/puppeth
 - id: FAQs
   to: /docs/faq
 - id: Resources

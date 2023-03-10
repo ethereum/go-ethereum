@@ -62,7 +62,7 @@ _ = cl
 
 ### Interacting with the client {#interacting-with-a-client}
 
-The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function `BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to `eth_sendTransaction`. The full list of client methods can be found [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client).
+The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function `BlockNumber()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to `eth_sendTransaction`. The full list of client methods can be found [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client).
 
 Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be created using `Context.Background()`.
 
@@ -178,7 +178,7 @@ An instance of `gethclient` can be used in exactly the same way as `ethclient`. 
 
 ```sh
 CallContract()
-CreatAccessList()
+CreateAccessList()
 GCStats()
 GetNodeInfo()
 GetProof()
@@ -189,7 +189,7 @@ SubscribePendingTransactions()
 
 _Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument._
 
-Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [GitHub](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [GitHub](https://github.com/MariusVanDerWijden/web3go).
+Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [GitHub](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more in-depth set of examples available on [GitHub](https://github.com/MariusVanDerWijden/web3go).
 
 ## Summary {#summary}
 

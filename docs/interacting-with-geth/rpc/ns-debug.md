@@ -229,6 +229,8 @@ storage hash.
 | Console | `debug.getModifiedAccountsByNumber(startNum uint64, endNum uint64)`             |
 | RPC     | `{"method": "debug_getModifiedAccountsByNumber", "params": [startNum, endNum]}` |
 
+<Note> Geth only keeps recent trie nodes and preimages of keys in memory - for older blocks this information is deleted by Geth's garbage collection. This means that calls to `debug_GetModifiedAccountsByNumber` on blocks that are old enough to be eligible for garbage collection will return an error due to the trie nodes and preimages being unavailable. To fix this, run Geth with `--cache.preimages=true` to prevent the relevant data being lost to the garbage collector </Note>
+
 ### debug_getRawReceipts
 
 Returns the consensus-encoding of all receipts in a single block.
@@ -344,6 +346,18 @@ Sets the rate of mutex profiling.
 | :------ | --------------------------------------------------------------- |
 | Console | `debug.setMutexProfileFraction(rate int)`                       |
 | RPC     | `{"method": "debug_setMutexProfileFraction", "params": [rate]}` |
+
+### debug_setTrieFlushInterval
+
+Configures how often in-memory state tries are persisted to disk. The interval needs to be in a format parsable by a [time.Duration](https://pkg.go.dev/time#ParseDuration). Note that the interval is not wall-clock time. Rather it is accumulated block processing time after which the state should be flushed.
+For example the value `0s` will essentially turn on archive mode. If set to `1h`, it means that after one hour of effective block processing time, the trie would be flushed. If one block takes 200ms, a flush would occur every `5*3600=18000` blocks. The default interval for mainnet is `1h`.
+
+**Note:** this configuration will not be presisted through restarts.
+
+| Client  | Method invocation                                                |
+| :------ | ---------------------------------------------------------------- |
+| Console | `debug.setTrieFlushInterval(interval string)`                    |
+| RPC     | `{"method": "debug_setTrieFlushInterval", "params": [interval]}` |
 
 ### debug_stacks
 
