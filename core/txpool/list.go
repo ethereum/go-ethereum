@@ -213,7 +213,7 @@ func (m *sortedMap) Ready(start uint64) types.Transactions {
 
 // Len returns the length of the transaction map.
 func (m *sortedMap) Len() int {
-	return m.index.Len()
+	return len(m.items)
 }
 
 func (m *sortedMap) flatten() types.Transactions {
