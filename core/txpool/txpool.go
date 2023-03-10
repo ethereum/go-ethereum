@@ -1059,7 +1059,7 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
-// Returns the number of transactions moved to the future queue.
+// Returns the number of transactions removed from the pending queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
@@ -1092,7 +1092,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
-			return 1+ len(invalids)
+			return 1 + len(invalids)
 		}
 	}
 	// Transaction is in the future queue
