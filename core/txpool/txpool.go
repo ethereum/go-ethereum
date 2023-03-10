@@ -264,13 +264,11 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
 
-	pending      map[common.Address]*list // All currently processable transactions
-	queue        map[common.Address]*list // Queued but non-processable transactions
-	queuedCount  atomic.Int32
-	pendingCount atomic.Int32
-	beats        map[common.Address]time.Time // Last heartbeat from each known account
-	all          *lookup                      // All transactions to allow lookups
-	priced       *pricedList                  // All transactions sorted by price
+	pending map[common.Address]*list     // All currently processable transactions
+	queue   map[common.Address]*list     // Queued but non-processable transactions
+	beats   map[common.Address]time.Time // Last heartbeat from each known account
+	all     *lookup                      // All transactions to allow lookups
+	priced  *pricedList                  // All transactions sorted by price
 
 	chainHeadCh     chan core.ChainHeadEvent
 	chainHeadSub    event.Subscription
