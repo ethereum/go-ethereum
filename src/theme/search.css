@@ -27,6 +27,10 @@
   justify-content: space-between;
 }
 
+.DocSearch-Button-Placeholder, .DocSearch-Button-Keys {
+  display: flex;
+}
+
 .DocSearch-Button-Keys kbd {
   background: none;
   border: 1px solid var(--chakra-colors-secondary);
@@ -144,7 +148,7 @@ svg[aria-label='Algolia'] * {
   color: var(--chakra-colors-bg);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   /* Search field in mobile menu */
   .DocSearch-Button-Container {
     flex-direction: row-reverse;
@@ -168,6 +172,10 @@ svg[aria-label='Algolia'] * {
 
   .DocSearch-Search-Icon * {
     color: var(--chakra-colors-bg);
+  }
+
+  .DocSearch-Button-Placeholder, .DocSearch-Button-Keys {
+    display: none;
   }
 
   /* Mobile modal styling */
