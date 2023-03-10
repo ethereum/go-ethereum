@@ -14,7 +14,7 @@ If `incompletes` is false, then accounts for which the key preimage (i.e: the `a
 | Client  | Method invocation                                                                                                |
 | :------ | ---------------------------------------------------------------------------------------------------------------- |
 | Console | `debug.accountRange(blockNrOrHash, start, maxResults, nocode, nostorage, incompletes)`                           |
-| RPC     | `{"method": "debug_getHeaderRlp", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
+| RPC     | `{"method": "debug_accountRange", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
 
 ### debug_backtraceAt
 
@@ -189,26 +189,35 @@ Returns a list of the last 'bad blocks' that the client has seen on the network 
 | Console | `debug.getBadBlocks()`                           |
 | RPC     | `{"method": "debug_getBadBlocks", "params": []}` |
 
-### debug_getBlockRlp
+### debug_getRawBlock
 
 Retrieves and returns the RLP encoded block by number.
 
 | Client  | Method invocation                                     |
 | :------ | ----------------------------------------------------- |
-| Go      | `debug.GetBlockRlp(number uint64) (string, error)`    |
-| Console | `debug.getBlockRlp(number, [options])`                |
-| RPC     | `{"method": "debug_getBlockRlp", "params": [number]}` |
+| Go      | `debug.getRawBlock(blockNrOrHash) (string, error)`    |
+| Console | `debug.getBlockRlp(blockNrOrHash)`                |
+| RPC     | `{"method": "debug_getRawBlock", "params": [blockNrOrHash]}` |
 
 References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
-### debug_getHeaderRlp
+### debug_getRawHeader
 
 Returns an RLP-encoded header.
 
 | Client  | Method invocation                                   |
 | :------ | --------------------------------------------------- |
-| Console | `debug.getHeaderRlp(blockNum)`                      |
-| RPC     | `{"method": "debug_getHeaderRlp", "params": [num]}` |
+| Console | `debug.getRawHeader(blockNrOrHash)`                      |
+| RPC     | `{"method": "debug_getRawHeader", "params": [blockNrOrHash]}` |
+
+### debug_getRawTransaction
+
+Returns the bytes of the transaction.
+
+| Client  | Method invocation                                   |
+| :------ | --------------------------------------------------- |
+| Console | `debug.getRawTransaction(blockNrOrHash)`                      |
+| RPC     | `{"method": "debug_getRawTransaction", "params": [transactionHash]}` |
 
 ### debug_getModifiedAccountsByHash
 
