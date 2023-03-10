@@ -366,7 +366,8 @@ func (l *list) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
 	}
 	// Reset total cost
-	l.subTotalCost(append(removed, invalids...)...)
+	l.subTotalCost(removed...)
+	l.subTotalCost(invalids...)
 	l.txs.reheap()
 	return removed, invalids
 }

@@ -264,11 +264,13 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*list     // All currently processable transactions
-	queue   map[common.Address]*list     // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *lookup                      // All transactions to allow lookups
-	priced  *pricedList                  // All transactions sorted by price
+	pending      map[common.Address]*list // All currently processable transactions
+	queue        map[common.Address]*list // Queued but non-processable transactions
+	queuedCount  atomic.Int32
+	pendingCount atomic.Int32
+	beats        map[common.Address]time.Time // Last heartbeat from each known account
+	all          *lookup                      // All transactions to allow lookups
+	priced       *pricedList                  // All transactions sorted by price
 
 	chainHeadCh     chan core.ChainHeadEvent
 	chainHeadSub    event.Subscription
@@ -596,61 +598,61 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) (common.Address, error) {
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
-		return common.Address{}, core.ErrTxTypeNotSupported
+		return core.ErrTxTypeNotSupported
 	}
 	// Reject dynamic fee transactions until EIP-1559 activates.
 	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
-		return common.Address{}, core.ErrTxTypeNotSupported
+		return core.ErrTxTypeNotSupported
 	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if tx.Size() > txMaxSize {
-		return common.Address{}, ErrOversizedData
+		return ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.
 	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-		return common.Address{}, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
-		return common.Address{}, ErrNegativeValue
+		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
-		return common.Address{}, ErrGasLimit
+		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
 	if tx.GasFeeCap().BitLen() > 256 {
-		return common.Address{}, core.ErrFeeCapVeryHigh
+		return core.ErrFeeCapVeryHigh
 	}
 	if tx.GasTipCap().BitLen() > 256 {
-		return common.Address{}, core.ErrTipVeryHigh
+		return core.ErrTipVeryHigh
 	}
 	// Ensure gasFeeCap is greater than or equal to gasTipCap.
 	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
-		return common.Address{}, core.ErrTipAboveFeeCap
+		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
-		return common.Address{}, ErrInvalidSender
+		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return common.Address{}, ErrUnderpriced
+		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return common.Address{}, core.ErrNonceTooLow
+		return core.ErrNonceTooLow
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	balance := pool.currentState.GetBalance(from)
 	if balance.Cmp(tx.Cost()) < 0 {
-		return common.Address{}, core.ErrInsufficientFunds
+		return core.ErrInsufficientFunds
 	}
 
 	// Verify that replacing transactions will not result in overdraft
@@ -663,19 +665,19 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) (common.Addres
 		}
 		if balance.Cmp(sum) < 0 {
 			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
-			return common.Address{}, ErrOverdraft
+			return ErrOverdraft
 		}
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
 	if err != nil {
-		return common.Address{}, err
+		return err
 	}
 	if tx.Gas() < intrGas {
-		return common.Address{}, core.ErrIntrinsicGas
+		return core.ErrIntrinsicGas
 	}
-	return from, nil
+	return nil
 }
 
 // add validates a transaction and inserts it into the non-executable queue for later
@@ -698,12 +700,14 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	from, err := pool.validateTx(tx, isLocal)
-	if err != nil {
+	if err := pool.validateTx(tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
+
+	// already validated by this point
+	from, _ := types.Sender(pool.signer, tx)
 
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
@@ -737,21 +741,23 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 		// If the new transaction is a future transaction it should never churn pending transactions
 		if pool.isFuture(from, tx) {
-			for i := 0; i < len(drop); i++ {
-				dropSender, _ := types.Sender(pool.signer, drop[i])
-				if list := pool.pending[dropSender]; list != nil && list.Overlaps(drop[i]) {
-					// Add all transactions back to the priced queue
-					for k := 0; k < len(drop); k++ {
-						heap.Push(&pool.priced.urgent, drop[k])
-					}
-					log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
-					return false, ErrFutureReplacePending
+			var replacesPending bool
+			for _, dropTx := range drop {
+				dropSender, _ := types.Sender(pool.signer, dropTx)
+				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
+					replacesPending = true
 				}
+			}
+			// Add all transactions back to the priced queue
+			if replacesPending {
+				for _, dropTx := range drop {
+					heap.Push(&pool.priced.urgent, dropTx)
+				}
+				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
+				return false, ErrFutureReplacePending
 			}
 		}
 
-		// Bump the counter of rejections-since-reorg
-		pool.changesSinceReorg += len(drop)
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
@@ -805,23 +811,18 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	return replaced, nil
 }
 
+// isFuture reports whether the given transaction is immediately executable.
 func (pool *TxPool) isFuture(from common.Address, tx *types.Transaction) bool {
 	list := pool.pending[from]
-	if list != nil { // Sender already has pending txs
-		if old := list.txs.Get(tx.Nonce()); old != nil { // Replacing a pending, check bump
-			return false
-		}
-		// Not replacing, check if parent nonce exist
-		if list.txs.Get(tx.Nonce()-1) != nil {
-			return false
-		}
-		return true
+	if list == nil {
+		return pool.pendingNonces.get(from) != tx.Nonce()
 	}
-	// Sender has no pending
-	if pool.pendingNonces.get(from) == tx.Nonce() {
-		return false
+	// Sender has pending transations.
+	if old := list.txs.Get(tx.Nonce()); old != nil {
+		return false // It replaces a pending transaction.
 	}
-	return true
+	// Not replacing, check if parent nonce exists in pending.
+	return list.txs.Get(tx.Nonce()-1) == nil
 }
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
