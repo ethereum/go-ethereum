@@ -744,6 +744,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 				dropSender, _ := types.Sender(pool.signer, dropTx)
 				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
 					replacesPending = true
+					break
 				}
 			}
 			// Add all transactions back to the priced queue
