@@ -815,7 +815,7 @@ func (pool *TxPool) isFuture(from common.Address, tx *types.Transaction) bool {
 	if list == nil {
 		return pool.pendingNonces.get(from) != tx.Nonce()
 	}
-	// Sender has pending transations.
+	// Sender has pending transactions.
 	if old := list.txs.Get(tx.Nonce()); old != nil {
 		return false // It replaces a pending transaction.
 	}
