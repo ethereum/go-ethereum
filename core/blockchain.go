@@ -1741,7 +1741,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, interrupt)
 
 					blockPrefetchExecuteTimer.Update(time.Since(start))
 					if atomic.LoadUint32(interrupt) == 1 {
