@@ -17,6 +17,7 @@
 package txpool
 
 import (
+	"container/heap"
 	"errors"
 	"fmt"
 	"math"
@@ -595,70 +596,86 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) (common.Address, error) {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
-		return core.ErrTxTypeNotSupported
+		return common.Address{}, core.ErrTxTypeNotSupported
 	}
 	// Reject dynamic fee transactions until EIP-1559 activates.
 	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
-		return core.ErrTxTypeNotSupported
+		return common.Address{}, core.ErrTxTypeNotSupported
 	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if tx.Size() > txMaxSize {
-		return ErrOversizedData
+		return common.Address{}, ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.
 	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+		return common.Address{}, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
-		return ErrNegativeValue
+		return common.Address{}, ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
-		return ErrGasLimit
+		return common.Address{}, ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
 	if tx.GasFeeCap().BitLen() > 256 {
-		return core.ErrFeeCapVeryHigh
+		return common.Address{}, core.ErrFeeCapVeryHigh
 	}
 	if tx.GasTipCap().BitLen() > 256 {
-		return core.ErrTipVeryHigh
+		return common.Address{}, core.ErrTipVeryHigh
 	}
 	// Ensure gasFeeCap is greater than or equal to gasTipCap.
 	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
-		return core.ErrTipAboveFeeCap
+		return common.Address{}, core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
-		return ErrInvalidSender
+		return common.Address{}, ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return ErrUnderpriced
+		return common.Address{}, ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return core.ErrNonceTooLow
+		return common.Address{}, core.ErrNonceTooLow
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return core.ErrInsufficientFunds
+	balance := pool.currentState.GetBalance(from)
+	if balance.Cmp(tx.Cost()) < 0 {
+		return common.Address{}, core.ErrInsufficientFunds
 	}
+
+	// Verify that replacing transactions will not result in overdraft
+	list := pool.pending[from]
+	if list != nil { // Sender already has pending txs
+		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+		if repl := list.txs.Get(tx.Nonce()); repl != nil {
+			// Deduct the cost of a transaction replaced by this
+			sum.Sub(sum, repl.Cost())
+		}
+		if balance.Cmp(sum) < 0 {
+			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+			return common.Address{}, ErrOverdraft
+		}
+	}
+
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
 	if err != nil {
-		return err
+		return common.Address{}, err
 	}
 	if tx.Gas() < intrGas {
-		return core.ErrIntrinsicGas
+		return common.Address{}, core.ErrIntrinsicGas
 	}
-	return nil
+	return from, nil
 }
 
 // add validates a transaction and inserts it into the non-executable queue for later
@@ -681,25 +698,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx, isLocal); err != nil {
+	from, err := pool.validateTx(tx, isLocal)
+	if err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
-	}
-
-	// Verify that replacing transactions will not result in overdraft
-	from, _ := types.Sender(pool.signer, tx) // already validated
-	list := pool.pending[from]
-	if list != nil { // Sender already has pending txs
-		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
-		if repl := list.txs.Get(tx.Nonce()); repl != nil {
-			// Deduct the cost of a transaction replaced by this
-			sum.Sub(sum, repl.Cost())
-		}
-		if sum.Cmp(pool.currentState.GetBalance(from)) > 0 {
-			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
-			return false, ErrOverdraft
-		}
 	}
 
 	// If the transaction pool is full, discard underpriced transactions
@@ -734,12 +737,12 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 		// If the new transaction is a future transaction it should never churn pending transactions
 		if pool.isFuture(from, tx) {
-			for _, dropTx := range drop {
-				dropSender, _ := types.Sender(pool.signer, dropTx)
-				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
+			for i := 0; i < len(drop); i++ {
+				dropSender, _ := types.Sender(pool.signer, drop[i])
+				if list := pool.pending[dropSender]; list != nil && list.Overlaps(drop[i]) {
 					// Add all transactions back to the priced queue
-					for _, d := range drop {
-						pool.priced.urgent.Push(d)
+					for k := 0; k < len(drop); k++ {
+						heap.Push(&pool.priced.urgent, drop[k])
 					}
 					log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
 					return false, ErrFutureReplacePending
