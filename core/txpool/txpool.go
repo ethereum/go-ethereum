@@ -1092,7 +1092,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
-			return len(invalids)
+			return 1+ len(invalids)
 		}
 	}
 	// Transaction is in the future queue
