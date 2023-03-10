@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,27 +14,39 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package version
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/ethereum/go-ethereum/tests/fuzzers/modexp"
+	"runtime/debug"
+	"time"
 )
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
-		fmt.Fprintf(os.Stderr, "Example\n")
-		fmt.Fprintf(os.Stderr, "	$ debug ../crashers/4bbef6857c733a87ecf6fd8b9e7238f65eb9862a\n")
-		os.Exit(1)
+// In go 1.18 and beyond, the go tool embeds VCS information into the build.
+
+const (
+	govcsTimeLayout = "2006-01-02T15:04:05Z"
+	ourTimeLayout   = "20060102"
+)
+
+// buildInfoVCS returns VCS information of the build.
+func buildInfoVCS(info *debug.BuildInfo) (s VCSInfo, ok bool) {
+	for _, v := range info.Settings {
+		switch v.Key {
+		case "vcs.revision":
+			s.Commit = v.Value
+		case "vcs.modified":
+			if v.Value == "true" {
+				s.Dirty = true
+			}
+		case "vcs.time":
+			t, err := time.Parse(govcsTimeLayout, v.Value)
+			if err == nil {
+				s.Date = t.Format(ourTimeLayout)
+			}
+		}
 	}
-	crasher := os.Args[1]
-	data, err := os.ReadFile(crasher)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
-		os.Exit(1)
+	if s.Commit != "" && s.Date != "" {
+		ok = true
 	}
-	modexp.Fuzz(data)
+	return
 }

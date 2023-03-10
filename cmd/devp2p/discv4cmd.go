@@ -78,7 +78,7 @@ var (
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
-		Flags:  flags.Merge(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag}),
+		Flags:  flags.Merge(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag, crawlParallelismFlag}),
 	}
 	discv4TestCommand = &cli.Command{
 		Name:   "test",
@@ -119,6 +119,11 @@ var (
 		Name:  "timeout",
 		Usage: "Time limit for the crawl.",
 		Value: 30 * time.Minute,
+	}
+	crawlParallelismFlag = &cli.IntFlag{
+		Name:  "parallel",
+		Usage: "How many parallel discoveries to attempt.",
+		Value: 16,
 	}
 	remoteEnodeFlag = &cli.StringFlag{
 		Name:    "remote",
@@ -195,7 +200,7 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 	defer disc.Close()
 	c := newCrawler(inputSet, disc, enode.IterNodes(nodeargs))
 	c.revalidateInterval = 0
-	output := c.run(0)
+	output := c.run(0, 1)
 	writeNodesJSON(nodesFile, output)
 	return nil
 }
@@ -214,7 +219,7 @@ func discv4Crawl(ctx *cli.Context) error {
 	defer disc.Close()
 	c := newCrawler(inputSet, disc, disc.RandomNodes())
 	c.revalidateInterval = 10 * time.Minute
-	output := c.run(ctx.Duration(crawlTimeoutFlag.Name))
+	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
 	return nil
 }

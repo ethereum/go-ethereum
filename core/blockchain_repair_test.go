@@ -1857,11 +1857,11 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
-	if head := newChain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
+	if head := newChain.CurrentSnapBlock(); head.Number.Uint64() != tt.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, tt.expHeadFastBlock)
 	}
-	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
+	if head := newChain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
 	if frozen, err := db.(freezer).Ancients(); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
@@ -1973,11 +1973,11 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(1) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(1))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(1) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(1))
 	}
 
 	// Reinsert B2-B4
@@ -1987,11 +1987,11 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
 	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
 		t.Error("Failed to regenerate the snapshot of known state")
