@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -74,6 +75,9 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
+	if !b.eth.Merger().TDDReached() && (number == rpc.FinalizedBlockNumber || number == rpc.SafeBlockNumber) {
+		return nil, fmt.Errorf("tag not supported on pre-merge network")
+	}
 	if number == rpc.FinalizedBlockNumber {
 		block := b.eth.blockchain.CurrentFinalBlock()
 		if block != nil {
@@ -122,6 +126,9 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if number == rpc.LatestBlockNumber {
 		header := b.eth.blockchain.CurrentBlock()
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+	}
+	if !b.eth.Merger().TDDReached() && (number == rpc.FinalizedBlockNumber || number == rpc.SafeBlockNumber) {
+		return nil, fmt.Errorf("tag not supported on pre-merge network")
 	}
 	if number == rpc.FinalizedBlockNumber {
 		header := b.eth.blockchain.CurrentFinalBlock()
