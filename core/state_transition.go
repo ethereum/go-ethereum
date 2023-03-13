@@ -253,16 +253,17 @@ func (st *StateTransition) preCheck() error {
 	if !msg.SkipAccountChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
-		if msgNonce := msg.Nonce; stNonce < msgNonce {
+		if msgNonce := msg.Nonce; stNonce+1 < stNonce {
+			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
+				msg.From.Hex(), stNonce)
+		} else if stNonce < msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
 				msg.From.Hex(), msgNonce, stNonce)
 		} else if stNonce > msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				msg.From.Hex(), msgNonce, stNonce)
-		} else if stNonce+1 < stNonce {
-			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
-				msg.From.Hex(), stNonce)
 		}
+
 		// Make sure the sender is an EOA
 		codeHash := st.state.GetCodeHash(msg.From)
 		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
