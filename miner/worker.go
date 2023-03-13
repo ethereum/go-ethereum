@@ -789,6 +789,10 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	//if w.isTTDReached(env.header) {
 	//	return errors.New("ignore uncle for beacon block")
 	//}
+	if w.chain.Config().IsMilano(env.header.Number) {
+		return errors.New("ignore uncle for Milano")
+	}
+
 	hash := uncle.Hash()
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")

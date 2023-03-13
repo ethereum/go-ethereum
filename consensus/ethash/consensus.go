@@ -45,7 +45,7 @@ var (
 	ByzantiumBlockReward          = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	ConstantinopleBlockReward     = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
 	MilanoBlockReward             = big.NewInt(1e+18) // Block reward in wei for successfully mining a block
-	maxUncles                     = 0                 // Maximum number of uncles allowed in a single block
+	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
 	SubsidyReductionInterval      = big.NewInt(1000000)
 
@@ -214,9 +214,17 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if len(block.Uncles()) > maxUncles {
 		return errTooManyUncles
 	}
+
+	if chain.Config().IsMilano(block.Number()) {
+		if len(block.Uncles()) > 0 {
+			return errTooManyUncles
+		}
+	}
+
 	if len(block.Uncles()) == 0 {
 		return nil
 	}
+
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
 
@@ -758,22 +766,26 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// Accumulate the rewards for the miner and any included uncles
-	//reward := new(big.Int).Set(blockReward)
+	reward := new(big.Int).Set(blockReward)
 
-	// Select the correct block reward based on chain progression
-	// Equivalent to: baseSubsidy / 2^(height/subsidyHalvingInterval)
-	interval := header.Number.Uint64() / SubsidyReductionInterval.Uint64()
-	reward := new(big.Int).Rsh(blockReward, uint(interval))
+	if config.IsMilano(header.Number) {
+		// Select the correct block reward based on chain progression
+		// Equivalent to: baseSubsidy / 2^(height/subsidyHalvingInterval)
+		interval := header.Number.Uint64() / SubsidyReductionInterval.Uint64()
+		reward = new(big.Int).Rsh(blockReward, uint(interval))
+	}
 
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, reward)
-		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
-		r.Div(reward, big32)
-		reward.Add(reward, r)
+	if !config.IsMilano(header.Number) {
+		r := new(big.Int)
+		for _, uncle := range uncles {
+			r.Add(uncle.Number, big8)
+			r.Sub(r, header.Number)
+			r.Mul(r, reward)
+			r.Div(r, big8)
+			state.AddBalance(uncle.Coinbase, r)
+			r.Div(reward, big32)
+			reward.Add(reward, r)
+		}
 	}
 	state.AddBalance(header.Coinbase, reward)
 }
