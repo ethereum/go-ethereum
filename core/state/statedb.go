@@ -187,8 +187,14 @@ func (s *StateDB) setError(err error) {
 	}
 }
 
+// Error returns all memorized database failure wrapped in a single
+// error object.
 func (s *StateDB) Error() error {
-	return s.dbErr
+	errs := []error{s.dbErr}
+	for _, obj := range s.stateObjects {
+		errs = append(errs, obj.dbErr)
+	}
+	return errors.Join(errs...) // nil error will be ignored
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
