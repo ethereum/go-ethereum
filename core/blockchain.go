@@ -1752,44 +1752,45 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		}
 
 		// Process block using the parent state as reference point
-		substart := time.Now()
+		pstart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
+		ptime := time.Since(pstart)
 
-		// Update the metrics touched during block processing
-		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-		triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-		trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-		// Validate the state using the default validator
-		substart = time.Now()
+		vstart := time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
-		proctime := time.Since(start)
+		vtime := time.Since(vstart)
+		proctime := time.Since(start) // processing + validation
 
-		// Update the metrics touched during block validation
-		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+		// Update the metrics touched during block processing and validation
+		accountReadTimer.Update(statedb.AccountReads)                   // Account reads are complete(in processing)
+		storageReadTimer.Update(statedb.StorageReads)                   // Storage reads are complete(in processing)
+		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads)   // Account reads are complete(in processing)
+		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads)   // Storage reads are complete(in processing)
+		accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
+		storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
+		accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
+		storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
+		triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
+		trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
+		trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
+		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
 
 		// Write the block to the chain and get the status.
-		substart = time.Now()
-		var status WriteStatus
+		var (
+			wstart = time.Now()
+			status WriteStatus
+		)
 		if !setHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, receipts, statedb)
@@ -1804,9 +1805,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
 		snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Triedb commits are complete, we can mark them
+		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
-		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
+		blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
 		blockInsertTimer.UpdateSince(start)
 
 		// Report the import stats before returning the various results
