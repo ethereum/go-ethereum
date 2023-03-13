@@ -244,6 +244,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			DatasetsOnDisk:   config.DatasetsOnDisk,
 			DatasetsLockMmap: config.DatasetsLockMmap,
 			NotifyFull:       config.NotifyFull,
+			MilanoBlock:      chainConfig.MilanoBlock.Uint64(),
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}

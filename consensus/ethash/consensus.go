@@ -599,6 +599,11 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	// Recompute the digest and PoW values
 	number := header.Number.Uint64()
 
+	// MilanoBlock fork
+	if number > ethash.config.MilanoBlock {
+		number = number - initiateBlock
+	}
+
 	var (
 		digest []byte
 		result []byte

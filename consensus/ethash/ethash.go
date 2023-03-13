@@ -431,6 +431,8 @@ type Config struct {
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool
 
+	MilanoBlock uint64
+
 	Log log.Logger `toml:"-"`
 }
 

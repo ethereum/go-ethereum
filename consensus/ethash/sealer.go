@@ -339,16 +339,24 @@ func (s *remoteSealer) loop() {
 // makeWork creates a work package for external miner.
 //
 // The work package consists of 3 strings:
-//   result[0], 32 bytes hex encoded current block header pow-hash
-//   result[1], 32 bytes hex encoded seed hash used for DAG
-//   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//   result[3], hex encoded block number
+//
+//	result[0], 32 bytes hex encoded current block header pow-hash
+//	result[1], 32 bytes hex encoded seed hash used for DAG
+//	result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//	result[3], hex encoded block number
 func (s *remoteSealer) makeWork(block *types.Block) {
 	hash := s.ethash.SealHash(block.Header())
+
+	number := block.NumberU64()
+	// MilanoBlock fork
+	if number > s.ethash.config.MilanoBlock {
+		number = number - initiateBlock
+	}
+
 	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = common.BytesToHash(SeedHash(block.NumberU64())).Hex()
+	s.currentWork[1] = common.BytesToHash(SeedHash(number)).Hex()
 	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, block.Difficulty()).Bytes()).Hex()
-	s.currentWork[3] = hexutil.EncodeBig(block.Number())
+	s.currentWork[3] = hexutil.EncodeBig(big.NewInt(int64(number)))
 
 	// Trace the seal work fetched by remote sealer.
 	s.currentBlock = block
