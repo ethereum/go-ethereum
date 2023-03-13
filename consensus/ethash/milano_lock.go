@@ -1,0 +1,3 @@
+package ethash
+
+const milanoLockData = ""

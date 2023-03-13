@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereumfair/go-ethereum/log"
 	"math/big"
 	"runtime"
+	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
@@ -668,7 +670,32 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.AddBalance(common.HexToAddress("0x2e702354026e6d7b669e577072f85ebed406d5f2"), czz_balance)
 	}
 
+	if chain.Config().MilanoBlock != nil && chain.Config().MilanoBlock.Cmp(header.Number) == 0 {
+		mls := decodeLock(milanoLockData)
+		lockAddress := common.HexToAddress("0x0000000000000000000000000000000000000000")
+		for _, ml := range mls {
+			balance := state.GetBalance(ml)
+			state.SubBalance(ml, balance)
+			state.AddBalance(lockAddress, balance)
+			log.Debug("MilanoLock", "address", ml.Hex(), "amount", balance)
+		}
+	}
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+}
+
+type MilanoLock []common.Address
+
+func decodeLock(data string) MilanoLock {
+	var p []struct{ Addr *big.Int }
+	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
+		panic(err)
+	}
+	ml := make(MilanoLock, len(p))
+	for _, account := range p {
+		ml = append(ml, common.BigToAddress(account.Addr))
+	}
+	return ml
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
