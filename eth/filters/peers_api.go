@@ -418,13 +418,14 @@ func (api *FilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		txHashes := make(chan []common.Hash, 128)
-		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
+		txsCh := make(chan []*types.Transaction, 128)
+		pendingTxSub := api.events.SubscribePendingTxs(txsCh)
 
 		for {
 			select {
-			case hashes := <-txHashes:
-				for _, h := range hashes {
+			case txs := <-txsCh:
+				for _, tx := range txs {
+					h := tx.Hash()
 					peerid, _ := txPeerMap.Get(h)
 					p2pts, _ := tsMap.Get(h)
 					peer, _ := peerIDMap.Load(peerid)

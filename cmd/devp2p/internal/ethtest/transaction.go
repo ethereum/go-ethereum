@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-//var faucetAddr = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+// var faucetAddr = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
 func (s *Suite) sendSuccessfulTxs(t *utesting.T) error {
@@ -95,7 +95,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 				}
 			}
 			return fmt.Errorf("missing transaction: got %v missing %v", recTxs, tx.Hash())
-		case *NewPooledTransactionHashes:
+		case *NewPooledTransactionHashes66:
 			txHashes := *msg
 			// if you receive an old tx propagation, read from connection again
 			if len(txHashes) == 1 && prevTx != nil {
@@ -110,6 +110,34 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 				}
 			}
 			return fmt.Errorf("missing transaction announcement: got %v missing %v", txHashes, tx.Hash())
+		case *NewPooledTransactionHashes:
+			txHashes := msg.Hashes
+			if len(txHashes) != len(msg.Sizes) {
+				return fmt.Errorf("invalid msg size lengths: hashes: %v sizes: %v", len(txHashes), len(msg.Sizes))
+			}
+			if len(txHashes) != len(msg.Types) {
+				return fmt.Errorf("invalid msg type lengths: hashes: %v types: %v", len(txHashes), len(msg.Types))
+			}
+			// if you receive an old tx propagation, read from connection again
+			if len(txHashes) == 1 && prevTx != nil {
+				if txHashes[0] == prevTx.Hash() {
+					continue
+				}
+			}
+			for index, gotHash := range txHashes {
+				if gotHash == tx.Hash() {
+					if msg.Sizes[index] != uint32(tx.Size()) {
+						return fmt.Errorf("invalid tx size: got %v want %v", msg.Sizes[index], tx.Size())
+					}
+					if msg.Types[index] != tx.Type() {
+						return fmt.Errorf("invalid tx type: got %v want %v", msg.Types[index], tx.Type())
+					}
+					// Ok
+					return nil
+				}
+			}
+			return fmt.Errorf("missing transaction announcement: got %v missing %v", txHashes, tx.Hash())
+
 		default:
 			return fmt.Errorf("unexpected message in sendSuccessfulTx: %s", pretty.Sdump(msg))
 		}
@@ -192,17 +220,19 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	nonce = txs[len(txs)-1].Nonce()
 
 	// Wait for the transaction announcement(s) and make sure all sent txs are being propagated.
-	// all txs should be announced within 3 announcements.
+	// all txs should be announced within a couple announcements.
 	recvHashes := make([]common.Hash, 0)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 20; i++ {
 		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
 		case *Transactions:
 			for _, tx := range *msg {
 				recvHashes = append(recvHashes, tx.Hash())
 			}
-		case *NewPooledTransactionHashes:
+		case *NewPooledTransactionHashes66:
 			recvHashes = append(recvHashes, *msg...)
+		case *NewPooledTransactionHashes:
+			recvHashes = append(recvHashes, msg.Hashes...)
 		default:
 			if !strings.Contains(pretty.Sdump(msg), "i/o timeout") {
 				return fmt.Errorf("unexpected message while waiting to receive txs: %s", pretty.Sdump(msg))
@@ -246,8 +276,13 @@ func checkMaliciousTxPropagation(s *Suite, txs []*types.Transaction, conn *Conn)
 		if len(badTxs) > 0 {
 			return fmt.Errorf("received %d bad txs: \n%v", len(badTxs), badTxs)
 		}
-	case *NewPooledTransactionHashes:
+	case *NewPooledTransactionHashes66:
 		badTxs, _ := compareReceivedTxs(*msg, txs)
+		if len(badTxs) > 0 {
+			return fmt.Errorf("received %d bad txs: \n%v", len(badTxs), badTxs)
+		}
+	case *NewPooledTransactionHashes:
+		badTxs, _ := compareReceivedTxs(msg.Hashes, txs)
 		if len(badTxs) > 0 {
 			return fmt.Errorf("received %d bad txs: \n%v", len(badTxs), badTxs)
 		}

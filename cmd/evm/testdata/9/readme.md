@@ -44,10 +44,10 @@ $ dir=./testdata/9 && ./evm t8n --state.fork=London --input.alloc=$dir/alloc.jso
    "nonce": "0x1"
   },
   "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
-   "balance": "0xbfc02677a000"
+   "balance": "0x5bb10ddef6e0"
   },
   "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-   "balance": "0xff104fcfea7800",
+   "balance": "0xff745ee8832120",
    "nonce": "0x2"
   }
  }

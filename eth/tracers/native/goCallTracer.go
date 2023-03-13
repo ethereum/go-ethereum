@@ -2,17 +2,19 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/state"
+	sdb "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"strconv"
+	"strings"
 
 	"github.com/holiman/uint256"
 )
@@ -20,7 +22,7 @@ import (
 func init() {
 	// we chose the wildcard to be false due to wanting to be up the queue in the lookup list (ahead of interpreted languages)
 	// tracers.RegisterLookup(false, newGoCallTracer)
-	register("goCallTracer", newGoCallTracer)
+	tracers.DefaultDirectory.Register("goCallTracer", newGoCallTracer, false)
 }
 
 type call struct {
@@ -51,7 +53,7 @@ type TracerResult interface {
 type CallTracer struct {
 	callStack []*call
 	descended bool
-	statedb   *state.StateDB
+	statedb   *sdb.StateDB
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
 }
@@ -71,8 +73,14 @@ func (tracer *CallTracer) i() int {
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (tracer *CallTracer) GetResult() (json.RawMessage, error) {
+	if len(tracer.callStack) != 1 {
+		return nil, errors.New("incorrect number of top-level calls")
+	}
 	res, err := json.Marshal(tracer.callStack[0])
-	return json.RawMessage(res), err
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(res), tracer.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -92,9 +100,9 @@ func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to comm
 		Calls: []*call{},
 	}}
 }
-func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	tracer.callStack[tracer.i()].GasUsed = hexutil.Uint64(gasUsed)
-	tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
+	// tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
 	tracer.callStack[tracer.i()].Output = hexutil.Bytes(output)
 }
 
@@ -219,3 +227,18 @@ func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
 func (tracer *CallTracer) CaptureTxEnd(restGas uint64)                          {}
 func (tracer *CallTracer) CaptureTxStart(gasLimit uint64)                       {}
+
+func bigToHex(n *big.Int) string {
+	if n == nil {
+		return ""
+	}
+	return "0x" + n.Text(16)
+}
+
+func uintToHex(n uint64) string {
+	return "0x" + strconv.FormatUint(n, 16)
+}
+
+func addrToHex(a common.Address) string {
+	return strings.ToLower(a.Hex())
+}

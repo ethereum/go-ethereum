@@ -1,11 +1,3 @@
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 package influxdb
 
 import (
@@ -69,6 +61,9 @@ func InfluxDBV2WithTags(r metrics.Registry, d time.Duration, endpoint string, to
 func (r *v2Reporter) run() {
 	intervalTicker := time.NewTicker(r.interval)
 	pingTicker := time.NewTicker(time.Second * 5)
+
+	defer intervalTicker.Stop()
+	defer pingTicker.Stop()
 
 	for {
 		select {
