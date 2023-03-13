@@ -749,7 +749,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			// Add all transactions back to the priced queue
 			if replacesPending {
 				for _, dropTx := range drop {
-					pool.priced.Put(dropTx, local || pool.locals.containsTx(dropTx))
+					pool.priced.Put(dropTx, false)
 				}
 				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
 				return false, ErrFutureReplacePending
