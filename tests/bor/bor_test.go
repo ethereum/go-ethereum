@@ -392,11 +392,17 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
 
+	spanner := getMockedSpanner(t, currentValidators)
+	_bor.SetSpanner(spanner)
+
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= spanSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
+
+	spanner = getMockedSpanner(t, currentSpan.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 
 	validators, err := _bor.GetCurrentValidators(context.Background(), block.Hash(), spanSize) // check validator set at the first block of new span
 	if err != nil {
@@ -426,6 +432,9 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	res, _ := loadSpanFromFile(t)
 
 	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
+
+	spanner := getMockedSpanner(t, currentValidators)
+	_bor.SetSpanner(spanner)
 
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i < sprintSize; i++ {
@@ -528,6 +537,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
 		}
 
+		spanner := getMockedSpanner(t, currentValidators)
+		_bor.SetSpanner(spanner)
+
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
@@ -553,6 +565,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		} else {
 			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
 		}
+
+		spanner := getMockedSpanner(t, currentValidators)
+		_bor.SetSpanner(spanner)
 
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
@@ -580,6 +595,8 @@ func TestOutOfTurnSigning(t *testing.T) {
 
 	h.EXPECT().Close().AnyTimes()
 
+	spanner := getMockedSpanner(t, heimdallSpan.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -1081,6 +1098,9 @@ func TestJaipurFork(t *testing.T) {
 	block := init.genesis.ToBlock(db)
 
 	res, _ := loadSpanFromFile(t)
+
+	spanner := getMockedSpanner(t, res.Result.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 
 	for i := uint64(1); i < sprintSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
