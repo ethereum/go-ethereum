@@ -75,7 +75,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
 	if !b.eth.Merger().TDDReached() && (number == rpc.FinalizedBlockNumber || number == rpc.SafeBlockNumber) {
-		return nil, fmt.Errorf("tag not supported on pre-merge network")
+		return nil, errors.New("tag not supported on pre-merge network")
 	}
 	if number == rpc.FinalizedBlockNumber {
 		block := b.eth.blockchain.CurrentFinalBlock()
