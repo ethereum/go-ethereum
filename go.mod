@@ -71,7 +71,7 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 )
 
-require github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230213123031-bc4b91aed74e
+require github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230312204821-9a244123c812
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1 // indirect
