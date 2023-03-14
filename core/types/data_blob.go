@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/crate-crypto/go-proto-danksharding-crypto/eth"
-	api "github.com/crate-crypto/go-proto-danksharding-crypto/serialisation"
+	api "github.com/crate-crypto/go-proto-danksharding-crypto/serialization"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
@@ -199,6 +199,36 @@ func (li BlobKzgs) copy() BlobKzgs {
 	return cpy
 }
 
+type KZGProofs []KZGProof
+
+func (li *KZGProofs) Deserialize(dr *codec.DecodingReader) error {
+	return dr.List(func() codec.Deserializable {
+		i := len(*li)
+		*li = append(*li, KZGProof{})
+		return &(*li)[i]
+	}, 48, params.MaxBlobsPerBlock)
+}
+
+func (li KZGProofs) Serialize(w *codec.EncodingWriter) error {
+	return w.List(func(i uint64) codec.Serializable {
+		return &li[i]
+	}, 48, uint64(len(li)))
+}
+
+func (li KZGProofs) ByteLength() uint64 {
+	return uint64(len(li)) * 48
+}
+
+func (li KZGProofs) FixedLength() uint64 {
+	return 0
+}
+
+func (li KZGProofs) copy() KZGProofs {
+	cpy := make(KZGProofs, len(li))
+	copy(cpy, li)
+	return cpy
+}
+
 type Blobs []Blob
 
 func (a *Blobs) Deserialize(dr *codec.DecodingReader) error {
@@ -229,28 +259,28 @@ func (blobs Blobs) copy() Blobs {
 	return cpy
 }
 
-// Return KZG commitments, versioned hashes and the aggregated KZG proof that correspond to these blobs
-func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGCommitment, versionedHashes []common.Hash, aggregatedProof KZGProof, err error) {
+// Return KZG commitments, versioned hashes and the proofs that correspond to these blobs
+func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, versionedHashes []common.Hash, proofs []KZGProof, err error) {
 	commitments = make([]KZGCommitment, len(blobs))
+	proofs = make([]KZGProof, len(blobs))
 	versionedHashes = make([]common.Hash, len(blobs))
 
 	for i, blob := range blobs {
-		commitment, err := eth.CryptoCtx.BlobToCommitment(blob)
+		commitment, err := eth.CryptoCtx.BlobToKZGCommitment(blob)
 		if err != nil {
+			return nil, nil, nil, fmt.Errorf("could not convert blob to commitment: %v", err)
+		}
 
-			return nil, nil, KZGProof{}, fmt.Errorf("could not convert blob to commitment: %v", err)
+		proof, err := eth.CryptoCtx.ComputeBlobKZGProof(blob, commitment)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("could not compute proof for blob: %v", err)
 		}
 		commitments[i] = KZGCommitment(commitment)
+		proofs[i] = KZGProof(proof)
 		versionedHashes[i] = common.Hash(eth.KZGToVersionedHash(commitment))
 	}
 
-	proof, _, err := eth.CryptoCtx.ComputeAggregateKZGProof(toBlobs(blobs))
-	if err != nil {
-		return nil, nil, KZGProof{}, err
-	}
-	var kzgProof = KZGProof(proof)
-
-	return commitments, versionedHashes, kzgProof, nil
+	return commitments, versionedHashes, proofs, nil
 }
 
 func toBlobs(_blobs Blobs) []api.Blob {
@@ -267,24 +297,31 @@ func toComms(_comms BlobKzgs) []api.KZGCommitment {
 	}
 	return comms
 }
+func toProofs(_proofs KZGProofs) []api.KZGProof {
+	proofs := make([]api.KZGProof, len(_proofs))
+	for i, _proof := range _proofs {
+		proofs[i] = api.KZGProof(_proof)
+	}
+	return proofs
+}
 
 type BlobTxWrapper struct {
-	Tx                 SignedBlobTx
-	BlobKzgs           BlobKzgs
-	Blobs              Blobs
-	KzgAggregatedProof KZGProof
+	Tx       SignedBlobTx
+	BlobKzgs BlobKzgs
+	Blobs    Blobs
+	Proofs   KZGProofs
 }
 
 func (txw *BlobTxWrapper) Deserialize(dr *codec.DecodingReader) error {
-	return dr.Container(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.KzgAggregatedProof)
+	return dr.Container(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.Proofs)
 }
 
 func (txw *BlobTxWrapper) Serialize(w *codec.EncodingWriter) error {
-	return w.Container(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.KzgAggregatedProof)
+	return w.Container(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.Proofs)
 }
 
 func (txw *BlobTxWrapper) ByteLength() uint64 {
-	return codec.ContainerLength(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.KzgAggregatedProof)
+	return codec.ContainerLength(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.Proofs)
 }
 
 func (txw *BlobTxWrapper) FixedLength() uint64 {
@@ -292,14 +329,14 @@ func (txw *BlobTxWrapper) FixedLength() uint64 {
 }
 
 type BlobTxWrapData struct {
-	BlobKzgs           BlobKzgs
-	Blobs              Blobs
-	KzgAggregatedProof KZGProof
+	BlobKzgs BlobKzgs
+	Blobs    Blobs
+	Proofs   KZGProofs
 }
 
 // sizeWrapData returns the size in bytes of the ssz-encoded BlobTxWrapData
 func (b *BlobTxWrapData) sizeWrapData() common.StorageSize {
-	return common.StorageSize(codec.ContainerLength(&b.BlobKzgs, &b.Blobs, &b.KzgAggregatedProof))
+	return common.StorageSize(codec.ContainerLength(&b.BlobKzgs, &b.Blobs, &b.Proofs))
 }
 
 // validateBlobTransactionWrapper implements validate_blob_transaction_wrapper from EIP-4844
@@ -320,7 +357,7 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if l1 > params.MaxBlobsPerBlock {
 		return fmt.Errorf("number of blobs exceeds max: %v", l1)
 	}
-	err := eth.CryptoCtx.VerifyAggregateKZGProof(toBlobs(b.Blobs), api.KZGProof(b.KzgAggregatedProof), toComms(b.BlobKzgs))
+	err := eth.CryptoCtx.VerifyBlobKZGProofBatch(toBlobs(b.Blobs), toProofs(b.Proofs), toComms(b.BlobKzgs))
 	if err != nil {
 		return fmt.Errorf("error during proof verification: %v", err)
 	}
@@ -337,9 +374,9 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 
 func (b *BlobTxWrapData) copy() TxWrapData {
 	return &BlobTxWrapData{
-		BlobKzgs:           b.BlobKzgs.copy(),
-		Blobs:              b.Blobs.copy(),
-		KzgAggregatedProof: b.KzgAggregatedProof,
+		BlobKzgs: b.BlobKzgs.copy(),
+		Blobs:    b.Blobs.copy(),
+		Proofs:   b.Proofs.copy(),
 	}
 }
 
@@ -351,8 +388,8 @@ func (b *BlobTxWrapData) blobs() Blobs {
 	return b.Blobs
 }
 
-func (b *BlobTxWrapData) aggregatedProof() KZGProof {
-	return b.KzgAggregatedProof
+func (b *BlobTxWrapData) proofs() KZGProofs {
+	return b.Proofs
 }
 
 func (b *BlobTxWrapData) encodeTyped(w io.Writer, txdata TxData) error {
@@ -364,10 +401,10 @@ func (b *BlobTxWrapData) encodeTyped(w io.Writer, txdata TxData) error {
 		return fmt.Errorf("expected signed blob tx, got %T", txdata)
 	}
 	wrapped := BlobTxWrapper{
-		Tx:                 *blobTx,
-		BlobKzgs:           b.BlobKzgs,
-		Blobs:              b.Blobs,
-		KzgAggregatedProof: b.KzgAggregatedProof,
+		Tx:       *blobTx,
+		BlobKzgs: b.BlobKzgs,
+		Blobs:    b.Blobs,
+		Proofs:   b.Proofs,
 	}
 	return EncodeSSZ(w, &wrapped)
 }

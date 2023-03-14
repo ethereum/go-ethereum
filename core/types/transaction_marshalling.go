@@ -54,7 +54,7 @@ type txJSON struct {
 	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 	Blobs               Blobs         `json:"blobs,omitempty"`
 	BlobKzgs            BlobKzgs      `json:"blobKzgs,omitempty"`
-	KzgAggregatedProof  KZGProof      `json:"kzgAggregatedProof,omitempty"`
+	Proofs              KZGProofs     `json:"proofs,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -123,7 +123,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		if tx.wrapData != nil {
 			enc.Blobs = tx.wrapData.blobs()
 			enc.BlobKzgs = tx.wrapData.kzgs()
-			enc.KzgAggregatedProof = tx.wrapData.aggregatedProof()
+			enc.Proofs = tx.wrapData.proofs()
 		}
 	}
 	return json.Marshal(&enc)
@@ -362,9 +362,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		// A BlobTx may not contain data
 		if len(dec.Blobs) != 0 || len(dec.BlobKzgs) != 0 {
 			tx.wrapData = &BlobTxWrapData{
-				BlobKzgs:           dec.BlobKzgs,
-				Blobs:              dec.Blobs,
-				KzgAggregatedProof: dec.KzgAggregatedProof,
+				BlobKzgs: dec.BlobKzgs,
+				Blobs:    dec.Blobs,
+				Proofs:   dec.Proofs,
 			}
 			// Verify that versioned hashes match kzgs, and kzgs match blobs.
 			if err := tx.wrapData.validateBlobTransactionWrapper(&itx); err != nil {

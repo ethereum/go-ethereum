@@ -145,15 +145,15 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 		msg.Value.SetFromBig((*big.Int)(&args.Value))
 		msg.Data = input
 		msg.AccessList = types.AccessListView(al)
-		commitments, hashes, aggProof, err := types.Blobs(args.Blobs).ComputeCommitmentsAndAggregatedProof()
+		commitments, hashes, proofs, err := types.Blobs(args.Blobs).ComputeCommitmentsAndProofs()
 		if err != nil {
 			return nil, fmt.Errorf("invalid blobs: %v", err)
 		}
 		msg.BlobVersionedHashes = hashes
 		wrapData := types.BlobTxWrapData{
-			Blobs:              args.Blobs,
-			KzgAggregatedProof: aggProof,
-			BlobKzgs:           commitments,
+			Blobs:    args.Blobs,
+			Proofs:   proofs,
+			BlobKzgs: commitments,
 		}
 		data = &types.SignedBlobTx{Message: msg}
 		return types.NewTx(data, types.WithTxWrapData(&wrapData)), nil

@@ -1614,7 +1614,7 @@ func newRandomBlobTx(t *testing.T, chain *core.BlockChain, nonce uint64) *types.
 	var blobs types.Blobs
 	blobs = append(blobs, types.Blob{})
 
-	commitments, versionedHashes, aggregatedProof, err := blobs.ComputeCommitmentsAndAggregatedProof()
+	commitments, versionedHashes, proofs, err := blobs.ComputeCommitmentsAndProofs()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1639,9 +1639,9 @@ func newRandomBlobTx(t *testing.T, chain *core.BlockChain, nonce uint64) *types.
 		},
 	}
 	wrapData := &types.BlobTxWrapData{
-		BlobKzgs:           commitments,
-		Blobs:              blobs,
-		KzgAggregatedProof: aggregatedProof,
+		BlobKzgs: commitments,
+		Blobs:    blobs,
+		Proofs:   proofs,
 	}
 	tx := types.NewTx(txData, types.WithTxWrapData(wrapData))
 	signer := types.NewDankSigner(chainID)

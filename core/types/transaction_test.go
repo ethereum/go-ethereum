@@ -495,9 +495,9 @@ func TestTransactionCoding(t *testing.T) {
 			// This is the identity point serialised
 			var kzgProof KZGProof = [48]byte{192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 			wrapData = &BlobTxWrapData{
-				BlobKzgs:           BlobKzgs{KZGCommitment{0: 0xc0}},
-				Blobs:              Blobs{Blob{}},
-				KzgAggregatedProof: kzgProof,
+				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
+				Blobs:    Blobs{Blob{}},
+				Proofs:   KZGProofs{kzgProof},
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))

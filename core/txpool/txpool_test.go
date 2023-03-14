@@ -128,11 +128,11 @@ func blobTx(nonce uint64, gaslimit uint64, gasFee uint64, tip uint64, dataGasFee
 	for i := 0; i < len(blobData.BlobKzgs); i++ {
 		hashes = append(hashes, blobData.BlobKzgs[i].ComputeVersionedHash())
 	}
-	_, _, aggregatedProof, err := blobData.Blobs.ComputeCommitmentsAndAggregatedProof()
+	_, _, proofs, err := blobData.Blobs.ComputeCommitmentsAndProofs()
 	if err != nil {
 		panic(err)
 	}
-	blobData.KzgAggregatedProof = aggregatedProof
+	blobData.Proofs = proofs
 
 	address := types.AddressSSZ(common.Address{})
 	sbtx := &types.SignedBlobTx{
