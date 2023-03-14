@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -91,4 +93,55 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 			common.Big0,
 		)
 	}
+}
+
+// CalcBaseFee calculates the basefee of the header.
+func CalcBaseFeeUint(config *params.ChainConfig, parent *types.Header) *uint256.Int {
+	var (
+		initialBaseFeeUint             = uint256.NewInt(params.InitialBaseFee)
+		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
+		baseFeeChangeDenominatorUint   = uint256.NewInt(baseFeeChangeDenominatorUint64)
+	)
+
+	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
+	if !config.IsLondon(parent.Number) {
+		return initialBaseFeeUint.Clone()
+	}
+
+	var (
+		parentGasTarget    = parent.GasLimit / params.ElasticityMultiplier
+		parentGasTargetBig = uint256.NewInt(parentGasTarget)
+	)
+
+	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
+	if parent.GasUsed == parentGasTarget {
+		return math.FromBig(parent.BaseFee)
+	}
+
+	if parent.GasUsed > parentGasTarget {
+		// If the parent block used more gas than its target, the baseFee should increase.
+		gasUsedDelta := uint256.NewInt(parent.GasUsed - parentGasTarget)
+
+		parentBaseFee := math.FromBig(parent.BaseFee)
+		x := gasUsedDelta.Mul(parentBaseFee, gasUsedDelta)
+		y := x.Div(x, parentGasTargetBig)
+		baseFeeDelta := math.BigMaxUint(
+			x.Div(y, baseFeeChangeDenominatorUint),
+			math.U1,
+		)
+
+		return x.Add(parentBaseFee, baseFeeDelta)
+	}
+
+	// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
+	gasUsedDelta := uint256.NewInt(parentGasTarget - parent.GasUsed)
+	parentBaseFee := math.FromBig(parent.BaseFee)
+	x := gasUsedDelta.Mul(parentBaseFee, gasUsedDelta)
+	y := x.Div(x, parentGasTargetBig)
+	baseFeeDelta := x.Div(y, baseFeeChangeDenominatorUint)
+
+	return math.BigMaxUint(
+		x.Sub(parentBaseFee, baseFeeDelta),
+		math.U0.Clone(),
+	)
 }

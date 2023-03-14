@@ -1375,7 +1375,7 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 
 	var stateSyncLogs []*types.Log
 
-	tracing.Exec(writeBlockAndSetHeadCtx, "blockchain.writeBlockWithState", func(_ context.Context, span trace.Span) {
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeBlockWithState", func(_ context.Context, span trace.Span) {
 		stateSyncLogs, err = bc.writeBlockWithState(block, receipts, logs, state)
 		tracing.SetAttributes(
 			span,
@@ -1392,7 +1392,7 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 
 	var reorg bool
 
-	tracing.Exec(writeBlockAndSetHeadCtx, "blockchain.ReorgNeeded", func(_ context.Context, span trace.Span) {
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.ReorgNeeded", func(_ context.Context, span trace.Span) {
 		reorg, err = bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
 		tracing.SetAttributes(
 			span,
@@ -1406,7 +1406,7 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 		return NonStatTy, err
 	}
 
-	tracing.Exec(writeBlockAndSetHeadCtx, "blockchain.reorg", func(_ context.Context, span trace.Span) {
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.reorg", func(_ context.Context, span trace.Span) {
 		if reorg {
 			// Reorganise the chain if the parent is not the head block
 			if block.ParentHash() != currentBlock.Hash() {
@@ -1435,7 +1435,7 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 
 	// Set new head.
 	if status == CanonStatTy {
-		tracing.Exec(writeBlockAndSetHeadCtx, "blockchain.writeHeadBlock", func(_ context.Context, _ trace.Span) {
+		tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeHeadBlock", func(_ context.Context, _ trace.Span) {
 			bc.writeHeadBlock(block)
 		})
 	}

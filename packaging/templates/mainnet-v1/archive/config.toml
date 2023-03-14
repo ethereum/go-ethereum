@@ -86,7 +86,7 @@ gcmode = "archive"
         # vhosts = ["*"]
         # corsdomain = ["*"]
     # [jsonrpc.timeouts]
-        # read = "30s"
+        # read = "10s"
         # write = "30s"
         # idle = "2m0s"
 

@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"sync/atomic"
@@ -44,20 +45,24 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	//
 	// TODO(karalabe): Figure out if we could get away with random order somehow
 	var txs types.Transactions
-	pending := h.txpool.Pending(false)
+
+	pending := h.txpool.Pending(context.Background(), false)
 	for _, batch := range pending {
 		txs = append(txs, batch...)
 	}
+
 	if len(txs) == 0 {
 		return
 	}
 	// The eth/65 protocol introduces proper transaction announcements, so instead
 	// of dripping transactions across multiple peers, just send the entire list as
 	// an announcement and let the remote side decide what they need (likely nothing).
+
 	hashes := make([]common.Hash, len(txs))
 	for i, tx := range txs {
 		hashes[i] = tx.Hash()
 	}
+
 	p.AsyncSendPooledTransactionHashes(hashes)
 }
 

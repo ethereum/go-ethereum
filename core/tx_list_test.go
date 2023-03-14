@@ -17,9 +17,10 @@
 package core
 
 import (
-	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -59,11 +60,15 @@ func BenchmarkTxListAdd(b *testing.B) {
 	for i := 0; i < len(txs); i++ {
 		txs[i] = transaction(uint64(i), 0, key)
 	}
+
 	// Insert the transactions in a random order
-	priceLimit := big.NewInt(int64(DefaultTxPoolConfig.PriceLimit))
+	priceLimit := uint256.NewInt(DefaultTxPoolConfig.PriceLimit)
 	b.ResetTimer()
+	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		list := newTxList(true)
+
 		for _, v := range rand.Perm(len(txs)) {
 			list.Add(txs[v], DefaultTxPoolConfig.PriceBump)
 			list.Filter(priceLimit, DefaultTxPoolConfig.PriceBump)

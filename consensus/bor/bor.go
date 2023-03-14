@@ -866,7 +866,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 
-		tracing.Exec(finalizeCtx, "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
+		tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
 			// check and commit span
 			err = c.checkAndCommitSpan(finalizeCtx, state, header, cx)
 		})
@@ -877,7 +877,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 		}
 
 		if c.HeimdallClient != nil {
-			tracing.Exec(finalizeCtx, "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
+			tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
 				// commit states
 				stateSyncData, err = c.CommitStates(finalizeCtx, state, header, cx)
 			})
@@ -889,7 +889,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 		}
 	}
 
-	tracing.Exec(finalizeCtx, "bor.changeContractCodeIfNeeded", func(ctx context.Context, span trace.Span) {
+	tracing.Exec(finalizeCtx, "", "bor.changeContractCodeIfNeeded", func(ctx context.Context, span trace.Span) {
 		err = c.changeContractCodeIfNeeded(headerNumber, state)
 	})
 
@@ -899,7 +899,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	}
 
 	// No block rewards in PoA, so the state remains as it is
-	tracing.Exec(finalizeCtx, "bor.IntermediateRoot", func(ctx context.Context, span trace.Span) {
+	tracing.Exec(finalizeCtx, "", "bor.IntermediateRoot", func(ctx context.Context, span trace.Span) {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	})
 

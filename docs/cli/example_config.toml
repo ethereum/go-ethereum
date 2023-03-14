@@ -93,7 +93,7 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
     vhosts = ["localhost"]      # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
     corsdomain = ["localhost"]  # Comma separated list of domains from which to accept cross origin requests (browser enforced)
   [jsonrpc.timeouts]
-    read = "30s"
+    read = "10s"
     write = "30s"
     idle = "2m0s"
 

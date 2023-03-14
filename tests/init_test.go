@@ -141,9 +141,6 @@ func (tm *testMatcher) findSkip(name string) (reason string, skipload bool) {
 	isWin32 := runtime.GOARCH == "386" && runtime.GOOS == "windows"
 	for _, re := range tm.slowpat {
 		if re.MatchString(name) {
-			if testing.Short() {
-				return "skipped in -short mode", false
-			}
 			if isWin32 {
 				return "skipped on 32bit windows", false
 			}

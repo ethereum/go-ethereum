@@ -61,6 +61,28 @@ func CPUProfile(ctx context.Context, sec int) ([]byte, map[string]string, error)
 		}, nil
 }
 
+// CPUProfile generates a CPU Profile for a given duration
+func CPUProfileWithChannel(done chan bool) ([]byte, map[string]string, error) {
+	var buf bytes.Buffer
+	if err := pprof.StartCPUProfile(&buf); err != nil {
+		return nil, nil, err
+	}
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+	}
+
+	pprof.StopCPUProfile()
+
+	return buf.Bytes(),
+		map[string]string{
+			"X-Content-Type-Options": "nosniff",
+			"Content-Type":           "application/octet-stream",
+			"Content-Disposition":    `attachment; filename="profile"`,
+		}, nil
+}
+
 // Trace runs a trace profile for a given duration
 func Trace(ctx context.Context, sec int) ([]byte, map[string]string, error) {
 	if sec <= 0 {

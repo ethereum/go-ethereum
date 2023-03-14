@@ -19,19 +19,23 @@ package types
 import (
 	"math/big"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type DynamicFeeTx struct {
-	ChainID    *big.Int
-	Nonce      uint64
-	GasTipCap  *big.Int // a.k.a. maxPriorityFeePerGas
-	GasFeeCap  *big.Int // a.k.a. maxFeePerGas
-	Gas        uint64
-	To         *common.Address `rlp:"nil"` // nil means contract creation
-	Value      *big.Int
-	Data       []byte
-	AccessList AccessList
+	ChainID          *big.Int
+	Nonce            uint64
+	GasTipCap        *big.Int     // a.k.a. maxPriorityFeePerGas
+	gasTipCapUint256 *uint256.Int // a.k.a. maxPriorityFeePerGas
+	GasFeeCap        *big.Int     // a.k.a. maxFeePerGas
+	gasFeeCapUint256 *uint256.Int // a.k.a. maxFeePerGas
+	Gas              uint64
+	To               *common.Address `rlp:"nil"` // nil means contract creation
+	Value            *big.Int
+	Data             []byte
+	AccessList       AccessList
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -65,9 +69,21 @@ func (tx *DynamicFeeTx) copy() TxData {
 	}
 	if tx.GasTipCap != nil {
 		cpy.GasTipCap.Set(tx.GasTipCap)
+
+		if cpy.gasTipCapUint256 != nil {
+			cpy.gasTipCapUint256.Set(tx.gasTipCapUint256)
+		} else {
+			cpy.gasTipCapUint256, _ = uint256.FromBig(tx.GasTipCap)
+		}
 	}
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
+
+		if cpy.gasFeeCapUint256 != nil {
+			cpy.gasFeeCapUint256.Set(tx.gasFeeCapUint256)
+		} else {
+			cpy.gasFeeCapUint256, _ = uint256.FromBig(tx.GasFeeCap)
+		}
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
@@ -88,11 +104,38 @@ func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
 func (tx *DynamicFeeTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) gasTipCap() *big.Int    { return tx.GasTipCap }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
-func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
-func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
+func (tx *DynamicFeeTx) gasFeeCapU256() *uint256.Int {
+	if tx.gasFeeCapUint256 != nil {
+		return tx.gasFeeCapUint256
+	}
+
+	tx.gasFeeCapUint256, _ = uint256.FromBig(tx.GasFeeCap)
+
+	return tx.gasFeeCapUint256
+}
+func (tx *DynamicFeeTx) gasTipCap() *big.Int { return tx.GasTipCap }
+func (tx *DynamicFeeTx) gasTipCapU256() *uint256.Int {
+	if tx.gasTipCapUint256 != nil {
+		return tx.gasTipCapUint256
+	}
+
+	tx.gasTipCapUint256, _ = uint256.FromBig(tx.GasTipCap)
+
+	return tx.gasTipCapUint256
+}
+func (tx *DynamicFeeTx) gasPrice() *big.Int { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) gasPriceU256() *uint256.Int {
+	if tx.gasFeeCapUint256 != nil {
+		return tx.gasTipCapUint256
+	}
+
+	tx.gasFeeCapUint256, _ = uint256.FromBig(tx.GasFeeCap)
+
+	return tx.gasFeeCapUint256
+}
+func (tx *DynamicFeeTx) value() *big.Int     { return tx.Value }
+func (tx *DynamicFeeTx) nonce() uint64       { return tx.Nonce }
+func (tx *DynamicFeeTx) to() *common.Address { return tx.To }
 
 func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

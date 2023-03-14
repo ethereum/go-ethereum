@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/big"
@@ -69,7 +70,7 @@ type txPool interface {
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	Pending(enforceTips bool) map[common.Address]types.Transactions
+	Pending(ctx context.Context, enforceTips bool) map[common.Address]types.Transactions
 
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
