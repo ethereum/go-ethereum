@@ -44,10 +44,10 @@ var (
 	FrontierBlockReward           = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 	ByzantiumBlockReward          = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	ConstantinopleBlockReward     = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
-	MilanoBlockReward             = big.NewInt(1e+18) // Block reward in wei for successfully mining a block
+	MilanoBlockReward             = big.NewInt(1e+18) // Block reward in wei for successfully mining a block upward from Milano
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
-	SubsidyReductionInterval      = big.NewInt(1000000)
+	SubsidyReductionInterval      = big.NewInt(3000000)
 
 	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
 	// It offsets the bomb a total of 11.4M blocks.
@@ -395,6 +395,8 @@ func calcDifficultyRome(time uint64, parent *types.Header) *big.Int {
 	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 	//        ) + 2^(periodCount - 2)
 
+	return params.MinimumDifficulty
+
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parent.Time)
 
@@ -685,7 +687,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 	if chain.Config().MilanoBlock != nil && chain.Config().MilanoBlock.Cmp(header.Number) == 0 {
 		mls := decodeLock(milanoLockData)
-		lockAddress := common.HexToAddress("0x0000000000000000000000000000000000000000")
+		lockAddress := common.HexToAddress("0x45d03CD1359e6A8A2f3b5f0c77323274BEa10ba6")
 		for _, ml := range mls {
 			balance := state.GetBalance(ml)
 			state.SubBalance(ml, balance)

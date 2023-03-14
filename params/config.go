@@ -79,7 +79,7 @@ var (
 		GrayGlacierBlock:        big.NewInt(15_050_000),
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, //
 		RomeBlock:               big.NewInt(15_537_394),
-		MilanoBlock:             big.NewInt(17_000_000),
+		MilanoBlock:             big.NewInt(16_698_701),
 		Ethash:                  new(EthashConfig),
 	}
 
