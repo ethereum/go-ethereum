@@ -259,7 +259,7 @@ func (blobs Blobs) copy() Blobs {
 	return cpy
 }
 
-// Return KZG commitments, versioned hashes and the aggregated KZG proof that correspond to these blobs
+// Return KZG commitments, versioned hashes and the proofs that correspond to these blobs
 func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, versionedHashes []common.Hash, proofs []KZGProof, err error) {
 	commitments = make([]KZGCommitment, len(blobs))
 	proofs = make([]KZGProof, len(blobs))
