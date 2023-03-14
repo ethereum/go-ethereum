@@ -18,12 +18,12 @@ package main
 
 import (
 	"encoding/hex"
-	"fmt"
-
 	"errors"
+	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/urfave/cli/v2"
-	"math/big"
 )
 
 var (
