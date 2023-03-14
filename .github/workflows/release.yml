@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Build geth
         run: |
-          cd cmd/geth && /opt/go/1.18.1/bin/go build
+          cd cmd/geth && /opt/go/1.19.5/bin/go build
           tar -czvf geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz geth
           echo $(md5sum geth | awk '{print $1}') > geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz.md5
       - name: Upload geth to release page
