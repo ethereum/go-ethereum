@@ -95,7 +95,7 @@ type TxWrapData interface {
 	copy() TxWrapData
 	kzgs() BlobKzgs
 	blobs() Blobs
-	aggregatedProof() KZGProof
+	proofs() KZGProofs
 	encodeTyped(w io.Writer, txdata TxData) error
 	sizeWrapData() common.StorageSize
 	validateBlobTransactionWrapper(inner TxData) error
@@ -270,7 +270,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, TxWrapData, error) {
 	case BlobTxType:
 		var wrapped BlobTxWrapper
 		err := DecodeSSZ(b[1:], &wrapped)
-		return &wrapped.Tx, &BlobTxWrapData{BlobKzgs: wrapped.BlobKzgs, Blobs: wrapped.Blobs, KzgAggregatedProof: wrapped.KzgAggregatedProof}, err
+		return &wrapped.Tx, &BlobTxWrapData{BlobKzgs: wrapped.BlobKzgs, Blobs: wrapped.Blobs, Proofs: wrapped.Proofs}, err
 	default:
 		minimal, err := tx.decodeTypedMinimal(b)
 		return minimal, nil, err
@@ -555,13 +555,13 @@ func (tx *Transaction) VerifyBlobs() error {
 
 // BlobWrapData returns the blob and kzg data, if any.
 // kzgs and blobs may be empty if the transaction is not wrapped.
-func (tx *Transaction) BlobWrapData() (versionedHashes []common.Hash, kzgs BlobKzgs, blobs Blobs, aggProof KZGProof) {
+func (tx *Transaction) BlobWrapData() (versionedHashes []common.Hash, kzgs BlobKzgs, blobs Blobs, proofs KZGProofs) {
 	if blobWrap, ok := tx.wrapData.(*BlobTxWrapData); ok {
 		if signedBlobTx, ok := tx.inner.(*SignedBlobTx); ok {
-			return signedBlobTx.Message.BlobVersionedHashes, blobWrap.BlobKzgs, blobWrap.Blobs, blobWrap.KzgAggregatedProof
+			return signedBlobTx.Message.BlobVersionedHashes, blobWrap.BlobKzgs, blobWrap.Blobs, blobWrap.Proofs
 		}
 	}
-	return nil, nil, nil, KZGProof{}
+	return nil, nil, nil, nil
 }
 
 // WithSignature returns a new transaction with the given signature.

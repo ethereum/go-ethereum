@@ -17,7 +17,6 @@
 package engine
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -257,15 +256,12 @@ func BlockToBlobData(block *types.Block) (*BlobsBundle, error) {
 	}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
-			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
-			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
+			versionedHashes, kzgs, blobs, proofs := tx.BlobWrapData()
+			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) || len(blobs) != len(proofs) {
 				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
-					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
+					" / versioned hashes (%d) / proofs (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes), len(proofs))
 			}
-			var zProof types.KZGProof
-			if zProof == aggProof {
-				return nil, errors.New("aggregated proof is not available in blobs")
-			}
+
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
 			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
 		}

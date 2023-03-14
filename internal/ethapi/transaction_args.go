@@ -302,13 +302,13 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		msg.Value.SetFromBig((*big.Int)(args.Value))
 		msg.Data = args.data()
 		msg.AccessList = types.AccessListView(al)
-		commitments, versionedHashes, aggregatedProof, err := types.Blobs(args.Blobs).ComputeCommitmentsAndAggregatedProof()
+		commitments, versionedHashes, proofs, err := types.Blobs(args.Blobs).ComputeCommitmentsAndProofs()
 		// XXX if blobs are invalid we will omit the wrap-data (and an error will pop-up later)
 		if err == nil {
 			opts = append(opts, types.WithTxWrapData(&types.BlobTxWrapData{
-				BlobKzgs:           commitments,
-				Blobs:              args.Blobs,
-				KzgAggregatedProof: aggregatedProof,
+				BlobKzgs: commitments,
+				Blobs:    args.Blobs,
+				Proofs:   proofs,
 			}))
 			msg.BlobVersionedHashes = versionedHashes
 		}
