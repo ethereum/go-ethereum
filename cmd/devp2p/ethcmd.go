@@ -20,8 +20,10 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"errors"
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/urfave/cli/v2"
+	"math/big"
 )
 
 var (
@@ -49,16 +51,29 @@ var (
 	}
 	// Subcommands
 	ethNewBlockCommand = cli.Command{
-		Name:   "new-block",
-		Usage:  "<node> <msg>",
-		Action: ethNewBlock,
+		Name:  "new-msg",
+		Usage: "<node> <code> <msg>",
+		Description: `Example codes:
+  - GetBlockBodies: 0x15
+  - BlockBodies: 0x16
+  - NewBlock: 0x17
+  - NewPooledTransactionHashes: 0x18
+`,
+		Action: ethMessage,
 	}
 )
 
-// ethNewBlock peers with node, sends the provided new block announcement, then disconnects from the peer.
-func ethNewBlock(ctx *cli.Context) error {
-	// Decode message body.
-	msg, err := hex.DecodeString(ctx.Args().Get(1))
+// ethMessage peers with node, sends the provided message, then disconnects from the peer.
+func ethMessage(ctx *cli.Context) error {
+	if ctx.NArg() < 3 {
+		return errors.New("Three args needed: <node> <code> <msg>")
+	}
+	msgCode, ok := big.NewInt(0).SetString(ctx.Args().Get(1), 0)
+	if !ok {
+		return fmt.Errorf("unable to decode msg code")
+	}
+	code := msgCode.Uint64()
+	msg, err := hex.DecodeString(ctx.Args().Get(2))
 	if err != nil {
 		return fmt.Errorf("unable to decode msg: %s", err)
 	}
@@ -82,8 +97,6 @@ func ethNewBlock(ctx *cli.Context) error {
 	if err := conn.Peer(chain, status); err != nil {
 		return fmt.Errorf("unable to peer with node: %s", err)
 	}
-	// Send new block announcement.
-	code := uint64((ethtest.NewBlock{}).Code())
 	if _, err = conn.Conn.Write(code, msg); err != nil {
 		exit(fmt.Errorf("failed to write to connection: %w", err))
 	}
