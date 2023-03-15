@@ -164,7 +164,7 @@ func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error)
 		return decodeBigIntNoPtr, nil
 	case typ.AssignableTo(reflect.PtrTo(u256Int)):
 		return decodeU256, nil
-	case typ.AssignableTo(bigInt):
+	case typ.AssignableTo(u256Int):
 		return decodeU256NoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrDecoder(typ, tags)
