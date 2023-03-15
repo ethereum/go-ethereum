@@ -57,7 +57,7 @@ type vmContext struct {
 }
 
 func testCtx() *vmContext {
-	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1), Time: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
+	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1), Time: 1}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
 func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
@@ -180,7 +180,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1), Time: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1), Time: 1}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
@@ -204,7 +204,7 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1), Time: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1), Time: 1}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 		tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
 		tracer.CaptureEnd(nil, 0, nil)
 		ret, err := tracer.GetResult()
@@ -239,7 +239,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blockCtx := vm.BlockContext{BlockNumber: big.NewInt(150), Time: big.NewInt(150)}
+	blockCtx := vm.BlockContext{BlockNumber: big.NewInt(150), Time: 150}
 	res, err := runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
@@ -249,7 +249,7 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
-	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250), Time: big.NewInt(250)}
+	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250), Time: 250}
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
