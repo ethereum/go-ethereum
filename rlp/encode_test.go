@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 type testEncoder struct {
@@ -146,6 +147,31 @@ var encTests = []encTest{
 	// negative ints are not supported
 	{val: big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
 	{val: *big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
+
+	// uint256
+	{val: uint256.NewInt(0), output: "80"},
+	{val: uint256.NewInt(1), output: "01"},
+	{val: uint256.NewInt(127), output: "7F"},
+	{val: uint256.NewInt(128), output: "8180"},
+	{val: uint256.NewInt(256), output: "820100"},
+	{val: uint256.NewInt(1024), output: "820400"},
+	{val: uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFF), output: "84FFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFF), output: "85FFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFF), output: "86FFFFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFFFF), output: "87FFFFFFFFFFFFFF"},
+	{
+		val:    new(uint256.Int).SetBytes(unhex("102030405060708090A0B0C0D0E0F2")),
+		output: "8F102030405060708090A0B0C0D0E0F2",
+	},
+	{
+		val:    new(uint256.Int).SetBytes(unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
+		output: "9C0100020003000400050006000700080009000A000B000C000D000E01",
+	},
+	// non-pointer uint256.Int -- not supported
+	//    encode_test.go:402: test 47: unexpected error: rlp: unadressable value of type uint256.Int, EncodeRLP is pointer method
+	//{val: *uint256.NewInt(0), output: "80"},
+	//{val: *uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// byte arrays
 	{val: [0]byte{}, output: "80"},
