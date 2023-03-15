@@ -355,9 +355,6 @@ func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.db.dbErr != nil {
-		return nil, s.db.dbErr
-	}
 	// If nothing changed, don't bother with committing anything
 	if tr == nil {
 		return nil, nil
