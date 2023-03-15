@@ -107,6 +107,17 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 				}
 				snapshot.Counters = append(snapshot.Counters, measurement)
 			}
+		case metrics.CounterFloat64:
+			if m.Value() > 0 {
+				measurement[Name] = fmt.Sprintf("%s.%s", name, "value")
+				measurement[Value] = m.Value()
+				measurement[Attributes] = map[string]interface{}{
+					DisplayUnitsLong:  Operations,
+					DisplayUnitsShort: OperationsShort,
+					DisplayMin:        "0",
+				}
+				snapshot.Counters = append(snapshot.Counters, measurement)
+			}
 		case metrics.Gauge:
 			measurement[Name] = name
 			measurement[Value] = float64(m.Value())
