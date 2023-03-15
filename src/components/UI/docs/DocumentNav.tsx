@@ -20,7 +20,7 @@ export const DocumentNav: FC<Props> = ({ content }) => {
   const activeHash = useActiveHash(parsedHeadings.map(heading => heading!.headingId));
 
   return parsedHeadings.length ? (
-    <Box as='aside' position='sticky' top='4'>
+    <Box as='aside' position='sticky' h='calc(100vh - 3rem)' overflowY='auto' top='4'>
       <Text textStyle='document-nav-title'>on this page</Text>
       <Divider borderColor='primary' my={`4 !important`} />
       {parsedHeadings.map((heading, idx) => {
