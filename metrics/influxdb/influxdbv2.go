@@ -93,9 +93,9 @@ func (r *v2Reporter) send() {
 			r.write.WritePoint(pt)
 
 		case metrics.CounterFloat64:
-			v := metric.Value()
+			v := metric.Count()
 
-			measurement := fmt.Sprintf("%s%s.value", namespace, name)
+			measurement := fmt.Sprintf("%s%s.count", namespace, name)
 			fields := map[string]interface{}{
 				"value": v,
 			}

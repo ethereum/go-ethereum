@@ -7,7 +7,7 @@ import (
 // CounterFloat64 holds a float64 value that can be incremented and decremented.
 type CounterFloat64 interface {
 	Clear()
-	Value() float64
+	Count() float64
 	Dec(float64)
 	Inc(float64)
 	Snapshot() CounterFloat64
@@ -38,13 +38,13 @@ func NewCounterFloat64() CounterFloat64 {
 	if !Enabled {
 		return NilCounterFloat64{}
 	}
-	return &StandardCounterFloat64{value: 0.0}
+	return &StandardCounterFloat64{count: 0.0}
 }
 
 // NewCounterFloat64Forced constructs a new StandardCounterFloat64 and returns it no matter if
 // the global switch is enabled or not.
 func NewCounterFloat64Forced() CounterFloat64 {
-	return &StandardCounterFloat64{value: 0.0}
+	return &StandardCounterFloat64{count: 0.0}
 }
 
 // NewRegisteredCounterFloat64 constructs and registers a new StandardCounterFloat64.
@@ -78,8 +78,8 @@ func (CounterFloat64Snapshot) Clear() {
 	panic("Clear called on a CounterFloat64Snapshot")
 }
 
-// Value returns the value at the time the snapshot was taken.
-func (c CounterFloat64Snapshot) Value() float64 { return float64(c) }
+// Count returns the value at the time the snapshot was taken.
+func (c CounterFloat64Snapshot) Count() float64 { return float64(c) }
 
 // Dec panics.
 func (CounterFloat64Snapshot) Dec(float64) {
@@ -100,8 +100,8 @@ type NilCounterFloat64 struct{}
 // Clear is a no-op.
 func (NilCounterFloat64) Clear() {}
 
-// Value is a no-op.
-func (NilCounterFloat64) Value() float64 { return 0.0 }
+// Count is a no-op.
+func (NilCounterFloat64) Count() float64 { return 0.0 }
 
 // Dec is a no-op.
 func (NilCounterFloat64) Dec(i float64) {}
@@ -116,38 +116,38 @@ func (NilCounterFloat64) Snapshot() CounterFloat64 { return NilCounterFloat64{} 
 // sync.Mutex package to manage a single float64 value.
 type StandardCounterFloat64 struct {
 	mutex sync.Mutex
-	value float64
+	count float64
 }
 
 // Clear sets the counter to zero.
 func (c *StandardCounterFloat64) Clear() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.value = 0.0
+	c.count = 0.0
 }
 
-// Value returns the current value.
-func (c *StandardCounterFloat64) Value() float64 {
+// Count returns the current value.
+func (c *StandardCounterFloat64) Count() float64 {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	return c.value
+	return c.count
 }
 
 // Dec decrements the counter by the given amount.
 func (c *StandardCounterFloat64) Dec(v float64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.value -= v
+	c.count -= v
 }
 
 // Inc increments the counter by the given amount.
 func (c *StandardCounterFloat64) Inc(v float64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.value += v
+	c.count += v
 }
 
 // Snapshot returns a read-only copy of the counter.
 func (c *StandardCounterFloat64) Snapshot() CounterFloat64 {
-	return CounterFloat64Snapshot(c.Value())
+	return CounterFloat64Snapshot(c.Count())
 }

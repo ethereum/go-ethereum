@@ -108,9 +108,9 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 				snapshot.Counters = append(snapshot.Counters, measurement)
 			}
 		case metrics.CounterFloat64:
-			if m.Value() > 0 {
-				measurement[Name] = fmt.Sprintf("%s.%s", name, "value")
-				measurement[Value] = m.Value()
+			if m.Count() > 0 {
+				measurement[Name] = fmt.Sprintf("%s.%s", name, "count")
+				measurement[Value] = m.Count()
 				measurement[Attributes] = map[string]interface{}{
 					DisplayUnitsLong:  Operations,
 					DisplayUnitsShort: OperationsShort,
