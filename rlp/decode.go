@@ -53,6 +53,7 @@ var (
 	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
+	errUint256Large  = errors.New("rlp: value too large for uint256")
 
 	streamPool = sync.Pool{
 		New: func() interface{} { return new(Stream) },
@@ -914,15 +915,7 @@ func (s *Stream) decodeUint256(dst *uint256.Int) error {
 			return ErrCanonSize
 		}
 	default:
-		// uint256 does not support >32byte integers
-		// Should we raise an error here or just truncate?
-		// TODO!
-		//
-		// For large integers, a temporary buffer is needed.
-		buffer = make([]byte, size)
-		if err := s.readFull(buffer); err != nil {
-			return err
-		}
+		return errUint256Large
 	}
 
 	// Reject leading zero bytes.
