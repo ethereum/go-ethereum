@@ -193,10 +193,10 @@ Returns a list of the last 'bad blocks' that the client has seen on the network 
 
 Retrieves and returns the RLP encoded block by number.
 
-| Client  | Method invocation                                     |
-| :------ | ----------------------------------------------------- |
-| Go      | `debug.getRawBlock(blockNrOrHash) (string, error)`    |
-| Console | `debug.getBlockRlp(blockNrOrHash)`                |
+| Client  | Method invocation                                            |
+| :------ | ------------------------------------------------------------ |
+| Go      | `debug.getRawBlock(blockNrOrHash) (string, error)`           |
+| Console | `debug.getBlockRlp(blockNrOrHash)`                           |
 | RPC     | `{"method": "debug_getRawBlock", "params": [blockNrOrHash]}` |
 
 References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
@@ -205,18 +205,18 @@ References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-en
 
 Returns an RLP-encoded header.
 
-| Client  | Method invocation                                   |
-| :------ | --------------------------------------------------- |
-| Console | `debug.getRawHeader(blockNrOrHash)`                      |
+| Client  | Method invocation                                             |
+| :------ | ------------------------------------------------------------- |
+| Console | `debug.getRawHeader(blockNrOrHash)`                           |
 | RPC     | `{"method": "debug_getRawHeader", "params": [blockNrOrHash]}` |
 
 ### debug_getRawTransaction
 
 Returns the bytes of the transaction.
 
-| Client  | Method invocation                                   |
-| :------ | --------------------------------------------------- |
-| Console | `debug.getRawTransaction(blockNrOrHash)`                      |
+| Client  | Method invocation                                                    |
+| :------ | -------------------------------------------------------------------- |
+| Console | `debug.getRawTransaction(blockNrOrHash)`                             |
 | RPC     | `{"method": "debug_getRawTransaction", "params": [transactionHash]}` |
 
 ### debug_getModifiedAccountsByHash

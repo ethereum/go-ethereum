@@ -27,7 +27,8 @@
   justify-content: space-between;
 }
 
-.DocSearch-Button-Placeholder, .DocSearch-Button-Keys {
+.DocSearch-Button-Placeholder,
+.DocSearch-Button-Keys {
   display: flex;
 }
 
@@ -174,7 +175,8 @@ svg[aria-label='Algolia'] * {
     color: var(--chakra-colors-bg);
   }
 
-  .DocSearch-Button-Placeholder, .DocSearch-Button-Keys {
+  .DocSearch-Button-Placeholder,
+  .DocSearch-Button-Keys {
     display: none;
   }
 
