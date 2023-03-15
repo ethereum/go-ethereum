@@ -174,7 +174,7 @@ func TestShardingExecutePayloadV1(t *testing.T) {
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
-	fcState := beacon.ForkchoiceStateV1{
+	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      postBlocks[0].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -204,7 +204,7 @@ func TestShardingExecutePayloadV1(t *testing.T) {
 		ExcessDataGas: block.ExcessDataGas(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(beacon.ExecutableData{
+	_, err := api.ExecutePayloadV1(engine.ExecutableData{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),
@@ -228,7 +228,7 @@ func TestShardingExecutePayloadV1(t *testing.T) {
 	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
 		t.Fatal("Unexpected chain head update")
 	}
-	fcState = beacon.ForkchoiceStateV1{
+	fcState = engine.ForkchoiceStateV1{
 		HeadBlockHash:      fakeBlock.Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
