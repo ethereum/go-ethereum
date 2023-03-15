@@ -66,7 +66,7 @@ func TestCollector(t *testing.T) {
 test_counter 12345
 
 # TYPE test_counter_float64 gauge
-test/counter_float64 54321.98
+test_counter_float64 54321.98
 
 # TYPE test_gauge gauge
 test_gauge 23456
