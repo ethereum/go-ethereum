@@ -251,6 +251,9 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 	var maxGasLimit uint64 = 30_000_000
 	var gasEstimate uint64 = 0
 	for gasEstimate < maxGasLimit {
+		if len(heads) == 0 {
+			break
+		}
 		tx := heads[0].Tx()
 		rpcTx := NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		content = append(content, rpcTx)
