@@ -14,7 +14,7 @@ export const Layout: FC<Props> = ({ children }) => {
   return (
     <Container maxW={{ base: 'full', md: 'container.2xl' }} my={{ base: 4, md: 7 }}>
       {/* adding min-height & top margin to keep footer at the bottom of the page */}
-      <Flex direction='column' minH='100vh'>
+      <Flex direction='column' minH='calc(100vh - 3.5rem)'>
         <Header />
 
         {children}
