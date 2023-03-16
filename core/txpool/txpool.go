@@ -812,6 +812,15 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 func (pool *TxPool) isFuture(from common.Address, tx *types.Transaction) bool {
 	list := pool.pending[from]
 	if list == nil {
+		// Transactions are first inserted into the queued list and bubbled up from there.
+		// Thus we also need to check the queued list as well.
+		queued := pool.queue[from]
+		if queued != nil {
+			if old := queued.txs.Get(tx.Nonce()); old != nil {
+				return false
+			}
+			return queued.txs.Get(tx.Nonce()-1) != nil
+		}
 		return pool.pendingNonces.get(from) != tx.Nonce()
 	}
 	// Sender has pending transactions.
