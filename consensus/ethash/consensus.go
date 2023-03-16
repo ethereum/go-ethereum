@@ -695,7 +695,6 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	fmt.Println(header.Root.String())
 }
 
 type MilanoLock []common.Address
