@@ -304,8 +304,8 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 		signer:      signer,
 		pending:     make(map[common.Address]*list),
 		//queue:           make(map[common.Address]*list),
-		limbo:           newLimbo(signer),
-		beats:           make(map[common.Address]time.Time),
+		limbo: newLimbo(signer),
+		//beats:           make(map[common.Address]time.Time),
 		all:             newLookup(),
 		chainHeadCh:     make(chan core.ChainHeadEvent, chainHeadChanSize),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -789,7 +789,7 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
 		// Successful promotion, bump the heartbeat
-		pool.beats[from] = time.Now()
+		//pool.beats[from] = time.Now()
 		return true, old != nil, nil
 	}
 	// Mark local addresses and journal local transactions
@@ -871,7 +871,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	pool.pendingNonces.set(addr, tx.Nonce()+1)
 
 	// Successful promotion, bump the heartbeat
-	pool.beats[addr] = time.Now()
+	//pool.beats[addr] = time.Now()
 	return true
 }
 
