@@ -992,6 +992,131 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 	return tracer.GetResult()
 }
 
+func (api *API) TraceCall2(ctx context.Context, args []ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) ([]interface{}, error) {
+	// Try to retrieve the specified block
+	var (
+		err   error
+		block *types.Block
+	)
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		block, err = api.blockByHash(ctx, hash)
+	} else if number, ok := blockNrOrHash.Number(); ok {
+		if number == rpc.PendingBlockNumber {
+			// We don't have access to the miner here. For tracing 'future' transactions,
+			// it can be done with block- and state-overrides instead, which offers
+			// more flexibility and stability than trying to trace on 'pending', since
+			// the contents of 'pending' is unstable and probably not a true representation
+			// of what the next actual block is likely to contain.
+			return nil, errors.New("tracing on top of pending is not supported")
+		}
+		block, err = api.blockByNumber(ctx, number)
+	} else {
+		return nil, errors.New("invalid arguments; neither block nor hash specified")
+	}
+	if err != nil {
+		return nil, err
+	}
+	// try to recompute the state
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	// Apply the customization rules if required.
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+		config.BlockOverrides.Apply(&vmctx)
+	}
+	// Execute the trace
+	var msgs []*core.Message
+	for _, a := range args {
+		msg, err := a.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, msg)
+	}
+
+	var traceConfig *TraceConfig
+	if config != nil {
+		traceConfig = &config.TraceConfig
+	}
+	return api.traceTx2(ctx, msgs, new(Context), vmctx, statedb, traceConfig)
+}
+
+// traceTx2 configures a new tracer according to the provided configuration, and
+// executes the given message in the provided environment. The return value will
+// be tracer dependent.
+func (api *API) traceTx2(ctx context.Context, msgs []*core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (result []interface{}, rErr error) {
+	var (
+		tracer    Tracer
+		timeout   = defaultTraceTimeout
+		txContext = core.NewEVMTxContext(msgs[len(msgs)-1])
+		err       error
+	)
+	if config == nil {
+		config = &TraceConfig{}
+	}
+	// Default tracer is the struct logger
+	tracer = logger.NewStructLogger(config.Config)
+	if config.Tracer != nil {
+		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+
+	// Define a meaningful timeout of a single transaction trace
+	if config.Timeout != nil {
+		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	go func() {
+		<-deadlineCtx.Done()
+		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			tracer.Stop(errors.New("execution timeout"))
+			// Stop evm execution. Note cancellation is not necessarily immediate.
+			vmenv.Cancel()
+		}
+	}()
+	defer cancel()
+
+	// Call Prepare to clear out the statedb access list
+	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
+	var r []json.RawMessage
+	var e []string
+	for _, message := range msgs {
+
+		if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit)); err != nil {
+			r = append(r, nil)
+			e = append(e, err.Error())
+			//return nil, fmt.Errorf("tracing failed: %w", err)
+		} else {
+			jRaw, err2 := tracer.GetResult()
+			r = append(r, jRaw)
+			if err2 != nil {
+				e = append(e, err2.Error())
+			} else {
+				e = append(e, "")
+			}
+
+		}
+	}
+	result = []interface{}{r, e}
+	return result, nil
+}
+
 // APIs return the collection of RPC services the tracer package offers.
 func APIs(backend Backend) []rpc.API {
 	// Append all the local APIs and return

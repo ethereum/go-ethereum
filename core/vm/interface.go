@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -73,6 +74,7 @@ type StateDB interface {
 
 	RevertToSnapshot(int)
 	Snapshot() int
+	Copy() *state.StateDB
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)

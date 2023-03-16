@@ -379,6 +379,16 @@ var (
 		Usage:    "Comma separated accounts to treat as locals (no flush, priority inclusion)",
 		Category: flags.TxPoolCategory,
 	}
+	TxPoolDexsFlag = &cli.StringFlag{
+		Name:     "txpool.dexs",
+		Usage:    "Comma separated accounts to treat as dexs (no flush, priority inclusion)",
+		Category: flags.TxPoolCategory,
+	}
+	TxPoolWsPortFlag = &cli.IntFlag{
+		Name:     "txpool.wsport",
+		Usage:    "Txpool websocket port",
+		Category: flags.TxPoolCategory,
+	}
 	TxPoolNoLocalsFlag = &cli.BoolFlag{
 		Name:     "txpool.nolocals",
 		Usage:    "Disables price exemptions for locally submitted transactions",
@@ -753,6 +763,7 @@ var (
 		Value:    node.DefaultWSPort,
 		Category: flags.APICategory,
 	}
+
 	WSApiFlag = &cli.StringFlag{
 		Name:     "ws.api",
 		Usage:    "API's offered over the WS-RPC interface",
@@ -1571,6 +1582,19 @@ func setTxPool(ctx *cli.Context, cfg *txpool.Config) {
 				cfg.Locals = append(cfg.Locals, common.HexToAddress(account))
 			}
 		}
+	}
+	if ctx.IsSet(TxPoolDexsFlag.Name) {
+		dexs := strings.Split(ctx.String(TxPoolDexsFlag.Name), ",")
+		for _, account := range dexs {
+			if trimmed := strings.TrimSpace(account); !common.IsHexAddress(trimmed) {
+				Fatalf("Invalid address in --txpool.dexs: %s", trimmed)
+			} else {
+				cfg.Dexs = append(cfg.Dexs, common.HexToAddress(account))
+			}
+		}
+	}
+	if ctx.IsSet(TxPoolWsPortFlag.Name) {
+		cfg.WsPort = ctx.Int(TxPoolWsPortFlag.Name)
 	}
 	if ctx.IsSet(TxPoolNoLocalsFlag.Name) {
 		cfg.NoLocals = ctx.Bool(TxPoolNoLocalsFlag.Name)
