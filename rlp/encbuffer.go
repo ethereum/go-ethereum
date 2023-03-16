@@ -397,7 +397,7 @@ func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 }
 
 // WriteUint256 encodes uint256.Int as an RLP string.
-func (w EncoderBuffer) WriteUint256(i *big.Int) {
+func (w EncoderBuffer) WriteUint256(i *uint256.Int) {
 	w.buf.writeUint256(i)
 }
 
