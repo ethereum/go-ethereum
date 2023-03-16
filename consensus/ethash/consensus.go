@@ -776,7 +776,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsMilano(header.Number) {
 		// Select the correct block reward based on chain progression
 		// Equivalent to: baseSubsidy / 2^(height/subsidyHalvingInterval)
-		interval := header.Number.Uint64() - config.MilanoBlock.Uint64()/SubsidyReductionInterval.Uint64()
+		interval := (header.Number.Uint64() + 1 - config.MilanoBlock.Uint64()) / SubsidyReductionInterval.Uint64()
 		reward = new(big.Int).Rsh(blockReward, uint(interval))
 	}
 
