@@ -145,9 +145,9 @@ func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 		return writeBigIntPtr, nil
 	case typ.AssignableTo(bigInt):
 		return writeBigIntNoPtr, nil
-	case typ.AssignableTo(reflect.PtrTo(u256Int)):
+	case typ == reflect.PtrTo(u256Int):
 		return writeU256IntPtr, nil
-	case typ.AssignableTo(u256Int):
+	case typ == u256Int:
 		return writeU256IntNoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrWriter(typ, ts)
