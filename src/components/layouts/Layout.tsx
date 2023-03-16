@@ -1,5 +1,5 @@
 // Libraries
-import { Container } from '@chakra-ui/react';
+import { Container, Flex, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
 // Components
@@ -13,11 +13,16 @@ interface Props {
 export const Layout: FC<Props> = ({ children }) => {
   return (
     <Container maxW={{ base: 'full', md: 'container.2xl' }} my={{ base: 4, md: 7 }}>
-      <Header />
+      {/* adding min-height & top margin to keep footer at the bottom of the page */}
+      <Flex direction='column' minH='calc(100vh - 3.5rem)'>
+        <Header />
 
-      {children}
+        {children}
 
-      <Footer />
+        <Stack mt='auto'>
+          <Footer />
+        </Stack>
+      </Flex>
     </Container>
   );
 };
