@@ -25,13 +25,13 @@ func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
 		}
 		// Int:
 		var _tmp1 uint256.Int
-		if err := dec.DecodeUint256(&_tmp1); err != nil {
+		if err := dec.ReadUint256(&_tmp1); err != nil {
 			return err
 		}
 		_tmp0.Int = &_tmp1
 		// IntNoPtr:
 		var _tmp2 uint256.Int
-		if err := dec.DecodeUint256(&_tmp2); err != nil {
+		if err := dec.ReadUint256(&_tmp2); err != nil {
 			return err
 		}
 		_tmp0.IntNoPtr = _tmp2
