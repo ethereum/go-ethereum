@@ -695,6 +695,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	fmt.Println(header.Root.String())
 }
 
 type MilanoLock []common.Address
@@ -766,6 +767,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsConstantinople(header.Number) {
 		blockReward = ConstantinopleBlockReward
 	}
+
 	if config.IsMilano(header.Number) {
 		blockReward = MilanoBlockReward
 	}
@@ -785,10 +787,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		for _, uncle := range uncles {
 			r.Add(uncle.Number, big8)
 			r.Sub(r, header.Number)
-			r.Mul(r, reward)
+			r.Mul(r, blockReward)
 			r.Div(r, big8)
 			state.AddBalance(uncle.Coinbase, r)
-			r.Div(reward, big32)
+			r.Div(blockReward, big32)
 			reward.Add(reward, r)
 		}
 	}
