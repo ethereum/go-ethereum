@@ -904,8 +904,7 @@ func (s *Stream) decodeUint256(dst *uint256.Int) error {
 		// Avoid zero-length read.
 		s.kind = -1
 	case size <= uint64(len(s.uintbuf)):
-		// For integers smaller than s.uintbuf, allocating a buffer
-		// can be avoided.
+		// All possible uint256 values fit into s.uintbuf.
 		buffer = s.uintbuf[:size]
 		if err := s.readFull(buffer); err != nil {
 			return err
