@@ -326,6 +326,7 @@ var encTests = []encTest{
 	{val: (*[]byte)(nil), output: "80"},
 	{val: (*[10]byte)(nil), output: "80"},
 	{val: (*big.Int)(nil), output: "80"},
+	{val: (*uint256.Int)(nil), output: "80"},
 	{val: (*[]string)(nil), output: "C0"},
 	{val: (*[10]string)(nil), output: "C0"},
 	{val: (*[]interface{})(nil), output: "C0"},
