@@ -34,6 +34,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
+- ```bor.devfakeauthor```: Run miner without validator set authorization [dev mode] : Use with '--bor.withoutheimdall' (default: false)
+
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
 - ```bor.runheimdall```: Run Heimdall service as a child process (default: false)
@@ -97,6 +99,8 @@ The ```bor server``` command runs the Bor client.
 - ```rpc.gascap```: Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 50000000)
 
 - ```rpc.txfeecap```: Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 5)
+
+- ```rpc.allow-unprotected-txs```: Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC (default: false)
 
 - ```ipcdisable```: Disable the IPC-RPC server (default: false)
 

@@ -13,7 +13,7 @@ syncmode = "full"
 # snapshot = true
 # "bor.logs" = false
 # ethstats = ""
-
+# devfakeauthor = false
 # ["eth.requiredblocks"]
 
 [p2p]
@@ -65,6 +65,7 @@ syncmode = "full"
 #   ipcpath = ""
 #   gascap = 50000000
 #   txfeecap = 5.0
+#   allow-unprotected-txs = false
 #   [jsonrpc.http]
 #     enabled = false
 #     port = 8545

@@ -260,6 +260,8 @@ type JsonRPCConfig struct {
 	Graphql *APIConfig `hcl:"graphql,block" toml:"graphql,block"`
 
 	HttpTimeout *HttpTimeouts `hcl:"timeouts,block" toml:"timeouts,block"`
+
+	AllowUnprotectedTxs bool `hcl:"allow-unprotected-txs,optional" toml:"allow-unprotected-txs,optional"`
 }
 
 type GRPCConfig struct {
@@ -511,10 +513,11 @@ func DefaultConfig() *Config {
 			IgnorePrice: gasprice.DefaultIgnorePrice,
 		},
 		JsonRPC: &JsonRPCConfig{
-			IPCDisable: false,
-			IPCPath:    "",
-			GasCap:     ethconfig.Defaults.RPCGasCap,
-			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
+			IPCDisable:          false,
+			IPCPath:             "",
+			GasCap:              ethconfig.Defaults.RPCGasCap,
+			TxFeeCap:            ethconfig.Defaults.RPCTxFeeCap,
+			AllowUnprotectedTxs: false,
 			Http: &APIConfig{
 				Enabled: false,
 				Port:    8545,
@@ -724,6 +727,9 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.RunHeimdall = c.Heimdall.RunHeimdall
 	n.RunHeimdallArgs = c.Heimdall.RunHeimdallArgs
 	n.UseHeimdallApp = c.Heimdall.UseHeimdallApp
+
+	// Developer Fake Author for producing blocks without authorisation on bor consensus
+	n.DevFakeAuthor = c.DevFakeAuthor
 
 	// Developer Fake Author for producing blocks without authorisation on bor consensus
 	n.DevFakeAuthor = c.DevFakeAuthor
@@ -1057,6 +1063,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,
 		Version:               params.VersionWithCommit(gitCommit, gitDate),
 		IPCPath:               ipcPath,
+		AllowUnprotectedTxs:   c.JsonRPC.AllowUnprotectedTxs,
 		P2P: p2p.Config{
 			MaxPeers:        int(c.P2P.MaxPeers),
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),

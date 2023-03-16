@@ -174,7 +174,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// START: Bor changes
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
-		log.Info("Unprotected transactions allowed")
+		log.Debug(" ###########", "Unprotected transactions allowed")
+
+		config.TxPool.AllowUnprotectedTxs = true
 	}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {

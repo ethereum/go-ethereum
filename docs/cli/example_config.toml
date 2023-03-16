@@ -13,6 +13,7 @@ gcmode = "full"              # Blockchain garbage collection mode ("full", "arch
 snapshot = true              # Enables the snapshot-database mode
 "bor.logs" = false           # Enables bor log retrieval
 ethstats = ""                # Reporting URL of a ethstats service (nodename:secret@host:port)
+devfakeauthor = false        # Run miner without validator set authorization [dev mode] : Use with '--bor.withoutheimdall' (default: false)
 
 ["eth.requiredblocks"]  # Comma separated block number-to-hash mappings to require for peering (<number>=<hash>) (default = empty map)
   "31000000" = "0x2087b9e2b353209c2c21e370c82daa12278efd0fe5f0febe6c29035352cf050e"
@@ -64,6 +65,7 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
   ipcpath = ""                                     # Filename for IPC socket/pipe within the datadir (explicit paths escape it)
   gascap = 50000000                                # Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)
   txfeecap = 5.0                                   # Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)
+  allow-unprotected-txs = false                    # Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC (default: false)
   [jsonrpc.http]
     enabled = false                                # Enable the HTTP-RPC server
     port = 8545                                    # http.port

@@ -174,7 +174,8 @@ type TxPoolConfig struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	Lifetime            time.Duration // Maximum amount of time non-executable transaction are queued
+	AllowUnprotectedTxs bool          // Allow non-EIP-155 transactions
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -191,7 +192,8 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	AccountQueue: 64,
 	GlobalQueue:  1024,
 
-	Lifetime: 3 * time.Hour,
+	Lifetime:            3 * time.Hour,
+	AllowUnprotectedTxs: false,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -759,7 +761,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
+	if err != nil && !pool.config.AllowUnprotectedTxs {
 		return ErrInvalidSender
 	}
 
@@ -1096,6 +1098,11 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
+
+		if pool.config.AllowUnprotectedTxs {
+			pool.signer = types.NewFakeSigner(tx.ChainId())
+		}
+
 		_, err = types.Sender(pool.signer, tx)
 		if err != nil {
 			errs = append(errs, ErrInvalidSender)
@@ -1149,11 +1156,16 @@ func (pool *TxPool) addTx(tx *types.Transaction, local, sync bool) error {
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
+		if pool.config.AllowUnprotectedTxs {
+			pool.signer = types.NewFakeSigner(tx.ChainId())
+		}
+
 		_, err = types.Sender(pool.signer, tx)
 		if err != nil {
 			invalidTxMeter.Mark(1)
-
 			return
+		} else {
+			err = nil
 		}
 	}()
 

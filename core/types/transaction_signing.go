@@ -470,6 +470,42 @@ func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 	})
 }
 
+// FakeSigner implements the Signer interface and accepts unprotected transactions
+type FakeSigner struct{ londonSigner }
+
+var _ Signer = FakeSigner{}
+
+func NewFakeSigner(chainId *big.Int) Signer {
+	signer := NewLondonSigner(chainId)
+	ls, _ := signer.(londonSigner)
+
+	return FakeSigner{londonSigner: ls}
+}
+
+func (f FakeSigner) Sender(tx *Transaction) (common.Address, error) {
+	return f.londonSigner.Sender(tx)
+}
+
+func (f FakeSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
+	return f.londonSigner.SignatureValues(tx, sig)
+}
+
+func (f FakeSigner) ChainID() *big.Int {
+	return f.londonSigner.ChainID()
+}
+
+// Hash returns 'signature hash', i.e. the transaction hash that is signed by the
+// private key. This hash does not uniquely identify the transaction.
+func (f FakeSigner) Hash(tx *Transaction) common.Hash {
+	return f.londonSigner.Hash(tx)
+}
+
+// Equal returns true if the given signer is the same as the receiver.
+func (f FakeSigner) Equal(Signer) bool {
+	// Always return true
+	return true
+}
+
 func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want %d", len(sig), crypto.SignatureLength))
