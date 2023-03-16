@@ -114,8 +114,8 @@ var (
 		GrayGlacierBlock:        big.NewInt(0),
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, //
 		RomeBlock:               big.NewInt(0),
-		InitiateBlock:           big.NewInt(10),
-		MilanoBlock:             big.NewInt(100),
+		InitiateBlock:           big.NewInt(10000),
+		MilanoBlock:             big.NewInt(30000),
 		Ethash:                  new(EthashConfig),
 	}
 
