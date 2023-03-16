@@ -253,7 +253,7 @@ func decodeU256(s *Stream, val reflect.Value) error {
 		val.Set(reflect.ValueOf(i))
 	}
 
-	err := s.decodeUint256(i)
+	err := s.ReadUint256(i)
 	if err != nil {
 		return wrapStreamError(err, val.Type())
 	}
@@ -888,7 +888,8 @@ func (s *Stream) decodeBigInt(dst *big.Int) error {
 	return nil
 }
 
-func (s *Stream) decodeUint256(dst *uint256.Int) error {
+// ReadUint256 decodes the next value as a uint256.
+func (s *Stream) ReadUint256(dst *uint256.Int) error {
 	var buffer []byte
 	kind, size, err := s.Kind()
 	switch {
