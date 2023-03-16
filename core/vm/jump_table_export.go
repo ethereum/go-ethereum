@@ -16,37 +16,42 @@
 
 package vm
 
-import "strings"
+import (
+	"errors"
+	
+	"github.com/ethereum/go-ethereum/params"
+)
 
-// LookupInstructionSet returns the constructor for an instructionset for the
-// given fork.
-// If the fork is unknown, this method returns nil
-func LookupInstructionSet(fork string) func() JumpTable {
-	switch strings.ToLower(fork) {
-	case "frontier":
-		return newFrontierInstructionSet
-	case "homestead":
-		return newHomesteadInstructionSet
-	case "tangerinewhistle":
-		return newTangerineWhistleInstructionSet
-	case "spuriousdragon":
-		return newSpuriousDragonInstructionSet
-	case "byzantium":
-		return newByzantiumInstructionSet
-	case "constantinople":
-		return newConstantinopleInstructionSet
-	case "istanbul":
-		return newIstanbulInstructionSet
-	case "berlin":
-		return newBerlinInstructionSet
-	case "london":
-		return newLondonInstructionSet
-	case "merge":
-		return newMergeInstructionSet
-	case "shanghai":
-		return newShanghaiInstructionSet
+// LookupInstructionSet returns the instructionset for the fork configured by
+// the rules.
+func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
+	switch {
+	case rules.IsPrague:
+		return newShanghaiInstructionSet(), errors.New("prague-fork not defined yet")
+	case rules.IsCancun:
+		return newShanghaiInstructionSet(), errors.New("cancun-fork not defined yet")
+	case rules.IsShanghai:
+		return newShanghaiInstructionSet(), nil
+	case rules.IsMerge:
+		return newMergeInstructionSet(), nil
+	case rules.IsLondon:
+		return newLondonInstructionSet(), nil
+	case rules.IsBerlin:
+		return newBerlinInstructionSet(), nil
+	case rules.IsIstanbul:
+		return newIstanbulInstructionSet(), nil
+	case rules.IsConstantinople:
+		return newConstantinopleInstructionSet(), nil
+	case rules.IsByzantium:
+		return newByzantiumInstructionSet(), nil
+	case rules.IsEIP158:
+		return newSpuriousDragonInstructionSet(), nil
+	case rules.IsEIP150:
+		return newTangerineWhistleInstructionSet(), nil
+	case rules.IsHomestead:
+		return newHomesteadInstructionSet(), nil
 	}
-	return nil
+	return newFrontierInstructionSet(), nil
 }
 
 // Stack returns the mininum and maximum stack requirements.
