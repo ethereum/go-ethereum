@@ -350,7 +350,7 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 	number := block.NumberU64()
 	// MilanoBlock fork
 	if number > s.ethash.config.MilanoBlock {
-		number = number - initiateBlock
+		number = number - s.ethash.config.InitiateBlock
 	}
 
 	s.currentWork[0] = hash.Hex()
