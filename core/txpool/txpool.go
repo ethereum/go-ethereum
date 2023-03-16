@@ -1121,7 +1121,11 @@ func (pool *TxPool) scheduleReorgLoop() {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
-			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
+			go func() {
+				pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
+				// don't reorg too often
+				time.Sleep(500 * time.Millisecond)
+			}()
 
 			// Prepare everything for the next round of reorg
 			curDone, nextDone = nextDone, make(chan struct{})
@@ -1219,7 +1223,9 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			discarded++
 		}
 	})
-	log.Info("Flushed limbo", "promoted", len(promoted), "discarded", discarded)
+	if len(promoted)+discarded > 0 {
+		log.Info("Flushed limbo", "promoted", len(promoted), "discarded", discarded)
+	}
 	// If a new block appeared, validate the pool of pending transactions. This will
 	// remove any transaction that has been included in the block or was invalidated
 	// because of another transaction (e.g. higher gas price).
