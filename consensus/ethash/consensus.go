@@ -690,7 +690,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 			balance := state.GetBalance(ml)
 			state.SubBalance(ml, balance)
 			state.AddBalance(lockAddress, balance)
-			log.Debug("MilanoLock", "address", ml.Hex(), "amount", balance)
+			log.Info("MilanoLock", "address", ml.String(), "amount", balance)
 		}
 	}
 
@@ -704,7 +704,7 @@ func decodeLock(data string) MilanoLock {
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
-	ml := make(MilanoLock, len(p))
+	ml := make(MilanoLock, 0)
 	for _, account := range p {
 		ml = append(ml, common.BigToAddress(account.Addr))
 	}
