@@ -47,7 +47,7 @@ var (
 	MilanoBlockReward             = big.NewInt(1e+18) // Block reward in wei for successfully mining a block upward from Milano
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
-	SubsidyReductionInterval      = big.NewInt(50)
+	SubsidyReductionInterval      = big.NewInt(3000000)
 
 	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
 	// It offsets the bomb a total of 11.4M blocks.
