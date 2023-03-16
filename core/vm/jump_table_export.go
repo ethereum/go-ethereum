@@ -41,7 +41,7 @@ func LookupInstructionSet(fork string) func() JumpTable {
 		return newBerlinInstructionSet
 	case "london":
 		return newLondonInstructionSet
-	case "merged":
+	case "merge":
 		return newMergeInstructionSet
 	case "shanghai":
 		return newShanghaiInstructionSet
