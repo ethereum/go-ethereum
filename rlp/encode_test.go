@@ -168,10 +168,9 @@ var encTests = []encTest{
 		val:    new(uint256.Int).SetBytes(unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
 		output: "9C0100020003000400050006000700080009000A000B000C000D000E01",
 	},
-	// non-pointer uint256.Int -- not supported
-	//    encode_test.go:402: test 47: unexpected error: rlp: unadressable value of type uint256.Int, EncodeRLP is pointer method
-	//{val: *uint256.NewInt(0), output: "80"},
-	//{val: *uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
+	// non-pointer uint256.Int
+	{val: *uint256.NewInt(0), output: "80"},
+	{val: *uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// byte arrays
 	{val: [0]byte{}, output: "80"},
