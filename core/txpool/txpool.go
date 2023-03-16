@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"sort"
+	//"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -95,6 +95,8 @@ var (
 	// ErrOverdraft is returned if a transaction would cause the senders balance to go negative
 	// thus invalidating a potential large number of transactions.
 	ErrOverdraft = errors.New("transaction would cause overdraft")
+
+	ErrFuture = errors.New("future transactions rejected")
 )
 
 var (
@@ -263,11 +265,12 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*list     // All currently processable transactions
-	queue   map[common.Address]*list     // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *lookup                      // All transactions to allow lookups
-	priced  *pricedList                  // All transactions sorted by price
+	pending map[common.Address]*list // All currently processable transactions
+	limbo   *limboArea               // non-processable transactions
+	//queue   map[common.Address]*list     // Queued but non-processable transactions
+	beats  map[common.Address]time.Time // Last heartbeat from each known account
+	all    *lookup                      // All transactions to allow lookups
+	priced *pricedList                  // All transactions sorted by price
 
 	chainHeadCh     chan core.ChainHeadEvent
 	chainHeadSub    event.Subscription
@@ -293,13 +296,15 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 	config = (&config).sanitize()
 
 	// Create the transaction pool with its initial settings
+	signer := types.LatestSigner(chainconfig)
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.LatestSigner(chainconfig),
-		pending:         make(map[common.Address]*list),
-		queue:           make(map[common.Address]*list),
+		config:      config,
+		chainconfig: chainconfig,
+		chain:       chain,
+		signer:      signer,
+		pending:     make(map[common.Address]*list),
+		//queue:           make(map[common.Address]*list),
+		limbo:           newLimbo(signer),
 		beats:           make(map[common.Address]time.Time),
 		all:             newLookup(),
 		chainHeadCh:     make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -352,14 +357,14 @@ func (pool *TxPool) loop() {
 	var (
 		prevPending, prevQueued, prevStales int
 		// Start the stats reporting and transaction eviction tickers
-		report  = time.NewTicker(statsReportInterval)
-		evict   = time.NewTicker(evictionInterval)
+		report = time.NewTicker(statsReportInterval)
+		//evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
 		// Track the previous head headers for transaction reorgs
 		head = pool.chain.CurrentBlock()
 	)
 	defer report.Stop()
-	defer evict.Stop()
+	//defer evict.Stop()
 	defer journal.Stop()
 
 	// Notify tests that the init phase is done
@@ -391,23 +396,23 @@ func (pool *TxPool) loop() {
 			}
 
 		// Handle inactive account transaction eviction
-		case <-evict.C:
-			pool.mu.Lock()
-			for addr := range pool.queue {
-				// Skip local transactions from the eviction mechanism
-				if pool.locals.contains(addr) {
-					continue
-				}
-				// Any non-locals old enough should be removed
-				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
-					list := pool.queue[addr].Flatten()
-					for _, tx := range list {
-						pool.removeTx(tx.Hash(), true)
-					}
-					queuedEvictionMeter.Mark(int64(len(list)))
-				}
-			}
-			pool.mu.Unlock()
+		//case <-evict.C:
+		//pool.mu.Lock()
+		//for addr := range pool.queue {
+		//	// Skip local transactions from the eviction mechanism
+		//	if pool.locals.contains(addr) {
+		//		continue
+		//	}
+		//	// Any non-locals old enough should be removed
+		//	if time.Since(pool.beats[addr]) > pool.config.Lifetime {
+		//		list := pool.queue[addr].Flatten()
+		//		for _, tx := range list {
+		//			pool.removeTx(tx.Hash(), true)
+		//		}
+		//		queuedEvictionMeter.Mark(int64(len(list)))
+		//	}
+		//}
+		//pool.mu.Unlock()
 
 		// Handle local transaction journal rotation
 		case <-journal.C:
@@ -498,9 +503,9 @@ func (pool *TxPool) stats() (int, int) {
 		pending += list.Len()
 	}
 	queued := 0
-	for _, list := range pool.queue {
-		queued += list.Len()
-	}
+	//for _, list := range pool.queue {
+	//	queued += list.Len()
+	//}
 	return pending, queued
 }
 
@@ -514,10 +519,10 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	for addr, list := range pool.pending {
 		pending[addr] = list.Flatten()
 	}
-	queued := make(map[common.Address]types.Transactions, len(pool.queue))
-	for addr, list := range pool.queue {
-		queued[addr] = list.Flatten()
-	}
+	queued := make(map[common.Address]types.Transactions, 0)
+	//for addr, list := range pool.queue {
+	//	queued[addr] = list.Flatten()
+	//}
 	return pending, queued
 }
 
@@ -532,9 +537,9 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 		pending = list.Flatten()
 	}
 	var queued types.Transactions
-	if list, ok := pool.queue[addr]; ok {
-		queued = list.Flatten()
-	}
+	//if list, ok := pool.queue[addr]; ok {
+	//	queued = list.Flatten()
+	//}
 	return pending, queued
 }
 
@@ -586,9 +591,9 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 		if pending := pool.pending[addr]; pending != nil {
 			txs[addr] = append(txs[addr], pending.Flatten()...)
 		}
-		if queued := pool.queue[addr]; queued != nil {
-			txs[addr] = append(txs[addr], queued.Flatten()...)
-		}
+		//if queued := pool.queue[addr]; queued != nil {
+		//	txs[addr] = append(txs[addr], queued.Flatten()...)
+		//}
 	}
 	return txs
 }
@@ -677,20 +682,39 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	return nil
 }
 
-// add validates a transaction and inserts it into the non-executable queue for later
-// pending promotion and execution. If the transaction is a replacement for an already
-// pending or queued one, it overwrites the previous transaction if its price is higher.
+func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+	added, replaced, err := pool.addPending(tx, local)
+	// Error menas the tx was invalid, for some reason (other than future-nonce)
+	if err != nil {
+		return replaced, err
+	}
+	if added {
+		return replaced, err
+	}
+	pool.addLimbo(tx)
+	return false, nil
+}
+
+func (pool *TxPool) addLimbo(tx *types.Transaction) (added, replaced bool, err error) {
+	added = pool.limbo.Add(tx)
+	return added, false, nil
+}
+
+// add validates a transaction and inserts it into the pending.
+// If the tx is not executable, it is not added.
+// If the transaction is a replacement for an already pending or queued one,
+// it overwrites the previous transaction if its price is higher.
 //
 // If a newly added transaction is marked as local, its sending account will be
 // be added to the allowlist, preventing any associated transaction from being dropped
 // out of the pool due to pricing constraints.
-func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
-		return false, ErrAlreadyKnown
+		return false, false, ErrAlreadyKnown
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
@@ -700,19 +724,19 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if err := pool.validateTx(tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
-		return false, err
+		return false, false, err
 	}
 
 	// already validated by this point
 	from, _ := types.Sender(pool.signer, tx)
 
 	// If the transaction pool is full, discard underpriced transactions
-	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
+	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
 			underpricedTxMeter.Mark(1)
-			return false, ErrUnderpriced
+			return false, false, ErrUnderpriced
 		}
 
 		// We're about to replace a transaction. The reorg does a more thorough
@@ -721,41 +745,20 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// replacements to 25% of the slots
 		if pool.changesSinceReorg > int(pool.config.GlobalSlots/4) {
 			throttleTxMeter.Mark(1)
-			return false, ErrTxPoolOverflow
+			return false, false, ErrTxPoolOverflow
 		}
 
 		// New transaction is better than our worse ones, make room for it.
 		// If it's a local transaction, forcibly discard all available transactions.
 		// Otherwise if we can't make enough room for new one, abort the operation.
-		drop, success := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+numSlots(tx), isLocal)
+		drop, success := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots)+numSlots(tx), isLocal)
 
 		// Special case, we still can't make the room for the new remote one.
 		if !isLocal && !success {
 			log.Trace("Discarding overflown transaction", "hash", hash)
 			overflowedTxMeter.Mark(1)
-			return false, ErrTxPoolOverflow
+			return false, false, ErrTxPoolOverflow
 		}
-
-		// If the new transaction is a future transaction it should never churn pending transactions
-		if pool.isFuture(from, tx) {
-			var replacesPending bool
-			for _, dropTx := range drop {
-				dropSender, _ := types.Sender(pool.signer, dropTx)
-				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
-					replacesPending = true
-					break
-				}
-			}
-			// Add all transactions back to the priced queue
-			if replacesPending {
-				for _, dropTx := range drop {
-					pool.priced.Put(dropTx, false)
-				}
-				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
-				return false, ErrFutureReplacePending
-			}
-		}
-
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
@@ -771,7 +774,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		inserted, old := list.Add(tx, pool.config.PriceBump)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
-			return false, ErrReplaceUnderpriced
+			return false, false, ErrReplaceUnderpriced
 		}
 		// New transaction is better, replace old one
 		if old != nil {
@@ -787,12 +790,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 		// Successful promotion, bump the heartbeat
 		pool.beats[from] = time.Now()
-		return old != nil, nil
-	}
-	// New transaction isn't replacing a pending one, push into queue
-	replaced, err = pool.enqueueTx(hash, tx, isLocal, true)
-	if err != nil {
-		return false, err
+		return true, old != nil, nil
 	}
 	// Mark local addresses and journal local transactions
 	if local && !pool.locals.contains(from) {
@@ -804,9 +802,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		localGauge.Inc(1)
 	}
 	pool.journalTx(from, tx)
-
-	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
-	return replaced, nil
+	return false, replaced, nil
 }
 
 // isFuture reports whether the given transaction is immediately executable.
@@ -827,40 +823,8 @@ func (pool *TxPool) isFuture(from common.Address, tx *types.Transaction) bool {
 //
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local bool, addAll bool) (bool, error) {
-	// Try to insert the transaction into the future queue
-	from, _ := types.Sender(pool.signer, tx) // already validated
-	if pool.queue[from] == nil {
-		pool.queue[from] = newList(false)
-	}
-	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)
-	if !inserted {
-		// An older transaction was better, discard this
-		queuedDiscardMeter.Mark(1)
-		return false, ErrReplaceUnderpriced
-	}
-	// Discard any previous transaction and mark this
-	if old != nil {
-		pool.all.Remove(old.Hash())
-		pool.priced.Removed(1)
-		queuedReplaceMeter.Mark(1)
-	} else {
-		// Nothing was replaced, bump the queued counter
-		queuedGauge.Inc(1)
-	}
-	// If the transaction isn't in lookup set but it's expected to be there,
-	// show the error log.
-	if pool.all.Get(hash) == nil && !addAll {
-		log.Error("Missing transaction in lookup set, please report the issue", "hash", hash)
-	}
-	if addAll {
-		pool.all.Add(tx, local)
-		pool.priced.Put(tx, local)
-	}
-	// If we never record the heartbeat, do it right now.
-	if _, exist := pool.beats[from]; !exist {
-		pool.beats[from] = time.Now()
-	}
-	return old != nil, nil
+	queuedDiscardMeter.Mark(1)
+	return false, ErrFuture
 }
 
 // journalTx adds the specified transaction to the local disk journal if it is
@@ -1036,8 +1000,8 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		pool.mu.RLock()
 		if txList := pool.pending[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusPending
-		} else if txList := pool.queue[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
-			status[i] = TxStatusQueued
+			//} else if txList := pool.queue[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
+			//	status[i] = TxStatusQueued
 		}
 		// implicit else: the tx may have been included into a block between
 		// checking pool.Get and obtaining the lock. In that case, TxStatusUnknown is correct
@@ -1096,16 +1060,16 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 		}
 	}
 	// Transaction is in the future queue
-	if future := pool.queue[addr]; future != nil {
-		if removed, _ := future.Remove(tx); removed {
-			// Reduce the queued counter
-			queuedGauge.Dec(1)
-		}
-		if future.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
-		}
-	}
+	//if future := pool.queue[addr]; future != nil {
+	//	if removed, _ := future.Remove(tx); removed {
+	//		// Reduce the queued counter
+	//		queuedGauge.Dec(1)
+	//	}
+	//	if future.Empty() {
+	//		delete(pool.queue, addr)
+	//		delete(pool.beats, addr)
+	//	}
+	//}
 	return 0
 }
 
@@ -1218,13 +1182,13 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	}(time.Now())
 	defer close(done)
 
-	var promoteAddrs []common.Address
-	if dirtyAccounts != nil && reset == nil {
-		// Only dirty accounts need to be promoted, unless we're resetting.
-		// For resets, all addresses in the tx queue will be promoted and
-		// the flatten operation can be avoided.
-		promoteAddrs = dirtyAccounts.flatten()
-	}
+	//var promoteAddrs []common.Address
+	//if dirtyAccounts != nil && reset == nil {
+	// Only dirty accounts need to be promoted, unless we're resetting.
+	// For resets, all addresses in the tx queue will be promoted and
+	// the flatten operation can be avoided.
+	//promoteAddrs = dirtyAccounts.flatten()
+	//}
 	pool.mu.Lock()
 	if reset != nil {
 		// Reset from the old head to the new, rescheduling any reorged transactions
@@ -1238,14 +1202,24 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			}
 		}
 		// Reset needs promote for all addresses
-		promoteAddrs = make([]common.Address, 0, len(pool.queue))
-		for addr := range pool.queue {
-			promoteAddrs = append(promoteAddrs, addr)
-		}
+		//promoteAddrs = make([]common.Address, 0, len(pool.queue))
+		//for addr := range pool.queue {
+		//	promoteAddrs = append(promoteAddrs, addr)
+		//}
 	}
 	// Check for pending transactions for every account that sent new ones
-	promoted := pool.promoteExecutables(promoteAddrs)
-
+	//promoted := pool.promoteExecutables(promoteAddrs)
+	var promoted []*types.Transaction
+	var discarded int
+	pool.limbo.flush(func(transaction *types.Transaction) {
+		added, _, _ := pool.addPending(transaction, false)
+		if added {
+			promoted = append(promoted, transaction)
+		} else {
+			discarded++
+		}
+	})
+	log.Info("Flushed limbo", "promoted", len(promoted), "discarded", discarded)
 	// If a new block appeared, validate the pool of pending transactions. This will
 	// remove any transaction that has been included in the block or was invalidated
 	// because of another transaction (e.g. higher gas price).
@@ -1265,7 +1239,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
 	pool.truncatePending()
-	pool.truncateQueue()
+	//pool.truncateQueue()
 
 	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	pool.changesSinceReorg = 0 // Reset change counter
@@ -1383,68 +1357,16 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
-func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
-	// Track the promoted transactions to broadcast them at once
-	var promoted []*types.Transaction
-
-	// Iterate over all accounts and promote any executable transactions
-	for _, addr := range accounts {
-		list := pool.queue[addr]
-		if list == nil {
-			continue // Just in case someone calls with a non existing account
-		}
-		// Drop all transactions that are deemed too old (low nonce)
-		forwards := list.Forward(pool.currentState.GetNonce(addr))
-		for _, tx := range forwards {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-		}
-		log.Trace("Removed old queued transactions", "count", len(forwards))
-		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-		}
-		log.Trace("Removed unpayable queued transactions", "count", len(drops))
-		queuedNofundsMeter.Mark(int64(len(drops)))
-
-		// Gather all executable transactions and promote them
-		readies := list.Ready(pool.pendingNonces.get(addr))
-		for _, tx := range readies {
-			hash := tx.Hash()
-			if pool.promoteTx(addr, hash, tx) {
-				promoted = append(promoted, tx)
-			}
-		}
-		log.Trace("Promoted queued transactions", "count", len(promoted))
-		queuedGauge.Dec(int64(len(readies)))
-
-		// Drop all transactions over the allowed limit
-		var caps types.Transactions
-		if !pool.locals.contains(addr) {
-			caps = list.Cap(int(pool.config.AccountQueue))
-			for _, tx := range caps {
-				hash := tx.Hash()
-				pool.all.Remove(hash)
-				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
-			}
-			queuedRateLimitMeter.Mark(int64(len(caps)))
-		}
-		// Mark all the items dropped as removed
-		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
-		queuedGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
-		if pool.locals.contains(addr) {
-			localGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
-		}
-		// Delete the entire queue entry if it became empty.
-		if list.Empty() {
-			delete(pool.queue, addr)
-			delete(pool.beats, addr)
-		}
-	}
-	return promoted
-}
+//func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
+//	// Track the promoted transactions to broadcast them at once
+//	var promoted []*types.Transaction
+//	var l *limboArea
+//
+//	l.flush(func(transaction *types.Transaction) {
+//		pool.add(transaction, false)
+//	})
+//	return promoted
+//}
 
 // truncatePending removes transactions from the pending queue if the pool is above the
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
@@ -1534,49 +1456,49 @@ func (pool *TxPool) truncatePending() {
 }
 
 // truncateQueue drops the oldest transactions in the queue if the pool is above the global queue limit.
-func (pool *TxPool) truncateQueue() {
-	queued := uint64(0)
-	for _, list := range pool.queue {
-		queued += uint64(list.Len())
-	}
-	if queued <= pool.config.GlobalQueue {
-		return
-	}
-
-	// Sort all accounts with queued transactions by heartbeat
-	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
-	for addr := range pool.queue {
-		if !pool.locals.contains(addr) { // don't drop locals
-			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
-		}
-	}
-	sort.Sort(sort.Reverse(addresses))
-
-	// Drop transactions until the total is below the limit or only locals remain
-	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
-		addr := addresses[len(addresses)-1]
-		list := pool.queue[addr.address]
-
-		addresses = addresses[:len(addresses)-1]
-
-		// Drop all transactions if they are less than the overflow
-		if size := uint64(list.Len()); size <= drop {
-			for _, tx := range list.Flatten() {
-				pool.removeTx(tx.Hash(), true)
-			}
-			drop -= size
-			queuedRateLimitMeter.Mark(int64(size))
-			continue
-		}
-		// Otherwise drop only last few transactions
-		txs := list.Flatten()
-		for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
-			pool.removeTx(txs[i].Hash(), true)
-			drop--
-			queuedRateLimitMeter.Mark(1)
-		}
-	}
-}
+//func (pool *TxPool) truncateQueue() {
+//	queued := uint64(0)
+//	for _, list := range pool.queue {
+//		queued += uint64(list.Len())
+//	}
+//	if queued <= pool.config.GlobalQueue {
+//		return
+//	}
+//
+//	// Sort all accounts with queued transactions by heartbeat
+//	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
+//	for addr := range pool.queue {
+//		if !pool.locals.contains(addr) { // don't drop locals
+//			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
+//		}
+//	}
+//	sort.Sort(sort.Reverse(addresses))
+//
+//	// Drop transactions until the total is below the limit or only locals remain
+//	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
+//		addr := addresses[len(addresses)-1]
+//		list := pool.queue[addr.address]
+//
+//		addresses = addresses[:len(addresses)-1]
+//
+//		// Drop all transactions if they are less than the overflow
+//		if size := uint64(list.Len()); size <= drop {
+//			for _, tx := range list.Flatten() {
+//				pool.removeTx(tx.Hash(), true)
+//			}
+//			drop -= size
+//			queuedRateLimitMeter.Mark(int64(size))
+//			continue
+//		}
+//		// Otherwise drop only last few transactions
+//		txs := list.Flatten()
+//		for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
+//			pool.removeTx(txs[i].Hash(), true)
+//			drop--
+//			queuedRateLimitMeter.Mark(1)
+//		}
+//	}
+//}
 
 // demoteUnexecutables removes invalid and processed transactions from the pools
 // executable/pending queue and any subsequent transactions that become unexecutable
