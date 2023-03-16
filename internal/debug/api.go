@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ type HandlerT struct {
 	cpuFile   string
 	traceW    io.WriteCloser
 	traceFile string
+	filePath  string
 }
 
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
@@ -75,6 +77,44 @@ func (*HandlerT) MemStats() *runtime.MemStats {
 	return s
 }
 
+func (h *HandlerT) PeriodicComputeProfiling() {
+	ticker := time.NewTicker(60 * time.Second)
+	go func() {
+		for range ticker.C {
+			h.computeProfiling()
+		}
+	}()
+}
+
+// MemStats returns detailed runtime memory statistics.
+func (h *HandlerT) computeProfiling() error {
+	s := new(runtime.MemStats)
+	runtime.ReadMemStats(s)
+	currentTime := strconv.FormatInt(time.Now().Unix(), 10)
+
+	systemMem := float64(s.Alloc) / float64(s.HeapSys) * 100
+	// Trigger the profiling if memory usage is above 75%
+	log.Info("[computeProfiling] current systemMem", "mem", systemMem, "memAlloc", float64(s.Alloc), "heapSys", float64(s.HeapSys))
+
+	if systemMem > float64(75) {
+		memoryFileName := currentTime + "-memory-profile"
+		err := h.WriteMemProfile(memoryFileName)
+		if err != nil {
+			log.Error("Fail to write mem profile when doing periodic compute check during high memory usage", "err", err)
+			return err
+		}
+		log.Info("Successfully wrote the memory profile with name", "filename", memoryFileName)
+		cpuFileName := currentTime + "-cpu-profile"
+		err = h.CpuProfile(cpuFileName, 10)
+		if err != nil {
+			log.Error("Fail to write cpu profile when doing periodic compute check during high memory usage", "err", err)
+			return err
+		}
+		log.Info("Successfully wrote the cpu profile with name", "filename", cpuFileName)
+	}
+	return nil
+}
+
 // GcStats returns GC statistics.
 func (*HandlerT) GcStats() *debug.GCStats {
 	s := new(debug.GCStats)
@@ -100,7 +140,14 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	if h.cpuW != nil {
 		return errors.New("CPU profiling already in progress")
 	}
-	f, err := os.Create(expandHome(file))
+
+	var f *os.File
+	var err error
+	if h.filePath != "" {
+		f, err = os.Create(filepath.Join(h.filePath, file))
+	} else {
+		f, err = os.Create(expandHome(file))
+	}
 	if err != nil {
 		return err
 	}
@@ -143,11 +190,11 @@ func (h *HandlerT) GoTrace(file string, nsec uint) error {
 // BlockProfile turns on goroutine profiling for nsec seconds and writes profile data to
 // file. It uses a profile rate of 1 for most accurate information. If a different rate is
 // desired, set the rate and write the profile manually.
-func (*HandlerT) BlockProfile(file string, nsec uint) error {
+func (h *HandlerT) BlockProfile(file string, nsec uint) error {
 	runtime.SetBlockProfileRate(1)
 	time.Sleep(time.Duration(nsec) * time.Second)
 	defer runtime.SetBlockProfileRate(0)
-	return writeProfile("block", file)
+	return writeProfile("block", file, h.filePath)
 }
 
 // SetBlockProfileRate sets the rate of goroutine block profile data collection.
@@ -157,18 +204,18 @@ func (*HandlerT) SetBlockProfileRate(rate int) {
 }
 
 // WriteBlockProfile writes a goroutine blocking profile to the given file.
-func (*HandlerT) WriteBlockProfile(file string) error {
-	return writeProfile("block", file)
+func (h *HandlerT) WriteBlockProfile(file string) error {
+	return writeProfile("block", file, h.filePath)
 }
 
 // MutexProfile turns on mutex profiling for nsec seconds and writes profile data to file.
 // It uses a profile rate of 1 for most accurate information. If a different rate is
 // desired, set the rate and write the profile manually.
-func (*HandlerT) MutexProfile(file string, nsec uint) error {
+func (h *HandlerT) MutexProfile(file string, nsec uint) error {
 	runtime.SetMutexProfileFraction(1)
 	time.Sleep(time.Duration(nsec) * time.Second)
 	defer runtime.SetMutexProfileFraction(0)
-	return writeProfile("mutex", file)
+	return writeProfile("mutex", file, h.filePath)
 }
 
 // SetMutexProfileFraction sets the rate of mutex profiling.
@@ -177,15 +224,15 @@ func (*HandlerT) SetMutexProfileFraction(rate int) {
 }
 
 // WriteMutexProfile writes a goroutine blocking profile to the given file.
-func (*HandlerT) WriteMutexProfile(file string) error {
-	return writeProfile("mutex", file)
+func (h *HandlerT) WriteMutexProfile(file string) error {
+	return writeProfile("mutex", file, h.filePath)
 }
 
 // WriteMemProfile writes an allocation profile to the given file.
 // Note that the profiling rate cannot be set through the API,
 // it must be set on the command line.
-func (*HandlerT) WriteMemProfile(file string) error {
-	return writeProfile("heap", file)
+func (h *HandlerT) WriteMemProfile(file string) error {
+	return writeProfile("heap", file, h.filePath)
 }
 
 // Stacks returns a printed representation of the stacks of all goroutines.
@@ -206,10 +253,17 @@ func (*HandlerT) SetGCPercent(v int) int {
 	return debug.SetGCPercent(v)
 }
 
-func writeProfile(name, file string) error {
+func writeProfile(name, file, path string) error {
 	p := pprof.Lookup(name)
-	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
-	f, err := os.Create(expandHome(file))
+	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file, "path", path)
+
+	var f *os.File
+	var err error
+	if path != "" {
+		f, err = os.Create(filepath.Join(path, file))
+	} else {
+		f, err = os.Create(expandHome(file))
+	}
 	if err != nil {
 		return err
 	}
