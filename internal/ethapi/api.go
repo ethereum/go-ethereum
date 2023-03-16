@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"container/heap"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -227,6 +228,34 @@ func (s *TxPoolAPI) ContentTo(addr common.Address) map[string]map[string]map[str
 		if len(dump) > 0 {
 			content["pending"][account.Hex()] = dump
 		}
+	}
+	return content
+}
+
+func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
+	var content []*RPCTransaction
+	pending, _ := s.b.TxPoolContent()
+	curHeader := s.b.CurrentHeader()
+	signer := types.LatestSignerForChainID(common.Big1)
+	heads := make(types.TxByPriceAndTime, 0, len(pending))
+	for from, accTxs := range pending {
+		acc, _ := types.Sender(signer, accTxs[0])
+		wrapped, err := types.NewTxWithMinerFee(accTxs[0], curHeader.BaseFee)
+		// Remove transaction if sender doesn't match from, or if wrapping fails.
+		if acc != from || err != nil {
+			continue
+		}
+		heads = append(heads, wrapped)
+	}
+	heap.Init(&heads)
+	var maxGasLimit uint64 = 30_000_000
+	var gasEstimate uint64 = 0
+	for gasEstimate < maxGasLimit {
+		tx := heads[0].Tx()
+		rpcTx := NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		content = append(content, rpcTx)
+		heap.Pop(&heads)
+		gasEstimate += tx.Gas()
 	}
 	return content
 }

@@ -510,6 +510,10 @@ func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) (*TxWithMinerFee, erro
 	}, nil
 }
 
+func (s TxWithMinerFee) Tx() *Transaction {
+	return s.tx
+}
+
 // TxByPriceAndTime implements both the sort and the heap interface, making it useful
 // for all at once sorting as well as individually adding and removing elements.
 type TxByPriceAndTime []*TxWithMinerFee
