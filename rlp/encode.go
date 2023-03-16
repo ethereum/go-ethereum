@@ -217,13 +217,13 @@ func writeU256IntPtr(val reflect.Value, w *encBuffer) error {
 		w.str = append(w.str, 0x80)
 		return nil
 	}
-	w.writeU256Int(ptr)
+	w.writeUint256(ptr)
 	return nil
 }
 
 func writeU256IntNoPtr(val reflect.Value, w *encBuffer) error {
 	i := val.Interface().(uint256.Int)
-	w.writeU256Int(&i)
+	w.writeUint256(&i)
 	return nil
 }
 

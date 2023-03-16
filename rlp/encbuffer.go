@@ -172,8 +172,8 @@ func (w *encBuffer) writeBigInt(i *big.Int) {
 	}
 }
 
-// writeU256Int writes i as a uint256.Int.
-func (w *encBuffer) writeU256Int(z *uint256.Int) {
+// writeUint256 writes z as an integer.
+func (w *encBuffer) writeUint256(z *uint256.Int) {
 	bitlen := z.BitLen()
 	if bitlen <= 64 {
 		w.writeUint64(z.Uint64())
@@ -394,6 +394,11 @@ func (w EncoderBuffer) WriteUint64(i uint64) {
 // Note: Unlike with Encode, the sign of i is ignored.
 func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 	w.buf.writeBigInt(i)
+}
+
+// WriteUint256 encodes uint256.Int as an RLP string.
+func (w EncoderBuffer) WriteUint256(i *big.Int) {
+	w.buf.writeUint256(i)
 }
 
 // WriteBytes encodes b as an RLP string.
