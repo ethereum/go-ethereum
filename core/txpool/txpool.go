@@ -700,6 +700,17 @@ func (pool *TxPool) addLimbo(tx *types.Transaction) (added, replaced bool, err e
 	return added, false, nil
 }
 
+// isFuture reports whether the given transaction is immediately executable.
+func (pool *TxPool) isExecutable(from common.Address, tx *types.Transaction) bool {
+	list := pool.pending[from]
+	if list == nil {
+		return pool.pendingNonces.get(from) == tx.Nonce()
+	}
+	// Does parent nonce exist in pending?
+	return list.txs.Get(tx.Nonce()-1) == nil
+	// Replacements are handled later
+}
+
 // add validates a transaction and inserts it into the pending.
 // If the tx is not executable, it is not added.
 // If the transaction is a replacement for an already pending or queued one,
@@ -729,6 +740,10 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 
 	// already validated by this point
 	from, _ := types.Sender(pool.signer, tx)
+
+	if !pool.isExecutable(from, tx) {
+		return false, false, nil
+	}
 
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots {
@@ -767,7 +782,7 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 			pool.changesSinceReorg += dropped
 		}
 	}
-
+	replaced = false
 	// Try to replace an existing transaction in the pending pool
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
@@ -781,17 +796,14 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 			pool.all.Remove(old.Hash())
 			pool.priced.Removed(1)
 			pendingReplaceMeter.Mark(1)
+			replaced = true
 		}
-		pool.all.Add(tx, isLocal)
-		pool.priced.Put(tx, isLocal)
-		pool.journalTx(from, tx)
-		pool.queueTxEvent(tx)
-		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
-
-		// Successful promotion, bump the heartbeat
-		//pool.beats[from] = time.Now()
-		return true, old != nil, nil
 	}
+	pool.all.Add(tx, isLocal)
+	pool.priced.Put(tx, isLocal)
+	pool.journalTx(from, tx)
+	pool.queueTxEvent(tx)
+	log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 	// Mark local addresses and journal local transactions
 	if local && !pool.locals.contains(from) {
 		log.Info("Setting new local account", "address", from)
@@ -802,7 +814,7 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 		localGauge.Inc(1)
 	}
 	pool.journalTx(from, tx)
-	return false, replaced, nil
+	return true, replaced, nil
 }
 
 // isFuture reports whether the given transaction is immediately executable.
