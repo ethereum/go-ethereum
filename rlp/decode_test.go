@@ -1244,6 +1244,27 @@ func BenchmarkDecodeBigInts(b *testing.B) {
 	}
 }
 
+func BenchmarkDecodeU256Ints(b *testing.B) {
+	ints := make([]*uint256.Int, 200)
+	for i := range ints {
+		ints[i], _ = uint256.FromBig(math.BigPow(2, int64(i)))
+	}
+	enc, err := EncodeToBytes(ints)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(enc)))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var out []*uint256.Int
+	for i := 0; i < b.N; i++ {
+		if err := DecodeBytes(enc, &out); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func encodeTestSlice(n uint) []byte {
 	s := make([]uint, n)
 	for i := uint(0); i < n; i++ {
