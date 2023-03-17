@@ -1146,13 +1146,18 @@ func deleteString(trie *Trie, k string) {
 
 func TestDecodeNode(t *testing.T) {
 	t.Parallel()
+
+	var seed [8]byte
+	crand.Read(seed[:])
+	rnd := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
+	fmt.Printf("Seed: %v\n", seed)
 	var (
 		hash  = make([]byte, 20)
 		elems = make([]byte, 20)
 	)
 	for i := 0; i < 5000000; i++ {
-		crand.Read(hash)
-		crand.Read(elems)
+		rnd.Read(hash)
+		rnd.Read(elems)
 		decodeNode(hash, elems)
 	}
 }
