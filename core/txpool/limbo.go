@@ -86,7 +86,7 @@ func (l *limboArea) flush(fn func(*types.Transaction)) {
 	l.mu.Unlock()
 	// Now flush them out
 	var keys = make(sort.StringSlice, 0, len(txs))
-	for k, _ := range l.txs {
+	for k, _ := range txs {
 		keys = append(keys, k)
 	}
 	sort.Sort(keys)
