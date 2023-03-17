@@ -395,6 +395,7 @@ func calcDifficultyRome(time uint64, parent *types.Header) *big.Int {
 	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 	//        ) + 2^(periodCount - 2)
 
+	return params.MinimumDifficulty
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parent.Time)
 
