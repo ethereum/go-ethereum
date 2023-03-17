@@ -76,7 +76,7 @@ func (p *StateProcessor) Process(block *types.Block, excessDataGas *big.Int, sta
 	// Iterate over and process the individual transactions
 	signer := types.MakeSigner(p.config, header.Number, header.Time)
 	for i, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(signer, header.BaseFee)
+		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -99,7 +99,7 @@ func (p *StateProcessor) Process(block *types.Block, excessDataGas *big.Int, sta
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockTime uint64, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockTime uint64, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -131,7 +131,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
@@ -150,7 +150,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, excessDataGas *big.Int, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	signer := types.MakeSigner(config, header.Number, header.Time)
-	msg, err := tx.AsMessage(signer, header.BaseFee)
+	msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 	if err != nil {
 		return nil, err
 	}

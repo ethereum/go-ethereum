@@ -20,10 +20,9 @@
 package signify
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/jedisct1/go-minisign"
 )
@@ -40,8 +39,6 @@ func TestSignify(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
-
-	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)
@@ -85,8 +82,6 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	rand.Seed(time.Now().UnixNano())
-
 	data := make([]byte, 1024)
 	rand.Read(data)
 	tmpFile.Write(data)
@@ -110,8 +105,6 @@ func TestSignifyTrustedCommentTooManyLinesLF(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	rand.Seed(time.Now().UnixNano())
-
 	data := make([]byte, 1024)
 	rand.Read(data)
 	tmpFile.Write(data)
@@ -134,8 +127,6 @@ func TestSignifyTrustedCommentEmpty(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
-
-	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)

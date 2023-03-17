@@ -100,7 +100,7 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 	head := dl.peers[id].chain.CurrentBlock()
 	if td == nil {
 		// If no particular TD was requested, load from the peer's blockchain
-		td = dl.peers[id].chain.GetTd(head.Hash(), head.NumberU64())
+		td = dl.peers[id].chain.GetTd(head.Hash(), head.Number.Uint64())
 	}
 	// Synchronise with the chosen peer and ensure proper cleanup afterwards
 	err := dl.downloader.synchronise(id, head.Hash(), td, nil, mode, false, nil)
@@ -158,7 +158,7 @@ type downloadTesterPeer struct {
 // and total difficulty.
 func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 	head := dlp.chain.CurrentBlock()
-	return head.Hash(), dlp.chain.GetTd(head.Hash(), head.NumberU64())
+	return head.Hash(), dlp.chain.GetTd(head.Hash(), head.Number.Uint64())
 }
 
 func unmarshalRlpHeaders(rlpdata []rlp.RawValue) []*types.Header {
@@ -430,10 +430,10 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 	if hs := int(tester.chain.CurrentHeader().Number.Uint64()) + 1; hs != headers {
 		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, headers)
 	}
-	if bs := int(tester.chain.CurrentBlock().NumberU64()) + 1; bs != blocks {
+	if bs := int(tester.chain.CurrentBlock().Number.Uint64()) + 1; bs != blocks {
 		t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, blocks)
 	}
-	if rs := int(tester.chain.CurrentFastBlock().NumberU64()) + 1; rs != receipts {
+	if rs := int(tester.chain.CurrentSnapBlock().Number.Uint64()) + 1; rs != receipts {
 		t.Fatalf("synchronised receipts mismatch: have %v, want %v", rs, receipts)
 	}
 }
@@ -490,7 +490,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 	for {
 		// Check the retrieval count synchronously (! reason for this ugly block)
 		tester.lock.RLock()
-		retrieved := int(tester.chain.CurrentFastBlock().Number().Uint64()) + 1
+		retrieved := int(tester.chain.CurrentSnapBlock().Number.Uint64()) + 1
 		tester.lock.RUnlock()
 		if retrieved >= targetBlocks+1 {
 			break
@@ -506,7 +506,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 			{
 				cached = tester.downloader.queue.resultCache.countCompleted()
 				frozen = int(atomic.LoadUint32(&blocked))
-				retrieved = int(tester.chain.CurrentFastBlock().Number().Uint64()) + 1
+				retrieved = int(tester.chain.CurrentSnapBlock().Number.Uint64()) + 1
 			}
 			tester.downloader.queue.resultCache.lock.Unlock()
 			tester.downloader.queue.lock.Unlock()
@@ -522,7 +522,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 		// Make sure we filled up the cache, then exhaust it
 		time.Sleep(25 * time.Millisecond) // give it a chance to screw up
 		tester.lock.RLock()
-		retrieved = int(tester.chain.CurrentFastBlock().Number().Uint64()) + 1
+		retrieved = int(tester.chain.CurrentSnapBlock().Number.Uint64()) + 1
 		tester.lock.RUnlock()
 		if cached != blockCacheMaxItems && cached != blockCacheMaxItems-reorgProtHeaderDelay && retrieved+cached+frozen != targetBlocks+1 && retrieved+cached+frozen != targetBlocks+1-reorgProtHeaderDelay {
 			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheMaxItems, retrieved, frozen, targetBlocks+1)
@@ -921,7 +921,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == SnapSync {
-		if head := tester.chain.CurrentBlock().NumberU64(); head != 0 {
+		if head := tester.chain.CurrentBlock().Number.Uint64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -943,7 +943,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == SnapSync {
-		if head := tester.chain.CurrentBlock().NumberU64(); head != 0 {
+		if head := tester.chain.CurrentBlock().Number.Uint64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -1478,13 +1478,13 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 			if c.local > 0 {
 				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
 			}
-			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header()); err != nil {
+			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
 			}
 			select {
 			case <-success:
 				// Ok, downloader fully cancelled after sync cycle
-				if bs := int(tester.chain.CurrentBlock().NumberU64()) + 1; bs != len(chain.blocks) {
+				if bs := int(tester.chain.CurrentBlock().Number.Uint64()) + 1; bs != len(chain.blocks) {
 					t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(chain.blocks))
 				}
 			case <-time.NewTimer(time.Second * 3).C:

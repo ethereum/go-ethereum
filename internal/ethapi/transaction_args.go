@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -204,10 +205,10 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Set sender address or use zero address if none specified.
 	addr := args.from()
@@ -277,7 +278,20 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.Blobs != nil {
 		fakeDataHashes = make([]common.Hash, len(args.Blobs))
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, maxFeePerDataGas, data, accessList, fakeDataHashes, true)
+	msg := &core.Message{
+		From:              addr,
+		To:                args.To,
+		Value:             value,
+		GasLimit:          gas,
+		GasPrice:          gasPrice,
+		GasFeeCap:         gasFeeCap,
+		GasTipCap:         gasTipCap,
+		MaxFeePerDataGas:  maxFeePerDataGas,
+		Data:              data,
+		AccessList:        accessList,
+		DataHashes:        fakeDataHashes,
+		SkipAccountChecks: true,
+	}
 	return msg, nil
 }
 
@@ -299,6 +313,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		msg.Gas = view.Uint64View(*args.Gas)
 		msg.GasFeeCap.SetFromBig((*big.Int)(args.MaxFeePerGas))
 		msg.GasTipCap.SetFromBig((*big.Int)(args.MaxPriorityFeePerGas))
+		msg.MaxFeePerDataGas.SetFromBig((*big.Int)(args.MaxFeePerDataGas))
 		msg.Value.SetFromBig((*big.Int)(args.Value))
 		msg.Data = args.data()
 		msg.AccessList = types.AccessListView(al)
