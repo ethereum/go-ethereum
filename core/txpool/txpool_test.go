@@ -499,6 +499,11 @@ func TestDoubleNonce(t *testing.T) {
 	}
 }
 
+func pendingSize(pool *TxPool) int {
+	p, _ := pool.Stats()
+	return p
+}
+
 func TestMissingNonce(t *testing.T) {
 	t.Parallel()
 
@@ -513,7 +518,7 @@ func TestMissingNonce(t *testing.T) {
 		if _, err := pool.add(tx, false); err != nil {
 			t.Error("didn't expect error", err)
 		}
-		if have, want := len(pool.pending), 0; have != want {
+		if have, want := pendingSize(pool), 0; have != want {
 			t.Errorf("expected %d pending transactions, got %d", want, have)
 		}
 		if have, want := pool.all.Count(), 0; have != want {
@@ -530,7 +535,7 @@ func TestMissingNonce(t *testing.T) {
 		if _, err := pool.add(tx, false); err != nil {
 			t.Error("didn't expect error", err)
 		}
-		if have, want := pool.pending[addr].Len(), 1; have != want {
+		if have, want := pendingSize(pool), 1; have != want {
 			t.Errorf("expected %d pending transactions, got %d", want, have)
 		}
 		if have, want := pool.all.Count(), 1; have != want {
@@ -540,7 +545,7 @@ func TestMissingNonce(t *testing.T) {
 	<-pool.requestReset(nil, nil)
 	// both should now be pending
 	{
-		if have, want := pool.pending[addr].Len(), 2; have != want {
+		if have, want := pendingSize(pool), 2; have != want {
 			t.Errorf("expected %d pending transactions, got %d", want, have)
 		}
 		if have, want := pool.all.Count(), 2; have != want {

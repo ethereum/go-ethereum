@@ -265,8 +265,9 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*list // All currently processable transactions
-	limbo   *limboArea               // non-processable transactions
+	pending        map[common.Address]*list // All currently processable transactions
+	limbo          *limboArea               // non-processable transactions
+	lastLimboFlush time.Time
 	//queue   map[common.Address]*list     // Queued but non-processable transactions
 	beats  map[common.Address]time.Time // Last heartbeat from each known account
 	all    *lookup                      // All transactions to allow lookups
@@ -1135,9 +1136,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
 			go func(done chan struct{}) {
-				pool.runReorg(done, reset, dirtyAccounts, queuedEvents)
-				// don't reorg too often
-				time.Sleep(500 * time.Millisecond)
+				pool.runReorg(reset, dirtyAccounts, queuedEvents)
 				close(done)
 			}(nextDone)
 
@@ -1194,7 +1193,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*sortedMap) {
+func (pool *TxPool) runReorg(reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*sortedMap) {
 	defer func(t0 time.Time) {
 		reorgDurationTimer.Update(time.Since(t0))
 	}(time.Now())
@@ -1228,14 +1227,17 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	//promoted := pool.promoteExecutables(promoteAddrs)
 	var promoted []*types.Transaction
 	var discarded int
-	pool.limbo.flush(func(transaction *types.Transaction) {
-		added, _, _ := pool.addPending(transaction, false)
-		if added {
-			promoted = append(promoted, transaction)
-		} else {
-			discarded++
-		}
-	})
+	if time.Since(pool.lastLimboFlush) > time.Second {
+		pool.limbo.flush(func(transaction *types.Transaction) {
+			added, _, _ := pool.addPending(transaction, false)
+			if added {
+				promoted = append(promoted, transaction)
+			} else {
+				discarded++
+			}
+		})
+		pool.lastLimboFlush = time.Now()
+	}
 	if len(promoted)+discarded > 0 {
 		log.Info("Flushed limbo", "promoted", len(promoted), "discarded", discarded)
 	}
