@@ -349,7 +349,7 @@ func (s *remoteSealer) makeWork(block *types.Block) {
 
 	number := block.NumberU64()
 	// MilanoBlock fork
-	if number > s.ethash.config.MilanoBlock {
+	if number >= s.ethash.config.MilanoBlock {
 		number = number - s.ethash.config.InitiateBlock
 	}
 

@@ -600,7 +600,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	number := header.Number.Uint64()
 
 	// MilanoBlock fork
-	if number > ethash.config.MilanoBlock {
+	if number >= ethash.config.MilanoBlock {
 		number = number - ethash.config.InitiateBlock
 	}
 
