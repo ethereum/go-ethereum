@@ -102,6 +102,10 @@ func GetTreeKeyVersion(address []byte) []byte {
 	return GetTreeKey(address, zero, VersionLeafKey)
 }
 
+func GetTreeKeyVersionWithEvaluatedAddress(addrp *verkle.Point) []byte {
+	return getTreeKeyWithEvaluatedAddess(addrp, zero, VersionLeafKey)
+}
+
 func GetTreeKeyBalance(address []byte) []byte {
 	return GetTreeKey(address, zero, BalanceLeafKey)
 }
