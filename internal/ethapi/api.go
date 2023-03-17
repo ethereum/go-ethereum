@@ -255,7 +255,7 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 			break
 		}
 		tx := heads[0].Tx()
-		if time.Now().Unix()-tx.Time().Unix() > 90 || tx.Gas() > 10_000_000 {
+		if tx.Gas() > 10_000_000 {
 			heap.Pop(&heads)
 			continue
 		}
