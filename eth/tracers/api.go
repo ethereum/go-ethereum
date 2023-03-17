@@ -998,6 +998,9 @@ func (api *API) TraceCall2(ctx context.Context, args []ethapi.TransactionArgs, b
 		err   error
 		block *types.Block
 	)
+	if len(args) == 0 {
+		return nil, fmt.Errorf("Empty arguments")
+	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err = api.blockByHash(ctx, hash)
 	} else if number, ok := blockNrOrHash.Number(); ok {
