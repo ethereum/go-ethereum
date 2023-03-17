@@ -65,9 +65,9 @@ type testBlockChain struct {
 }
 
 func newTestBlockChain(gasLimit uint64, statedb *state.StateDB, chainHeadFeed *event.Feed) *testBlockChain {
-	var limit atomic.Uint64
-	limit.Store(gasLimit)
-	return &testBlockChain{limit, statedb, new(event.Feed)}
+	bc := testBlockChain{statedb: statedb, chainHeadFeed: new(event.Feed)}
+	bc.gasLimit.Store(gasLimit)
+	return &bc
 }
 
 func (bc *testBlockChain) CurrentBlock() *types.Header {
