@@ -247,6 +247,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "Sealer",
 		Default: c.cliConfig.Sealer.GasPrice,
 	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "miner.recommit",
+		Usage:   "The time interval for miner to re-create mining work",
+		Value:   &c.cliConfig.Sealer.Recommit,
+		Default: c.cliConfig.Sealer.Recommit,
+		Group:   "Sealer",
+	})
 
 	// ethstats
 	f.StringFlag(&flagset.StringFlag{

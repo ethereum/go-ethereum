@@ -168,6 +168,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```miner.gasprice```: Minimum gas price for mining a transaction (default: 1000000000)
 
+- ```miner.recommit```: The time interval for miner to re-create mining work (default: 2m5s)
+
 ### Telemetry Options
 
 - ```metrics```: Enable metrics collection and reporting (default: false)
