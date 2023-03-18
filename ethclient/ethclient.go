@@ -556,6 +556,9 @@ func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64
 }
 
 func (ec *Client) EstimateGasManyTx(ctx context.Context, msg []ethereum.CallMsg) ([]interface{}, error) {
+	if len(msg) == 0 {
+		return nil, errors.New("Empty args")
+	}
 	var resp []interface{}
 	var callArs []interface{}
 	for _, m := range msg {

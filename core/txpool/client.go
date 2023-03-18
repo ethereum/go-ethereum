@@ -107,7 +107,3 @@ func serveWs(broadcast *Broadcast, w http.ResponseWriter, r *http.Request) {
 	go newClient.writePump()
 	go newClient.readPump()
 }
-
-func messageHandler(broadcast *Broadcast, b []byte) {
-	broadcast.broadcastMessage <- b
-}

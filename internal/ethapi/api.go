@@ -236,11 +236,15 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 	var content []*RPCTransaction
 	pending, _ := s.b.TxPoolContent()
 	curHeader := s.b.CurrentHeader()
+	header, err := s.b.HeaderByNumber(context.Background(), rpc.PendingBlockNumber)
+	if err != nil {
+		return nil
+	}
 	signer := types.LatestSignerForChainID(common.Big1)
 	heads := make(types.TxByPriceAndTime, 0, len(pending))
 	for from, accTxs := range pending {
 		acc, _ := types.Sender(signer, accTxs[0])
-		wrapped, err := types.NewTxWithMinerFee(accTxs[0], curHeader.BaseFee)
+		wrapped, err := types.NewTxWithMinerFee(accTxs[0], header.BaseFee)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
 		if acc != from || err != nil {
 			continue
@@ -248,9 +252,7 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 		heads = append(heads, wrapped)
 	}
 	heap.Init(&heads)
-	var maxGasLimit uint64 = 30_000_000
-	var gasEstimate uint64 = 0
-	for gasEstimate < maxGasLimit {
+	for {
 		if len(heads) == 0 {
 			break
 		}
@@ -260,11 +262,8 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 			continue
 		}
 		rpcTx := NewRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
-
 		content = append(content, rpcTx)
 		heap.Pop(&heads)
-
-		gasEstimate += tx.Gas()
 	}
 	return content
 }
@@ -1416,6 +1415,7 @@ func (s *BlockChainAPI) EstimateGasManyTx(ctx context.Context, args []Transactio
 		bNrOrHash = *blockNrOrHash
 	}
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
+
 	if state == nil || err != nil {
 		return nil, err
 	}
