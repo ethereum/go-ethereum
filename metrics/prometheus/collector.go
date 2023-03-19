@@ -29,6 +29,7 @@ var (
 	typeGaugeTpl           = "# TYPE %s gauge\n"
 	typeCounterTpl         = "# TYPE %s counter\n"
 	typeSummaryTpl         = "# TYPE %s summary\n"
+	typeMeterTpl           = "# TYPE %s meter\n"
 	keyValueTpl            = "%s %v\n\n"
 	keyQuantileTagValueTpl = "%s {quantile=\"%s\"} %v\n"
 )
@@ -70,7 +71,13 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 }
 
 func (c *collector) addMeter(name string, m metrics.Meter) {
-	c.writeGaugeCounter(name, m.Count())
+	name = mutateKey(name)
+	c.buff.WriteString(fmt.Sprintf(typeMeterTpl, name))
+	c.buff.WriteString(fmt.Sprintf("%s %v\n", name+"_count", m.Count()))
+	c.buff.WriteString(fmt.Sprintf("%s %v\n", name+"_m1", m.Rate1()))
+	c.buff.WriteString(fmt.Sprintf("%s %v\n", name+"_m5", m.Rate5()))
+	c.buff.WriteString(fmt.Sprintf("%s %v\n", name+"_m15", m.Rate15()))
+	c.buff.WriteString(fmt.Sprintf("%s %v\n\n", name+"_mean", m.RateMean()))
 }
 
 func (c *collector) addTimer(name string, m metrics.Timer) {
