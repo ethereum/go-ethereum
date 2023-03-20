@@ -9,7 +9,7 @@ import (
 // TracerOpts configure the tracer to save or ignore various aspects of a transaction execution.
 type TracerOpts struct {
 	Logs          bool `json:"logs"`
-	NetBalChanges bool `json:"diffMode"`
+	NetBalChanges bool `json:"netBalChanges"`
 }
 
 // Trace contains all the accumulated details of a transaction execution.
@@ -62,7 +62,7 @@ type CallLog struct {
 type NetBalChanges struct {
 	Pre  state `json:"pre"`
 	Post state `json:"post"`
-	// Todo alex: if we want to track contract creations / deleteions we must add the idea here!
+	// Todo alex: if we want to track contract creations / deletions we must add the idea here!
 }
 
 type state = map[common.Address]*account
