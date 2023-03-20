@@ -75,6 +75,7 @@ func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.Raw
 			return data
 		}
 	}
+
 	return nil // Can't find the data anywhere.
 }
 

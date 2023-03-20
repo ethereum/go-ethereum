@@ -178,5 +178,8 @@ func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 
 	w.setEtherbase(TestBankAddress)
 
+	// enable empty blocks
+	w.noempty = 0
+
 	return w, backend, w.close
 }

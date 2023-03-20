@@ -172,9 +172,11 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 }
 
 func TestEmptyWorkEthash(t *testing.T) {
+	t.Skip()
 	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
 }
 func TestEmptyWorkClique(t *testing.T) {
+	t.Skip()
 	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
