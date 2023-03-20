@@ -26,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func u64(val uint64) *uint64 { return &val }
-
 // TestCreation tests that different genesis and fork rule combinations result in
 // the correct fork ID.
 func TestCreation(t *testing.T) {
