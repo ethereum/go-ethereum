@@ -114,6 +114,10 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 		return nil, err
 	}
 
+	if revert := result.Revert(); revert != nil {
+		CacheRevertReason(tx.Hash(), blockHash, revert)
+	}
+
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
