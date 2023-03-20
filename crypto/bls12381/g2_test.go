@@ -74,7 +74,6 @@ func TestG2AdditiveProperties(t *testing.T) {
 	zero := g.Zero()
 	for i := 0; i < fuz; i++ {
 		a, b := g.rand(), g.rand()
-		_, _, _ = b, t1, zero
 		g.Add(t0, a, zero)
 		if !g.Equal(t0, a) {
 			t.Fatal("a + 0 == a")
