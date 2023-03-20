@@ -189,7 +189,7 @@ func TestTransactionZAttack(t *testing.T) {
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
 		for j := 0; j < int(pool.config.GlobalSlots); j++ {
-			overDraftTxs = append(overDraftTxs, pricedValuedTransaction(uint64(j), 60000000000, 21000, big.NewInt(500), key))
+			overDraftTxs = append(overDraftTxs, pricedValuedTransaction(uint64(j), 600000000000, 21000, big.NewInt(500), key))
 		}
 	}
 	pool.AddRemotesSync(overDraftTxs)
