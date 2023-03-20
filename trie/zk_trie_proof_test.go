@@ -143,8 +143,8 @@ func TestSMTMissingKeyProof(t *testing.T) {
 	tr, _ := NewZkTrie(common.Hash{}, NewZktrieDatabase((memorydb.New())))
 	mt := &zkTrieImplTestWrapper{tr.Tree()}
 	err := mt.UpdateWord(
-		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("k"), 20)),
-		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("v"), 20)),
+		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("k"), 32)),
+		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("v"), 32)),
 	)
 	assert.Nil(t, err)
 
@@ -194,4 +194,43 @@ func randomZktrie(t *testing.T, n int) (*ZkTrie, map[string]*kv) {
 	}
 
 	return tr, vals
+}
+
+// Tests that new "proof with deletion" feature
+func TestProofWithDeletion(t *testing.T) {
+	tr, _ := NewZkTrie(common.Hash{}, NewZktrieDatabase((memorydb.New())))
+	mt := &zkTrieImplTestWrapper{tr.Tree()}
+	key1 := bytes.Repeat([]byte("k"), 32)
+	key2 := bytes.Repeat([]byte("m"), 32)
+	err := mt.UpdateWord(
+		zkt.NewByte32FromBytesPaddingZero(key1),
+		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("v"), 32)),
+	)
+	assert.NoError(t, err)
+	err = mt.UpdateWord(
+		zkt.NewByte32FromBytesPaddingZero(key2),
+		zkt.NewByte32FromBytesPaddingZero(bytes.Repeat([]byte("n"), 32)),
+	)
+	assert.NoError(t, err)
+
+	proof := memorydb.New()
+	s_key1, err := zkt.ToSecureKeyBytes(key1)
+	assert.NoError(t, err)
+
+	sibling1, err := tr.ProveWithDeletion(s_key1.Bytes(), 0, proof)
+	assert.NoError(t, err)
+	nd, err := tr.TryGet(key2)
+	assert.NoError(t, err)
+	l := len(sibling1)
+	// a hacking to grep the value part directly from the encoded leaf node,
+	// notice the sibling of key `k*32`` is just the leaf of key `m*32`
+	assert.Equal(t, sibling1[l-33:l-1], nd)
+
+	s_key2, err := zkt.ToSecureKeyBytes(bytes.Repeat([]byte("x"), 32))
+	assert.NoError(t, err)
+
+	sibling2, err := tr.ProveWithDeletion(s_key2.Bytes(), 0, proof)
+	assert.NoError(t, err)
+	assert.Nil(t, sibling2)
+
 }

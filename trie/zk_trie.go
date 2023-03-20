@@ -174,29 +174,49 @@ func (t *ZkTrie) NodeIterator(start []byte) NodeIterator {
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
 func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
-	err := t.ZkTrie.Prove(key, fromLevel, func(n *zktrie.Node) error {
-		nodeHash, err := n.NodeHash()
-		if err != nil {
-			return err
-		}
+	// omit sibling, which is not required for proving only
+	_, err := t.ProveWithDeletion(key, fromLevel, proofDb)
+	return err
+}
 
-		if n.Type == zktrie.NodeTypeLeaf {
-			preImage := t.GetKey(n.NodeKey.Bytes())
-			if len(preImage) > 0 {
-				n.KeyPreimage = &zkt.Byte32{}
-				copy(n.KeyPreimage[:], preImage)
-				//return fmt.Errorf("key preimage not found for [%x] ref %x", n.NodeKey.Bytes(), k.Bytes())
+// ProveWithDeletion is the implement of Prove, it also return possible sibling node
+// (if there is, i.e. the node of key exist and is not the only node in trie)
+// so witness generator can predict the final state root after deletion of this key
+// the returned sibling node has no key along with it for witness generator must decode
+// the node for its purpose
+func (t *ZkTrie) ProveWithDeletion(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) (sibling []byte, err error) {
+	err = t.ZkTrie.ProveWithDeletion(key, fromLevel,
+		func(n *zktrie.Node) error {
+			nodeHash, err := n.NodeHash()
+			if err != nil {
+				return err
 			}
-		}
-		return proofDb.Put(nodeHash[:], n.Value())
-	})
+
+			if n.Type == zktrie.NodeTypeLeaf {
+				preImage := t.GetKey(n.NodeKey.Bytes())
+				if len(preImage) > 0 {
+					n.KeyPreimage = &zkt.Byte32{}
+					copy(n.KeyPreimage[:], preImage)
+					//return fmt.Errorf("key preimage not found for [%x] ref %x", n.NodeKey.Bytes(), k.Bytes())
+				}
+			}
+			return proofDb.Put(nodeHash[:], n.Value())
+		},
+		func(_ *zktrie.Node, n *zktrie.Node) {
+			// the sibling for each leaf should be unique except for EmptyNode
+			if n != nil && n.Type != zktrie.NodeTypeEmpty {
+				sibling = n.Value()
+			}
+		},
+	)
 	if err != nil {
-		return err
+		return
 	}
 
 	// we put this special kv pair in db so we can distinguish the type and
 	// make suitable Proof
-	return proofDb.Put(magicHash, zktrie.ProofMagicBytes())
+	err = proofDb.Put(magicHash, zktrie.ProofMagicBytes())
+	return
 }
 
 // VerifyProof checks merkle proofs. The given proof must contain the value for

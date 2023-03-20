@@ -314,7 +314,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 			}
 			env.sMu.Unlock()
 
-			proof, err := state.GetStorageTrieProof(addr, key)
+			proof, sibling, err := state.GetStorageTrieProof(addr, key)
 			if err != nil {
 				log.Error("Storage proof not available", "error", err, "address", addrStr, "key", keyStr)
 				// but we still mark the proofs map with nil array
@@ -325,6 +325,9 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 			}
 			env.sMu.Lock()
 			m[keyStr] = wrappedProof
+			if sibling != nil {
+				env.DeletionProofs = append(env.DeletionProofs, sibling)
+			}
 			env.sMu.Unlock()
 		}
 	}

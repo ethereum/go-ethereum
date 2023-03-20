@@ -48,6 +48,10 @@ type StorageTrace struct {
 
 	// All storage proofs BEFORE execution
 	StorageProofs map[string]map[string][]hexutil.Bytes `json:"storageProofs,omitempty"`
+
+	// Node entries for deletion, no need to distinguish what it is from, just read them
+	// into the partial db
+	DeletionProofs []hexutil.Bytes `json:"deletionProofs,omitempty"`
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM

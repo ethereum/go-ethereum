@@ -201,13 +201,30 @@ func NewZkTrieProofWriter(storage *types.StorageTrace) (*zktrieProofWriter, erro
 				var err error
 				storages[addr], err = trie.NewZkTrie(accState.Root, zkDb)
 				if err != nil {
-					return nil, fmt.Errorf("zktrie create failure for storage in addr <%s>: %s", err, addrs)
+					return nil, fmt.Errorf("zktrie create failure for storage in addr <%s>: %s, (root %s)", addrs, err, accState.Root)
 				}
 
 			} else {
 				return nil, fmt.Errorf("can not resume proof for storage %s@%s", keys, addrs)
 			}
 
+		}
+	}
+
+	for _, delProof := range storage.DeletionProofs {
+
+		n, err := zktrie.DecodeSMTProof(delProof)
+		if err != nil {
+			log.Warn("decode delproof string fail", "error", err, "node", delProof)
+		} else if n != nil {
+			hash, err := n.NodeHash()
+			if err != nil {
+				log.Warn("node has no valid node hash", "error", err)
+			} else {
+				//notice: must consistent with trie/merkletree.go
+				bt := hash[:]
+				underlayerDb.Put(bt, delProof)
+			}
 		}
 	}
 
@@ -381,7 +398,7 @@ func (w *zktrieProofWriter) traceAccountUpdate(addr common.Address, updateAccDat
 	var proof proofList
 	s_key, _ := zkt.ToSecureKeyBytes(addr.Bytes())
 	if err := w.tracingZktrie.Prove(s_key.Bytes(), 0, &proof); err != nil {
-		return nil, fmt.Errorf("prove BEFORE state for <%x> fail: %s", addr.Bytes(), err)
+		return nil, fmt.Errorf("prove BEFORE state fail: %s", err)
 	}
 
 	decodeProofForMPTPath(proof, out.AccountPath[0])
