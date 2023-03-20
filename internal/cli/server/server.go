@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
+	"github.com/ethereum/go-ethereum/internal/cli/server/pprof"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -56,6 +57,14 @@ type Server struct {
 }
 
 type serverOption func(srv *Server, config *Config) error
+
+var glogger *log.GlogHandler
+
+func init() {
+	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.LvlInfo)
+	log.Root().SetHandler(glogger)
+}
 
 func WithGRPCAddress() serverOption {
 	return func(srv *Server, config *Config) error {
@@ -97,6 +106,13 @@ func VerbosityStringToInt(loglevel string) int {
 
 //nolint:gocognit
 func NewServer(config *Config, opts ...serverOption) (*Server, error) {
+	// start pprof
+	if config.Pprof.Enabled {
+		pprof.SetMemProfileRate(config.Pprof.MemProfileRate)
+		pprof.SetSetBlockProfileRate(config.Pprof.BlockProfileRate)
+		pprof.StartPProf(fmt.Sprintf("%s:%d", config.Pprof.Addr, config.Pprof.Port))
+	}
+
 	runtime.SetMutexProfileFraction(5)
 
 	srv := &Server{
@@ -104,7 +120,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 	}
 
 	// start the logger
-	setupLogger(VerbosityIntToString(config.Verbosity))
+	setupLogger(VerbosityIntToString(config.Verbosity), *config.Logging)
 
 	var err error
 
@@ -441,16 +457,22 @@ func (s *Server) loggingServerInterceptor(ctx context.Context, req interface{}, 
 	return h, err
 }
 
-func setupLogger(logLevel string) {
+func setupLogger(logLevel string, loggingInfo LoggingConfig) {
+	var ostream log.Handler
+
 	output := io.Writer(os.Stderr)
 
-	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-	if usecolor {
-		output = colorable.NewColorableStderr()
+	if loggingInfo.Json {
+		ostream = log.StreamHandler(output, log.JSONFormat())
+	} else {
+		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if usecolor {
+			output = colorable.NewColorableStderr()
+		}
+		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
 	}
 
-	ostream := log.StreamHandler(output, log.TerminalFormat(usecolor))
-	glogger := log.NewGlogHandler(ostream)
+	glogger.SetHandler(ostream)
 
 	// logging
 	lvl, err := log.LvlFromString(strings.ToLower(logLevel))
@@ -458,6 +480,20 @@ func setupLogger(logLevel string) {
 		glogger.Verbosity(lvl)
 	} else {
 		glogger.Verbosity(log.LvlInfo)
+	}
+
+	if loggingInfo.Vmodule != "" {
+		if err := glogger.Vmodule(loggingInfo.Vmodule); err != nil {
+			log.Error("failed to set Vmodule", "err", err)
+		}
+	}
+
+	log.PrintOrigins(loggingInfo.Debug)
+
+	if loggingInfo.Backtrace != "" {
+		if err := glogger.BacktraceAt(loggingInfo.Backtrace); err != nil {
+			log.Error("failed to set BacktraceAt", "err", err)
+		}
 	}
 
 	log.Root().SetHandler(glogger)

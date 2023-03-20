@@ -52,6 +52,7 @@ func (c *DumpconfigCommand) Run(args []string) int {
 	userConfig := command.GetConfig()
 
 	// convert the big.Int and time.Duration fields to their corresponding Raw fields
+	userConfig.JsonRPC.RPCEVMTimeoutRaw = userConfig.JsonRPC.RPCEVMTimeout.String()
 	userConfig.JsonRPC.HttpTimeout.ReadTimeoutRaw = userConfig.JsonRPC.HttpTimeout.ReadTimeout.String()
 	userConfig.JsonRPC.HttpTimeout.WriteTimeoutRaw = userConfig.JsonRPC.HttpTimeout.WriteTimeout.String()
 	userConfig.JsonRPC.HttpTimeout.IdleTimeoutRaw = userConfig.JsonRPC.HttpTimeout.IdleTimeout.String()
