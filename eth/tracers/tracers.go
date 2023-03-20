@@ -104,28 +104,19 @@ const (
 // GetMemoryCopyPadded returns offset + size as a new slice.
 // It zero-pads the slice if it extends beyond memory bounds.
 func GetMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
-	if offset < 0 {
-		return nil, fmt.Errorf("offset cannot be smaller than zero")
+	if offset < 0 || size < 0 {
+		return nil, fmt.Errorf("offset or size must not be negative")
 	}
-
-    if int(offset) >= m.Len() {
-        // case 1: the slice falls entirely outside memory bounds
-        if size > memoryPadLimit {
-            return nil, fmt.Errorf("reached limit for padding memory slice: offset %d, size %d", offset, size)
-        }
-        padded := make([]byte, size)
-        return padded, nil
-    } else if int(offset+size) >= m.Len() {
-        // case 2: the slice overlaps memory bounds
-        if int(offset+size)-m.Len() > memoryPadLimit {
-            return nil, fmt.Errorf("reached limit for padding memory slice: offset %d, size %d", offset, size)
-        }
-        padded := make([]byte, size)
-        memSlice := m.GetCopy(offset, int64(m.Len()) - offset)
-        copy(padded[0:len(memSlice)], memSlice)
-        return padded, nil
-    }
-    // case 3: the slice falls inside memory bounds
-    memSlice := m.GetCopy(offset, size)
-    return memSlice, nil
+	if int(offset+size) < m.Len() { // slice fully inside memory
+		return m.GetCopy(offset, size), nil
+	}
+	paddingNeeded := int(offset+size) - m.Len()
+	if paddingNeeded > memoryPadLimit {
+		return nil, fmt.Errorf("reached limit for padding memory slice: %d", paddingNeeded)
+	}
+	cpy := make([]byte, size)
+	if overlap := int64(m.Len()) - offset; overlap > 0 {
+		copy(cpy, m.GetPtr(offset, overlap))
+	}
+	return cpy, nil
 }
