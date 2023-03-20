@@ -1,6 +1,7 @@
 package blocknative
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -73,6 +74,20 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
+
+	// If we want NetBalChanges, start by tracking the top level addresses
+	if t.opts.NetBalChanges {
+		t.lookupAccount(from)
+		t.lookupAccount(to)
+		t.lookupAccount(env.Context.Coinbase) // Todo alex: Do we care about where the mining reward theoretically goes to?
+
+		// The recipient balance includes the value transferred.
+		// todo alex: This would mean in the before for the from address,
+		toBal := new(big.Int).Sub(t.trace.NetBalChanges.Pre[to].Balance, value)
+		t.trace.NetBalChanges.Pre[to].Balance = toBal
+
+		// Todo alex: Does capture start occur before the initial gas negation? I think i need to re-add here!
+	}
 
 	// Blocks only contain `Random` post-merge, but we still have pre-merge tests.
 	random := ""
@@ -153,12 +168,25 @@ func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 		}
 	}()
 
-	// TODO: Here we can check for specific op codes that may interest us
-	// Op codes we like at BN are:
-	// CREATE, CREATE2
-	// SELFDESTRUCT
-	// CALL, CALLCODE, DELEGATECALL, STATICCALL (picked up by CaptureEnter)
-	// REVERT
+	// If we want NetBalChanges, track storage altering opcodes. Here we add the addresses to our map to check later.
+	// Todo Alex: Can I remove this in space of a better way of tracking touched addresses and not opcode comparison?
+	if t.opts.NetBalChanges {
+		stack := scope.Stack
+		stackData := stack.Data()
+		stackLen := len(stackData)
+		caller := scope.Contract.Address()
+		switch {
+		case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
+			slot := common.Hash(stackData[stackLen-1].Bytes32())
+			t.lookupStorage(caller, slot)
+		case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE):
+			addr := common.Address(stackData[stackLen-1].Bytes20())
+			t.lookupAccount(addr)
+		case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
+			addr := common.Address(stackData[stackLen-2].Bytes20())
+			t.lookupAccount(addr)
+		}
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -227,10 +255,84 @@ func (t *txnOpCodeTracer) SetStateRoot(root common.Hash) {
 	t.trace.BlockContext.StateRoot = bytesToHex(root.Bytes())
 }
 
-func (*txnOpCodeTracer) CaptureTxEnd(restGas uint64) {}
+func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
+	// If we want NetBalChanges,
+	if t.opts.NetBalChanges {
+		for addr, state := range t.trace.NetBalChanges.Pre {
+			// Todo alex: If we end up tracking creations / deletions, we would prune some here
+
+			// Keep track if we end up finding an altered address
+			modified := false
+
+			// Keep track of potential Eth balance changes, and storage changes
+			// Later in a final post-processing step we will decode these for user known formats
+			postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
+			newBalance := t.env.StateDB.GetBalance(addr)
+			newCode := t.env.StateDB.GetCode(addr)
+
+			if newBalance.Cmp(t.trace.NetBalChanges.Pre[addr].Balance) != 0 {
+				modified = true
+				postAccount.Balance = newBalance
+			}
+			if !bytes.Equal(newCode, t.trace.NetBalChanges.Pre[addr].Code) {
+				modified = true
+				postAccount.Code = newCode
+			}
+
+			for key, val := range state.Storage {
+				// don't include the empty slot
+				if val == (common.Hash{}) {
+					delete(t.trace.NetBalChanges.Pre[addr].Storage, key)
+				}
+
+				newVal := t.env.StateDB.GetState(addr, key)
+				if val == newVal {
+					// Omit unchanged slots
+					delete(t.trace.NetBalChanges.Pre[addr].Storage, key)
+				} else {
+					modified = true
+					if newVal != (common.Hash{}) {
+						postAccount.Storage[key] = newVal
+					}
+				}
+			}
+
+			if modified {
+				t.trace.NetBalChanges.Post[addr] = postAccount
+			} else {
+				// if state is not modified, then no need to include into the pre state
+				delete(t.trace.NetBalChanges.Pre, addr)
+			}
+		}
+	}
+}
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *txnOpCodeTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
+}
+
+// lookupAccount fetches details of an account and adds it to the prestate
+// if it doesn't exist there.
+func (t *txnOpCodeTracer) lookupAccount(addr common.Address) {
+	if _, ok := t.trace.NetBalChanges.Pre[addr]; ok {
+		return
+	}
+
+	t.trace.NetBalChanges.Pre[addr] = &account{
+		Balance: t.env.StateDB.GetBalance(addr),
+		Code:    t.env.StateDB.GetCode(addr),
+		Storage: make(map[common.Hash]common.Hash),
+	}
+}
+
+// lookupStorage fetches the requested storage slot and adds
+// it to the prestate of the given contract. It assumes `lookupAccount`
+// has been performed on the contract before.
+func (t *txnOpCodeTracer) lookupStorage(addr common.Address, key common.Hash) {
+	if _, ok := t.trace.NetBalChanges.Pre[addr].Storage[key]; ok {
+		return
+	}
+	t.trace.NetBalChanges.Pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
 }
