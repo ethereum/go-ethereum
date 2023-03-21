@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
+
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -339,12 +341,20 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		return v.Format(timeFormat)
 
 	case *big.Int:
-		// Big ints get consumed by the Stringer clause so we need to handle
+		// Big ints get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
 			return "<nil>"
 		}
 		return formatLogfmtBigInt(v)
+
+	case *uint256.Int:
+		// Uint256s get consumed by the Stringer clause, so we need to handle
+		// them earlier on.
+		if v == nil {
+			return "<nil>"
+		}
+		return formatLogfmtUint256(v)
 	}
 	if term {
 		if s, ok := value.(TerminalStringer); ok {
@@ -446,6 +456,36 @@ func formatLogfmtBigInt(n *big.Int) string {
 
 	var (
 		text  = n.String()
+		buf   = make([]byte, len(text)+len(text)/3)
+		comma = 0
+		i     = len(buf) - 1
+	)
+	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
+		c := text[j]
+
+		switch {
+		case c == '-':
+			buf[i] = c
+		case comma == 3:
+			buf[i] = ','
+			i--
+			comma = 0
+			fallthrough
+		default:
+			buf[i] = c
+			comma++
+		}
+	}
+	return string(buf[i+1:])
+}
+
+// formatLogfmtUint256 formats n with thousand separators.
+func formatLogfmtUint256(n *uint256.Int) string {
+	if n.IsUint64() {
+		return FormatLogfmtUint64(n.Uint64())
+	}
+	var (
+		text  = n.Dec()
 		buf   = make([]byte, len(text)+len(text)/3)
 		comma = 0
 		i     = len(buf) - 1
