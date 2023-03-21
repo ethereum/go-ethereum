@@ -71,7 +71,7 @@ type Trie interface {
 	// TryGetStorage returns the value for key stored in the trie. The value bytes
 	// must not be modified by the caller. If a node was not found in the database,
 	// a trie.MissingNodeError is returned.
-	TryGetStorage(addr, key []byte) ([]byte, error)
+	TryGetStorage(addr common.Address, key []byte) ([]byte, error)
 
 	// TryGetAccount abstracts an account read from the trie. It retrieves the
 	// account blob from the trie with provided account address and decodes it
@@ -85,7 +85,7 @@ type Trie interface {
 	// any existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
-	TryUpdateStorage(addr, key, value []byte) error
+	TryUpdateStorage(addr common.Address, key, value []byte) error
 
 	// TryUpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
@@ -94,7 +94,7 @@ type Trie interface {
 
 	// TryDeleteStorage removes any existing value for key from the trie. If a node
 	// was not found in the database, a trie.MissingNodeError is returned.
-	TryDeleteStorage(addr, key []byte) error
+	TryDeleteStorage(addr common.Address, key []byte) error
 
 	// TryDeleteAccount abstracts an account deletion from the trie.
 	TryDeleteAccount(address common.Address) error

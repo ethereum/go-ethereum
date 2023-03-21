@@ -205,12 +205,12 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db    Database    // Database to load trie nodes through
-	state common.Hash // Root hash of the state to prefetch
-	owner common.Hash // Owner of the trie, usually account hash
-	root  common.Hash // Root hash of the trie to prefetch
-	addr  []byte      // Address of the account that the trie belongs to
-	trie  Trie        // Trie being populated with nodes
+	db    Database       // Database to load trie nodes through
+	state common.Hash    // Root hash of the state to prefetch
+	owner common.Hash    // Owner of the trie, usually account hash
+	root  common.Hash    // Root hash of the trie to prefetch
+	addr  common.Address // Address of the account that the trie belongs to
+	trie  Trie           // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -233,7 +233,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		state: state,
 		owner: owner,
 		root:  root,
-		addr:  addr[:],
+		addr:  addr,
 		wake:  make(chan struct{}, 1),
 		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
@@ -341,7 +341,6 @@ func (sf *subfetcher) loop() {
 						if len(task) == common.AddressLength {
 							sf.trie.TryGetAccount(common.BytesToAddress(task))
 						} else {
-
 							sf.trie.TryGetStorage(sf.addr, task)
 						}
 						sf.seen[string(task)] = struct{}{}
