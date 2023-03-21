@@ -461,22 +461,18 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
 	}
-	if _, ok := t.block.numberOrHash.Hash(); !ok {
-		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
-		if err != nil {
-			return nil, err
-		}
-		hash := header.Hash()
-		t.block.numberOrHash.BlockHash = &hash
+	// Assumes block hash has been resolved.
+	hash := t.block.hash
+	if hash == (common.Hash{}) {
+		return nil, fmt.Errorf("block initialization failed to fill in hash")
 	}
-	return t.getLogs(ctx)
+	return t.getLogs(ctx, hash)
 }
 
 // getLogs returns log objects for the given tx.
 // Assumes block hash is resolved.
-func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
+func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, error) {
 	var (
-		hash, _   = t.block.numberOrHash.Hash()
 		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
 		logs, err = filter.Logs(ctx)
 	)
@@ -803,6 +799,7 @@ func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 			r:            b.r,
 			numberOrHash: &blockNumberOrHash,
 			header:       uncle,
+			hash:         uncle.Hash(),
 		})
 	}
 	return &ret, nil
@@ -953,6 +950,7 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index int32 }) (*Block
 		r:            b.r,
 		numberOrHash: &blockNumberOrHash,
 		header:       uncle,
+		hash:         uncle.Hash(),
 	}, nil
 }
 
