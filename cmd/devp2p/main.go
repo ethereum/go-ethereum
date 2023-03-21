@@ -29,7 +29,6 @@ import (
 var app = flags.NewApp("go-ethereum devp2p tool")
 
 func init() {
-	app.HideVersion = true
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
