@@ -1178,29 +1178,21 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	Number *Long
 	Hash   *common.Hash
 }) (*Block, error) {
-	var block *Block
+	var numberOrHash rpc.BlockNumberOrHash
 	if args.Number != nil {
 		if *args.Number < 0 {
 			return nil, nil
 		}
 		number := rpc.BlockNumber(*args.Number)
-		numberOrHash := rpc.BlockNumberOrHashWithNumber(number)
-		block = &Block{
-			r:            r,
-			numberOrHash: &numberOrHash,
-		}
+		numberOrHash = rpc.BlockNumberOrHashWithNumber(number)
 	} else if args.Hash != nil {
-		numberOrHash := rpc.BlockNumberOrHashWithHash(*args.Hash, false)
-		block = &Block{
-			r:            r,
-			numberOrHash: &numberOrHash,
-		}
+		numberOrHash = rpc.BlockNumberOrHashWithHash(*args.Hash, false)
 	} else {
-		numberOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		block = &Block{
-			r:            r,
-			numberOrHash: &numberOrHash,
-		}
+		numberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	}
+	block := &Block{
+		r:            r,
+		numberOrHash: &numberOrHash,
 	}
 	// Resolve the header, return nil if it doesn't exist.
 	// Note we don't resolve block directly here since it will require an
