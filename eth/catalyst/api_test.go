@@ -880,7 +880,6 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 	api := NewConsensusAPI(ethservice)
-	setupBlocks(t, ethservice, 10, ethservice.BlockChain().CurrentBlock(), func(parent *types.Header) {}, nil)
 
 	// Test parent already post TTD in FCU
 	parent := preMergeBlocks[len(preMergeBlocks)-2]
