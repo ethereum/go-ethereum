@@ -195,7 +195,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return receipt, nil
 }
 
-func ApplyTransactionForPreExec(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+func ApplyTransactionForPreExec(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
 	blockContext := NewEVMBlockContext(header, bc, author)
 	blockContext.BaseFee = big.NewInt(0)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)

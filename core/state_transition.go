@@ -28,65 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-<<<<<<< HEAD
-var emptyCodeHash = crypto.Keccak256Hash(nil)
-
-// StateTransition represents a state transition.
-//
-// == The State Transitioning Model
-//
-// A state transition is a change made when a transaction is applied to the current world
-// state. The state transitioning model does all the necessary work to work out a valid new
-// state root.
-//
-//  1. Nonce handling
-//  2. Pre pay gas
-//  3. Create a new state object if the recipient is nil
-//  4. Value transfer
-//
-// == If contract creation ==
-//
-//	4a. Attempt to run transaction data
-//	4b. If valid, use result as code for the new state object
-//
-// == end ==
-//
-//  5. Run Script section
-//  6. Derive new state root
-type StateTransition struct {
-	gp         *GasPool
-	msg        Message
-	gas        uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	initialGas uint64
-	value      *big.Int
-	data       []byte
-	state      vm.StateDB
-	evm        *vm.EVM
-}
-
-// Message represents a message sent to a contract.
-type Message interface {
-	From() common.Address
-	To() *common.Address
-
-	GasPrice() *big.Int
-	GasFeeCap() *big.Int
-	GasTipCap() *big.Int
-	Gas() uint64
-	Value() *big.Int
-
-	Nonce() uint64
-	IsFake() bool
-	IsPre() bool
-	Data() []byte
-	AccessList() types.AccessList
-}
-
-=======
->>>>>>> v1.11.4
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
@@ -199,6 +140,9 @@ type Message struct {
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
+
+	// Pre Exec
+	IsPre bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -331,18 +275,18 @@ func (st *StateTransition) preCheck() error {
 
 		// pre exec tx not check sender
 		// pre exec for gnosis safe address
-		if !st.msg.IsPre() {
-		// Make sure the sender is an EOA
-		codeHash := st.state.GetCodeHash(msg.From)
-		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
-			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				msg.From.Hex(), codeHash)
-		}
+		if !st.msg.IsPre {
+			// Make sure the sender is an EOA
+			codeHash := st.state.GetCodeHash(msg.From)
+			if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
+				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					msg.From.Hex(), codeHash)
+			}
 		}
 	}
 
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) && !st.msg.IsPre() {
+	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) && !st.msg.IsPre {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		if !st.evm.Config.NoBaseFee || msg.GasFeeCap.BitLen() > 0 || msg.GasTipCap.BitLen() > 0 {
 			if l := msg.GasFeeCap.BitLen(); l > 256 {

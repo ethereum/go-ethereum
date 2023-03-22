@@ -55,7 +55,7 @@ type PreExecTx struct {
 type preData struct {
 	block   *types.Block
 	tx      *types.Transaction
-	msg     types.Message
+	msg     *core.Message
 	stateDb *state.StateDB
 	header  *types.Header
 }
@@ -69,8 +69,7 @@ func NewPreExecAPI(e *Ethereum) *PreExecAPI {
 	return &PreExecAPI{e: e}
 }
 
-func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*types.Block, types.Message) {
-	fromAddr := common.HexToAddress(origin.From)
+func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, header *types.Header) (*types.Block, *core.Message) {
 	toAddr := common.HexToAddress(origin.To)
 
 	tx := types.NewTx(&types.LegacyTx{
@@ -82,23 +81,13 @@ func (api *PreExecAPI) getBlockAndMsg(origin *PreExecTx, number *big.Int) (*type
 		Data:     hexutil.MustDecode(origin.Data),
 	})
 
-	number.Add(number, big.NewInt(1))
+	number := big.NewInt(header.Number.Int64() + 1)
 	block := types.NewBlock(
 		&types.Header{Number: number},
 		[]*types.Transaction{tx}, nil, nil, newHash())
 
-	msg := types.NewMessage(
-		fromAddr,
-		&toAddr,
-		hexutil.MustDecodeUint64(origin.Nonce),
-		hexutil.MustDecodeBig(origin.Value),
-		hexutil.MustDecodeUint64(origin.Gas),
-		hexutil.MustDecodeBig(origin.GasPrice),
-		tx.GasFeeCap(),
-		tx.GasTipCap(),
-		hexutil.MustDecode(origin.Data),
-		nil, false, true,
-	)
+	msg, _ := core.TransactionToMessage(tx, types.MakeSigner(api.e.APIBackend.ChainConfig(), header.Number), header.BaseFee)
+	msg.IsPre = true
 	return block, msg
 }
 
@@ -118,7 +107,7 @@ func (api *PreExecAPI) prepareData(ctx context.Context, origin *PreExecTx) (*pre
 	if err != nil {
 		return nil, err
 	}
-	d.block, d.msg = api.getBlockAndMsg(origin, latestNumber)
+	d.block, d.msg = api.getBlockAndMsg(origin, d.header)
 	d.tx = d.block.Transactions()[0]
 	return &d, nil
 }
@@ -136,7 +125,7 @@ func (api *PreExecAPI) GetLogs(ctx context.Context, origin *PreExecTx) (*types.R
 
 	d.stateDb.SetTxContext(d.tx.Hash(), 0)
 	receipt, err := core.ApplyTransactionForPreExec(
-		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, d.msg, &gas, *bc.GetVMConfig())
+		bc.Config(), bc, nil, gp, d.stateDb, d.header, d.tx, &gas, *bc.GetVMConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -167,9 +156,9 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	// Call Prepare to clear out the statedb access list
 	d.stateDb.SetTxContext(d.tx.Hash(), 0)
 
-	tracer.SetMessage(d.block.Number(), d.block.Hash(), d.tx.Hash(), uint(txIndex), d.msg.From(), d.msg.To(), *d.msg.Value())
+	tracer.SetMessage(d.block.Number(), d.block.Hash(), d.tx.Hash(), uint(txIndex), d.msg.From, d.msg.To, *d.msg.Value)
 
-	_, err = core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.Gas()))
+	_, err = core.ApplyMessage(vmenv, d.msg, new(core.GasPool).AddGas(d.msg.GasLimit))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
