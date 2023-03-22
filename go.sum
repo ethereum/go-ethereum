@@ -118,6 +118,12 @@ github.com/crate-crypto/go-ipa v0.0.0-20220523130400-f11357ae11c7 h1:6IrxszG5G+O
 github.com/crate-crypto/go-ipa v0.0.0-20220523130400-f11357ae11c7/go.mod h1:gFnFS95y8HstDP6P9pPwzrxOOC5TRDkwbM+ao15ChAI=
 github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230312204821-9a244123c812 h1:fvpzeIO449sb44y2Nqd0MVziJHvp0OFCG66t3ZjuYqU=
 github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230312204821-9a244123c812/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232037-070b0b94db8a h1:LWAQVosZamsfhvO14tfYNMluSHTWXF6AKa+9DmaK7Q0=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232037-070b0b94db8a/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232628-fbbf54e10131 h1:/ZBvP82vNl+xWYfcAHewbjRkq1MS2l0DKyeIWO4wgME=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232628-fbbf54e10131/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322233247-22e22c6f68e6 h1:KguBkZjb4BXvSmVxjugrmJQyGjZqZHJfGHMmHgZn6ls=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322233247-22e22c6f68e6/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cyberdelia/templates v0.0.0-20141128023046-ca7fffd4298c/go.mod h1:GyV+0YP4qX0UQ7r2MoYZ+AvYDp12OF5yg4q8rGnyNh4=
 github.com/dave/jennifer v1.2.0/go.mod h1:fIb+770HOpJ2fmN9EPPKOqm1vMGhB+TwXKMZhrIygKg=
