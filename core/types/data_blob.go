@@ -266,18 +266,18 @@ func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, v
 	versionedHashes = make([]common.Hash, len(blobs))
 
 	for i, blob := range blobs {
-		commitment, err := kzg.CryptoCtx.BlobToKZGCommitment(blob)
+		commitment, err := kzg.CryptoCtx.BlobToKZGCommitment(serialization.Blob(blob))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not convert blob to commitment: %v", err)
 		}
 
-		proof, err := kzg.CryptoCtx.ComputeBlobKZGProof(blob, commitment)
+		proof, err := kzg.CryptoCtx.ComputeBlobKZGProof(serialization.Blob(blob), commitment)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not compute proof for blob: %v", err)
 		}
 		commitments[i] = KZGCommitment(commitment)
 		proofs[i] = KZGProof(proof)
-		versionedHashes[i] = common.Hash(kzg.KZGToVersionedHash(commitment))
+		versionedHashes[i] = common.Hash(kzg.KZGToVersionedHash(serialization.KZGCommitment(commitment)))
 	}
 
 	return commitments, versionedHashes, proofs, nil
