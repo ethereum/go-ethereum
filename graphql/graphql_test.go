@@ -292,7 +292,7 @@ func TestGraphQLTransactionLogs(t *testing.T) {
 	)
 	defer stack.Close()
 
-	handler := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+	handler, _ := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
@@ -344,7 +344,7 @@ func TestGraphQLBlockTransactions(t *testing.T) {
 	)
 	defer stack.Close()
 
-	handler := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+	handler, _ := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
@@ -396,7 +396,7 @@ func TestGraphQLBlock(t *testing.T) {
 	)
 	defer stack.Close()
 
-	handler := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+	handler, chain := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
@@ -408,7 +408,7 @@ func TestGraphQLBlock(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
-	query := `{ block { ommerCount transactionCount } }`
+	query := `{ block { number hash gasLimit ommerCount transactionCount } }`
 	res := handler.Schema.Exec(context.Background(), query, "", map[string]interface{}{})
 	if res.Errors != nil {
 		t.Fatalf("graphql query failed: %v", res.Errors)
@@ -417,7 +417,59 @@ func TestGraphQLBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to encode graphql response: %s", err)
 	}
-	want := `{"block":{"ommerCount":0,"transactionCount":3}}`
+	want := fmt.Sprintf(`{"block":{"number":1,"hash":"%s","gasLimit":11500000,"ommerCount":0,"transactionCount":3}}`, chain[len(chain)-1].Hash())
+	if string(have) != want {
+		t.Errorf("response unmatch. expected %s, got %s", want, have)
+	}
+}
+func TestGraphQLBlockFromTx(t *testing.T) {
+	var (
+		key, _  = crypto.GenerateKey()
+		addr    = crypto.PubkeyToAddress(key.PublicKey)
+		dadStr  = "0x0000000000000000000000000000000000000dad"
+		dad     = common.HexToAddress(dadStr)
+		genesis = &core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   11500000,
+			Difficulty: big.NewInt(1048576),
+			Alloc: core.GenesisAlloc{
+				addr: {Balance: big.NewInt(params.Ether)},
+				dad: {
+					// LOG0(0, 0), LOG0(0, 0), RETURN(0, 0)
+					Code:    common.Hex2Bytes("60006000a060006000a060006000f3"),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+		signer = types.LatestSigner(genesis.Config)
+		stack  = createNode(t)
+	)
+	defer stack.Close()
+
+	var tx *types.Transaction
+	handler, chain := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 2, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+	})
+	// start node
+	if err := stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+	query := fmt.Sprintf(`{ transaction(hash: "%s") { block { number hash gasLimit ommerCount transactionCount } } }`, tx.Hash())
+	res := handler.Schema.Exec(context.Background(), query, "", map[string]interface{}{})
+	if res.Errors != nil {
+		t.Fatalf("graphql query failed: %v", res.Errors)
+	}
+	have, err := json.Marshal(res.Data)
+	if err != nil {
+		t.Fatalf("failed to encode graphql response: %s", err)
+	}
+	want := fmt.Sprintf(`{"transaction":{"block":{"number":1,"hash":"%s","gasLimit":11500000,"ommerCount":0,"transactionCount":3}}}`, chain[len(chain)-1].Hash())
 	if string(have) != want {
 		t.Errorf("response unmatch. expected %s, got %s", want, have)
 	}
@@ -437,7 +489,7 @@ func createNode(t *testing.T) *node.Node {
 	return stack
 }
 
-func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) *handler {
+func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
 	ethConf := &ethconfig.Config{
 		Genesis: gspec,
 		Ethash: ethash.Config{
@@ -468,5 +520,5 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}
-	return handler
+	return handler, chain
 }
