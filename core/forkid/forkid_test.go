@@ -308,7 +308,7 @@ func TestValidation(t *testing.T) {
 
 		// Local is mainnet Gray Glacier, and isn't aware of more forks. Remote announces Gray Glacier +
 		// 0xffffffff. Local needs software update, reject.
-		{&timestampedConfig, 15050000, 0, ID{Hash: checksumToBytes(checksumUpdate(0xf0afd0e3, math.MaxUint64)), Next: 0}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 15050000, 0, ID{Hash: checksumToBytes(checksumUpdate(0xf0afd0e3, math.MaxUint64)), Next: 0}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Gray Glacier, and is aware of Shanghai. Remote announces Shanghai +
 		// 0xffffffff. Local needs software update, reject.
