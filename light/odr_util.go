@@ -175,7 +175,7 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.BaseFee(), block.Transactions()); err != nil {
 			return nil, err
 		}
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)

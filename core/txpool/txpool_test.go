@@ -64,14 +64,15 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
-func (bc *testBlockChain) CurrentBlock() *types.Block {
-	return types.NewBlock(&types.Header{
+func (bc *testBlockChain) CurrentBlock() *types.Header {
+	return &types.Header{
+		Number:   new(big.Int),
 		GasLimit: atomic.LoadUint64(&bc.gasLimit),
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+	}
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {

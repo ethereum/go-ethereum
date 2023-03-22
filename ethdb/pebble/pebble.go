@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build arm64 || amd64
+//go:build (arm64 || amd64) && !openbsd
 
 // Package pebble implements the key-value database layer based on pebble.
 package pebble
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"sync"
@@ -130,7 +131,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
-	maxMemTableSize := 4 << 30 // 4 GB
+	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
 
 	// Two memory tables is configured which is identical to leveldb,
 	// including a frozen memory table and another live one.
@@ -361,6 +362,17 @@ func (d *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (d *Database) Compact(start []byte, limit []byte) error {
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	// Note any prefixed database entry will be smaller than this
+	// flag, as for trie nodes we need the 32 byte 0xff because
+	// there might be a shared prefix starting with a number of
+	// 0xff-s, so 32 ensures than only a hash collision could touch it.
+	// https://github.com/cockroachdb/pebble/issues/2359#issuecomment-1443995833
+	if limit == nil {
+		limit = bytes.Repeat([]byte{0xff}, 32)
+	}
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
 

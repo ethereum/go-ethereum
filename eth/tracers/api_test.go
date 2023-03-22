@@ -109,7 +109,7 @@ func (b *testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types
 
 func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
-		return b.chain.CurrentBlock(), nil
+		return b.chain.GetBlockByNumber(b.chain.CurrentBlock().Number.Uint64()), nil
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }

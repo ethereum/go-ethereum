@@ -237,6 +237,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			log.Warn("Forkchoice requested unknown head", "hash", update.HeadBlockHash)
 			return engine.STATUS_SYNCING, nil
 		}
+		// If the finalized hash is known, we can direct the downloader to move
+		// potentially more data to the freezer from the get go.
+		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
+
 		// Header advertised via a past newPayload request. Start syncing to it.
 		// Before we do however, make sure any legacy sync in switched off so we
 		// don't accidentally have 2 cycles running.
@@ -244,8 +248,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			merger.ReachTTD()
 			api.eth.Downloader().Cancel()
 		}
-		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
-		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
+		context := []interface{}{"number", header.Number, "hash", header.Hash()}
+		if update.FinalizedBlockHash != (common.Hash{}) {
+			if finalized == nil {
+				context = append(context, []interface{}{"finalized", "unknown"}...)
+			} else {
+				context = append(context, []interface{}{"finalized", finalized.Number}...)
+			}
+		}
+		log.Info("Forkchoice requested sync to new head", context...)
+		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header, finalized); err != nil {
 			return engine.STATUS_SYNCING, err
 		}
 		return engine.STATUS_SYNCING, nil
@@ -289,7 +301,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
-		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
+		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
 		return valid(nil), nil
 	}
 	api.eth.SetSynced()
@@ -310,7 +322,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
 		}
 		// Set the finalized block
-		api.eth.BlockChain().SetFinalized(finalBlock)
+		api.eth.BlockChain().SetFinalized(finalBlock.Header())
 	}
 	// Check if the safe block hash is in our canonical tree, if not somethings wrong
 	if update.SafeBlockHash != (common.Hash{}) {
@@ -324,7 +336,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
 		}
 		// Set the safe block
-		api.eth.BlockChain().SetSafe(safeBlock)
+		api.eth.BlockChain().SetSafe(safeBlock.Header())
 	}
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
@@ -792,7 +804,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested count too large: %v", count))
 	}
 	// limit count up until current
-	current := api.eth.BlockChain().CurrentBlock().NumberU64()
+	current := api.eth.BlockChain().CurrentBlock().Number.Uint64()
 	last := uint64(start) + uint64(count) - 1
 	if last > current {
 		last = current

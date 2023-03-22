@@ -194,6 +194,7 @@ var (
 		ArrowGlacierBlock:             nil,
 		TerminalTotalDifficulty:       big.NewInt(10_790_000),
 		TerminalTotalDifficultyPassed: true,
+		ShanghaiTime:                  newUint64(1678832736),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,

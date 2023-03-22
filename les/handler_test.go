@@ -121,20 +121,20 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(0).Hash()},
 		}, {
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64()}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Number.Uint64()}, Amount: 1},
 			[]common.Hash{bc.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		//{
-		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
+		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Number.Uint64()() - 1}, Amount: limit + 10, Reverse: true},
 		//	[]common.Hash{},
 		//},
 		// Check that requesting more than available is handled gracefully
 		{
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Number.Uint64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64()).Hash(),
+				bc.GetBlockByNumber(bc.CurrentBlock().Number.Uint64() - 4).Hash(),
+				bc.GetBlockByNumber(bc.CurrentBlock().Number.Uint64()).Hash(),
 			},
 		}, {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
@@ -145,10 +145,10 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Number.Uint64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 4).Hash(),
-				bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1).Hash(),
+				bc.GetBlockByNumber(bc.CurrentBlock().Number.Uint64() - 4).Hash(),
+				bc.GetBlockByNumber(bc.CurrentBlock().Number.Uint64() - 1).Hash(),
 			},
 		}, {
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
@@ -162,7 +162,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&GetBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().Number.Uint64() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -240,7 +240,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(bc.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(bc.CurrentBlock().Number.Uint64()))
 				if !seen[num] {
 					seen[num] = true
 
@@ -292,7 +292,7 @@ func testGetCode(t *testing.T, protocol int) {
 
 	var codereqs []*CodeReq
 	var codes [][]byte
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
 			BHash:  header.Hash(),
@@ -367,7 +367,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 	// Collect the hashes to request, and the response to expect
 	var receipts []types.Receipts
 	var hashes []common.Hash
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		block := bc.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
@@ -404,7 +404,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	proofsV2 := light.NewNodeSet()
 
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		trie, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
 

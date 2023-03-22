@@ -154,7 +154,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root()); err != nil {
+		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
 			return err
 		}
 	}
@@ -317,8 +317,8 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by BlockChain, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
-		if err := validateHeader(bmap[b.Hash()].BlockHeader, b.Header()); err != nil {
+	for b := cm.CurrentBlock(); b != nil && b.Number.Uint64() != 0; b = cm.GetBlockByHash(b.ParentHash).Header() {
+		if err := validateHeader(bmap[b.Hash()].BlockHeader, b); err != nil {
 			return fmt.Errorf("imported block header validation failed: %v", err)
 		}
 	}

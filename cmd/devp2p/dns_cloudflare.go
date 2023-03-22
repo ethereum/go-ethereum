@@ -126,11 +126,16 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	}
 
 	// Iterate over the new records and inject anything missing.
+	log.Info("Updating DNS entries")
+	created := 0
+	updated := 0
+	skipped := 0
 	for path, val := range records {
 		old, exists := existing[path]
 		if !exists {
 			// Entry is unknown, push a new one to Cloudflare.
-			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
+			log.Debug(fmt.Sprintf("Creating %s = %q", path, val))
+			created++
 			ttl := rootTTL
 			if path != name {
 				ttl = treeNodeTTLCloudflare // Max TTL permitted by Cloudflare
@@ -139,27 +144,33 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, record)
 		} else if old.Content != val {
 			// Entry already exists, only change its content.
-			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
+			log.Debug(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
+			updated++
 			old.Content = val
 			err = c.UpdateDNSRecord(context.Background(), c.zoneID, old.ID, old)
 		} else {
+			skipped++
 			log.Debug(fmt.Sprintf("Skipping %s = %q", path, val))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to publish %s: %v", path, err)
 		}
 	}
-
+	log.Info("Updated DNS entries", "new", created, "updated", updated, "untouched", skipped)
 	// Iterate over the old records and delete anything stale.
+	deleted := 0
+	log.Info("Deleting stale DNS entries")
 	for path, entry := range existing {
 		if _, ok := records[path]; ok {
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
+		log.Debug(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
+		deleted++
 		if err := c.DeleteDNSRecord(context.Background(), c.zoneID, entry.ID); err != nil {
 			return fmt.Errorf("failed to delete %s: %v", path, err)
 		}
 	}
+	log.Info("Deleted stale DNS entries", "count", deleted)
 	return nil
 }
