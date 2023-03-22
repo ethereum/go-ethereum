@@ -46,14 +46,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
-	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode = crypto.Keccak256Hash(nil)
-)
-
 const (
 	// minRequestSize is the minimum number of bytes to request from a remote peer.
 	// This number is used as the low cap for account and storage range requests.
@@ -1833,7 +1825,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.pend = 0
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
-		if !bytes.Equal(account.CodeHash, emptyCode[:]) {
+		if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
 				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
 				res.task.needCode[i] = true
@@ -1841,7 +1833,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 			}
 		}
 		// Check if the account is a contract with an unknown storage trie
-		if account.Root != emptyRoot {
+		if account.Root != types.EmptyRootHash {
 			if !rawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle

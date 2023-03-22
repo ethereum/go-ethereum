@@ -357,7 +357,7 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if l1 > params.MaxBlobsPerBlock {
 		return fmt.Errorf("number of blobs exceeds max: %v", l1)
 	}
-	err := kzg.CryptoCtx.VerifyBlobKZGProofBatch(toBlobs(b.Blobs), toProofs(b.Proofs), toComms(b.BlobKzgs))
+	err := kzg.CryptoCtx.VerifyBlobKZGProofBatch(toBlobs(b.Blobs), toComms(b.BlobKzgs), toProofs(b.Proofs))
 	if err != nil {
 		return fmt.Errorf("error during proof verification: %v", err)
 	}

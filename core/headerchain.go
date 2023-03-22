@@ -389,7 +389,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time,
 	if res.ignored > 0 {
 		context = append(context, []interface{}{"ignored", res.ignored}...)
 	}
-	log.Info("Imported new block headers", context...)
+	log.Debug("Imported new block headers", context...)
 	return res.status, err
 }
 

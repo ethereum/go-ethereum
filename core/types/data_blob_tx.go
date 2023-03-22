@@ -387,3 +387,14 @@ func (stx *SignedBlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	(*uint256.Int)(&stx.Signature.R).SetFromBig(r)
 	(*uint256.Int)(&stx.Signature.S).SetFromBig(s)
 }
+
+func (tx *SignedBlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.gasFeeCap())
+	}
+	tip := dst.Sub(tx.gasFeeCap(), baseFee)
+	if tip.Cmp(tx.gasTipCap()) > 0 {
+		tip.Set(tx.gasTipCap())
+	}
+	return tip.Add(tip, baseFee)
+}

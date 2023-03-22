@@ -370,7 +370,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 
 		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
-		skeleton.Sync(tt.head, true)
+		skeleton.Sync(tt.head, nil, true)
 
 		<-wait
 		skeleton.Terminate()
@@ -484,10 +484,10 @@ func TestSkeletonSyncExtend(t *testing.T) {
 
 		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
-		skeleton.Sync(tt.head, true)
+		skeleton.Sync(tt.head, nil, true)
 
 		<-wait
-		if err := skeleton.Sync(tt.extend, false); err != tt.err {
+		if err := skeleton.Sync(tt.extend, nil, false); err != tt.err {
 			t.Errorf("test %d: extension failure mismatch: have %v, want %v", i, err, tt.err)
 		}
 		skeleton.Terminate()
@@ -859,7 +859,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Create a skeleton sync and run a cycle
 		skeleton := newSkeleton(db, peerset, drop, filler)
-		skeleton.Sync(tt.head, true)
+		skeleton.Sync(tt.head, nil, true)
 
 		var progress skeletonProgress
 		// Wait a bit (bleah) for the initial sync loop to go to idle. This might
@@ -910,7 +910,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Apply the post-init events if there's any
 		if tt.newHead != nil {
-			skeleton.Sync(tt.newHead, true)
+			skeleton.Sync(tt.newHead, nil, true)
 		}
 		if tt.newPeer != nil {
 			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH66, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {

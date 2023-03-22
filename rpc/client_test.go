@@ -69,6 +69,26 @@ func TestClientResponseType(t *testing.T) {
 	}
 }
 
+// This test checks calling a method that returns 'null'.
+func TestClientNullResponse(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+
+	client := DialInProc(server)
+	defer client.Close()
+
+	var result json.RawMessage
+	if err := client.Call(&result, "test_null"); err != nil {
+		t.Fatal(err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if !reflect.DeepEqual(result, json.RawMessage("null")) {
+		t.Errorf("Expected null, got %s", result)
+	}
+}
+
 // This test checks that server-returned errors with code and data come out of Client.Call.
 func TestClientErrorData(t *testing.T) {
 	server := newTestServer()

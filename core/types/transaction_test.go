@@ -697,3 +697,27 @@ func TestTransactionSizes(t *testing.T) {
 		}
 	}
 }
+
+func TestVerifyBlobTransaction(t *testing.T) {
+	blobs := Blobs{Blob{}}
+	blobs[0][0] = 0xa
+	commitments, hashes, proofs, err := blobs.ComputeCommitmentsAndProofs()
+	if err != nil {
+		t.Fatalf("failed to compute commitments: %v", err)
+	}
+
+	txData := SignedBlobTx{
+		Message: BlobTxMessage{
+			BlobVersionedHashes: hashes,
+		},
+	}
+	wrapData := BlobTxWrapData{
+		BlobKzgs: commitments,
+		Blobs:    blobs,
+		Proofs:   proofs,
+	}
+	tx := NewTx(&txData, WithTxWrapData(&wrapData))
+	if err := tx.VerifyBlobs(); err != nil {
+		t.Fatalf("failed to verify blobs: %v", err)
+	}
+}
