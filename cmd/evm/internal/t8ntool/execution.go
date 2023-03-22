@@ -58,6 +58,7 @@ type ExecutionResult struct {
 	GasUsed         math.HexOrDecimal64   `json:"gasUsed"`
 	BaseFee         *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
 	WithdrawalsRoot *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	ExcessDataGas   *math.HexOrDecimal256 `json:"currentExcessDataGas,omitempty"`
 }
 
 type ommer struct {
@@ -286,16 +287,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
-		StateRoot:   root,
-		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
-		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:       types.CreateBloom(receipts),
-		LogsHash:    rlpHash(statedb.Logs()),
-		Receipts:    receipts,
-		Rejected:    rejectedTxs,
-		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
-		GasUsed:     (math.HexOrDecimal64)(gasUsed),
-		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
+		StateRoot:     root,
+		TxRoot:        types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
+		ReceiptRoot:   types.DeriveSha(receipts, trie.NewStackTrie(nil)),
+		Bloom:         types.CreateBloom(receipts),
+		LogsHash:      rlpHash(statedb.Logs()),
+		Receipts:      receipts,
+		Rejected:      rejectedTxs,
+		Difficulty:    (*math.HexOrDecimal256)(vmContext.Difficulty),
+		GasUsed:       (math.HexOrDecimal64)(gasUsed),
+		BaseFee:       (*math.HexOrDecimal256)(vmContext.BaseFee),
+		ExcessDataGas: (*math.HexOrDecimal256)(vmContext.ExcessDataGas),
 	}
 	if pre.Env.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
