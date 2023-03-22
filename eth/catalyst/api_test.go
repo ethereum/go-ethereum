@@ -1240,9 +1240,10 @@ func TestNilWithdrawals(t *testing.T) {
 
 func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	genesis, blocks := generateMergeChain(10, true)
-	n, ethservice := startEthService(t, genesis, blocks)
 	// enable shanghai on the last block
-	ethservice.BlockChain().Config().ShanghaiTime = &blocks[len(blocks)-1].Header().Time
+	time := blocks[len(blocks)-1].Header().Time + 1
+	genesis.Config.ShanghaiTime = &time
+	n, ethservice := startEthService(t, genesis, blocks)
 
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()
