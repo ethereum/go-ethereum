@@ -10,13 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-func init() {
-	tracers.DefaultDirectory.Register("txnOpCodeTracer", NewTxnOpCodeTracer, false)
-}
 
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
@@ -34,7 +29,7 @@ type txnOpCodeTracer struct {
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
 // options applied.
-func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func NewTxnOpCodeTracer(cfg json.RawMessage) (Tracer, error) {
 
 	// First callframe contains tx context info
 	// and is populated on start and end.

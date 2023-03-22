@@ -1,8 +1,16 @@
 package blocknative
 
 import (
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
+
+type Tracer interface {
+	vm.EVMLogger
+	GetResult() (json.RawMessage, error)
+	Stop(err error)
+}
 
 // TracerOpts configure the tracer to save or ignore various aspects of a transaction execution.
 type TracerOpts struct {
