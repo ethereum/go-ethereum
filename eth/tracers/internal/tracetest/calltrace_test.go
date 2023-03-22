@@ -58,7 +58,7 @@ type callTrace struct {
 	From         common.Address  `json:"from"`
 	Gas          *hexutil.Uint64 `json:"gas"`
 	GasUsed      *hexutil.Uint64 `json:"gasUsed"`
-	To           common.Address  `json:"to,omitempty"`
+	To           *common.Address `json:"to,omitempty"`
 	Input        hexutil.Bytes   `json:"input"`
 	Output       hexutil.Bytes   `json:"output,omitempty"`
 	Error        string          `json:"error,omitempty"`

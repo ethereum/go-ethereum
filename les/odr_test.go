@@ -281,7 +281,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		blockHashes  = make(map[common.Hash]common.Hash)        // Transaction hash to block hash mappings
 		intraIndex   = make(map[common.Hash]uint64)             // Transaction intra-index in block
 	)
-	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().NumberU64(); number++ {
+	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().Number.Uint64(); number++ {
 		block := server.backend.Blockchain().GetBlockByNumber(number)
 		if block == nil {
 			t.Fatalf("Failed to retrieve block %d", number)

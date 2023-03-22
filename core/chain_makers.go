@@ -207,23 +207,31 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 }
 
 // AddWithdrawal adds a withdrawal to the generated block.
-func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
-	// The withdrawal will be assigned the next valid index.
-	var idx uint64
+// It returns the withdrawal index.
+func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) uint64 {
+	cpy := *w
+	cpy.Index = b.nextWithdrawalIndex()
+	b.withdrawals = append(b.withdrawals, &cpy)
+	return cpy.Index
+}
+
+// nextWithdrawalIndex computes the index of the next withdrawal.
+func (b *BlockGen) nextWithdrawalIndex() uint64 {
+	if len(b.withdrawals) != 0 {
+		return b.withdrawals[len(b.withdrawals)-1].Index + 1
+	}
 	for i := b.i - 1; i >= 0; i-- {
 		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
-			idx = wd[len(wd)-1].Index + 1
-			break
+			return wd[len(wd)-1].Index + 1
 		}
 		if i == 0 {
-			// Correctly set the index if no parent had withdrawals
+			// Correctly set the index if no parent had withdrawals.
 			if wd := b.parent.Withdrawals(); len(wd) != 0 {
-				idx = wd[len(wd)-1].Index + 1
+				return wd[len(wd)-1].Index + 1
 			}
 		}
 	}
-	w.Index = idx
-	b.withdrawals = append(b.withdrawals, w)
+	return 0
 }
 
 // PrevBlock returns a previously generated block by number. It panics if

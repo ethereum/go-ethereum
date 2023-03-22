@@ -116,12 +116,58 @@ type Logger interface {
 	// SetHandler updates the logger to write records to the specified handler.
 	SetHandler(h Handler)
 
-	// Log a message at the given level with context key/value pairs
+	// Log a message at the trace level with context key/value pairs
+	//
+	// # Usage
+	//
+	//	log.Trace("msg")
+	//	log.Trace("msg", "key1", val1)
+	//	log.Trace("msg", "key1", val1, "key2", val2)
 	Trace(msg string, ctx ...interface{})
+
+	// Log a message at the debug level with context key/value pairs
+	//
+	// # Usage Examples
+	//
+	//	log.Debug("msg")
+	//	log.Debug("msg", "key1", val1)
+	//	log.Debug("msg", "key1", val1, "key2", val2)
 	Debug(msg string, ctx ...interface{})
+
+	// Log a message at the info level with context key/value pairs
+	//
+	// # Usage Examples
+	//
+	//	log.Info("msg")
+	//	log.Info("msg", "key1", val1)
+	//	log.Info("msg", "key1", val1, "key2", val2)
 	Info(msg string, ctx ...interface{})
+
+	// Log a message at the warn level with context key/value pairs
+	//
+	// # Usage Examples
+	//
+	//	log.Warn("msg")
+	//	log.Warn("msg", "key1", val1)
+	//	log.Warn("msg", "key1", val1, "key2", val2)
 	Warn(msg string, ctx ...interface{})
+
+	// Log a message at the error level with context key/value pairs
+	//
+	// # Usage Examples
+	//
+	//	log.Error("msg")
+	//	log.Error("msg", "key1", val1)
+	//	log.Error("msg", "key1", val1, "key2", val2)
 	Error(msg string, ctx ...interface{})
+
+	// Log a message at the crit level with context key/value pairs, and then exit.
+	//
+	// # Usage Examples
+	//
+	//	log.Crit("msg")
+	//	log.Crit("msg", "key1", val1)
+	//	log.Crit("msg", "key1", val1, "key2", val2)
 	Crit(msg string, ctx ...interface{})
 }
 
