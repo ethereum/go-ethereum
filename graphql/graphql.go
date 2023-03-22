@@ -570,7 +570,7 @@ type BlockType int
 type Block struct {
 	r            *Resolver
 	numberOrHash *rpc.BlockNumberOrHash
-	hash         common.Hash
+	hash         common.Hash // Must be resolved during initialization
 	header       *types.Header
 	block        *types.Block
 	receipts     []*types.Receipt
@@ -629,15 +629,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	if b.receipts != nil {
 		return b.receipts, nil
 	}
-	hash := b.hash
-	if hash == (common.Hash{}) {
-		header, err := b.resolveHeader(ctx)
-		if err != nil {
-			return nil, err
-		}
-		hash = header.Hash()
-	}
-	receipts, err := b.r.backend.GetReceipts(ctx, hash)
+	receipts, err := b.r.backend.GetReceipts(ctx, b.hash)
 	if err != nil {
 		return nil, err
 	}
@@ -655,13 +647,6 @@ func (b *Block) Number(ctx context.Context) (Long, error) {
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
-	if b.hash == (common.Hash{}) {
-		header, err := b.resolveHeader(ctx)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		b.hash = header.Hash()
-	}
 	return b.hash, nil
 }
 
@@ -838,15 +823,7 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
-	h := b.hash
-	if h == (common.Hash{}) {
-		header, err := b.resolveHeader(ctx)
-		if err != nil {
-			return hexutil.Big{}, err
-		}
-		h = header.Hash()
-	}
-	td := b.r.backend.GetTd(ctx, h)
+	td := b.r.backend.GetTd(ctx, b.hash)
 	if td == nil {
 		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", b.hash)
 	}
@@ -1016,16 +993,8 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	if args.Filter.Topics != nil {
 		topics = *args.Filter.Topics
 	}
-	hash := b.hash
-	if hash == (common.Hash{}) {
-		header, err := b.resolveHeader(ctx)
-		if err != nil {
-			return nil, err
-		}
-		hash = header.Hash()
-	}
 	// Construct the range filter
-	filter := b.r.filterSystem.NewBlockFilter(hash, addresses, topics)
+	filter := b.r.filterSystem.NewBlockFilter(b.hash, addresses, topics)
 
 	// Run the filter and return all the logs
 	return runFilter(ctx, b.r, filter)
