@@ -22,13 +22,13 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/crate-crypto/go-proto-danksharding-crypto/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -1079,5 +1079,5 @@ func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
 }
 
 func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
-	return eth.PointEvaluationPrecompile(input)
+	return kzg.PointEvaluationPrecompile(input)
 }
