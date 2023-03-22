@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	api "github.com/crate-crypto/go-proto-danksharding-crypto/serialization"
+	"github.com/crate-crypto/go-proto-danksharding-crypto/serialization"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/kzg"
@@ -51,7 +51,7 @@ func (p *KZGCommitment) UnmarshalText(text []byte) error {
 }
 
 func (c KZGCommitment) ComputeVersionedHash() common.Hash {
-	return common.Hash(kzg.KZGToVersionedHash(api.KZGCommitment(c)))
+	return common.Hash(kzg.KZGToVersionedHash(serialization.KZGCommitment(c)))
 }
 
 // Compressed BLS12-381 G1 element
@@ -283,24 +283,24 @@ func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, v
 	return commitments, versionedHashes, proofs, nil
 }
 
-func toBlobs(_blobs Blobs) []api.Blob {
-	blobs := make([]api.Blob, len(_blobs))
+func toBlobs(_blobs Blobs) []serialization.Blob {
+	blobs := make([]serialization.Blob, len(_blobs))
 	for i, _blob := range _blobs {
-		blobs[i] = api.Blob(_blob)
+		blobs[i] = serialization.Blob(_blob)
 	}
 	return blobs
 }
-func toComms(_comms BlobKzgs) []api.KZGCommitment {
-	comms := make([]api.KZGCommitment, len(_comms))
+func toComms(_comms BlobKzgs) []serialization.KZGCommitment {
+	comms := make([]serialization.KZGCommitment, len(_comms))
 	for i, _comm := range _comms {
-		comms[i] = api.KZGCommitment(_comm)
+		comms[i] = serialization.KZGCommitment(_comm)
 	}
 	return comms
 }
-func toProofs(_proofs KZGProofs) []api.KZGProof {
-	proofs := make([]api.KZGProof, len(_proofs))
+func toProofs(_proofs KZGProofs) []serialization.KZGProof {
+	proofs := make([]serialization.KZGProof, len(_proofs))
 	for i, _proof := range _proofs {
-		proofs[i] = api.KZGProof(_proof)
+		proofs[i] = serialization.KZGProof(_proof)
 	}
 	return proofs
 }
