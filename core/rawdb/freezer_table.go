@@ -823,6 +823,10 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 			break
 		}
 	}
+
+	// Update metrics.
+	t.sizeGauge.Inc(int64(totalSize))
+	t.readMeter.Mark(int64(totalSize))
 	return output[:outputSize], sizes, nil
 }
 
