@@ -604,6 +604,8 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 // if necessary. Call this function instead of `resolve` unless you need the
 // additional data (transactions and uncles).
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.header != nil {
 		return b.header, nil
 	}
