@@ -462,12 +462,11 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
 	}
-	// Assumes block hash has been resolved.
-	hash := t.block.hash
-	if hash == (common.Hash{}) {
-		return nil, fmt.Errorf("block initialization failed to fill in hash")
+	h, err := t.block.Hash(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return t.getLogs(ctx, hash)
+	return t.getLogs(ctx, h)
 }
 
 // getLogs returns log objects for the given tx.
@@ -649,6 +648,8 @@ func (b *Block) Number(ctx context.Context) (Long, error) {
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return b.hash, nil
 }
 
