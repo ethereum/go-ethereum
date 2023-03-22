@@ -417,7 +417,7 @@ func TestGraphQLBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to encode graphql response: %s", err)
 	}
-	want := `{"transaction":{"inputData":"0x","gas":"0x186a0","gasPrice":"0x3b9aca00"}}`
+	want := `{"block":{"ommerCount":0,"transactionCount":3}}`
 	if string(have) != want {
 		t.Errorf("response unmatch. expected %s, got %s", want, have)
 	}
