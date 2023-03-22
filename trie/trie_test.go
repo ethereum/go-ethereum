@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -1146,13 +1145,14 @@ func deleteString(trie *Trie, k string) {
 
 func TestDecodeNode(t *testing.T) {
 	t.Parallel()
+
 	var (
 		hash  = make([]byte, 20)
 		elems = make([]byte, 20)
 	)
 	for i := 0; i < 5000000; i++ {
-		crand.Read(hash)
-		crand.Read(elems)
+		prng.Read(hash)
+		prng.Read(elems)
 		decodeNode(hash, elems)
 	}
 }
