@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"sort"
 	"strconv"
+	"sync"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -573,11 +574,14 @@ type Block struct {
 	header       *types.Header
 	block        *types.Block
 	receipts     []*types.Receipt
+	mu           sync.Mutex
 }
 
 // resolve returns the internal Block object representing this block, fetching
 // it if necessary.
 func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.block != nil {
 		return b.block, nil
 	}
@@ -620,22 +624,25 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 // resolveReceipts returns the list of receipts for this block, fetching them
 // if necessary.
 func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
-	if b.receipts == nil {
-		hash := b.hash
-		if hash == (common.Hash{}) {
-			header, err := b.resolveHeader(ctx)
-			if err != nil {
-				return nil, err
-			}
-			hash = header.Hash()
-		}
-		receipts, err := b.r.backend.GetReceipts(ctx, hash)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.receipts != nil {
+		return b.receipts, nil
+	}
+	hash := b.hash
+	if hash == (common.Hash{}) {
+		header, err := b.resolveHeader(ctx)
 		if err != nil {
 			return nil, err
 		}
-		b.receipts = receipts
+		hash = header.Hash()
 	}
-	return b.receipts, nil
+	receipts, err := b.r.backend.GetReceipts(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	b.receipts = receipts
+	return receipts, nil
 }
 
 func (b *Block) Number(ctx context.Context) (Long, error) {
