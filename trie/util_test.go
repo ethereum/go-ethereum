@@ -225,7 +225,7 @@ func TestTrieTracePrevValue(t *testing.T) {
 	trie.resolveAndTrack(root.Bytes(), nil)
 
 	for _, val := range vals {
-		trie.TryDelete([]byte(val.k))
+		trie.TryDelete(nil, []byte(val.k))
 	}
 	paths, blobs = trie.tracer.prevList()
 	if len(paths) != len(seen) || len(blobs) != len(seen) {

@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
 )
 
 type VerkleStem [31]byte
@@ -51,23 +50,21 @@ type AccessWitness struct {
 	// block.
 	InitialValue map[string][]byte
 
-	// Caches all the points that correspond to an address,
-	// so they are not recalculated.
-	addrToPoint map[string]*verkle.Point
-
 	// Caches which code chunks have been accessed, in order
 	// to reduce the number of times that GetTreeKeyCodeChunk
 	// is called.
 	CodeLocations map[string]map[uint64]struct{}
+
+	statedb *StateDB
 }
 
-func NewAccessWitness() *AccessWitness {
+func NewAccessWitness(statedb *StateDB) *AccessWitness {
 	return &AccessWitness{
 		Branches:      make(map[VerkleStem]Mode),
 		Chunks:        make(map[common.Hash]Mode),
 		InitialValue:  make(map[string][]byte),
-		addrToPoint:   make(map[string]*verkle.Point),
 		CodeLocations: make(map[string]map[uint64]struct{}),
+		statedb:       statedb,
 	}
 }
 
@@ -246,7 +243,6 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 		Branches:     make(map[VerkleStem]Mode),
 		Chunks:       make(map[common.Hash]Mode),
 		InitialValue: make(map[string][]byte),
-		addrToPoint:  make(map[string]*verkle.Point),
 	}
 
 	naw.Merge(aw)
@@ -254,20 +250,8 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 	return naw
 }
 
-func (aw *AccessWitness) getTreeKeyHeader(addr []byte) *verkle.Point {
-	if point, ok := aw.addrToPoint[string(addr)]; ok {
-		return point
-	}
-
-	point := utils.EvaluateAddressPoint(addr)
-	aw.addrToPoint[string(addr)] = point
-	return point
-}
-
 func (aw *AccessWitness) GetTreeKeyVersionCached(addr []byte) []byte {
-	p := aw.getTreeKeyHeader(addr)
-	v := utils.PointToHash(p, utils.VersionLeafKey)
-	return v[:]
+	return aw.statedb.db.(*VerkleDB).addrToPoint.GetTreeKeyVersionCached(addr)
 }
 
 func (aw *AccessWitness) TouchAndChargeProofOfAbsence(addr []byte) uint64 {

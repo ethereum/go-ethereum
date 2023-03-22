@@ -111,7 +111,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryDelete([]byte("123456"))
+	err = trie.TryDelete(nil, []byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -144,7 +144,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 		t.Errorf("Wrong error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryDelete([]byte("123456"))
+	err = trie.TryDelete(nil, []byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}

@@ -106,7 +106,7 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList *accessList
 
-	witness *types.AccessWitness
+	witness *AccessWitness
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -155,7 +155,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		hasher:              crypto.NewKeccakState(),
 	}
 	if tr.IsVerkle() {
-		sdb.witness = types.NewAccessWitness()
+		sdb.witness = NewAccessWitness(sdb)
 		if sdb.snaps == nil {
 			snapconfig := snapshot.Config{
 				CacheSize:  256,
@@ -184,14 +184,14 @@ func (s *StateDB) Snaps() *snapshot.Tree {
 	return s.snaps
 }
 
-func (s *StateDB) Witness() *types.AccessWitness {
+func (s *StateDB) Witness() *AccessWitness {
 	if s.witness == nil {
-		s.witness = types.NewAccessWitness()
+		s.witness = NewAccessWitness(s)
 	}
 	return s.witness
 }
 
-func (s *StateDB) SetWitness(aw *types.AccessWitness) {
+func (s *StateDB) SetWitness(aw *AccessWitness) {
 	s.witness = aw
 }
 
@@ -532,7 +532,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			groupOffset := (chunknr + 128) % 256
 			if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
 				values = make([][]byte, verkle.NodeWidth)
-				key = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(chunknr))
+				key = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.db.db.(*VerkleDB).GetTreeKeyHeader(obj.address[:]), uint256.NewInt(chunknr))
 			}
 			values[groupOffset] = chunks[i : i+32]
 

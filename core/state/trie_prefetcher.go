@@ -339,7 +339,7 @@ func (sf *subfetcher) loop() {
 						if len(task) == len(common.Address{}) {
 							sf.trie.TryGetAccount(task)
 						} else {
-							sf.trie.TryGet(task)
+							sf.trie.TryGet(nil, task)
 						}
 						sf.seen[string(task)] = struct{}{}
 					}

@@ -17,6 +17,8 @@
 package utils
 
 import (
+	"sync"
+
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
 	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
@@ -40,6 +42,38 @@ var (
 
 	getTreePolyIndex0Point *verkle.Point
 )
+
+type PointCache struct {
+	cache map[string]*verkle.Point
+	lock  sync.RWMutex
+}
+
+func NewPointCache() *PointCache {
+	return &PointCache{
+		cache: make(map[string]*verkle.Point),
+	}
+}
+
+func (pc *PointCache) GetTreeKeyHeader(addr []byte) *verkle.Point {
+	pc.lock.RLock()
+	point, ok := pc.cache[string(addr)]
+	pc.lock.RUnlock()
+	if ok {
+		return point
+	}
+
+	point = EvaluateAddressPoint(addr)
+	pc.lock.Lock()
+	pc.cache[string(addr)] = point
+	pc.lock.Unlock()
+	return point
+}
+
+func (pc *PointCache) GetTreeKeyVersionCached(addr []byte) []byte {
+	p := pc.GetTreeKeyHeader(addr)
+	v := PointToHash(p, VersionLeafKey)
+	return v[:]
+}
 
 func init() {
 	// The byte array is the Marshalled output of the point computed as such:

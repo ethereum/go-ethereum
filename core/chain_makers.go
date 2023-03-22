@@ -365,7 +365,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			kvs := make(map[string][]byte)
 			keys := statedb.Witness().Keys()
 			for _, key := range keys {
-				v, err := vtr.TryGet(key)
+				v, err := vtr.GetWithHashedKey(key)
 				if err != nil {
 					panic(err)
 				}

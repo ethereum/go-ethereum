@@ -29,9 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
-	"github.com/holiman/uint256"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -73,8 +70,6 @@ type stateObject struct {
 	data     types.StateAccount
 	db       *StateDB
 
-	pointEval *verkle.Point
-
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -115,16 +110,11 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
 	}
-	var pointEval *verkle.Point
-	if db.GetTrie().IsVerkle() {
-		pointEval = trieUtils.EvaluateAddressPoint(address.Bytes())
-	}
 
 	return &stateObject{
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
-		pointEval:      pointEval,
 		data:           data,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
@@ -235,7 +225,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			panic("verkle trees use the snapshot")
 		}
 		start := time.Now()
-		enc, err = s.getTrie(db).TryGet(key.Bytes())
+		enc, err = s.getTrie(db).TryGet(s.address[:], key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -351,23 +341,16 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			if tr.IsVerkle() {
-				k := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, new(uint256.Int).SetBytes(key[:]))
-				s.setError(tr.TryDelete(k))
-				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
-			} else {
-				s.setError(tr.TryDelete(key[:]))
-			}
+			s.setError(tr.TryDelete(s.address[:], key[:]))
 			s.db.StorageDeleted += 1
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 			if !tr.IsVerkle() {
-				s.setError(tr.TryUpdate(key[:], v))
+				s.setError(tr.TryUpdate(s.address[:], key[:], v))
 			} else {
-				k := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, new(uint256.Int).SetBytes(key[:]))
 				// Update the trie, with v as a value
-				s.setError(tr.TryUpdate(k, value[:]))
+				s.setError(tr.TryUpdate(s.address[:], key[:], value[:]))
 			}
 			s.db.StorageUpdated += 1
 		}

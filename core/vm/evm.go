@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -86,7 +86,7 @@ type TxContext struct {
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
 
-	Accesses *types.AccessWitness
+	Accesses *state.AccessWitness
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -129,9 +129,6 @@ type EVM struct {
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
-	if txCtx.Accesses == nil && chainConfig.IsCancun(blockCtx.BlockNumber) {
-		txCtx.Accesses = types.NewAccessWitness()
-	}
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
@@ -139,6 +136,9 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
+	}
+	if txCtx.Accesses == nil && chainConfig.IsCancun(blockCtx.BlockNumber) {
+		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -148,7 +148,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	if txCtx.Accesses == nil && evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
-		txCtx.Accesses = types.NewAccessWitness()
+		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
 	}
 	evm.TxContext = txCtx
 	evm.StateDB = statedb

@@ -28,23 +28,26 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
+	"github.com/holiman/uint256"
 )
 
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
 // interface so that Verkle trees can be reused verbatim.
 type VerkleTrie struct {
-	root verkle.VerkleNode
-	db   *Database
+	root       verkle.VerkleNode
+	db         *Database
+	pointCache *utils.PointCache
 }
 
 func (vt *VerkleTrie) ToDot() string {
 	return verkle.ToDot(vt.root)
 }
 
-func NewVerkleTrie(root verkle.VerkleNode, db *Database) *VerkleTrie {
+func NewVerkleTrie(root verkle.VerkleNode, db *Database, pointCache *utils.PointCache) *VerkleTrie {
 	return &VerkleTrie{
-		root: root,
-		db:   db,
+		root:       root,
+		db:         db,
+		pointCache: pointCache,
 	}
 }
 
@@ -59,55 +62,45 @@ func (trie *VerkleTrie) GetKey(key []byte) []byte {
 // TryGet returns the value for key stored in the trie. The value bytes must
 // not be modified by the caller. If a node was not found in the database, a
 // trie.MissingNodeError is returned.
-func (trie *VerkleTrie) TryGet(key []byte) ([]byte, error) {
+func (trie *VerkleTrie) TryGet(addr, key []byte) ([]byte, error) {
+	pointEval := trie.pointCache.GetTreeKeyHeader(key)
+	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, new(uint256.Int).SetBytes(key))
+	return trie.root.Get(k, trie.db.diskdb.Get)
+}
+
+// GetWithHashedKey returns the value, assuming that the key has already
+// been hashed.
+func (trie *VerkleTrie) GetWithHashedKey(key []byte) ([]byte, error) {
 	return trie.root.Get(key, trie.db.diskdb.Get)
 }
 
 func (t *VerkleTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var (
-		err                                error
-		balancekey, cskey, ckkey, noncekey [32]byte
-		acc                                *types.StateAccount = &types.StateAccount{}
+		acc      *types.StateAccount = &types.StateAccount{}
+		resolver                     = func(hash []byte) ([]byte, error) {
+			return t.db.diskdb.Get(hash)
+		}
 	)
-
-	// Only evaluate the polynomial once
-	// TODO implement GetStem as well, so that the trie is only traversed once
-	// it's not as bad because the commitments aren't updated, but it could, in
-	// theory, have to deserialize some more nodes (if there is some sort of cache
-	// dump)
-	versionkey := utils.GetTreeKeyVersion(key[:])
-	copy(balancekey[:], versionkey)
-	balancekey[31] = utils.BalanceLeafKey
-	copy(noncekey[:], versionkey)
-	noncekey[31] = utils.NonceLeafKey
-	copy(cskey[:], versionkey)
-	cskey[31] = utils.CodeSizeLeafKey
-	copy(ckkey[:], versionkey)
-	ckkey[31] = utils.CodeKeccakLeafKey
-
-	nonce, err := t.TryGet(noncekey[:])
+	versionkey := t.pointCache.GetTreeKeyVersionCached(key)
+	values, err := t.root.(*verkle.InternalNode).GetStem(versionkey[:31], resolver)
 	if err != nil {
 		return nil, fmt.Errorf("TryGetAccount (%x) error: %v", key, err)
 	}
-	if len(nonce) > 0 {
-		acc.Nonce = binary.LittleEndian.Uint64(nonce)
+
+	if values == nil {
+		return nil, nil
 	}
-	balance, err := t.TryGet(balancekey[:])
-	if err != nil {
-		return nil, fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	if len(values[utils.NonceLeafKey]) > 0 {
+		acc.Nonce = binary.LittleEndian.Uint64(values[utils.NonceLeafKey])
 	}
+	balance := values[utils.BalanceLeafKey]
 	if len(balance) > 0 {
 		for i := 0; i < len(balance)/2; i++ {
 			balance[len(balance)-i-1], balance[i] = balance[i], balance[len(balance)-i-1]
 		}
 	}
 	acc.Balance = new(big.Int).SetBytes(balance[:])
-	ck, err := t.TryGet(ckkey[:])
-	if err != nil {
-		return nil, fmt.Errorf("updateStateObject (%x) error: %v", key, err)
-	}
-	acc.CodeHash = ck
-
+	acc.CodeHash = values[utils.CodeKeccakLeafKey]
 	// TODO fix the code size as well
 
 	return acc, nil
@@ -120,7 +113,7 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 		err            error
 		nonce, balance [32]byte
 		values         = make([][]byte, verkle.NodeWidth)
-		stem           = utils.GetTreeKeyVersion(key[:])
+		stem           = t.pointCache.GetTreeKeyVersionCached(key[:])
 	)
 
 	// Only evaluate the polynomial once
@@ -156,10 +149,9 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 }
 
 func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) error {
-	resolver :=
-		func(h []byte) ([]byte, error) {
-			return trie.db.diskdb.Get(h)
-		}
+	resolver := func(h []byte) ([]byte, error) {
+		return trie.db.diskdb.Get(h)
+	}
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
 		return root.InsertStem(key, values, resolver)
@@ -174,43 +166,38 @@ func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) error {
 // existing value is deleted from the trie. The value bytes must not be modified
 // by the caller while they are stored in the trie. If a node was not found in the
 // database, a trie.MissingNodeError is returned.
-func (trie *VerkleTrie) TryUpdate(key, value []byte) error {
+func (trie *VerkleTrie) TryUpdate(address, key, value []byte) error {
+	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(trie.pointCache.GetTreeKeyHeader(address), new(uint256.Int).SetBytes(key[:]))
 	var v [32]byte
 	copy(v[:], value[:])
-	return trie.root.Insert(key, v[:], func(h []byte) ([]byte, error) {
+	return trie.root.Insert(k, v[:], func(h []byte) ([]byte, error) {
 		return trie.db.diskdb.Get(h)
 	})
 }
 
 func (t *VerkleTrie) TryDeleteAccount(key []byte) error {
 	var (
-		err                                error
-		balancekey, cskey, ckkey, noncekey [32]byte
+		err    error
+		values = make([][]byte, verkle.NodeWidth)
+		stem   = t.pointCache.GetTreeKeyVersionCached(key[:])
 	)
 
-	// Only evaluate the polynomial once
-	// TODO InsertStem with overwrite of values 0
-	versionkey := utils.GetTreeKeyVersion(key[:])
-	copy(balancekey[:], versionkey)
-	balancekey[31] = utils.BalanceLeafKey
-	copy(noncekey[:], versionkey)
-	noncekey[31] = utils.NonceLeafKey
-	copy(cskey[:], versionkey)
-	cskey[31] = utils.CodeSizeLeafKey
-	copy(ckkey[:], versionkey)
-	ckkey[31] = utils.CodeKeccakLeafKey
+	for i := 0; i < verkle.NodeWidth; i++ {
+		values[i] = zero[:]
+	}
 
-	if err = t.TryDelete(versionkey); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	resolver := func(hash []byte) ([]byte, error) {
+		return t.db.diskdb.Get(hash)
 	}
-	if err = t.TryDelete(noncekey[:]); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+
+	switch root := t.root.(type) {
+	case *verkle.InternalNode:
+		err = root.InsertStem(stem, values, resolver)
+	case *verkle.StatelessNode:
+		err = root.InsertAtStem(stem, values, resolver, true)
 	}
-	if err = t.TryDelete(balancekey[:]); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
-	}
-	if err = t.TryDelete(ckkey[:]); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	if err != nil {
+		return fmt.Errorf("TryDeleteAccount (%x) error: %v", key, err)
 	}
 	// TODO figure out if the code size needs to be updated, too
 
@@ -219,8 +206,10 @@ func (t *VerkleTrie) TryDeleteAccount(key []byte) error {
 
 // TryDelete removes any existing value for key from the trie. If a node was not
 // found in the database, a trie.MissingNodeError is returned.
-func (trie *VerkleTrie) TryDelete(key []byte) error {
-	return trie.root.Delete(key, func(h []byte) ([]byte, error) {
+func (trie *VerkleTrie) TryDelete(addr, key []byte) error {
+	pointEval := trie.pointCache.GetTreeKeyHeader(key)
+	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, new(uint256.Int).SetBytes(key))
+	return trie.root.Delete(k, func(h []byte) ([]byte, error) {
 		return trie.db.diskdb.Get(h)
 	})
 }
@@ -239,33 +228,22 @@ func nodeToDBKey(n verkle.VerkleNode) []byte {
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
 func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *NodeSet, error) {
-	flush := make(chan verkle.VerkleNode)
-	resolver := func(n verkle.VerkleNode) {
-		flush <- n
+	root, ok := trie.root.(*verkle.InternalNode)
+	if !ok {
+		return common.Hash{}, nil, errors.New("unexpected root node type")
 	}
-	go func() {
-		switch root := trie.root.(type) {
-		case *verkle.InternalNode:
-			root.Flush(resolver)
-		case *verkle.StatelessNode:
-			root.Flush(resolver)
-		}
-		close(flush)
-	}()
-	var commitCount int
-	for n := range flush {
-		commitCount += 1
-		value, err := n.Serialize()
-		if err != nil {
-			panic(err)
-		}
+	nodes, err := root.BatchSerialize()
+	if err != nil {
+		return common.Hash{}, nil, fmt.Errorf("serializing tree nodes: %s", err)
+	}
 
-		if err := trie.db.diskdb.Put(nodeToDBKey(n), value); err != nil {
-			return common.Hash{}, NewNodeSet(common.Hash{}), err
+	for _, node := range nodes {
+		if err := trie.db.diskdb.Put(node.CommitmentBytes[:], node.SerializedBytes); err != nil {
+			return common.Hash{}, nil, fmt.Errorf("put node to disk: %s", err)
 		}
 	}
 
-	return trie.Hash(), NewNodeSet(common.Hash{}), nil
+	return nodes[0].CommitmentBytes, NewNodeSet(common.Hash{}), nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
