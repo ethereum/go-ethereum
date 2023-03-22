@@ -600,19 +600,21 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 // if necessary. Call this function instead of `resolve` unless you need the
 // additional data (transactions and uncles).
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
+	if b.header != nil {
+		return b.header, nil
+	}
 	if b.numberOrHash == nil && b.hash == (common.Hash{}) {
 		return nil, errBlockInvariant
 	}
 	var err error
-	if b.header == nil {
-		if b.hash != (common.Hash{}) {
-			b.header, err = b.r.backend.HeaderByHash(ctx, b.hash)
-		} else {
-			b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
-			b.hash = b.header.Hash()
-		}
+	b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
+	if err != nil {
+		return nil, err
 	}
-	return b.header, err
+	if b.hash == (common.Hash{}) {
+		b.hash = b.header.Hash()
+	}
+	return b.header, nil
 }
 
 // resolveReceipts returns the list of receipts for this block, fetching them
@@ -706,11 +708,18 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	if b.header == nil || b.header.Number.Uint64() < 1 {
 		return nil, nil
 	}
-	num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
+	var (
+		num       = rpc.BlockNumber(b.header.Number.Uint64() - 1)
+		hash      = b.header.ParentHash
+		numOrHash = rpc.BlockNumberOrHash{
+			BlockNumber: &num,
+			BlockHash:   &hash,
+		}
+	)
 	return &Block{
 		r:            b.r,
-		numberOrHash: &num,
-		hash:         b.header.ParentHash,
+		numberOrHash: &numOrHash,
+		hash:         hash,
 	}, nil
 }
 
