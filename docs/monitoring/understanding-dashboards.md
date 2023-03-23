@@ -145,14 +145,14 @@ The transaction processing panel tracks the time taken to complete the various t
 <Note>
 Block propagation was disabled in Geth at The Merge. Block propagation is now the responsibility of the consensus client.  Included here for archival interest.
 </Note>
- 
+
 Block propagation metrics track the rate that the local node hears about, receives and broadcasts blocks. This includes:
 
-- **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share.
+- **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share
 - **known announcements**: the number of announcements per second the local node is already aware of them
-- **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
-- **ingress broadcasts**: the number of blocks directly propagated to local node per second.
-- **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
+- **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node
+- **ingress broadcasts**: the number of blocks directly propagated to local node per second
+- **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded
 - **malicious broadcasts**: the number of blocks which are determined to be malicious per second
 
 #### Transaction propagation
@@ -199,14 +199,14 @@ The database section tracks various metrics related to data storage and i/o in t
 
 #### Data rate
 
-measures the rate that data is written to, or read from, the LevelDB and ancients databases. Includes:
+Measures the rate that data is written to, or read from, the LevelDB and ancients databases. Includes:
 
-- **leveldb read**: Rate that data is read to the fast-access LevelDB database that stores recent data.
+- **leveldb read**: Rate that data is read from the fast-access LevelDB database that stores recent data.
 - **leveldb write**: Rate that data is written to the fast-access LevelDB database that stores recent data.
 - **ancient read**: Rate that data is read from the freezer (the database storing older data).
 - **ancient write**: Rate that data is written to the freezer (the database storing older data)
-- **compaction read**: Rate that data is written to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
-- **compaction write**: Rate that data is read from to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- **compaction read**: Rate that data is read from the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- **compaction write**: Rate that data is written to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
 
 #### Session totals
 
