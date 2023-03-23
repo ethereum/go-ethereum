@@ -69,6 +69,16 @@ type ProofFormat interface {
 	Children() (left, right ProofFormat) // either both or neither should be nil
 }
 
+// IsEqual returns true if the two formats are the same
+func IsEqual(a, b ProofFormat) bool {
+	al, ar := a.Children()
+	bl, br := b.Children()
+	if al == nil || bl == nil {
+		return al == nil && bl == nil
+	}
+	return IsEqual(al, bl) && IsEqual(ar, br)
+}
+
 // ProofReader allows traversing and reading a tree structure or a subset of it.
 // Note: the hash of each traversed node is always requested. If the internal
 // hash is not available then subtrees are always traversed (first left, then right).

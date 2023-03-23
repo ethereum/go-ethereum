@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -97,34 +96,55 @@ func blsync(ctx *cli.Context) error {
 		customHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
 	}
 
+	// create data structures
 	var (
-		beaconApi       = api.NewBeaconLightApi(ctx.String(utils.BeaconApiFlag.Name), customHeader)
 		db              = memorydb.New()
 		threshold       = ctx.Int(utils.BeaconThresholdFlag.Name)
 		committeeChain  = light.NewCommitteeChain(db, chainConfig.Forks, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name), light.BLSVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 		checkpointStore = light.NewCheckpointStore(db, committeeChain)
-		headTracker     = light.NewHeadTracker(committeeChain)
-		scheduler       = request.NewScheduler()
+		headValidator   = light.NewHeadValidator(committeeChain)
+		lightChain      = light.NewLightChain(db, stateProofFormat)
 	)
 	committeeChain.SetGenesisData(chainConfig.GenesisData)
+	headUpdater := sync.NewHeadUpdater(headValidator, committeeChain)
+	headTracker := request.NewHeadTracker(headUpdater.NewSignedHead)
+	headValidator.Subscribe(threshold, func(signedHead types.SignedHead) {
+		headTracker.SetValidatedHead(signedHead.Header)
+	})
 
+	// create sync modules
 	checkpointInit := sync.NewCheckpointInit(committeeChain, checkpointStore, chainConfig.Checkpoint)
-	forwardSync := sync.NewForwardUpdateSyncer(committeeChain)
-	headSync := sync.NewHeadSyncer(headTracker, committeeChain)
+	forwardSync := sync.NewForwardUpdateSync(committeeChain)
+	headerSync := sync.NewHeaderSync(lightChain, false)
+	stateSync := sync.NewStateSync(lightChain, true)
+	beaconBlockSync := newBeaconBlockSyncer(lightChain)
+	engineApiUpdater := &engineApiUpdater{ //TODO constructor
+		client:     makeRPCClient(ctx),
+		headerSync: headerSync,
+		stateSync:  stateSync,
+		blockSync:  beaconBlockSync,
+		chain:      lightChain,
+	}
+
+	// set up sync modules and triggers
+	scheduler := request.NewScheduler(headTracker)
+	headTracker.SetupTriggers(scheduler.GetModuleTrigger)
 	scheduler.RegisterModule(checkpointInit)
 	scheduler.RegisterModule(forwardSync)
-	scheduler.RegisterModule(headSync)
-	scheduler.AddTriggers(forwardSync, []*request.ModuleTrigger{&checkpointInit.InitTrigger, &forwardSync.NewUpdateTrigger, &headSync.SignedHeadTrigger})
-	scheduler.AddTriggers(headSync, []*request.ModuleTrigger{&forwardSync.NewUpdateTrigger})
-
-	syncer := &execSyncer{
-		api:           beaconApi,
-		client:        makeRPCClient(ctx),
-		execRootCache: lru.NewCache[common.Hash, common.Hash](1000),
-	}
-	headTracker.Subscribe(threshold, syncer.newHead)
+	scheduler.RegisterModule(headUpdater)
+	scheduler.RegisterModule(beaconBlockSync)
+	scheduler.RegisterModule(engineApiUpdater)
+	scheduler.RegisterModule(stateSync)
+	scheduler.RegisterModule(headerSync)
+	// start
 	scheduler.Start()
-	scheduler.RegisterServer(api.NewSyncServer(beaconApi))
+	stateSync.SetTailTarget(0)
+	// register server(s)
+	for _, url := range utils.SplitAndTrim(ctx.String(utils.BeaconApiFlag.Name)) {
+		beaconApi := api.NewBeaconLightApi(url, customHeader)
+		scheduler.RegisterServer(api.NewSyncServer(beaconApi))
+	}
+	// run until stopped
 	<-ctx.Done()
 	scheduler.Stop()
 	return nil
@@ -149,86 +169,4 @@ func callForkchoiceUpdatedV1(client *rpc.Client, headHash, finalizedHash common.
 	err := client.CallContext(ctx, &resp, "engine_forkchoiceUpdatedV1", update, nil)
 	cancel()
 	return resp.PayloadStatus.Status, err
-}
-
-type execSyncer struct {
-	api           *api.BeaconLightApi
-	sub           *api.StateProofSub
-	client        *rpc.Client
-	execRootCache *lru.Cache[common.Hash, common.Hash] // beacon block root -> execution block root
-}
-
-// newHead fetches state proofs to determine the execution block root and calls
-// the engine API if specified
-func (e *execSyncer) newHead(signedHead types.SignedHead) {
-	head := signedHead.Header
-	log.Info("Received new beacon head", "slot", head.Slot, "blockRoot", head.Hash())
-	block, err := e.api.GetExecutionPayload(head)
-	if err != nil {
-		log.Error("Error fetching execution payload from beacon API", "error", err)
-		return
-	}
-	blockRoot := block.Hash()
-	var finalizedExecRoot common.Hash
-	if e.sub == nil {
-		if sub, err := e.api.SubscribeStateProof(stateProofFormat, 0, 1); err == nil {
-			log.Info("Successfully created beacon state subscription")
-			e.sub = sub
-		} else {
-			log.Error("Failed to create beacon state subscription", "error", err)
-			return
-		}
-	}
-	proof, err := e.sub.Get(head.StateRoot)
-	if err == nil {
-		var (
-			execBlockRoot       = common.Hash(proof.Values[execBlockIndex])
-			finalizedBeaconRoot = common.Hash(proof.Values[finalizedBlockIndex])
-			beaconRoot          = head.Hash()
-		)
-		e.execRootCache.Add(beaconRoot, execBlockRoot)
-		if blockRoot != execBlockRoot {
-			log.Error("Execution payload block hash does not match value in beacon state", "expected", execBlockRoot, "got", block.Hash())
-			return
-		}
-		if _, ok := e.execRootCache.Get(head.ParentRoot); !ok {
-			e.fetchExecRoots(head.ParentRoot)
-		}
-		finalizedExecRoot, _ = e.execRootCache.Get(finalizedBeaconRoot)
-	} else if err != api.ErrNotFound {
-		log.Error("Error fetching state proof from beacon API", "error", err)
-	}
-	if e.client == nil { // dry run, no engine API specified
-		log.Info("New execution block retrieved", "block number", block.NumberU64(), "block hash", blockRoot, "finalized block hash", finalizedExecRoot)
-		return
-	}
-	if status, err := callNewPayloadV1(e.client, block); err == nil {
-		log.Info("Successful NewPayload", "block number", block.NumberU64(), "block hash", blockRoot, "status", status)
-	} else {
-		log.Error("Failed NewPayload", "block number", block.NumberU64(), "block hash", blockRoot, "error", err)
-	}
-	if status, err := callForkchoiceUpdatedV1(e.client, blockRoot, finalizedExecRoot); err == nil {
-		log.Info("Successful ForkchoiceUpdated", "head", blockRoot, "finalized", finalizedExecRoot, "status", status)
-	} else {
-		log.Error("Failed ForkchoiceUpdated", "head", blockRoot, "finalized", finalizedExecRoot, "error", err)
-	}
-}
-
-func (e *execSyncer) fetchExecRoots(blockRoot common.Hash) {
-	for maxFetch := 256; maxFetch > 0; maxFetch-- {
-		header, err := e.api.GetHeader(blockRoot)
-		if err != nil {
-			break
-		}
-		proof, err := e.sub.Get(header.StateRoot)
-		if err != nil {
-			// exit silently because we expect running into an error when parent is unknown
-			break
-		}
-		e.execRootCache.Add(header.Hash(), common.Hash(proof.Values[execBlockIndex]))
-		if _, ok := e.execRootCache.Get(header.ParentRoot); ok {
-			break
-		}
-		blockRoot = header.ParentRoot
-	}
 }

@@ -19,16 +19,21 @@ package request
 import (
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const softRequestTimeout = time.Second
 
 type Module interface {
-	Process(servers []*Server) bool // removed if return value is false
+	SetupTriggers(trigger func(id string, subscribe bool) *ModuleTrigger)
+	Process(env *Environment)
 }
 
 type RequestServer interface {
-	SetTriggerCallback(func())
+	SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHead))
+	UnsubscribeHeads()
 	Delay() time.Duration
 	Fail(string)
 }
@@ -47,14 +52,17 @@ func (t *ModuleTrigger) Trigger() {
 	defer t.s.triggerLock.Unlock()
 
 	for m := range t.triggers {
-		t.s.moduleTrigger(m)
+		t.s.triggerModule(m)
 	}
 }
 
 type Scheduler struct {
+	headTracker *HeadTracker
+
 	lock        sync.Mutex
 	modules     []Module // first has highest priority
 	servers     []*Server
+	triggers    map[string]*ModuleTrigger
 	triggeredBy map[Module][]*ModuleTrigger
 	stopCh      chan chan struct{}
 
@@ -65,10 +73,12 @@ type Scheduler struct {
 	trServers             map[*Server]struct{}
 }
 
-func NewScheduler() *Scheduler {
+func NewScheduler(headTracker *HeadTracker) *Scheduler {
 	return &Scheduler{
+		headTracker: headTracker,
 		stopCh:      make(chan chan struct{}),
 		triggerCh:   make(chan struct{}, 1),
+		triggers:    make(map[string]*ModuleTrigger),
 		triggeredBy: make(map[Module][]*ModuleTrigger),
 	}
 }
@@ -79,46 +89,51 @@ func (s *Scheduler) RegisterModule(m Module) {
 	defer s.lock.Unlock()
 
 	s.modules = append(s.modules, m)
+	m.SetupTriggers(func(id string, subscribe bool) *ModuleTrigger { return s.addTrigger(m, id, subscribe) })
 }
 
-func (s *Scheduler) AddTriggers(m Module, triggeredBy []*ModuleTrigger) {
-	s.triggeredBy[m] = append(s.triggeredBy[m], triggeredBy...)
-	for _, t := range triggeredBy {
-		if t.triggers == nil {
-			t.s = s
-			t.triggers = make(map[Module]struct{})
-		}
-		t.triggers[m] = struct{}{}
+func (s *Scheduler) addTrigger(m Module, id string, subscribe bool) *ModuleTrigger {
+	t, ok := s.triggers[id]
+	if !ok {
+		t = new(ModuleTrigger)
+		s.triggers[id] = t
 	}
+	if !subscribe {
+		return t
+	}
+	s.triggeredBy[m] = append(s.triggeredBy[m], t)
+	if t.triggers == nil {
+		t.s = s
+		t.triggers = make(map[Module]struct{})
+	}
+	t.triggers[m] = struct{}{}
+	return t
 }
 
-func (s *Scheduler) unregisterModule(m Module, t []*ModuleTrigger) {
-	for i, module := range s.modules {
-		if module == m {
-			copy(s.modules[i:len(s.modules)-1], s.modules[i+1:])
-			s.modules = s.modules[:len(s.modules)-1]
-			break
-		}
-	}
-	triggeredBy := s.triggeredBy[m]
-	delete(s.triggeredBy, m)
-	for _, t := range triggeredBy {
-		delete(t.triggers, m)
-	}
-}
-
-func (s *Scheduler) RegisterServer(RequestServer RequestServer) {
+// GetModuleTrigger returns the ModuleTrigger with the given id or creates a new one.
+func (s *Scheduler) GetModuleTrigger(id string) *ModuleTrigger {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	server := s.newServer(RequestServer)
-	s.servers = append(s.servers, server)
-	RequestServer.SetTriggerCallback(func() {
-		s.ServerTrigger(server)
-	})
-	s.ServerTrigger(server)
+	t, ok := s.triggers[id]
+	if !ok {
+		t = new(ModuleTrigger)
+		s.triggers[id] = t
+	}
+	return t
 }
 
+// RegisterServer registers a new server.
+func (s *Scheduler) RegisterServer(requestServer RequestServer) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	server := s.newServer(requestServer)
+	s.servers = append(s.servers, server)
+	s.headTracker.registerServer(server)
+}
+
+// UnregisterServer removes a registered server.
 func (s *Scheduler) UnregisterServer(RequestServer RequestServer) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -128,16 +143,18 @@ func (s *Scheduler) UnregisterServer(RequestServer RequestServer) {
 			s.servers[i] = s.servers[len(s.servers)-1]
 			s.servers = s.servers[:len(s.servers)-1]
 			server.stop()
+			s.headTracker.unregisterServer(server)
 			return
 		}
 	}
 }
 
-// call before registering servers
+// Start starts the scheduler. It should be called after registering all modules and before registering any servers.
 func (s *Scheduler) Start() {
 	go s.syncLoop()
 }
 
+// Stop stops the scheduler.
 func (s *Scheduler) Stop() {
 	s.lock.Lock()
 	for _, server := range s.servers {
@@ -150,6 +167,7 @@ func (s *Scheduler) Stop() {
 	<-stop
 }
 
+// syncLoop calls all processable modules in the order of their registration. A round of processing starts whenever there is at least one processable module. Triggers triggered during a processing round do not affect the current round but ensure that there is going to be a next round.
 func (s *Scheduler) syncLoop() {
 	s.lock.Lock()
 	s.triggerLock.Lock()
@@ -179,36 +197,42 @@ func (s *Scheduler) syncLoop() {
 	}
 }
 
+// processModules runs an entire processing round, calling processable modules with the appropriate Environment.
 func (s *Scheduler) processModules(trModules map[Module]struct{}, trServers map[*Server]struct{}) {
-	trs := make([]*Server, 0, len(s.servers))
+	mtEnv := Environment{ // enables all servers for triggered modules
+		HeadTracker:   s.headTracker,
+		scheduler:     s,
+		allServers:    s.servers,
+		canRequestNow: make(map[*Server]struct{}),
+	}
+	stEnv := Environment{ // enables triggered servers only for other modules
+		HeadTracker:   s.headTracker,
+		scheduler:     s,
+		allServers:    s.servers,
+		canRequestNow: make(map[*Server]struct{}),
+	}
 	for _, server := range s.servers {
+		if canRequest, _ := server.CanRequestNow(); !canRequest {
+			continue
+		}
+		mtEnv.canRequestNow[server] = struct{}{}
 		if _, ok := trServers[server]; ok {
-			trs = append(trs, server)
+			stEnv.canRequestNow[server] = struct{}{}
 		}
 	}
-	var i int
+
 	for _, module := range s.modules {
-		keep := true
 		if _, ok := trModules[module]; ok {
-			keep = module.Process(s.servers)
-		} else if len(trs) > 0 {
-			keep = module.Process(trs)
-		}
-		if keep {
-			s.modules[i] = module
-			i++
+			module.Process(&mtEnv)
+		} else if len(stEnv.canRequestNow) > 0 {
+			module.Process(&stEnv)
 		}
 	}
-	s.modules = s.modules[:i]
 }
 
-func (s *Scheduler) ServerTrigger(server *Server) {
+// triggerServer ensures that a next processing round is initiated as soon as possible and every module will be called with the given server enabled in its Environment. Should be called when the given server has become available (again) or when its range of servable requests has been expanded.
+func (s *Scheduler) triggerServer(server *Server) {
 	s.triggerLock.Lock()
-	s.serverTrigger(server)
-	s.triggerLock.Unlock()
-}
-
-func (s *Scheduler) serverTrigger(server *Server) {
 	if s.trServers == nil {
 		s.trServers = make(map[*Server]struct{})
 	}
@@ -217,15 +241,11 @@ func (s *Scheduler) serverTrigger(server *Server) {
 		s.triggerCh <- struct{}{}
 		s.triggered = true
 	}
-}
-
-func (s *Scheduler) ModuleTrigger(module Module) {
-	s.triggerLock.Lock()
-	s.moduleTrigger(module)
 	s.triggerLock.Unlock()
 }
 
-func (s *Scheduler) moduleTrigger(module Module) {
+// triggerModule ensures that a next processing round is initiated as soon as possible and the given module will be called with all servers enabled in its Environment. Called by ModuleTrigger.Trigger when the range of possible requests or processable data might have been expanded.
+func (s *Scheduler) triggerModule(module Module) {
 	if s.trModules == nil {
 		s.trModules = make(map[Module]struct{})
 	}

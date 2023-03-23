@@ -22,8 +22,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
 )
 
 const (
@@ -32,53 +34,47 @@ const (
 
 type SyncServer struct {
 	api  *BeaconLightApi
-	Stop func()
 	lock sync.RWMutex
 
-	triggerCallback     func()
-	latestHeadSlot      uint64
-	latestHeadHash      common.Hash
-	signedHeads         []types.SignedHead
-	canRequestBootstrap bool
-	firstUpdate         uint64 //TODO ...
+	unsubscribe                  func()
+	canRequestBootstrap          bool
+	firstUpdate, afterLastUpdate uint64
+	firstState                   uint64 //TODO ...
 }
 
 func NewSyncServer(api *BeaconLightApi) *SyncServer {
-	s := &SyncServer{
+	return &SyncServer{
 		api:                 api,
 		canRequestBootstrap: true,
 	}
-	s.Stop = s.api.StartHeadListener(s.newHead, s.newSignedHead, func(err error) {
-		log.Warn("Head event stream error", "err", err)
-	})
-	return s
 }
 
-func (s *SyncServer) SetTriggerCallback(cb func()) {
+func (s *SyncServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(signedHead types.SignedHead)) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.unsubscribe = s.api.StartHeadListener(newHead, func(signedHead types.SignedHead) {
+		s.lock.Lock()
+		s.afterLastUpdate = types.PeriodOfSlot(signedHead.Header.Slot + 256)
+		s.lock.Unlock()
+		newSignedHead(signedHead)
+	}, func(err error) {
+		log.Warn("Head event stream error", "err", err)
+	})
+	s.lock.Unlock()
+}
 
-	s.triggerCallback = cb
+func (s *SyncServer) UnsubscribeHeads() {
+	s.lock.Lock()
+	if s.unsubscribe != nil {
+		s.unsubscribe()
+		s.unsubscribe = nil
+	}
+	s.lock.Unlock()
 }
 
 func (s *SyncServer) Delay() time.Duration { return 0 } //TODO
 
 func (s *SyncServer) Fail(desc string) {
 	log.Warn("API endpoint failure", "URL", s.api.url, "error", desc)
-}
-
-func (s *SyncServer) LatestHead() (uint64, common.Hash) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.latestHeadSlot, s.latestHeadHash
-}
-
-func (s *SyncServer) SignedHeads() []types.SignedHead {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.signedHeads
 }
 
 func (s *SyncServer) CanRequestBootstrap() bool {
@@ -105,10 +101,7 @@ func (s *SyncServer) UpdateRange() types.PeriodRange {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	if len(s.signedHeads) == 0 {
-		return types.PeriodRange{}
-	}
-	r := types.PeriodRange{First: s.firstUpdate, AfterLast: types.PeriodOfSlot(s.signedHeads[len(s.signedHeads)-1].Header.Slot + 256)}
+	r := types.PeriodRange{First: s.firstUpdate, AfterLast: s.afterLastUpdate}
 	if !r.IsEmpty() {
 		return r
 	}
@@ -125,32 +118,44 @@ func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.
 	}()
 }
 
-func (s *SyncServer) newHead(slot uint64, blockRoot common.Hash) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.latestHeadSlot, s.latestHeadHash = slot, blockRoot
+func (s *SyncServer) RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock)) {
+	go func() {
+		if block, err := s.api.GetBeaconBlock(blockRoot); err == nil {
+			response(block)
+		} else {
+			response(nil)
+		}
+	}()
 }
 
-func (s *SyncServer) newSignedHead(signedHead types.SignedHead) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *SyncServer) RequestBeaconHeader(blockRoot common.Hash, response func(*types.Header)) {
+	go func() {
+		if header, err := s.api.GetHeader(blockRoot); err == nil {
+			response(&header)
+		} else {
+			response(nil)
+		}
+	}()
+}
 
-	if s.signedHeads == nil {
-		s.signedHeads = []types.SignedHead{signedHead}
-		s.triggerCallback()
-		return
-	}
-	if lastHead := s.signedHeads[len(s.signedHeads)-1]; signedHead.Header.Slot < lastHead.Header.Slot ||
-		(signedHead.Header.Slot == lastHead.Header.Slot && signedHead.SignerCount() <= lastHead.SignerCount()) {
-		return
-	}
-	if len(s.signedHeads) < maxHeadLength {
-		s.signedHeads = append(s.signedHeads, signedHead)
-		s.triggerCallback()
-		return
-	}
-	copy(s.signedHeads[:len(s.signedHeads)-1], s.signedHeads[1:])
-	s.signedHeads[len(s.signedHeads)-1] = signedHead
-	s.triggerCallback()
+func (s *SyncServer) BeaconStateTail() uint64 {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return s.firstState
+}
+
+func (s *SyncServer) RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.ProofFormat, response func(*merkle.MultiProof)) {
+	go func() {
+		if proof, err := s.api.GetStateProof(stateRoot, format); err == nil {
+			response(&proof)
+		} else {
+			s.lock.Lock()
+			if slot >= s.firstState {
+				s.firstState = slot + 1
+			}
+			s.lock.Unlock()
+			response(nil)
+		}
+	}()
 }

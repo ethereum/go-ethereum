@@ -25,14 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type HeadTracker struct {
+type HeadValidator struct {
 	lock           sync.Mutex
 	committeeChain *CommitteeChain
 	subs           []*headSub
 }
 
-func NewHeadTracker(committeeChain *CommitteeChain) *HeadTracker {
-	return &HeadTracker{committeeChain: committeeChain}
+func NewHeadValidator(committeeChain *CommitteeChain) *HeadValidator {
+	return &HeadValidator{committeeChain: committeeChain}
 }
 
 type headSub struct {
@@ -41,7 +41,7 @@ type headSub struct {
 	callbacks      []func(types.SignedHead)
 }
 
-func (h *HeadTracker) Subscribe(minSignerCount int, callback func(types.SignedHead)) {
+func (h *HeadValidator) Subscribe(minSignerCount int, callback func(types.SignedHead)) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
@@ -64,7 +64,7 @@ func (h *HeadTracker) Subscribe(minSignerCount int, callback func(types.SignedHe
 	}
 }
 
-func (h *HeadTracker) Add(head types.SignedHead) error {
+func (h *HeadValidator) Add(head types.SignedHead) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 

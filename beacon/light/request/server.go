@@ -20,36 +20,19 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
-func SelectServer(servers []*Server, priority func(server *Server) uint64) *Server {
-	var (
-		maxPriority uint64
-		mpCount     int
-		bestServer  *Server
-	)
-	for _, server := range servers {
-		pri := priority(server)
-		if pri == 0 || pri < maxPriority { // 0 means it cannot serve the request at all
-			continue
-		}
-		if pri > maxPriority {
-			maxPriority = pri
-			mpCount = 1
-			bestServer = server
-		} else {
-			mpCount++
-			if rand.Intn(mpCount) == 0 {
-				bestServer = server
-			}
-		}
-	}
-	return bestServer
-}
-
-type Server struct { //TODO name?
+type Server struct {
 	RequestServer
-	scheduler    *Scheduler
+	scheduler *Scheduler
+
+	headLock       sync.RWMutex
+	latestHeadSlot uint64
+	latestHeadHash common.Hash
+	unregistered   bool // accessed under HeadTracker.prefetchLock
+
 	lock         sync.Mutex
 	sent         map[uint64]chan struct{} // closed when returned; nil when timed out
 	timeoutCount int
@@ -69,51 +52,68 @@ func (s *Scheduler) newServer(server RequestServer) *Server {
 	}
 }
 
-// guarantees a server trigger later if the result is false
-func (s *Server) CanSend() bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *Server) setHead(slot uint64, blockRoot common.Hash) {
+	s.headLock.Lock()
+	defer s.headLock.Unlock()
 
-	if s.isDelayed() || s.timeoutCount != 0 {
-		s.needTrigger = true
-		return false
-	}
-	return true
+	s.latestHeadSlot, s.latestHeadHash = slot, blockRoot
+}
+
+func (s *Server) trigger() {
+	s.scheduler.triggerServer(s)
+}
+
+func (s *Server) LatestHead() (uint64, common.Hash) {
+	s.headLock.RLock()
+	defer s.headLock.RUnlock()
+
+	return s.latestHeadSlot, s.latestHeadHash
 }
 
 // guarantees a server trigger later if the result is false
-func (s *Server) TrySend() (uint64, bool) {
+func (s *Server) CanRequestNow() (bool, uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	if s.isDelayed() || s.timeoutCount != 0 {
 		s.needTrigger = true
-		return 0, false
+		return false, 0
 	}
+	return true, uint64(rand.Uint32() + 1) //TODO use priority based on in-flight requests
+}
+
+func (s *Server) sendRequest(timeoutTrigger *ModuleTrigger) uint64 {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.lastReqId++
+	reqId := s.lastReqId
 	returnCh := make(chan struct{})
-	s.sent[s.lastReqId] = returnCh
+	s.sent[reqId] = returnCh
 	s.delayChecked = false
 	go func() {
 		timer := time.NewTimer(softRequestTimeout)
 		select {
 		case <-timer.C:
 			s.lock.Lock()
-			if _, ok := s.sent[s.lastReqId]; ok {
-				s.sent[s.lastReqId] = nil
+			if _, ok := s.sent[reqId]; ok {
+				s.sent[reqId] = nil
 				s.timeoutCount++
 			}
 			s.lock.Unlock()
+			if timeoutTrigger != nil {
+				timeoutTrigger.Trigger()
+			}
 		case <-returnCh:
 			timer.Stop()
 		case <-s.stopCh:
 			timer.Stop()
 		}
 	}()
-	return s.lastReqId, true
+	return reqId
 }
 
-func (s *Server) Timeout(reqId uint64) bool {
+func (s *Server) hasTimedOut(reqId uint64) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -121,7 +121,7 @@ func (s *Server) Timeout(reqId uint64) bool {
 	return ok && ch == nil
 }
 
-func (s *Server) Returned(reqId uint64) {
+func (s *Server) returned(reqId uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -130,6 +130,10 @@ func (s *Server) Returned(reqId uint64) {
 			close(ch)
 		} else {
 			s.timeoutCount--
+			if s.needTrigger && s.timeoutCount == 0 && !s.isDelayed() {
+				s.needTrigger = false
+				s.scheduler.triggerServer(s)
+			}
 		}
 		delete(s.sent, reqId)
 	}
@@ -152,11 +156,11 @@ func (s *Server) isDelayed() bool {
 			case <-timer.C:
 				s.lock.Lock()
 				s.delayed = false
-				trigger := s.needTrigger && s.timeoutCount == 0
-				s.lock.Unlock()
-				if trigger {
-					s.scheduler.serverTrigger(s)
+				if s.needTrigger && s.timeoutCount == 0 {
+					s.needTrigger = false
+					s.scheduler.triggerServer(s)
 				}
+				s.lock.Unlock()
 			case <-s.stopCh:
 				timer.Stop()
 			}

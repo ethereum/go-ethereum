@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
+
 	"net/http"
 	"time"
 
@@ -32,9 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ctypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
@@ -211,36 +208,15 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 }
 
 // does not verify state root
-func (api *BeaconLightApi) GetHeadStateProof(format merkle.ProofFormat) (merkle.MultiProof, error) {
-	encFormat, bitLength := EncodeCompactProofFormat(format)
+//TODO ...
+/*func (api *BeaconLightApi) GetHeadStateProof(format merkle.ProofFormat) (merkle.MultiProof, error) {
+	encFormat, bitLength := EncodeCompactProofFormat(format) //TODO cache encoding?
 	return api.getStateProof("head", format, encFormat, bitLength)
-}
+}*/
 
-type StateProofSub struct {
-	api       *BeaconLightApi
-	format    merkle.ProofFormat
-	encFormat []byte
-	bitLength int
-}
-
-func (api *BeaconLightApi) SubscribeStateProof(format merkle.ProofFormat, first, period int) (*StateProofSub, error) {
-	encFormat, bitLength := EncodeCompactProofFormat(format)
-	_, err := api.httpGetf("/eth/v0/beacon/proof/subscribe/states?format=0x%x&first=%d&period=%d", encFormat, first, period)
-	if err != nil && err != ErrNotFound {
-		// if subscribe endpoint is missing then we expect proof endpoint to serve recent states without subscription
-		return nil, err
-	}
-	return &StateProofSub{
-		api:       api,
-		format:    format,
-		encFormat: encFormat,
-		bitLength: bitLength,
-	}, nil
-}
-
-// verifies state root
-func (sub *StateProofSub) Get(stateRoot common.Hash) (merkle.MultiProof, error) {
-	proof, err := sub.api.getStateProof(stateRoot.Hex(), sub.format, sub.encFormat, sub.bitLength)
+func (api *BeaconLightApi) GetStateProof(stateRoot common.Hash, format merkle.ProofFormat) (merkle.MultiProof, error) {
+	encFormat, bitLength := EncodeCompactProofFormat(format) //TODO cache encoding?
+	proof, err := api.getStateProof(stateRoot.Hex(), format, encFormat, bitLength)
 	if err != nil {
 		return merkle.MultiProof{}, err
 	}
@@ -329,77 +305,27 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 	return checkpoint, nil
 }
 
-// GetExecutionPayload fetches the execution block belonging to the beacon block
-// specified by beaconRoot and validates its block hash against the expected execRoot.
-func (api *BeaconLightApi) GetExecutionPayload(header types.Header) (*ctypes.Block, error) {
-	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", header.Hash())
+func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*capella.BeaconBlock, error) {
+	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", blockRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	spec := configs.Mainnet
-	// note: eth2 api endpoints serve bellatrix.SignedBeaconBlock instead
-	// also try  github.com/protolambda/eth2api for api bindings
-	//var beaconBlock bellatrix.BeaconBlock
-	var beaconBlock capella.BeaconBlock
-	myJSONBlockData := resp
 	var beaconBlockMessage struct {
 		Data struct {
 			Message capella.BeaconBlock `json:"message"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(myJSONBlockData, &beaconBlockMessage); err != nil {
+	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
 	}
-	beaconBlock = beaconBlockMessage.Data.Message
-	beaconBodyRoot := common.Hash(beaconBlock.Body.HashTreeRoot(spec, tree.GetHashFn()))
-	if beaconBodyRoot != header.BodyRoot {
-		return nil, fmt.Errorf("Beacon body root hash mismatch (expected: %x, got: %x)", header.BodyRoot.Bytes(), beaconBodyRoot.Bytes())
+	beaconBlock := new(capella.BeaconBlock)
+	*beaconBlock = beaconBlockMessage.Data.Message
+	root := common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
+	if root != blockRoot {
+		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, root)
 	}
-
-	payload := &beaconBlock.Body.ExecutionPayload
-	txs := make([]*ctypes.Transaction, len(payload.Transactions))
-	for i, opaqueTx := range payload.Transactions {
-		var tx ctypes.Transaction
-		if err := tx.UnmarshalBinary(opaqueTx); err != nil {
-			return nil, fmt.Errorf("failed to parse tx %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	withdrawals := make([]*ctypes.Withdrawal, len(payload.Withdrawals))
-	for i, w := range payload.Withdrawals {
-		withdrawals[i] = &ctypes.Withdrawal{
-			Index:     uint64(w.Index),
-			Validator: uint64(w.ValidatorIndex),
-			Address:   common.Address(w.Address),
-			Amount:    uint64(w.Amount),
-		}
-	}
-	wroot := ctypes.DeriveSha(ctypes.Withdrawals(withdrawals), trie.NewStackTrie(nil))
-	execHeader := &ctypes.Header{
-		ParentHash:      common.Hash(payload.ParentHash),
-		UncleHash:       ctypes.EmptyUncleHash,
-		Coinbase:        common.Address(payload.FeeRecipient),
-		Root:            common.Hash(payload.StateRoot),
-		TxHash:          ctypes.DeriveSha(ctypes.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:     common.Hash(payload.ReceiptsRoot),
-		Bloom:           ctypes.Bloom(payload.LogsBloom),
-		Difficulty:      big.NewInt(0), // constant
-		Number:          new(big.Int).SetUint64(uint64(payload.BlockNumber)),
-		GasLimit:        uint64(payload.GasLimit),
-		GasUsed:         uint64(payload.GasUsed),
-		Time:            uint64(payload.Timestamp),
-		Extra:           []byte(payload.ExtraData),
-		MixDigest:       common.Hash(payload.PrevRandao), // reused in merge
-		Nonce:           ctypes.BlockNonce{},             // zero
-		BaseFee:         (*uint256.Int)(&payload.BaseFeePerGas).ToBig(),
-		WithdrawalsHash: &wroot,
-	}
-	execBlock := ctypes.NewBlockWithHeader(execHeader).WithBody(txs, nil).WithWithdrawals(withdrawals)
-	if execBlock.Hash() != common.Hash(payload.BlockHash) {
-		return nil, fmt.Errorf("Sanity check failed, payload hash does not match.")
-	}
-	return execBlock, nil
+	return beaconBlock, nil
 }
 
 func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {

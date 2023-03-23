@@ -35,14 +35,14 @@ type checkpointInitServer interface {
 }
 
 type CheckpointInit struct {
-	request.SingleLock
 	lock           sync.Mutex
+	reqLock        request.SingleLock
 	chain          *light.CommitteeChain
 	cs             *light.CheckpointStore
 	checkpointHash common.Hash
 	initialized    bool
 
-	InitTrigger request.ModuleTrigger
+	initTrigger *request.ModuleTrigger
 }
 
 func NewCheckpointInit(chain *light.CommitteeChain, cs *light.CheckpointStore, checkpointHash common.Hash) *CheckpointInit {
@@ -53,129 +53,149 @@ func NewCheckpointInit(chain *light.CommitteeChain, cs *light.CheckpointStore, c
 	}
 }
 
-func (s *CheckpointInit) Process(servers []*request.Server) bool {
+func (s *CheckpointInit) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+	s.reqLock.Trigger = trigger("checkpointInit", true)
+	s.initTrigger = trigger("committeeChainInit", false)
+}
+
+func (s *CheckpointInit) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	if s.initialized {
-		return false
+		return
 	}
 	if checkpoint := s.cs.Get(s.checkpointHash); checkpoint != nil {
 		checkpoint.InitChain(s.chain)
 		s.initialized = true
-		s.InitTrigger.Trigger()
-		return false
+		s.initTrigger.Trigger()
+		return
 	}
-	srv := request.SelectServer(servers, func(server *request.Server) uint64 {
-		if cserver, ok := server.RequestServer.(checkpointInitServer); ok && cserver.CanRequestBootstrap() && s.CanSend(server) {
-			return 1
-		}
-		return 0
-	})
-	if srv == nil {
-		return true
+	if s.reqLock.CanRequest() {
+		env.TryRequest(checkpointRequest{
+			CheckpointInit: s,
+			checkpointHash: s.checkpointHash,
+		})
 	}
-	reqId, ok := s.TrySend(srv)
-	if !ok {
-		return true
-	}
-	server := srv.RequestServer.(checkpointInitServer)
-	server.RequestBootstrap(s.checkpointHash, func(checkpoint *light.CheckpointData) {
-		s.lock.Lock()
-		defer s.lock.Unlock()
+}
 
-		s.Returned(srv, reqId)
+type checkpointRequest struct {
+	*CheckpointInit
+	checkpointHash common.Hash
+}
+
+func (r checkpointRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
+	if cs, ok := server.RequestServer.(checkpointInitServer); !ok || !cs.CanRequestBootstrap() {
+		return false, 0
+	}
+	return true, 0
+}
+
+func (r checkpointRequest) SendTo(server *request.Server) {
+	reqId := r.reqLock.Send(server)
+	server.RequestServer.(checkpointInitServer).RequestBootstrap(r.checkpointHash, func(checkpoint *light.CheckpointData) {
+		r.lock.Lock()
+		defer r.lock.Unlock()
+
+		r.reqLock.Returned(server, reqId)
 		if checkpoint == nil || !checkpoint.Validate() {
 			server.Fail("error retrieving checkpoint data")
 			return
 		}
-		checkpoint.InitChain(s.chain)
-		s.cs.Store(checkpoint)
-		s.initialized = true
-		s.InitTrigger.Trigger()
+		checkpoint.InitChain(r.chain)
+		r.cs.Store(checkpoint)
+		r.initialized = true
+		r.initTrigger.Trigger()
 	})
-	return true
 }
 
-type forwardUpdateServer interface {
+type updateServer interface {
 	request.RequestServer
 	UpdateRange() types.PeriodRange
 	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee))
 }
 
-type ForwardUpdateSyncer struct {
-	request.SingleLock
-	lock  sync.Mutex
-	chain *light.CommitteeChain
+type ForwardUpdateSync struct {
+	lock    sync.Mutex
+	reqLock request.SingleLock
+	chain   *light.CommitteeChain
 
-	NewUpdateTrigger request.ModuleTrigger
+	newUpdateTrigger *request.ModuleTrigger
 }
 
-func NewForwardUpdateSyncer(chain *light.CommitteeChain) *ForwardUpdateSyncer {
-	return &ForwardUpdateSyncer{chain: chain}
+func NewForwardUpdateSync(chain *light.CommitteeChain) *ForwardUpdateSync {
+	return &ForwardUpdateSync{chain: chain}
 }
 
-func (s *ForwardUpdateSyncer) Process(servers []*request.Server) bool {
+func (s *ForwardUpdateSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+	s.reqLock.Trigger = trigger("forwardUpdateSync", true)
+	trigger("committeeChainInit", true)
+	trigger("validatedHead", true)
+	s.newUpdateTrigger = trigger("newUpdate", true)
+}
+
+func (s *ForwardUpdateSync) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	first, ok := s.chain.NextSyncPeriod()
 	if !ok {
-		return true
+		return
 	}
-	srv := request.SelectServer(servers, func(server *request.Server) uint64 {
-		if fserver, ok := server.RequestServer.(forwardUpdateServer); ok && s.CanSend(server) {
-			updateRange := fserver.UpdateRange()
-			if first < updateRange.First {
-				return 0
-			}
-			return updateRange.AfterLast
-		}
-		return 0
+	env.TryRequest(updateRequest{
+		ForwardUpdateSync: s,
+		first:             first,
 	})
-	if srv == nil {
-		return true
+}
+
+type updateRequest struct {
+	*ForwardUpdateSync
+	first uint64
+}
+
+func (r updateRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
+	if us, ok := server.RequestServer.(updateServer); ok {
+		if updateRange := us.UpdateRange(); updateRange.Includes(r.first) {
+			return true, updateRange.AfterLast
+		}
 	}
-	server := srv.RequestServer.(forwardUpdateServer)
-	updateRange := server.UpdateRange()
-	if updateRange.AfterLast <= first {
-		return true
-	}
-	reqId, ok := s.TrySend(srv)
-	if !ok {
-		return true
-	}
-	count := updateRange.AfterLast - first
-	if count > maxUpdateRequest { //TODO const
+	return false, 0
+}
+
+func (r updateRequest) SendTo(server *request.Server) {
+	us := server.RequestServer.(updateServer)
+	updateRange := us.UpdateRange()
+	count := updateRange.AfterLast - r.first
+	if count > maxUpdateRequest {
 		count = maxUpdateRequest
 	}
-	server.RequestUpdates(first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedCommittee) {
-		s.lock.Lock()
-		defer s.lock.Unlock()
+	reqId := r.reqLock.Send(server)
+	us.RequestUpdates(r.first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedCommittee) {
+		r.lock.Lock()
+		defer r.lock.Unlock()
 
-		s.Returned(srv, reqId)
+		r.reqLock.Returned(server, reqId)
 		if len(updates) != int(count) || len(committees) != int(count) {
 			server.Fail("wrong number of updates received")
 			return
 		}
 		for i, update := range updates {
-			if update.Header.SyncPeriod() != first+uint64(i) {
+			if update.Header.SyncPeriod() != r.first+uint64(i) {
 				server.Fail("update with wrong sync period received")
 				return
 			}
-			if err := s.chain.InsertUpdate(update, committees[i]); err != nil {
+			if err := r.chain.InsertUpdate(update, committees[i]); err != nil {
 				if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
 					server.Fail("invalid update received")
 				} else {
 					log.Error("Unexpected InsertUpdate error", "error", err)
 				}
-				if i != 0 {
-					s.NewUpdateTrigger.Trigger()
+				if i != 0 { // some updates were added
+					r.newUpdateTrigger.Trigger()
 				}
 				return
 			}
 		}
-		s.NewUpdateTrigger.Trigger()
+		r.newUpdateTrigger.Trigger()
 	})
-	return true
 }

@@ -16,32 +16,70 @@
 
 package request
 
+type sentRequest struct {
+	sentTo *Server
+	reqId  uint64
+}
+
 type SingleLock struct {
-	requestLock map[*Server]uint64 // servers where the request has been sent and not timed out yet
+	sentRequest
+	Trigger *ModuleTrigger
 }
 
-func (s *SingleLock) CanSend(server *Server) bool {
-	reqId, ok := s.requestLock[server]
-	if ok && server.Timeout(reqId) {
-		delete(s.requestLock, server)
-		return false
+func (s *SingleLock) CanRequest() bool {
+	if s.sentTo != nil && s.sentTo.hasTimedOut(s.reqId) {
+		s.sentTo = nil
 	}
-	return !ok && server.CanSend()
+	return s.sentTo == nil
 }
 
-// assumes that canSend returned true (no request lock)
-func (s *SingleLock) TrySend(srv *Server) (uint64, bool) {
-	if s.requestLock == nil {
-		s.requestLock = make(map[*Server]uint64)
-	}
-	if reqId, ok := srv.TrySend(); ok {
-		s.requestLock[srv] = reqId
-		return reqId, true
-	}
-	return 0, false
+func (s *SingleLock) Send(srv *Server) uint64 {
+	reqId := srv.sendRequest(s.Trigger)
+	s.sentTo, s.reqId = srv, reqId
+	return reqId
 }
 
 func (s *SingleLock) Returned(srv *Server, reqId uint64) {
-	delete(s.requestLock, srv)
-	srv.Returned(reqId)
+	if srv == s.sentTo && reqId == s.reqId {
+		s.sentTo = nil
+	}
+	srv.returned(reqId)
+	if s.Trigger != nil {
+		s.Trigger.Trigger()
+	}
+}
+
+type MultiLock struct {
+	locks   map[interface{}]sentRequest // locks are only present in the map when sentTo != nil
+	Trigger *ModuleTrigger
+}
+
+func (s *MultiLock) CanRequest(id interface{}) bool {
+	if s.locks == nil {
+		s.locks = make(map[interface{}]sentRequest)
+	}
+	if sl, ok := s.locks[id]; ok {
+		if sl.sentTo.hasTimedOut(sl.reqId) {
+			delete(s.locks, id)
+		} else {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *MultiLock) Send(srv *Server, id interface{}) uint64 {
+	reqId := srv.sendRequest(s.Trigger)
+	s.locks[id] = sentRequest{sentTo: srv, reqId: reqId}
+	return reqId
+}
+
+func (s *MultiLock) Returned(srv *Server, reqId uint64, id interface{}) {
+	if s.locks[id] == (sentRequest{sentTo: srv, reqId: reqId}) {
+		delete(s.locks, id)
+	}
+	srv.returned(reqId)
+	if s.Trigger != nil {
+		s.Trigger.Trigger()
+	}
 }
