@@ -24,8 +24,6 @@ type v2Reporter struct {
 
 	client influxdb2.Client
 	write  api.WriteAPI
-
-	cache map[string]int64
 }
 
 // InfluxDBWithTags starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval with the specified tags
@@ -39,7 +37,6 @@ func InfluxDBV2WithTags(r metrics.Registry, d time.Duration, endpoint string, to
 		organization: organization,
 		namespace:    namespace,
 		tags:         tags,
-		cache:        make(map[string]int64),
 	}
 
 	rep.client = influxdb2.NewClient(rep.endpoint, rep.token)
@@ -86,17 +83,25 @@ func (r *v2Reporter) send() {
 		switch metric := i.(type) {
 		case metrics.Counter:
 			v := metric.Count()
-			l := r.cache[name]
 
 			measurement := fmt.Sprintf("%s%s.count", namespace, name)
 			fields := map[string]interface{}{
-				"value": v - l,
+				"value": v,
 			}
 
 			pt := influxdb2.NewPoint(measurement, r.tags, fields, now)
 			r.write.WritePoint(pt)
 
-			r.cache[name] = v
+		case metrics.CounterFloat64:
+			v := metric.Count()
+
+			measurement := fmt.Sprintf("%s%s.count", namespace, name)
+			fields := map[string]interface{}{
+				"value": v,
+			}
+
+			pt := influxdb2.NewPoint(measurement, r.tags, fields, now)
+			r.write.WritePoint(pt)
 
 		case metrics.Gauge:
 			ms := metric.Snapshot()

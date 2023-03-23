@@ -141,6 +141,16 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
+		case metrics.CounterFloat64:
+			count := metric.Count()
+			pts = append(pts, client.Point{
+				Measurement: fmt.Sprintf("%s%s.count", namespace, name),
+				Tags:        r.tags,
+				Fields: map[string]interface{}{
+					"value": count,
+				},
+				Time: now,
+			})
 		case metrics.Gauge:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{
