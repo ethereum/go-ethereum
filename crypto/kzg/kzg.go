@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/crate-crypto/go-proto-danksharding-crypto/api"
 	"github.com/crate-crypto/go-proto-danksharding-crypto/serialization"
@@ -39,21 +40,32 @@ var (
 // The value that gets returned when the `verify_kzg_proof“ precompile is called
 var precompileReturnValue [64]byte
 
-// The context object stores all of the necessary configurations
-// to allow one to create and verify blob proofs
-var CryptoCtx api.Context
+var gCryptoCtx api.Context
+var initCryptoCtx sync.Once
 
-func init() {
-	// Initialize context to match the configurations that the
-	// specs are using.
-	ctx, err := api.NewContext4096Insecure1337()
-	if err != nil {
-		panic(fmt.Sprintf("could not create context, err : %v", err))
-	}
-	CryptoCtx = *ctx
-	// Initialize the precompile return value
-	new(big.Int).SetUint64(serialization.ScalarsPerBlob).FillBytes(precompileReturnValue[:32])
-	copy(precompileReturnValue[32:], api.MODULUS[:])
+// InitializeCrypytoCtx initializes the global context object returned via CryptoCtx
+func InitializeCrypytoCtx() {
+	initCryptoCtx.Do(func() {
+		// Initialize context to match the configurations that the
+		// specs are using.
+		ctx, err := api.NewContext4096Insecure1337()
+		if err != nil {
+			panic(fmt.Sprintf("could not create context, err : %v", err))
+		}
+		gCryptoCtx = *ctx
+		// Initialize the precompile return value
+		new(big.Int).SetUint64(serialization.ScalarsPerBlob).FillBytes(precompileReturnValue[:32])
+		copy(precompileReturnValue[32:], api.MODULUS[:])
+	})
+}
+
+// CryptoCtx returns a context object stores all of the necessary configurations
+// to allow one to create and verify blob proofs.
+// This function is expensive to run if the crypto context isn't initialized, so it is recommended to
+// pre-initialize by calling InitializeCryptoCtx
+func CrpytoCtx() api.Context {
+	InitializeCrypytoCtx()
+	return gCryptoCtx
 }
 
 // PointEvaluationPrecompile implements point_evaluation_precompile from EIP-4844
@@ -82,7 +94,8 @@ func PointEvaluationPrecompile(input []byte) ([]byte, error) {
 	var quotientKZG [48]byte
 	copy(quotientKZG[:], input[144:PrecompileInputLength])
 
-	err := CryptoCtx.VerifyKZGProof(dataKZG, quotientKZG, x, y)
+	cryptoCtx := CrpytoCtx()
+	err := cryptoCtx.VerifyKZGProof(dataKZG, quotientKZG, x, y)
 	if err != nil {
 		return nil, fmt.Errorf("verify_kzg_proof error: %v", err)
 	}
