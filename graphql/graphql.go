@@ -1006,12 +1006,6 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 func (b *Block) Account(ctx context.Context, args struct {
 	Address common.Address
 }) (*Account, error) {
-	if b.numberOrHash == nil {
-		_, err := b.resolveHeader(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return &Account{
 		r:             b.r,
 		address:       args.Address,
@@ -1054,12 +1048,6 @@ func (c *CallResult) Status() Long {
 func (b *Block) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
-	if b.numberOrHash == nil {
-		_, err := b.resolve(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
 	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -1079,12 +1067,6 @@ func (b *Block) Call(ctx context.Context, args struct {
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (Long, error) {
-	if b.numberOrHash == nil {
-		_, err := b.resolveHeader(ctx)
-		if err != nil {
-			return 0, err
-		}
-	}
 	gas, err := ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, b.r.backend.RPCGasCap())
 	return Long(gas), err
 }
