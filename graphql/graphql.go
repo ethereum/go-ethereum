@@ -190,27 +190,31 @@ type Transaction struct {
 	tx    *types.Transaction
 	block *Block
 	index uint64
+	mu    sync.Mutex
 }
 
 // resolve returns the internal transaction object, fetching it if needed.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
-	if t.tx == nil {
-		// Try to return an already finalized transaction
-		tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
-		if err == nil && tx != nil {
-			t.tx = tx
-			blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
-			t.block = &Block{
-				r:            t.r,
-				numberOrHash: &blockNrOrHash,
-				hash:         blockHash,
-			}
-			t.index = index
-			return t.tx, nil
-		}
-		// No finalized transaction, try to retrieve it from the pool
-		t.tx = t.r.backend.GetPoolTransaction(t.hash)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.tx != nil {
+		return t.tx, nil
 	}
+	// Try to return an already finalized transaction
+	tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
+	if err == nil && tx != nil {
+		t.tx = tx
+		blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
+		t.block = &Block{
+			r:            t.r,
+			numberOrHash: &blockNrOrHash,
+			hash:         blockHash,
+		}
+		t.index = index
+		return t.tx, nil
+	}
+	// No finalized transaction, try to retrieve it from the pool
+	t.tx = t.r.backend.GetPoolTransaction(t.hash)
 	return t.tx, nil
 }
 
