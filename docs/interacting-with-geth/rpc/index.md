@@ -50,7 +50,7 @@ Since the HTTP server is reachable from any local application, additional protec
 geth --http --http.corsdomain https://remix.ethereum.org
 ```
 
-The `--http.corsdomain` command also acceptsd wildcards that enable access to the RPC from any origin:
+The `--http.corsdomain` command also accepts wildcards that enable access to the RPC from any origin:
 
 ```sh
 --http.corsdomain '*'
@@ -111,8 +111,7 @@ The following table summarizes the relative strengths and weaknesses of each tra
 |       Remote connection       | **Y** | **Y** |   N   |
 | Per-message metadata overhead | high  |  low  |  low  |
 
-As a general rule IPC is most secure because it is limited to interactions on the local machine and cannot be exposed to external traffic. It can also be used
-to subscribe to events. HTTP is a familiar and idempotent transport that closes connections between requests and can therefore have lower overall overheads if the number of requests is fairly low. Websockets provides a continuous open channel that can enable event subscriptions and streaming and handle large volumes of requests with smaller per-message overheads.
+As a general rule IPC is most secure because it is limited to interactions on the local machine and cannot be exposed to external traffic. It can also be used to subscribe to events. HTTP is a familiar and idempotent transport that closes connections between requests and can therefore have lower overall overheads if the number of requests is fairly low. Websockets provides a continuous open channel that can enable event subscriptions and streaming and handle large volumes of requests with smaller per-message overheads.
 
 ## Engine-API {#engine-api}
 
