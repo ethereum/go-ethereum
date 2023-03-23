@@ -315,6 +315,12 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 			body: "{block { transactions { logs { account { address } } } } }",
 			want: fmt.Sprintf(`{"block":{"transactions":[{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]}]}}`, dadStr, dadStr, dadStr, dadStr, dadStr, dadStr),
 		},
+		// Multiple fields of a tx race to resolve it. Happens in this case
+		// because resolving the tx body belonging to a log is delayed.
+		{
+			body: `{block { logs(filter: {}) { transaction { nonce value gasPrice }}}}`,
+			want: `{"block":{"logs":[{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}}]}}`,
+		},
 		// Multiple txes of a block race to set/retrieve receipts of a block.
 		{
 			body: "{block { transactions { status gasUsed } } }",
@@ -340,7 +346,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 			t.Fatalf("failed to encode graphql response for testcase #%d: %s", i, err)
 		}
 		if string(have) != tt.want {
-			t.Errorf("response unmatch for testcase #%d. expected %s, got %s", i, tt.want, have)
+			t.Errorf("response unmatch for testcase #%d.\nExpected:\n%s\nGot:\n%s\n", i, tt.want, have)
 		}
 	}
 }
