@@ -262,8 +262,12 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
-	if chainConfig.IsShanghai(prestate.Env.Number) && prestate.Env.Withdrawals == nil {
-		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
+	if chainConfig.IsShanghai(prestate.Env.Number) {
+		if prestate.Env.Withdrawals == nil {
+			return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
+		}
+	} else {
+		prestate.Env.Withdrawals = nil
 	}
 	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
 	env := prestate.Env
