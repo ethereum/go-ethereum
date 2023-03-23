@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -53,7 +54,7 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 		GasUsed    hexutil.Uint64    `json:"gasUsed"`
 	}
 	var result accessListResult
-	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
+	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", ethclient.ToCallArg(msg)); err != nil {
 		return nil, 0, "", err
 	}
 	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
@@ -102,7 +103,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 	}
 
 	var res accountResult
-	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, ethclient.ToBlockNumArg(blockNumber))
 	// Turn hexutils back to normal datatypes
 	storageResults := make([]StorageResult, 0, len(res.StorageProof))
 	for _, st := range res.StorageProof {
@@ -137,8 +138,8 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int, overrides *map[common.Address]OverrideAccount) ([]byte, error) {
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(
-		ctx, &hex, "eth_call", toCallArg(msg),
-		toBlockNumArg(blockNumber), overrides,
+		ctx, &hex, "eth_call", ethclient.ToCallArg(msg),
+		ethclient.ToBlockNumArg(blockNumber), overrides,
 	)
 	return hex, err
 }
@@ -161,7 +162,7 @@ func (ec *Client) MemStats(ctx context.Context) (*runtime.MemStats, error) {
 // Note, this is a destructive action and may severely damage your chain.
 // Use with extreme caution.
 func (ec *Client) SetHead(ctx context.Context, number *big.Int) error {
-	return ec.c.CallContext(ctx, nil, "debug_setHead", toBlockNumArg(number))
+	return ec.c.CallContext(ctx, nil, "debug_setHead", ethclient.ToBlockNumArg(number))
 }
 
 // GetNodeInfo retrieves the node info of a geth node.
@@ -179,45 +180,6 @@ func (ec *Client) SubscribeFullPendingTransactions(ctx context.Context, ch chan<
 // SubscribePendingTransactions subscribes to new pending transaction hashes.
 func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
-}
-
-func toBlockNumArg(number *big.Int) string {
-	if number == nil {
-		return "latest"
-	}
-	pending := big.NewInt(-1)
-	if number.Cmp(pending) == 0 {
-		return "pending"
-	}
-	finalized := big.NewInt(int64(rpc.FinalizedBlockNumber))
-	if number.Cmp(finalized) == 0 {
-		return "finalized"
-	}
-	safe := big.NewInt(int64(rpc.SafeBlockNumber))
-	if number.Cmp(safe) == 0 {
-		return "safe"
-	}
-	return hexutil.EncodeBig(number)
-}
-
-func toCallArg(msg ethereum.CallMsg) interface{} {
-	arg := map[string]interface{}{
-		"from": msg.From,
-		"to":   msg.To,
-	}
-	if len(msg.Data) > 0 {
-		arg["data"] = hexutil.Bytes(msg.Data)
-	}
-	if msg.Value != nil {
-		arg["value"] = (*hexutil.Big)(msg.Value)
-	}
-	if msg.Gas != 0 {
-		arg["gas"] = hexutil.Uint64(msg.Gas)
-	}
-	if msg.GasPrice != nil {
-		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
-	}
-	return arg
 }
 
 // OverrideAccount specifies the state of an account to be overridden.
