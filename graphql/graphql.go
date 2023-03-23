@@ -586,8 +586,8 @@ type BlockType int
 // when required.
 type Block struct {
 	r            *Resolver
-	numberOrHash *rpc.BlockNumberOrHash
-	hash         common.Hash // Must be resolved during initialization
+	numberOrHash *rpc.BlockNumberOrHash // Field resolvers assume numberOrHash is always present
+	hash         common.Hash            // Must be resolved during initialization
 	header       *types.Header
 	block        *types.Block
 	receipts     []*types.Receipt
