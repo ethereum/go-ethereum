@@ -124,7 +124,7 @@ func TestMocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not start mocker: %s", err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("Invalid Status Code received for starting mocker, expected 200, got %d", resp.StatusCode)
 	}
