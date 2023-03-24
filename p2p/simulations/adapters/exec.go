@@ -432,8 +432,7 @@ func execP2PNode() {
 	if err != nil {
 		log.Crit("Can't post startup info", "url", statusURL, "err", err)
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 	if stackErr != nil {
 		os.Exit(1)
 	}
