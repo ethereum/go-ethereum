@@ -529,7 +529,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opJump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.Cancelled() {
+	if interpreter.evm.abort.Load() {
 		return nil, errStopToken
 	}
 	pos := scope.Stack.pop()
@@ -541,7 +541,7 @@ func opJump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 }
 
 func opJumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.Cancelled() {
+	if interpreter.evm.abort.Load() {
 		return nil, errStopToken
 	}
 	pos, cond := scope.Stack.pop(), scope.Stack.pop()
