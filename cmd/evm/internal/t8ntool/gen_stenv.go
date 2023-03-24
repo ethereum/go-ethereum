@@ -33,7 +33,6 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		Ommers              []ommer                             `json:"ommers,omitempty"`
 		Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee             *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
-		ExcessDataGas       *math.HexOrDecimal256               `json:"currentExcessDataGas,omitempty"`
 		ParentUncleHash     common.Hash                         `json:"parentUncleHash"`
 	}
 	var enc stEnv
@@ -53,7 +52,6 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Ommers = s.Ommers
 	enc.Withdrawals = s.Withdrawals
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
-	enc.ExcessDataGas = (*math.HexOrDecimal256)(s.ExcessDataGas)
 	enc.ParentUncleHash = s.ParentUncleHash
 	return json.Marshal(&enc)
 }
@@ -77,7 +75,6 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		Ommers              []ommer                             `json:"ommers,omitempty"`
 		Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee             *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
-		ExcessDataGas       *math.HexOrDecimal256               `json:"currentExcessDataGas,omitempty"`
 		ParentUncleHash     *common.Hash                        `json:"parentUncleHash"`
 	}
 	var dec stEnv
@@ -135,9 +132,6 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BaseFee != nil {
 		s.BaseFee = (*big.Int)(dec.BaseFee)
-	}
-	if dec.ExcessDataGas != nil {
-		s.ExcessDataGas = (*big.Int)(dec.ExcessDataGas)
 	}
 	if dec.ParentUncleHash != nil {
 		s.ParentUncleHash = *dec.ParentUncleHash
