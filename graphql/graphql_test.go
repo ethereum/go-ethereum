@@ -265,8 +265,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 	// make sure the request is not handled successfully
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
