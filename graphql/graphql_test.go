@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"strings"
@@ -155,6 +156,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
+		defer resp.Body.Close()
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
@@ -238,6 +240,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
+		defer resp.Body.Close()
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
@@ -263,6 +266,8 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
+	defer resp.Body.Close()
+	io.Copy(ioutil.Discard, resp.Body)
 	// make sure the request is not handled successfully
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
