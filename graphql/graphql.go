@@ -274,13 +274,13 @@ func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
 }
 
 func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, error) {
-	// Pending tx
-	if t.block == nil {
-		return nil, nil
-	}
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return nil, err
+	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
 	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
@@ -323,13 +323,13 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 }
 
 func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
-	// Pending tx
-	if t.block == nil {
-		return nil, nil
-	}
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return nil, err
+	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
 	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
@@ -403,12 +403,12 @@ func (t *Transaction) Block(ctx context.Context) (*Block, error) {
 }
 
 func (t *Transaction) Index(ctx context.Context) (*int32, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if t.block == nil {
 		return nil, nil
-	}
-	if _, err := t.resolve(ctx); err != nil {
-		return nil, err
 	}
 	index := int32(t.index)
 	return &index, nil
@@ -416,12 +416,12 @@ func (t *Transaction) Index(ctx context.Context) (*int32, error) {
 
 // getReceipt returns the receipt associated with this transaction, if any.
 func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if t.block == nil {
 		return nil, nil
-	}
-	if _, err := t.resolve(ctx); err != nil {
-		return nil, err
 	}
 	receipts, err := t.block.resolveReceipts(ctx)
 	if err != nil {
@@ -473,12 +473,12 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 }
 
 func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if t.block == nil {
 		return nil, nil
-	}
-	if _, err := t.resolve(ctx); err != nil {
-		return nil, err
 	}
 	h, err := t.block.Hash(ctx)
 	if err != nil {
