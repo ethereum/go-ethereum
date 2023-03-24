@@ -289,23 +289,22 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
-		StateRoot:     root,
-		TxRoot:        types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
-		ReceiptRoot:   types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:         types.CreateBloom(receipts),
-		LogsHash:      rlpHash(statedb.Logs()),
-		Receipts:      receipts,
-		Rejected:      rejectedTxs,
-		Difficulty:    (*math.HexOrDecimal256)(vmContext.Difficulty),
-		GasUsed:       (math.HexOrDecimal64)(gasUsed),
-		BaseFee:       (*math.HexOrDecimal256)(vmContext.BaseFee),
-		ExcessDataGas: (*math.HexOrDecimal256)(vmContext.ExcessDataGas),
+		StateRoot:   root,
+		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
+		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
+		Bloom:       types.CreateBloom(receipts),
+		LogsHash:    rlpHash(statedb.Logs()),
+		Receipts:    receipts,
+		Rejected:    rejectedTxs,
+		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
+		GasUsed:     (math.HexOrDecimal64)(gasUsed),
+		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
 	}
 	if pre.Env.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
 		execRs.WithdrawalsRoot = &h
 	}
-	if pre.Env.ParentExcessDataGas != nil {
+	if vmContext.ExcessDataGas != nil {
 		// calculate and set the excess data gas at the end of this block execution
 		newBlobs := 0
 		for _, tx := range txs {
@@ -313,7 +312,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				newBlobs += len(tx.DataHashes())
 			}
 		}
-		execRs.ExcessDataGas = (*math.HexOrDecimal256)(misc.CalcExcessDataGas(pre.Env.ParentExcessDataGas, newBlobs))
+		execRs.ExcessDataGas = (*math.HexOrDecimal256)(misc.CalcExcessDataGas(vmContext.ExcessDataGas, newBlobs))
 	}
 	return statedb, execRs, nil
 }
