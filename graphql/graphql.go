@@ -1219,7 +1219,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	if args.To != nil {
 		to = rpc.BlockNumber(*args.To)
 	} else {
-		to = rpc.BlockNumber(r.backend.CurrentBlock().Number().Int64())
+		to = rpc.BlockNumber(r.backend.CurrentBlock().Number.Int64())
 	}
 	if to < from {
 		return []*Block{}, nil

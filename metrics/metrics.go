@@ -127,8 +127,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		return
 	}
 
-	refreshFreq := int64(refresh / time.Second)
-
 	// Create the various data collectors
 	var (
 		cpustats  = make([]CPUStats, 2)
@@ -146,6 +144,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuSysLoad            = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
 		cpuSysWait            = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
 		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
+		cpuSysLoadTotal       = GetOrRegisterCounterFloat64("system/cpu/sysload/total", DefaultRegistry)
+		cpuSysWaitTotal       = GetOrRegisterCounterFloat64("system/cpu/syswait/total", DefaultRegistry)
+		cpuProcLoadTotal      = GetOrRegisterCounterFloat64("system/cpu/procload/total", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
 		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
@@ -163,14 +164,29 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 
+	var lastCollectTime time.Time
+
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
 	for ; ; now, prev = prev, now {
-		// CPU
+		// Gather CPU times.
 		ReadCPUStats(&cpustats[now])
-		cpuSysLoad.Update((cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq)
-		cpuSysWait.Update((cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq)
-		cpuProcLoad.Update((cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq)
+		collectTime := time.Now()
+		secondsSinceLastCollect := collectTime.Sub(lastCollectTime).Seconds()
+		lastCollectTime = collectTime
+		if secondsSinceLastCollect > 0 {
+			sysLoad := cpustats[now].GlobalTime - cpustats[prev].GlobalTime
+			sysWait := cpustats[now].GlobalWait - cpustats[prev].GlobalWait
+			procLoad := cpustats[now].LocalTime - cpustats[prev].LocalTime
+			// Convert to integer percentage.
+			cpuSysLoad.Update(int64(sysLoad / secondsSinceLastCollect * 100))
+			cpuSysWait.Update(int64(sysWait / secondsSinceLastCollect * 100))
+			cpuProcLoad.Update(int64(procLoad / secondsSinceLastCollect * 100))
+			// increment counters (ms)
+			cpuSysLoadTotal.Inc(sysLoad)
+			cpuSysWaitTotal.Inc(sysWait)
+			cpuProcLoadTotal.Inc(procLoad)
+		}
 
 		// Threads
 		cpuThreads.Update(int64(threadCreateProfile.Count()))

@@ -134,8 +134,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 // Tests that an empty state is not scheduled for syncing.
 func TestEmptyStateSync(t *testing.T) {
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	empty := common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	sync := NewStateSync(empty, rawdb.NewMemoryDatabase(), nil, db.Scheme())
+	sync := NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, db.Scheme())
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 		t.Errorf("content requested for empty state: %v, %v, %v", nodes, paths, codes)
 	}
@@ -555,7 +554,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			isCode[crypto.Keccak256Hash(acc.code)] = struct{}{}
 		}
 	}
-	isCode[common.BytesToHash(emptyCodeHash)] = struct{}{}
+	isCode[types.EmptyCodeHash] = struct{}{}
 	checkTrieConsistency(db, srcRoot)
 
 	// Create a destination state and sync with the scheduler

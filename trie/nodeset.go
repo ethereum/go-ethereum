@@ -78,7 +78,7 @@ type nodeWithPrev struct {
 }
 
 // unwrap returns the internal memoryNode object.
-// nolint: unused
+// nolint:unused
 func (n *nodeWithPrev) unwrap() *memoryNode {
 	return n.memoryNode
 }
@@ -93,22 +93,22 @@ func (n *nodeWithPrev) memorySize(pathlen int) int {
 // NodeSet contains all dirty nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
-	owner      common.Hash            // the identifier of the trie
-	nodes      map[string]*memoryNode // the set of dirty nodes(inserted, updated, deleted)
-	leaves     []*leaf                // the list of dirty leaves
-	accessList map[string][]byte      // The list of accessed nodes, which records the original node value
+	owner   common.Hash            // the identifier of the trie
+	nodes   map[string]*memoryNode // the set of dirty nodes(inserted, updated, deleted)
+	leaves  []*leaf                // the list of dirty leaves
+	updates int                    // the count of updated and inserted nodes
+	deletes int                    // the count of deleted nodes
+
+	// The list of accessed nodes, which records the original node value.
+	// The origin value is expected to be nil for newly inserted node
+	// and is expected to be non-nil for other types(updated, deleted).
+	accessList map[string][]byte
 }
 
 // NewNodeSet initializes an empty node set to be used for tracking dirty nodes
-// for a specific account or storage trie. The owner is zero for the account trie
-// and the owning account address hash for storage tries. The provided accessList
-// represents the original value of accessed nodes, it can be optional but would
-// be beneficial for speeding up the construction of trie history.
+// from a specific account or storage trie. The owner is zero for the account
+// trie and the owning account address hash for storage tries.
 func NewNodeSet(owner common.Hash, accessList map[string][]byte) *NodeSet {
-	// Don't panic for lazy users
-	if accessList == nil {
-		accessList = make(map[string][]byte)
-	}
 	return &NodeSet{
 		owner:      owner,
 		nodes:      make(map[string]*memoryNode),
@@ -116,39 +116,30 @@ func NewNodeSet(owner common.Hash, accessList map[string][]byte) *NodeSet {
 	}
 }
 
-// forEachWithOrder iterates the dirty nodes with the specified order.
-// If topToBottom is true:
-//
-//	then the order of iteration is top to bottom, left to right.
-//
-// If topToBottom is false:
-//
-//	then the order of iteration is bottom to top, right to left.
-func (set *NodeSet) forEachWithOrder(topToBottom bool, callback func(path string, n *memoryNode)) {
+// forEachWithOrder iterates the dirty nodes with the order from bottom to top,
+// right to left, nodes with the longest path will be iterated first.
+func (set *NodeSet) forEachWithOrder(callback func(path string, n *memoryNode)) {
 	var paths sort.StringSlice
 	for path := range set.nodes {
 		paths = append(paths, path)
 	}
-	if topToBottom {
-		paths.Sort()
-	} else {
-		sort.Sort(sort.Reverse(paths))
-	}
+	// Bottom-up, longest path first
+	sort.Sort(sort.Reverse(paths))
 	for _, path := range paths {
 		callback(path, set.nodes[path])
 	}
 }
 
-// markUpdated marks the node as dirty(newly-inserted or updated) with provided
-// node path, node object along with its previous value.
+// markUpdated marks the node as dirty(newly-inserted or updated).
 func (set *NodeSet) markUpdated(path []byte, node *memoryNode) {
 	set.nodes[string(path)] = node
+	set.updates += 1
 }
 
-// markDeleted marks the node as deleted with provided path and previous value.
-// nolint: unused
+// markDeleted marks the node as deleted.
 func (set *NodeSet) markDeleted(path []byte) {
 	set.nodes[string(path)] = &memoryNode{}
+	set.deletes += 1
 }
 
 // addLeaf collects the provided leaf node into set.
@@ -156,9 +147,9 @@ func (set *NodeSet) addLeaf(node *leaf) {
 	set.leaves = append(set.leaves, node)
 }
 
-// Size returns the number of dirty nodes contained in the set.
-func (set *NodeSet) Size() int {
-	return len(set.nodes)
+// Size returns the number of dirty nodes in set.
+func (set *NodeSet) Size() (int, int) {
+	return set.updates, set.deletes
 }
 
 // Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
@@ -179,11 +170,17 @@ func (set *NodeSet) Summary() string {
 		for path, n := range set.nodes {
 			// Deletion
 			if n.isDeleted() {
-				fmt.Fprintf(out, "  [-]: %x\n", path)
+				fmt.Fprintf(out, "  [-]: %x prev: %x\n", path, set.accessList[path])
+				continue
+			}
+			// Insertion
+			origin, ok := set.accessList[path]
+			if !ok {
+				fmt.Fprintf(out, "  [+]: %x -> %v\n", path, n.hash)
 				continue
 			}
 			// Update
-			fmt.Fprintf(out, "  [+]: %x -> %v\n", path, n.hash)
+			fmt.Fprintf(out, "  [*]: %x -> %v prev: %x\n", path, n.hash, origin)
 		}
 	}
 	for _, n := range set.leaves {

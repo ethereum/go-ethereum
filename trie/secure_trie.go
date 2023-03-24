@@ -75,7 +75,7 @@ func NewStateTrie(id *ID, db *Database) (*StateTrie, error) {
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *StateTrie) Get(key []byte) []byte {
-	res, err := t.TryGet(key)
+	res, err := t.TryGetStorage(common.Address{}, key)
 	if err != nil {
 		log.Error("Unhandled trie error in StateTrie.Get", "err", err)
 	}
@@ -86,7 +86,7 @@ func (t *StateTrie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If the specified node is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) TryGet(key []byte) ([]byte, error) {
+func (t *StateTrie) TryGetStorage(_ common.Address, key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
@@ -131,7 +131,7 @@ func (t *StateTrie) TryGetNode(path []byte) ([]byte, int, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *StateTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil {
+	if err := t.TryUpdateStorage(common.Address{}, key, value); err != nil {
 		log.Error("Unhandled trie error in StateTrie.Update", "err", err)
 	}
 }
@@ -144,7 +144,7 @@ func (t *StateTrie) Update(key, value []byte) {
 // stored in the trie.
 //
 // If a node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) TryUpdate(key, value []byte) error {
+func (t *StateTrie) TryUpdateStorage(_ common.Address, key, value []byte) error {
 	hk := t.hashKey(key)
 	err := t.trie.TryUpdate(hk, value)
 	if err != nil {
@@ -171,7 +171,7 @@ func (t *StateTrie) TryUpdateAccount(address common.Address, acc *types.StateAcc
 
 // Delete removes any existing value for key from the trie.
 func (t *StateTrie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil {
+	if err := t.TryDeleteStorage(common.Address{}, key); err != nil {
 		log.Error("Unhandled trie error in StateTrie.Delete", "err", err)
 	}
 }
@@ -179,7 +179,7 @@ func (t *StateTrie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If the specified trie node is not in the trie, nothing will be changed.
 // If a node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) TryDelete(key []byte) error {
+func (t *StateTrie) TryDeleteStorage(_ common.Address, key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)

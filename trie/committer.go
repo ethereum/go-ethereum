@@ -37,18 +37,16 @@ type committer struct {
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodes *NodeSet, collectLeaf bool) *committer {
+func newCommitter(nodeset *NodeSet, collectLeaf bool) *committer {
 	return &committer{
-		nodes:       nodes,
+		nodes:       nodeset,
 		collectLeaf: collectLeaf,
 	}
 }
 
-// Commit collapses a node down into a hash node and returns it along with
-// the modified nodeset.
+// Commit collapses a node down into a hash node.
 func (c *committer) Commit(n node) hashNode {
-	h := c.commit(nil, n)
-	return h.(hashNode)
+	return c.commit(nil, n).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
@@ -67,9 +65,7 @@ func (c *committer) commit(path []byte, n node) node {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV := c.commit(append(path, cn.Key...), cn.Val)
-
-			collapsed.Val = childV
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
@@ -115,8 +111,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed := c.commit(append(path, byte(i)), child)
-		children[i] = hashed
+		children[i] = c.commit(append(path, byte(i)), child)
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
@@ -136,6 +131,12 @@ func (c *committer) store(path []byte, n node) node {
 	// usually is leaf node). But small value (less than 32bytes) is not
 	// our target (leaves in account trie only).
 	if hash == nil {
+		// The node is embedded in its parent, in other words, this node
+		// will not be stored in the database independently, mark it as
+		// deleted only if the node was existent in database before.
+		if _, ok := c.nodes.accessList[string(path)]; ok {
+			c.nodes.markDeleted(path)
+		}
 		return n
 	}
 	// We have the hash already, estimate the RLP encoding-size of the node.

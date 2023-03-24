@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -143,7 +144,9 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 		Val      []byte
 		Key      []byte
 	}
-	gob.NewDecoder(r).Decode(&dec)
+	if err := gob.NewDecoder(r).Decode(&dec); err != nil {
+		return err
+	}
 	st.owner = dec.Owner
 	st.nodeType = dec.NodeType
 	st.val = dec.Val
@@ -157,7 +160,9 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 			continue
 		}
 		var child StackTrie
-		child.unmarshalBinary(r)
+		if err := child.unmarshalBinary(r); err != nil {
+			return err
+		}
 		st.children[i] = &child
 	}
 	return nil
@@ -407,7 +412,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 		return
 
 	case emptyNode:
-		st.val = emptyRoot.Bytes()
+		st.val = types.EmptyRootHash.Bytes()
 		st.key = st.key[:0]
 		st.nodeType = hashedNode
 		return

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
@@ -104,7 +105,7 @@ func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(rawdb.NewMemoryDatabase())
 	dbB := NewDatabase(rawdb.NewMemoryDatabase())
 	emptyA, _ := New(TrieID(common.Hash{}), dbA)
-	emptyB, _ := New(TrieID(emptyRoot), dbB)
+	emptyB, _ := New(TrieID(types.EmptyRootHash), dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB}[i].Scheme())
@@ -433,6 +434,7 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 // Tests that at any point in time during a sync, only complete sub-tries are in
 // the database.
 func TestIncompleteSync(t *testing.T) {
+	t.Parallel()
 	// Create a random trie to copy
 	srcDb, srcTrie, _ := makeTestTrie()
 

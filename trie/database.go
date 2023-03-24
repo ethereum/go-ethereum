@@ -792,7 +792,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	for _, owner := range order {
 		subset := nodes.sets[owner]
-		subset.forEachWithOrder(false, func(path string, n *memoryNode) {
+		subset.forEachWithOrder(func(path string, n *memoryNode) {
 			if n.isDeleted() {
 				return // ignore deletion
 			}
@@ -807,7 +807,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err
 			}
-			if account.Root != emptyRoot {
+			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.parent)
 			}
 		}
