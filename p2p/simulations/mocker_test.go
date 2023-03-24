@@ -156,7 +156,7 @@ func TestMocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not reset network: %s", err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
 	//now the number of nodes in the network should be zero
 	nodesInfo, err = client.GetNodes()
