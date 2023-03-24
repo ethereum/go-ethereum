@@ -58,6 +58,7 @@ type ExecutionResult struct {
 	GasUsed         math.HexOrDecimal64   `json:"gasUsed"`
 	BaseFee         *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
 	WithdrawalsRoot *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	ExcessDataGas   *math.HexOrDecimal256 `json:"currentExcessDataGas,omitempty"`
 }
 
 type ommer struct {
@@ -83,7 +84,6 @@ type stEnv struct {
 	Ommers              []ommer                             `json:"ommers,omitempty"`
 	Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 	BaseFee             *big.Int                            `json:"currentBaseFee,omitempty"`
-	ExcessDataGas       *big.Int                            `json:"currentExcessDataGas,omitempty"`
 	ParentUncleHash     common.Hash                         `json:"parentUncleHash"`
 }
 
@@ -101,7 +101,6 @@ type stEnvMarshaling struct {
 	Timestamp           math.HexOrDecimal64
 	ParentTimestamp     math.HexOrDecimal64
 	BaseFee             *math.HexOrDecimal256
-	ExcessDataGas       *math.HexOrDecimal256
 }
 
 type rejectedTx struct {
@@ -161,8 +160,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmContext.Random = &rnd
 	}
 	// If excess data gas is defined, add it to vmContext
-	if pre.Env.ExcessDataGas != nil {
-		vmContext.ExcessDataGas = pre.Env.ExcessDataGas
+	if chainConfig.IsSharding(pre.Env.Timestamp) {
+		if pre.Env.ParentExcessDataGas != nil {
+			vmContext.ExcessDataGas = pre.Env.ParentExcessDataGas
+		} else {
+			vmContext.ExcessDataGas = big.NewInt(0)
+		}
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
@@ -300,6 +303,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	if pre.Env.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
 		execRs.WithdrawalsRoot = &h
+	}
+	if vmContext.ExcessDataGas != nil {
+		// calculate and set the excess data gas at the end of this block execution
+		newBlobs := 0
+		for _, tx := range txs {
+			if tx.Type() == types.BlobTxType {
+				newBlobs += len(tx.DataHashes())
+			}
+		}
+		execRs.ExcessDataGas = (*math.HexOrDecimal256)(misc.CalcExcessDataGas(vmContext.ExcessDataGas, newBlobs))
 	}
 	return statedb, execRs, nil
 }

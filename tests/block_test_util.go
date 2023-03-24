@@ -89,6 +89,7 @@ type btHeader struct {
 	Timestamp        uint64
 	BaseFeePerGas    *big.Int
 	WithdrawalsRoot  *common.Hash
+	ExcessDataGas    *big.Int
 }
 
 type btHeaderMarshaling struct {
@@ -99,6 +100,7 @@ type btHeaderMarshaling struct {
 	GasUsed       math.HexOrDecimal64
 	Timestamp     math.HexOrDecimal64
 	BaseFeePerGas *math.HexOrDecimal256
+	ExcessDataGas *math.HexOrDecimal256
 }
 
 func (t *BlockTest) Run(snapshotter bool) error {
@@ -163,18 +165,19 @@ func (t *BlockTest) Run(snapshotter bool) error {
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
-		Config:     config,
-		Nonce:      t.json.Genesis.Nonce.Uint64(),
-		Timestamp:  t.json.Genesis.Timestamp,
-		ParentHash: t.json.Genesis.ParentHash,
-		ExtraData:  t.json.Genesis.ExtraData,
-		GasLimit:   t.json.Genesis.GasLimit,
-		GasUsed:    t.json.Genesis.GasUsed,
-		Difficulty: t.json.Genesis.Difficulty,
-		Mixhash:    t.json.Genesis.MixHash,
-		Coinbase:   t.json.Genesis.Coinbase,
-		Alloc:      t.json.Pre,
-		BaseFee:    t.json.Genesis.BaseFeePerGas,
+		Config:        config,
+		Nonce:         t.json.Genesis.Nonce.Uint64(),
+		Timestamp:     t.json.Genesis.Timestamp,
+		ParentHash:    t.json.Genesis.ParentHash,
+		ExtraData:     t.json.Genesis.ExtraData,
+		GasLimit:      t.json.Genesis.GasLimit,
+		GasUsed:       t.json.Genesis.GasUsed,
+		Difficulty:    t.json.Genesis.Difficulty,
+		Mixhash:       t.json.Genesis.MixHash,
+		Coinbase:      t.json.Genesis.Coinbase,
+		Alloc:         t.json.Pre,
+		BaseFee:       t.json.Genesis.BaseFeePerGas,
+		ExcessDataGas: t.json.Genesis.ExcessDataGas,
 	}
 }
 
@@ -282,6 +285,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.WithdrawalsRoot, h2.WithdrawalsHash) {
 		return fmt.Errorf("withdrawalsRoot: want: %v have: %v", h.WithdrawalsRoot, h2.WithdrawalsHash)
+	}
+	if !reflect.DeepEqual(h.ExcessDataGas, h2.ExcessDataGas) {
+		return fmt.Errorf("excessDataGas: want: %v have: %v", h.ExcessDataGas, h2.ExcessDataGas)
 	}
 	return nil
 }

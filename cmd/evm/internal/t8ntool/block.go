@@ -59,13 +59,14 @@ type header struct {
 }
 
 type headerMarshaling struct {
-	Difficulty *math.HexOrDecimal256
-	Number     *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Time       math.HexOrDecimal64
-	Extra      hexutil.Bytes
-	BaseFee    *math.HexOrDecimal256
+	Difficulty    *math.HexOrDecimal256
+	Number        *math.HexOrDecimal256
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Time          math.HexOrDecimal64
+	Extra         hexutil.Bytes
+	BaseFee       *math.HexOrDecimal256
+	ExcessDataGas *math.HexOrDecimal256
 }
 
 type bbInput struct {
