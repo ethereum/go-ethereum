@@ -897,14 +897,14 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err = api.blockByHash(ctx, hash)
 	} else if number, ok := blockNrOrHash.Number(); ok {
-		if number == rpc.PendingBlockNumber {
-			// We don't have access to the miner here. For tracing 'future' transactions,
-			// it can be done with block- and state-overrides instead, which offers
-			// more flexibility and stability than trying to trace on 'pending', since
-			// the contents of 'pending' is unstable and probably not a true representation
-			// of what the next actual block is likely to contain.
-			return nil, errors.New("tracing on top of pending is not supported")
-		}
+		//if number == rpc.PendingBlockNumber {
+		//	// We don't have access to the miner here. For tracing 'future' transactions,
+		//	// it can be done with block- and state-overrides instead, which offers
+		//	// more flexibility and stability than trying to trace on 'pending', since
+		//	// the contents of 'pending' is unstable and probably not a true representation
+		//	// of what the next actual block is likely to contain.
+		//	return nil, errors.New("tracing on top of pending is not supported")
+		//}
 		block, err = api.blockByNumber(ctx, number)
 	} else {
 		return nil, errors.New("invalid arguments; neither block nor hash specified")
