@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,7 +96,7 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	confirmStatusCode(t, resp.StatusCode, expectedStatusCode)
 }
 
