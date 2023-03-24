@@ -155,8 +155,8 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
-		defer resp.Body.Close()
 		bodyBytes, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
