@@ -844,9 +844,13 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
-	td := b.r.backend.GetTd(ctx, b.hash)
+	hash, err := b.Hash(ctx)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+	td := b.r.backend.GetTd(ctx, hash)
 	if td == nil {
-		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", b.hash)
+		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", hash)
 	}
 	return hexutil.Big(*td), nil
 }
@@ -1015,7 +1019,11 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := b.r.filterSystem.NewBlockFilter(b.hash, addresses, topics)
+	hash, err := b.Hash(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filter := b.r.filterSystem.NewBlockFilter(hash, addresses, topics)
 
 	// Run the filter and return all the logs
 	return runFilter(ctx, b.r, filter)
