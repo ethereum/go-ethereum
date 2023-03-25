@@ -124,6 +124,8 @@ github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232628-fbbf5
 github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322232628-fbbf54e10131/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
 github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322233247-22e22c6f68e6 h1:KguBkZjb4BXvSmVxjugrmJQyGjZqZHJfGHMmHgZn6ls=
 github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230322233247-22e22c6f68e6/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230325161441-829bf646183d h1:rFbq+iU1Evnzs//EjFY7bUcIn4+/gdczDfx+PSMmvTE=
+github.com/crate-crypto/go-proto-danksharding-crypto v0.0.0-20230325161441-829bf646183d/go.mod h1:ZNzUrSnC7IXKtQWnROzWVfQSivVSCPkMtwXekLDj4qI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cyberdelia/templates v0.0.0-20141128023046-ca7fffd4298c/go.mod h1:GyV+0YP4qX0UQ7r2MoYZ+AvYDp12OF5yg4q8rGnyNh4=
 github.com/dave/jennifer v1.2.0/go.mod h1:fIb+770HOpJ2fmN9EPPKOqm1vMGhB+TwXKMZhrIygKg=

@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crate-crypto/go-proto-danksharding-crypto/api"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/ztyp/view"
 
@@ -492,12 +493,10 @@ func TestTransactionCoding(t *testing.T) {
 					BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014")},
 				},
 			}
-			// This is the identity point serialised
-			var kzgProof KZGProof = [48]byte{192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 			wrapData = &BlobTxWrapData{
 				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
 				Blobs:    Blobs{Blob{}},
-				Proofs:   KZGProofs{kzgProof},
+				Proofs:   KZGProofs{api.ZERO_POINT},
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))
