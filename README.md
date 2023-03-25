@@ -1,16 +1,20 @@
-## Go Ethereum
+## `AAED`
 
-Official Golang execution layer implementation of the Ethereum protocol.
+The `AAED` chain is a fork of Ethereum Golang, mainly used for supporting AAED underlying blockchain technology.
 
-[![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
-)](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
-[![Travis](https://travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.com/ethereum/go-ethereum)
-[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
+The extended features include:
 
-Automated builds are available for stable releases and the unstable master branch. Binary
-archives are published at https://geth.ethereum.org/downloads/.
+1. Supporting 0 gas fee transactions for specific contracts.
+
+2. Supporting dynamic mint/burn governance tokens.
+
+3. Adopting POA consensus algorithm.
+
+4. Providing block capacity of up to 2048 transactions.
+
+5. Fixed gas fee.
+
+   
 
 ## Building the source
 
@@ -349,12 +353,6 @@ Please make sure your contributions adhere to our coding guidelines:
 Please see the [Developers' Guide](https://geth.ethereum.org/docs/developers/geth-developer/dev-guide)
 for more details on configuring your environment, managing project dependencies, and
 testing procedures.
-
-### Contributing to geth.ethereum.org
-
-For contributions to the [go-ethereum website](https://geth.ethereum.org), please checkout and raise pull requests against the `website` branch.
-For more detailed instructions please see the `website` branch [README](https://github.com/ethereum/go-ethereum/tree/website#readme) or the 
-[contributing](https://geth.ethereum.org/docs/developers/geth-developer/contributing) page of the website.
 
 ## License
 
