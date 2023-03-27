@@ -288,14 +288,17 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 
 func doTest(cmdline []string) {
 	var (
-		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch     = flag.String("arch", "", "Run tests for given architecture")
-		cc       = flag.String("cc", "", "Sets C compiler binary")
-		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
-		verbose  = flag.Bool("v", false, "Whether to log verbosely")
-		race     = flag.Bool("race", false, "Execute the race detector")
+		dlgo         = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch         = flag.String("arch", "", "Run tests for given architecture")
+		cc           = flag.String("cc", "", "Sets C compiler binary")
+		coverage     = flag.Bool("coverage", false, "Whether to record code coverage")
+		verbose      = flag.Bool("v", false, "Whether to log verbosely")
+		race         = flag.Bool("race", false, "Execute the race detector")
+		stateTestDir = "tests/spec-tests"
 	)
 	flag.CommandLine.Parse(cmdline)
+
+	downloadSpecTestFixtures(stateTestDir)
 
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
@@ -330,6 +333,27 @@ func doTest(cmdline []string) {
 	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
+}
+
+func downloadSpecTestFixtures(cachedir string) string {
+	// Download the execution-spec-tests
+	const version = "0.2.4"
+
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	ext := ".tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = ".zip"
+	}
+	base := "fixtures"
+	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", version, base, ext)
+	archivePath := filepath.Join(cachedir, base+ext)
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	if err := build.ExtractArchive(archivePath, cachedir); err != nil {
+		log.Fatal(err)
+	}
+	return filepath.Join(cachedir, base)
 }
 
 // doLint runs golangci-lint on requested packages.
