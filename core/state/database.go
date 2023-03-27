@@ -81,22 +81,22 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
-	// TryUpdateStorage associates key with value in the trie. If value has length zero,
+	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
 	UpdateStorage(addr common.Address, key, value []byte) error
 
-	// TryUpdateAccount abstracts an account write to the trie. It encodes the
+	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
 	UpdateAccount(address common.Address, account *types.StateAccount) error
 
-	// TryDeleteStorage removes any existing value for key from the trie. If a node
+	// DeleteStorage removes any existing value for key from the trie. If a node
 	// was not found in the database, a trie.MissingNodeError is returned.
 	DeleteStorage(addr common.Address, key []byte) error
 
-	// TryDeleteAccount abstracts an account deletion from the trie.
+	// DeleteAccount abstracts an account deletion from the trie.
 	DeleteAccount(address common.Address) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and
