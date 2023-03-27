@@ -414,9 +414,7 @@ func (t *Transaction) Index(ctx context.Context) (*int32, error) {
 	if block == nil {
 		return nil, nil
 	}
-	t.mu.Lock()
 	index := int32(t.index)
-	t.mu.Unlock()
 	return &index, nil
 }
 
