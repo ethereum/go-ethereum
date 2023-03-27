@@ -341,12 +341,7 @@ func downloadSpecTestFixtures(cachedir string) string {
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	ext := ".tar.gz"
-	if runtime.GOOS == "windows" {
-		// TODO (MariusVanDerWijden) enable windows tests once spec tests provide a .zip
-		return ""
-		ext = ".zip"
-	}
-	base := "fixtures"
+	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
 	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", version, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
