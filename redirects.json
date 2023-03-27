@@ -1,0 +1,238 @@
+[
+  {
+    "source": "/getting-started/dev-mode",
+    "destination": "/docs/developers/geth-developer/dev-mode"
+  },
+  {
+    "source": "/docs/getting-started/dev-mode",
+    "destination": "/docs/developers/geth-developer/dev-mode"
+  },
+  {
+    "source": "/docs/install-and-build/installing-geth",
+    "destination": "/docs/getting-started/installing-geth"
+  },
+  {
+    "source": "/docs/install-and-build/backup-restore",
+    "destination": "/docs/getting-started/backup-restore"
+  },
+  {
+    "source": "/docs/interface/command-line-options",
+    "destination": "/docs/fundamentals/command-line-options"
+  },
+  {
+    "source": "/docs/interface/pruning",
+    "destination": "/docs/fundamentals/pruning"
+  },
+  {
+    "source": "/docs/interface/consensus-clients",
+    "destination": "/docs/getting-started/consensus-client"
+  },
+  {
+    "source": "/docs/interface/peer-to-peer",
+    "destination": "/docs/fundamentals/peer-to-peer"
+  },
+  {
+    "source": "/docs/interface/les",
+    "destination": "/docs/fundamentals/les"
+  },
+  {
+    "source": "/docs/interface/managing-your-accounts",
+    "destination": "/docs/fundamentals/account-management"
+  },
+  {
+    "source": "/docs/interface/javascript-console",
+    "destination": "/docs/interacting-with-geth/javascript-console"
+  },
+  {
+    "source": "/getting-started/private-network",
+    "destination": "/docs/fundamentals/private-network"
+  },
+  {
+    "source": "/docs/interface/private-network",
+    "destination": "/docs/fundamentals/private-network"
+  },
+  {
+    "source": "/docs/interface/mining",
+    "destination": "/docs/fundamentals/mining"
+  },
+  {
+    "source": "/docs/interface/metrics",
+    "destination": "/docs/monitoring/metrics"
+  },
+  {
+    "source": "/docs/dapp/native",
+    "destination": "/docs/developers/dapp-developer/native"
+  },
+  {
+    "source": "/docs/dapp/tracing",
+    "destination": "/docs/developers/evm-tracing"
+  },
+  {
+    "source": "/docs/dapp/custom-tracer",
+    "destination": "/docs/developers/evm-tracing/custom-tracer"
+  },
+  {
+    "source": "/docs/dapp/builtin-tracers",
+    "destination": "/docs/developers/evm-tracing/built-in-tracers"
+  },
+  {
+    "source": "/docs/dapp/native-accounts",
+    "destination": "/docs/developers/dapp-developer/native-accounts"
+  },
+  {
+    "source": "/docs/dapp/native-bindings",
+    "destination": "/docs/developers/dapp-developer/native-bindings"
+  },
+  {
+    "source": "/docs/dapp/mobile",
+    "destination": "/docs/developers/dapp-developer/mobile"
+  },
+  {
+    "source": "/docs/dapp/mobile-accounts",
+    "destination": "/docs/developers/dapp-developer/mobile"
+  },
+  {
+    "source": "/docs/rpc/server",
+    "destination": "/docs/interacting-with-geth/rpc"
+  },
+  {
+    "source": "/docs/rpc/pubsub",
+    "destination": "/docs/interacting-with-geth/rpc/pubsub"
+  },
+  {
+    "source": "/docs/rpc/batch",
+    "destination": "/docs/interacting-with-geth/batch"
+  },
+  {
+    "source": "/docs/rpc/graphql",
+    "destination": "/docs/interacting-with-geth/rpc/graphql"
+  },
+  {
+    "source": "/docs/rpc/ns-admin",
+    "destination": "/docs/interacting-with-geth/rpc/ns-admin"
+  },
+  {
+    "source": "/docs/rpc/ns-clique",
+    "destination": "/docs/interacting-with-geth/rpc/ns-clique"
+  },
+  {
+    "source": "/docs/rpc/ns-debug",
+    "destination": "/docs/interacting-with-geth/rpc/ns-debug"
+  },
+  {
+    "source": "/docs/rpc/ns-eth",
+    "destination": "/docs/interacting-with-geth/rpc/ns-eth"
+  },
+  {
+    "source": "/docs/rpc/ns-les",
+    "destination": "/docs/interacting-with-geth/rpc/ns-les"
+  },
+  {
+    "source": "/docs/rpc/ns-miner",
+    "destination": "/docs/interacting-with-geth/rpc/ns-miner"
+  },
+  {
+    "source": "/docs/rpc/ns-net",
+    "destination": "/docs/interacting-with-geth/rpc/ns-net"
+  },
+  {
+    "source": "/docs/rpc/ns-personal",
+    "destination": "/docs/interacting-with-geth/rpc/ns-personal"
+  },
+  {
+    "source": "/docs/rpc/ns-txpool",
+    "destination": "/docs/interacting-with-geth/rpc/ns-txpool"
+  },
+  {
+    "source": "/docs/rpc/objects",
+    "destination": "/docs"
+  },
+  {
+    "source": "/docs/interacting-with-geth/rpc/objects",
+    "destination": "/docs"
+  },
+  {
+    "source": "/docs/developers/dev-guide",
+    "destination": "/docs/developers/geth-developer/dev-guide"
+  },
+  {
+    "source": "/docs/developers/code-review-guidelines",
+    "destination": "/docs/developers/geth-developer/code-review-guidelines"
+  },
+  {
+    "source": "/docs/developers/issue-handling-workflow",
+    "destination": "/docs/developers/geth-developer/issue-handling-workflow"
+  },
+  {
+    "source": "/docs/developers/dns-discovery-setup",
+    "destination": "/docs/developers/geth-developer/dns-discovery-setup"
+  },
+  {
+    "source": "/docs/clef/introduction",
+    "destination": "/docs/tools/clef/introduction"
+  },
+  {
+    "source": "/docs/clef/tutorial",
+    "destination": "/docs/tools/clef/tutorial"
+  },
+  {
+    "source": "/docs/clef/cliquesigning",
+    "destination": "/docs/tools/clef/clique-signing"
+  },
+  {
+    "source": "/docs/clef/rules",
+    "destination": "/docs/tools/clef/rules"
+  },
+  {
+    "source": "/docs/clef/setup",
+    "destination": "/docs/tools/clef/setup"
+  },
+  {
+    "source": "/docs/clef/apis",
+    "destination": "/docs/tools/clef/apis"
+  },
+  {
+    "source": "/docs/clef/datatypes",
+    "destination": "/docs/tools/clef/datatypes"
+  },
+  {
+    "source": "/docs/interface/sync-mode",
+    "destination": "/docs/fundamentals/sync-modes"
+  },
+  {
+    "source": "/docs/interface/hardware",
+    "destination": "/docs/getting-started/hardware-requirements"
+  },
+  {
+    "source": "/docs/interacting-with-geth",
+    "destination": "/docs/interacting-with-geth/rpc"
+  },
+  {
+    "source": "/docs/developers/dapp-developer",
+    "destination": "/docs/developers/dapp-developer/dev-mode"
+  },
+  {
+    "source": "/docs/developers/geth-developer",
+    "destination": "/docs/developers/geth-developer/dev-guide"
+  },
+  {
+    "source": "/docs/monitoring",
+    "destination": "/docs/monitoring/dashboards"
+  },
+  {
+    "source": "/docs/tools",
+    "destination": "/docs/tools/clef/introduction"
+  },
+  {
+    "source": "/docs/tools/clef",
+    "destination": "/docs/tools/clef/introduction"
+  },
+  {
+    "source": "/docs/developers/contributing",
+    "destination": "/docs/developers/geth-developer/contributing"
+  },
+  {
+    "source": "/docs/interacting-with-geth/rpc/ns-personal-deprecation",
+    "destination": "/docs/interacting-with-geth/rpc/ns-personal"
+  }
+]
