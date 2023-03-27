@@ -7,3 +7,10 @@
   for = "/*"
   [headers.values]
     Access-Control-Allow-Origin = "https://matomo.ethereum.org"
+
+#redirects
+
+[[redirects]]
+  from = "/getting-started/dev-mode"
+  to = "/docs/developers/geth-developer/dev-mode"
+  force = true

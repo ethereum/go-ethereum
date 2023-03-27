@@ -1,3 +1,5 @@
+// NOTE: Every redirect here must also be included in netlify.toml while we are using Netlify
+
 const redirects = [
   {
     source: '/getting-started/dev-mode',
