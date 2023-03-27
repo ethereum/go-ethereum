@@ -17,14 +17,12 @@
 package txpool
 
 import (
-	"container/heap"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -384,7 +382,7 @@ func (pool *TxPool) loop() {
 			pool.mu.RLock()
 			pending, queued := pool.stats()
 			pool.mu.RUnlock()
-			stales := int(atomic.LoadInt64(&pool.priced.stales))
+			stales := int(pool.priced.stales.Load())
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
 				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
@@ -738,7 +736,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 
 		// If the new transaction is a future transaction it should never churn pending transactions
-		if pool.isFuture(from, tx) {
+		if !isLocal && pool.isFuture(from, tx) {
 			var replacesPending bool
 			for _, dropTx := range drop {
 				dropSender, _ := types.Sender(pool.signer, dropTx)
@@ -750,7 +748,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			// Add all transactions back to the priced queue
 			if replacesPending {
 				for _, dropTx := range drop {
-					heap.Push(&pool.priced.urgent, dropTx)
+					pool.priced.Put(dropTx, false)
 				}
 				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
 				return false, ErrFutureReplacePending

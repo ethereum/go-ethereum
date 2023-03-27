@@ -563,7 +563,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, reader: newEmptyReader()}
+	tr := &Trie{root: root, reader: newEmptyReader(), tracer: newTracer()}
 	if empty {
 		tr.root = nil
 	}

@@ -144,7 +144,9 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 		Val      []byte
 		Key      []byte
 	}
-	gob.NewDecoder(r).Decode(&dec)
+	if err := gob.NewDecoder(r).Decode(&dec); err != nil {
+		return err
+	}
 	st.owner = dec.Owner
 	st.nodeType = dec.NodeType
 	st.val = dec.Val
@@ -158,7 +160,9 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 			continue
 		}
 		var child StackTrie
-		child.unmarshalBinary(r)
+		if err := child.unmarshalBinary(r); err != nil {
+			return err
+		}
 		st.children[i] = &child
 	}
 	return nil

@@ -434,6 +434,7 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 // Tests that at any point in time during a sync, only complete sub-tries are in
 // the database.
 func TestIncompleteSync(t *testing.T) {
+	t.Parallel()
 	// Create a random trie to copy
 	srcDb, srcTrie, _ := makeTestTrie()
 
