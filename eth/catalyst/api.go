@@ -72,7 +72,7 @@ const (
 	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
 	// to send a consensus update before it's considered offline and the user is
 	// warned.
-	beaconUpdateConsensusTimeout = 30 * time.Second
+	beaconUpdateConsensusTimeout = 2 * time.Minute
 
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
