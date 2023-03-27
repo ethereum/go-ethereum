@@ -1,0 +1,22 @@
+# buf.gen.yaml
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    # <module_name>   : name in go.mod
+    # <relative_path> : where generated code should be output
+    # default: <module_name>/<relative_path>
+    default: github.com/ethereum/go-ethereum/grpc
+    # Remove `except` field if googleapis is not used
+    # except:
+      # - buf.build/googleapis/googleapis
+plugins:
+  - plugin: buf.build/grpc/go
+    out: gen
+    opt:
+      - paths=source_relative
+  # dependencies
+  - plugin: buf.build/protocolbuffers/go
+    out: gen
+    opt:
+      - paths=source_relative

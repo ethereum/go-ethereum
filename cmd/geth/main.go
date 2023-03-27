@@ -180,6 +180,9 @@ var (
 		utils.RPCGlobalEVMTimeoutFlag,
 		utils.RPCGlobalTxFeeCapFlag,
 		utils.AllowUnprotectedTxs,
+		utils.GRPCEnabledFlag,
+		utils.GRPCHostFlag,
+		utils.GRPCPortFlag,
 	}
 
 	metricsFlags = []cli.Flag{

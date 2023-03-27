@@ -791,6 +791,24 @@ var (
 		Usage:    "Enables the (deprecated) personal namespace",
 		Category: flags.APICategory,
 	}
+	// grpc
+	GRPCEnabledFlag = &cli.BoolFlag{
+		Name:     "grpc",
+		Usage:    "Enable the gRPC server",
+		Category: flags.APICategory,
+	}
+	GRPCHostFlag = &cli.StringFlag{
+		Name:     "grpc.addr",
+		Usage:    "gRPC server listening interface",
+		Value:    node.DefaultGRPCHost,
+		Category: flags.APICategory,
+	}
+	GRPCPortFlag = &cli.IntFlag{
+		Name:     "grpc.port",
+		Usage:    "gRPC server listening port",
+		Value:    node.DefaultGRPCPort,
+		Category: flags.APICategory,
+	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
@@ -1211,6 +1229,19 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+// setGRCP creates the gRPC RPC listener interface string from the set command
+// line flags, returning empty if the gRPC endpoint is disabled.
+func setGRCP(ctx *cli.Context, cfg *node.Config) {
+	if ctx.Bool(GRPCEnabledFlag.Name) {
+		if ctx.IsSet(GRPCHostFlag.Name) {
+			cfg.GRPCHost = ctx.String(GRPCHostFlag.Name)
+		}
+		if ctx.IsSet(GRPCPortFlag.Name) {
+			cfg.GRPCPort = ctx.Int(GRPCPortFlag.Name)
+		}
+	}
+}
+
 // setGraphQL creates the GraphQL listener interface string from the set
 // command line flags, returning empty if the GraphQL endpoint is disabled.
 func setGraphQL(ctx *cli.Context, cfg *node.Config) {
@@ -1460,6 +1491,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
+	setGRCP(ctx, cfg)
 	setGraphQL(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
@@ -2029,6 +2061,14 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 	err := graphql.New(stack, backend, filterSystem, cfg.GraphQLCors, cfg.GraphQLVirtualHosts)
 	if err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+}
+
+// RegisterGRPCService adds the gRPC API to the node.
+// It was done this way so that our grpc execution server can access the ethapi.Backend
+func RegisterGRPCService(stack *node.Node, backend ethapi.Backend, cfg *node.Config) {
+	if err := node.NewGRPCServerHandler(stack, backend, cfg); err != nil {
+		Fatalf("Failed to register the gRPC service: %v", err)
 	}
 }
 

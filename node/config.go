@@ -189,6 +189,12 @@ type Config struct {
 	// Requests using ip address directly are not affected
 	GraphQLVirtualHosts []string `toml:",omitempty"`
 
+	// GRPCHost is the host interface on which to start the gRPC server. If this
+	// field is empty, no gRPC API endpoint will be started.
+	GRPCHost string `toml:",omitempty"`
+	// GRPCPort is the TCP port number on which to start the gRPC server.
+	GRPCPort int `toml:",omitempty"`
+
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
@@ -260,10 +266,27 @@ func (c *Config) HTTPEndpoint() string {
 	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
 }
 
+// GRPCEndpoint resolves a gRPC endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) GRPCEndpoint() string {
+	if c.GRPCHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.GRPCHost, c.GRPCPort)
+}
+
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
 	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort, AuthPort: DefaultAuthPort}
 	return config.HTTPEndpoint()
+}
+
+// DefaultGRPCEndpoint returns the gRPC endpoint used by default.
+// NOTE - implemented this to be consistent with DefaultHTTPEndpoint, but
+// neither are ever used
+func DefaultGRPCEndpoint() string {
+	config := &Config{GRPCHost: DefaultGRPCHost, GRPCPort: DefaultGRPCPort}
+	return config.GRPCEndpoint()
 }
 
 // WSEndpoint resolves a websocket endpoint based on the configured host interface
