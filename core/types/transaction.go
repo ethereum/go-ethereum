@@ -561,6 +561,20 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 	}
 }
 
+func NewTransactionsByPriceAndNonceFromAstria(signer Signer, txs Transactions) *TransactionsByPriceAndNonce {
+	// Initialize a price and received time based heap with the head transactions
+	heads := make(TxByPriceAndTime, 0, len(txs))
+	for _, tx := range txs {
+		
+	}
+	// Assemble and return the transaction set
+	return &TransactionsByPriceAndNonce{
+		txs:     txs,
+		heads:   heads,
+		signer:  signer,
+	}
+}
+
 // Peek returns the next transaction by price.
 func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	if len(t.heads) == 0 {
