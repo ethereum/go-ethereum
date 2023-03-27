@@ -342,6 +342,8 @@ func downloadSpecTestFixtures(cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	ext := ".tar.gz"
 	if runtime.GOOS == "windows" {
+		// TODO (MariusVanDerWijden) enable windows tests once spec tests provide a .zip
+		return ""
 		ext = ".zip"
 	}
 	base := "fixtures"
