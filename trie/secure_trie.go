@@ -82,15 +82,15 @@ func (t *StateTrie) Get(key []byte) []byte {
 	return res
 }
 
-// TryGet returns the value for key stored in the trie.
-// The value bytes must not be modified by the caller.
-// If the specified node is not in the trie, nil will be returned.
+// GetStorage attempts to retrieve a storage slot with provided account address
+// and slot key. The value bytes must not be modified by the caller.
+// If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
-// TryGetAccount attempts to retrieve an account with provided account address.
+// GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
@@ -103,10 +103,10 @@ func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, err
 	return ret, err
 }
 
-// TryGetAccountByHash does the same thing as TryGetAccount, however
-// it expects an account hash that is the hash of address. This constitutes an
-// abstraction leak, since the client code needs to know the key format.
-func (t *StateTrie) TryGetAccountByHash(addrHash common.Hash) (*types.StateAccount, error) {
+// GetAccountByHash does the same thing as GetAccount, however it expects an
+// account hash that is the hash of address. This constitutes an abstraction
+// leak, since the client code needs to know the key format.
+func (t *StateTrie) GetAccountByHash(addrHash common.Hash) (*types.StateAccount, error) {
 	res, err := t.trie.TryGet(addrHash.Bytes())
 	if res == nil || err != nil {
 		return nil, err
@@ -116,11 +116,11 @@ func (t *StateTrie) TryGetAccountByHash(addrHash common.Hash) (*types.StateAccou
 	return ret, err
 }
 
-// TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
+// GetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 // If the specified trie node is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) TryGetNode(path []byte) ([]byte, int, error) {
+func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 	return t.trie.TryGetNode(path)
 }
 
@@ -136,7 +136,7 @@ func (t *StateTrie) Update(key, value []byte) {
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
+// UpdateStorage associates key with value in the trie. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
 // is deleted from the trie and calls to Get will return nil.
 //
@@ -154,8 +154,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	return nil
 }
 
-// TryUpdateAccount account will abstract the write of an account to the
-// secure trie.
+// UpdateAccount will abstract the write of an account to the secure trie.
 func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
 	hk := t.hashKey(address.Bytes())
 	data, err := rlp.EncodeToBytes(acc)
@@ -176,7 +175,7 @@ func (t *StateTrie) Delete(key []byte) {
 	}
 }
 
-// TryDelete removes any existing value for key from the trie.
+// DeleteStorage removes any existing storage slot from the trie.
 // If the specified trie node is not in the trie, nothing will be changed.
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
@@ -185,7 +184,7 @@ func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
 	return t.trie.TryDelete(hk)
 }
 
-// TryDeleteAccount abstracts an account deletion from the trie.
+// DeleteAccount abstracts an account deletion from the trie.
 func (t *StateTrie) DeleteAccount(address common.Address) error {
 	hk := t.hashKey(address.Bytes())
 	delete(t.getSecKeyCache(), string(hk))
