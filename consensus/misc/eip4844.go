@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -64,17 +65,51 @@ func CountBlobs(txs []*types.Transaction) int {
 	return count
 }
 
-// VerifyEip4844Header verifies that the header is not malformed
+// VerifyEip4844Header verifies that the header is not malformed but does *not* check the value of excessDataGas.
+// See VerifyExcessDataGas for the full check.
 func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Header) error {
 	if header.ExcessDataGas == nil {
 		return fmt.Errorf("header is missing excessDataGas")
 	}
-	// TODO: Make sure excess data gas is computed correctly. This requires we know the
-	// number of blobs in the previous block.
+	return nil
+}
+
+// VerifyExcessDataGas verifies the excess_data_gas in the block header
+func VerifyExcessDataGas(chainReader ChainReader, block *types.Block) error {
+	excessDataGas := block.ExcessDataGas()
+	if !chainReader.Config().IsSharding(block.Time()) {
+		if excessDataGas != nil {
+			return fmt.Errorf("unexpected excessDataGas in header")
+		}
+		return nil
+
+	}
+	if excessDataGas == nil {
+		return fmt.Errorf("header is missing excessDataGas")
+	}
+
+	number, parent := block.NumberU64()-1, block.ParentHash()
+	parentBlock := chainReader.GetBlock(parent, number)
+	if parentBlock == nil {
+		return fmt.Errorf("parent block not found")
+	}
+	numBlobs := CountBlobs(block.Transactions())
+	expectedEDG := CalcExcessDataGas(parentBlock.ExcessDataGas(), numBlobs)
+	if excessDataGas.Cmp(expectedEDG) != 0 {
+		return fmt.Errorf("invalid excessDataGas: have %s want %v", excessDataGas, expectedEDG)
+	}
 	return nil
 }
 
 // GetDataGasPrice implements get_data_gas_price from EIP-4844
 func GetDataGasPrice(excessDataGas *big.Int) *big.Int {
 	return fakeExponential(big.NewInt(params.MinDataGasPrice), excessDataGas, big.NewInt(params.DataGasPriceUpdateFraction))
+}
+
+// ChainReader defines a small collection of methods needed to access the local
+// blockchain for EIP4844 block verifcation.
+type ChainReader interface {
+	Config() *params.ChainConfig
+	// GetBlock retrieves a block from the database by hash and number.
+	GetBlock(hash common.Hash, number uint64) *types.Block
 }
