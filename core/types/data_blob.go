@@ -265,13 +265,14 @@ func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, v
 	proofs = make([]KZGProof, len(blobs))
 	versionedHashes = make([]common.Hash, len(blobs))
 
+	cryptoCtx := kzg.CrpytoCtx()
 	for i, blob := range blobs {
-		commitment, err := kzg.CryptoCtx.BlobToKZGCommitment(serialization.Blob(blob))
+		commitment, err := cryptoCtx.BlobToKZGCommitment(serialization.Blob(blob))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not convert blob to commitment: %v", err)
 		}
 
-		proof, err := kzg.CryptoCtx.ComputeBlobKZGProof(serialization.Blob(blob), commitment)
+		proof, err := cryptoCtx.ComputeBlobKZGProof(serialization.Blob(blob), commitment)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not compute proof for blob: %v", err)
 		}
@@ -357,7 +358,8 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if l1 > params.MaxBlobsPerBlock {
 		return fmt.Errorf("number of blobs exceeds max: %v", l1)
 	}
-	err := kzg.CryptoCtx.VerifyBlobKZGProofBatch(toBlobs(b.Blobs), toComms(b.BlobKzgs), toProofs(b.Proofs))
+	cryptoCtx := kzg.CrpytoCtx()
+	err := cryptoCtx.VerifyBlobKZGProofBatch(toBlobs(b.Blobs), toComms(b.BlobKzgs), toProofs(b.Proofs))
 	if err != nil {
 		return fmt.Errorf("error during proof verification: %v", err)
 	}
