@@ -493,11 +493,23 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 
 // UnpackLog unpacks a retrieved log into the provided output structure.
 func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) error {
+	// Happens in case of LOG0 or an anonymous event with
+	// no indexed arg. Only parse the data.
 	if len(log.Topics) == 0 {
-		return errNoEventSignature
+		if len(log.Data) > 0 {
+			if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	if log.Topics[0] != c.abi.Events[event].ID {
-		return errEventSignatureMismatch
+	// All the topics for an anonymous event are indexed inputs.
+	topics := log.Topics
+	if !c.abi.Events[event].Anonymous {
+		if log.Topics[0] != c.abi.Events[event].ID {
+			return errEventSignatureMismatch
+		}
+		topics = log.Topics[1:]
 	}
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
@@ -510,16 +522,28 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 			indexed = append(indexed, arg)
 		}
 	}
-	return abi.ParseTopics(out, indexed, log.Topics[1:])
+	return abi.ParseTopics(out, indexed, topics)
 }
 
 // UnpackLogIntoMap unpacks a retrieved log into the provided map.
 func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event string, log types.Log) error {
+	// Happens in case of LOG0 or an anonymous event with
+	// no indexed arg. Only parse the data.
 	if len(log.Topics) == 0 {
-		return errNoEventSignature
+		if len(log.Data) > 0 {
+			if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	if log.Topics[0] != c.abi.Events[event].ID {
-		return errEventSignatureMismatch
+	// All the topics for an anonymous event are indexed inputs.
+	topics := log.Topics
+	if !c.abi.Events[event].Anonymous {
+		if log.Topics[0] != c.abi.Events[event].ID {
+			return errEventSignatureMismatch
+		}
+		topics = log.Topics[1:]
 	}
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
@@ -532,7 +556,7 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event strin
 			indexed = append(indexed, arg)
 		}
 	}
-	return abi.ParseTopicsIntoMap(out, indexed, log.Topics[1:])
+	return abi.ParseTopicsIntoMap(out, indexed, topics)
 }
 
 // ensureContext is a helper method to ensure a context is not nil, even if the
