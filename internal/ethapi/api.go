@@ -191,6 +191,7 @@ func (s *TxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
 func (s *TxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
 	content := make(map[string]map[string]*RPCTransaction, 2)
 	pending, queue := s.b.TxPoolContentFrom(addr)
+
 	curHeader := s.b.CurrentHeader()
 
 	// Build the pending transactions
@@ -236,15 +237,12 @@ func (s *TxPoolAPI) ContentPending() []*RPCTransaction {
 	var content []*RPCTransaction
 	pending, _ := s.b.TxPoolContent()
 	curHeader := s.b.CurrentHeader()
-	header, err := s.b.HeaderByNumber(context.Background(), rpc.PendingBlockNumber)
-	if err != nil {
-		return nil
-	}
+	baseFee := misc.CalcBaseFee(s.b.ChainConfig(), curHeader)
 	signer := types.LatestSignerForChainID(common.Big1)
 	heads := make(types.TxByPriceAndTime, 0, len(pending))
 	for from, accTxs := range pending {
 		acc, _ := types.Sender(signer, accTxs[0])
-		wrapped, err := types.NewTxWithMinerFee(accTxs[0], header.BaseFee)
+		wrapped, err := types.NewTxWithMinerFee(accTxs[0], baseFee)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
 		if acc != from || err != nil {
 			continue
