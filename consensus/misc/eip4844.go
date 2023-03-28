@@ -80,9 +80,9 @@ func VerifyExcessDataGas(chainReader ChainReader, block *types.Block) error {
 	if !chainReader.Config().IsSharding(block.Time()) {
 		if excessDataGas != nil {
 			return fmt.Errorf("unexpected excessDataGas in header")
-		} else {
-			return nil
 		}
+		return nil
+
 	}
 	if excessDataGas == nil {
 		return fmt.Errorf("header is missing excessDataGas")
