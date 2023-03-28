@@ -48,6 +48,8 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+
+	Sender common.Address `json:"sender,omitempty"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -94,6 +96,13 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+	case *L1MessageTx:
+		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.To = t.To()
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.Sender = *tx.Sender
 	}
 	return json.Marshal(&enc)
 }
@@ -262,6 +271,32 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+	case L1MessageTxType:
+		var itx L1MessageTx
+		inner = &itx
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in transaction")
+		}
+		itx.Gas = uint64(*dec.Gas)
+		if dec.To != nil {
+			itx.To = dec.To
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		itx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Data
+		if itx.Sender == nil {
+			return errors.New("missing required field 'sender' in transaction")
+		}
+		itx.Sender = &dec.Sender
 
 	default:
 		return ErrTxTypeNotSupported

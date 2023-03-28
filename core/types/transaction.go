@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"go/types"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -186,6 +187,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case L1MessageTxType:
+		var inner L1MessageTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -286,6 +291,10 @@ func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 func (tx *Transaction) To() *common.Address {
 	return copyAddressPtr(tx.inner.to())
 }
+// IsDepositTx returns true if the transaction is a deposit tx type.
+func (tx *Transaction) IsL1MessageTx() bool {
+	return tx.Type() == L1MessageTxType
+}
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
@@ -324,6 +333,9 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	if tx.Type() == L1MessageTxType {
+		return new(big.Int), nil
+	}
 	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
