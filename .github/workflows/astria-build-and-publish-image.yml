@@ -20,10 +20,11 @@ jobs:
       # TODO - build for amd64 and arm64?
       # FIXME - version needs to be autoincrement, probably from git tags?
       - name: Build latest Docker image
-        run: docker build \
-          --build-arg COMMIT=${GITHUB_SHA} \
-          --build-arg VERSION=0.1 \
-          --build-arg BUILDNUM=${GITHUB_RUN_NUMBER} \
-          --tag ghcr.io/astriaorg/go-ethereum:latest .
+        run: |
+          docker build \
+            --build-arg COMMIT=${GITHUB_SHA} \
+            --build-arg VERSION=0.1 \
+            --build-arg BUILDNUM=${GITHUB_RUN_NUMBER} \
+            --tag ghcr.io/astriaorg/go-ethereum:latest .
       - name: Push latest Docker image
         run: docker push ghcr.io/astriaorg/go-ethereum:latest
