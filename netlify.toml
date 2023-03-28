@@ -7,3 +7,300 @@
   for = "/*"
   [headers.values]
     Access-Control-Allow-Origin = "https://matomo.ethereum.org"
+
+#redirects
+
+[[redirects]]
+  from = "/getting-started/dev-mode"
+  to = "/docs/developers/dapp-developer/dev-mode"
+  force = true
+
+[[redirects]]
+  from = "/docs/getting-started/dev-mode"
+  to = "/docs/developers/dapp-developer/dev-mode"
+  force = true
+
+[[redirects]]
+  from = "/docs/install-and-build/installing-geth"
+  to = "/docs/getting-started/installing-geth"
+  force = true
+
+[[redirects]]
+  from = "/docs/install-and-build/backup-restore"
+  to = "/docs/fundamentals/backup-restore"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/command-line-options"
+  to = "/docs/fundamentals/command-line-options"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/pruning"
+  to = "/docs/fundamentals/pruning"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/consensus-clients"
+  to = "/docs/getting-started/consensus-client"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/peer-to-peer"
+  to = "/docs/fundamentals/peer-to-peer"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/les"
+  to = "/docs/fundamentals/les"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/managing-your-accounts"
+  to = "/docs/fundamentals/account-management"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/javascript-console"
+  to = "/docs/interacting-with-geth/javascript-console"
+  force = true
+
+[[redirects]]
+  from = "/getting-started/private-network"
+  to = "/docs/fundamentals/private-network"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/private-network"
+  to = "/docs/fundamentals/private-network"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/mining"
+  to = "/docs/fundamentals/mining"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/metrics"
+  to = "/docs/monitoring/metrics"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/native"
+  to = "/docs/developers/dapp-developer/native"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/tracing"
+  to = "/docs/developers/evm-tracing"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/custom-tracer"
+  to = "/docs/developers/evm-tracing/custom-tracer"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/builtin-tracers"
+  to = "/docs/developers/evm-tracing/built-in-tracers"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/native-accounts"
+  to = "/docs/developers/dapp-developer/native-accounts"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/native-bindings"
+  to = "/docs/developers/dapp-developer/native-bindings"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/mobile"
+  to = "/docs/developers/dapp-developer/mobile"
+  force = true
+
+[[redirects]]
+  from = "/docs/dapp/mobile-accounts"
+  to = "/docs/developers/dapp-developer/mobile"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/server"
+  to = "/docs/interacting-with-geth/rpc"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/pubsub"
+  to = "/docs/interacting-with-geth/rpc/pubsub"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/batch"
+  to = "/docs/interacting-with-geth/rpc/batch"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/graphql"
+  to = "/docs/interacting-with-geth/rpc/graphql"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-admin"
+  to = "/docs/interacting-with-geth/rpc/ns-admin"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-clique"
+  to = "/docs/interacting-with-geth/rpc/ns-clique"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-debug"
+  to = "/docs/interacting-with-geth/rpc/ns-debug"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-eth"
+  to = "/docs/interacting-with-geth/rpc/ns-eth"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-les"
+  to = "/docs/interacting-with-geth/rpc/ns-les"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-miner"
+  to = "/docs/interacting-with-geth/rpc/ns-miner"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-net"
+  to = "/docs/interacting-with-geth/rpc/ns-net"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-personal"
+  to = "/docs/interacting-with-geth/rpc/ns-personal"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/ns-txpool"
+  to = "/docs/interacting-with-geth/rpc/ns-txpool"
+  force = true
+
+[[redirects]]
+  from = "/docs/rpc/objects"
+  to = "/docs"
+  force = true
+
+[[redirects]]
+  from = "/docs/interacting-with-geth/rpc/objects"
+  to = "/docs"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/dev-guide"
+  to = "/docs/developers/geth-developer/dev-guide"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/code-review-guidelines"
+  to = "/docs/developers/geth-developer/code-review-guidelines"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/issue-handling-workflow"
+  to = "/docs/developers/geth-developer/issue-handling-workflow"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/dns-discovery-setup"
+  to = "/docs/developers/geth-developer/dns-discovery-setup"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/introduction"
+  to = "/docs/tools/clef/introduction"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/tutorial"
+  to = "/docs/tools/clef/tutorial"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/cliquesigning"
+  to = "/docs/tools/clef/clique-signing"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/rules"
+  to = "/docs/tools/clef/rules"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/setup"
+  to = "/docs/tools/clef/setup"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/apis"
+  to = "/docs/tools/clef/apis"
+  force = true
+
+[[redirects]]
+  from = "/docs/clef/datatypes"
+  to = "/docs/tools/clef/datatypes"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/sync-mode"
+  to = "/docs/fundamentals/sync-modes"
+  force = true
+
+[[redirects]]
+  from = "/docs/interface/hardware"
+  to = "/docs/getting-started/hardware-requirements"
+  force = true
+
+[[redirects]]
+  from = "/docs/interacting-with-geth"
+  to = "/docs/interacting-with-geth/rpc"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/dapp-developer"
+  to = "/docs/developers/dapp-developer/dev-mode"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/geth-developer"
+  to = "/docs/developers/geth-developer/dev-guide"
+  force = true
+
+[[redirects]]
+  from = "/docs/monitoring"
+  to = "/docs/monitoring/dashboards"
+  force = true
+
+[[redirects]]
+  from = "/docs/tools"
+  to = "/docs/tools/clef/introduction"
+  force = true
+
+[[redirects]]
+  from = "/docs/tools/clef"
+  to = "/docs/tools/clef/introduction"
+  force = true
+
+[[redirects]]
+  from = "/docs/developers/contributing"
+  to = "/docs/developers/geth-developer/contributing"
+  force = true
+
+[[redirects]]
+  from = "/docs/interacting-with-geth/rpc/ns-personal-deprecation"
+  to = "/docs/interacting-with-geth/rpc/ns-personal"
+  force = true
