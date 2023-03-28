@@ -3,12 +3,12 @@
 const redirects = [
   {
     source: '/getting-started/dev-mode',
-    destination: '/docs/developers/geth-developer/dev-mode',
+    destination: '/docs/developers/dapp-developer/dev-mode',
     permanent: true
   },
   {
     source: '/docs/getting-started/dev-mode',
-    destination: '/docs/developers/geth-developer/dev-mode',
+    destination: '/docs/developers/dapp-developer/dev-mode',
     permanent: true
   },
   {
@@ -128,7 +128,7 @@ const redirects = [
   },
   {
     source: '/docs/rpc/batch',
-    destination: '/docs/interacting-with-geth/batch',
+    destination: '/docs/interacting-with-geth/rpc/batch',
     permanent: true
   },
   {
