@@ -36,7 +36,7 @@ import (
 func ResolveNameConflict(rawName string, used func(string) bool) string {
 	name := rawName
 	if unicode.IsDigit(rune(name[0])) {
-		name = fmt.Sprintf("%v%v", "m", name)
+		name = fmt.Sprintf("%s%s", "m", name)
 	}
 	ok := used(name)
 	for idx := 0; ok; idx++ {
