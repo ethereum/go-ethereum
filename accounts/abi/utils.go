@@ -16,7 +16,10 @@
 
 package abi
 
-import "fmt"
+import (
+	"fmt"
+	"unicode"
+)
 
 // ResolveNameConflict returns the next available name for a given thing.
 // This helper can be used for lots of purposes:
@@ -29,8 +32,12 @@ import "fmt"
 //
 // Name conflicts are mostly resolved by adding number suffix. e.g. if the abi contains
 // Methods "send" and "send1", ResolveNameConflict would return "send2" for input "send".
+// If a method name starts with a number an m is prepended (e.g. 1method -> m1method).
 func ResolveNameConflict(rawName string, used func(string) bool) string {
 	name := rawName
+	if unicode.IsDigit(rune(name[0])) {
+		name = fmt.Sprintf("%v%v", "m", name)
+	}
 	ok := used(name)
 	for idx := 0; ok; idx++ {
 		name = fmt.Sprintf("%s%d", rawName, idx)
