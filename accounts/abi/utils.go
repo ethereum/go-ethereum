@@ -34,13 +34,14 @@ import (
 // Methods "send" and "send1", ResolveNameConflict would return "send2" for input "send".
 // If a method name starts with a number an m is prepended (e.g. 1method -> m1method).
 func ResolveNameConflict(rawName string, used func(string) bool) string {
-	name := rawName
-	if unicode.IsDigit(rune(name[0])) {
-		name = fmt.Sprintf("%s%s", "m", name)
+	prefixedName := rawName
+	if unicode.IsDigit(rune(rawName[0])) {
+		prefixedName = fmt.Sprintf("%s%s", "m", rawName)
 	}
+	name := prefixedName
 	ok := used(name)
 	for idx := 0; ok; idx++ {
-		name = fmt.Sprintf("%s%d", rawName, idx)
+		name = fmt.Sprintf("%s%d", prefixedName, idx)
 		ok = used(name)
 	}
 	return name
