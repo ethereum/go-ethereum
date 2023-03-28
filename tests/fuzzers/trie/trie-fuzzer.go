@@ -147,13 +147,13 @@ func runRandTest(rt randTest) error {
 	for i, step := range rt {
 		switch step.op {
 		case opUpdate:
-			tr.Update(step.key, step.value)
+			tr.MustUpdate(step.key, step.value)
 			values[string(step.key)] = string(step.value)
 		case opDelete:
-			tr.Delete(step.key)
+			tr.MustDelete(step.key)
 			delete(values, string(step.key))
 		case opGet:
-			v := tr.Get(step.key)
+			v := tr.MustGet(step.key)
 			want := values[string(step.key)]
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
@@ -176,7 +176,7 @@ func runRandTest(rt randTest) error {
 			checktr := trie.NewEmpty(triedb)
 			it := trie.NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
-				checktr.Update(it.Key, it.Value)
+				checktr.MustUpdate(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
 				return fmt.Errorf("hash mismatch in opItercheckhash")

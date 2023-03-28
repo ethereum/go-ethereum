@@ -93,13 +93,13 @@ func makeTries() (chtTrie *trie.Trie, bloomTrie *trie.Trie, chtKeys, bloomKeys [
 		// The element in CHT is <big-endian block number> -> <block hash>
 		key := make([]byte, 8)
 		binary.BigEndian.PutUint64(key, uint64(i+1))
-		chtTrie.Update(key, []byte{0x1, 0xf})
+		chtTrie.MustUpdate(key, []byte{0x1, 0xf})
 		chtKeys = append(chtKeys, key)
 
 		// The element in Bloom trie is <2 byte bit index> + <big-endian block number> -> bloom
 		key2 := make([]byte, 10)
 		binary.BigEndian.PutUint64(key2[2:], uint64(i+1))
-		bloomTrie.Update(key2, []byte{0x2, 0xe})
+		bloomTrie.MustUpdate(key2, []byte{0x2, 0xe})
 		bloomKeys = append(bloomKeys, key2)
 	}
 	return
