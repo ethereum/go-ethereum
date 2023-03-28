@@ -260,7 +260,7 @@ type TxPool struct {
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *noncer        // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	currentMaxGas atomic.Uint64  // Current gas limit for transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
@@ -599,9 +599,10 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
-// validateTx checks whether a transaction is valid according to the consensus
-// rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+// validateTxBasics checks whether a transaction is valid according to the consensus
+// rules, but does not check state-dependent validation such as sufficient balance.
+// This check is meant as an early check which only needs to be performed once.
+func (pool *TxPool) validateTxBasics(tx *types.Transaction) error {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
 		return core.ErrTxTypeNotSupported
@@ -624,7 +625,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.currentMaxGas < tx.Gas() {
+	if pool.currentMaxGas.Load() < tx.Gas() {
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
@@ -639,14 +640,29 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
+	if _, err := types.Sender(pool.signer, tx); err != nil {
 		return ErrInvalidSender
 	}
+	// Ensure the transaction has more gas than the basic tx fee.
+	if intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai); err != nil {
+		return err
+	} else if tx.Gas() < intrGas {
+		return core.ErrIntrinsicGas
+	}
+	return nil
+}
+
+// validateTxState assumes that the basic transaction validity checks have been performed
+// ( in validateTxBasics), and checks wether the transaction is valid given
+// the txpool state: sufficient balance, correct nonce etc.
+func (pool *TxPool) validateTxState(tx *types.Transaction, local bool) error {
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
+	// Signature has been checked already, this cannot error.
+	from, _ := types.Sender(pool.signer, tx)
+
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return core.ErrNonceTooLow
@@ -657,7 +673,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if balance.Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
 	}
-
 	// Verify that replacing transactions will not result in overdraft
 	list := pool.pending[from]
 	if list != nil { // Sender already has pending txs
@@ -671,15 +686,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			return ErrOverdraft
 		}
 	}
-
-	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
-	if err != nil {
-		return err
-	}
-	if tx.Gas() < intrGas {
-		return core.ErrIntrinsicGas
-	}
 	return nil
 }
 
@@ -692,23 +698,19 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if added {
 		return replaced, err
 	}
-	pool.addLimbo(tx)
+	// If there was no error, but it was not added to the pending, that means
+	// it was not executable straight away. Place it in limbo.
+	pool.limbo.Add(tx)
 	return false, nil
 }
 
-func (pool *TxPool) addLimbo(tx *types.Transaction) (added, replaced bool, err error) {
-	added = pool.limbo.Add(tx)
-	return added, false, nil
-}
-
-// isFuture reports whether the given transaction is immediately executable.
+// isExecutable reports whether the given transaction is immediately executable.
 func (pool *TxPool) isExecutable(from common.Address, tx *types.Transaction) bool {
-	list := pool.pending[from]
-	if list == nil {
-		return pool.pendingNonces.get(from) == tx.Nonce()
+	if list := pool.pending[from]; list != nil {
+		// Does parent nonce exist in pending?
+		return list.txs.Get(tx.Nonce()-1) != nil
 	}
-	// Does parent nonce exist in pending?
-	return list.txs.Get(tx.Nonce()-1) != nil
+	return pool.pendingNonces.get(from) == tx.Nonce()
 	// Replacements are handled later
 }
 
@@ -733,7 +735,7 @@ func (pool *TxPool) addPending(tx *types.Transaction, local bool) (added, replac
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx, isLocal); err != nil {
+	if err := pool.validateTxState(tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, false, err
@@ -957,6 +959,13 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			invalidTxMeter.Mark(1)
 			continue
 		}
+
+		if err := pool.validateTxBasics(tx); err != nil {
+			errs[i] = err
+			invalidTxMeter.Mark(1)
+			continue
+		}
+
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
@@ -1360,7 +1369,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	pool.currentState = statedb
 	pool.pendingNonces = newNoncer(statedb)
-	pool.currentMaxGas = newHead.GasLimit
+	pool.currentMaxGas.Store(newHead.GasLimit)
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1541,7 +1550,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas.Load())
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
