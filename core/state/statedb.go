@@ -90,10 +90,10 @@ type StateDB struct {
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
-	thash   common.Hash
-	txIndex int
-	logs    map[common.Hash][]*types.Log
-	logSize uint
+	thash    common.Hash
+	txIndex  int
+	logs     map[common.Hash][]*types.Log
+	logSize  uint
 	calls    map[common.Hash][]*types.Call
 	callSize uint
 
@@ -147,7 +147,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsDirty:    make(map[common.Address]struct{}),
 		stateObjectsDestruct: make(map[common.Address]struct{}),
 		logs:                 make(map[common.Hash][]*types.Log),
-		calls:               make(map[common.Hash][]*types.Call),
+		calls:                make(map[common.Hash][]*types.Call),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
 		accessList:           newAccessList(),
@@ -212,6 +212,7 @@ func (s *StateDB) AddLog(log *types.Log) {
 func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
 	logs := s.logs[hash]
 	for _, l := range logs {
+		l.BlockNumber = blockNumber
 		l.BlockHash = blockHash
 	}
 	return logs
@@ -736,8 +737,8 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
-		calls:               make(map[common.Hash][]*types.Call, len(s.calls)),
-		callSize:            s.callSize,
+		calls:                make(map[common.Hash][]*types.Call, len(s.calls)),
+		callSize:             s.callSize,
 		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
 		journal:              newJournal(),
 		hasher:               crypto.NewKeccakState(),
