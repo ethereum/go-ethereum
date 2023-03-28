@@ -6,7 +6,7 @@ The purpose of the go-ethereum website is to provide the necessary documentation
 
 ## Contributing
 
-Contributions from the community are very welcome. Please contribute by cloning the `go-ethereum` repository, checking out the `website` branch and raising pull requests to be reviewed and merged by the repository maintainers. Issues can be raised in the main `go-ethereum` repository using the prefix `[website]: ` in the title.
+Contributions from the community are very welcome. Please contribute by cloning the `go-ethereum` repository, checking out the `website` branch, creating a new branch with the prefix `website-` and raising pull requests to be reviewed and merged by the repository maintainers. Issues can be raised in the main `go-ethereum` repository using the prefix `[website]: ` in the title.
 
 ### The geth.ethereum.org stack
 
