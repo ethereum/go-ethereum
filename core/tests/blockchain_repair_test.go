@@ -1815,7 +1815,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0)
+	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0, 0, 0)
 	defer closeFn()
 
 	genesis := back.BlockChain().Genesis()
