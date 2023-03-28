@@ -73,6 +73,9 @@ type Receipt struct {
 
 	// The value of evm execution result.
 	ReturnValue []byte `json:"returnValue,omitempty"`
+
+	// Scroll rollup
+	L1Fee *big.Int `json:"l1Fee,omitempty" gencodec:"required"`
 }
 
 type receiptMarshaling struct {
@@ -95,6 +98,14 @@ type receiptRLP struct {
 
 // storedReceiptRLP is the storage encoding of a receipt.
 type storedReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Logs              []*LogForStorage
+	L1Fee             *big.Int
+}
+
+// v5StoredReceiptRLP is the storage encoding of a receipt used in database version 5.
+type v5StoredReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Logs              []*LogForStorage
@@ -295,6 +306,7 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
 		Logs:              make([]*LogForStorage, len(r.Logs)),
+		L1Fee:             r.L1Fee,
 	}
 	for i, log := range r.Logs {
 		enc.Logs[i] = (*LogForStorage)(log)
@@ -319,11 +331,33 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	if err := decodeV3StoredReceiptRLP(r, blob); err == nil {
 		return nil
 	}
-	return decodeV4StoredReceiptRLP(r, blob)
+	if err := decodeV4StoredReceiptRLP(r, blob); err == nil {
+		return nil
+	}
+	return decodeV5StoredReceiptRLP(r, blob)
 }
 
 func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	var stored storedReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+		return err
+	}
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+		return err
+	}
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
+	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.L1Fee = stored.L1Fee
+
+	return nil
+}
+
+func decodeV5StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored v5StoredReceiptRLP
 	if err := rlp.DecodeBytes(blob, &stored); err != nil {
 		return err
 	}
