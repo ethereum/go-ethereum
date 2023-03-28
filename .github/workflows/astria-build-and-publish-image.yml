@@ -1,0 +1,26 @@
+build-and-publish-latest:
+on:
+  push:
+    branches:
+      - astria # Running this job only for astria branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2 # Checking out the repo
+      - uses: actions/setup-go@v4
+        with:
+        go-version: "^1.20.x" # The Go version to download (if necessary) and use.
+      - run: go version
+
+      - name: Log in to registry
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+
+      # TODO - build for amd64 and arm64?
+      - name: Build and Publish latest Docker image
+        uses: TCPShield/gp-docker-action@1.1.13
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }} # Provide GITHUB_TOKEN to login into the GitHub Packages
+          image-name: ghcr.io/astriaorg/go-ethereum # Provide only Docker image name, tag will be automatically set to latest
+          # Pass some additional arguments to the docker build command
+          # FIXME - version needs to be autoincrement, probably from git tags?
+          custom-args: --build-arg COMMIT=${GITHUB_SHA} --build-arg VERSION=0.1.0 --build-arg BUILDNUM=${GITHUB_RUN_NUMBER}

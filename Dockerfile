@@ -22,7 +22,8 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
-EXPOSE 8545 8546 30303 30303/udp
+# Astria - add 50051 for GRPC
+EXPOSE 8545 8546 30303 30303/udp 50051
 ENTRYPOINT ["geth"]
 
 # Add some metadata labels to help programatic image consumption
