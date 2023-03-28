@@ -199,7 +199,7 @@ func (n ID) String() string {
 	return fmt.Sprintf("%x", n[:])
 }
 
-// The Go syntax representation of a ID is a call to HexID.
+// GoString returns the Go syntax representation of a ID is a call to HexID.
 func (n ID) GoString() string {
 	return fmt.Sprintf("enode.HexID(\"%x\")", n[:])
 }

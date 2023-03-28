@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"flag"
 	"math/rand"
@@ -326,7 +327,7 @@ func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, com
 func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 	var res string
 	var addr common.Address
-	rand.Read(addr[:])
+	crand.Read(addr[:])
 	c, cancel := context.WithTimeout(ctx, time.Second*12)
 	defer cancel()
 	err := client.CallContext(c, &res, "eth_getBalance", addr, "latest")

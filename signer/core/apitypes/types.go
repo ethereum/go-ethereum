@@ -27,8 +27,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
 
 type ValidationInfo struct {
 	Typ     string `json:"type"`
@@ -64,7 +62,7 @@ func (vs *ValidationMessages) Info(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{INFO, msg})
 }
 
-/// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
+// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
 func (v *ValidationMessages) GetWarnings() error {
 	var messages []string
 	for _, msg := range v.Messages {
@@ -224,15 +222,6 @@ func (t *Type) typeName() string {
 	return t.Type
 }
 
-func (t *Type) isReferenceType() bool {
-	if len(t.Type) == 0 {
-		return false
-	}
-	// Reference types must have a leading uppercase character
-	r, _ := utf8.DecodeRuneInString(t.Type)
-	return unicode.IsUpper(r)
-}
-
 type Types map[string][]Type
 
 type TypePriority struct {
@@ -367,8 +356,8 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		encType := field.Type
 		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
-			arrayValue, ok := encValue.([]interface{})
-			if !ok {
+			arrayValue, err := convertDataToSlice(encValue)
+			if err != nil {
 				return nil, dataMismatchError(encType, encValue)
 			}
 
@@ -418,6 +407,14 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
 func parseBytes(encType interface{}) ([]byte, bool) {
+	// Handle array types.
+	val := reflect.ValueOf(encType)
+	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
+		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
+		reflect.Copy(v, val)
+		return v.Bytes(), true
+	}
+
 	switch v := encType.(type) {
 	case []byte:
 		return v, true
@@ -458,6 +455,8 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	switch v := encValue.(type) {
 	case *math.HexOrDecimal256:
 		b = (*big.Int)(v)
+	case *big.Int:
+		b = v
 	case string:
 		var hexIntValue math.HexOrDecimal256
 		if err := hexIntValue.UnmarshalText([]byte(v)); err != nil {
@@ -490,13 +489,23 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
 	switch encType {
 	case "address":
-		stringValue, ok := encValue.(string)
-		if !ok || !common.IsHexAddress(stringValue) {
-			return nil, dataMismatchError(encType, encValue)
-		}
 		retval := make([]byte, 32)
-		copy(retval[12:], common.HexToAddress(stringValue).Bytes())
-		return retval, nil
+		switch val := encValue.(type) {
+		case string:
+			if common.IsHexAddress(val) {
+				copy(retval[12:], common.HexToAddress(val).Bytes())
+				return retval, nil
+			}
+		case []byte:
+			if len(val) == 20 {
+				copy(retval[12:], val)
+				return retval, nil
+			}
+		case [20]byte:
+			copy(retval[12:], val[:])
+			return retval, nil
+		}
+		return nil, dataMismatchError(encType, encValue)
 	case "bool":
 		boolValue, ok := encValue.(bool)
 		if !ok {
@@ -551,6 +560,19 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 // the provided type and data
 func dataMismatchError(encType string, encValue interface{}) error {
 	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
+}
+
+func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
+	var outEncValue []interface{}
+	rv := reflect.ValueOf(encValue)
+	if rv.Kind() == reflect.Slice {
+		for i := 0; i < rv.Len(); i++ {
+			outEncValue = append(outEncValue, rv.Index(i).Interface())
+		}
+	} else {
+		return outEncValue, fmt.Errorf("provided data '%v' is not slice", encValue)
+	}
+	return outEncValue, nil
 }
 
 // validate makes sure the types are sound
@@ -612,7 +634,7 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 			Typ:  field.Type,
 		}
 		if field.isArray() {
-			arrayValue, _ := encValue.([]interface{})
+			arrayValue, _ := convertDataToSlice(encValue)
 			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
@@ -698,15 +720,15 @@ func (t Types) validate() error {
 			if typeKey == typeObj.Type {
 				return fmt.Errorf("type %q cannot reference itself", typeObj.Type)
 			}
-			if typeObj.isReferenceType() {
-				if _, exist := t[typeObj.typeName()]; !exist {
-					return fmt.Errorf("reference type %q is undefined", typeObj.Type)
-				}
-				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
-					return fmt.Errorf("unknown reference type %q", typeObj.Type)
-				}
-			} else if !isPrimitiveTypeValid(typeObj.Type) {
-				return fmt.Errorf("unknown type %q", typeObj.Type)
+			if isPrimitiveTypeValid(typeObj.Type) {
+				continue
+			}
+			// Must be reference type
+			if _, exist := t[typeObj.typeName()]; !exist {
+				return fmt.Errorf("reference type %q is undefined", typeObj.Type)
+			}
+			if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
+				return fmt.Errorf("unknown reference type %q", typeObj.Type)
 			}
 		}
 	}
@@ -720,112 +742,30 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		primitiveType == "bool" ||
 		primitiveType == "bool[]" ||
 		primitiveType == "string" ||
-		primitiveType == "string[]" {
-		return true
-	}
-	if primitiveType == "bytes" ||
+		primitiveType == "string[]" ||
+		primitiveType == "bytes" ||
 		primitiveType == "bytes[]" ||
-		primitiveType == "bytes1" ||
-		primitiveType == "bytes1[]" ||
-		primitiveType == "bytes2" ||
-		primitiveType == "bytes2[]" ||
-		primitiveType == "bytes3" ||
-		primitiveType == "bytes3[]" ||
-		primitiveType == "bytes4" ||
-		primitiveType == "bytes4[]" ||
-		primitiveType == "bytes5" ||
-		primitiveType == "bytes5[]" ||
-		primitiveType == "bytes6" ||
-		primitiveType == "bytes6[]" ||
-		primitiveType == "bytes7" ||
-		primitiveType == "bytes7[]" ||
-		primitiveType == "bytes8" ||
-		primitiveType == "bytes8[]" ||
-		primitiveType == "bytes9" ||
-		primitiveType == "bytes9[]" ||
-		primitiveType == "bytes10" ||
-		primitiveType == "bytes10[]" ||
-		primitiveType == "bytes11" ||
-		primitiveType == "bytes11[]" ||
-		primitiveType == "bytes12" ||
-		primitiveType == "bytes12[]" ||
-		primitiveType == "bytes13" ||
-		primitiveType == "bytes13[]" ||
-		primitiveType == "bytes14" ||
-		primitiveType == "bytes14[]" ||
-		primitiveType == "bytes15" ||
-		primitiveType == "bytes15[]" ||
-		primitiveType == "bytes16" ||
-		primitiveType == "bytes16[]" ||
-		primitiveType == "bytes17" ||
-		primitiveType == "bytes17[]" ||
-		primitiveType == "bytes18" ||
-		primitiveType == "bytes18[]" ||
-		primitiveType == "bytes19" ||
-		primitiveType == "bytes19[]" ||
-		primitiveType == "bytes20" ||
-		primitiveType == "bytes20[]" ||
-		primitiveType == "bytes21" ||
-		primitiveType == "bytes21[]" ||
-		primitiveType == "bytes22" ||
-		primitiveType == "bytes22[]" ||
-		primitiveType == "bytes23" ||
-		primitiveType == "bytes23[]" ||
-		primitiveType == "bytes24" ||
-		primitiveType == "bytes24[]" ||
-		primitiveType == "bytes25" ||
-		primitiveType == "bytes25[]" ||
-		primitiveType == "bytes26" ||
-		primitiveType == "bytes26[]" ||
-		primitiveType == "bytes27" ||
-		primitiveType == "bytes27[]" ||
-		primitiveType == "bytes28" ||
-		primitiveType == "bytes28[]" ||
-		primitiveType == "bytes29" ||
-		primitiveType == "bytes29[]" ||
-		primitiveType == "bytes30" ||
-		primitiveType == "bytes30[]" ||
-		primitiveType == "bytes31" ||
-		primitiveType == "bytes31[]" ||
-		primitiveType == "bytes32" ||
-		primitiveType == "bytes32[]" {
-		return true
-	}
-	if primitiveType == "int" ||
+		primitiveType == "int" ||
 		primitiveType == "int[]" ||
-		primitiveType == "int8" ||
-		primitiveType == "int8[]" ||
-		primitiveType == "int16" ||
-		primitiveType == "int16[]" ||
-		primitiveType == "int32" ||
-		primitiveType == "int32[]" ||
-		primitiveType == "int64" ||
-		primitiveType == "int64[]" ||
-		primitiveType == "int96" ||
-		primitiveType == "int96[]" ||
-		primitiveType == "int128" ||
-		primitiveType == "int128[]" ||
-		primitiveType == "int256" ||
-		primitiveType == "int256[]" {
+		primitiveType == "uint" ||
+		primitiveType == "uint[]" {
 		return true
 	}
-	if primitiveType == "uint" ||
-		primitiveType == "uint[]" ||
-		primitiveType == "uint8" ||
-		primitiveType == "uint8[]" ||
-		primitiveType == "uint16" ||
-		primitiveType == "uint16[]" ||
-		primitiveType == "uint32" ||
-		primitiveType == "uint32[]" ||
-		primitiveType == "uint64" ||
-		primitiveType == "uint64[]" ||
-		primitiveType == "uint96" ||
-		primitiveType == "uint96[]" ||
-		primitiveType == "uint128" ||
-		primitiveType == "uint128[]" ||
-		primitiveType == "uint256" ||
-		primitiveType == "uint256[]" {
-		return true
+	// For 'bytesN', 'bytesN[]', we allow N from 1 to 32
+	for n := 1; n <= 32; n++ {
+		// e.g. 'bytes28' or 'bytes28[]'
+		if primitiveType == fmt.Sprintf("bytes%d", n) || primitiveType == fmt.Sprintf("bytes%d[]", n) {
+			return true
+		}
+	}
+	// For 'intN','intN[]' and 'uintN','uintN[]' we allow N in increments of 8, from 8 up to 256
+	for n := 8; n <= 256; n += 8 {
+		if primitiveType == fmt.Sprintf("int%d", n) || primitiveType == fmt.Sprintf("int%d[]", n) {
+			return true
+		}
+		if primitiveType == fmt.Sprintf("uint%d", n) || primitiveType == fmt.Sprintf("uint%d[]", n) {
+			return true
+		}
 	}
 	return false
 }

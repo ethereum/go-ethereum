@@ -37,28 +37,24 @@ type committer struct {
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(owner common.Hash, collectLeaf bool) *committer {
+func newCommitter(nodeset *NodeSet, collectLeaf bool) *committer {
 	return &committer{
-		nodes:       NewNodeSet(owner),
+		nodes:       nodeset,
 		collectLeaf: collectLeaf,
 	}
 }
 
-// Commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
-	h, err := c.commit(nil, n)
-	if err != nil {
-		return nil, nil, err
-	}
-	return h.(hashNode), c.nodes, nil
+// Commit collapses a node down into a hash node.
+func (c *committer) Commit(n node) hashNode {
+	return c.commit(nil, n).(hashNode)
 }
 
-// commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) commit(path []byte, n node) (node, error) {
+// commit collapses a node down into a hash node and returns it.
+func (c *committer) commit(path []byte, n node) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
-		return hash, nil
+		return hash
 	}
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
@@ -69,34 +65,28 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV, err := c.commit(append(path, cn.Key...), cn.Val)
-			if err != nil {
-				return nil, err
-			}
-			collapsed.Val = childV
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
 		}
-		// The key needs to be copied, since we're delivering it to database
+		// The key needs to be copied, since we're adding it to the
+		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
-		return collapsed, nil
+		return collapsed
 	case *fullNode:
-		hashedKids, err := c.commitChildren(path, cn)
-		if err != nil {
-			return nil, err
-		}
+		hashedKids := c.commitChildren(path, cn)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
-		return collapsed, nil
+		return collapsed
 	case hashNode:
-		return cn, nil
+		return cn
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -104,7 +94,7 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
+func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -121,31 +111,32 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, err := c.commit(append(path, byte(i)), child)
-		if err != nil {
-			return children, err
-		}
-		children[i] = hashed
+		children[i] = c.commit(append(path, byte(i)), child)
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
-	return children, nil
+	return children
 }
 
-// store hashes the node n and if we have a storage layer specified, it writes
-// the key/value pair to it and tracks any node->child references as well as any
-// node->external trie references.
+// store hashes the node n and adds it to the modified nodeset. If leaf collection
+// is enabled, leaf nodes will be tracked in the modified nodeset as well.
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 
 	// This was not generated - must be a small node stored in the parent.
 	// In theory, we should check if the node is leaf here (embedded node
-	// usually is leaf node). But small value(less than 32bytes) is not
-	// our target(leaves in account trie only).
+	// usually is leaf node). But small value (less than 32bytes) is not
+	// our target (leaves in account trie only).
 	if hash == nil {
+		// The node is embedded in its parent, in other words, this node
+		// will not be stored in the database independently, mark it as
+		// deleted only if the node was existent in database before.
+		if _, ok := c.nodes.accessList[string(path)]; ok {
+			c.nodes.markDeleted(path)
+		}
 		return n
 	}
 	// We have the hash already, estimate the RLP encoding-size of the node.
@@ -160,7 +151,7 @@ func (c *committer) store(path []byte, n node) node {
 		}
 	)
 	// Collect the dirty node to nodeset for return.
-	c.nodes.add(string(path), mnode)
+	c.nodes.markUpdated(path, mnode)
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key

@@ -19,30 +19,16 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
 
-var (
-	// Git information set by linker when building with ci.go.
-	gitCommit string
-	gitDate   string
-	app       = &cli.App{
-		Name:        filepath.Base(os.Args[0]),
-		Usage:       "go-ethereum devp2p tool",
-		Version:     params.VersionWithCommit(gitCommit, gitDate),
-		Writer:      os.Stdout,
-		HideVersion: true,
-	}
-)
+var app = flags.NewApp("go-ethereum devp2p tool")
 
 func init() {
-	// Set up the CLI app.
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
@@ -56,6 +42,7 @@ func init() {
 		fmt.Fprintf(os.Stderr, "No such command: %s\n", cmd)
 		os.Exit(1)
 	}
+
 	// Add subcommands.
 	app.Commands = []*cli.Command{
 		enrdumpCommand,

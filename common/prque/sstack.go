@@ -10,53 +10,50 @@
 
 package prque
 
+import "golang.org/x/exp/constraints"
+
 // The size of a block of data
 const blockSize = 4096
 
 // A prioritized item in the sorted stack.
-//
-// Note: priorities can "wrap around" the int64 range, a comes before b if (a.priority - b.priority) > 0.
-// The difference between the lowest and highest priorities in the queue at any point should be less than 2^63.
-type item struct {
-	value    interface{}
-	priority int64
+type item[P constraints.Ordered, V any] struct {
+	value    V
+	priority P
 }
 
 // SetIndexCallback is called when the element is moved to a new index.
 // Providing SetIndexCallback is optional, it is needed only if the application needs
 // to delete elements other than the top one.
-type SetIndexCallback func(data interface{}, index int)
+type SetIndexCallback[V any] func(data V, index int)
 
 // Internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
-type sstack struct {
-	setIndex   SetIndexCallback
-	size       int
-	capacity   int
-	offset     int
-	wrapAround bool
+type sstack[P constraints.Ordered, V any] struct {
+	setIndex SetIndexCallback[V]
+	size     int
+	capacity int
+	offset   int
 
-	blocks [][]*item
-	active []*item
+	blocks [][]*item[P, V]
+	active []*item[P, V]
 }
 
 // Creates a new, empty stack.
-func newSstack(setIndex SetIndexCallback, wrapAround bool) *sstack {
-	result := new(sstack)
+func newSstack[P constraints.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V] {
+	result := new(sstack[P, V])
 	result.setIndex = setIndex
-	result.active = make([]*item, blockSize)
-	result.blocks = [][]*item{result.active}
+	result.active = make([]*item[P, V], blockSize)
+	result.blocks = [][]*item[P, V]{result.active}
 	result.capacity = blockSize
-	result.wrapAround = wrapAround
 	return result
 }
 
 // Pushes a value onto the stack, expanding it if necessary. Required by
 // heap.Interface.
-func (s *sstack) Push(data interface{}) {
+func (s *sstack[P, V]) Push(data any) {
 	if s.size == s.capacity {
-		s.active = make([]*item, blockSize)
+		s.active = make([]*item[P, V], blockSize)
 		s.blocks = append(s.blocks, s.active)
 		s.capacity += blockSize
 		s.offset = 0
@@ -65,16 +62,16 @@ func (s *sstack) Push(data interface{}) {
 		s.offset = 0
 	}
 	if s.setIndex != nil {
-		s.setIndex(data.(*item).value, s.size)
+		s.setIndex(data.(*item[P, V]).value, s.size)
 	}
-	s.active[s.offset] = data.(*item)
+	s.active[s.offset] = data.(*item[P, V])
 	s.offset++
 	s.size++
 }
 
 // Pops a value off the stack and returns it. Currently no shrinking is done.
 // Required by heap.Interface.
-func (s *sstack) Pop() (res interface{}) {
+func (s *sstack[P, V]) Pop() (res any) {
 	s.size--
 	s.offset--
 	if s.offset < 0 {
@@ -83,28 +80,24 @@ func (s *sstack) Pop() (res interface{}) {
 	}
 	res, s.active[s.offset] = s.active[s.offset], nil
 	if s.setIndex != nil {
-		s.setIndex(res.(*item).value, -1)
+		s.setIndex(res.(*item[P, V]).value, -1)
 	}
 	return
 }
 
 // Returns the length of the stack. Required by sort.Interface.
-func (s *sstack) Len() int {
+func (s *sstack[P, V]) Len() int {
 	return s.size
 }
 
 // Compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
-func (s *sstack) Less(i, j int) bool {
-	a, b := s.blocks[i/blockSize][i%blockSize].priority, s.blocks[j/blockSize][j%blockSize].priority
-	if s.wrapAround {
-		return a-b > 0
-	}
-	return a > b
+func (s *sstack[P, V]) Less(i, j int) bool {
+	return s.blocks[i/blockSize][i%blockSize].priority > s.blocks[j/blockSize][j%blockSize].priority
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.
-func (s *sstack) Swap(i, j int) {
+func (s *sstack[P, V]) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
 	a, b := s.blocks[jb][jo], s.blocks[ib][io]
 	if s.setIndex != nil {
@@ -115,6 +108,6 @@ func (s *sstack) Swap(i, j int) {
 }
 
 // Resets the stack, effectively clearing its contents.
-func (s *sstack) Reset() {
-	*s = *newSstack(s.setIndex, false)
+func (s *sstack[P, V]) Reset() {
+	*s = *newSstack[P, V](s.setIndex)
 }

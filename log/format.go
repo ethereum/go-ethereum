@@ -79,14 +79,14 @@ type TerminalStringer interface {
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
-//     [LEVEL] [TIME] MESSAGE key=value key=value ...
+//	[LEVEL] [TIME] MESSAGE key=value key=value ...
 //
 // Example:
 //
-//     [DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-//
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func TerminalFormat(usecolor bool) Format {
 	return FormatFunc(func(r *Record) []byte {
+		msg := escapeMessage(r.Msg)
 		var color = 0
 		if usecolor {
 			switch r.Lvl {
@@ -123,19 +123,19 @@ func TerminalFormat(usecolor bool) Format {
 
 			// Assemble and print the log heading
 			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, msg)
 			} else {
-				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, msg)
 			}
 		} else {
 			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), msg)
 			} else {
-				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
+				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), msg)
 			}
 		}
 		// try to justify the log output for short messages
-		length := utf8.RuneCountInString(r.Msg)
+		length := utf8.RuneCountInString(msg)
 		if len(r.Ctx) > 0 && length < termMsgJust {
 			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
 		}
@@ -149,7 +149,6 @@ func TerminalFormat(usecolor bool) Format {
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-//
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
@@ -169,6 +168,8 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 		v := formatLogfmtValue(ctx[i+1], term)
 		if !ok {
 			k, v = errorKey, formatLogfmtValue(k, term)
+		} else {
+			k = escapeString(k)
 		}
 
 		// XXX: we should probably check that all of your key bytes aren't invalid
@@ -473,8 +474,31 @@ func formatLogfmtBigInt(n *big.Int) string {
 func escapeString(s string) string {
 	needsQuoting := false
 	for _, r := range s {
-		// We quote everything below " (0x34) and above~ (0x7E), plus equal-sign
+		// We quote everything below " (0x22) and above~ (0x7E), plus equal-sign
 		if r <= '"' || r > '~' || r == '=' {
+			needsQuoting = true
+			break
+		}
+	}
+	if !needsQuoting {
+		return s
+	}
+	return strconv.Quote(s)
+}
+
+// escapeMessage checks if the provided string needs escaping/quoting, similarly
+// to escapeString. The difference is that this method is more lenient: it allows
+// for spaces and linebreaks to occur without needing quoting.
+func escapeMessage(s string) string {
+	needsQuoting := false
+	for _, r := range s {
+		// Allow CR/LF/TAB. This is to make multi-line messages work.
+		if r == '\r' || r == '\n' || r == '\t' {
+			continue
+		}
+		// We quote everything below <space> (0x20) and above~ (0x7E),
+		// plus equal-sign
+		if r < ' ' || r > '~' || r == '=' {
 			needsQuoting = true
 			break
 		}
