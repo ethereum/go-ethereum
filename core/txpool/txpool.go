@@ -975,7 +975,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
+	newErrs, _ := pool.addTxsLocked(news, local)
 	pool.mu.Unlock()
 
 	var nilSlot = 0
@@ -987,7 +987,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		nilSlot++
 	}
 	// Reorg the pool internals if needed and return
-	done := pool.requestPromoteExecutables(dirtyAddrs)
+	done := pool.requestPromoteExecutables( /* dirtyAddrs */)
 	if sync {
 		<-done
 	}
@@ -997,17 +997,19 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
-	dirty := newAccountSet(pool.signer)
+	//dirty := newAccountSet(pool.signer)
 	errs := make([]error, len(txs))
+	valid := int64(0)
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
 		errs[i] = err
 		if err == nil && !replaced {
-			dirty.addTx(tx)
+			//dirty.addTx(tx)
+			valid++
 		}
 	}
-	validTxMeter.Mark(int64(len(dirty.accounts)))
-	return errs, dirty
+	validTxMeter.Mark(valid)
+	return errs, nil
 }
 
 // Status returns the status (unknown/pending/queued) of a batch of transactions
@@ -1109,9 +1111,9 @@ func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) c
 
 // requestPromoteExecutables requests transaction promotion checks for the given addresses.
 // The returned channel is closed when the promotion checks have occurred.
-func (pool *TxPool) requestPromoteExecutables(set *accountSet) chan struct{} {
+func (pool *TxPool) requestPromoteExecutables( /* set *accountSet */) chan struct{} {
 	select {
-	case pool.reqPromoteCh <- set:
+	case pool.reqPromoteCh <- nil: //set:
 		return <-pool.reorgDoneCh
 	case <-pool.reorgShutdownCh:
 		return pool.reorgShutdownCh
@@ -1137,15 +1139,15 @@ func (pool *TxPool) scheduleReorgLoop() {
 		nextDone      = make(chan struct{})
 		launchNextRun bool
 		reset         *txpoolResetRequest
-		dirtyAccounts *accountSet
-		queuedEvents  = make(map[common.Address]*sortedMap)
+		//dirtyAccounts *accountSet
+		queuedEvents = make(map[common.Address]*sortedMap)
 	)
 	for {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
 			go func(done chan struct{}) {
-				pool.runReorg(reset, dirtyAccounts, queuedEvents)
+				pool.runReorg(reset /* dirtyAccounts ,*/, queuedEvents)
 				close(done)
 			}(nextDone)
 
@@ -1153,7 +1155,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			curDone, nextDone = nextDone, make(chan struct{})
 			launchNextRun = false
 
-			reset, dirtyAccounts = nil, nil
+			reset = nil
 			queuedEvents = make(map[common.Address]*sortedMap)
 		}
 
@@ -1168,13 +1170,13 @@ func (pool *TxPool) scheduleReorgLoop() {
 			launchNextRun = true
 			pool.reorgDoneCh <- nextDone
 
-		case req := <-pool.reqPromoteCh:
+		case <-pool.reqPromoteCh:
 			// Promote request: update address set if request is already pending.
-			if dirtyAccounts == nil {
-				dirtyAccounts = req
-			} else {
-				dirtyAccounts.merge(req)
-			}
+			//if dirtyAccounts == nil {
+			//	dirtyAccounts = req
+			//} else {
+			//	dirtyAccounts.merge(req)
+			//}
 			launchNextRun = true
 			pool.reorgDoneCh <- nextDone
 
@@ -1202,7 +1204,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *TxPool) runReorg(reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*sortedMap) {
+func (pool *TxPool) runReorg(reset *txpoolResetRequest, events map[common.Address]*sortedMap) {
 	defer func(t0 time.Time) {
 		reorgDurationTimer.Update(time.Since(t0))
 	}(time.Now())
