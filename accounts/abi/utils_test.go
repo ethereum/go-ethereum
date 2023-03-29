@@ -49,6 +49,10 @@ func TestResolveNameConflict(t *testing.T) {
 			input:  "method",
 			output: "method0",
 		},
+		{
+			input:  "",
+			output: "",
+		},
 	}
 
 	for _, test := range tests {
