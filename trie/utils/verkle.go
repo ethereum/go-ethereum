@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"math/big"
 	"sync"
 
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
@@ -39,6 +40,12 @@ var (
 	MainStorageOffset   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
 	VerkleNodeWidth     = uint256.NewInt(256)
 	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
+
+	// BigInt versions of the above.
+	headerStorageOffsetBig = HeaderStorageOffset.ToBig()
+	mainStorageOffsetBig   = MainStorageOffset.ToBig()
+	verkleNodeWidthBig     = VerkleNodeWidth.ToBig()
+	codeStorageDeltaBig    = codeStorageDelta.ToBig()
 
 	getTreePolyIndex0Point *verkle.Point
 )
@@ -261,23 +268,23 @@ func EvaluateAddressPoint(address []byte) *verkle.Point {
 	return ret
 }
 
-func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageKey *uint256.Int) []byte {
-	pos := storageKey.Clone()
-	if storageKey.Cmp(codeStorageDelta) < 0 {
-		pos.Add(HeaderStorageOffset, storageKey)
+func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageKey []byte) []byte {
+	// Note that `pos` must be a big.Int and not a uint256.Int, because the subsequent
+	// arithmetics operations could overflow. (e.g: imagine if storageKey is 2^256-1)
+	pos := new(big.Int).SetBytes(storageKey)
+	if pos.Cmp(codeStorageDeltaBig) < 0 {
+		pos.Add(headerStorageOffsetBig, pos)
 	} else {
-		pos.Add(MainStorageOffset, storageKey)
+		pos.Add(mainStorageOffsetBig, pos)
 	}
-	treeIndex := new(uint256.Int).Div(pos, VerkleNodeWidth)
+	treeIndex, overflow := uint256.FromBig(pos.Div(pos, verkleNodeWidthBig))
+	if overflow { // Must never happen considering the EIP definition.
+		panic("tree index overflow")
+	}
 	// calculate the sub_index, i.e. the index in the stem tree.
 	// Because the modulus is 256, it's the last byte of treeIndex
-	subIndexMod := new(uint256.Int).Mod(pos, VerkleNodeWidth)
-	var subIndex byte
-	if len(subIndexMod) != 0 {
-		// uint256 is broken into 4 little-endian quads,
-		// each with native endianness. Extract the least
-		// significant byte.
-		subIndex = byte(subIndexMod[0])
-	}
+	posBytes := pos.Bytes()
+	subIndex := posBytes[len(posBytes)-1]
+
 	return getTreeKeyWithEvaluatedAddess(evaluated, treeIndex, subIndex)
 }

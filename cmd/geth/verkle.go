@@ -247,7 +247,7 @@ func convertToVerkle(ctx *cli.Context) error {
 				}
 
 				// Slot not in the header group, get its tree key
-				slotkey := tutils.GetTreeKeyStorageSlotWithEvaluatedAddress(addrPoint, slotnrbig)
+				slotkey := tutils.GetTreeKeyStorageSlotWithEvaluatedAddress(addrPoint, slotnr)
 
 				// Create the group if need be
 				values := translatedStorage[string(slotkey[:31])]
