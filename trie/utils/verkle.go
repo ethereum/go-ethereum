@@ -277,7 +277,7 @@ func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageK
 	} else {
 		pos.Add(mainStorageOffsetBig, pos)
 	}
-	treeIndex, overflow := uint256.FromBig(pos.Div(pos, verkleNodeWidthBig))
+	treeIndex, overflow := uint256.FromBig(big.NewInt(0).Div(pos, verkleNodeWidthBig))
 	if overflow { // Must never happen considering the EIP definition.
 		panic("tree index overflow")
 	}
