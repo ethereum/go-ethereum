@@ -811,7 +811,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 // isGapped reports whether the given transaction is immediately executable.
 func (pool *TxPool) isGapped(from common.Address, tx *types.Transaction) bool {
 	// Short circuit if transaction matches pending nonce and can be promoted
-	// to pending list as as executable one.
+	// to pending list as an executable transaction.
 	next := pool.pendingNonces.get(from)
 	if tx.Nonce() == next {
 		return false
