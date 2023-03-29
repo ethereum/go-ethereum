@@ -165,8 +165,8 @@ func convertToVerkle(ctx *cli.Context) error {
 
 		// Store the basic account data
 		var (
-			nonce, balance, version [32]byte
-			newValues               = make([][]byte, 256)
+			nonce, balance, version, size [32]byte
+			newValues                     = make([][]byte, 256)
 		)
 		newValues[0] = version[:]
 		newValues[1] = balance[:]
@@ -207,11 +207,10 @@ func convertToVerkle(ctx *cli.Context) error {
 			}
 
 			// Write the code size in the account header group
-			var size [32]byte
-			newValues[3] = acc.CodeHash[:]
-			newValues[4] = size[:]
 			binary.LittleEndian.PutUint64(size[:8], uint64(len(code)))
 		}
+		newValues[3] = acc.CodeHash[:]
+		newValues[4] = size[:]
 
 		// Save every slot into the tree
 		if !bytes.Equal(acc.Root, emptyRoot[:]) {
