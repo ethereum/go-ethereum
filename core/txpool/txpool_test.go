@@ -327,7 +327,7 @@ func TestQueue(t *testing.T) {
 	<-pool.requestReset(nil, nil)
 
 	pool.enqueueTx(tx.Hash(), tx, false, true)
-	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
+	<-pool.requestPromoteExecutables()
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
@@ -337,8 +337,14 @@ func TestQueue(t *testing.T) {
 	testSetNonce(pool, from, 2)
 	pool.enqueueTx(tx.Hash(), tx, false, true)
 
-	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
-	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
+	<-pool.requestPromoteExecutables()
+
+	list := pool.pending[from]
+	if list == nil {
+		t.Fatalf("expected transaction to be in tx pool")
+	}
+
+	if _, ok := list.txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
 	//if len(pool.queue) > 0 {
@@ -476,9 +482,9 @@ func TestDoubleNonce(t *testing.T) {
 	if replace, err := pool.add(tx2, false); err != nil || !replace {
 		t.Errorf("second transaction insert failed (%v) or not reported replacement (%v)", err, replace)
 	}
-	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
-	if pool.pending[addr].Len() != 1 {
-		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
+	<-pool.requestPromoteExecutables()
+	if have := pendingCount(pool, addr); have != 1 {
+		t.Fatalf("expected 1 pending transactions, have %d", have)
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
@@ -486,9 +492,9 @@ func TestDoubleNonce(t *testing.T) {
 
 	// Add the third transaction and ensure it's not saved (smaller price)
 	pool.add(tx3, false)
-	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
-	if pool.pending[addr].Len() != 1 {
-		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
+	<-pool.requestPromoteExecutables()
+	if have := pendingCount(pool, addr); have != 1 {
+		t.Fatalf("expected 1 pending transactions, have %d", have)
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
@@ -502,6 +508,14 @@ func TestDoubleNonce(t *testing.T) {
 func pendingSize(pool *TxPool) int {
 	p, _ := pool.Stats()
 	return p
+}
+
+// pendingCount returns how many pending transactions the given sender has
+func pendingCount(pool *TxPool, sender common.Address) int {
+	if list := pool.pending[sender]; list != nil {
+		return list.Len()
+	}
+	return 0
 }
 
 func TestMissingNonce(t *testing.T) {
@@ -1246,20 +1260,20 @@ func TestAllowedTxSize(t *testing.T) {
 	dataSize := txMaxSize - baseSize
 
 	// Try adding a transaction with maximal allowed size
-	tx := pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(1), key, dataSize)
+	tx := pricedDataTransaction(0, pool.currentMaxGas.Load(), big.NewInt(1), key, dataSize)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
 	}
 	// Try adding a transaction with random allowed size
-	if err := pool.addRemoteSync(pricedDataTransaction(1, pool.currentMaxGas, big.NewInt(1), key, uint64(rand.Intn(int(dataSize))))); err != nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(1, pool.currentMaxGas.Load(), big.NewInt(1), key, uint64(rand.Intn(int(dataSize))))); err != nil {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 	// Try adding a transaction of minimal not allowed size
-	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentMaxGas, big.NewInt(1), key, txMaxSize)); err == nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentMaxGas.Load(), big.NewInt(1), key, txMaxSize)); err == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction of random not allowed size
-	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentMaxGas, big.NewInt(1), key, dataSize+1+uint64(rand.Intn(10*txMaxSize)))); err == nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentMaxGas.Load(), big.NewInt(1), key, dataSize+1+uint64(rand.Intn(10*txMaxSize)))); err == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
 	// Run some sanity checks on the pool internals
