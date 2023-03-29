@@ -1229,9 +1229,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// setGRCP creates the gRPC RPC listener interface string from the set command
+// setGRPC creates the gRPC RPC listener interface string from the set command
 // line flags, returning empty if the gRPC endpoint is disabled.
-func setGRCP(ctx *cli.Context, cfg *node.Config) {
+func setGRPC(ctx *cli.Context, cfg *node.Config) {
 	if ctx.Bool(GRPCEnabledFlag.Name) {
 		if ctx.IsSet(GRPCHostFlag.Name) {
 			cfg.GRPCHost = ctx.String(GRPCHostFlag.Name)
@@ -1491,7 +1491,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
-	setGRCP(ctx, cfg)
+	setGRPC(ctx, cfg)
 	setGraphQL(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
