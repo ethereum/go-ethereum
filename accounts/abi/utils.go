@@ -35,7 +35,7 @@ import (
 // If a method name starts with a number an m is prepended (e.g. 1method -> m1method).
 func ResolveNameConflict(rawName string, used func(string) bool) string {
 	prefixedName := rawName
-	if unicode.IsDigit(rune(rawName[0])) {
+	if len(rawName) > 0 && unicode.IsDigit(rune(rawName[0])) {
 		prefixedName = fmt.Sprintf("%s%s", "m", rawName)
 	}
 	name := prefixedName
