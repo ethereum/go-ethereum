@@ -201,7 +201,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.setError(err)
 			return common.Hash{}
 		}
-		enc, err = tr.TryGetStorage(s.address, key.Bytes())
+		enc, err = tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -294,7 +294,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			if err := tr.TryDeleteStorage(s.address, key[:]); err != nil {
+			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
@@ -302,7 +302,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			if err := tr.TryUpdateStorage(s.address, key[:], v); err != nil {
+			if err := tr.UpdateStorage(s.address, key[:], v); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
