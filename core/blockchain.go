@@ -87,6 +87,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errInvalidVmConfig      = errors.New("vmConfig debug enabled without tracer")
 )
 
 const (
@@ -233,7 +234,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
-
+	// Ensure a Trace is provided if we are running in debug mode
+	if vmConfig.Debug {
+		if vmConfig.Tracer == nil {
+			return nil, errInvalidVmConfig
+		}
+	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
 		Cache:     cacheConfig.TrieCleanLimit,
