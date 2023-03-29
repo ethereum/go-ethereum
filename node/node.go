@@ -533,7 +533,7 @@ func (n *Node) stopRPC() {
 }
 
 func (n *Node) startGRPC() error {
-	if n.config.GRPCHost != "" {
+	if n.grpcServerHandler != nil {
 		// start the server
 		if err := n.grpcServerHandler.Start(); err != nil {
 			return err
@@ -544,7 +544,9 @@ func (n *Node) startGRPC() error {
 }
 
 func (n *Node) stopGRPC() {
-	n.grpcServerHandler.Stop()
+	if n.grpcServerHandler != nil {
+		n.grpcServerHandler.Stop()
+	}
 }
 
 // startInProc registers all RPC APIs on the inproc server.
