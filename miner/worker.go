@@ -1102,7 +1102,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, e
 	defer work.discard()
 
 	if !params.noTxs {
-		interrupt := &atomic.Int32{}
+		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(w.newpayloadTimeout, func() {
 			interrupt.Store(commitInterruptTimeout)
 		})
