@@ -75,7 +75,7 @@ type ChainIndexer struct {
 	backend  ChainIndexerBackend // Background processor generating the index data content
 	children []*ChainIndexer     // Child indexers to cascade chain updates to
 
-	active    uint32          // Flag whether the event loop was started
+	active    atomic.Bool     // Flag whether the event loop was started
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
 	ctx       context.Context
@@ -166,7 +166,7 @@ func (c *ChainIndexer) Close() error {
 		errs = append(errs, err)
 	}
 	// If needed, tear down the secondary event loop
-	if atomic.LoadUint32(&c.active) != 0 {
+	if c.active.Load() {
 		c.quit <- errc
 		if err := <-errc; err != nil {
 			errs = append(errs, err)
@@ -196,7 +196,7 @@ func (c *ChainIndexer) Close() error {
 // queue.
 func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
-	atomic.StoreUint32(&c.active, 1)
+	c.active.Store(true)
 
 	defer sub.Unsubscribe()
 
