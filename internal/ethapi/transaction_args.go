@@ -274,7 +274,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		GasTipCap:         gasTipCap,
 		Data:              data,
 		AccessList:        accessList,
-		SkipAccountChecks: true,
+		SkipAccountChecks: false,
 	}
 	return msg, nil
 }
