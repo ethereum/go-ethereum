@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -41,6 +42,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -896,6 +898,16 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	}
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+
+	// If gasPrice is 0, make sure that the account has sufficient balance to cover `l1Fee`.
+	if api.backend.ChainConfig().UsingScroll && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
+		l1Fee, err := fees.CalculateL1MsgFee(message, vmenv.StateDB)
+		if err != nil {
+			return nil, err
+		}
+
+		statedb.AddBalance(message.From(), l1Fee)
+	}
 
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)

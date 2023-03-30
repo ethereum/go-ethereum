@@ -47,6 +47,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -848,11 +849,12 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 // if statDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
-	Nonce     *hexutil.Uint64              `json:"nonce"`
-	Code      *hexutil.Bytes               `json:"code"`
-	Balance   **hexutil.Big                `json:"balance"`
-	State     *map[common.Hash]common.Hash `json:"state"`
-	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
+	Nonce      *hexutil.Uint64              `json:"nonce"`
+	Code       *hexutil.Bytes               `json:"code"`
+	Balance    **hexutil.Big                `json:"balance"`
+	BalanceAdd **hexutil.Big                `json:"balanceAdd"`
+	State      *map[common.Hash]common.Hash `json:"state"`
+	StateDiff  *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -873,8 +875,15 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 			state.SetCode(addr, *account.Code)
 		}
 		// Override account balance.
+		if account.Balance != nil && account.BalanceAdd != nil {
+			return fmt.Errorf("account %s has both 'balance' and 'balanceAdd'", addr.Hex())
+		}
 		if account.Balance != nil {
 			state.SetBalance(addr, (*big.Int)(*account.Balance))
+		}
+		if account.BalanceAdd != nil {
+			balance := big.NewInt(0).Add(state.GetBalance(addr), (*big.Int)(*account.BalanceAdd))
+			state.SetBalance(addr, balance)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
@@ -891,6 +900,54 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		}
 	}
 	return nil
+}
+
+func newRPCBalance(balance *big.Int) **hexutil.Big {
+	rpcBalance := (*hexutil.Big)(balance)
+	return &rpcBalance
+}
+
+func CalculateL1MsgFee(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, config *params.ChainConfig) (*big.Int, error) {
+	if !config.UsingScroll {
+		return big.NewInt(0), nil
+	}
+
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	// Get a new instance of the EVM.
+	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+	evm, _, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+	if err != nil {
+		return nil, err
+	}
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	go func() {
+		<-ctx.Done()
+		evm.Cancel()
+	}()
+
+	return fees.CalculateL1MsgFee(msg, evm.StateDB)
 }
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
@@ -985,6 +1042,26 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
+	// If gasPrice is 0 and no state override is set, make sure
+	// that the account has sufficient balance to cover `l1Fee`.
+	isGasPriceZero := args.GasPrice == nil || args.GasPrice.ToInt().Cmp(big.NewInt(0)) == 0
+
+	if overrides == nil {
+		overrides = &StateOverride{}
+	}
+	_, isOverrideSet := (*overrides)[args.from()]
+
+	if isGasPriceZero && !isOverrideSet {
+		l1Fee, err := CalculateL1MsgFee(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), s.b.ChainConfig())
+		if err != nil {
+			return nil, err
+		}
+
+		(*overrides)[args.from()] = OverrideAccount{
+			BalanceAdd: newRPCBalance(l1Fee),
+		}
+	}
+
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -1040,12 +1117,25 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		balance := state.GetBalance(*args.From) // from can't be nil
 		available := new(big.Int).Set(balance)
+
+		// account for tx value
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
 				return 0, errors.New("insufficient funds for transfer")
 			}
 			available.Sub(available, args.Value.ToInt())
 		}
+
+		// account for l1 fee
+		l1Fee, err := CalculateL1MsgFee(ctx, b, args, blockNrOrHash, nil, 0, gasCap, b.ChainConfig())
+		if err != nil {
+			return 0, err
+		}
+		if l1Fee.Cmp(available) >= 0 {
+			return 0, errors.New("insufficient funds for l1 fee")
+		}
+		available.Sub(available, l1Fee)
+
 		allowance := new(big.Int).Div(available, feeCap)
 
 		// If the allowance is larger than maximum uint64, skip checking
