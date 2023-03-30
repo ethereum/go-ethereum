@@ -47,7 +47,6 @@ func newMeteredConn(conn UDPConn) UDPConn {
 	if !metrics.Enabled {
 		return conn
 	}
-
 	return &meteredUdpConn{UDPConn: conn}
 }
 
