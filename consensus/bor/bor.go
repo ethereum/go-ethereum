@@ -692,13 +692,6 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 	currentSigner := *c.authorizedSigner.Load()
 
-	// Bail out early if we're unauthorized to sign a block. This check also takes
-	// place before block is signed in `Seal`.
-	if !snap.ValidatorSet.HasAddress(currentSigner.signer) {
-		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
-		return &UnauthorizedSignerError{number - 1, currentSigner.signer.Bytes()}
-	}
-
 	// Set the correct difficulty
 	header.Difficulty = new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, currentSigner.signer))
 
