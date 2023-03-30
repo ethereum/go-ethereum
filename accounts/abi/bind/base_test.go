@@ -196,7 +196,7 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 	var received map[string]interface{}
 	err := bc.UnpackLogIntoMap(received, "received", mockLog)
 	if err == nil {
-		t.Error("unpacking LOG0 is not supported")
+		t.Error("unpacking anonymous event is not supported")
 	}
 	if err.Error() != "no event signature" {
 		t.Errorf("expected error 'no event signature', got '%s'", err)
