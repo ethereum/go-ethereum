@@ -52,11 +52,12 @@ var (
 	logjsonFlag = &cli.BoolFlag{
 		Name:     "log.json",
 		Usage:    "Format logs with JSON",
+		Hidden:   true,
 		Category: flags.LoggingCategory,
 	}
-	logfmtFlag = &cli.BoolFlag{
-		Name:     "log.logfmt",
-		Usage:    "Format logs with logfmt",
+	logFormatFlag = &cli.StringFlag{
+		Name:     "log.format",
+		Usage:    "Log format to use (json|logfmt|terminal)",
 		Category: flags.LoggingCategory,
 	}
 	logFileFlag = &cli.StringFlag{
@@ -120,7 +121,7 @@ var Flags = []cli.Flag{
 	verbosityFlag,
 	vmoduleFlag,
 	logjsonFlag,
-	logfmtFlag,
+	logFormatFlag,
 	logFileFlag,
 	backtraceAtFlag,
 	debugFlag,
@@ -151,12 +152,24 @@ func Setup(ctx *cli.Context) error {
 	useColor := logFile == "" && os.Getenv("TERM") != "dumb" && (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd()))
 
 	var logfmt log.Format
-	if ctx.Bool(logjsonFlag.Name) {
+	switch ctx.String(logFormatFlag.Name) {
+	case "json":
 		logfmt = log.JSONFormat()
-	} else if ctx.Bool(logfmtFlag.Name) {
+	case "logfmt":
 		logfmt = log.LogfmtFormat()
-	} else {
+	case "terminal":
 		logfmt = log.TerminalFormat(useColor)
+	case "":
+		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
+		if ctx.Bool(logjsonFlag.Name) {
+			defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+			logfmt = log.JSONFormat()
+		} else {
+			logfmt = log.TerminalFormat(useColor)
+		}
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
 	}
 
 	if logFile != "" {
