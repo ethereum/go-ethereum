@@ -162,7 +162,7 @@ func Setup(ctx *cli.Context) error {
 	case "":
 		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
 		if ctx.Bool(logjsonFlag.Name) {
-			log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+			defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
 			logfmt = log.JSONFormat()
 		} else {
 			logfmt = log.TerminalFormat(useColor)
