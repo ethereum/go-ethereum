@@ -186,7 +186,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
-func TestUnpackAnonomousLogIntoMap(t *testing.T) {
+func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 	mockLog := newMockLog(nil, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":false,"name":"amount","type":"uint256"}],"name":"received","type":"event"}]`
