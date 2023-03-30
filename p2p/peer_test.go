@@ -129,7 +129,8 @@ func TestPeerProtoReadMsg(t *testing.T) {
 		},
 	}
 
-	closer, rw, _, errc := testPeer([]Protocol{proto})
+	closer, rw, peer, errc := testPeer([]Protocol{proto})
+	defer peer.Disconnect(DiscQuitting)
 	defer closer()
 
 	Send(rw, baseProtocolLength+2, []uint{1})
@@ -160,7 +161,8 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			return nil
 		},
 	}
-	closer, rw, _, _ := testPeer([]Protocol{proto})
+	closer, rw, peer, _ := testPeer([]Protocol{proto})
+	defer peer.Disconnect(DiscQuitting)
 	defer closer()
 
 	if err := ExpectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
@@ -172,7 +174,7 @@ func TestPeerPing(t *testing.T) {
 	closer, rw, _, _ := testPeer(nil)
 	defer closer()
 	if err := SendItems(rw, pingMsg); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 	if err := ExpectMsg(rw, pongMsg, nil); err != nil {
 		t.Error(err)
