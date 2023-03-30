@@ -22,7 +22,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 
@@ -79,11 +78,9 @@ var (
 		Usage:    "Prepends log messages with call-site location (file and line number)",
 		Category: flags.LoggingCategory,
 	}
-	logLocationFlag = &flags.DirectoryFlag{
-		Name:     "log.folder",
-		Usage:    "Location where the log files should be placed",
-		Value:    flags.DirectoryString("./logs/"),
-		Category: flags.LoggingCategory,
+	logRotateFlag = &cli.BoolFlag{
+		Name:  "log.rotate",
+		Usage: "Enables log file rotation",
 	}
 	logMaxSizeMBsFlag = &cli.IntFlag{
 		Name:     "log.maxsize",
@@ -153,12 +150,12 @@ var (
 var Flags = []cli.Flag{
 	verbosityFlag,
 	vmoduleFlag,
+	backtraceAtFlag,
+	debugFlag,
 	logjsonFlag,
 	logFormatFlag,
 	logFileFlag,
-	backtraceAtFlag,
-	debugFlag,
-	logLocationFlag,
+	logRotateFlag,
 	logMaxSizeMBsFlag,
 	logMaxBackupsFlag,
 	logMaxAgeFlag,
@@ -186,59 +183,65 @@ func init() {
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
-	output := io.Writer(os.Stderr)
-	var logfmt log.Format
-	ttyHasColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-
-	switch ctx.String(logFormatFlag.Name) {
-	case "json":
-		logfmt = log.JSONFormat()
-	case "logfmt":
-		logfmt = log.LogfmtFormat()
-	case "terminal":
-		logfmt = log.TerminalFormat(ttyHasColor)
-	case "":
+	var (
+		logfmt     log.Format
+		output     = io.Writer(os.Stderr)
+		logFmtFlag = ctx.String(logFormatFlag.Name)
+	)
+	switch {
+	case ctx.Bool(logjsonFlag.Name):
 		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
-		if ctx.Bool(logjsonFlag.Name) {
-			defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
-			logfmt = log.JSONFormat()
-		} else {
-			logfmt = log.TerminalFormat(ttyHasColor)
+		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+		logfmt = log.JSONFormat()
+	case logFmtFlag == "json":
+		logfmt = log.JSONFormat()
+	case logFmtFlag == "logfmt":
+		logfmt = log.LogfmtFormat()
+	case logFmtFlag == "", logFmtFlag == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if useColor {
+			output = colorable.NewColorableStderr()
 		}
+		logfmt = log.TerminalFormat(useColor)
 	default:
 		// Unknown log format specified
 		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
 	}
-
-	if logFile != "" {
-		var err error
-		logOutputStream, err = log.FileHandler(logFile, logfmt)
-		if err != nil {
-			return err
-		}
-	} else {
-		if ttyHasColor {
-			output = colorable.NewColorableStderr()
-		}
-		logfmt = log.TerminalFormat(ttyHasColor)
-	}
-
-	stdHandler := log.StreamHandler(output, logfmt)
-	ostream := stdHandler
-	if folder := ctx.String(logLocationFlag.Name); folder != "" {
-		if err := validateLogLocation(folder); err != nil {
+	var (
+		stdHandler = log.StreamHandler(output, logfmt)
+		ostream    = stdHandler
+		logFile    = ctx.String(logFileFlag.Name)
+		rotation   = ctx.Bool(logRotateFlag.Name)
+	)
+	if len(logFile) > 0 {
+		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
 			return fmt.Errorf("failed to initiatilize file logger: %v", err)
 		}
-		lumberjackHandler := log.StreamHandler(&lumberjack.Logger{
-			Filename:   path.Join(folder, "log.log"),
+	}
+	if rotation {
+		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
+		// so typically /tmp/geth-lumberjack.log on linux
+		if len(logFile) > 0 {
+			log.Info("Rotating file logging configured", "location", logFile)
+		} else {
+			log.Info("Rotating file logging configured", "location",
+				filepath.Join(os.TempDir(), "geth-lumberjack.log"))
+		}
+		ostream = log.MultiHandler(log.StreamHandler(&lumberjack.Logger{
+			Filename:   logFile,
 			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
 			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
 			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
 			Compress:   ctx.Bool(logCompressFlag.Name),
-		}, logfmt)
-		ostream = log.MultiHandler(lumberjackHandler, stdHandler)
+		}, logfmt), stdHandler)
+	} else if logFile != "" {
+		if logOutputStream, err := log.FileHandler(logFile, logfmt); err != nil {
+			return err
+		} else {
+			ostream = log.MultiHandler(logOutputStream, stdHandler)
+			log.Info("File logging configured", "location", logFile)
+		}
 	}
-
 	glogger.SetHandler(ostream)
 
 	// logging
