@@ -76,6 +76,7 @@ var (
 		GrayGlacierBlock:              big.NewInt(15_050_000),
 		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		TerminalTotalDifficultyPassed: true,
+		ShanghaiTime:                  newUint64(1681338455),
 		Ethash:                        new(EthashConfig),
 	}
 
@@ -194,6 +195,7 @@ var (
 		ArrowGlacierBlock:             nil,
 		TerminalTotalDifficulty:       big.NewInt(10_790_000),
 		TerminalTotalDifficultyPassed: true,
+		ShanghaiTime:                  newUint64(1678832736),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,

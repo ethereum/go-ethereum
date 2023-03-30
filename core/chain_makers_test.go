@@ -19,7 +19,10 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,6 +30,112 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+func TestGenerateWithdrawalChain(t *testing.T) {
+	var (
+		keyHex  = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
+		key, _  = crypto.HexToECDSA(keyHex)
+		address = crypto.PubkeyToAddress(key.PublicKey) // 658bdf435d810c91414ec09147daa6db62406379
+		aa      = common.Address{0xaa}
+		bb      = common.Address{0xbb}
+		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
+		config  = *params.AllEthashProtocolChanges
+		gspec   = &Genesis{
+			Config:     &config,
+			Alloc:      GenesisAlloc{address: {Balance: funds}},
+			BaseFee:    big.NewInt(params.InitialBaseFee),
+			Difficulty: common.Big1,
+			GasLimit:   5_000_000,
+		}
+		gendb  = rawdb.NewMemoryDatabase()
+		signer = types.LatestSigner(gspec.Config)
+		db     = rawdb.NewMemoryDatabase()
+	)
+
+	config.TerminalTotalDifficultyPassed = true
+	config.TerminalTotalDifficulty = common.Big0
+	config.ShanghaiTime = u64(0)
+
+	// init 0xaa with some storage elements
+	storage := make(map[common.Hash]common.Hash)
+	storage[common.Hash{0x00}] = common.Hash{0x00}
+	storage[common.Hash{0x01}] = common.Hash{0x01}
+	storage[common.Hash{0x02}] = common.Hash{0x02}
+	storage[common.Hash{0x03}] = common.HexToHash("0303")
+	gspec.Alloc[aa] = GenesisAccount{
+		Balance: common.Big1,
+		Nonce:   1,
+		Storage: storage,
+		Code:    common.Hex2Bytes("6042"),
+	}
+	gspec.Alloc[bb] = GenesisAccount{
+		Balance: common.Big2,
+		Nonce:   1,
+		Storage: storage,
+		Code:    common.Hex2Bytes("600154600354"),
+	}
+
+	genesis := gspec.MustCommit(gendb)
+
+	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
+		gen.AddTx(tx)
+		if i == 1 {
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 42,
+				Address:   common.Address{0xee},
+				Amount:    1337,
+			})
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 13,
+				Address:   common.Address{0xee},
+				Amount:    1,
+			})
+		}
+		if i == 3 {
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 42,
+				Address:   common.Address{0xee},
+				Amount:    1337,
+			})
+			gen.AddWithdrawal(&types.Withdrawal{
+				Validator: 13,
+				Address:   common.Address{0xee},
+				Amount:    1,
+			})
+		}
+	})
+
+	// Import the chain. This runs all block validation rules.
+	blockchain, _ := NewBlockChain(db, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+
+	if i, err := blockchain.InsertChain(chain); err != nil {
+		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+		return
+	}
+
+	// enforce that withdrawal indexes are monotonically increasing from 0
+	var (
+		withdrawalIndex uint64
+		head            = blockchain.CurrentBlock().Number.Uint64()
+	)
+	for i := 0; i < int(head); i++ {
+		block := blockchain.GetBlockByNumber(uint64(i))
+		if block == nil {
+			t.Fatalf("block %d not found", i)
+		}
+		if len(block.Withdrawals()) == 0 {
+			continue
+		}
+		for j := 0; j < len(block.Withdrawals()); j++ {
+			if block.Withdrawals()[j].Index != withdrawalIndex {
+				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, withdrawalIndex)
+			}
+			withdrawalIndex += 1
+		}
+	}
+}
 
 func ExampleGenerateChain() {
 	var (
@@ -88,7 +197,7 @@ func ExampleGenerateChain() {
 	}
 
 	state, _ := blockchain.State()
-	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
+	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number)
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))
