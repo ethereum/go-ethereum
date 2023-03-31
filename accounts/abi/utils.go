@@ -32,11 +32,13 @@ import (
 //
 // Name conflicts are mostly resolved by adding number suffix. e.g. if the abi contains
 // Methods "send" and "send1", ResolveNameConflict would return "send2" for input "send".
-// If a method name starts with a number an m is prepended (e.g. 1method -> m1method).
+// If a method name starts with a number an M is prepended (e.g. 1method -> M1method).
+// This will export the method in the ABI, which is okay since a leading number can be interpreted
+// as an uppercase letter.
 func ResolveNameConflict(rawName string, used func(string) bool) string {
 	prefixedName := rawName
 	if len(rawName) > 0 && unicode.IsDigit(rune(rawName[0])) {
-		prefixedName = fmt.Sprintf("%s%s", "m", rawName)
+		prefixedName = fmt.Sprintf("%s%s", "M", rawName)
 	}
 	name := prefixedName
 	ok := used(name)

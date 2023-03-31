@@ -31,15 +31,15 @@ func TestResolveNameConflict(t *testing.T) {
 	}{
 		{
 			input:  "1method",
-			output: "m1method",
+			output: "M1method",
 		},
 		{
 			input:  "1method",
-			output: "m1method0",
+			output: "M1method0",
 		},
 		{
 			input:  "1method",
-			output: "m1method1",
+			output: "M1method1",
 		},
 		{
 			input:  "method",
