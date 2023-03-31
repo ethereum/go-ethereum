@@ -126,6 +126,22 @@ var (
 			WaitPeriod:           2,
 			MinePeriod:           2,
 		},
+		1512000: {
+			SwitchRound:          1512000,
+			CertThreshold:        50, // attack fix by reduce this number
+			TimeoutSyncThreshold: 5,
+			TimeoutPeriod:        25,
+			WaitPeriod:           2,
+			MinePeriod:           2,
+		},
+		1514000: {
+			SwitchRound:          1514000,
+			CertThreshold:        73, // recover back to normal number, expect all nodes is back into masternode list
+			TimeoutSyncThreshold: 5,
+			TimeoutPeriod:        25,
+			WaitPeriod:           2,
+			MinePeriod:           2,
+		},
 	}
 
 	UnitTestV2Configs = map[uint64]*V2Config{
