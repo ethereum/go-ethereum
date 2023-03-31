@@ -183,7 +183,7 @@ func TestNewPersonalAccount(t *testing.T) {
 		t.Fatalf("failed to create account: %v", err)
 	}
 
-	if !common.IsHexAddress(addr) {
+	if !common.IsHexAddress(addr.String()) {
 		t.Fatalf("address isn't hex encoded: %s", addr)
 	}
 }
