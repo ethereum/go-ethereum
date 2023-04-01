@@ -145,14 +145,14 @@ The transaction processing panel tracks the time taken to complete the various t
 <Note>
 Block propagation was disabled in Geth at The Merge. Block propagation is now the responsibility of the consensus client.  Included here for archival interest.
 </Note>
- 
+
 Block propagation metrics track the rate that the local node hears about, receives and broadcasts blocks. This includes:
 
-- **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share.
+- **ingress announcements**: the number of inbound announcements per second. Announcements are messages from peers that signal that they have a block to share
 - **known announcements**: the number of announcements per second the local node is already aware of them
-- **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node.
-- **ingress broadcasts**: the number of blocks directly propagated to local node per second.
-- **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded.
+- **malicious announcements**: the number of announcements per second that are determined to be malicious, e.g. because they are trying to mount a denial-of-service attack on the local node
+- **ingress broadcasts**: the number of blocks directly propagated to local node per second
+- **known broadcasts**: counts all blocks that have been broadcast by peers including those that are too far behind the head to be downloaded
 - **malicious broadcasts**: the number of blocks which are determined to be malicious per second
 
 #### Transaction propagation
@@ -195,30 +195,30 @@ Tracks the rate that headers/block bodies arrive from remote peers.
 
 ### Database
 
-The database section tracks various metrics related to data storage and i/o in the levelDB and ancients databases.
+The database section tracks various metrics related to data storage and i/o in the LevelDB and ancients databases.
 
 #### Data rate
 
-measures the rate that data is written to, or read from, the levelDB and ancients databases. Includes:
+Measures the rate that data is written to, or read from, the LevelDB and ancients databases. Includes:
 
-- **leveldb read**: Rate that data is read to the fast-access levelDB database that stores recent data.
-- **leveldb write**: Rate that data is written to the fast-access levelDB database that stores recent data.
+- **leveldb read**: Rate that data is read from the fast-access LevelDB database that stores recent data.
+- **leveldb write**: Rate that data is written to the fast-access LevelDB database that stores recent data.
 - **ancient read**: Rate that data is read from the freezer (the database storing older data).
 - **ancient write**: Rate that data is written to the freezer (the database storing older data)
-- **compaction read**: Rate that data is written to the levelDb database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
-- **compaction write**: Rate that data is read from to the levelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- **compaction read**: Rate that data is read from the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- **compaction write**: Rate that data is written to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
 
 #### Session totals
 
-Instead of the _rate_ that data is read from, and written to, the levelDB and ancients databases (as per `Data rate`), this panel tracks the total amount of data read and written across the entire time Geth is running.
+Instead of the _rate_ that data is read from, and written to, the LevelDB and ancients databases (as per `Data rate`), this panel tracks the total amount of data read and written across the entire time Geth is running.
 
 #### Persistent size
 
-This panel shows the amount of data, in GB, in the levelDB and ancients databases.
+This panel shows the amount of data, in GB, in the LevelDB and ancients databases.
 
 #### Compaction time, delay and count
 
-These panels show the amount of time spent compacting the levelDB database, duration write operations to the database are delayed due to compaction and the count of various types of compaction executions.
+These panels show the amount of time spent compacting the LevelDB database, duration write operations to the database are delayed due to compaction and the count of various types of compaction executions.
 
 <Note>
 The current default Geth Grafana dashboard includes panels for light nodes. Light nodes are not currently functional since Ethereum moved to proof-of-stake.
