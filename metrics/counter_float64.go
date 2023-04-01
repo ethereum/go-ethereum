@@ -1,7 +1,8 @@
 package metrics
 
 import (
-	"sync"
+	"math"
+	"sync/atomic"
 )
 
 // CounterFloat64 holds a float64 value that can be incremented and decremented.
@@ -38,13 +39,13 @@ func NewCounterFloat64() CounterFloat64 {
 	if !Enabled {
 		return NilCounterFloat64{}
 	}
-	return &StandardCounterFloat64{count: 0.0}
+	return &StandardCounterFloat64{}
 }
 
 // NewCounterFloat64Forced constructs a new StandardCounterFloat64 and returns it no matter if
 // the global switch is enabled or not.
 func NewCounterFloat64Forced() CounterFloat64 {
-	return &StandardCounterFloat64{count: 0.0}
+	return &StandardCounterFloat64{}
 }
 
 // NewRegisteredCounterFloat64 constructs and registers a new StandardCounterFloat64.
@@ -115,39 +116,52 @@ func (NilCounterFloat64) Snapshot() CounterFloat64 { return NilCounterFloat64{} 
 // StandardCounterFloat64 is the standard implementation of a CounterFloat64 and uses the
 // sync.Mutex package to manage a single float64 value.
 type StandardCounterFloat64 struct {
-	mutex sync.Mutex
-	count float64
+	floatBits uint64
 }
 
 // Clear sets the counter to zero.
 func (c *StandardCounterFloat64) Clear() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.count = 0.0
+	atomicClearFloat(&c.floatBits)
 }
 
 // Count returns the current value.
 func (c *StandardCounterFloat64) Count() float64 {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	return c.count
+	return atomicGetFloat(&c.floatBits)
 }
 
 // Dec decrements the counter by the given amount.
 func (c *StandardCounterFloat64) Dec(v float64) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.count -= v
+	atomicAddFloat(&c.floatBits, -v)
 }
 
 // Inc increments the counter by the given amount.
 func (c *StandardCounterFloat64) Inc(v float64) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.count += v
+	atomicAddFloat(&c.floatBits, v)
 }
 
 // Snapshot returns a read-only copy of the counter.
 func (c *StandardCounterFloat64) Snapshot() CounterFloat64 {
 	return CounterFloat64Snapshot(c.Count())
+}
+
+func atomicAddFloat(fbits *uint64, v float64) {
+	for {
+		loadedBits := atomic.LoadUint64(fbits)
+		newBits := math.Float64bits(math.Float64frombits(loadedBits) + v)
+		if atomic.CompareAndSwapUint64(fbits, loadedBits, newBits) {
+			break
+		}
+	}
+}
+
+func atomicGetFloat(addr *uint64) float64 {
+	return math.Float64frombits(atomic.LoadUint64(addr))
+}
+
+func atomicClearFloat(addr *uint64) {
+	atomic.StoreUint64(addr, 0)
+}
+
+func atomicStoreFloat(addr *uint64, v float64) {
+	atomic.StoreUint64(addr, math.Float64bits(v))
 }

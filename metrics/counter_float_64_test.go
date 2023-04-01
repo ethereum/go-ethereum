@@ -1,6 +1,9 @@
 package metrics
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func BenchmarkCounterFloat64(b *testing.B) {
 	c := NewCounterFloat64()
@@ -8,6 +11,20 @@ func BenchmarkCounterFloat64(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Inc(1.0)
 	}
+}
+
+func BenchmarkCounterFloat64Pararel(b *testing.B) {
+	c := NewCounterFloat64()
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	for i := 0; i < b.N; i++ {
+		wg.Add(1)
+		go func(i float64) {
+			c.Inc(i)
+			wg.Done()
+		}(float64(i))
+	}
+	wg.Wait()
 }
 
 func TestCounterFloat64Clear(t *testing.T) {
