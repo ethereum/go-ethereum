@@ -124,8 +124,8 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to retrieve trace result: %v", err)
 	}
-	ret := new([]flatCallTrace)
-	if err := json.Unmarshal(res, ret); err != nil {
+	ret := make([]flatCallTrace, 0)
+	if err := json.Unmarshal(res, &ret); err != nil {
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
 	if !jsonEqualFlat(ret, test.Result) {
