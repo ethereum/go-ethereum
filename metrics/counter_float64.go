@@ -114,7 +114,7 @@ func (NilCounterFloat64) Inc(i float64) {}
 func (NilCounterFloat64) Snapshot() CounterFloat64 { return NilCounterFloat64{} }
 
 // StandardCounterFloat64 is the standard implementation of a CounterFloat64 and uses the
-// sync.Mutex package to manage a single float64 value.
+// atomic to manage a single float64 value.
 type StandardCounterFloat64 struct {
 	floatBits uint64
 }

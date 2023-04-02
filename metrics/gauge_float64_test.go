@@ -13,7 +13,7 @@ func BenchmarkGaugeFloat64(b *testing.B) {
 	}
 }
 
-func BenchmarkGaugeFloat64Pararel(b *testing.B) {
+func BenchmarkGaugeFloat64Parallel(b *testing.B) {
 	c := NewGaugeFloat64()
 	b.ResetTimer()
 	var wg sync.WaitGroup

@@ -13,7 +13,7 @@ func BenchmarkCounterFloat64(b *testing.B) {
 	}
 }
 
-func BenchmarkCounterFloat64Pararel(b *testing.B) {
+func BenchmarkCounterFloat64Parallel(b *testing.B) {
 	c := NewCounterFloat64()
 	b.ResetTimer()
 	var wg sync.WaitGroup
