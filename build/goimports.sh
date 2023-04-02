@@ -2,13 +2,13 @@
 
 find_files() {
   find . ! \( \
-      \( \
-        -path '.github' \
-        -o -path './build/_workspace' \
-        -o -path './build/bin' \
-        -o -path './crypto/bn256' \
-        -o -path '*/vendor/*' \
-      \) -prune \
+    \( \
+    -path '.github' \
+    -o -path './build/_workspace' \
+    -o -path './build/bin' \
+    -o -path './crypto/bn256' \
+    -o -path '*/vendor/*' \
+    \) -prune \
     \) -name '*.go'
 }
 

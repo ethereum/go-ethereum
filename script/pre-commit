@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+ROOT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && cd .. && pwd)"
+# format json files
+for filepath in $(git diff HEAD --name-only | grep .json); do
+  jq . $filepath >$filepath.tmp && mv $filepath.tmp $filepath
+  if [[ $? != 0 ]]; then
+    rm $filepath.tmp
+  fi
+done
+
+make format
+
+find . -name '*.sh' | grep -v ".history" | xargs -I {} shfmt -l -w -ci --indent=2 {}
+shfmt -l -w -ci --indent=2 ${ROOT_PATH}/script/pre-commit
+shfmt -l -w -ci --indent=2 ${ROOT_PATH}/script/pre-push
+git add .

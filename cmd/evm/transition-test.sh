@@ -1,14 +1,14 @@
 #!/bin/bash
 ticks="\`\`\`"
 
-function showjson(){
+function showjson() {
   echo "\`$1\`:"
   echo "${ticks}json"
   cat $1
   echo ""
   echo "$ticks"
 }
-function demo(){
+function demo() {
   echo "$ticks"
   echo "$1"
   $1
@@ -16,15 +16,15 @@ function demo(){
   echo "$ticks"
   echo ""
 }
-function tick(){
+function tick() {
   echo "$ticks"
 }
 
-function code(){
+function code() {
   echo "$ticks$1"
 }
 
-cat << "EOF"
+cat <<"EOF"
 # EVM tool
 
 The EVM tool provides a few useful subcommands to facilitate testing at the EVM
@@ -65,7 +65,7 @@ Command line params that need to be supported are
 ```
 EOF
 ./evm t8n -h | grep "\-\-trace\.\|\-\-output\.\|\-\-state\.\|\-\-input"
-cat << "EOF"
+cat <<"EOF"
 ```
 #### Objects
 
@@ -225,12 +225,12 @@ There are a few (not many) errors that can occur, those are defined below.
 EOF
 ./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --state.fork=Frontier+1346 2>/dev/null
 exitcode=$?
-if [ $exitcode !=  3 ]; then
-	echo "Failed, exitcode should be 3,was $exitcode"
+if [ $exitcode != 3 ]; then
+  echo "Failed, exitcode should be 3,was $exitcode"
 else
   echo "exitcode:$exitcode OK"
 fi
-cat << "EOF"
+cat <<"EOF"
 ```
 #### Forks
 ### Basic usage
@@ -245,7 +245,9 @@ found in [`tests/init.go`](tests/init.go).
 Invoking it with the provided example files
 EOF
 cmd="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --state.fork=Berlin"
-tick;echo "$cmd"; tick
+tick
+echo "$cmd"
+tick
 $cmd 2>/dev/null
 echo "Two resulting files:"
 echo ""
@@ -255,14 +257,16 @@ echo ""
 
 echo "We can make them spit out the data to e.g. \`stdout\` like this:"
 cmd="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/txs.json --input.env=./testdata/1/env.json --output.result=stdout --output.alloc=stdout --state.fork=Berlin"
-tick;echo "$cmd"; tick
-output=`$cmd 2>/dev/null`
+tick
+echo "$cmd"
+tick
+output=$($cmd 2>/dev/null)
 echo "Output:"
 echo "${ticks}json"
 echo "$output"
 echo "$ticks"
 
-cat << "EOF"
+cat <<"EOF"
 
 #### About Ommers
 
@@ -294,7 +298,7 @@ showjson ./testdata/5/env.json
 
 echo "When applying this, using a reward of \`0x08\`"
 cmd="./evm t8n --input.alloc=./testdata/5/alloc.json -input.txs=./testdata/5/txs.json --input.env=./testdata/5/env.json  --output.alloc=stdout --state.reward=0x80 --state.fork=Berlin"
-output=`$cmd 2>/dev/null`
+output=$($cmd 2>/dev/null)
 echo "Output:"
 echo "${ticks}json"
 echo "$output"
@@ -305,7 +309,9 @@ echo ""
 echo "It is also possible to experiment with future eips that are not yet defined in a hard fork."
 echo "Example, putting EIP-1344 into Frontier: "
 cmd="./evm t8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json"
-tick;echo "$cmd"; tick
+tick
+echo "$cmd"
+tick
 echo ""
 
 echo "#### Block history"
@@ -336,7 +342,7 @@ cmd1="./evm t8n --input.alloc=./testdata/1/alloc.json --input.txs=./testdata/1/t
 cmd2="./evm t8n --input.alloc=stdin --input.env=./testdata/1/env.json --input.txs=./testdata/1/txs.json --state.fork=Berlin"
 echo "$ticks"
 echo "$cmd1 | $cmd2"
-output=$($cmd1 | $cmd2 )
+output=$($cmd1 | $cmd2)
 echo $output
 echo "$ticks"
 echo "What happened here, is that we first applied two identical transactions, so the second one was rejected. "
@@ -365,7 +371,7 @@ demo "cat signed_txs.rlp"
 echo "We can use \`rlpdump\` to check what the contents are: "
 echo "$ticks"
 echo "rlpdump -hex \$(cat signed_txs.rlp | jq -r )"
-rlpdump -hex $(cat signed_txs.rlp | jq -r )
+rlpdump -hex $(cat signed_txs.rlp | jq -r)
 echo "$ticks"
 echo "Now, we can now use those (or any other already signed transactions), as input, like so: "
 cmd="./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./signed_txs.rlp --input.env=./testdata/13/env.json --output.result=alloc_rlptx.json"
@@ -380,7 +386,7 @@ echo "cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateR
 cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot
 echo "$ticks"
 
-cat << "EOF"
+cat <<"EOF"
 
 ## Transaction tool
 
@@ -395,16 +401,18 @@ The transaction tool is used to perform static validity checks on transactions s
 EOF
 
 cmd="./evm t9n --state.fork Homestead --input.txs testdata/15/signed_txs.rlp"
-tick;echo "$cmd";
+tick
+echo "$cmd"
 $cmd 2>/dev/null
 tick
 
 cmd="./evm t9n --state.fork London --input.txs testdata/15/signed_txs.rlp"
-tick;echo "$cmd";
+tick
+echo "$cmd"
 $cmd 2>/dev/null
 tick
 
-cat << "EOF"
+cat <<"EOF"
 ## Block builder tool (b11r)
 
 The `evm b11r` tool is used to assemble and seal full block rlps.
