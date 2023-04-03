@@ -29,7 +29,7 @@ Geth also tracks several performance metrics for the LevelDB database that can b
 
 ## Freezer/ancients
 
-Older segments of the chain are moved out of the fast LevelDB database and into a freezer database the is less performant. Nodes rarely need to access these files so IO speed is less important and the bulk of the chain data can be stored on a cheaper HDD. Once blocks pass some threshold age (90,000 blocks behind the head by default) the block and receipt data is flattened and saved as a raw binary blob of data along with an index entry file used for identification.
+Older segments of the chain are moved out of the LevelDB database and into a freezer database. Nodes rarely need to access these files so IO speed is less important and the bulk of the chain data can be stored on a cheaper HDD. Once blocks pass some threshold age (90,000 blocks behind the head by default) the block and receipt data is flattened and saved as a raw binary blob of data along with an index entry file used for identification.
 
 Geth also tracks some basic metrics relating to the ancients database that can be monitored:
 
