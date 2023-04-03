@@ -1,6 +1,9 @@
 package metrics
 
-import "sync/atomic"
+import (
+	"math"
+	"sync/atomic"
+)
 
 // GaugeFloat64s hold a float64 value that can be set arbitrarily.
 type GaugeFloat64 interface {
@@ -93,12 +96,12 @@ func (g *StandardGaugeFloat64) Snapshot() GaugeFloat64 {
 
 // Update updates the gauge's value.
 func (g *StandardGaugeFloat64) Update(v float64) {
-	atomicStoreFloat(&g.floatBits, v)
+	g.floatBits.Store(math.Float64bits(v))
 }
 
 // Value returns the gauge's current value.
 func (g *StandardGaugeFloat64) Value() float64 {
-	return atomicGetFloat(&g.floatBits)
+	return math.Float64frombits(g.floatBits.Load())
 }
 
 // FunctionalGaugeFloat64 returns value from given function

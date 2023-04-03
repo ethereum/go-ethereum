@@ -121,12 +121,12 @@ type StandardCounterFloat64 struct {
 
 // Clear sets the counter to zero.
 func (c *StandardCounterFloat64) Clear() {
-	atomicClearFloat(&c.floatBits)
+	c.floatBits.Store(0)
 }
 
 // Count returns the current value.
 func (c *StandardCounterFloat64) Count() float64 {
-	return atomicGetFloat(&c.floatBits)
+	return math.Float64frombits(c.floatBits.Load())
 }
 
 // Dec decrements the counter by the given amount.
@@ -152,16 +152,4 @@ func atomicAddFloat(fbits *atomic.Uint64, v float64) {
 			break
 		}
 	}
-}
-
-func atomicGetFloat(addr *atomic.Uint64) float64 {
-	return math.Float64frombits(addr.Load())
-}
-
-func atomicClearFloat(addr *atomic.Uint64) {
-	addr.Store(0)
-}
-
-func atomicStoreFloat(addr *atomic.Uint64, v float64) {
-	addr.Store(math.Float64bits(v))
 }
