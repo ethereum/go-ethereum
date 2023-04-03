@@ -159,6 +159,9 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
+
+	BlobTxMinDataGasprice            = 1       // Minimum gas price for data blobs
+	BlobTxDataGaspriceUpdateFraction = 2225652 // Controls the maximum rate of change for data gas price
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
