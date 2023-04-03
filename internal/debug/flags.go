@@ -218,14 +218,19 @@ func Setup(ctx *cli.Context) error {
 			return fmt.Errorf("failed to initiatilize file logger: %v", err)
 		}
 	}
+	context := []interface{}{"rotate", rotation}
+	if len(logFmtFlag) > 0 {
+		context = append(context, "format", logFmtFlag)
+	} else {
+		context = append(context, "format", "terminal")
+	}
 	if rotation {
 		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
 		// so typically /tmp/geth-lumberjack.log on linux
 		if len(logFile) > 0 {
-			log.Info("Rotating file logging configured", "location", logFile)
+			context = append(context, "location", logFile)
 		} else {
-			log.Info("Rotating file logging configured", "location",
-				filepath.Join(os.TempDir(), "geth-lumberjack.log"))
+			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
 		}
 		ostream = log.MultiHandler(log.StreamHandler(&lumberjack.Logger{
 			Filename:   logFile,
@@ -239,7 +244,7 @@ func Setup(ctx *cli.Context) error {
 			return err
 		} else {
 			ostream = log.MultiHandler(logOutputStream, stdHandler)
-			log.Info("File logging configured", "location", logFile)
+			context = append(context, "location", logFile)
 		}
 	}
 	glogger.SetHandler(ostream)
@@ -292,6 +297,9 @@ func Setup(ctx *cli.Context) error {
 		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
+	}
+	if len(logFile) > 0 || rotation {
+		log.Info("Logging configured", context...)
 	}
 	return nil
 }
