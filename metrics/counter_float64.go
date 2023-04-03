@@ -116,7 +116,7 @@ func (NilCounterFloat64) Snapshot() CounterFloat64 { return NilCounterFloat64{} 
 // StandardCounterFloat64 is the standard implementation of a CounterFloat64 and uses the
 // atomic to manage a single float64 value.
 type StandardCounterFloat64 struct {
-	floatBits uint64
+	floatBits atomic.Uint64
 }
 
 // Clear sets the counter to zero.
@@ -144,24 +144,24 @@ func (c *StandardCounterFloat64) Snapshot() CounterFloat64 {
 	return CounterFloat64Snapshot(c.Count())
 }
 
-func atomicAddFloat(fbits *uint64, v float64) {
+func atomicAddFloat(fbits *atomic.Uint64, v float64) {
 	for {
-		loadedBits := atomic.LoadUint64(fbits)
+		loadedBits := fbits.Load()
 		newBits := math.Float64bits(math.Float64frombits(loadedBits) + v)
-		if atomic.CompareAndSwapUint64(fbits, loadedBits, newBits) {
+		if fbits.CompareAndSwap(loadedBits, newBits) {
 			break
 		}
 	}
 }
 
-func atomicGetFloat(addr *uint64) float64 {
-	return math.Float64frombits(atomic.LoadUint64(addr))
+func atomicGetFloat(addr *atomic.Uint64) float64 {
+	return math.Float64frombits(addr.Load())
 }
 
-func atomicClearFloat(addr *uint64) {
-	atomic.StoreUint64(addr, 0)
+func atomicClearFloat(addr *atomic.Uint64) {
+	addr.Store(0)
 }
 
-func atomicStoreFloat(addr *uint64, v float64) {
-	atomic.StoreUint64(addr, math.Float64bits(v))
+func atomicStoreFloat(addr *atomic.Uint64, v float64) {
+	addr.Store(math.Float64bits(v))
 }

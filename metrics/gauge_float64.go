@@ -1,5 +1,7 @@
 package metrics
 
+import "sync/atomic"
+
 // GaugeFloat64s hold a float64 value that can be set arbitrarily.
 type GaugeFloat64 interface {
 	Snapshot() GaugeFloat64
@@ -81,7 +83,7 @@ func (NilGaugeFloat64) Value() float64 { return 0.0 }
 // StandardGaugeFloat64 is the standard implementation of a GaugeFloat64 and uses
 // atomic to manage a single float64 value.
 type StandardGaugeFloat64 struct {
-	floatBits uint64
+	floatBits atomic.Uint64
 }
 
 // Snapshot returns a read-only copy of the gauge.

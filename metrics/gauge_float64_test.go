@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"sync"
 	"testing"
 )
 
@@ -16,15 +15,13 @@ func BenchmarkGaugeFloat64(b *testing.B) {
 func BenchmarkGaugeFloat64Parallel(b *testing.B) {
 	c := NewGaugeFloat64()
 	b.ResetTimer()
-	var wg sync.WaitGroup
-	for i := 0; i < b.N; i++ {
-		wg.Add(1)
-		go func(i float64) {
-			c.Update(i)
-			wg.Done()
-		}(float64(i))
-	}
-	wg.Wait()
+	b.RunParallel(func(pb *testing.PB) {
+		count := 1.0
+		for pb.Next() {
+			c.Update(count)
+			count += 1.0
+		}
+	})
 }
 
 func TestGaugeFloat64(t *testing.T) {
