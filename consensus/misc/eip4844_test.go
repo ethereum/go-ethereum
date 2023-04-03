@@ -44,3 +44,34 @@ func TestCalcBlobFee(t *testing.T) {
 		}
 	}
 }
+
+func TestFakeExponential(t *testing.T) {
+	tests := []struct {
+		factor      int64
+		numerator   int64
+		denominator int64
+		want        int64
+	}{
+		// When numerator == 0 the return value should always equal the value of factor
+		{1, 0, 1, 1},
+		{38493, 0, 1000, 38493},
+		{0, 1234, 2345, 0}, // should be 0
+		{1, 2, 1, 6},       // approximate 7.389
+		{1, 4, 2, 6},
+		{1, 3, 1, 16}, // approximate 20.09
+		{1, 6, 2, 18},
+		{1, 4, 1, 49}, // approximate 54.60
+		{1, 8, 2, 50},
+		{10, 8, 2, 542}, // approximate 540.598
+		{11, 8, 2, 596}, // approximate 600.58
+		{1, 5, 1, 136},  // approximate 148.4
+		{1, 5, 2, 11},   // approximate 12.18
+		{2, 5, 2, 23},   // approximate 24.36
+	}
+	for i, tt := range tests {
+		have := fakeExponential(big.NewInt(tt.factor), big.NewInt(tt.numerator), big.NewInt(tt.denominator))
+		if have.Int64() != tt.want {
+			t.Errorf("test %d: fake exponential mismatch: have %v want %v", i, have, tt.want)
+		}
+	}
+}
