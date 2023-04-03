@@ -656,9 +656,6 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	if err := pool.validateTxBasics(tx, local); err != nil {
-		return err
-	}
 	// Signature has been checked already, this cannot error.
 	from, _ := types.Sender(pool.signer, tx)
 	// Ensure the transaction adheres to nonce ordering
