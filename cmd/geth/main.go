@@ -466,7 +466,8 @@ func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 	}
 	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
 	if len(backends) == 0 {
-		utils.Fatalf("Keystore is not available")
+		log.Warn("Failed to unlock accounts, keystore is not available")
+		return
 	}
 	ks := backends[0].(*keystore.KeyStore)
 	passwords := utils.MakePasswordList(ctx)
