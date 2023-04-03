@@ -363,7 +363,6 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 			if preExists && preState != nil && state.Balance != nil {
 				weiAmount = new(big.Int).Sub(state.Balance, preState.Balance)
 				etherAmount = weiToEther(weiAmount)
-				fmt.Println("etherAmount: ", etherAmount, "weiAmount: ", weiAmount)
 			}
 
 			diff := &valueChanges{

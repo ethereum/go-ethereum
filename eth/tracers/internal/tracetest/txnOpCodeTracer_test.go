@@ -45,8 +45,9 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 		}
 
 		// TODO ALEX: remove this flag for only my test to run
-		if !strings.HasSuffix(file.Name(), "balance_changes_eth.json") {
-			// if !strings.HasSuffix(file.Name(), "inner_create.json") { // todo alex: this has a seg fault while tracing!
+		// if !strings.HasSuffix(file.Name(), "balance_changes_eth.json") {
+		// if !strings.HasSuffix(file.Name(), "balance_changes_erc20_deposit.json") {
+		if !strings.HasSuffix(file.Name(), "balance_changes_erc20_transfer.json") {
 
 			continue
 		}
