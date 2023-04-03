@@ -889,7 +889,7 @@ func TestTraceChain(t *testing.T) {
 			t.Error("Missing tracing block")
 		}
 		if ref != rel {
-			t.Errorf("Ref and deref actions are not equal, ref %d rel %d", ref, rel)
+			t.Errorf("Ref and deref actions are not equal, ref %d rel %d", ref.Load(), rel.Load())
 		}
 	}
 }
