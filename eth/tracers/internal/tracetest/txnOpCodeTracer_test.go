@@ -2,6 +2,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/blocknative"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -30,6 +30,8 @@ type txnOpCodeTracerTest struct {
 
 func TestTxnOpCodeTracer(t *testing.T) {
 	testTxnOpCodeTracer("txnOpCodeTracer", "txnOpCode_tracer", t)
+	testTxnOpCodeTracer("txnOpCodeTracer", "txnOpCode_tracer_with_netbalchanges", t)
+
 }
 
 func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
@@ -41,6 +43,15 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
+		// TODO ALEX: remove this flag for only my test to run
+		if !strings.HasSuffix(file.Name(), "balance_changes_eth.json") {
+			// if !strings.HasSuffix(file.Name(), "inner_create.json") { // todo alex: this has a seg fault while tracing!
+
+			continue
+		}
+		fmt.Println("Testing only balance_changes_erc20.json...")
+
 		file := file
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -55,7 +66,8 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
-			if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
+			// Here we use unmarshalBinary as it can account for EIP2718 typed transactions in the tests
+			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
 
@@ -109,11 +121,11 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 
 			if !tracesEqual(ret, test.Result) {
 				// Below are prints to show differences if we fail, can always just check against the specific test json files too!
-				// x, _ := json.MarshalIndent(ret, "", "")
+				x, _ := json.MarshalIndent(ret, "  ", "  ")
 				// y, _ := json.MarshalIndent(test.Result, "", "")
-				// fmt.Println("x")
-				// fmt.Println(string(x))
-				// fmt.Println("y")
+				fmt.Println("Trace response:")
+				fmt.Println(string(x))
+				// fmt.Println("Expected response:")
 				// fmt.Println(string(y))
 				t.Fatal("traces mismatch")
 				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)

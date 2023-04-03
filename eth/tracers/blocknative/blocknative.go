@@ -60,14 +60,27 @@ type CallLog struct {
 
 // NetBalChanges represents the difference of value (ETH, erc20, erc721) after the transaction for all addresses
 type NetBalChanges struct {
-	Pre  state `json:"pre"`
-	Post state `json:"post"`
+	Pre        state      `json:"-"` //`json:"pre"`
+	Post       state      `json:"-"` //`json:"post"`
+	Difference difference `json:"difference,omitempty"`
+	InitialGas uint64     `json:"-"` // Bought gas, used to find initial bal for the from address as the buy happens before trace starts
 	// Todo alex: if we want to track contract creations / deletions we must add the idea here!
 }
 
+type difference = map[common.Address]*valueChanges
+
+type valueChanges struct {
+	Eth      *big.Float      `json:"eth,omitempty"` // TODO ALEX: this term ETH may need to be generalised
+	EthInWei *big.Int        `json:"ethinwei,omitempty"`
+	Erc20    placeholderType `json:"erc20,omitempty"`
+	Erc721   placeholderType `json:"erc721,omitempty"`
+}
+
+// TODO ALEX: expand on these types (types of tokens to track, erc20, erc721, etc...)
+type placeholderType interface{}
+
 type state = map[common.Address]*account
 
-// Todo alex: This account structure will need some additional post processing mapping for token names and decoding of values
 type account struct {
 	Balance *big.Int                    `json:"balance,omitempty"`
 	Code    []byte                      `json:"code,omitempty"`

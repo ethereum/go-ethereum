@@ -2,15 +2,18 @@ package blocknative
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -36,10 +39,8 @@ type txnOpCodeTracer struct {
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
 // options applied.
 func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-
-	// First callframe contains tx context info
-	// and is populated on start and end.
-	t := &txnOpCodeTracer{callStack: make([]CallFrame, 1)}
+	// First callframe contains tx context info and is populated on start and end.
+	var t txnOpCodeTracer = txnOpCodeTracer{callStack: make([]CallFrame, 1)}
 
 	// Decode raw json opts into our struct.
 	if cfg != nil {
@@ -48,12 +49,21 @@ func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trac
 		}
 	}
 
-	return t, nil
+	// If we need deeper nested structures initialized, check and do so now
+	if t.opts.NetBalChanges {
+		t.trace.NetBalChanges = NetBalChanges{
+			Pre:        make(state),
+			Post:       make(state),
+			Difference: make(difference),
+		}
+	}
+
+	return &t, nil
+
 }
 
 // GetResult returns an empty json object.
 func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
-
 	// This block used to trip on subtraces being discovered, for this tracer we do not need this,
 	// however we would like to keep this here in a possible future where we do care about such cases.
 
@@ -79,14 +89,22 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	if t.opts.NetBalChanges {
 		t.lookupAccount(from)
 		t.lookupAccount(to)
-		t.lookupAccount(env.Context.Coinbase) // Todo alex: Do we care about where the mining reward theoretically goes to?
+		t.lookupAccount(env.Context.Coinbase)
 
+		// Update the to address
 		// The recipient balance includes the value transferred.
-		// todo alex: This would mean in the before for the from address,
 		toBal := new(big.Int).Sub(t.trace.NetBalChanges.Pre[to].Balance, value)
 		t.trace.NetBalChanges.Pre[to].Balance = toBal
 
-		// Todo alex: Does capture start occur before the initial gas negation? I think I need to re-add here!
+		// Collect the gas usage
+		// We need to re-add them to get the pre-tx balance.
+		gasPrice := env.TxContext.GasPrice
+		consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.trace.NetBalChanges.InitialGas))
+
+		// Update the from address
+		fromBal := new(big.Int).Set(t.trace.NetBalChanges.Pre[from].Balance)
+		fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+		t.trace.NetBalChanges.Pre[from].Balance = fromBal
 	}
 
 	// Blocks only contain `Random` post-merge, but we still have pre-merge tests.
@@ -167,9 +185,7 @@ func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 			log.Warn("Panic during trace. Recovered.", "err", r)
 		}
 	}()
-
 	// If we want NetBalChanges, track storage altering opcodes. Here we add the addresses to our map to check later.
-	// Todo Alex: Can I remove this in space of a better way of tracking touched addresses and not opcode comparison?
 	if t.opts.NetBalChanges {
 		stack := scope.Stack
 		stackData := stack.Data()
@@ -219,7 +235,6 @@ func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-
 	size := len(t.callStack)
 	if size <= 1 {
 		return
@@ -247,7 +262,8 @@ func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 	t.callStack[size-1].Calls = append(t.callStack[size-1].Calls, call)
 }
 
-func (*txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
+func (t *txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
+	t.trace.NetBalChanges.InitialGas = gasLimit
 }
 
 // SetStateRoot implements core.stateRootSetter and stores the given root in the trace's BlockContext.
@@ -259,8 +275,6 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 	// If we want NetBalChanges,
 	if t.opts.NetBalChanges {
 		for addr, state := range t.trace.NetBalChanges.Pre {
-			// Todo alex: If we end up tracking creations / deletions, we would prune some here
-
 			// Keep track if we end up finding an altered address
 			modified := false
 
@@ -284,7 +298,6 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 				if val == (common.Hash{}) {
 					delete(t.trace.NetBalChanges.Pre[addr].Storage, key)
 				}
-
 				newVal := t.env.StateDB.GetState(addr, key)
 				if val == newVal {
 					// Omit unchanged slots
@@ -293,6 +306,7 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 					modified = true
 					if newVal != (common.Hash{}) {
 						postAccount.Storage[key] = newVal
+						fmt.Println("CaptureTxEnd | Found a modified slot!: ", addr, "key: ", key, "newVal: ", newVal)
 					}
 				}
 			}
@@ -303,6 +317,60 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 				// if state is not modified, then no need to include into the pre state
 				delete(t.trace.NetBalChanges.Pre, addr)
 			}
+		}
+		// b, _ := json.MarshalIndent(t.trace.NetBalChanges.Pre, "", "    ")
+		// fmt.Println("These are our cleaned pre slots: ", string(b))
+		// c, _ := json.MarshalIndent(t.trace.NetBalChanges.Post, "", "    ")
+		// fmt.Println("These are our post slots: ", string(c))
+
+		for addr, state := range t.trace.NetBalChanges.Post {
+			// Add the balance and storage separately, as one may not be changed but another is.
+			preState, preExists := t.trace.NetBalChanges.Pre[addr]
+
+			// First check for storage slot updates, we must determine if these are values changes now
+			if len(state.Storage) != 0 {
+				fmt.Println("Found storage slot to decode: ", state.Storage)
+
+				// If there is a storage slot updated, check if this is a erc20 token
+				// TODO ALEX: everything below is still in the works, finding best way to do this still.
+				nameLocation := "0x0000000000000000000000000000000000000000000000000000000000000000"
+				symbolHash := t.env.StateDB.GetState(addr, common.HexToHash(nameLocation))
+				bytes, _ := hex.DecodeString(symbolHash.Hex()[2:])
+				symbol := string(bytes)
+
+				fmt.Println("addr: ", addr, ", symbol: ", symbol)
+
+				addr1 := "0xf527a5ee2155fad99a5bbb23c9e52b0a11b99dd4"
+				addrLower := strings.ToLower(addr1[2:])
+				keyHex := fmt.Sprintf("%064s%064s", addrLower, "")
+
+				fmt.Println("keyHex: ", keyHex)
+
+				keyBytes, _ := hex.DecodeString(keyHex)
+
+				hashed := crypto.Keccak256(keyBytes)
+				slot := "0x" + hex.EncodeToString(hashed[:])
+
+				fmt.Println("slot: ", slot)
+
+				// Attempt to decode the amount found at the storage slot found
+				// Iterate through all address location storage slots to see if these match up
+			}
+
+			// If the post bal exists, add it to the diff
+			var weiAmount *big.Int
+			var etherAmount *big.Float
+			if preExists && preState != nil && state.Balance != nil {
+				weiAmount = new(big.Int).Sub(state.Balance, preState.Balance)
+				etherAmount = weiToEther(weiAmount)
+				fmt.Println("etherAmount: ", etherAmount, "weiAmount: ", weiAmount)
+			}
+
+			diff := &valueChanges{
+				Eth:      etherAmount,
+				EthInWei: weiAmount,
+			}
+			t.trace.NetBalChanges.Difference[addr] = diff
 		}
 	}
 }
@@ -335,4 +403,5 @@ func (t *txnOpCodeTracer) lookupStorage(addr common.Address, key common.Hash) {
 		return
 	}
 	t.trace.NetBalChanges.Pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
+	// fmt.Println("lookupStorage | addr: ", addr, "key: ", key, "storing: ", t.env.StateDB.GetState(addr, key))
 }
