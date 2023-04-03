@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -250,14 +251,14 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	istanbul bool // Fork indicator whether we are in the istanbul stage.
-	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
-	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
-	shanghai bool // Fork indicator whether we are in the Shanghai stage.
+	istanbul atomic.Bool // Fork indicator whether we are in the istanbul stage.
+	eip2718  atomic.Bool // Fork indicator whether we are using EIP-2718 type transactions.
+	eip1559  atomic.Bool // Fork indicator whether we are using EIP-1559 type transactions.
+	shanghai atomic.Bool // Fork indicator whether we are in the Shanghai stage.
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *noncer        // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	currentMaxGas atomic.Uint64  // Current gas limit for transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
@@ -592,15 +593,17 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
-// validateTx checks whether a transaction is valid according to the consensus
-// rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+// validateTxBasics checks whether a transaction is valid according to the consensus
+// rules, but does not check state-dependent validation such as sufficient balance.
+// This check is meant as an early check which only needs to be performed once,
+// and does not require the pool mutex to be held.
+func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
-	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
+	if !pool.eip2718.Load() && tx.Type() != types.LegacyTxType {
 		return core.ErrTxTypeNotSupported
 	}
 	// Reject dynamic fee transactions until EIP-1559 activates.
-	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
+	if !pool.eip1559.Load() && tx.Type() == types.DynamicFeeTxType {
 		return core.ErrTxTypeNotSupported
 	}
 	// Reject transactions over defined size to prevent DOS attacks
@@ -608,7 +611,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.
-	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+	if pool.shanghai.Load() && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -617,7 +620,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.currentMaxGas < tx.Gas() {
+	if pool.currentMaxGas.Load() < tx.Gas() {
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers
@@ -632,14 +635,29 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly.
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
+	if _, err := types.Sender(pool.signer, tx); err != nil {
 		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
+	// Ensure the transaction has more gas than the basic tx fee.
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul.Load(), pool.shanghai.Load())
+	if err != nil {
+		return err
+	}
+	if tx.Gas() < intrGas {
+		return core.ErrIntrinsicGas
+	}
+	return nil
+}
+
+// validateTx checks whether a transaction is valid according to the consensus
+// rules and adheres to some heuristic limits of the local node (price and size).
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// Signature has been checked already, this cannot error.
+	from, _ := types.Sender(pool.signer, tx)
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return core.ErrNonceTooLow
@@ -663,15 +681,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
 			return ErrOverdraft
 		}
-	}
-
-	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
-	if err != nil {
-		return err
-	}
-	if tx.Gas() < intrGas {
-		return core.ErrIntrinsicGas
 	}
 	return nil
 }
@@ -969,12 +978,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			knownTxMeter.Mark(1)
 			continue
 		}
-		// Exclude transactions with invalid signatures as soon as
-		// possible and cache senders in transactions before
-		// obtaining lock
-		_, err := types.Sender(pool.signer, tx)
-		if err != nil {
-			errs[i] = ErrInvalidSender
+		// Exclude transactions with basic errors, e.g invalid signatures and
+		// insufficient intrinsic gas as soon as possible and cache senders
+		// in transactions before obtaining lock
+
+		if err := pool.validateTxBasics(tx, local); err != nil {
+			errs[i] = err
 			invalidTxMeter.Mark(1)
 			continue
 		}
@@ -1364,7 +1373,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	pool.currentState = statedb
 	pool.pendingNonces = newNoncer(statedb)
-	pool.currentMaxGas = newHead.GasLimit
+	pool.currentMaxGas.Store(newHead.GasLimit)
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1373,10 +1382,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
-	pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	pool.eip2718 = pool.chainconfig.IsBerlin(next)
-	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.shanghai = pool.chainconfig.IsShanghai(uint64(time.Now().Unix()))
+	pool.istanbul.Store(pool.chainconfig.IsIstanbul(next))
+	pool.eip2718.Store(pool.chainconfig.IsBerlin(next))
+	pool.eip1559.Store(pool.chainconfig.IsLondon(next))
+	pool.shanghai.Store(pool.chainconfig.IsShanghai(uint64(time.Now().Unix())))
 }
 
 // promoteExecutables moves transactions that have become processable from the
@@ -1400,7 +1409,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas.Load())
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1597,7 +1606,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas.Load())
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
