@@ -82,7 +82,7 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 		return true
 	})
 
-	ns.SubscribeField(bt.setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(bt.setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue any) {
 		n, _ := ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
 		if n == nil {
 			return
@@ -100,7 +100,7 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 			n.deactivate()
 		}
 	})
-	ns.SubscribeField(bt.setup.clientField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(bt.setup.clientField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue any) {
 		type peer interface {
 			FreeClientId() string
 		}

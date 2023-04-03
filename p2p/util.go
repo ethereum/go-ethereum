@@ -62,11 +62,11 @@ func (h *expHeap) expire(now mclock.AbsTime, onExp func(string)) {
 }
 
 // heap.Interface boilerplate
-func (h expHeap) Len() int            { return len(h) }
-func (h expHeap) Less(i, j int) bool  { return h[i].exp < h[j].exp }
-func (h expHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *expHeap) Push(x interface{}) { *h = append(*h, x.(expItem)) }
-func (h *expHeap) Pop() interface{} {
+func (h expHeap) Len() int           { return len(h) }
+func (h expHeap) Less(i, j int) bool { return h[i].exp < h[j].exp }
+func (h expHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *expHeap) Push(x any)        { *h = append(*h, x.(expItem)) }
+func (h *expHeap) Pop() any {
 	old := *h
 	n := len(old)
 	x := old[n-1]

@@ -121,7 +121,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		}
 	})
 
-	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue any) {
 		if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 			newCap, _ := newValue.(uint64)
 			c.UpdateCapacity(newCap, node == cp.capReqNode)

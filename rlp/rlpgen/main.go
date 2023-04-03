@@ -56,7 +56,7 @@ func main() {
 	}
 }
 
-func fatal(args ...interface{}) {
+func fatal(args ...any) {
 	fmt.Fprintln(os.Stderr, args...)
 	os.Exit(1)
 }

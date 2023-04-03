@@ -76,11 +76,11 @@ func TestSubscriptions(t *testing.T) {
 
 	// create subscriptions one by one
 	for i, namespace := range namespaces {
-		request := map[string]interface{}{
+		request := map[string]any{
 			"id":      i,
 			"method":  fmt.Sprintf("%s_subscribe", namespace),
 			"jsonrpc": "2.0",
-			"params":  []interface{}{"someSubscription", notificationCount, i},
+			"params":  []any{"someSubscription", notificationCount, i},
 		}
 		if err := out.Encode(&request); err != nil {
 			t.Fatalf("Could not create subscription: %v", err)

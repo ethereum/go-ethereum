@@ -323,7 +323,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 				errCh <- err
 				return
 			}
-			var i interface{}
+			var i any
 			msg.Decode(&i)
 		}
 		// at this point we can be sure that the other two

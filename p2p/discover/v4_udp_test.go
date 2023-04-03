@@ -107,7 +107,7 @@ func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *
 
 // waits for a packet to be sent by the transport.
 // validate should have type func(X, *net.UDPAddr, []byte), where X is a packet type.
-func (test *udpTest) waitPacketOut(validate interface{}) (closed bool) {
+func (test *udpTest) waitPacketOut(validate any) (closed bool) {
 	test.t.Helper()
 
 	dgram, err := test.pipe.receive()

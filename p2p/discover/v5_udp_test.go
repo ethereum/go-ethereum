@@ -794,7 +794,7 @@ func (test *udpV5Test) getNode(key *ecdsa.PrivateKey, addr *net.UDPAddr) *enode.
 // waitPacketOut waits for the next output packet and handles it using the given 'validate'
 // function. The function must be of type func (X, *net.UDPAddr, v5wire.Nonce) where X is
 // assignable to packetV5.
-func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
+func (test *udpV5Test) waitPacketOut(validate any) (closed bool) {
 	test.t.Helper()
 
 	fn := reflect.ValueOf(validate)

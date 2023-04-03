@@ -183,7 +183,7 @@ type selectPeerItem struct {
 	weight uint64
 }
 
-func selectPeerWeight(i interface{}) uint64 {
+func selectPeerWeight(i any) uint64 {
 	return i.(selectPeerItem).weight
 }
 

@@ -91,7 +91,7 @@ func validateOperation(t *testing.T, c *contract.CheckpointOracle, backend *back
 
 // validateEvents checks that the correct number of contract events
 // fired by contract backend.
-func validateEvents(target int, sink interface{}) (bool, []reflect.Value) {
+func validateEvents(target int, sink any) (bool, []reflect.Value) {
 	chanval := reflect.ValueOf(sink)
 	chantyp := chanval.Type()
 	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.RecvDir == 0 {

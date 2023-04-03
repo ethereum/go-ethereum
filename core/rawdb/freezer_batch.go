@@ -42,7 +42,7 @@ func newFreezerBatch(f *Freezer) *freezerBatch {
 }
 
 // Append adds an RLP-encoded item of the given kind.
-func (batch *freezerBatch) Append(kind string, num uint64, item interface{}) error {
+func (batch *freezerBatch) Append(kind string, num uint64, item any) error {
 	return batch.tables[kind].Append(num, item)
 }
 
@@ -113,7 +113,7 @@ func (batch *freezerTableBatch) reset() {
 // Append rlp-encodes and adds data at the end of the freezer table. The item number is a
 // precautionary parameter to ensure data correctness, but the table will reject already
 // existing data.
-func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
+func (batch *freezerTableBatch) Append(item uint64, data any) error {
 	if item != batch.curItem {
 		return fmt.Errorf("%w: have %d want %d", errOutOrderInsertion, item, batch.curItem)
 	}

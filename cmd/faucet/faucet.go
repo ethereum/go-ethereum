@@ -129,7 +129,7 @@ func main() {
 		}
 	}
 	website := new(bytes.Buffer)
-	err := template.Must(template.New("").Parse(websiteTmpl)).Execute(website, map[string]interface{}{
+	err := template.Must(template.New("").Parse(websiteTmpl)).Execute(website, map[string]any{
 		"Network":   *netnameFlag,
 		"Amounts":   amounts,
 		"Periods":   periods,
@@ -367,7 +367,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 	f.lock.RLock()
 	reqs := f.reqs
 	f.lock.RUnlock()
-	if err = send(wsconn, map[string]interface{}{
+	if err = send(wsconn, map[string]any{
 		"funds":    new(big.Int).Div(balance, ether),
 		"funded":   nonce,
 		"peers":    f.stack.Server().PeerCount(),
@@ -613,7 +613,7 @@ func (f *faucet) loop() {
 			peers := f.stack.Server().PeerCount()
 
 			for _, conn := range f.conns {
-				if err := send(conn, map[string]interface{}{
+				if err := send(conn, map[string]any{
 					"funds":    balance,
 					"funded":   f.nonce,
 					"peers":    peers,
@@ -645,7 +645,7 @@ func (f *faucet) loop() {
 			// Pending requests updated, stream to clients
 			f.lock.RLock()
 			for _, conn := range f.conns {
-				if err := send(conn, map[string]interface{}{"requests": f.reqs}, time.Second); err != nil {
+				if err := send(conn, map[string]any{"requests": f.reqs}, time.Second); err != nil {
 					log.Warn("Failed to send requests to client", "err", err)
 					conn.conn.Close()
 				}
@@ -657,7 +657,7 @@ func (f *faucet) loop() {
 
 // sends transmits a data packet to the remote end of the websocket, but also
 // setting a write deadline to prevent waiting forever on the node.
-func send(conn *wsConn, value interface{}, timeout time.Duration) error {
+func send(conn *wsConn, value any, timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}

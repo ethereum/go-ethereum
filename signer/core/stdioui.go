@@ -42,7 +42,7 @@ func (ui *StdIOUI) RegisterUIServer(api *UIServerAPI) {
 }
 
 // dispatch sends a request over the stdio
-func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error {
+func (ui *StdIOUI) dispatch(serviceMethod string, args any, reply any) error {
 	err := ui.client.Call(&reply, serviceMethod, args)
 	if err != nil {
 		log.Info("Error", "exc", err.Error())
@@ -51,7 +51,7 @@ func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interf
 }
 
 // notify sends a request over the stdio, and does not listen for a response
-func (ui *StdIOUI) notify(serviceMethod string, args interface{}) error {
+func (ui *StdIOUI) notify(serviceMethod string, args any) error {
 	ctx := context.Background()
 	err := ui.client.Notify(ctx, serviceMethod, args)
 	if err != nil {

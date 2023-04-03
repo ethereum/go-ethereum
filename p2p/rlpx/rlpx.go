@@ -594,7 +594,7 @@ func (h *handshakeState) makeAuthResp() (msg *authRespV4, err error) {
 }
 
 // readMsg reads an encrypted handshake message, decoding it into msg.
-func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Reader) ([]byte, error) {
+func (h *handshakeState) readMsg(msg any, prv *ecdsa.PrivateKey, r io.Reader) ([]byte, error) {
 	h.rbuf.reset()
 	h.rbuf.grow(512)
 
@@ -622,7 +622,7 @@ func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Re
 }
 
 // sealEIP8 encrypts a handshake message.
-func (h *handshakeState) sealEIP8(msg interface{}) ([]byte, error) {
+func (h *handshakeState) sealEIP8(msg any) ([]byte, error) {
 	h.wbuf.reset()
 
 	// Write the message plaintext.

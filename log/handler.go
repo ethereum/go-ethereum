@@ -159,7 +159,7 @@ func FilterHandler(fn func(r *Record) bool, h Handler) Handler {
 // from your ui package:
 //
 //	log.MatchFilterHandler("pkg", "app/ui", log.StdoutHandler)
-func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
+func MatchFilterHandler(key string, value any, h Handler) Handler {
 	return FilterHandler(func(r *Record) (pass bool) {
 		switch key {
 		case r.KeyNames.Lvl:
@@ -297,7 +297,7 @@ func LazyHandler(h Handler) Handler {
 	})
 }
 
-func evaluateLazy(lz Lazy) (interface{}, error) {
+func evaluateLazy(lz Lazy) (any, error) {
 	t := reflect.TypeOf(lz.Fn)
 
 	if t.Kind() != reflect.Func {
@@ -317,7 +317,7 @@ func evaluateLazy(lz Lazy) (interface{}, error) {
 	if len(results) == 1 {
 		return results[0].Interface(), nil
 	}
-	values := make([]interface{}, len(results))
+	values := make([]any, len(results))
 	for i, v := range results {
 		values[i] = v.Interface()
 	}

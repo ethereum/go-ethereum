@@ -214,13 +214,13 @@ func (c *Client) RPCClient(ctx context.Context, nodeID string) (*rpc.Client, err
 
 // Get performs a HTTP GET request decoding the resulting JSON response
 // into "out"
-func (c *Client) Get(path string, out interface{}) error {
+func (c *Client) Get(path string, out any) error {
 	return c.Send(http.MethodGet, path, nil, out)
 }
 
 // Post performs a HTTP POST request sending "in" as the JSON body and
 // decoding the resulting JSON response into "out"
-func (c *Client) Post(path string, in, out interface{}) error {
+func (c *Client) Post(path string, in, out any) error {
 	return c.Send(http.MethodPost, path, in, out)
 }
 
@@ -231,7 +231,7 @@ func (c *Client) Delete(path string) error {
 
 // Send performs a HTTP request, sending "in" as the JSON request body and
 // decoding the JSON response into "out"
-func (c *Client) Send(method, path string, in, out interface{}) error {
+func (c *Client) Send(method, path string, in, out any) error {
 	var body []byte
 	if in != nil {
 		var err error
@@ -693,7 +693,7 @@ func (s *Server) OPTIONS(path string, handle http.HandlerFunc) {
 }
 
 // JSON sends "data" as a JSON HTTP response
-func (s *Server) JSON(w http.ResponseWriter, status int, data interface{}) {
+func (s *Server) JSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)

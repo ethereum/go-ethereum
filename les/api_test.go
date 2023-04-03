@@ -304,7 +304,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 }
 
 func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, common.Hash) {
-	res := make(map[string]interface{})
+	res := make(map[string]any)
 	if err := client.CallContext(ctx, &res, "eth_getBlockByNumber", "latest", false); err != nil {
 		t.Fatalf("Failed to obtain head block: %v", err)
 	}
@@ -344,7 +344,7 @@ func freezeClient(ctx context.Context, t *testing.T, server *rpc.Client, clientI
 }
 
 func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 	params["capacity"] = cap
 	if err := server.CallContext(ctx, nil, "les_setClientParams", []enode.ID{clientID}, []string{}, params); err != nil {
 		t.Fatalf("Failed to set client capacity: %v", err)
@@ -352,7 +352,7 @@ func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 }
 
 func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID) uint64 {
-	var res map[enode.ID]map[string]interface{}
+	var res map[enode.ID]map[string]any
 	if err := server.CallContext(ctx, &res, "les_clientInfo", []enode.ID{clientID}, []string{}); err != nil {
 		t.Fatalf("Failed to get client info: %v", err)
 	}
@@ -372,7 +372,7 @@ func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 }
 
 func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (minCap, totalCap uint64) {
-	var res map[string]interface{}
+	var res map[string]any
 	if err := server.CallContext(ctx, &res, "les_serverInfo"); err != nil {
 		t.Fatalf("Failed to query server info: %v", err)
 	}

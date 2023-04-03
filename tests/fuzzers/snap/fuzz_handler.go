@@ -89,7 +89,7 @@ type dummyBackend struct {
 
 func (d *dummyBackend) Chain() *core.BlockChain                { return d.chain }
 func (d *dummyBackend) RunPeer(*snap.Peer, snap.Handler) error { return nil }
-func (d *dummyBackend) PeerInfo(enode.ID) interface{}          { return "Foo" }
+func (d *dummyBackend) PeerInfo(enode.ID) any                  { return "Foo" }
 func (d *dummyBackend) Handle(*snap.Peer, snap.Packet) error   { return nil }
 
 type dummyRW struct {
@@ -112,7 +112,7 @@ func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
 
-func doFuzz(input []byte, obj interface{}, code int) int {
+func doFuzz(input []byte, obj any, code int) int {
 	if len(input) > 1024*4 {
 		return -1
 	}

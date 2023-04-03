@@ -38,7 +38,7 @@ type decodedCallData struct {
 // to an ABI method signature.
 type decodedArgument struct {
 	soltype abi.Argument
-	value   interface{}
+	value   any
 }
 
 // String implements stringer interface, tries to use the underlying value-type

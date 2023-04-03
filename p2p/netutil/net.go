@@ -88,7 +88,7 @@ func ParseNetlist(s string) (*Netlist, error) {
 }
 
 // MarshalTOML implements toml.MarshalerRec.
-func (l Netlist) MarshalTOML() interface{} {
+func (l Netlist) MarshalTOML() any {
 	list := make([]string, 0, len(l))
 	for _, net := range l {
 		list = append(list, net.String())
@@ -97,7 +97,7 @@ func (l Netlist) MarshalTOML() interface{} {
 }
 
 // UnmarshalTOML implements toml.UnmarshalerRec.
-func (l *Netlist) UnmarshalTOML(fn func(interface{}) error) error {
+func (l *Netlist) UnmarshalTOML(fn func(any) error) error {
 	var masks []string
 	if err := fn(&masks); err != nil {
 		return err

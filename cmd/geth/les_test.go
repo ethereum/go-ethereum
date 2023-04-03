@@ -43,7 +43,7 @@ func (g *gethrpc) killAndWait() {
 	g.geth.WaitExit()
 }
 
-func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}) {
+func (g *gethrpc) callRPC(result any, method string, args ...any) {
 	if err := g.rpc.Call(&result, method, args...); err != nil {
 		g.geth.Fatalf("callRPC %v: %v", method, err)
 	}

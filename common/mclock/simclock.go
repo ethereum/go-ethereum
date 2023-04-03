@@ -193,13 +193,13 @@ func (h *simTimerHeap) Swap(i, j int) {
 	(*h)[j].index = j
 }
 
-func (h *simTimerHeap) Push(x interface{}) {
+func (h *simTimerHeap) Push(x any) {
 	t := x.(*simTimer)
 	t.index = len(*h)
 	*h = append(*h, t)
 }
 
-func (h *simTimerHeap) Pop() interface{} {
+func (h *simTimerHeap) Pop() any {
 	end := len(*h) - 1
 	t := (*h)[end]
 	t.index = -1

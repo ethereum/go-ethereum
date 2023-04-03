@@ -30,8 +30,8 @@ type (
 		idx  map[WrsItem]int
 		wfn  WeightFn
 	}
-	WrsItem  interface{}
-	WeightFn func(interface{}) uint64
+	WrsItem  any
+	WeightFn func(any) uint64
 )
 
 // NewWeightedRandomSelect returns a new WeightedRandomSelect structure
@@ -110,7 +110,7 @@ const wrsBranches = 8 // max number of branches in the wrsNode tree
 
 // wrsNode is a node of a tree structure that can store WrsItems or further wrsNodes.
 type wrsNode struct {
-	items                    [wrsBranches]interface{}
+	items                    [wrsBranches]any
 	weights                  [wrsBranches]uint64
 	sumCost                  uint64
 	level, itemCnt, maxItems int

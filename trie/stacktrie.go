@@ -32,7 +32,7 @@ import (
 var ErrCommitDisabled = errors.New("no database for committing")
 
 var stPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return NewStackTrie(nil)
 	},
 }

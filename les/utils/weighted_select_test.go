@@ -26,7 +26,7 @@ type testWrsItem struct {
 	widx *int
 }
 
-func testWeight(i interface{}) uint64 {
+func testWeight(i any) uint64 {
 	t := i.(*testWrsItem)
 	w := *t.widx
 	if w == -1 || w == t.idx {

@@ -100,7 +100,7 @@ const (
 type Msg struct {
 	MsgType int
 	ReqID   uint64
-	Obj     interface{}
+	Obj     any
 }
 
 // peerByTxHistory is a heap.Interface implementation which can sort

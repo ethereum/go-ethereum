@@ -121,7 +121,7 @@ func (p *pingPongService) Stop() error {
 	return nil
 }
 
-func (p *pingPongService) Info() interface{} {
+func (p *pingPongService) Info() any {
 	return struct {
 		Received int64 `json:"received"`
 	}{

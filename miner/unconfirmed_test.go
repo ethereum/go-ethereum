@@ -45,7 +45,7 @@ func TestUnconfirmedInsertBounds(t *testing.T) {
 			pool.Insert(depth, [32]byte{byte(depth), byte(i)})
 		}
 		// Validate that no blocks below the depth allowance are left in
-		pool.blocks.Do(func(block interface{}) {
+		pool.blocks.Do(func(block any) {
 			if block := block.(*unconfirmedBlock); block.index+uint64(limit) <= depth {
 				t.Errorf("depth %d: block %x not dropped", depth, block.hash)
 			}

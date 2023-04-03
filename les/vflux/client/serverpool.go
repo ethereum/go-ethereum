@@ -107,7 +107,7 @@ var (
 	sfDialProcess     = nodestate.MergeFlags(sfQuery, sfCanDial, sfDialing, sfConnected, sfRedialWait)
 
 	sfiNodeHistory = clientSetup.NewPersistentField("nodeHistory", reflect.TypeOf(nodeHistory{}),
-		func(field interface{}) ([]byte, error) {
+		func(field any) ([]byte, error) {
 			if n, ok := field.(nodeHistory); ok {
 				ne := nodeHistoryEnc{
 					DialCost:        n.dialCost,
@@ -119,7 +119,7 @@ var (
 			}
 			return nil, errors.New("invalid field type")
 		},
-		func(enc []byte) (interface{}, error) {
+		func(enc []byte) (any, error) {
 			var ne nodeHistoryEnc
 			err := rlp.DecodeBytes(enc, &ne)
 			n := nodeHistory{
@@ -133,14 +133,14 @@ var (
 	sfiNodeWeight     = clientSetup.NewField("nodeWeight", reflect.TypeOf(uint64(0)))
 	sfiConnectedStats = clientSetup.NewField("connectedStats", reflect.TypeOf(ResponseTimeStats{}))
 	sfiLocalAddress   = clientSetup.NewPersistentField("localAddress", reflect.TypeOf(&enr.Record{}),
-		func(field interface{}) ([]byte, error) {
+		func(field any) ([]byte, error) {
 			if enr, ok := field.(*enr.Record); ok {
 				enc, err := rlp.EncodeToBytes(enr)
 				return enc, err
 			}
 			return nil, errors.New("invalid field type")
 		},
-		func(enc []byte) (interface{}, error) {
+		func(enc []byte) (any, error) {
 			var enr enr.Record
 			if err := rlp.DecodeBytes(enc, &enr); err != nil {
 				return nil, err

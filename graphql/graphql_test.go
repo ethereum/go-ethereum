@@ -350,7 +350,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 			want: `{"block":{"account":{"balance":"0x0","transactionCount":"0x0","code":"0x"}}}`,
 		},
 	} {
-		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]any{})
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}

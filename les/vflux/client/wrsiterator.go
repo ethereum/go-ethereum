@@ -40,7 +40,7 @@ type WrsIterator struct {
 // and none of the disabled flags set. When a node is selected the selectedFlag is set which also
 // disables further selectability until it is removed or times out.
 func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags nodestate.Flags, weightField nodestate.Field) *WrsIterator {
-	wfn := func(i interface{}) uint64 {
+	wfn := func(i any) uint64 {
 		n := ns.GetNode(i.(enode.ID))
 		if n == nil {
 			return 0
@@ -55,7 +55,7 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags n
 	}
 	w.cond = sync.NewCond(&w.lock)
 
-	ns.SubscribeField(weightField, func(n *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(weightField, func(n *enode.Node, state nodestate.Flags, oldValue, newValue any) {
 		if state.HasAll(requireFlags) && state.HasNone(disableFlags) {
 			w.lock.Lock()
 			w.wrs.Update(n.ID())

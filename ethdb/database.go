@@ -134,7 +134,7 @@ type AncientWriter interface {
 // AncientWriteOp is given to the function argument of ModifyAncients.
 type AncientWriteOp interface {
 	// Append adds an RLP-encoded item.
-	Append(kind string, number uint64, item interface{}) error
+	Append(kind string, number uint64, item any) error
 
 	// AppendRaw adds an item without RLP-encoding it.
 	AppendRaw(kind string, number uint64, item []byte) error

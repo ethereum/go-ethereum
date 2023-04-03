@@ -242,12 +242,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			merger.ReachTTD()
 			api.eth.Downloader().Cancel()
 		}
-		context := []interface{}{"number", header.Number, "hash", header.Hash()}
+		context := []any{"number", header.Number, "hash", header.Hash()}
 		if update.FinalizedBlockHash != (common.Hash{}) {
 			if finalized == nil {
-				context = append(context, []interface{}{"finalized", "unknown"}...)
+				context = append(context, []any{"finalized", "unknown"}...)
 			} else {
-				context = append(context, []interface{}{"finalized", finalized.Number}...)
+				context = append(context, []any{"finalized", finalized.Number}...)
 			}
 		}
 		log.Info("Forkchoice requested sync to new head", context...)

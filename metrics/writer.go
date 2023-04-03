@@ -19,7 +19,7 @@ func Write(r Registry, d time.Duration, w io.Writer) {
 // io.Writer.
 func WriteOnce(r Registry, w io.Writer) {
 	var namedMetrics namedMetricSlice
-	r.Each(func(name string, i interface{}) {
+	r.Each(func(name string, i any) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
 
@@ -88,7 +88,7 @@ func WriteOnce(r Registry, w io.Writer) {
 
 type namedMetric struct {
 	name string
-	m    interface{}
+	m    any
 }
 
 // namedMetricSlice is a slice of namedMetrics that implements sort.Interface.

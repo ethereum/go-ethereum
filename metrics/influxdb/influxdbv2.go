@@ -75,7 +75,7 @@ func (r *v2Reporter) run() {
 }
 
 func (r *v2Reporter) send() {
-	r.reg.Each(func(name string, i interface{}) {
+	r.reg.Each(func(name string, i any) {
 		now := time.Now()
 		measurement, fields := readMeter(r.namespace, name, i)
 		if fields == nil {

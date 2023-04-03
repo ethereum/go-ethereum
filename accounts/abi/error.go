@@ -82,7 +82,7 @@ func (e *Error) String() string {
 	return e.str
 }
 
-func (e *Error) Unpack(data []byte) (interface{}, error) {
+func (e *Error) Unpack(data []byte) (any, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
 	}

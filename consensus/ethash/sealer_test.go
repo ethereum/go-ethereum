@@ -78,13 +78,13 @@ func TestRemoteNotify(t *testing.T) {
 // Tests whether remote HTTP servers are correctly notified of new work. (Full pending block body / --miner.notify.full)
 func TestRemoteNotifyFull(t *testing.T) {
 	// Start a simple web server to capture notifications.
-	sink := make(chan map[string]interface{})
+	sink := make(chan map[string]any)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
-		var work map[string]interface{}
+		var work map[string]any
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
 		}
@@ -168,13 +168,13 @@ func TestRemoteMultiNotify(t *testing.T) {
 // issues in the notifications. Full pending block body / --miner.notify.full)
 func TestRemoteMultiNotifyFull(t *testing.T) {
 	// Start a simple web server to capture notifications.
-	sink := make(chan map[string]interface{}, 64)
+	sink := make(chan map[string]any, 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
-		var work map[string]interface{}
+		var work map[string]any
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
 		}

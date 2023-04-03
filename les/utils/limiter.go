@@ -68,7 +68,7 @@ type request struct {
 }
 
 // flatWeight distributes weights equally between each active network address
-func flatWeight(item interface{}) uint64 { return item.(*nodeQueue).flatWeight }
+func flatWeight(item any) uint64 { return item.(*nodeQueue).flatWeight }
 
 // add adds the node queue to the address group. It is the caller's responsibility to
 // add the address group to the address map and the address selector if it wasn't
@@ -129,8 +129,8 @@ func (ag *addressGroup) choose() *nodeQueue {
 // NewLimiter creates a new Limiter
 func NewLimiter(sumCostLimit uint) *Limiter {
 	l := &Limiter{
-		addressSelect: NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*addressGroup).groupWeight }),
-		valueSelect:   NewWeightedRandomSelect(func(item interface{}) uint64 { return item.(*nodeQueue).valueWeight }),
+		addressSelect: NewWeightedRandomSelect(func(item any) uint64 { return item.(*addressGroup).groupWeight }),
+		valueSelect:   NewWeightedRandomSelect(func(item any) uint64 { return item.(*nodeQueue).valueWeight }),
 		nodes:         make(map[enode.ID]*nodeQueue),
 		addresses:     make(map[string]*addressGroup),
 		sumCostLimit:  sumCostLimit,

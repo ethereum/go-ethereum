@@ -534,7 +534,7 @@ func TestB11r(t *testing.T) {
 
 // cmpJson compares the JSON in two byte slices.
 func cmpJson(a, b []byte) (bool, error) {
-	var j, j2 interface{}
+	var j, j2 any
 	if err := json.Unmarshal(a, &j); err != nil {
 		return false, err
 	}

@@ -91,7 +91,7 @@ or one (true).
 
 To decode into an interface value, one of these types is stored in the value:
 
-	[]interface{}, for RLP lists
+	[]any, for RLP lists
 	[]byte, for RLP strings
 
 Non-empty interface types are not supported when decoding.

@@ -255,11 +255,11 @@ type dummyMsg struct {
 	data []byte
 }
 
-func (d dummyMsg) Decode(val interface{}) error {
+func (d dummyMsg) Decode(val any) error {
 	return rlp.DecodeBytes(d.data, val)
 }
 
-func (f *fuzzer) doFuzz(msgCode uint64, packet interface{}) {
+func (f *fuzzer) doFuzz(msgCode uint64, packet any) {
 	enc, err := rlp.EncodeToBytes(packet)
 	if err != nil {
 		panic(err)

@@ -61,8 +61,8 @@ func parseNode(node string) (enode.ID, error) {
 }
 
 // ServerInfo returns global server parameters
-func (api *LightServerAPI) ServerInfo() map[string]interface{} {
-	res := make(map[string]interface{})
+func (api *LightServerAPI) ServerInfo() map[string]any {
+	res := make(map[string]any)
 	res["minimumCapacity"] = api.server.minCapacity
 	res["maximumCapacity"] = api.server.maxCapacity
 	_, res["totalCapacity"] = api.server.clientPool.Limits()
@@ -72,7 +72,7 @@ func (api *LightServerAPI) ServerInfo() map[string]interface{} {
 }
 
 // ClientInfo returns information about clients listed in the ids list or matching the given tags
-func (api *LightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]interface{} {
+func (api *LightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]any {
 	var ids []enode.ID
 	for _, node := range nodes {
 		if id, err := parseNode(node); err == nil {
@@ -80,7 +80,7 @@ func (api *LightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]in
 		}
 	}
 
-	res := make(map[enode.ID]map[string]interface{})
+	res := make(map[enode.ID]map[string]any)
 	if len(ids) == 0 {
 		ids = api.server.peers.ids()
 	}
@@ -102,11 +102,11 @@ func (api *LightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]in
 // If maxCount limit is applied but there are more potential results then the ID
 // of the next potential result is included in the map with an empty structure
 // assigned to it.
-func (api *LightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{} {
-	res := make(map[enode.ID]map[string]interface{})
+func (api *LightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]any {
+	res := make(map[enode.ID]map[string]any)
 	ids := api.server.clientPool.GetPosBalanceIDs(start, stop, maxCount+1)
 	if len(ids) > maxCount {
-		res[ids[maxCount]] = make(map[string]interface{})
+		res[ids[maxCount]] = make(map[string]any)
 		ids = ids[:maxCount]
 	}
 	for _, id := range ids {
@@ -122,8 +122,8 @@ func (api *LightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int
 }
 
 // clientInfo creates a client info data structure
-func (api *LightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBalance) map[string]interface{} {
-	info := make(map[string]interface{})
+func (api *LightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBalance) map[string]any {
+	info := make(map[string]any)
 	pb, nb := balance.GetBalance()
 	info["isConnected"] = peer != nil
 	info["pricing/balance"] = pb
@@ -140,7 +140,7 @@ func (api *LightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBala
 
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *LightServerAPI) setParams(params map[string]interface{}, client *clientPeer, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
+func (api *LightServerAPI) setParams(params map[string]any, client *clientPeer, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
 	defParams := client == nil
 	for name, value := range params {
 		errValue := func() error {
@@ -191,7 +191,7 @@ func (api *LightServerAPI) setParams(params map[string]interface{}, client *clie
 
 // SetClientParams sets client parameters for all clients listed in the ids list
 // or all connected clients if the list is empty
-func (api *LightServerAPI) SetClientParams(nodes []string, params map[string]interface{}) error {
+func (api *LightServerAPI) SetClientParams(nodes []string, params map[string]any) error {
 	var err error
 	for _, node := range nodes {
 		var id enode.ID
@@ -215,7 +215,7 @@ func (api *LightServerAPI) SetClientParams(nodes []string, params map[string]int
 }
 
 // SetDefaultParams sets the default parameters applicable to clients connected in the future
-func (api *LightServerAPI) SetDefaultParams(params map[string]interface{}) error {
+func (api *LightServerAPI) SetDefaultParams(params map[string]any) error {
 	update, err := api.setParams(params, nil, &api.defaultPosFactors, &api.defaultNegFactors)
 	if update {
 		api.server.clientPool.SetDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
@@ -254,7 +254,7 @@ func (api *LightServerAPI) AddBalance(node string, amount int64) (balance [2]uin
 //
 // Note: measurement time is adjusted for each pass depending on the previous ones.
 // Therefore a controlled total measurement time is achievable in multiple passes.
-func (api *LightServerAPI) Benchmark(setups []map[string]interface{}, passCount, length int) ([]map[string]interface{}, error) {
+func (api *LightServerAPI) Benchmark(setups []map[string]any, passCount, length int) ([]map[string]any, error) {
 	benchmarks := make([]requestBenchmark, len(setups))
 	for i, setup := range setups {
 		if t, ok := setup["type"].(string); ok {
@@ -308,9 +308,9 @@ func (api *LightServerAPI) Benchmark(setups []map[string]interface{}, passCount,
 		}
 	}
 	rs := api.server.handler.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
-	result := make([]map[string]interface{}, len(setups))
+	result := make([]map[string]any, len(setups))
 	for i, r := range rs {
-		res := make(map[string]interface{})
+		res := make(map[string]any)
 		if r.err == nil {
 			res["totalCount"] = r.totalCount
 			res["avgTime"] = r.avgTime

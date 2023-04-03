@@ -25,7 +25,7 @@ import (
 type reflectTest struct {
 	name  string
 	args  []string
-	struc interface{}
+	struc any
 	want  map[string]string
 	err   string
 }

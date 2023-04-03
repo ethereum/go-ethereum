@@ -24,7 +24,7 @@ import (
 
 type packUnpackTest struct {
 	def      string
-	unpacked interface{}
+	unpacked any
 	packed   string
 }
 

@@ -28,7 +28,7 @@ import (
 // TypeMuxEvent is a time-tagged notification pushed to subscribers.
 type TypeMuxEvent struct {
 	Time time.Time
-	Data interface{}
+	Data any
 }
 
 // A TypeMux dispatches events to registered receivers. Receivers can be
@@ -50,7 +50,7 @@ var ErrMuxClosed = errors.New("event: mux closed")
 // Subscribe creates a subscription for events of the given types. The
 // subscription's channel is closed when it is unsubscribed
 // or the mux is closed.
-func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
+func (mux *TypeMux) Subscribe(types ...any) *TypeMuxSubscription {
 	sub := newsub(mux)
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
@@ -80,7 +80,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 
 // Post sends an event to all receivers registered for the given type.
 // It returns ErrMuxClosed if the mux has been stopped.
-func (mux *TypeMux) Post(ev interface{}) error {
+func (mux *TypeMux) Post(ev any) error {
 	event := &TypeMuxEvent{
 		Time: time.Now(),
 		Data: ev,

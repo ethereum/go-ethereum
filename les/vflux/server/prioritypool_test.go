@@ -53,7 +53,7 @@ func TestPriorityPool(t *testing.T) {
 	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 
-	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(setup.capacityField, func(node *enode.Node, state nodestate.Flags, oldValue, newValue any) {
 		if n := ns.GetField(node, setup.balanceField); n != nil {
 			c := n.(*ppTestClient)
 			c.cap = newValue.(uint64)

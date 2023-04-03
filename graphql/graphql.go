@@ -49,7 +49,7 @@ type Long int64
 func (b Long) ImplementsGraphQLType(name string) bool { return name == "Long" }
 
 // UnmarshalGraphQL unmarshals the provided GraphQL query data.
-func (b *Long) UnmarshalGraphQL(input interface{}) error {
+func (b *Long) UnmarshalGraphQL(input any) error {
 	var err error
 	switch input := input.(type) {
 	case string:

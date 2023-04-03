@@ -55,8 +55,8 @@ const (
 	MetricsPostUrl = "https://metrics-api.librato.com/v1/metrics"
 )
 
-type Measurement map[string]interface{}
-type Metric map[string]interface{}
+type Measurement map[string]any
+type Metric map[string]any
 
 type Batch struct {
 	Gauges      []Measurement `json:"gauges,omitempty"`

@@ -24,7 +24,7 @@ import (
 )
 
 func TestParseSelector(t *testing.T) {
-	mkType := func(types ...interface{}) []ArgumentMarshaling {
+	mkType := func(types ...any) []ArgumentMarshaling {
 		var result []ArgumentMarshaling
 		for i, typeOrComponents := range types {
 			name := fmt.Sprintf("name%d", i)

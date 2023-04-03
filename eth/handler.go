@@ -233,7 +233,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// All the block fetcher activities should be disabled
 		// after the transition. Print the warning log.
 		if h.merger.PoSFinalized() {
-			var ctx []interface{}
+			var ctx []any
 			ctx = append(ctx, "blocks", len(blocks))
 			if len(blocks) > 0 {
 				ctx = append(ctx, "firsthash", blocks[0].Hash())

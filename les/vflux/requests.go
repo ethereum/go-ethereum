@@ -55,7 +55,7 @@ type (
 )
 
 // Add encodes and adds a new request to the batch
-func (r *Requests) Add(service, name string, val interface{}) (int, error) {
+func (r *Requests) Add(service, name string, val any) (int, error) {
 	enc, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return -1, err
@@ -69,7 +69,7 @@ func (r *Requests) Add(service, name string, val interface{}) (int, error) {
 }
 
 // Get decodes the reply to the i-th request in the batch
-func (r Replies) Get(i int, val interface{}) error {
+func (r Replies) Get(i int, val any) error {
 	if i < 0 || i >= len(r) {
 		return ErrNoReply
 	}

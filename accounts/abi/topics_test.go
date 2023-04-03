@@ -27,7 +27,7 @@ import (
 
 func TestMakeTopics(t *testing.T) {
 	type args struct {
-		query [][]interface{}
+		query [][]any
 	}
 	tests := []struct {
 		name    string
@@ -37,31 +37,31 @@ func TestMakeTopics(t *testing.T) {
 	}{
 		{
 			"support fixed byte types, right padded to 32 bytes",
-			args{[][]interface{}{{[5]byte{1, 2, 3, 4, 5}}}},
+			args{[][]any{{[5]byte{1, 2, 3, 4, 5}}}},
 			[][]common.Hash{{common.Hash{1, 2, 3, 4, 5}}},
 			false,
 		},
 		{
 			"support common hash types in topics",
-			args{[][]interface{}{{common.Hash{1, 2, 3, 4, 5}}}},
+			args{[][]any{{common.Hash{1, 2, 3, 4, 5}}}},
 			[][]common.Hash{{common.Hash{1, 2, 3, 4, 5}}},
 			false,
 		},
 		{
 			"support address types in topics",
-			args{[][]interface{}{{common.Address{1, 2, 3, 4, 5}}}},
+			args{[][]any{{common.Address{1, 2, 3, 4, 5}}}},
 			[][]common.Hash{{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5}}},
 			false,
 		},
 		{
 			"support *big.Int types in topics",
-			args{[][]interface{}{{big.NewInt(1).Lsh(big.NewInt(2), 254)}}},
+			args{[][]any{{big.NewInt(1).Lsh(big.NewInt(2), 254)}}},
 			[][]common.Hash{{common.Hash{128}}},
 			false,
 		},
 		{
 			"support boolean types in topics",
-			args{[][]interface{}{
+			args{[][]any{
 				{true},
 				{false},
 			}},
@@ -73,7 +73,7 @@ func TestMakeTopics(t *testing.T) {
 		},
 		{
 			"support int/uint(8/16/32/64) types in topics",
-			args{[][]interface{}{
+			args{[][]any{
 				{int8(-2)},
 				{int16(-3)},
 				{int32(-4)},
@@ -105,13 +105,13 @@ func TestMakeTopics(t *testing.T) {
 		},
 		{
 			"support string types in topics",
-			args{[][]interface{}{{"hello world"}}},
+			args{[][]any{{"hello world"}}},
 			[][]common.Hash{{crypto.Keccak256Hash([]byte("hello world"))}},
 			false,
 		},
 		{
 			"support byte slice types in topics",
-			args{[][]interface{}{{[]byte{1, 2, 3}}}},
+			args{[][]any{{[]byte{1, 2, 3}}}},
 			[][]common.Hash{{crypto.Keccak256Hash([]byte{1, 2, 3})}},
 			false,
 		},
@@ -131,9 +131,9 @@ func TestMakeTopics(t *testing.T) {
 }
 
 type args struct {
-	createObj func() interface{}
-	resultObj func() interface{}
-	resultMap func() map[string]interface{}
+	createObj func() any
+	resultObj func() any
+	resultMap func() map[string]any
 	fields    Arguments
 	topics    []common.Hash
 }
@@ -174,10 +174,10 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "support fixed byte types, right padded to 32 bytes",
 			args: args{
-				createObj: func() interface{} { return &bytesStruct{} },
-				resultObj: func() interface{} { return &bytesStruct{StaticBytes: [5]byte{1, 2, 3, 4, 5}} },
-				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"staticBytes": [5]byte{1, 2, 3, 4, 5}}
+				createObj: func() any { return &bytesStruct{} },
+				resultObj: func() any { return &bytesStruct{StaticBytes: [5]byte{1, 2, 3, 4, 5}} },
+				resultMap: func() map[string]any {
+					return map[string]any{"staticBytes": [5]byte{1, 2, 3, 4, 5}}
 				},
 				fields: Arguments{Argument{
 					Name:    "staticBytes",
@@ -193,10 +193,10 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "int8 with negative value",
 			args: args{
-				createObj: func() interface{} { return &int8Struct{} },
-				resultObj: func() interface{} { return &int8Struct{Int8Value: -1} },
-				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"int8Value": int8(-1)}
+				createObj: func() any { return &int8Struct{} },
+				resultObj: func() any { return &int8Struct{Int8Value: -1} },
+				resultMap: func() map[string]any {
+					return map[string]any{"int8Value": int8(-1)}
 				},
 				fields: Arguments{Argument{
 					Name:    "int8Value",
@@ -213,10 +213,10 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "int256 with negative value",
 			args: args{
-				createObj: func() interface{} { return &int256Struct{} },
-				resultObj: func() interface{} { return &int256Struct{Int256Value: big.NewInt(-1)} },
-				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"int256Value": big.NewInt(-1)}
+				createObj: func() any { return &int256Struct{} },
+				resultObj: func() any { return &int256Struct{Int256Value: big.NewInt(-1)} },
+				resultMap: func() map[string]any {
+					return map[string]any{"int256Value": big.NewInt(-1)}
 				},
 				fields: Arguments{Argument{
 					Name:    "int256Value",
@@ -233,10 +233,10 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "hash type",
 			args: args{
-				createObj: func() interface{} { return &hashStruct{} },
-				resultObj: func() interface{} { return &hashStruct{crypto.Keccak256Hash([]byte("stringtopic"))} },
-				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"hashValue": crypto.Keccak256Hash([]byte("stringtopic"))}
+				createObj: func() any { return &hashStruct{} },
+				resultObj: func() any { return &hashStruct{crypto.Keccak256Hash([]byte("stringtopic"))} },
+				resultMap: func() map[string]any {
+					return map[string]any{"hashValue": crypto.Keccak256Hash([]byte("stringtopic"))}
 				},
 				fields: Arguments{Argument{
 					Name:    "hashValue",
@@ -252,13 +252,13 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "function type",
 			args: args{
-				createObj: func() interface{} { return &funcStruct{} },
-				resultObj: func() interface{} {
+				createObj: func() any { return &funcStruct{} },
+				resultObj: func() any {
 					return &funcStruct{[24]byte{255, 255, 255, 255, 255, 255, 255, 255,
 						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}}
 				},
-				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"funcValue": [24]byte{255, 255, 255, 255, 255, 255, 255, 255,
+				resultMap: func() map[string]any {
+					return map[string]any{"funcValue": [24]byte{255, 255, 255, 255, 255, 255, 255, 255,
 						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}}
 				},
 				fields: Arguments{Argument{
@@ -276,9 +276,9 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "error on topic/field count mismatch",
 			args: args{
-				createObj: func() interface{} { return nil },
-				resultObj: func() interface{} { return nil },
-				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				createObj: func() any { return nil },
+				resultObj: func() any { return nil },
+				resultMap: func() map[string]any { return make(map[string]any) },
 				fields: Arguments{Argument{
 					Name:    "tupletype",
 					Type:    tupleType,
@@ -291,9 +291,9 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "error on unindexed arguments",
 			args: args{
-				createObj: func() interface{} { return &int256Struct{} },
-				resultObj: func() interface{} { return &int256Struct{} },
-				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				createObj: func() any { return &int256Struct{} },
+				resultObj: func() any { return &int256Struct{} },
+				resultMap: func() map[string]any { return make(map[string]any) },
 				fields: Arguments{Argument{
 					Name:    "int256Value",
 					Type:    int256Type,
@@ -309,9 +309,9 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "error on tuple in topic reconstruction",
 			args: args{
-				createObj: func() interface{} { return &tupleType },
-				resultObj: func() interface{} { return &tupleType },
-				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				createObj: func() any { return &tupleType },
+				resultObj: func() any { return &tupleType },
+				resultMap: func() map[string]any { return make(map[string]any) },
 				fields: Arguments{Argument{
 					Name:    "tupletype",
 					Type:    tupleType,
@@ -324,10 +324,10 @@ func setupTopicsTests() []topicTest {
 		{
 			name: "error on improper encoded function",
 			args: args{
-				createObj: func() interface{} { return &funcStruct{} },
-				resultObj: func() interface{} { return &funcStruct{} },
-				resultMap: func() map[string]interface{} {
-					return make(map[string]interface{})
+				createObj: func() any { return &funcStruct{} },
+				resultObj: func() any { return &funcStruct{} },
+				resultMap: func() map[string]any {
+					return make(map[string]any)
 				},
 				fields: Arguments{Argument{
 					Name:    "funcValue",
@@ -368,7 +368,7 @@ func TestParseTopicsIntoMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			outMap := make(map[string]interface{})
+			outMap := make(map[string]any)
 			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)
 			}

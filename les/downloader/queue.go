@@ -393,15 +393,15 @@ func (q *queue) Results(block bool) []*fetchResult {
 	return results
 }
 
-func (q *queue) Stats() []interface{} {
+func (q *queue) Stats() []any {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
 	return q.stats()
 }
 
-func (q *queue) stats() []interface{} {
-	return []interface{}{
+func (q *queue) stats() []any {
+	return []any{
 		"receiptTasks", q.receiptTaskQueue.Size(),
 		"blockTasks", q.blockTaskQueue.Size(),
 		"itemSize", q.resultSize,
@@ -591,7 +591,7 @@ func (q *queue) CancelReceipts(request *fetchRequest) {
 }
 
 // Cancel aborts a fetch request, returning all pending hashes to the task queue.
-func (q *queue) cancel(request *fetchRequest, taskQueue interface{}, pendPool map[string]*fetchRequest) {
+func (q *queue) cancel(request *fetchRequest, taskQueue any, pendPool map[string]*fetchRequest) {
 	if request.From > 0 {
 		taskQueue.(*prque.Prque[int64, uint64]).Push(request.From, -int64(request.From))
 	}
@@ -655,7 +655,7 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 // Note, this method expects the queue lock to be already held. The
 // reason the lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
-func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue interface{}, timeoutMeter metrics.Meter) map[string]int {
+func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue any, timeoutMeter metrics.Meter) map[string]int {
 	// Iterate over the expired requests and return each to the queue
 	expiries := make(map[string]int)
 	for id, request := range pendPool {

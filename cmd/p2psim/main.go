@@ -405,8 +405,8 @@ func rpcNode(ctx *cli.Context) error {
 	if ctx.Bool(subscribeFlag.Name) {
 		return rpcSubscribe(rpcClient, ctx.App.Writer, method, args.Slice()[3:]...)
 	}
-	var result interface{}
-	params := make([]interface{}, len(args.Slice()[3:]))
+	var result any
+	params := make([]any, len(args.Slice()[3:]))
 	for i, v := range args.Slice()[3:] {
 		params[i] = v
 	}
@@ -420,8 +420,8 @@ func rpcSubscribe(client *rpc.Client, out io.Writer, method string, args ...stri
 	parts := strings.SplitN(method, "_", 2)
 	namespace := parts[0]
 	method = parts[1]
-	ch := make(chan interface{})
-	subArgs := make([]interface{}, len(args)+1)
+	ch := make(chan any)
+	subArgs := make([]any, len(args)+1)
 	subArgs[0] = method
 	for i, v := range args {
 		subArgs[i+1] = v

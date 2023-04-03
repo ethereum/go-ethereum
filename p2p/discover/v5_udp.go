@@ -71,7 +71,7 @@ type UDPv5 struct {
 	validSchemes enr.IdentityScheme
 
 	// misc buffers used during message handling
-	logcontext []interface{}
+	logcontext []any
 
 	// talkreq handler registry
 	trlock     sync.Mutex

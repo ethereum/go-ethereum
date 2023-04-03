@@ -31,7 +31,7 @@ import (
 )
 
 // verifyImportEvent verifies that one single event arrive on an import channel.
-func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
+func verifyImportEvent(t *testing.T, imported chan any, arrive bool) {
 	if arrive {
 		select {
 		case <-imported:
@@ -48,7 +48,7 @@ func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
 }
 
 // verifyImportDone verifies that no more events are arriving on an import channel.
-func verifyImportDone(t *testing.T, imported chan interface{}) {
+func verifyImportDone(t *testing.T, imported chan any) {
 	select {
 	case <-imported:
 		t.Fatalf("extra block imported")
@@ -82,7 +82,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 	if err != nil {
 		t.Fatalf("Failed to create peer pair %v", err)
 	}
-	importCh := make(chan interface{})
+	importCh := make(chan any)
 	c.handler.fetcher.newHeadHook = func(header *types.Header) {
 		importCh <- header
 	}

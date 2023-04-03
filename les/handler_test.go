@@ -39,10 +39,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}) error {
+func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data any) error {
 	type resp struct {
 		ReqID, BV uint64
-		Data      interface{}
+		Data      any
 	}
 	return p2p.ExpectMsg(r, msgcode, resp{reqID, bv, data})
 }

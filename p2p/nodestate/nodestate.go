@@ -113,8 +113,8 @@ type (
 	fieldDefinition struct {
 		name   string
 		ftype  reflect.Type
-		encode func(interface{}) ([]byte, error)
-		decode func([]byte) (interface{}, error)
+		encode func(any) ([]byte, error)
+		decode func([]byte) (any, error)
 	}
 
 	// Setup contains the list of flags and fields used by the application
@@ -136,14 +136,14 @@ type (
 
 	// FieldCallback is a subscription callback which is called when the value of
 	// a specific field is changed.
-	FieldCallback func(n *enode.Node, state Flags, oldValue, newValue interface{})
+	FieldCallback func(n *enode.Node, state Flags, oldValue, newValue any)
 
 	// nodeInfo contains node state, fields and state timeouts
 	nodeInfo struct {
 		node       *enode.Node
 		state      bitMask
 		timeouts   []*nodeStateTimeout
-		fields     []interface{}
+		fields     []any
 		fieldCount int
 		db, dirty  bool
 	}
@@ -173,7 +173,7 @@ type (
 	offlineCallback struct {
 		node   *nodeInfo
 		state  bitMask
-		fields []interface{}
+		fields []any
 	}
 )
 
@@ -217,7 +217,7 @@ func (s *Setup) NewField(name string, ftype reflect.Type) Field {
 }
 
 // NewPersistentField creates a new persistent node field
-func (s *Setup) NewPersistentField(name string, ftype reflect.Type, encode func(interface{}) ([]byte, error), decode func([]byte) (interface{}, error)) Field {
+func (s *Setup) NewPersistentField(name string, ftype reflect.Type, encode func(any) ([]byte, error), decode func([]byte) (any, error)) Field {
 	f := Field{index: len(s.fields), setup: s}
 	s.fields = append(s.fields, fieldDefinition{
 		name:   name,
@@ -403,7 +403,7 @@ func (ns *NodeStateMachine) SubscribeField(field Field, callback FieldCallback) 
 
 // newNode creates a new nodeInfo
 func (ns *NodeStateMachine) newNode(n *enode.Node) *nodeInfo {
-	return &nodeInfo{node: n, fields: make([]interface{}, len(ns.fields))}
+	return &nodeInfo{node: n, fields: make([]any, len(ns.fields))}
 }
 
 // checkStarted checks whether the state machine has already been started and panics otherwise.
@@ -441,7 +441,7 @@ func (ns *NodeStateMachine) Stop() {
 		panic("already closed")
 	}
 	for _, node := range ns.nodes {
-		fields := make([]interface{}, len(node.fields))
+		fields := make([]any, len(node.fields))
 		copy(fields, node.fields)
 		ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node, node.state, fields})
 	}
@@ -513,7 +513,7 @@ func (ns *NodeStateMachine) decodeNode(id enode.ID, data []byte) {
 	// It's a compatible node record, add it to set.
 	ns.nodes[id] = node
 	node.state = enc.State
-	fields := make([]interface{}, len(node.fields))
+	fields := make([]any, len(node.fields))
 	copy(fields, node.fields)
 	ns.offlineCallbackList = append(ns.offlineCallbackList, offlineCallback{node, node.state, fields})
 	log.Debug("Loaded node state", "id", id, "state", Flags{mask: enc.State, setup: ns.setup})
@@ -851,7 +851,7 @@ func (ns *NodeStateMachine) removeTimeouts(node *nodeInfo, mask bitMask) {
 // GetField retrieves the given field of the given node. Note that when used in a
 // subscription callback the result can be out of sync with the state change represented
 // by the callback parameters so extra safety checks might be necessary.
-func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) interface{} {
+func (ns *NodeStateMachine) GetField(n *enode.Node, field Field) any {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -883,7 +883,7 @@ func (ns *NodeStateMachine) GetState(n *enode.Node) Flags {
 }
 
 // SetField sets the given field of the given node and blocks until the operation is finished
-func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface{}) error {
+func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value any) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -897,7 +897,7 @@ func (ns *NodeStateMachine) SetField(n *enode.Node, field Field, value interface
 
 // SetFieldSub sets the given field of the given node without blocking (should be called
 // from a subscription/operation callback).
-func (ns *NodeStateMachine) SetFieldSub(n *enode.Node, field Field, value interface{}) error {
+func (ns *NodeStateMachine) SetFieldSub(n *enode.Node, field Field, value any) error {
 	ns.lock.Lock()
 	defer ns.lock.Unlock()
 
@@ -905,7 +905,7 @@ func (ns *NodeStateMachine) SetFieldSub(n *enode.Node, field Field, value interf
 	return ns.setField(n, field, value)
 }
 
-func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface{}) error {
+func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value any) error {
 	ns.checkStarted()
 	id, node := ns.updateEnode(n)
 	if node == nil {

@@ -27,14 +27,14 @@ import (
 const jwtExpiryTimeout = 60 * time.Second
 
 type jwtHandler struct {
-	keyFunc func(token *jwt.Token) (interface{}, error)
+	keyFunc func(token *jwt.Token) (any, error)
 	next    http.Handler
 }
 
 // newJWTHandler creates a http.Handler with jwt authentication support.
 func newJWTHandler(secret []byte, next http.Handler) http.Handler {
 	return &jwtHandler{
-		keyFunc: func(token *jwt.Token) (interface{}, error) {
+		keyFunc: func(token *jwt.Token) (any, error) {
 			return secret, nil
 		},
 		next: next,

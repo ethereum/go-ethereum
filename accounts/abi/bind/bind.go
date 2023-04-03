@@ -264,7 +264,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	}
 	buffer := new(bytes.Buffer)
 
-	funcs := map[string]interface{}{
+	funcs := map[string]any{
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],

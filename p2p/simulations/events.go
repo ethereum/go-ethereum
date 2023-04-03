@@ -60,7 +60,7 @@ type Event struct {
 	Msg *Msg `json:"msg,omitempty"`
 
 	//Optionally provide data (currently for simulation frontends only)
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
 // NewEvent creates a new event for the given object which should be either a
@@ -68,7 +68,7 @@ type Event struct {
 //
 // The object is copied so that the event represents the state of the object
 // when NewEvent is called.
-func NewEvent(v interface{}) *Event {
+func NewEvent(v any) *Event {
 	event := &Event{Time: time.Now()}
 	switch v := v.(type) {
 	case *Node:
@@ -89,7 +89,7 @@ func NewEvent(v interface{}) *Event {
 }
 
 // ControlEvent creates a new control event
-func ControlEvent(v interface{}) *Event {
+func ControlEvent(v any) *Event {
 	event := NewEvent(v)
 	event.Control = true
 	return event

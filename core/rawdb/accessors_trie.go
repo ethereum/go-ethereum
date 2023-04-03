@@ -50,7 +50,7 @@ const PathScheme = "pathScheme"
 type nodeHasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &nodeHasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() any { return &nodeHasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
 }
 
 func newNodeHasher() *nodeHasher       { return hasherPool.Get().(*nodeHasher) }

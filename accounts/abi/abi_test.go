@@ -792,8 +792,8 @@ func TestUnpackEventIntoMap(t *testing.T) {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
 
-	receivedMap := map[string]interface{}{}
-	expectedReceivedMap := map[string]interface{}{
+	receivedMap := map[string]any{}
+	expectedReceivedMap := map[string]any{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},
@@ -814,7 +814,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 		t.Error("unpacked `received` map does not match expected map")
 	}
 
-	receivedAddrMap := map[string]interface{}{}
+	receivedAddrMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receivedAddrMap, "receivedAddr", data); err != nil {
 		t.Error(err)
 	}
@@ -842,7 +842,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with no outputs
-	receiveMap := map[string]interface{}{}
+	receiveMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receiveMap, "receive", data); err != nil {
 		t.Error(err)
 	}
@@ -851,7 +851,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with only outputs
-	sendMap := map[string]interface{}{}
+	sendMap := map[string]any{}
 	if err = abi.UnpackIntoMap(sendMap, "send", data); err != nil {
 		t.Error(err)
 	}
@@ -863,7 +863,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	}
 
 	// Tests a method with outputs and inputs
-	getMap := map[string]interface{}{}
+	getMap := map[string]any{}
 	if err = abi.UnpackIntoMap(getMap, "get", data); err != nil {
 		t.Error(err)
 	}
@@ -891,7 +891,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	getMap := map[string]interface{}{}
+	getMap := map[string]any{}
 	if err = abi.UnpackIntoMap(getMap, "get", data); err == nil {
 		t.Error("naming conflict between two methods; error expected")
 	}
@@ -910,7 +910,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	receivedMap := map[string]interface{}{}
+	receivedMap := map[string]any{}
 	if err = abi.UnpackIntoMap(receivedMap, "received", data); err != nil {
 		t.Error("naming conflict between two events; no error expected")
 	}
@@ -937,7 +937,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if len(data)%32 == 0 {
 		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
 	}
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
 		"memo":   []byte{88},

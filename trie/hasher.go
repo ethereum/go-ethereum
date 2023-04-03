@@ -35,7 +35,7 @@ type hasher struct {
 
 // hasherPool holds pureHashers
 var hasherPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &hasher{
 			tmp:    make([]byte, 0, 550), // cap is as large as a full fullNode.
 			sha:    sha3.NewLegacyKeccak256().(crypto.KeccakState),

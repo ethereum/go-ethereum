@@ -153,14 +153,14 @@ func TerminalFormat(usecolor bool) Format {
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
-		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
+		common := []any{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
 		buf := &bytes.Buffer{}
 		logfmt(buf, append(common, r.Ctx...), 0, false)
 		return buf.Bytes()
 	})
 }
 
-func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
+func logfmt(buf *bytes.Buffer, ctx []any, color int, term bool) {
 	for i := 0; i < len(ctx); i += 2 {
 		if i != 0 {
 			buf.WriteByte(' ')
@@ -213,12 +213,12 @@ func JSONFormat() Format {
 func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 	jsonMarshal := json.Marshal
 	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
+		jsonMarshal = func(v any) ([]byte, error) {
 			return json.MarshalIndent(v, "", "    ")
 		}
 	}
 	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
+		props := make(map[string]any)
 
 		props[r.KeyNames.Time] = r.Time
 		props[r.KeyNames.Lvl] = r.Lvl.String()
@@ -255,13 +255,13 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 func JSONFormatEx(pretty, lineSeparated bool) Format {
 	jsonMarshal := json.Marshal
 	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
+		jsonMarshal = func(v any) ([]byte, error) {
 			return json.MarshalIndent(v, "", "    ")
 		}
 	}
 
 	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
+		props := make(map[string]any)
 
 		props[r.KeyNames.Time] = r.Time
 		props[r.KeyNames.Lvl] = r.Lvl.String()
@@ -291,7 +291,7 @@ func JSONFormatEx(pretty, lineSeparated bool) Format {
 	})
 }
 
-func formatShared(value interface{}) (result interface{}) {
+func formatShared(value any) (result any) {
 	defer func() {
 		if err := recover(); err != nil {
 			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && v.IsNil() {
@@ -317,7 +317,7 @@ func formatShared(value interface{}) (result interface{}) {
 	}
 }
 
-func formatJSONValue(value interface{}) interface{} {
+func formatJSONValue(value any) any {
 	value = formatShared(value)
 	switch value.(type) {
 	case int, int8, int16, int32, int64, float32, float64, uint, uint8, uint16, uint32, uint64, string:
@@ -328,7 +328,7 @@ func formatJSONValue(value interface{}) interface{} {
 }
 
 // formatValue formats a value for serialization
-func formatLogfmtValue(value interface{}, term bool) string {
+func formatLogfmtValue(value any, term bool) string {
 	if value == nil {
 		return "nil"
 	}

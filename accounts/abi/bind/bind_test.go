@@ -1255,7 +1255,7 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			check := func(a, b interface{}, errMsg string) {
+			check := func(a, b any, errMsg string) {
 				if !reflect.DeepEqual(a, b) {
 					t.Fatal(errMsg)
 				}

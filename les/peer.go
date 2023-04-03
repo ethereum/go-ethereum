@@ -83,7 +83,7 @@ type keyValueEntry struct {
 type keyValueList []keyValueEntry
 type keyValueMap map[string]rlp.RawValue
 
-func (l keyValueList) add(key string, val interface{}) keyValueList {
+func (l keyValueList) add(key string, val any) keyValueList {
 	var entry keyValueEntry
 	entry.Key = key
 	if val == nil {
@@ -106,7 +106,7 @@ func (l keyValueList) decode() (keyValueMap, uint64) {
 	return m, size
 }
 
-func (m keyValueMap) get(key string, val interface{}) error {
+func (m keyValueMap) get(key string, val any) error {
 	enc, ok := m[key]
 	if !ok {
 		return errResp(ErrMissingKey, "%s", key)
@@ -416,15 +416,15 @@ func (p *serverPeer) unfreeze() {
 
 // sendRequest send a request to the server based on the given message type
 // and content.
-func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data interface{}) error {
+func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data any) error {
 	type req struct {
 		ReqID uint64
-		Data  interface{}
+		Data  any
 	}
 	return p2p.Send(w, msgcode, &req{reqID, data})
 }
 
-func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount int) error {
+func (p *serverPeer) sendRequest(msgcode, reqID uint64, data any, amount int) error {
 	p.sentRequest(reqID, uint32(msgcode), uint32(amount))
 	return sendRequest(p.rw, msgcode, reqID, data)
 }

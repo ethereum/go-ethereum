@@ -25,7 +25,7 @@ import (
 )
 
 // readFile reads the json-data in the provided path and marshals into dest.
-func readFile(path, desc string, dest interface{}) error {
+func readFile(path, desc string, dest any) error {
 	inFile, err := os.Open(path)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed reading %s file: %v", desc, err))

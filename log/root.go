@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	root          = &logger{[]interface{}{}, new(swapHandler)}
+	root          = &logger{[]any{}, new(swapHandler)}
 	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
 	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
 )
@@ -16,7 +16,7 @@ func init() {
 
 // New returns a new logger with the given context.
 // New is a convenient alias for Root().New
-func New(ctx ...interface{}) Logger {
+func New(ctx ...any) Logger {
 	return root.New(ctx...)
 }
 
@@ -38,7 +38,7 @@ func Root() Logger {
 //	log.Trace("msg")
 //	log.Trace("msg", "key1", val1)
 //	log.Trace("msg", "key1", val1, "key2", val2)
-func Trace(msg string, ctx ...interface{}) {
+func Trace(msg string, ctx ...any) {
 	root.write(msg, LvlTrace, ctx, skipLevel)
 }
 
@@ -51,7 +51,7 @@ func Trace(msg string, ctx ...interface{}) {
 //	log.Debug("msg")
 //	log.Debug("msg", "key1", val1)
 //	log.Debug("msg", "key1", val1, "key2", val2)
-func Debug(msg string, ctx ...interface{}) {
+func Debug(msg string, ctx ...any) {
 	root.write(msg, LvlDebug, ctx, skipLevel)
 }
 
@@ -64,7 +64,7 @@ func Debug(msg string, ctx ...interface{}) {
 //	log.Info("msg")
 //	log.Info("msg", "key1", val1)
 //	log.Info("msg", "key1", val1, "key2", val2)
-func Info(msg string, ctx ...interface{}) {
+func Info(msg string, ctx ...any) {
 	root.write(msg, LvlInfo, ctx, skipLevel)
 }
 
@@ -77,7 +77,7 @@ func Info(msg string, ctx ...interface{}) {
 //	log.Warn("msg")
 //	log.Warn("msg", "key1", val1)
 //	log.Warn("msg", "key1", val1, "key2", val2)
-func Warn(msg string, ctx ...interface{}) {
+func Warn(msg string, ctx ...any) {
 	root.write(msg, LvlWarn, ctx, skipLevel)
 }
 
@@ -90,7 +90,7 @@ func Warn(msg string, ctx ...interface{}) {
 //	log.Error("msg")
 //	log.Error("msg", "key1", val1)
 //	log.Error("msg", "key1", val1, "key2", val2)
-func Error(msg string, ctx ...interface{}) {
+func Error(msg string, ctx ...any) {
 	root.write(msg, LvlError, ctx, skipLevel)
 }
 
@@ -103,7 +103,7 @@ func Error(msg string, ctx ...interface{}) {
 //	log.Crit("msg")
 //	log.Crit("msg", "key1", val1)
 //	log.Crit("msg", "key1", val1, "key2", val2)
-func Crit(msg string, ctx ...interface{}) {
+func Crit(msg string, ctx ...any) {
 	root.write(msg, LvlCrit, ctx, skipLevel)
 	os.Exit(1)
 }
@@ -113,6 +113,6 @@ func Crit(msg string, ctx ...interface{}) {
 // calldepth influences the reported line number of the log message.
 // A calldepth of zero reports the immediate caller of Output.
 // Non-zero calldepth skips as many stack frames.
-func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
+func Output(msg string, lvl Lvl, calldepth int, ctx ...any) {
 	root.write(msg, lvl, ctx, calldepth+skipLevel)
 }

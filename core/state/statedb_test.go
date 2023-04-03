@@ -440,7 +440,7 @@ func (test *snapshotTest) run() bool {
 func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	for _, addr := range test.addrs {
 		var err error
-		checkeq := func(op string, a, b interface{}) bool {
+		checkeq := func(op string, a, b any) bool {
 			if err == nil && !reflect.DeepEqual(a, b) {
 				err = fmt.Errorf("got %s(%s) == %v, want %v", op, addr.Hex(), a, b)
 				return false

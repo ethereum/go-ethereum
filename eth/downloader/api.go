@@ -30,7 +30,7 @@ import (
 type DownloaderAPI struct {
 	d                         *Downloader
 	mux                       *event.TypeMux
-	installSyncSubscription   chan chan interface{}
+	installSyncSubscription   chan chan any
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
 }
 
@@ -42,7 +42,7 @@ func NewDownloaderAPI(d *Downloader, m *event.TypeMux) *DownloaderAPI {
 	api := &DownloaderAPI{
 		d:                         d,
 		mux:                       m,
-		installSyncSubscription:   make(chan chan interface{}),
+		installSyncSubscription:   make(chan chan any),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
 	}
 
@@ -56,7 +56,7 @@ func NewDownloaderAPI(d *Downloader, m *event.TypeMux) *DownloaderAPI {
 func (api *DownloaderAPI) eventLoop() {
 	var (
 		sub               = api.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
-		syncSubscriptions = make(map[chan interface{}]struct{})
+		syncSubscriptions = make(map[chan any]struct{})
 	)
 
 	for {
@@ -71,7 +71,7 @@ func (api *DownloaderAPI) eventLoop() {
 				return
 			}
 
-			var notification interface{}
+			var notification any
 			switch event.Data.(type) {
 			case StartEvent:
 				notification = &SyncingResult{
@@ -99,7 +99,7 @@ func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		statuses := make(chan interface{})
+		statuses := make(chan any)
 		sub := api.SubscribeSyncStatus(statuses)
 
 		for {
@@ -127,15 +127,15 @@ type SyncingResult struct {
 
 // uninstallSyncSubscriptionRequest uninstalls a syncing subscription in the API event loop.
 type uninstallSyncSubscriptionRequest struct {
-	c           chan interface{}
-	uninstalled chan interface{}
+	c           chan any
+	uninstalled chan any
 }
 
 // SyncStatusSubscription represents a syncing subscription.
 type SyncStatusSubscription struct {
-	api       *DownloaderAPI   // register subscription in event loop of this api instance
-	c         chan interface{} // channel where events are broadcasted to
-	unsubOnce sync.Once        // make sure unsubscribe logic is executed once
+	api       *DownloaderAPI // register subscription in event loop of this api instance
+	c         chan any       // channel where events are broadcasted to
+	unsubOnce sync.Once      // make sure unsubscribe logic is executed once
 }
 
 // Unsubscribe uninstalls the subscription from the DownloadAPI event loop.
@@ -143,7 +143,7 @@ type SyncStatusSubscription struct {
 // after this method returns.
 func (s *SyncStatusSubscription) Unsubscribe() {
 	s.unsubOnce.Do(func() {
-		req := uninstallSyncSubscriptionRequest{s.c, make(chan interface{})}
+		req := uninstallSyncSubscriptionRequest{s.c, make(chan any)}
 		s.api.uninstallSyncSubscription <- &req
 
 		for {
@@ -160,7 +160,7 @@ func (s *SyncStatusSubscription) Unsubscribe() {
 
 // SubscribeSyncStatus creates a subscription that will broadcast new synchronisation updates.
 // The given channel must receive interface values, the result can either.
-func (api *DownloaderAPI) SubscribeSyncStatus(status chan interface{}) *SyncStatusSubscription {
+func (api *DownloaderAPI) SubscribeSyncStatus(status chan any) *SyncStatusSubscription {
 	api.installSyncSubscription <- status
 	return &SyncStatusSubscription{api: api, c: status}
 }

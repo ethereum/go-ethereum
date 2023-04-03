@@ -236,7 +236,7 @@ func TestSetState(t *testing.T) {
 	check(flags[0].Or(flags[1]), Flags{}, true)
 }
 
-func uint64FieldEnc(field interface{}) ([]byte, error) {
+func uint64FieldEnc(field any) ([]byte, error) {
 	if u, ok := field.(uint64); ok {
 		enc, err := rlp.EncodeToBytes(&u)
 		return enc, err
@@ -244,20 +244,20 @@ func uint64FieldEnc(field interface{}) ([]byte, error) {
 	return nil, errors.New("invalid field type")
 }
 
-func uint64FieldDec(enc []byte) (interface{}, error) {
+func uint64FieldDec(enc []byte) (any, error) {
 	var u uint64
 	err := rlp.DecodeBytes(enc, &u)
 	return u, err
 }
 
-func stringFieldEnc(field interface{}) ([]byte, error) {
+func stringFieldEnc(field any) ([]byte, error) {
 	if s, ok := field.(string); ok {
 		return []byte(s), nil
 	}
 	return nil, errors.New("invalid field type")
 }
 
-func stringFieldDec(enc []byte) (interface{}, error) {
+func stringFieldDec(enc []byte) (any, error) {
 	return string(enc), nil
 }
 
@@ -301,12 +301,12 @@ func TestFieldSub(t *testing.T) {
 
 	var (
 		lastState                  Flags
-		lastOldValue, lastNewValue interface{}
+		lastOldValue, lastNewValue any
 	)
-	ns.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}) {
+	ns.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue any) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
-	check := func(state Flags, oldValue, newValue interface{}) {
+	check := func(state Flags, oldValue, newValue any) {
 		if !lastState.Equals(state) || lastOldValue != oldValue || lastNewValue != newValue {
 			t.Fatalf("Incorrect field sub callback (expected [%v %v %v], got [%v %v %v])", state, oldValue, newValue, lastState, lastOldValue, lastNewValue)
 		}
@@ -319,7 +319,7 @@ func TestFieldSub(t *testing.T) {
 	check(s.OfflineFlag(), uint64(100), nil)
 
 	ns2 := NewNodeStateMachine(mdb, []byte("-ns"), clock, s)
-	ns2.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue interface{}) {
+	ns2.SubscribeField(fields[0], func(n *enode.Node, state Flags, oldValue, newValue any) {
 		lastState, lastOldValue, lastNewValue = state, oldValue, newValue
 	})
 	ns2.Start()

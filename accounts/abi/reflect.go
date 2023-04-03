@@ -38,7 +38,7 @@ import (
 // into:
 //
 //	type TupleT struct { X *big.Int }
-func ConvertType(in interface{}, proto interface{}) interface{} {
+func ConvertType(in any, proto any) any {
 	protoType := reflect.TypeOf(proto)
 	if reflect.TypeOf(in).ConvertibleTo(protoType) {
 		return reflect.ValueOf(in).Convert(protoType).Interface()

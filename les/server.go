@@ -174,7 +174,7 @@ func (s *LesServer) APIs() []rpc.API {
 }
 
 func (s *LesServer) Protocols() []p2p.Protocol {
-	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
+	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) any {
 		if p := s.peers.peer(id); p != nil {
 			return p.Info()
 		}

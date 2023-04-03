@@ -5,7 +5,7 @@ import (
 )
 
 type Logger interface {
-	Printf(format string, v ...interface{})
+	Printf(format string, v ...any)
 }
 
 func Log(r Registry, freq time.Duration, l Logger) {
@@ -19,7 +19,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 	duSuffix := scale.String()[1:]
 
 	for range time.Tick(freq) {
-		r.Each(func(name string, i interface{}) {
+		r.Each(func(name string, i any) {
 			switch metric := i.(type) {
 			case Counter:
 				l.Printf("counter %s\n", name)

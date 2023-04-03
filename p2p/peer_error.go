@@ -36,7 +36,7 @@ type peerError struct {
 	message string
 }
 
-func newPeerError(code int, format string, v ...interface{}) *peerError {
+func newPeerError(code int, format string, v ...any) *peerError {
 	desc, ok := errorToString[code]
 	if !ok {
 		panic("invalid error code")

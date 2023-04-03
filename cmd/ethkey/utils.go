@@ -47,7 +47,7 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 
 // mustPrintJSON prints the JSON encoding of the given object and
 // exits the program with an error message when the marshaling fails.
-func mustPrintJSON(jsonObject interface{}) {
+func mustPrintJSON(jsonObject any) {
 	str, err := json.MarshalIndent(jsonObject, "", "  ")
 	if err != nil {
 		utils.Fatalf("Failed to marshal JSON object: %v", err)

@@ -273,7 +273,7 @@ func verifyCompletingEvent(t *testing.T, completing chan []common.Hash, arrive b
 }
 
 // verifyImportEvent verifies that one single event arrive on an import channel.
-func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
+func verifyImportEvent(t *testing.T, imported chan any, arrive bool) {
 	if arrive {
 		select {
 		case <-imported:
@@ -291,7 +291,7 @@ func verifyImportEvent(t *testing.T, imported chan interface{}, arrive bool) {
 
 // verifyImportCount verifies that exactly count number of events arrive on an
 // import hook channel.
-func verifyImportCount(t *testing.T, imported chan interface{}, count int) {
+func verifyImportCount(t *testing.T, imported chan any, count int) {
 	for i := 0; i < count; i++ {
 		select {
 		case <-imported:
@@ -303,7 +303,7 @@ func verifyImportCount(t *testing.T, imported chan interface{}, count int) {
 }
 
 // verifyImportDone verifies that no more events are arriving on an import channel.
-func verifyImportDone(t *testing.T, imported chan interface{}) {
+func verifyImportDone(t *testing.T, imported chan any) {
 	select {
 	case <-imported:
 		t.Fatalf("extra block imported")
@@ -333,7 +333,7 @@ func testSequentialAnnouncements(t *testing.T, light bool) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	// Iteratively announce blocks until all are imported
-	imported := make(chan interface{})
+	imported := make(chan any)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -382,7 +382,7 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 		return secondHeaderFetcher(hash)
 	}
 	// Iteratively announce blocks until all are imported
-	imported := make(chan interface{})
+	imported := make(chan any)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -427,7 +427,7 @@ func testOverlappingAnnouncements(t *testing.T, light bool) {
 
 	// Iteratively announce blocks, but overlap them continuously
 	overlap := 16
-	imported := make(chan interface{}, len(hashes)-1)
+	imported := make(chan any, len(hashes)-1)
 	for i := 0; i < overlap; i++ {
 		imported <- nil
 	}
@@ -521,7 +521,7 @@ func testRandomArrivalImport(t *testing.T, light bool) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	// Iteratively announce blocks, skipping one entry
-	imported := make(chan interface{}, len(hashes)-1)
+	imported := make(chan any, len(hashes)-1)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -560,7 +560,7 @@ func TestQueueGapFill(t *testing.T) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	// Iteratively announce blocks, skipping one entry
-	imported := make(chan interface{}, len(hashes)-1)
+	imported := make(chan any, len(hashes)-1)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) { imported <- block }
 
 	for i := len(hashes) - 1; i >= 0; i-- {
@@ -593,7 +593,7 @@ func TestImportDeduplication(t *testing.T) {
 	}
 	// Instrument the fetching and imported events
 	fetching := make(chan []common.Hash)
-	imported := make(chan interface{}, len(hashes)-1)
+	imported := make(chan any, len(hashes)-1)
 	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- hashes }
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) { imported <- block }
 
@@ -702,8 +702,8 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	badHeaderFetcher := tester.makeHeaderFetcher("bad", blocks, -gatherSlack)
 	badBodyFetcher := tester.makeBodyFetcher("bad", blocks, 0)
 
-	imported := make(chan interface{})
-	announced := make(chan interface{})
+	imported := make(chan any)
+	announced := make(chan any)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -776,7 +776,7 @@ func TestEmptyBlockShortCircuit(t *testing.T) {
 	completing := make(chan []common.Hash)
 	tester.fetcher.completingHook = func(hashes []common.Hash) { completing <- hashes }
 
-	imported := make(chan interface{})
+	imported := make(chan any)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if block == nil {
 			t.Fatalf("Fetcher try to import empty block")
@@ -806,7 +806,7 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 	// Create a tester with instrumented import hooks
 	tester := newTester(false)
 
-	imported, announces := make(chan interface{}), int32(0)
+	imported, announces := make(chan any), int32(0)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) { imported <- block }
 	tester.fetcher.announceChangeHook = func(hash common.Hash, added bool) {
 		if added {
@@ -853,7 +853,7 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	// Create a tester with instrumented import hooks
 	tester := newTester(false)
 
-	imported, enqueued := make(chan interface{}), int32(0)
+	imported, enqueued := make(chan any), int32(0)
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) { imported <- block }
 	tester.fetcher.queueChangeHook = func(hash common.Hash, added bool) {
 		if added {
