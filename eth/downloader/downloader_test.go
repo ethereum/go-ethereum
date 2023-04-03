@@ -787,7 +787,7 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("peer", protocol, chain.blocks[1:])
 
 	// Instrument the downloader to signal body requests
-	bodiesHave, receiptsHave := atomic.Int32{}, atomic.Int32{}
+	var bodiesHave, receiptsHave atomic.Int32
 	tester.downloader.bodyFetchHook = func(headers []*types.Header) {
 		bodiesHave.Add(int32(len(headers)))
 	}
