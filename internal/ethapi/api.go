@@ -1077,10 +1077,6 @@ func (e *revertError) ErrorData() interface{} {
 	return e.reason
 }
 
-type callConfig struct {
-	BlockOverrides *BlockOverrides
-}
-
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
