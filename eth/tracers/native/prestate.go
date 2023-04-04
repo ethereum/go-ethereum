@@ -136,6 +136,10 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	if err != nil {
 		return
 	}
+	// Skip if tracing was interrupted
+	if t.interrupt.Load() {
+		return
+	}
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
