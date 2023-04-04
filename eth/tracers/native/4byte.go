@@ -48,7 +48,7 @@ func init() {
 type fourByteTracer struct {
 	noopTracer
 	ids               map[string]int   // ids aggregates the 4byte ids found
-	interrupt         uint32           // Atomic flag to signal execution interruption
+	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	reason            error            // Textual reason for the interruption
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
@@ -93,7 +93,7 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
-	if atomic.LoadUint32(&t.interrupt) > 0 {
+	if t.interrupt.Load() {
 		return
 	}
 	if len(input) < 4 {
@@ -124,7 +124,7 @@ func (t *fourByteTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *fourByteTracer) Stop(err error) {
 	t.reason = err
-	atomic.StoreUint32(&t.interrupt, 1)
+	t.interrupt.Store(true)
 }
 
 func bytesToHex(s []byte) string {
