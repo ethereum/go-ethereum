@@ -25,7 +25,9 @@ import (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	Debug                   bool      // Opcode logger
+        // Opcode logger
+        // Deprecated: this field is not used internally anymore and will be removed.
+	Debug                   bool
 	Tracer                  EVMLogger // Opcode logger
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
