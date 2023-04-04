@@ -111,7 +111,9 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
+		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
+			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+		}
 	}
 	return nil, nil
 }

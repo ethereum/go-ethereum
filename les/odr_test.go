@@ -68,7 +68,9 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 	var receipts types.Receipts
 	if bc != nil {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
+			if header := rawdb.ReadHeader(db, bhash, *number); header != nil {
+				receipts = rawdb.ReadReceipts(db, bhash, *number, header.Time, config)
+			}
 		}
 	} else {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
