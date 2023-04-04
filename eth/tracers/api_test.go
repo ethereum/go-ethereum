@@ -863,7 +863,8 @@ func TestTraceChain(t *testing.T) {
 		{10, 20, nil}, // the middle chain range, blocks [11, 20]
 	}
 	for _, c := range cases {
-		ref, rel = atomic.Uint32{}, atomic.Uint32{} // clean up the counters
+		ref.Store(0)
+		rel.Store(0)
 
 		from, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.start))
 		to, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.end))
