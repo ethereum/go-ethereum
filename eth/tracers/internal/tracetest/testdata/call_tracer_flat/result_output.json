@@ -68,7 +68,7 @@
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "to": "0x531f76bad925f6a925474996c7d738c1008045f6",
         "value": "0xde0b6b3a7640000",
-        "gas": "0x3b920",
+        "gas": "0x40b28",
         "input": "0x",
         "callType": "call"
       },

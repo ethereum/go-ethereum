@@ -54,7 +54,7 @@
       "action": {
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
-        "gas": "0xcf08",
+        "gas": "0x19ee4",
         "init": "0x5a600055600060006000f0505a60015500"
       },
       "error": "out of gas",
