@@ -68,6 +68,7 @@ func TestFakeExponential(t *testing.T) {
 		{1, 5, 1, 136},  // approximate 148.4
 		{1, 5, 2, 11},   // approximate 12.18
 		{2, 5, 2, 23},   // approximate 24.36
+		{1, 50000000, 2225652, 5709098764},
 	}
 	for i, tt := range tests {
 		f, n, d := big.NewInt(tt.factor), big.NewInt(tt.numerator), big.NewInt(tt.denominator)

@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	expFactor      = big.NewInt(params.BlobTxMinDataGasprice)
-	expDenominator = big.NewInt(params.BlobTxDataGaspriceUpdateFraction)
+	minDataGasPrice            = big.NewInt(params.BlobTxMinDataGasprice)
+	dataGaspriceUpdateFraction = big.NewInt(params.BlobTxDataGaspriceUpdateFraction)
 )
 
 // CalcBlobFee calculates the blobfee from the header's excess data gas field.
@@ -33,7 +33,7 @@ func CalcBlobFee(excessDataGas *big.Int) *big.Int {
 	if excessDataGas == nil {
 		return big.NewInt(params.BlobTxMinDataGasprice)
 	}
-	return fakeExponential(expFactor, excessDataGas, expDenominator)
+	return fakeExponential(minDataGasPrice, excessDataGas, dataGaspriceUpdateFraction)
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
