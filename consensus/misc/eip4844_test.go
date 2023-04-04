@@ -17,6 +17,7 @@
 package misc
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -69,9 +70,15 @@ func TestFakeExponential(t *testing.T) {
 		{2, 5, 2, 23},   // approximate 24.36
 	}
 	for i, tt := range tests {
-		have := fakeExponential(big.NewInt(tt.factor), big.NewInt(tt.numerator), big.NewInt(tt.denominator))
+		f, n, d := big.NewInt(tt.factor), big.NewInt(tt.numerator), big.NewInt(tt.denominator)
+		original := fmt.Sprintf("%d %d %d", f, n, d)
+		have := fakeExponential(f, n, d)
 		if have.Int64() != tt.want {
 			t.Errorf("test %d: fake exponential mismatch: have %v want %v", i, have, tt.want)
+		}
+		later := fmt.Sprintf("%d %d %d", f, n, d)
+		if original != later {
+			t.Errorf("test %d: fake exponential modified arguments: have\n%v\nwant\n%v", i, later, original)
 		}
 	}
 }

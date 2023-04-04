@@ -22,13 +22,18 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var (
+	expFactor      = big.NewInt(params.BlobTxMinDataGasprice)
+	expDenominator = big.NewInt(params.BlobTxDataGaspriceUpdateFraction)
+)
+
 // CalcBlobFee calculates the blobfee from the header's excess data gas field.
 func CalcBlobFee(excessDataGas *big.Int) *big.Int {
 	// If this block does not yet have EIP-4844 enabled, return the starting fee
 	if excessDataGas == nil {
 		return big.NewInt(params.BlobTxMinDataGasprice)
 	}
-	return fakeExponential(big.NewInt(params.BlobTxMinDataGasprice), excessDataGas, big.NewInt(params.BlobTxDataGaspriceUpdateFraction))
+	return fakeExponential(expFactor, excessDataGas, expDenominator)
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
