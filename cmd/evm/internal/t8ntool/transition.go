@@ -180,7 +180,6 @@ func Transition(ctx *cli.Context) error {
 
 	vmConfig := vm.Config{
 		Tracer: tracer,
-		Debug:  (tracer != nil),
 	}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
