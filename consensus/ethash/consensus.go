@@ -313,6 +313,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if chain.Config().IsShanghai(header.Time) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
+	if chain.Config().IsCancun(header.Time) {
+		return fmt.Errorf("ethash does not support cancun fork")
+	}
 	// Verify the engine specific seal securing the block
 	if seal {
 		if err := ethash.verifySeal(chain, header, false); err != nil {
