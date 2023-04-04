@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -150,19 +151,38 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transac
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
-		m.reheap()
+		m.reheap(false)
 	}
 	return removed
 }
 
-func (m *txSortedMap) reheap() {
-	*m.index = make([]uint64, 0, len(m.items))
+func (m *txSortedMap) reheap(withRlock bool) {
+	index := make(nonceHeap, 0, len(m.items))
 
-	for nonce := range m.items {
-		*m.index = append(*m.index, nonce)
+	if withRlock {
+		m.m.RLock()
+		log.Info("[DEBUG] Acquired lock over txpool map while performing reheap")
 	}
 
-	heap.Init(m.index)
+	for nonce := range m.items {
+		index = append(index, nonce)
+	}
+
+	if withRlock {
+		m.m.RUnlock()
+	}
+
+	heap.Init(&index)
+
+	if withRlock {
+		m.m.Lock()
+	}
+
+	m.index = &index
+
+	if withRlock {
+		m.m.Unlock()
+	}
 
 	m.cacheMu.Lock()
 	m.cache = nil
@@ -521,12 +541,17 @@ func (l *txList) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transact
 				lowest = nonce
 			}
 		}
+
+		l.txs.m.Lock()
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
+		l.txs.m.Unlock()
 	}
 	// Reset total cost
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
-	l.txs.reheap()
+
+	l.txs.reheap(true)
+
 	return removed, invalids
 }
 
