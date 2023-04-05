@@ -48,6 +48,8 @@ github.com/BurntSushi/toml v1.1.0 h1:ksErzDEI1khOiGPgpwuI7x2ebx/uXQNw7xJpn9Eq1+I
 github.com/BurntSushi/toml v1.1.0/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/DATA-DOG/go-sqlmock v1.3.3/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
+github.com/JekaMas/crand v1.0.1 h1:FMPxkUQqH/hExl0aUXsr0UCGYZ4lJH9IJ5H/KbM6Y9A=
+github.com/JekaMas/crand v1.0.1/go.mod h1:GGzGpMCht/tbaNQ5A4kSiKSqEoNAhhyTfSDQyIENBQU=
 github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d h1:RO27lgfZF8s9lZ3pWyzc0gCE0RZC+6/PXbRjAa0CNp8=
 github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d/go.mod h1:romz7UPgSYhfJkKOalzEEyV6sWtt/eAEm0nX2aOrod0=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
@@ -144,7 +146,6 @@ github.com/btcsuite/btcd v0.22.0-beta/go.mod h1:9n5ntfhhHQBIhUvlhDvD3Qg6fRUj4jkN
 github.com/btcsuite/btcd/btcec/v2 v2.1.2 h1:YoYoC9J0jwfukodSBMzZYUVQ8PTiYg4BnOWiJVzTmLs=
 github.com/btcsuite/btcd/btcec/v2 v2.1.2/go.mod h1:ctjw4H1kknNJmRN4iP1R7bTQ+v3GJkZBd6mui8ZsAZE=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.0/go.mod h1:7SFka0XMvUgj3hfZtydOrQY2mwhPclbT2snogU7SQQc=
-github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1/go.mod h1:7SFka0XMvUgj3hfZtydOrQY2mwhPclbT2snogU7SQQc=
 github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f/go.mod h1:TdznJufoqS23FtqVCzL0ZqgP5MqXbb4fg/WgDys70nA=
 github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a/go.mod h1:+5NJ2+qvTyV9exUAL/rxXi3DcLg2Ts+ymUAY5y4NvMg=
@@ -611,8 +612,8 @@ github.com/maticnetwork/cosmos-sdk v0.37.5-0.20220311095845-81690c6a53e7 h1:8NoE
 github.com/maticnetwork/cosmos-sdk v0.37.5-0.20220311095845-81690c6a53e7/go.mod h1:uW55Ru86N5o3L8SVkVL1TPE+mV/WRM2la8sC3TR/Ajc=
 github.com/maticnetwork/crand v1.0.2 h1:Af0tAivC8zrxXDpGWNWVT/0s1fOz8w0eRbahZgURS8I=
 github.com/maticnetwork/crand v1.0.2/go.mod h1:/NRNL3bj2eYdqpWmoIP5puxndTpi0XRxpj5ZKxfHjyg=
-github.com/maticnetwork/heimdall v0.3.0-beta1.0.20221123180730-457028136461 h1:XMznEUVoJVzrZjGzh252yNrmsEKLFgiXefWbhKRabJQ=
-github.com/maticnetwork/heimdall v0.3.0-beta1.0.20221123180730-457028136461/go.mod h1:IHC6KRjp1c9DLUXLB0+65Fdn+T55OV9y4VViCwYv4lk=
+github.com/maticnetwork/heimdall v0.3.1-0.20230105132832-d0063f71e3f0 h1:MYTAcBs4y88GEzesT8eAU472ZfQSLluW0qgkZTzNgwM=
+github.com/maticnetwork/heimdall v0.3.1-0.20230105132832-d0063f71e3f0/go.mod h1:A3bUSe9jjMQHEPPOUW1JytM3x2g3t+jvsbPY66KBPIs=
 github.com/maticnetwork/polyproto v0.0.2 h1:cPxuxbIDItdwGnucc3lZB58U8Zfe1mH73PWTGd15554=
 github.com/maticnetwork/polyproto v0.0.2/go.mod h1:e1mU2EXSwEpn5jM7GfNwu3AupsV6WAGoPFFfswXOF0o=
 github.com/maticnetwork/tendermint v0.26.0-dev0.0.20220923185258-3e7c7f86ce9f h1:iV69PJUEdwJJFXQvbADYVEMxDrkKAsPdHTg4U3F510I=

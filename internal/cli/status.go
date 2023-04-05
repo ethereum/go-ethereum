@@ -5,14 +5,28 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
-
-	empty "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // StatusCommand is the command to output the status of the client
 type StatusCommand struct {
 	*Meta2
+
+	wait bool
+}
+
+func (c *StatusCommand) Flags() *flagset.Flagset {
+	flags := c.NewFlagSet("status")
+
+	flags.BoolFlag(&flagset.BoolFlag{
+		Name:    "w",
+		Value:   &c.wait,
+		Usage:   "wait for Bor node to be available",
+		Default: false,
+	})
+
+	return flags
 }
 
 // MarkDown implements cli.MarkDown interface
@@ -39,7 +53,7 @@ func (c *StatusCommand) Synopsis() string {
 
 // Run implements the cli.Command interface
 func (c *StatusCommand) Run(args []string) int {
-	flags := c.NewFlagSet("status")
+	flags := c.Flags()
 	if err := flags.Parse(args); err != nil {
 		c.UI.Error(err.Error())
 		return 1
@@ -51,7 +65,7 @@ func (c *StatusCommand) Run(args []string) int {
 		return 1
 	}
 
-	status, err := borClt.Status(context.Background(), &empty.Empty{})
+	status, err := borClt.Status(context.Background(), &proto.StatusRequest{Wait: c.wait})
 	if err != nil {
 		c.UI.Error(err.Error())
 		return 1

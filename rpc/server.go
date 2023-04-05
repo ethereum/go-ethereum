@@ -105,11 +105,15 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	reqs, batch, err := codec.readBatch()
 	if err != nil {
 		if err != io.EOF {
+			// nolint: errcheck
 			codec.writeJSON(ctx, errorMessage(&invalidMessageError{"parse error"}))
 		}
 		return
 	}
+
+	// nolint: contextcheck
 	if batch {
+		// nolint: contextcheck
 		h.handleBatch(reqs)
 	} else {
 		h.handleMsg(reqs[0])

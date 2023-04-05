@@ -155,7 +155,7 @@ func (c *PruneStateCommand) Run(args []string) int {
 		return 1
 	}
 
-	dbHandles, err := server.MakeDatabaseHandles()
+	dbHandles, err := server.MakeDatabaseHandles(0)
 	if err != nil {
 		c.UI.Error(err.Error())
 		return 1

@@ -50,6 +50,12 @@ var (
 		Value: "",
 	}
 
+	// UseHeimdallApp flag for using internall heimdall app to fetch data
+	UseHeimdallAppFlag = cli.BoolFlag{
+		Name:  "bor.useheimdallapp",
+		Usage: "Use child heimdall process to fetch data, Only works when bor.runheimdall is true",
+	}
+
 	// BorFlags all bor related flags
 	BorFlags = []cli.Flag{
 		HeimdallURLFlag,
@@ -57,6 +63,7 @@ var (
 		HeimdallgRPCAddressFlag,
 		RunHeimdallFlag,
 		RunHeimdallArgsFlag,
+		UseHeimdallAppFlag,
 	}
 )
 
@@ -82,6 +89,7 @@ func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
 	cfg.HeimdallgRPCAddress = ctx.GlobalString(HeimdallgRPCAddressFlag.Name)
 	cfg.RunHeimdall = ctx.GlobalBool(RunHeimdallFlag.Name)
 	cfg.RunHeimdallArgs = ctx.GlobalString(RunHeimdallArgsFlag.Name)
+	cfg.UseHeimdallApp = ctx.GlobalBool(UseHeimdallAppFlag.Name)
 }
 
 // CreateBorEthereum Creates bor ethereum object from eth.Config

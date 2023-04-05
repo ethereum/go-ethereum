@@ -64,9 +64,11 @@ func (api *PublicFilterAPI) NewDeposits(ctx context.Context, crit ethereum.State
 		stateSyncData := make(chan *types.StateSyncData, 10)
 		stateSyncSub := api.events.SubscribeNewDeposits(stateSyncData)
 
+		// nolint: gosimple
 		for {
 			select {
 			case h := <-stateSyncData:
+				// nolint : gosimple
 				if crit.ID == h.ID || bytes.Compare(crit.Contract.Bytes(), h.Contract.Bytes()) == 0 ||
 					(crit.ID == 0 && crit.Contract == common.Address{}) {
 					notifier.Notify(rpcSub.ID, h)

@@ -347,10 +347,6 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
-	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
-	defer stack.Close()
-
 	if ctx.GlobalBool(utils.RunHeimdallFlag.Name) {
 		shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
@@ -359,6 +355,10 @@ func geth(ctx *cli.Context) error {
 			service.NewHeimdallService(shutdownCtx, getHeimdallArgs(ctx))
 		}()
 	}
+
+	prepare(ctx)
+	stack, backend := makeFullNode(ctx)
+	defer stack.Close()
 
 	startNode(ctx, stack, backend, false)
 	stack.Wait()

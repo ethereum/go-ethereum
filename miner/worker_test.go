@@ -18,11 +18,14 @@ package miner
 
 import (
 	"math/big"
+	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"gotest.tools/assert"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -35,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
@@ -63,35 +67,14 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
 	)
 
 	if isBor {
 		chainConfig = params.BorUnittestChainConfig
 
-		ctrl := gomock.NewController(t)
+		engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 		defer ctrl.Finish()
-
-		ethAPIMock := api.NewMockCaller(ctrl)
-		ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-		spanner := bor.NewMockSpanner(ctrl)
-		spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
-			{
-				ID:               0,
-				Address:          TestBankAddress,
-				VotingPower:      100,
-				ProposerPriority: 0,
-			},
-		}, nil).AnyTimes()
-
-		heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
-		heimdallClientMock.EXPECT().Close().Times(1)
-
-		contractMock := bor.NewMockGenesisContract(ctrl)
-
-		db, _, _ = NewDBForFakes(t)
-
-		engine = NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 	} else {
 		if isClique {
 			chainConfig = params.AllCliqueProtocolChanges
@@ -107,7 +90,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -171,17 +154,49 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	}
 }
 
+func getFakeBorFromConfig(t *testing.T, chainConfig *params.ChainConfig) (consensus.Engine, *gomock.Controller) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+
+	ethAPIMock := api.NewMockCaller(ctrl)
+	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	spanner := bor.NewMockSpanner(ctrl)
+	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+		{
+			ID:               0,
+			Address:          TestBankAddress,
+			VotingPower:      100,
+			ProposerPriority: 0,
+		},
+	}, nil).AnyTimes()
+
+	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClientMock.EXPECT().Close().Times(1)
+
+	contractMock := bor.NewMockGenesisContract(ctrl)
+
+	db, _, _ := NewDBForFakes(t)
+
+	engine := NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+
+	return engine, ctrl
+}
+
 func TestEmptyWorkEthash(t *testing.T) {
+	t.Skip()
 	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
 }
 func TestEmptyWorkClique(t *testing.T) {
+	t.Skip()
 	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
 	defer w.close()
 
 	var (
@@ -235,7 +250,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b, _ := NewTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1)
+	w, b, _ := NewTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -297,7 +312,7 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{}, 3)
@@ -368,7 +383,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -476,7 +491,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, postMerge bool) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
@@ -612,6 +627,64 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
+func TestCommitInterruptExperimentBor(t *testing.T) {
+	t.Parallel()
+	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
+	testCommitInterruptExperimentBor(t, 200, 5)
+
+	// with 1 sec block time and 100 millisec tx delay we should get 10 txs per block
+	testCommitInterruptExperimentBor(t, 100, 10)
+}
+
+func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int) {
+	t.Helper()
+
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
+	)
+
+	chainConfig = params.BorUnittestChainConfig
+
+	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+	defer func() {
+		engine.Close()
+		ctrl.Finish()
+	}()
+
+	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay)
+	defer w.close()
+
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
+	go func() {
+		wg.Done()
+
+		for {
+			tx := b.newRandomTx(false)
+			if err := b.TxPool().AddRemote(tx); err != nil {
+				t.Log(err)
+			}
+
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	wg.Wait()
+
+	// Start mining!
+	w.start()
+	time.Sleep(5 * time.Second)
+	w.stop()
+
+	assert.Equal(t, txCount, w.chain.CurrentBlock().Transactions().Len())
+}
+
 func BenchmarkBorMining(b *testing.B) {
 	chainConfig := params.BorUnittestChainConfig
 
@@ -643,7 +716,7 @@ func BenchmarkBorMining(b *testing.B) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0)
+	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.

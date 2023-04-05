@@ -55,7 +55,7 @@ const (
 
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
-	txGatherSlack = 20 * time.Millisecond
+	txGatherSlack = 100 * time.Millisecond
 
 	// maxTxArrivalWait is the longest acceptable duration for the txArrivalWait
 	// configuration value.  Longer config values will default to this.
