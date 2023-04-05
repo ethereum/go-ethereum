@@ -1075,7 +1075,7 @@ func (api *API) traceTx2(ctx context.Context, msgs []*core.Message, txctx *Conte
 			return nil, err
 		}
 	}
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {
