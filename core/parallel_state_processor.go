@@ -297,7 +297,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	coinbase, _ := p.bc.Engine().Author(header)
 
-	deps, delayMap := GetDeps(block.Header().TxDependency)
+	deps := GetDeps(block.Header().TxDependency)
 
 	if block.Header().TxDependency != nil {
 		metadata = true
@@ -315,9 +315,11 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 		cleansdb := statedb.Copy()
 
-		if len(header.TxDependency) > 0 {
-			shouldDelayFeeCal = delayMap[i]
+		if msg.From() == coinbase {
+			shouldDelayFeeCal = false
+		}
 
+		if len(header.TxDependency) != len(block.Transactions()) {
 			task := &ExecutionTask{
 				msg:               msg,
 				config:            p.config,
@@ -343,10 +345,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 			tasks = append(tasks, task)
 		} else {
-			if msg.From() == coinbase {
-				shouldDelayFeeCal = false
-			}
-
 			task := &ExecutionTask{
 				msg:               msg,
 				config:            p.config,
@@ -430,22 +428,16 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	return receipts, allLogs, *usedGas, nil
 }
 
-func GetDeps(txDependency [][]uint64) (map[int][]int, map[int]bool) {
+func GetDeps(txDependency [][]uint64) map[int][]int {
 	deps := make(map[int][]int)
-	delayMap := make(map[int]bool)
 
 	for i := 0; i <= len(txDependency)-1; i++ {
-		idx := int(txDependency[i][0])
-		shouldDelay := txDependency[i][1] == 1
+		deps[i] = []int{}
 
-		delayMap[idx] = shouldDelay
-
-		deps[idx] = []int{}
-
-		for j := 2; j <= len(txDependency[i])-1; j++ {
-			deps[idx] = append(deps[idx], int(txDependency[i][j]))
+		for j := 0; j <= len(txDependency[i])-1; j++ {
+			deps[i] = append(deps[i], int(txDependency[i][j]))
 		}
 	}
 
-	return deps, delayMap
+	return deps
 }

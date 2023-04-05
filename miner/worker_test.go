@@ -819,8 +819,11 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 				}
 			} else {
 				deps := block.TxDependency()
+				if len(deps[0]) != 0 {
+					b.Fatalf("wrong dependency")
+				}
 				for i := 1; i < block.Transactions().Len(); i++ {
-					if deps[i][0] != uint64(i) || deps[i][1] != uint64(0) || deps[i][2] != uint64(i-1) || len(deps[i]) != 3 {
+					if deps[i][0] != uint64(i-1) || len(deps[i]) != 1 {
 						b.Fatalf("wrong dependency")
 					}
 				}
