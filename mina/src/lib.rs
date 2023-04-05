@@ -69,8 +69,14 @@ pub extern "C" fn verify(
     let pubkey_y = unsafe { std::slice::from_raw_parts(pubkey_y, FIELD_SIZE) };
 
     let pubkey = PubKey::from_point_unsafe(CurvePoint::new(
-        BaseField::from_bytes(pubkey_x).unwrap(),
-        BaseField::from_bytes(pubkey_y).unwrap(),
+        match BaseField::from_bytes(pubkey_x) {
+            Ok(x) => x,
+            Err(_) => return false,
+        },
+        match BaseField::from_bytes(pubkey_y) {
+            Ok(y) => y,
+            Err(_) => return false,
+        },
         false,
     ));
 
@@ -78,8 +84,14 @@ pub extern "C" fn verify(
     let sig_s = unsafe { std::slice::from_raw_parts(sig_s, FIELD_SIZE) };
 
     let signature = Signature::new(
-        BaseField::from_bytes(sig_rx).unwrap(),
-        ScalarField::from_bytes(sig_s).unwrap(),
+        match BaseField::from_bytes(sig_rx) {
+            Ok(rx) => rx,
+            Err(_) => return false,
+        },
+        match ScalarField::from_bytes(sig_s) {
+            Ok(s) => s,
+            Err(_) => return false,
+        },
     );
 
     let fields = unsafe { std::slice::from_raw_parts(field_ptr, field_len * FIELD_SIZE) };
