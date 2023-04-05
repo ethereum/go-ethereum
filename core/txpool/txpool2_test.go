@@ -226,10 +226,10 @@ func BenchmarkFutureAttack(b *testing.B) {
 	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
 	futureTxs := types.Transactions{}
 
-	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		futureTxs = append(futureTxs, pricedTransaction(1000+uint64(n), 100000, big.NewInt(500), key))
 	}
+	b.ResetTimer()
 	for i := 0; i < 5; i++ {
 		pool.AddRemotesSync(futureTxs)
 	}
