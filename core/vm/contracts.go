@@ -114,7 +114,7 @@ var (
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
-	PrecompiledAddressesMina	  []common.Address
+	PrecompiledAddressesMina      []common.Address
 )
 
 func init() {

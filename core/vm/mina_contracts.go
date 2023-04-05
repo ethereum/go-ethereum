@@ -34,8 +34,8 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	calldata := input[4:]
 
 	unpacked, err := (abi.Arguments{{
-		Type: sol_uint8},		// networkId
-		{Type: sol_bytes32Arr},	// fields
+		Type: sol_uint8}, // networkId
+		{Type: sol_bytes32Arr}, // fields
 	}).Unpack(calldata)
 
 	if err != nil {
@@ -51,7 +51,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 
 	output_buffer := [32]byte{}
 
-	if !C.poseidon_hash(
+	if !C.poseidon(
 		C.uint8_t(networkId),
 		(*C.uint8_t)(&fields[0][0]),
 		C.uintptr_t(len(fields)),
@@ -80,12 +80,12 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	calldata := input[4:]
 
 	unpacked, err := (abi.Arguments{
-		{Type: sol_uint8},		// networkId
-		{Type: sol_bytes32},	// pubKeyX
-		{Type: sol_bytes32},	// pubKeyY
-		{Type: sol_bytes32},	// signatureRX
-		{Type: sol_bytes32},	// signatureS
-		{Type: sol_bytes32Arr},	// fields
+		{Type: sol_uint8},      // networkId
+		{Type: sol_bytes32},    // pubKeyX
+		{Type: sol_bytes32},    // pubKeyY
+		{Type: sol_bytes32},    // signatureRX
+		{Type: sol_bytes32},    // signatureS
+		{Type: sol_bytes32Arr}, // fields
 	}).Unpack(calldata)
 
 	if err != nil {

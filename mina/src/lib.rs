@@ -3,14 +3,13 @@ mod mina;
 use std::array::TryFromSliceError;
 
 use mina::{Message, NetworkId};
-use mina_hasher::Hashable;
 use mina_signer::{BaseField, CurvePoint, PubKey, ScalarField, Signature};
 use o1_utils::FieldHelpers;
 
 pub const FIELD_SIZE: usize = 32;
 
 #[no_mangle]
-pub extern "C" fn poseidon_hash(
+pub extern "C" fn poseidon(
     network_id: u8,
     field_ptr: *const u8,
     field_len: usize,
@@ -98,8 +97,6 @@ pub extern "C" fn verify(
         Ok(msg) => msg,
         Err(_) => return false,
     };
-
-    println!("{:?}", msg.to_roinput().to_fields()[0].to_biguint());
 
     let result = mina::verify(&signature, &pubkey, &msg, network_id);
 
