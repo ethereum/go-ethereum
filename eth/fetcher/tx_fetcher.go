@@ -56,6 +56,10 @@ const (
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
 	txGatherSlack = 20 * time.Millisecond
+
+	// maxTxArrivalWait is the longest acceptable duration for the txArrivalWait
+	// configuration value.  Longer config values will default to this.
+	maxTxArrivalWait = 500 * time.Millisecond
 )
 
 var (
@@ -335,6 +339,11 @@ func (f *TxFetcher) Start() {
 	// the txArrivalWait duration should not be less than the txGatherSlack duration
 	if f.txArrivalWait < txGatherSlack {
 		f.txArrivalWait = txGatherSlack
+	}
+
+	// the txArrivalWait duration should not be greater than the maxTxArrivalWait duration
+	if f.txArrivalWait > maxTxArrivalWait {
+		f.txArrivalWait = maxTxArrivalWait
 	}
 
 	go f.loop()
