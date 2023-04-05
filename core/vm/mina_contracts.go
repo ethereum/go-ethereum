@@ -1,5 +1,31 @@
 package vm
 
+// Solidity interfaces for precompiles
+//
+// enum NetworkId {
+//     MAINNET,
+//     TESTNET,
+//     NULLNET
+// }
+//
+// interface IHasher {
+//     function poseidonHash(
+//         NetworkId networkId,
+//         bytes32[] memory fields
+//     ) external view returns (bytes32);
+// }
+//
+// interface ISigner {
+//     function verify(
+//         NetworkId networkId,
+//         bytes32 pubKeyX,
+//         bytes32 pubKeyY,
+//         bytes32 signatureRX,
+//         bytes32 signatureS,
+//         bytes32[] calldata fields
+//     ) external view returns (bool);
+// }
+
 /*
 #cgo LDFLAGS: mina/target/release/libmina.a -ldl
 #include "../../mina/target/mina.h"
