@@ -14,8 +14,21 @@ import (
 
 var sol_bool, _ = abi.NewType("bool", "", nil)
 var sol_uint8, _ = abi.NewType("uint8", "", nil)
+var sol_string, _ = abi.NewType("string", "", nil)
 var sol_bytes32, _ = abi.NewType("bytes32", "", nil)
 var sol_bytes32Arr, _ = abi.NewType("bytes32[]", "", nil)
+
+var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
+
+func packErr(message string) []byte {
+	bytes, err := abi.Arguments{{Type: sol_string}}.Pack(message)
+
+	if err != nil {
+		return nil
+	}
+
+	return append(revertSelector, bytes...)
+}
 
 type MinaPoseidon struct{}
 
@@ -28,7 +41,7 @@ var poseidonHashSignature = crypto.Keccak256([]byte("poseidonHash(uint8,bytes32[
 
 func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	if len(input) < 4+64 || !bytes.Equal(input[:4], poseidonHashSignature) {
-		return nil, ErrExecutionReverted
+		return packErr("Invalid signature"), ErrExecutionReverted
 	}
 
 	calldata := input[4:]
@@ -39,14 +52,14 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	}).Unpack(calldata)
 
 	if err != nil {
-		return nil, err
+		return packErr("Unable to unpack calldata"), err
 	}
 
 	networkId := unpacked[0].(uint8)
 	fields := unpacked[1].([][32]uint8)
 
 	if len(fields) == 0 {
-		return nil, ErrExecutionReverted
+		return packErr("Unable to verify for 0 fields"), ErrExecutionReverted
 	}
 
 	output_buffer := [32]byte{}
@@ -57,7 +70,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 		C.uintptr_t(len(fields)),
 		(*C.uint8_t)(&output_buffer[0]),
 	) {
-		return nil, ErrExecutionReverted
+		return packErr("Calling Poseidon hash failed"), ErrExecutionReverted
 	}
 
 	return output_buffer[:], nil
@@ -74,7 +87,7 @@ var verifySignature = crypto.Keccak256([]byte("verify(uint8,bytes32,bytes32,byte
 
 func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	if len(input) < 4+64 || !bytes.Equal(input[:4], verifySignature) {
-		return nil, ErrExecutionReverted
+		return packErr("Invalid signature"), ErrExecutionReverted
 	}
 
 	calldata := input[4:]
@@ -89,7 +102,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	}).Unpack(calldata)
 
 	if err != nil {
-		return nil, err
+		return packErr("Unable to unpack calldata"), err
 	}
 
 	networkId := unpacked[0].(uint8)
@@ -100,7 +113,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	fields := unpacked[5].([][32]uint8)
 
 	if len(fields) == 0 {
-		return nil, ErrExecutionReverted
+		return packErr("Unable to verify for 0 fields"), ErrExecutionReverted
 	}
 
 	output_buffer := false
@@ -115,7 +128,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 		C.uintptr_t(len(fields)),
 		(*C.bool)(&output_buffer),
 	) {
-		return nil, ErrExecutionReverted
+		return packErr("Calling verify failed"), ErrExecutionReverted
 	}
 
 	return abi.Arguments{{Type: sol_bool}}.Pack(output_buffer)
