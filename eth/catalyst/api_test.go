@@ -879,15 +879,10 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(100, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
-
-	ethservice.BlockChain().Config().TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
-
-	var (
-		api    = NewConsensusAPI(ethservice)
-		parent = preMergeBlocks[len(preMergeBlocks)-1]
-	)
+	api := NewConsensusAPI(ethservice)
 
 	// Test parent already post TTD in FCU
+	parent := preMergeBlocks[len(preMergeBlocks)-2]
 	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      parent.Hash(),
 		SafeBlockHash:      common.Hash{},
@@ -913,6 +908,28 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 	data := *payload.Resolve().ExecutionPayload
+	// We need to recompute the blockhash, since the miner computes a wrong (correct) blockhash
+	txs, _ := decodeTransactions(data.Transactions)
+	header := &types.Header{
+		ParentHash:  data.ParentHash,
+		UncleHash:   types.EmptyUncleHash,
+		Coinbase:    data.FeeRecipient,
+		Root:        data.StateRoot,
+		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash: data.ReceiptsRoot,
+		Bloom:       types.BytesToBloom(data.LogsBloom),
+		Difficulty:  common.Big0,
+		Number:      new(big.Int).SetUint64(data.Number),
+		GasLimit:    data.GasLimit,
+		GasUsed:     data.GasUsed,
+		Time:        data.Timestamp,
+		BaseFee:     data.BaseFeePerGas,
+		Extra:       data.ExtraData,
+		MixDigest:   data.Random,
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	data.BlockHash = block.Hash()
+	// Send the new payload
 	resp2, err := api.NewPayloadV1(data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
@@ -1240,9 +1257,10 @@ func TestNilWithdrawals(t *testing.T) {
 
 func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	genesis, blocks := generateMergeChain(10, true)
-	n, ethservice := startEthService(t, genesis, blocks)
 	// enable shanghai on the last block
-	ethservice.BlockChain().Config().ShanghaiTime = &blocks[len(blocks)-1].Header().Time
+	time := blocks[len(blocks)-1].Header().Time + 1
+	genesis.Config.ShanghaiTime = &time
+	n, ethservice := startEthService(t, genesis, blocks)
 
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()

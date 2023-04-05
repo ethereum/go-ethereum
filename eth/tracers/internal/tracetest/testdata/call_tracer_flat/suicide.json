@@ -55,7 +55,7 @@
       "action": {
         "callType": "call",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
-        "gas": "0x445708",
+        "gas": "0x44aa20",
         "input": "0x41c0e1b5",
         "to": "0x8ee79c5b3f6e1d214d2c4fcf7ea4092a32e26e91",
         "value": "0x0"

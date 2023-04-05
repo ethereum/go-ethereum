@@ -105,7 +105,7 @@ type odrTrie struct {
 	trie *trie.Trie
 }
 
-func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
+func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
 	var res []byte
 	err := t.do(key, func() (err error) {
@@ -115,7 +115,7 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryGetAccount(address common.Address) (*types.StateAccount, error) {
+func (t *odrTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
 	var res types.StateAccount
 	key := crypto.Keccak256(address.Bytes())
 	err := t.do(key, func() (err error) {
@@ -131,7 +131,7 @@ func (t *odrTrie) TryGetAccount(address common.Address) (*types.StateAccount, er
 	return &res, err
 }
 
-func (t *odrTrie) TryUpdateAccount(address common.Address, acc *types.StateAccount) error {
+func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
 	key := crypto.Keccak256(address.Bytes())
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {
@@ -142,14 +142,14 @@ func (t *odrTrie) TryUpdateAccount(address common.Address, acc *types.StateAccou
 	})
 }
 
-func (t *odrTrie) TryUpdate(key, value []byte) error {
+func (t *odrTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
 		return t.trie.TryUpdate(key, value)
 	})
 }
 
-func (t *odrTrie) TryDelete(key []byte) error {
+func (t *odrTrie) DeleteStorage(_ common.Address, key []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
 		return t.trie.TryDelete(key)
@@ -157,7 +157,7 @@ func (t *odrTrie) TryDelete(key []byte) error {
 }
 
 // TryDeleteAccount abstracts an account deletion from the trie.
-func (t *odrTrie) TryDeleteAccount(address common.Address) error {
+func (t *odrTrie) DeleteAccount(address common.Address) error {
 	key := crypto.Keccak256(address.Bytes())
 	return t.do(key, func() error {
 		return t.trie.TryDelete(key)
