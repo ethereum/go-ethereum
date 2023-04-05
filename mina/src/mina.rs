@@ -1,13 +1,13 @@
 use mina_hasher::{DomainParameter, Hashable, Hasher, ROInput};
-use mina_signer::{BaseField, PubKey, Signer, Signature};
+use mina_signer::{BaseField, PubKey, Signature, Signer};
 use o1_utils::{field_helpers::FieldHelpersError, FieldHelpers};
 
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub enum NetworkId {
-    TESTNET = 0x00,
-    MAINNET = 0x01,
-    NULLNET = 0xff,
+    MAINNET = 0x00,
+    TESTNET = 0x01,
+    NULLNET = 0x02,
 }
 
 impl From<NetworkId> for u8 {
@@ -24,7 +24,7 @@ impl DomainParameter for NetworkId {
 
 #[derive(Clone)]
 pub struct Message {
-    fields: Vec<BaseField>,
+    pub fields: Vec<BaseField>,
 }
 
 impl Message {
@@ -60,4 +60,15 @@ pub fn poseidon(msg: &Message, network_id: NetworkId) -> BaseField {
     let mut hasher = mina_hasher::create_kimchi::<Message>(network_id);
 
     hasher.hash(msg)
+}
+
+pub fn verify(
+    signature: &Signature,
+    pubkey: &PubKey,
+    msg: &Message,
+    network_id: NetworkId,
+) -> bool {
+    let mut signer = mina_signer::create_kimchi::<Message>(network_id);
+
+    signer.verify(signature, pubkey, msg)
 }
