@@ -136,7 +136,7 @@ type Message struct {
 	Data       []byte
 	AccessList types.AccessList
 
-	// When SkipAccountCheckss is true, the message nonce is not checked against the
+	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
