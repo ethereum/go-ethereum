@@ -21,6 +21,7 @@ type sentRequest struct {
 	reqId  uint64
 }
 
+// Trigger is triggered when the request has been answered, failed or timed out, ensuring that wh
 type SingleLock struct {
 	sentRequest
 	Trigger *ModuleTrigger

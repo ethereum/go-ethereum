@@ -269,6 +269,7 @@ func (s *engineApiUpdater) Process(env *request.Environment) {
 			if finalizedState, err := s.chain.GetStateProof(finalized); err == nil {
 				finalizedExecRoot = common.Hash(finalizedState.Values[execBlockIndex])
 			}
+			s.chain.DeleteBefore(finalized.Slot)
 		}
 	} else {
 		if s.stateSync.HeadSyncPossible() {

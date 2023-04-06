@@ -129,8 +129,11 @@ func NewForwardUpdateSync(chain *light.CommitteeChain) *ForwardUpdateSync {
 
 func (s *ForwardUpdateSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.reqLock.Trigger = trigger("forwardUpdateSync", true)
+	// committeeChainInit signals that the committee chain is initialized (has fixed committee roots) and the first update request can be constructed.
 	trigger("committeeChainInit", true)
+	// validatedHead ensures that the UpdateRange of each server is re-checked as new heads appear and new updates are synced as they become available.
 	trigger("validatedHead", true)
+	// newUpdate is triggered when a new update is successfully added to the committee chain
 	s.newUpdateTrigger = trigger("newUpdate", true)
 }
 
