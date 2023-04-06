@@ -1,10 +1,9 @@
-// Libraries
 import { Code as ChakraCode, Stack, Text, useColorMode } from '@chakra-ui/react';
 import { nightOwl, prism } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 
-// Constants, utilities
 import { CLASSNAME_PREFIX } from '../../../constants';
+
 import { getProgrammingLanguageName } from '../../../utils';
 
 // Programming lang syntax highlighters

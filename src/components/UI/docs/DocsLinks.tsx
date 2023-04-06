@@ -15,12 +15,13 @@ import { useRouter } from 'next/router';
 
 import { LinksList } from './';
 
-import { NavLink } from '../../../types';
 import { checkNavLinks } from '../../../utils';
+
+import { NavLink } from '../../../types';
 
 interface Props {
   navLinks: NavLink[];
-  toggleMobileAccordion: () => void;
+  toggleMobileAccordion?: () => void;
 }
 
 export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
@@ -79,7 +80,10 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                     >
                       {to ? (
                         <NextLink href={to} passHref legacyBehavior>
-                          <Link textDecoration='none !important' onClick={toggleMobileAccordion}>
+                          <Link
+                            textDecoration='none !important'
+                            onClick={toggleMobileAccordion ? toggleMobileAccordion : () => {}}
+                          >
                             <Text
                               textStyle='docs-nav-dropdown'
                               color={isActive ? 'primary' : 'unset'}
@@ -115,7 +119,12 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                   </AccordionButton>
                   {items && (
                     <AccordionPanel borderBottom='2px solid' borderColor='primary' px={0} py={4}>
-                      <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion} />
+                      <LinksList
+                        links={items}
+                        toggleMobileAccordion={
+                          toggleMobileAccordion ? toggleMobileAccordion : () => {}
+                        }
+                      />
                     </AccordionPanel>
                   )}
                 </>
