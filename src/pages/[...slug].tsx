@@ -2,7 +2,7 @@ import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
 import { useContext, useEffect } from 'react';
-import { Box, Grid, Stack, Heading, Text } from '@chakra-ui/react';
+import { Box, Grid, Stack, Heading, Text, Flex } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
@@ -11,7 +11,7 @@ import gfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { ParsedUrlQuery } from 'querystring';
 
-import MDComponents, { Breadcrumbs, DocsNav, DocumentNav } from '../components/UI/docs';
+import MDComponents, { Breadcrumbs, DocumentNav } from '../components/UI/docs';
 import { PageMetadata } from '../components/UI';
 
 import { getFileList } from '../utils/getFileList';
@@ -83,14 +83,11 @@ interface Props {
 
 const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified }) => {
   const router = useRouter();
-  const { mobileNavLinks, setMobileNavLinks } = useContext(NavLinksContext);
+  const { setNavLinks } = useContext(NavLinksContext);
 
   useEffect(() => {
-    // set context value for `MobileDocsNav` component
-    console.log({ navLinks });
-    setMobileNavLinks(navLinks);
-    console.log({ mobileNavLinks });
-  }, []);
+    setNavLinks(navLinks);
+  }, [navLinks, setNavLinks]);
 
   useEffect(() => {
     const id = router.asPath.split('#')[1];
@@ -108,53 +105,44 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
       <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
-        <Grid
-          gap={{ base: 4, lg: 8 }}
-          templateColumns={{ base: 'repeat(1, 1fr)', lg: '288px 1fr' }}
-        >
-          <Stack display={{ base: 'none', lg: 'block' }}>
-            <DocsNav navLinks={navLinks} />
+        <Stack pl={{ base: 0, lg: 80 }} pb={4} width='100%' id='main-content'>
+          <Stack mb={16}>
+            {/* hide breadcrumbs on mobile */}
+            <Box display={{ base: 'none', lg: 'block' }}>
+              <Breadcrumbs />
+            </Box>
+
+            <Heading as='h1' mt='4 !important' mb={0} {...textStyles.h1}>
+              {frontmatter.title}
+            </Heading>
+            <Text as='span' mt='0 !important'>
+              Last edited on {lastModified}
+            </Text>
           </Stack>
 
-          <Stack pb={4} width='100%' id='main-content'>
-            <Stack mb={16}>
-              {/* hide breadcrumbs on mobile */}
-              <Box display={{ base: 'none', lg: 'block' }}>
-                <Breadcrumbs />
-              </Box>
-
-              <Heading as='h1' mt='4 !important' mb={0} {...textStyles.h1}>
-                {frontmatter.title}
-              </Heading>
-              <Text as='span' mt='0 !important'>
-                Last edited on {lastModified}
-              </Text>
-            </Stack>
-
-            <Grid
-              gap={{ base: 4, lg: 8 }}
-              templateColumns={{ base: 'repeat(1, 1fr)', xl: '1fr 192px' }}
+          <Grid
+            gap={{ base: 4, lg: 8 }}
+            templateColumns={{ base: 'repeat(1, 1fr)', xl: '1fr 192px' }}
+          >
+            <Box
+              w='min(100%, 768px)'
+              sx={{ '*:first-of-type': { marginTop: '0 !important' } }}
+              overflow='auto'
             >
-              <Box
-                w='min(100%, 768px)'
-                sx={{ '*:first-of-type': { marginTop: '0 !important' } }}
-                overflow='auto'
+              <ReactMarkdown
+                remarkPlugins={[gfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={ChakraUIRenderer(MDComponents)}
               >
-                <ReactMarkdown
-                  remarkPlugins={[gfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={ChakraUIRenderer(MDComponents)}
-                >
-                  {content}
-                </ReactMarkdown>
-              </Box>
+                {content}
+              </ReactMarkdown>
+            </Box>
 
-              <Stack display={{ base: 'none', xl: 'block' }}>
-                <DocumentNav content={content} />
-              </Stack>
-            </Grid>
-          </Stack>
-        </Grid>
+            <Stack display={{ base: 'none', xl: 'block' }}>
+              <DocumentNav content={content} />
+            </Stack>
+          </Grid>
+        </Stack>
       </main>
     </>
   );

@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 
 import { Header } from '../UI';
 import { Footer } from './Footer';
-import { MobileDocsNav } from '../UI/docs';
+import { DocsNav, MobileDocsNav } from '../UI/docs';
 
 // Context
 import { NavLinksContext } from '../../context';
@@ -15,9 +15,7 @@ interface Props {
 
 export const Layout: FC<Props> = ({ children }) => {
   const router = useRouter();
-
-  const { mobileNavLinks } = useContext(NavLinksContext);
-  // console.log({ mobileNavLinks });
+  const { _navLinks } = useContext(NavLinksContext);
 
   return (
     <Container
@@ -25,19 +23,21 @@ export const Layout: FC<Props> = ({ children }) => {
       my={{ base: 4, md: 7 }}
       overflow='visible'
     >
-      <Box
-        position='sticky'
-        top={{ base: 3, md: 7 }}
-        backdropFilter='blur(10px)'
-        opacity={0.9}
-        zIndex={9}
-      >
-        <Header />
+      <Box position='sticky' top={{ base: 3, md: 7 }} zIndex={9}>
+        <Box backdropFilter='blur(10px)' opacity={0.9}>
+          <Header />
 
-        {/* `MobileDocsNav` should be rendered under `/docs` pages only */}
+          {/* `MobileDocsNav` should be rendered under `/docs` pages only */}
+          {router.asPath.startsWith('/docs') && (
+            <Stack display={{ base: 'block', lg: 'none' }} my={6}>
+              <MobileDocsNav navLinks={_navLinks} />
+            </Stack>
+          )}
+        </Box>
+
         {router.asPath.startsWith('/docs') && (
-          <Stack display={{ base: 'block', lg: 'none' }} my={6}>
-            <MobileDocsNav navLinks={mobileNavLinks} />
+          <Stack display={{ base: 'none', lg: 'block' }} position='absolute'>
+            <DocsNav navLinks={_navLinks} />
           </Stack>
         )}
       </Box>

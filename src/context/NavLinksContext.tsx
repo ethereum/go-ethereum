@@ -3,13 +3,13 @@ import { ReactNode, createContext, useState } from 'react';
 import { NavLink } from '../types';
 
 export interface NavLinksContextInterface {
-  mobileNavLinks: NavLink[];
-  setMobileNavLinks: (navLinks: NavLink[]) => void;
+  _navLinks: NavLink[];
+  setNavLinks: (navLinks: NavLink[]) => void;
 }
 
 const defaultState = {
-  mobileNavLinks: [],
-  setMobileNavLinks: (mobileNavLinks: NavLink[]) => {}
+  _navLinks: [],
+  setNavLinks: (mobileNavLinks: NavLink[]) => {}
 };
 
 // initialize Context with default state
@@ -20,10 +20,10 @@ interface Props {
 }
 
 export const NavLinksContextProvider = ({ children }: Props) => {
-  const [mobileNavLinks, setMobileNavLinks] = useState<NavLink[]>([]);
+  const [_navLinks, setNavLinks] = useState<NavLink[]>([]);
 
   return (
-    <NavLinksContext.Provider value={{ mobileNavLinks, setMobileNavLinks }}>
+    <NavLinksContext.Provider value={{ _navLinks, setNavLinks }}>
       {children}
     </NavLinksContext.Provider>
   );

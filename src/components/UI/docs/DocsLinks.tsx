@@ -89,7 +89,6 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                               color={isActive ? 'primary' : 'unset'}
                               _before={{
                                 content: '"■"',
-                                verticalAlign: '-1.25px',
                                 marginInlineEnd: 2,
                                 fontSize: 'lg',
                                 display: isActive ? 'unset' : 'none'
