@@ -79,6 +79,15 @@ func IsEqual(a, b ProofFormat) bool {
 	return IsEqual(al, bl) && IsEqual(ar, br)
 }
 
+// ValueCount returns the number of merkle values required for this proof format
+func ValueCount(f ProofFormat) int {
+	if f == nil {
+		return 0
+	}
+	l, r := f.Children()
+	return ValueCount(l) + ValueCount(r)
+}
+
 // ProofReader allows traversing and reading a tree structure or a subset of it.
 // Note: the hash of each traversed node is always requested. If the internal
 // hash is not available then subtrees are always traversed (first left, then right).
