@@ -540,7 +540,7 @@ func DefaultConfig() *Config {
 				VHost:   []string{"localhost"},
 			},
 			HttpTimeout: &HttpTimeouts{
-				ReadTimeout:  30 * time.Second,
+				ReadTimeout:  10 * time.Second,
 				WriteTimeout: 30 * time.Second,
 				IdleTimeout:  120 * time.Second,
 			},

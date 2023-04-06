@@ -60,6 +60,38 @@ func Crit(msg string, ctx ...interface{}) {
 	os.Exit(1)
 }
 
+func OnTrace(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlTrace {
+		fn(root.Trace)
+	}
+}
+
+func OnDebug(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlDebug {
+		fn(root.Debug)
+	}
+}
+func OnInfo(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlInfo {
+		fn(root.Info)
+	}
+}
+func OnWarn(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlWarn {
+		fn(root.Warn)
+	}
+}
+func OnError(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlError {
+		fn(root.Error)
+	}
+}
+func OnCrit(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlCrit {
+		fn(root.Crit)
+	}
+}
+
 // Output is a convenient alias for write, allowing for the modification of
 // the calldepth (number of stack frames to skip).
 // calldepth influences the reported line number of the log message.

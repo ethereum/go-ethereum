@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 	"strings"
 	"time"
 
@@ -1457,16 +1458,26 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig, db ethdb.Database) *RPCTransaction {
 	txs := b.Transactions()
 
-	borReceipt := rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
-	if borReceipt != nil {
-		if borReceipt.TxHash != (common.Hash{}) {
-			borTx, _, _, _ := rawdb.ReadBorTransactionWithBlockHash(db, borReceipt.TxHash, b.Hash())
-			if borTx != nil {
-				txs = append(txs, borTx)
+	if index >= uint64(len(txs)+1) {
+		return nil
+	}
+
+	var borReceipt *types.Receipt
+
+	// Read bor receipts if a state-sync transaction is requested
+	if index == uint64(len(txs)) {
+		borReceipt = rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
+		if borReceipt != nil {
+			if borReceipt.TxHash != (common.Hash{}) {
+				borTx, _, _, _ := rawdb.ReadBorTransactionWithBlockHash(db, borReceipt.TxHash, b.Hash())
+				if borTx != nil {
+					txs = append(txs, borTx)
+				}
 			}
 		}
 	}
 
+	// If the index is still out of the range after checking bor state sync transaction, it means that the transaction index is invalid
 	if index >= uint64(len(txs)) {
 		return nil
 	}
@@ -1474,7 +1485,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
 
 	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
-	if borReceipt != nil && int(index) == len(txs)-1 {
+	if borReceipt != nil && index == uint64(len(txs)-1) {
 		rpcTx.Hash = borReceipt.TxHash
 	}
 
@@ -2220,6 +2231,21 @@ func (api *PrivateDebugAPI) GetCheckpointWhitelist() map[uint64]common.Hash {
 // PurgeCheckpointWhitelist purges the current checkpoint whitelist entries
 func (api *PrivateDebugAPI) PurgeCheckpointWhitelist() {
 	api.b.PurgeCheckpointWhitelist()
+}
+
+// GetTraceStack returns the current trace stack
+func (api *PrivateDebugAPI) GetTraceStack() string {
+	buf := make([]byte, 1024)
+
+	for {
+		n := runtime.Stack(buf, true)
+
+		if n < len(buf) {
+			return string(buf)
+		}
+
+		buf = make([]byte, 2*len(buf))
+	}
 }
 
 // PublicNetAPI offers network related RPC methods

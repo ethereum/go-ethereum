@@ -507,25 +507,39 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
+
 	amount := uint64(len(r.Txs))
+
 	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
 		stats := make([]light.TxStatus, len(r.Txs))
+
+		var (
+			err   error
+			addFn func(transaction *types.Transaction) error
+		)
+
 		for i, tx := range r.Txs {
 			if i != 0 && !waitOrStop() {
 				return nil
 			}
+
 			hash := tx.Hash()
 			stats[i] = txStatus(backend, hash)
+
 			if stats[i].Status == core.TxStatusUnknown {
-				addFn := backend.TxPool().AddRemotes
+				addFn = backend.TxPool().AddRemote
+
 				// Add txs synchronously for testing purpose
 				if backend.AddTxsSync() {
-					addFn = backend.TxPool().AddRemotesSync
+					addFn = backend.TxPool().AddRemoteSync
 				}
-				if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
-					stats[i].Error = errs[0].Error()
+
+				if err = addFn(tx); err != nil {
+					stats[i].Error = err.Error()
+
 					continue
 				}
+
 				stats[i] = txStatus(backend, hash)
 			}
 		}

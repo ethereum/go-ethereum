@@ -26,6 +26,7 @@ func newCheckpointVerifier(verifyFn func(ctx context.Context, handler *ethHandle
 		)
 
 		// check if we have the checkpoint blocks
+		//nolint:contextcheck
 		head := handler.ethAPI.BlockNumber()
 		if head < hexutil.Uint64(endBlock) {
 			log.Debug("Head block behind checkpoint block", "head", head, "checkpoint end block", endBlock)

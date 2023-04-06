@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -32,11 +33,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
+	"go.uber.org/goleak"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"pgregory.net/rapid"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/debug"
+	"github.com/ethereum/go-ethereum/common/leak"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -98,7 +103,7 @@ func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Tr
 }
 
 func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{0x01}, big.NewInt(100), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
 	return tx
 }
 
@@ -153,12 +158,17 @@ func validateTxPoolInternals(pool *TxPool) error {
 	if total := pool.all.Count(); total != pending+queued {
 		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
 	}
+
 	pool.priced.Reheap()
 	priced, remote := pool.priced.urgent.Len()+pool.priced.floating.Len(), pool.all.RemoteCount()
 	if priced != remote {
 		return fmt.Errorf("total priced transaction count %d != %d", priced, remote)
 	}
+
 	// Ensure the next nonce to assign is the correct one
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+
 	for addr, txs := range pool.pending {
 		// Find the last transaction
 		var last uint64
@@ -167,10 +177,16 @@ func validateTxPoolInternals(pool *TxPool) error {
 				last = nonce
 			}
 		}
+
 		if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
+
+		if txs.totalcost.Cmp(common.Big0) < 0 {
+			return fmt.Errorf("totalcost went negative: %v", txs.totalcost)
+		}
 	}
+
 	return nil
 }
 
@@ -325,10 +341,18 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 
 	tx = transaction(1, 100000, key)
+
+	pool.gasPriceMu.Lock()
+
 	pool.gasPrice = big.NewInt(1000)
-	if err := pool.AddRemote(tx); err != ErrUnderpriced {
+	pool.gasPriceUint = uint256.NewInt(1000)
+
+	pool.gasPriceMu.Unlock()
+
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrUnderpriced) {
 		t.Error("expected", ErrUnderpriced, "got", err)
 	}
+
 	if err := pool.AddLocal(tx); err != nil {
 		t.Error("expected", nil, "got", err)
 	}
@@ -347,9 +371,12 @@ func TestTransactionQueue(t *testing.T) {
 
 	pool.enqueueTx(tx.Hash(), tx, false, true)
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
+
+	pool.pendingMu.RLock()
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
+	pool.pendingMu.RUnlock()
 
 	tx = transaction(1, 100, key)
 	from, _ = deriveSender(tx)
@@ -357,9 +384,13 @@ func TestTransactionQueue(t *testing.T) {
 	pool.enqueueTx(tx.Hash(), tx, false, true)
 
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
+
+	pool.pendingMu.RLock()
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
+	pool.pendingMu.RUnlock()
+
 	if len(pool.queue) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue))
 	}
@@ -383,9 +414,13 @@ func TestTransactionQueue2(t *testing.T) {
 	pool.enqueueTx(tx3.Hash(), tx3, false, true)
 
 	pool.promoteExecutables([]common.Address{from})
+
+	pool.pendingMu.RLock()
 	if len(pool.pending) != 1 {
 		t.Error("expected pending length to be 1, got", len(pool.pending))
 	}
+	pool.pendingMu.RUnlock()
+
 	if pool.queue[from].Len() != 2 {
 		t.Error("expected len(queue) == 2, got", pool.queue[from].Len())
 	}
@@ -399,8 +434,10 @@ func TestTransactionNegativeValue(t *testing.T) {
 
 	tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, big.NewInt(1), nil), types.HomesteadSigner{}, key)
 	from, _ := deriveSender(tx)
+
 	testAddBalance(pool, from, big.NewInt(1))
-	if err := pool.AddRemote(tx); err != ErrNegativeValue {
+
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrNegativeValue) {
 		t.Error("expected", ErrNegativeValue, "got", err)
 	}
 }
@@ -413,7 +450,7 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
 
-	if err := pool.AddRemote(tx); err != ErrTipAboveFeeCap {
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrTipAboveFeeCap) {
 		t.Error("expected", ErrTipAboveFeeCap, "got", err)
 	}
 }
@@ -428,12 +465,12 @@ func TestTransactionVeryHighValues(t *testing.T) {
 	veryBigNumber.Lsh(veryBigNumber, 300)
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), veryBigNumber, key)
-	if err := pool.AddRemote(tx); err != ErrTipVeryHigh {
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrTipVeryHigh) {
 		t.Error("expected", ErrTipVeryHigh, "got", err)
 	}
 
 	tx2 := dynamicFeeTx(0, 100, veryBigNumber, big.NewInt(1), key)
-	if err := pool.AddRemote(tx2); err != ErrFeeCapVeryHigh {
+	if err := pool.AddRemote(tx2); !errors.Is(err, ErrFeeCapVeryHigh) {
 		t.Error("expected", ErrFeeCapVeryHigh, "got", err)
 	}
 }
@@ -495,23 +532,32 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	if replace, err := pool.add(tx2, false); err != nil || !replace {
 		t.Errorf("second transaction insert failed (%v) or not reported replacement (%v)", err, replace)
 	}
+
 	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
+
+	pool.pendingMu.RLock()
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
+	pool.pendingMu.RUnlock()
 
 	// Add the third transaction and ensure it's not saved (smaller price)
 	pool.add(tx3, false)
+
 	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
+
+	pool.pendingMu.RLock()
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
+	pool.pendingMu.RUnlock()
+
 	// Ensure the total transaction count is correct
 	if pool.all.Count() != 1 {
 		t.Error("expected 1 total transactions, got", pool.all.Count())
@@ -530,9 +576,13 @@ func TestTransactionMissingNonce(t *testing.T) {
 	if _, err := pool.add(tx, false); err != nil {
 		t.Error("didn't expect error", err)
 	}
+
+	pool.pendingMu.RLock()
 	if len(pool.pending) != 0 {
 		t.Error("expected 0 pending transactions, got", len(pool.pending))
 	}
+	pool.pendingMu.RUnlock()
+
 	if pool.queue[addr].Len() != 1 {
 		t.Error("expected 1 queued transaction, got", pool.queue[addr].Len())
 	}
@@ -603,19 +653,27 @@ func TestTransactionDropping(t *testing.T) {
 	pool.enqueueTx(tx12.Hash(), tx12, false, true)
 
 	// Check that pre and post validations leave the pool as is
+	pool.pendingMu.RLock()
 	if pool.pending[account].Len() != 3 {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
+	pool.pendingMu.RUnlock()
+
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
 	if pool.all.Count() != 6 {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 6)
 	}
+
 	<-pool.requestReset(nil, nil)
+
+	pool.pendingMu.RLock()
 	if pool.pending[account].Len() != 3 {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
+	pool.pendingMu.RUnlock()
+
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
@@ -626,6 +684,7 @@ func TestTransactionDropping(t *testing.T) {
 	testAddBalance(pool, account, big.NewInt(-650))
 	<-pool.requestReset(nil, nil)
 
+	pool.pendingMu.RLock()
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
@@ -635,6 +694,8 @@ func TestTransactionDropping(t *testing.T) {
 	if _, ok := pool.pending[account].txs.items[tx2.Nonce()]; ok {
 		t.Errorf("out-of-fund pending transaction present: %v", tx1)
 	}
+	pool.pendingMu.RUnlock()
+
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
 	}
@@ -651,12 +712,15 @@ func TestTransactionDropping(t *testing.T) {
 	atomic.StoreUint64(&pool.chain.(*testBlockChain).gasLimit, 100)
 	<-pool.requestReset(nil, nil)
 
+	pool.pendingMu.RLock()
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
 	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
 		t.Errorf("over-gased pending transaction present: %v", tx1)
 	}
+	pool.pendingMu.RUnlock()
+
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
 	}
@@ -711,19 +775,27 @@ func TestTransactionPostponing(t *testing.T) {
 		}
 	}
 	// Check that pre and post validations leave the pool as is
+	pool.pendingMu.RLock()
 	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
 	}
+	pool.pendingMu.RUnlock()
+
 	if len(pool.queue) != 0 {
 		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
 	}
 	if pool.all.Count() != len(txs) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
 	}
+
 	<-pool.requestReset(nil, nil)
+
+	pool.pendingMu.RLock()
 	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
 	}
+	pool.pendingMu.RUnlock()
+
 	if len(pool.queue) != 0 {
 		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
 	}
@@ -738,12 +810,17 @@ func TestTransactionPostponing(t *testing.T) {
 
 	// The first account's first transaction remains valid, check that subsequent
 	// ones are either filtered out, or queued up for later.
+	pool.pendingMu.RLock()
 	if _, ok := pool.pending[accs[0]].txs.items[txs[0].Nonce()]; !ok {
 		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txs[0])
 	}
+	pool.pendingMu.RUnlock()
+
 	if _, ok := pool.queue[accs[0]].txs.items[txs[0].Nonce()]; ok {
 		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txs[0])
 	}
+
+	pool.pendingMu.RLock()
 	for i, tx := range txs[1:100] {
 		if i%2 == 1 {
 			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
@@ -761,11 +838,16 @@ func TestTransactionPostponing(t *testing.T) {
 			}
 		}
 	}
+	pool.pendingMu.RUnlock()
+
 	// The second account's first transaction got invalid, check that all transactions
 	// are either filtered out, or queued up for later.
+	pool.pendingMu.RLock()
 	if pool.pending[accs[1]] != nil {
 		t.Errorf("invalidated account still has pending transactions")
 	}
+	pool.pendingMu.RUnlock()
+
 	for i, tx := range txs[100:] {
 		if i%2 == 1 {
 			if _, ok := pool.queue[accs[1]].txs.items[tx.Nonce()]; !ok {
@@ -854,9 +936,13 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 		if err := pool.addRemoteSync(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
+
+		pool.pendingMu.RLock()
 		if len(pool.pending) != 0 {
 			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, len(pool.pending), 0)
 		}
+		pool.pendingMu.RUnlock()
+
 		if i <= testTxPoolConfig.AccountQueue {
 			if pool.queue[account].Len() != int(i) {
 				t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, pool.queue[account].Len(), i)
@@ -935,6 +1021,7 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 	for i := uint64(0); i < 3*config.GlobalQueue; i++ {
 		txs = append(txs, transaction(i+1, 100000, local))
 	}
+
 	pool.AddLocals(txs)
 
 	// If locals are disabled, the previous eviction algorithm should apply here too
@@ -1112,6 +1199,7 @@ func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 		}
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1128,7 +1216,7 @@ func TestTransactionPendingLimiting(t *testing.T) {
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	testAddBalance(pool, account, big.NewInt(1000000))
+	testAddBalance(pool, account, big.NewInt(1000000000000))
 
 	// Keep track of transaction events to ensure all executables get announced
 	events := make(chan NewTxsEvent, testTxPoolConfig.AccountQueue+5)
@@ -1140,9 +1228,13 @@ func TestTransactionPendingLimiting(t *testing.T) {
 		if err := pool.addRemoteSync(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
+
+		pool.pendingMu.RLock()
 		if pool.pending[account].Len() != int(i)+1 {
 			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, pool.pending[account].Len(), i+1)
 		}
+		pool.pendingMu.RUnlock()
+
 		if len(pool.queue) != 0 {
 			t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, pool.queue[account].Len(), 0)
 		}
@@ -1195,9 +1287,13 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 	pool.AddRemotesSync(txs)
 
 	pending := 0
+
+	pool.pendingMu.RLock()
 	for _, list := range pool.pending {
 		pending += list.Len()
 	}
+	pool.pendingMu.RUnlock()
+
 	if pending > int(config.GlobalSlots) {
 		t.Fatalf("total pending transactions overflow allowance: %d > %d", pending, config.GlobalSlots)
 	}
@@ -1330,11 +1426,14 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	// Import the batch and verify that limits have been enforced
 	pool.AddRemotesSync(txs)
 
+	pool.pendingMu.RLock()
 	for addr, list := range pool.pending {
 		if list.Len() != int(config.AccountSlots) {
 			t.Errorf("addr %x: total pending transactions mismatch: have %d, want %d", addr, list.Len(), config.AccountSlots)
 		}
 	}
+	pool.pendingMu.RUnlock()
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1391,15 +1490,19 @@ func TestTransactionPoolRepricing(t *testing.T) {
 	if pending != 7 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 7)
 	}
+
 	if queued != 3 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
 	}
+
 	if err := validateEvents(events, 7); err != nil {
 		t.Fatalf("original event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// Reprice the pool and check that underpriced transactions get dropped
 	pool.SetGasPrice(big.NewInt(2))
 
@@ -1407,58 +1510,76 @@ func TestTransactionPoolRepricing(t *testing.T) {
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
+
 	if queued != 5 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 5)
 	}
+
 	if err := validateEvents(events, 0); err != nil {
 		t.Fatalf("reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// Check that we can't add the old transactions back
-	if err := pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(1), keys[0])); err != ErrUnderpriced {
+	if err := pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(1), keys[0])); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
-	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); err != ErrUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
-	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(1), keys[2])); err != ErrUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(1), keys[2])); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced queued transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
+
 	if err := validateEvents(events, 0); err != nil {
 		t.Fatalf("post-reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// However we can add local underpriced transactions
 	tx := pricedTransaction(1, 100000, big.NewInt(1), keys[3])
+
 	if err := pool.AddLocal(tx); err != nil {
 		t.Fatalf("failed to add underpriced local transaction: %v", err)
 	}
+
 	if pending, _ = pool.Stats(); pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
+
 	if err := validateEvents(events, 1); err != nil {
 		t.Fatalf("post-reprice local event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// And we can fill gaps with properly priced transactions
 	if err := pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(2), keys[0])); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(2), keys[1])); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(2), keys[2])); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
+
 	if err := validateEvents(events, 5); err != nil {
 		t.Fatalf("post-reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1487,6 +1608,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 		keys[i], _ = crypto.GenerateKey()
 		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
 	}
+
 	// Generate and queue a batch of transactions, both pending and queued
 	txs := types.Transactions{}
 
@@ -1512,15 +1634,19 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	if pending != 7 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 7)
 	}
+
 	if queued != 3 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
 	}
+
 	if err := validateEvents(events, 7); err != nil {
 		t.Fatalf("original event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// Reprice the pool and check that underpriced transactions get dropped
 	pool.SetGasPrice(big.NewInt(2))
 
@@ -1528,64 +1654,87 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
+
 	if queued != 5 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 5)
 	}
+
 	if err := validateEvents(events, 0); err != nil {
 		t.Fatalf("reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// Check that we can't add the old transactions back
 	tx := pricedTransaction(1, 100000, big.NewInt(1), keys[0])
-	if err := pool.AddRemote(tx); err != ErrUnderpriced {
+
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
+
 	tx = dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[1])
-	if err := pool.AddRemote(tx); err != ErrUnderpriced {
+
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
+
 	tx = dynamicFeeTx(2, 100000, big.NewInt(1), big.NewInt(1), keys[2])
-	if err := pool.AddRemote(tx); err != ErrUnderpriced {
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced queued transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
+
 	if err := validateEvents(events, 0); err != nil {
 		t.Fatalf("post-reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// However we can add local underpriced transactions
 	tx = dynamicFeeTx(1, 100000, big.NewInt(1), big.NewInt(1), keys[3])
+
 	if err := pool.AddLocal(tx); err != nil {
 		t.Fatalf("failed to add underpriced local transaction: %v", err)
 	}
+
 	if pending, _ = pool.Stats(); pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
+
 	if err := validateEvents(events, 1); err != nil {
 		t.Fatalf("post-reprice local event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	// And we can fill gaps with properly priced transactions
 	tx = pricedTransaction(1, 100000, big.NewInt(2), keys[0])
+
 	if err := pool.AddRemote(tx); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
+
 	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), keys[1])
+
 	if err := pool.AddRemote(tx); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
+
 	tx = dynamicFeeTx(2, 100000, big.NewInt(2), big.NewInt(2), keys[2])
+
 	if err := pool.AddRemote(tx); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
+
 	if err := validateEvents(events, 5); err != nil {
 		t.Fatalf("post-reprice event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1607,7 +1756,7 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 3)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(100000*1000000))
 	}
 	// Create transaction (both pending and queued) with a linearly growing gasprice
 	for i := uint64(0); i < 500; i++ {
@@ -1686,7 +1835,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Create a number of test accounts and fund them
-	keys := make([]*ecdsa.PrivateKey, 4)
+	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
@@ -1719,8 +1868,12 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Ensure that adding an underpriced transaction on block limit fails
-	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); err != ErrUnderpriced {
+	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
+	}
+	// Replace a future transaction with a future transaction
+	if err := pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(2), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
+		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	// Ensure that adding high priced transactions drops cheap ones, but not own
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil { // +K1:0 => -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
@@ -1732,6 +1885,10 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(3, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:3 => -K0:1 => Pend K1:0, K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
+	// Ensure that replacing a pending transaction with a future transaction fails
+	if err := pool.AddRemote(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); err != ErrFutureReplacePending {
+		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, ErrFutureReplacePending)
+	}
 	pending, queued = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
@@ -1739,7 +1896,8 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-	if err := validateEvents(events, 1); err != nil {
+
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("additional event firing failed: %v", err)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
@@ -1891,7 +2049,7 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 
 	// Ensure that adding an underpriced transaction fails
 	tx := dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[1])
-	if err := pool.AddRemote(tx); err != ErrUnderpriced { // Pend K0:0, K0:1, K2:0; Que K1:1
+	if err := pool.AddRemote(tx); !errors.Is(err, ErrUnderpriced) { // Pend K0:0, K0:1, K2:0; Que K1:1
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
 
@@ -1901,11 +2059,12 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 
-	tx = pricedTransaction(2, 100000, big.NewInt(3), keys[1])
+	tx = pricedTransaction(1, 100000, big.NewInt(3), keys[1])
 	if err := pool.AddRemote(tx); err != nil { // +K1:2, -K0:1 => Pend K0:0 K1:0, K2:0; Que K1:2
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	tx = dynamicFeeTx(3, 100000, big.NewInt(4), big.NewInt(1), keys[1])
+
+	tx = dynamicFeeTx(2, 100000, big.NewInt(4), big.NewInt(1), keys[1])
 	if err := pool.AddRemote(tx); err != nil { // +K1:3, -K1:0 => Pend K0:0 K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
@@ -1916,7 +2075,8 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-	if err := validateEvents(events, 1); err != nil {
+
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("additional event firing failed: %v", err)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
@@ -1991,7 +2151,7 @@ func TestDualHeapEviction(t *testing.T) {
 
 	add(false)
 	for baseFee = 0; baseFee <= 1000; baseFee += 100 {
-		pool.priced.SetBaseFee(big.NewInt(int64(baseFee)))
+		pool.priced.SetBaseFee(uint256.NewInt(uint64(baseFee)))
 		add(true)
 		check(highCap, "fee cap")
 		add(false)
@@ -2020,49 +2180,65 @@ func TestTransactionDeduplication(t *testing.T) {
 
 	// Create a batch of transactions and add a few of them
 	txs := make([]*types.Transaction, 16)
+
 	for i := 0; i < len(txs); i++ {
 		txs[i] = pricedTransaction(uint64(i), 100000, big.NewInt(1), key)
 	}
+
 	var firsts []*types.Transaction
+
 	for i := 0; i < len(txs); i += 2 {
 		firsts = append(firsts, txs[i])
 	}
+
 	errs := pool.AddRemotesSync(firsts)
-	if len(errs) != len(firsts) {
-		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), len(firsts))
+
+	if len(errs) != 0 {
+		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), 0)
 	}
+
 	for i, err := range errs {
 		if err != nil {
 			t.Errorf("add %d failed: %v", i, err)
 		}
 	}
+
 	pending, queued := pool.Stats()
+
 	if pending != 1 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
 	}
+
 	if queued != len(txs)/2-1 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, len(txs)/2-1)
 	}
+
 	// Try to add all of them now and ensure previous ones error out as knowns
 	errs = pool.AddRemotesSync(txs)
-	if len(errs) != len(txs) {
-		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), len(txs))
+	if len(errs) != 0 {
+		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), 0)
 	}
+
 	for i, err := range errs {
 		if i%2 == 0 && err == nil {
 			t.Errorf("add %d succeeded, should have failed as known", i)
 		}
+
 		if i%2 == 1 && err != nil {
 			t.Errorf("add %d failed: %v", i, err)
 		}
 	}
+
 	pending, queued = pool.Stats()
+
 	if pending != len(txs) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, len(txs))
 	}
+
 	if queued != 0 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -2096,12 +2272,15 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
 		t.Fatalf("failed to add original cheap pending transaction: %v", err)
 	}
-	if err := pool.AddRemote(pricedTransaction(0, 100001, big.NewInt(1), key)); err != ErrReplaceUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(0, 100001, big.NewInt(1), key)); !errors.Is(err, ErrReplaceUnderpriced) {
 		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(2), key)); err != nil {
 		t.Fatalf("failed to replace original cheap pending transaction: %v", err)
 	}
+
 	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("cheap replacement event firing failed: %v", err)
 	}
@@ -2109,12 +2288,15 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original proper pending transaction: %v", err)
 	}
-	if err := pool.AddRemote(pricedTransaction(0, 100001, big.NewInt(threshold-1), key)); err != ErrReplaceUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(0, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, ErrReplaceUnderpriced) {
 		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original proper pending transaction: %v", err)
 	}
+
 	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("proper replacement event firing failed: %v", err)
 	}
@@ -2123,9 +2305,11 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(1), key)); err != nil {
 		t.Fatalf("failed to add original cheap queued transaction: %v", err)
 	}
-	if err := pool.AddRemote(pricedTransaction(2, 100001, big.NewInt(1), key)); err != ErrReplaceUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(2, 100001, big.NewInt(1), key)); !errors.Is(err, ErrReplaceUnderpriced) {
 		t.Fatalf("original cheap queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(2), key)); err != nil {
 		t.Fatalf("failed to replace original cheap queued transaction: %v", err)
 	}
@@ -2133,9 +2317,11 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original proper queued transaction: %v", err)
 	}
-	if err := pool.AddRemote(pricedTransaction(2, 100001, big.NewInt(threshold-1), key)); err != ErrReplaceUnderpriced {
+
+	if err := pool.AddRemote(pricedTransaction(2, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, ErrReplaceUnderpriced) {
 		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
+
 	if err := pool.AddRemote(pricedTransaction(2, 100000, big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original proper queued transaction: %v", err)
 	}
@@ -2143,6 +2329,7 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := validateEvents(events, 0); err != nil {
 		t.Fatalf("queued replacement event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -2197,7 +2384,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 		}
 		// 2.  Don't bump tip or feecap => discard
 		tx = dynamicFeeTx(nonce, 100001, big.NewInt(2), big.NewInt(1), key)
-		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		if err := pool.AddRemote(tx); !errors.Is(err, ErrReplaceUnderpriced) {
 			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 3.  Bump both more than min => accept
@@ -2220,22 +2407,22 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 		}
 		// 6.  Bump tip max allowed so it's still underpriced => discard
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold-1), key)
-		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		if err := pool.AddRemote(tx); !errors.Is(err, ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 7.  Bump fee cap max allowed so it's still underpriced => discard
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold-1), big.NewInt(gasTipCap), key)
-		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		if err := pool.AddRemote(tx); !errors.Is(err, ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 8.  Bump tip min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold), key)
-		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		if err := pool.AddRemote(tx); !errors.Is(err, ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 9.  Bump fee cap min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(gasTipCap), key)
-		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+		if err := pool.AddRemote(tx); !errors.Is(err, ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 10. Check events match expected (3 new executable txs during pending, 0 during queue)
@@ -2465,6 +2652,7 @@ func benchmarkPendingDemotion(b *testing.B, size int) {
 	}
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		pool.demoteUnexecutables()
 	}
@@ -2496,37 +2684,161 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 }
 
 // Benchmarks the speed of batched transaction insertion.
-func BenchmarkPoolBatchInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100, false) }
-func BenchmarkPoolBatchInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000, false) }
-func BenchmarkPoolBatchInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000, false) }
-
-func BenchmarkPoolBatchLocalInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100, true) }
-func BenchmarkPoolBatchLocalInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000, true) }
-func BenchmarkPoolBatchLocalInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 10000, true) }
-
-func benchmarkPoolBatchInsert(b *testing.B, size int, local bool) {
+func BenchmarkPoolBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	testAddBalance(pool, account, big.NewInt(1000000))
+	testAddBalance(pool, account, big.NewInt(1000000000000000000))
 
-	batches := make([]types.Transactions, b.N)
-	for i := 0; i < b.N; i++ {
-		batches[i] = make(types.Transactions, size)
-		for j := 0; j < size; j++ {
-			batches[i][j] = transaction(uint64(size*i+j), 100000, key)
-		}
+	const format = "size %d, is local %t"
+
+	cases := []struct {
+		name    string
+		size    int
+		isLocal bool
+	}{
+		{size: 100, isLocal: false},
+		{size: 1000, isLocal: false},
+		{size: 10000, isLocal: false},
+
+		{size: 100, isLocal: true},
+		{size: 1000, isLocal: true},
+		{size: 10000, isLocal: true},
 	}
+
+	for i := range cases {
+		cases[i].name = fmt.Sprintf(format, cases[i].size, cases[i].isLocal)
+	}
+
 	// Benchmark importing the transactions into the queue
-	b.ResetTimer()
-	for _, batch := range batches {
-		if local {
-			pool.AddLocals(batch)
-		} else {
-			pool.AddRemotes(batch)
-		}
+
+	for _, testCase := range cases {
+		singleCase := testCase
+
+		b.Run(singleCase.name, func(b *testing.B) {
+			batches := make([]types.Transactions, b.N)
+
+			for i := 0; i < b.N; i++ {
+				batches[i] = make(types.Transactions, singleCase.size)
+
+				for j := 0; j < singleCase.size; j++ {
+					batches[i][j] = transaction(uint64(singleCase.size*i+j), 100000, key)
+				}
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for _, batch := range batches {
+				if testCase.isLocal {
+					pool.AddLocals(batch)
+				} else {
+					pool.AddRemotes(batch)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkPoolMining(b *testing.B) {
+	const format = "size %d"
+
+	cases := []struct {
+		name string
+		size int
+	}{
+		{size: 1},
+		{size: 5},
+		{size: 10},
+		{size: 20},
+	}
+
+	for i := range cases {
+		cases[i].name = fmt.Sprintf(format, cases[i].size)
+	}
+
+	const blockGasLimit = 30_000_000
+
+	// Benchmark importing the transactions into the queue
+
+	for _, testCase := range cases {
+		singleCase := testCase
+
+		b.Run(singleCase.name, func(b *testing.B) {
+			// Generate a batch of transactions to enqueue into the pool
+			pendingAddedCh := make(chan struct{}, 1024)
+
+			pool, localKey := setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+			defer pool.Stop()
+
+			localKeyPub := localKey.PublicKey
+			account := crypto.PubkeyToAddress(localKeyPub)
+
+			const balanceStr = "1_000_000_000"
+			balance, ok := big.NewInt(0).SetString(balanceStr, 0)
+			if !ok {
+				b.Fatal("incorrect initial balance", balanceStr)
+			}
+
+			testAddBalance(pool, account, balance)
+
+			signer := types.NewEIP155Signer(big.NewInt(1))
+			baseFee := uint256.NewInt(1)
+
+			const batchesSize = 100
+
+			batches := make([]types.Transactions, batchesSize)
+
+			for i := 0; i < batchesSize; i++ {
+				batches[i] = make(types.Transactions, singleCase.size)
+
+				for j := 0; j < singleCase.size; j++ {
+					batches[i][j] = transaction(uint64(singleCase.size*i+j), 100_000, localKey)
+				}
+
+				for _, batch := range batches {
+					pool.AddRemotes(batch)
+				}
+			}
+
+			var promoted int
+
+			for range pendingAddedCh {
+				promoted++
+
+				if promoted >= batchesSize*singleCase.size/2 {
+					break
+				}
+			}
+
+			var total int
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			pendingDurations := make([]time.Duration, b.N)
+
+			var added int
+
+			for i := 0; i < b.N; i++ {
+				added, pendingDurations[i], _ = mining(b, pool, signer, baseFee, blockGasLimit, i)
+				total += added
+			}
+
+			b.StopTimer()
+
+			pendingDurationsFloat := make([]float64, len(pendingDurations))
+
+			for i, v := range pendingDurations {
+				pendingDurationsFloat[i] = float64(v.Nanoseconds())
+			}
+
+			mean, stddev := stat.MeanStdDev(pendingDurationsFloat, nil)
+			b.Logf("[%s] pending mean %v, stdev %v, %v-%v",
+				common.NowMilliseconds(), time.Duration(mean), time.Duration(stddev), time.Duration(floats.Min(pendingDurationsFloat)), time.Duration(floats.Max(pendingDurationsFloat)))
+		})
 	}
 }
 
@@ -2566,24 +2878,317 @@ func BenchmarkInsertRemoteWithAllLocals(b *testing.B) {
 }
 
 // Benchmarks the speed of batch transaction insertion in case of multiple accounts.
-func BenchmarkPoolMultiAccountBatchInsert(b *testing.B) {
+func BenchmarkPoolAccountMultiBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, _ := setupTxPool()
 	defer pool.Stop()
-	b.ReportAllocs()
+
 	batches := make(types.Transactions, b.N)
+
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.GenerateKey()
 		account := crypto.PubkeyToAddress(key.PublicKey)
+
 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
 		tx := transaction(uint64(0), 100000, key)
+
 		batches[i] = tx
 	}
+
 	// Benchmark importing the transactions into the queue
+	b.ReportAllocs()
 	b.ResetTimer()
+
 	for _, tx := range batches {
 		pool.AddRemotesSync([]*types.Transaction{tx})
 	}
+}
+
+func BenchmarkPoolAccountMultiBatchInsertRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+
+	batches := make(types.Transactions, b.N)
+
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
+
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
+		batches[i] = tx
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
+
+		var pending map[common.Address]types.Transactions
+
+	loop:
+		for {
+			select {
+			case <-t.C:
+				pending = pool.Pending(context.Background(), true)
+			case <-done:
+				break loop
+			}
+		}
+
+		fmt.Fprint(io.Discard, pending)
+	}()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tx := range batches {
+		pool.AddRemotesSync([]*types.Transaction{tx})
+	}
+
+	close(done)
+}
+
+func BenchmarkPoolAccountMultiBatchInsertNoLockRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pendingAddedCh := make(chan struct{}, 1024)
+
+	pool, localKey := setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+	defer pool.Stop()
+
+	_ = localKey
+
+	batches := make(types.Transactions, b.N)
+
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
+
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
+		batches[i] = tx
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
+
+		var pending map[common.Address]types.Transactions
+
+		for range t.C {
+			pending = pool.Pending(context.Background(), true)
+
+			if len(pending) >= b.N/2 {
+				close(done)
+
+				return
+			}
+		}
+	}()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tx := range batches {
+		pool.AddRemotes([]*types.Transaction{tx})
+	}
+
+	<-done
+}
+
+func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+
+	batches := make(types.Transactions, b.N)
+
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
+		tx := transaction(uint64(0), 100000, key)
+
+		batches[i] = tx
+	}
+
+	// Benchmark importing the transactions into the queue
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tx := range batches {
+		_ = pool.AddRemoteSync(tx)
+	}
+}
+
+func BenchmarkPoolAccountsBatchInsertRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+
+	batches := make(types.Transactions, b.N)
+
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
+
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
+		batches[i] = tx
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
+
+		var pending map[common.Address]types.Transactions
+
+	loop:
+		for {
+			select {
+			case <-t.C:
+				pending = pool.Pending(context.Background(), true)
+			case <-done:
+				break loop
+			}
+		}
+
+		fmt.Fprint(io.Discard, pending)
+	}()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tx := range batches {
+		_ = pool.AddRemoteSync(tx)
+	}
+
+	close(done)
+}
+
+func BenchmarkPoolAccountsBatchInsertNoLockRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pendingAddedCh := make(chan struct{}, 1024)
+
+	pool, localKey := setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+	defer pool.Stop()
+
+	_ = localKey
+
+	batches := make(types.Transactions, b.N)
+
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
+
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
+		batches[i] = tx
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
+
+		var pending map[common.Address]types.Transactions
+
+		for range t.C {
+			pending = pool.Pending(context.Background(), true)
+
+			if len(pending) >= b.N/2 {
+				close(done)
+
+				return
+			}
+		}
+	}()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for _, tx := range batches {
+		_ = pool.AddRemote(tx)
+	}
+
+	<-done
+}
+
+func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
+	t.Parallel()
+
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+
+	const n = 5000
+
+	batches := make(types.Transactions, n)
+	batchesSecond := make(types.Transactions, n)
+
+	for i := 0; i < n; i++ {
+		batches[i] = newTxs(pool)
+		batchesSecond[i] = newTxs(pool)
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
+
+		var (
+			pending map[common.Address]types.Transactions
+			total   int
+		)
+
+		for range t.C {
+			pending = pool.Pending(context.Background(), true)
+			total = len(pending)
+
+			_ = pool.Locals()
+
+			if total >= n {
+				close(done)
+
+				return
+			}
+		}
+	}()
+
+	for _, tx := range batches {
+		pool.AddRemotesSync([]*types.Transaction{tx})
+	}
+
+	for _, tx := range batchesSecond {
+		pool.AddRemotes([]*types.Transaction{tx})
+	}
+
+	<-done
+}
+
+func newTxs(pool *TxPool) *types.Transaction {
+	key, _ := crypto.GenerateKey()
+	account := crypto.PubkeyToAddress(key.PublicKey)
+	tx := transaction(uint64(0), 100000, key)
+
+	pool.currentState.AddBalance(account, big.NewInt(1_000_000_000))
+
+	return tx
 }
 
 type acc struct {
@@ -2878,20 +3483,20 @@ func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
 				wg.Wait()
 
 				var (
-					addIntoTxPool func(tx []*types.Transaction) []error
+					addIntoTxPool func(tx *types.Transaction) error
 					totalInBatch  int
 				)
 
 				for _, tx := range txs.txs {
-					addIntoTxPool = pool.AddRemotesSync
+					addIntoTxPool = pool.AddRemoteSync
 
 					if tx.isLocal {
-						addIntoTxPool = pool.AddLocals
+						addIntoTxPool = pool.AddLocal
 					}
 
-					err := addIntoTxPool([]*types.Transaction{tx.tx})
-					if len(err) != 0 && err[0] != nil {
-						rt.Log("on adding a transaction to the tx pool", err[0], tx.tx.Gas(), tx.tx.GasPrice(), pool.GasPrice(), getBalance(pool, keys[tx.idx].account))
+					err := addIntoTxPool(tx.tx)
+					if err != nil {
+						rt.Log("on adding a transaction to the tx pool", err, tx.tx.Gas(), tx.tx.GasPrice(), pool.GasPrice(), getBalance(pool, keys[tx.idx].account))
 					}
 				}
 
@@ -2930,7 +3535,7 @@ func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
 
 					// check if txPool got stuck
 					if currentTxPoolStats == lastTxPoolStats {
-						stuckBlocks++ //todo: переписать
+						stuckBlocks++ //todo: need something better then that
 					} else {
 						stuckBlocks = 0
 						lastTxPoolStats = currentTxPoolStats
@@ -2938,7 +3543,7 @@ func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
 
 					// copy-paste
 					start := time.Now()
-					pending := pool.Pending(true)
+					pending := pool.Pending(context.Background(), true)
 					locals := pool.Locals()
 
 					// from fillTransactions
@@ -2956,7 +3561,7 @@ func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
 						// check for nonce gaps
 						var lastNonce, currentNonce int
 
-						pending = pool.Pending(true)
+						pending = pool.Pending(context.Background(), true)
 
 						for txAcc, pendingTxs := range pending {
 							lastNonce = int(pool.Nonce(txAcc)) - len(pendingTxs) - 1
@@ -3026,7 +3631,7 @@ func fillTransactions(ctx context.Context, pool *TxPool, locals []common.Address
 	signer := types.NewLondonSigner(big.NewInt(1))
 
 	// fake baseFee
-	baseFee := big.NewInt(1)
+	baseFee := uint256.NewInt(1)
 
 	blockGasLimit := gasLimit
 
@@ -3083,7 +3688,10 @@ func commitTransactions(pool *TxPool, txs *types.TransactionsByPriceAndNonce, bl
 
 		if tx.Gas() <= blockGasLimit {
 			blockGasLimit -= tx.Gas()
+
+			pool.mu.Lock()
 			pool.removeTx(tx.Hash(), false)
+			pool.mu.Unlock()
 
 			txCount++
 		} else {
@@ -3096,5 +3704,887 @@ func commitTransactions(pool *TxPool, txs *types.TransactionsByPriceAndNonce, bl
 func MakeWithPromoteTxCh(ch chan struct{}) func(*TxPool) {
 	return func(pool *TxPool) {
 		pool.promoteTxCh = ch
+	}
+}
+
+//nolint:thelper
+func mining(tb testing.TB, pool *TxPool, signer types.Signer, baseFee *uint256.Int, blockGasLimit uint64, totalBlocks int) (int, time.Duration, time.Duration) {
+	var (
+		localTxsCount  int
+		remoteTxsCount int
+		localTxs       = make(map[common.Address]types.Transactions)
+		remoteTxs      map[common.Address]types.Transactions
+		total          int
+	)
+
+	start := time.Now()
+
+	pending := pool.Pending(context.Background(), true)
+
+	pendingDuration := time.Since(start)
+
+	remoteTxs = pending
+
+	locals := pool.Locals()
+
+	pendingLen, queuedLen := pool.Stats()
+
+	for _, account := range locals {
+		if txs := remoteTxs[account]; len(txs) > 0 {
+			delete(remoteTxs, account)
+
+			localTxs[account] = txs
+		}
+	}
+
+	localTxsCount = len(localTxs)
+	remoteTxsCount = len(remoteTxs)
+
+	var txLocalCount int
+
+	if localTxsCount > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, baseFee)
+
+		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
+
+		total += txLocalCount
+	}
+
+	var txRemoteCount int
+
+	if remoteTxsCount > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
+
+		_, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
+
+		total += txRemoteCount
+	}
+
+	miningDuration := time.Since(start)
+
+	tb.Logf("[%s] mining block. block %d. total %d: pending %d(added %d), local %d(added %d), queued %d, localTxsCount %d, remoteTxsCount %d, pending %v, mining %v",
+		common.NowMilliseconds(), totalBlocks, total, pendingLen, txRemoteCount, localTxsCount, txLocalCount, queuedLen, localTxsCount, remoteTxsCount, pendingDuration, miningDuration)
+
+	return total, pendingDuration, miningDuration
+}
+
+//nolint:paralleltest
+func TestPoolMiningDataRaces(t *testing.T) {
+	if testing.Short() {
+		t.Skip("only for data race testing")
+	}
+
+	const format = "size %d, txs ticker %v, api ticker %v"
+
+	cases := []struct {
+		name              string
+		size              int
+		txsTickerDuration time.Duration
+		apiTickerDuration time.Duration
+	}{
+		{
+			size:              1,
+			txsTickerDuration: 200 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              1,
+			txsTickerDuration: 400 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              1,
+			txsTickerDuration: 600 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              1,
+			txsTickerDuration: 800 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+
+		{
+			size:              5,
+			txsTickerDuration: 200 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              5,
+			txsTickerDuration: 400 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              5,
+			txsTickerDuration: 600 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              5,
+			txsTickerDuration: 800 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+
+		{
+			size:              10,
+			txsTickerDuration: 200 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              10,
+			txsTickerDuration: 400 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              10,
+			txsTickerDuration: 600 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              10,
+			txsTickerDuration: 800 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+
+		{
+			size:              20,
+			txsTickerDuration: 200 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              20,
+			txsTickerDuration: 400 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              20,
+			txsTickerDuration: 600 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              20,
+			txsTickerDuration: 800 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+
+		{
+			size:              30,
+			txsTickerDuration: 200 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              30,
+			txsTickerDuration: 400 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              30,
+			txsTickerDuration: 600 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+		{
+			size:              30,
+			txsTickerDuration: 800 * time.Millisecond,
+			apiTickerDuration: 10 * time.Millisecond,
+		},
+	}
+
+	for i := range cases {
+		cases[i].name = fmt.Sprintf(format, cases[i].size, cases[i].txsTickerDuration, cases[i].apiTickerDuration)
+	}
+
+	//nolint:paralleltest
+	for _, testCase := range cases {
+		singleCase := testCase
+
+		t.Run(singleCase.name, func(t *testing.T) {
+			defer goleak.VerifyNone(t, leak.IgnoreList()...)
+
+			const (
+				blocks          = 300
+				blockGasLimit   = 40_000_000
+				blockPeriod     = time.Second
+				threads         = 10
+				batchesSize     = 10_000
+				timeoutDuration = 10 * blockPeriod
+
+				balanceStr = "1_000_000_000_000"
+			)
+
+			apiWithMining(t, balanceStr, batchesSize, singleCase, timeoutDuration, threads, blockPeriod, blocks, blockGasLimit)
+		})
+	}
+}
+
+//nolint:gocognit,thelper
+func apiWithMining(tb testing.TB, balanceStr string, batchesSize int, singleCase struct {
+	name              string
+	size              int
+	txsTickerDuration time.Duration
+	apiTickerDuration time.Duration
+}, timeoutDuration time.Duration, threads int, blockPeriod time.Duration, blocks int, blockGasLimit uint64) {
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+
+	defer func() {
+		close(done)
+
+		tb.Logf("[%s] finishing apiWithMining", common.NowMilliseconds())
+
+		wg.Wait()
+
+		tb.Logf("[%s] apiWithMining finished", common.NowMilliseconds())
+	}()
+
+	// Generate a batch of transactions to enqueue into the pool
+	pendingAddedCh := make(chan struct{}, 1024)
+
+	pool, localKey := setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+	defer pool.Stop()
+
+	localKeyPub := localKey.PublicKey
+	account := crypto.PubkeyToAddress(localKeyPub)
+
+	balance, ok := big.NewInt(0).SetString(balanceStr, 0)
+	if !ok {
+		tb.Fatal("incorrect initial balance", balanceStr)
+	}
+
+	testAddBalance(pool, account, balance)
+
+	signer := types.NewEIP155Signer(big.NewInt(1))
+	baseFee := uint256.NewInt(1)
+
+	batchesLocal := make([]types.Transactions, batchesSize)
+	batchesRemote := make([]types.Transactions, batchesSize)
+	batchesRemotes := make([]types.Transactions, batchesSize)
+	batchesRemoteSync := make([]types.Transactions, batchesSize)
+	batchesRemotesSync := make([]types.Transactions, batchesSize)
+
+	for i := 0; i < batchesSize; i++ {
+		batchesLocal[i] = make(types.Transactions, singleCase.size)
+
+		for j := 0; j < singleCase.size; j++ {
+			batchesLocal[i][j] = pricedTransaction(uint64(singleCase.size*i+j), 100_000, big.NewInt(int64(i+1)), localKey)
+		}
+
+		batchesRemote[i] = make(types.Transactions, singleCase.size)
+
+		remoteKey, _ := crypto.GenerateKey()
+		remoteAddr := crypto.PubkeyToAddress(remoteKey.PublicKey)
+		testAddBalance(pool, remoteAddr, balance)
+
+		for j := 0; j < singleCase.size; j++ {
+			batchesRemote[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteKey)
+		}
+
+		batchesRemotes[i] = make(types.Transactions, singleCase.size)
+
+		remotesKey, _ := crypto.GenerateKey()
+		remotesAddr := crypto.PubkeyToAddress(remotesKey.PublicKey)
+		testAddBalance(pool, remotesAddr, balance)
+
+		for j := 0; j < singleCase.size; j++ {
+			batchesRemotes[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesKey)
+		}
+
+		batchesRemoteSync[i] = make(types.Transactions, singleCase.size)
+
+		remoteSyncKey, _ := crypto.GenerateKey()
+		remoteSyncAddr := crypto.PubkeyToAddress(remoteSyncKey.PublicKey)
+		testAddBalance(pool, remoteSyncAddr, balance)
+
+		for j := 0; j < singleCase.size; j++ {
+			batchesRemoteSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteSyncKey)
+		}
+
+		batchesRemotesSync[i] = make(types.Transactions, singleCase.size)
+
+		remotesSyncKey, _ := crypto.GenerateKey()
+		remotesSyncAddr := crypto.PubkeyToAddress(remotesSyncKey.PublicKey)
+		testAddBalance(pool, remotesSyncAddr, balance)
+
+		for j := 0; j < singleCase.size; j++ {
+			batchesRemotesSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesSyncKey)
+		}
+	}
+
+	tb.Logf("[%s] starting goroutines", common.NowMilliseconds())
+
+	txsTickerDuration := singleCase.txsTickerDuration
+	apiTickerDuration := singleCase.apiTickerDuration
+
+	// locals
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			tb.Logf("[%s] stopping AddLocal(s)", common.NowMilliseconds())
+
+			wg.Done()
+
+			tb.Logf("[%s] stopped AddLocal(s)", common.NowMilliseconds())
+		}()
+
+		tb.Logf("[%s] starting AddLocal(s)", common.NowMilliseconds())
+
+		for _, batch := range batchesLocal {
+			batch := batch
+
+			select {
+			case <-done:
+				return
+			default:
+			}
+
+			if rand.Int()%2 == 0 {
+				runWithTimeout(tb, func(_ chan struct{}) {
+					errs := pool.AddLocals(batch)
+					if len(errs) != 0 {
+						tb.Logf("[%s] AddLocals error, %v", common.NowMilliseconds(), errs)
+					}
+				}, done, "AddLocals", timeoutDuration, 0, 0)
+			} else {
+				for _, tx := range batch {
+					tx := tx
+
+					runWithTimeout(tb, func(_ chan struct{}) {
+						err := pool.AddLocal(tx)
+						if err != nil {
+							tb.Logf("[%s] AddLocal error %s", common.NowMilliseconds(), err)
+						}
+					}, done, "AddLocal", timeoutDuration, 0, 0)
+
+					time.Sleep(txsTickerDuration)
+				}
+			}
+
+			time.Sleep(txsTickerDuration)
+		}
+	}()
+
+	// remotes
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			tb.Logf("[%s] stopping AddRemotes", common.NowMilliseconds())
+
+			wg.Done()
+
+			tb.Logf("[%s] stopped AddRemotes", common.NowMilliseconds())
+		}()
+
+		addTransactionsBatches(tb, batchesRemotes, getFnForBatches(pool.AddRemotes), done, timeoutDuration, txsTickerDuration, "AddRemotes", 0)
+	}()
+
+	// remote
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			tb.Logf("[%s] stopping AddRemote", common.NowMilliseconds())
+
+			wg.Done()
+
+			tb.Logf("[%s] stopped AddRemote", common.NowMilliseconds())
+		}()
+
+		addTransactions(tb, batchesRemote, pool.AddRemote, done, timeoutDuration, txsTickerDuration, "AddRemote", 0)
+	}()
+
+	// sync
+	// remotes
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			tb.Logf("[%s] stopping AddRemotesSync", common.NowMilliseconds())
+
+			wg.Done()
+
+			tb.Logf("[%s] stopped AddRemotesSync", common.NowMilliseconds())
+		}()
+
+		addTransactionsBatches(tb, batchesRemotesSync, getFnForBatches(pool.AddRemotesSync), done, timeoutDuration, txsTickerDuration, "AddRemotesSync", 0)
+	}()
+
+	// remote
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			tb.Logf("[%s] stopping AddRemoteSync", common.NowMilliseconds())
+
+			wg.Done()
+
+			tb.Logf("[%s] stopped AddRemoteSync", common.NowMilliseconds())
+		}()
+
+		addTransactions(tb, batchesRemoteSync, pool.AddRemoteSync, done, timeoutDuration, txsTickerDuration, "AddRemoteSync", 0)
+	}()
+
+	// tx pool API
+	for i := 0; i < threads; i++ {
+		i := i
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Pending-no-tips, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Pending-no-tips, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				p := pool.Pending(context.Background(), false)
+				fmt.Fprint(io.Discard, p)
+			}, done, "Pending-no-tips", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Pending-with-tips, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Pending-with-tips, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				p := pool.Pending(context.Background(), true)
+				fmt.Fprint(io.Discard, p)
+			}, done, "Pending-with-tips", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Locals, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Locals, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				l := pool.Locals()
+				fmt.Fprint(io.Discard, l)
+			}, done, "Locals", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Content, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Content, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				p, q := pool.Content()
+				fmt.Fprint(io.Discard, p, q)
+			}, done, "Content", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping GasPriceUint256, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped GasPriceUint256, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				res := pool.GasPriceUint256()
+				fmt.Fprint(io.Discard, res)
+			}, done, "GasPriceUint256", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping GasPrice, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped GasPrice, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				res := pool.GasPrice()
+				fmt.Fprint(io.Discard, res)
+			}, done, "GasPrice", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping SetGasPrice, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped SetGasPrice, , thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				pool.SetGasPrice(pool.GasPrice())
+			}, done, "SetGasPrice", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping ContentFrom, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped ContentFrom, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				p, q := pool.ContentFrom(account)
+				fmt.Fprint(io.Discard, p, q)
+			}, done, "ContentFrom", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Has, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Has, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				res := pool.Has(batchesRemotes[0][0].Hash())
+				fmt.Fprint(io.Discard, res)
+			}, done, "Has", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Get, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Get, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				tx := pool.Get(batchesRemotes[0][0].Hash())
+				fmt.Fprint(io.Discard, tx == nil)
+			}, done, "Get", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Nonce, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Nonce, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				res := pool.Nonce(account)
+				fmt.Fprint(io.Discard, res)
+			}, done, "Nonce", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Stats, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Stats, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				p, q := pool.Stats()
+				fmt.Fprint(io.Discard, p, q)
+			}, done, "Stats", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping Status, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped Status, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(_ chan struct{}) {
+				st := pool.Status([]common.Hash{batchesRemotes[1][0].Hash()})
+				fmt.Fprint(io.Discard, st)
+			}, done, "Status", apiTickerDuration, timeoutDuration, i)
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			defer func() {
+				tb.Logf("[%s] stopping SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
+
+				wg.Done()
+
+				tb.Logf("[%s] stopped SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
+			}()
+
+			runWithTicker(tb, func(c chan struct{}) {
+				ch := make(chan NewTxsEvent, 10)
+				sub := pool.SubscribeNewTxsEvent(ch)
+
+				if sub == nil {
+					return
+				}
+
+				defer sub.Unsubscribe()
+
+				select {
+				case <-done:
+					return
+				case <-c:
+				case res := <-ch:
+					fmt.Fprint(io.Discard, res)
+				}
+
+			}, done, "SubscribeNewTxsEvent", apiTickerDuration, timeoutDuration, i)
+		}()
+	}
+
+	// wait for the start
+	tb.Logf("[%s] before the first propagated transaction", common.NowMilliseconds())
+	<-pendingAddedCh
+	tb.Logf("[%s] after the first propagated transaction", common.NowMilliseconds())
+
+	var (
+		totalTxs    int
+		totalBlocks int
+	)
+
+	pendingDurations := make([]time.Duration, 0, blocks)
+
+	var (
+		added           int
+		pendingDuration time.Duration
+		miningDuration  time.Duration
+		diff            time.Duration
+	)
+
+	for {
+		added, pendingDuration, miningDuration = mining(tb, pool, signer, baseFee, blockGasLimit, totalBlocks)
+
+		totalTxs += added
+
+		pendingDurations = append(pendingDurations, pendingDuration)
+
+		totalBlocks++
+
+		if totalBlocks > blocks {
+			fmt.Fprint(io.Discard, totalTxs)
+			break
+		}
+
+		diff = blockPeriod - miningDuration
+		if diff > 0 {
+			time.Sleep(diff)
+		}
+	}
+
+	pendingDurationsFloat := make([]float64, len(pendingDurations))
+
+	for i, v := range pendingDurations {
+		pendingDurationsFloat[i] = float64(v.Nanoseconds())
+	}
+
+	mean, stddev := stat.MeanStdDev(pendingDurationsFloat, nil)
+	tb.Logf("[%s] pending mean %v, stddev %v, %v-%v",
+		common.NowMilliseconds(), time.Duration(mean), time.Duration(stddev), time.Duration(floats.Min(pendingDurationsFloat)), time.Duration(floats.Max(pendingDurationsFloat)))
+}
+
+func addTransactionsBatches(tb testing.TB, batches []types.Transactions, fn func(types.Transactions) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
+	tb.Helper()
+
+	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
+
+	defer func() {
+		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
+	}()
+
+	for _, batch := range batches {
+		batch := batch
+
+		select {
+		case <-done:
+			return
+		default:
+		}
+
+		runWithTimeout(tb, func(_ chan struct{}) {
+			err := fn(batch)
+			if err != nil {
+				tb.Logf("[%s] %s error: %s", common.NowMilliseconds(), name, err)
+			}
+		}, done, name, timeoutDuration, 0, thread)
+
+		time.Sleep(tickerDuration)
+	}
+}
+
+func addTransactions(tb testing.TB, batches []types.Transactions, fn func(*types.Transaction) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
+	tb.Helper()
+
+	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
+
+	defer func() {
+		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
+	}()
+
+	for _, batch := range batches {
+		for _, tx := range batch {
+			tx := tx
+
+			select {
+			case <-done:
+				return
+			default:
+			}
+
+			runWithTimeout(tb, func(_ chan struct{}) {
+				err := fn(tx)
+				if err != nil {
+					tb.Logf("%s error: %s", name, err)
+				}
+			}, done, name, timeoutDuration, 0, thread)
+
+			time.Sleep(tickerDuration)
+		}
+
+		time.Sleep(tickerDuration)
+	}
+}
+
+func getFnForBatches(fn func([]*types.Transaction) []error) func(types.Transactions) error {
+	return func(batch types.Transactions) error {
+		errs := fn(batch)
+		if len(errs) != 0 {
+			return errs[0]
+		}
+
+		return nil
+	}
+}
+
+//nolint:unparam
+func runWithTicker(tb testing.TB, fn func(c chan struct{}), done chan struct{}, name string, tickerDuration, timeoutDuration time.Duration, thread int) {
+	tb.Helper()
+
+	select {
+	case <-done:
+		tb.Logf("[%s] Short path. finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
+
+		return
+	default:
+	}
+
+	defer func() {
+		tb.Logf("[%s] finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
+	}()
+
+	localTicker := time.NewTicker(tickerDuration)
+	defer localTicker.Stop()
+
+	n := 0
+
+	for range localTicker.C {
+		select {
+		case <-done:
+			return
+		default:
+		}
+
+		runWithTimeout(tb, fn, done, name, timeoutDuration, n, thread)
+
+		n++
+	}
+}
+
+func runWithTimeout(tb testing.TB, fn func(chan struct{}), outerDone chan struct{}, name string, timeoutDuration time.Duration, n, thread int) {
+	tb.Helper()
+
+	select {
+	case <-outerDone:
+		tb.Logf("[%s] Short path. exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+
+		return
+	default:
+	}
+
+	timeout := time.NewTimer(timeoutDuration)
+	defer timeout.Stop()
+
+	doneCh := make(chan struct{})
+
+	isError := new(int32)
+	*isError = 0
+
+	go func() {
+		defer close(doneCh)
+
+		select {
+		case <-outerDone:
+			return
+		default:
+			fn(doneCh)
+		}
+	}()
+
+	const isDebug = false
+
+	var stack string
+
+	select {
+	case <-outerDone:
+		tb.Logf("[%s] exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+	case <-doneCh:
+		// only for debug
+		//tb.Logf("[%s] exiting inner runWithTimeout by successful call for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+	case <-timeout.C:
+		atomic.StoreInt32(isError, 1)
+
+		if isDebug {
+			stack = string(debug.Stack(true))
+		}
+
+		tb.Errorf("[%s] %s timeouted, thread %d, iteration %d. Stack %s", common.NowMilliseconds(), name, thread, n, stack)
 	}
 }
