@@ -1,15 +1,15 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
+import { useContext, useEffect } from 'react';
 import { Box, Grid, Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
+import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 import { useRouter } from 'next/router';
-import { useEffect } from 'react';
 import gfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { ParsedUrlQuery } from 'querystring';
-import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 
 import MDComponents, { Breadcrumbs, DocsNav, DocumentNav } from '../components/UI/docs';
 import { PageMetadata } from '../components/UI';
@@ -20,6 +20,9 @@ import { getLastModifiedDate, getParsedDate } from '../utils';
 import { NavLink } from '../types';
 
 import { textStyles } from '../theme/foundations';
+
+// Context
+import { NavLinksContext } from '../context';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -80,6 +83,14 @@ interface Props {
 
 const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified }) => {
   const router = useRouter();
+  const { mobileNavLinks, setMobileNavLinks } = useContext(NavLinksContext);
+
+  useEffect(() => {
+    // set context value for `MobileDocsNav` component
+    console.log({ navLinks });
+    setMobileNavLinks(navLinks);
+    console.log({ mobileNavLinks });
+  }, []);
 
   useEffect(() => {
     const id = router.asPath.split('#')[1];
@@ -101,13 +112,17 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
           gap={{ base: 4, lg: 8 }}
           templateColumns={{ base: 'repeat(1, 1fr)', lg: '288px 1fr' }}
         >
-          <Stack>
+          <Stack display={{ base: 'none', lg: 'block' }}>
             <DocsNav navLinks={navLinks} />
           </Stack>
 
           <Stack pb={4} width='100%' id='main-content'>
             <Stack mb={16}>
-              <Breadcrumbs />
+              {/* hide breadcrumbs on mobile */}
+              <Box display={{ base: 'none', lg: 'block' }}>
+                <Breadcrumbs />
+              </Box>
+
               <Heading as='h1' mt='4 !important' mb={0} {...textStyles.h1}>
                 {frontmatter.title}
               </Heading>

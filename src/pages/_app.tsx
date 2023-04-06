@@ -11,6 +11,9 @@ import theme from '../theme';
 // Algolia search css styling
 import '../theme/search.css';
 
+// Context
+import { NavLinksContextProvider } from '../context';
+
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     init({
@@ -23,9 +26,11 @@ export default function App({ Component, pageProps }: AppProps) {
     // `colorModeManager` added to fix flashing issue
     // See: https://chakra-ui.com/docs/styled-system/color-mode#add-colormodemanager-optional-for-ssr
     <ChakraProvider theme={theme} colorModeManager={localStorageManager}>
-      <Layout>
-        <Component {...pageProps} />
-      </Layout>
+      <NavLinksContextProvider>
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+      </NavLinksContextProvider>
     </ChakraProvider>
   );
 }
