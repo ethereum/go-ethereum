@@ -90,7 +90,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
 			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
-			msg, err := tx.AsMessage(signer, nil)
+			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
@@ -111,9 +111,9 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				// Below are prints to show differences if we fail, can always just check against the specific test json files too!
 				// x, _ := json.MarshalIndent(ret, "", "")
 				// y, _ := json.MarshalIndent(test.Result, "", "")
-				// fmt.Println("x")
+				// fmt.Println("ret")
 				// fmt.Println(string(x))
-				// fmt.Println("y")
+				// fmt.Println("test.Result")
 				// fmt.Println(string(y))
 				t.Fatal("traces mismatch")
 				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
