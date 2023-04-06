@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -24,11 +24,12 @@ type txnOpCodeTracer struct {
 	interrupt uint32      // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption (not always specific for us)
 	opts      TracerOpts
+	beginTime time.Time // Time object for start of trace for stats
 }
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
 // options applied.
-func newTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func NewTxnOpCodeTracer(cfg json.RawMessage) (Tracer, error) {
 
 	// First callframe contains tx context info
 	// and is populated on start and end.
@@ -42,10 +43,6 @@ func newTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trac
 	}
 
 	return t, nil
-}
-
-func init() {
-	tracers.DefaultDirectory.Register("txnOpCodeTracer", newTxnOpCodeTracer, false)
 }
 
 // GetResult returns an empty json object.
@@ -81,10 +78,13 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	// Populate the block context from the vm environment.
 	t.trace.BlockContext.Number = env.Context.BlockNumber.Uint64()
 	t.trace.BlockContext.BaseFee = env.Context.BaseFee.Uint64()
-	t.trace.BlockContext.Time = env.Context.Time // todo alex: check this removal -> .Uint64()
+	t.trace.BlockContext.Time = env.Context.Time
 	t.trace.BlockContext.Coinbase = addrToHex(env.Context.Coinbase)
 	t.trace.BlockContext.GasLimit = env.Context.GasLimit
 	t.trace.BlockContext.Random = random
+
+	// Start tracing timer
+	t.beginTime = time.Now()
 
 	// This is the initial call
 	t.callStack[0] = CallFrame{
@@ -107,9 +107,7 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.callStack[0].GasUsed = uintToHex(gasUsed)
 
 	// Add total time duration for this trace request
-	// todo alex: need to find a better place to get time from the evm execution
-	// we can use t.trace.BlockContext.Time and current time to calculate this here!
-	t.trace.Time = fmt.Sprintf("%v", time)
+	t.trace.Time = fmt.Sprintf("%v", time.Since(t.beginTime))
 
 	// If the user wants the logs, grab them from the state
 	if t.opts.Logs {
