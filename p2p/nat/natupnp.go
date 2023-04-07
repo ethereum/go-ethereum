@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package nat
 
 import (
@@ -5,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/huin/goupnp"
@@ -12,10 +29,17 @@ import (
 	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
+const (
+	soapRequestTimeout = 3 * time.Second
+	rateLimit          = 200 * time.Millisecond
+)
+
 type upnp struct {
-	dev     *goupnp.RootDevice
-	service string
-	client  upnpClient
+	dev         *goupnp.RootDevice
+	service     string
+	client      upnpClient
+	mu          sync.Mutex
+	lastReqTime time.Time
 }
 
 type upnpClient interface {
@@ -25,8 +49,23 @@ type upnpClient interface {
 	GetNATRSIPStatus() (sip bool, nat bool, err error)
 }
 
+func (n *upnp) natEnabled() bool {
+	var ok bool
+	var err error
+	n.withRateLimit(func() error {
+		_, ok, err = n.client.GetNATRSIPStatus()
+		return err
+	})
+	return err == nil && ok
+}
+
 func (n *upnp) ExternalIP() (addr net.IP, err error) {
-	ipString, err := n.client.GetExternalIPAddress()
+	var ipString string
+	n.withRateLimit(func() error {
+		ipString, err = n.client.GetExternalIPAddress()
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +79,15 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) error {
 	ip, err := n.internalAddress()
 	if err != nil {
-		return nil
+		return nil // TODO: Shouldn't we return the error?
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
-	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	n.DeleteMapping(protocol, extport, intport)
+
+	return n.withRateLimit(func() error {
+		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	})
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {
@@ -62,11 +105,8 @@ func (n *upnp) internalAddress() (net.IP, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			switch x := addr.(type) {
-			case *net.IPNet:
-				if x.Contains(devaddr.IP) {
-					return x.IP, nil
-				}
+			if x, ok := addr.(*net.IPNet); ok && x.Contains(devaddr.IP) {
+				return x.IP, nil
 			}
 		}
 	}
@@ -74,11 +114,26 @@ func (n *upnp) internalAddress() (net.IP, error) {
 }
 
 func (n *upnp) DeleteMapping(protocol string, extport, intport int) error {
-	return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
+	return n.withRateLimit(func() error {
+		return n.client.DeletePortMapping("", uint16(extport), strings.ToUpper(protocol))
+	})
 }
 
 func (n *upnp) String() string {
 	return "UPNP " + n.service
+}
+
+func (n *upnp) withRateLimit(fn func() error) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	lastreq := time.Since(n.lastReqTime)
+	if lastreq < rateLimit {
+		time.Sleep(rateLimit - lastreq)
+	}
+	err := fn()
+	n.lastReqTime = time.Now()
+	return err
 }
 
 // discoverUPnP searches for Internet Gateway Devices
@@ -86,24 +141,24 @@ func (n *upnp) String() string {
 func discoverUPnP() Interface {
 	found := make(chan *upnp, 2)
 	// IGDv1
-	go discover(found, internetgateway1.URN_WANConnectionDevice_1, func(dev *goupnp.RootDevice, sc goupnp.ServiceClient) *upnp {
+	go discover(found, internetgateway1.URN_WANConnectionDevice_1, func(sc goupnp.ServiceClient) *upnp {
 		switch sc.Service.ServiceType {
 		case internetgateway1.URN_WANIPConnection_1:
-			return &upnp{dev, "IGDv1-IP1", &internetgateway1.WANIPConnection1{sc}}
+			return &upnp{service: "IGDv1-IP1", client: &internetgateway1.WANIPConnection1{ServiceClient: sc}}
 		case internetgateway1.URN_WANPPPConnection_1:
-			return &upnp{dev, "IGDv1-PPP1", &internetgateway1.WANPPPConnection1{sc}}
+			return &upnp{service: "IGDv1-PPP1", client: &internetgateway1.WANPPPConnection1{ServiceClient: sc}}
 		}
 		return nil
 	})
 	// IGDv2
-	go discover(found, internetgateway2.URN_WANConnectionDevice_2, func(dev *goupnp.RootDevice, sc goupnp.ServiceClient) *upnp {
+	go discover(found, internetgateway2.URN_WANConnectionDevice_2, func(sc goupnp.ServiceClient) *upnp {
 		switch sc.Service.ServiceType {
 		case internetgateway2.URN_WANIPConnection_1:
-			return &upnp{dev, "IGDv2-IP1", &internetgateway2.WANIPConnection1{sc}}
+			return &upnp{service: "IGDv2-IP1", client: &internetgateway2.WANIPConnection1{ServiceClient: sc}}
 		case internetgateway2.URN_WANIPConnection_2:
-			return &upnp{dev, "IGDv2-IP2", &internetgateway2.WANIPConnection2{sc}}
+			return &upnp{service: "IGDv2-IP2", client: &internetgateway2.WANIPConnection2{ServiceClient: sc}}
 		case internetgateway2.URN_WANPPPConnection_1:
-			return &upnp{dev, "IGDv2-PPP1", &internetgateway2.WANPPPConnection1{sc}}
+			return &upnp{service: "IGDv2-PPP1", client: &internetgateway2.WANPPPConnection1{ServiceClient: sc}}
 		}
 		return nil
 	})
@@ -115,9 +170,13 @@ func discoverUPnP() Interface {
 	return nil
 }
 
-func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, goupnp.ServiceClient) *upnp) {
+// finds devices matching the given target and calls matcher for all
+// advertised services of each device. The first non-nil service found
+// is sent into out. If no service matched, nil is sent.
+func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient) *upnp) {
 	devs, err := goupnp.DiscoverDevices(target)
 	if err != nil {
+		out <- nil
 		return
 	}
 	found := false
@@ -130,17 +189,24 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 				return
 			}
 			// check for a matching IGD service
-			sc := goupnp.ServiceClient{service.NewSOAPClient(), devs[i].Root, service}
-			upnp := matcher(devs[i].Root, sc)
+			sc := goupnp.ServiceClient{
+				SOAPClient: service.NewSOAPClient(),
+				RootDevice: devs[i].Root,
+				Location:   devs[i].Location,
+				Service:    service,
+			}
+			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
+			upnp := matcher(sc)
 			if upnp == nil {
 				return
 			}
+			upnp.dev = devs[i].Root
+
 			// check whether port mapping is enabled
-			if _, nat, err := upnp.client.GetNATRSIPStatus(); err != nil || !nat {
-				return
+			if upnp.natEnabled() {
+				out <- upnp
+				found = true
 			}
-			out <- upnp
-			found = true
 		})
 	}
 	if !found {

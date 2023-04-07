@@ -1,57 +1,59 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package common
 
 import (
-	"math/big"
-
-	checker "gopkg.in/check.v1"
+	"testing"
 )
 
-type SizeSuite struct{}
+func TestStorageSizeString(t *testing.T) {
+	tests := []struct {
+		size StorageSize
+		str  string
+	}{
+		{2839274474874, "2.58 TiB"},
+		{2458492810, "2.29 GiB"},
+		{2381273, "2.27 MiB"},
+		{2192, "2.14 KiB"},
+		{12, "12.00 B"},
+	}
 
-var _ = checker.Suite(&SizeSuite{})
-
-func (s *SizeSuite) TestStorageSizeString(c *checker.C) {
-	data1 := 2381273
-	data2 := 2192
-	data3 := 12
-
-	exp1 := "2.38 mB"
-	exp2 := "2.19 kB"
-	exp3 := "12.00 B"
-
-	c.Assert(StorageSize(data1).String(), checker.Equals, exp1)
-	c.Assert(StorageSize(data2).String(), checker.Equals, exp2)
-	c.Assert(StorageSize(data3).String(), checker.Equals, exp3)
+	for _, test := range tests {
+		if test.size.String() != test.str {
+			t.Errorf("%f: got %q, want %q", float64(test.size), test.size.String(), test.str)
+		}
+	}
 }
 
-func (s *CommonSuite) TestCommon(c *checker.C) {
-	douglas := CurrencyToString(BigPow(10, 43))
-	einstein := CurrencyToString(BigPow(10, 22))
-	ether := CurrencyToString(BigPow(10, 19))
-	finney := CurrencyToString(BigPow(10, 16))
-	szabo := CurrencyToString(BigPow(10, 13))
-	shannon := CurrencyToString(BigPow(10, 10))
-	babbage := CurrencyToString(BigPow(10, 7))
-	ada := CurrencyToString(BigPow(10, 4))
-	wei := CurrencyToString(big.NewInt(10))
+func TestStorageSizeTerminalString(t *testing.T) {
+	tests := []struct {
+		size StorageSize
+		str  string
+	}{
+		{2839274474874, "2.58TiB"},
+		{2458492810, "2.29GiB"},
+		{2381273, "2.27MiB"},
+		{2192, "2.14KiB"},
+		{12, "12.00B"},
+	}
 
-	c.Assert(douglas, checker.Equals, "10 Douglas")
-	c.Assert(einstein, checker.Equals, "10 Einstein")
-	c.Assert(ether, checker.Equals, "10 Ether")
-	c.Assert(finney, checker.Equals, "10 Finney")
-	c.Assert(szabo, checker.Equals, "10 Szabo")
-	c.Assert(shannon, checker.Equals, "10 Shannon")
-	c.Assert(babbage, checker.Equals, "10 Babbage")
-	c.Assert(ada, checker.Equals, "10 Ada")
-	c.Assert(wei, checker.Equals, "10 Wei")
-}
-
-func (s *CommonSuite) TestLarge(c *checker.C) {
-	douglaslarge := CurrencyToString(BigPow(100000000, 43))
-	adalarge := CurrencyToString(BigPow(100000000, 4))
-	weilarge := CurrencyToString(big.NewInt(100000000))
-
-	c.Assert(douglaslarge, checker.Equals, "10000E298 Douglas")
-	c.Assert(adalarge, checker.Equals, "10000E7 Einstein")
-	c.Assert(weilarge, checker.Equals, "100 Babbage")
+	for _, test := range tests {
+		if test.size.TerminalString() != test.str {
+			t.Errorf("%f: got %q, want %q", float64(test.size), test.size.TerminalString(), test.str)
+		}
+	}
 }

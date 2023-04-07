@@ -1,107 +1,61 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package tests
 
 import (
-	"path"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// TODO: refactor test setup & execution to better align with vm and tx tests
-func TestBcValidBlockTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcValidBlockTest.json", []string{}, t)
-}
+func TestBlockchain(t *testing.T) {
+	t.Parallel()
 
-func TestBcUncleTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcUncleTest.json", []string{}, t)
-}
+	bt := new(testMatcher)
+	// General state tests are 'exported' as blockchain tests, but we can run them natively.
+	// For speedier CI-runs, the line below can be uncommented, so those are skipped.
+	// For now, in hardfork-times (Berlin), we run the tests both as StateTests and
+	// as blockchain tests, since the latter also covers things like receipt root
+	bt.skipLoad(`^GeneralStateTests/`)
 
-func TestBcUncleHeaderValidityTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcUncleHeaderValiditiy.json", []string{}, t)
-}
+	// Skip random failures due to selfish mining test
+	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
 
-func TestBcInvalidHeaderTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcInvalidHeaderTest.json", []string{}, t)
-}
+	// Slow tests
+	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
+	bt.slow(`.*bcExploitTest/ShanghaiLove.json`)
+	bt.slow(`.*bcExploitTest/SuicideIssue.json`)
+	bt.slow(`.*/bcForkStressTest/`)
+	bt.slow(`.*/bcGasPricerTest/RPC_API_Test.json`)
+	bt.slow(`.*/bcWalletTest/`)
 
-func TestBcInvalidRLPTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", []string{}, t)
-}
+	// Very slow test
+	bt.skipLoad(`.*/stTimeConsuming/.*`)
+	// test takes a lot for time and goes easily OOM because of sha3 calculation on a huge range,
+	// using 4.6 TGas
+	bt.skipLoad(`.*randomStatetest94.json.*`)
 
-func TestBcJSAPITests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcJS_API_Test.json", []string{}, t)
-}
-
-func TestBcRPCAPITests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcRPC_API_Test.json", []string{}, t)
-}
-
-func TestBcForkBlockTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcForkBlockTest.json", []string{}, t)
-}
-
-func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
-	bt, err := LoadBlockTests(filepath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	notWorking := make(map[string]bool, 100)
-	for _, name := range snafus {
-		notWorking[name] = true
-	}
-
-	for name, test := range bt {
-		if !notWorking[name] {
-			runBlockTest(name, test, t)
+	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		if err := bt.checkFailure(t, test.Run(false)); err != nil {
+			t.Errorf("test without snapshotter failed: %v", err)
 		}
-	}
-}
-
-func runBlockTest(name string, test *BlockTest, t *testing.T) {
-	cfg := testEthConfig()
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	err = ethereum.Start()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	// import the genesis block
-	ethereum.ResetWithGenesisBlock(test.Genesis)
-
-	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
-	if err != nil {
-		t.Fatalf("InsertPreState: %v", err)
-	}
-
-	err = test.TryBlocksInsert(ethereum.ChainManager())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = test.ValidatePostState(statedb); err != nil {
-		t.Fatal("post state validation failed: %v", err)
-	}
-	t.Log("Test passed: ", name)
-}
-
-func testEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(path.Join(common.DefaultDataDir(), "keys"))
-
-	return &eth.Config{
-		DataDir:        common.DefaultDataDir(),
-		LogLevel:       5,
-		Etherbase:      "primary",
-		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
-	}
+		if err := bt.checkFailure(t, test.Run(true)); err != nil {
+			t.Errorf("test with snapshotter failed: %v", err)
+		}
+	})
+	// There is also a LegacyTests folder, containing blockchain tests generated
+	// prior to Istanbul. However, they are all derived from GeneralStateTests,
+	// which run natively, so there's no reason to run them here.
 }

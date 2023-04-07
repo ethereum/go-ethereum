@@ -1,89 +1,82 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package vm
 
 import (
-	"math"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
-// Global Debug flag indicating Debug VM (full logging)
-var Debug bool
-
-type Type byte
-
-const (
-	StdVmTy Type = iota
-	JitVmTy
-	MaxVmTy
-
-	LogTyPretty byte = 0x1
-	LogTyDiff   byte = 0x2
-)
-
-var (
-	Pow256 = common.BigPow(2, 256)
-
-	U256 = common.U256
-	S256 = common.S256
-
-	Zero = common.Big0
-	One  = common.Big1
-
-	max = big.NewInt(math.MaxInt64)
-)
-
-func NewVm(env Environment) VirtualMachine {
-	switch env.VmType() {
-	case JitVmTy:
-		return NewJitVm(env)
-	default:
-		glog.V(0).Infoln("unsupported vm type %d", env.VmType())
-		fallthrough
-	case StdVmTy:
-		return New(env)
+// calcMemSize64 calculates the required memory size, and returns
+// the size and whether the result overflowed uint64
+func calcMemSize64(off, l *uint256.Int) (uint64, bool) {
+	if !l.IsUint64() {
+		return 0, true
 	}
+	return calcMemSize64WithUint(off, l.Uint64())
 }
 
-func calcMemSize(off, l *big.Int) *big.Int {
-	if l.Cmp(common.Big0) == 0 {
-		return common.Big0
+// calcMemSize64WithUint calculates the required memory size, and returns
+// the size and whether the result overflowed uint64
+// Identical to calcMemSize64, but length is a uint64
+func calcMemSize64WithUint(off *uint256.Int, length64 uint64) (uint64, bool) {
+	// if length is zero, memsize is always zero, regardless of offset
+	if length64 == 0 {
+		return 0, false
 	}
-
-	return new(big.Int).Add(off, l)
+	// Check that offset doesn't overflow
+	offset64, overflow := off.Uint64WithOverflow()
+	if overflow {
+		return 0, true
+	}
+	val := offset64 + length64
+	// if value < either of it's parts, then it overflowed
+	return val, val < offset64
 }
 
-// Simple helper
-func u256(n int64) *big.Int {
-	return big.NewInt(n)
+// getData returns a slice from the data based on the start and size and pads
+// up to size with zero's. This function is overflow safe.
+func getData(data []byte, start uint64, size uint64) []byte {
+	length := uint64(len(data))
+	if start > length {
+		start = length
+	}
+	end := start + size
+	if end > length {
+		end = length
+	}
+	return common.RightPadBytes(data[start:end], int(size))
 }
 
-// Mainly used for print variables and passing to Print*
-func toValue(val *big.Int) interface{} {
-	// Let's assume a string on right padded zero's
-	b := val.Bytes()
-	if b[0] != 0 && b[len(b)-1] == 0x0 && b[len(b)-2] == 0x0 {
-		return string(b)
+// toWordSize returns the ceiled word size required for memory expansion.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
 	}
 
-	return val
+	return (size + 31) / 32
 }
 
-func getData(data []byte, start, size *big.Int) []byte {
-	dlen := big.NewInt(int64(len(data)))
-
-	s := common.BigMin(start, dlen)
-	e := common.BigMin(new(big.Int).Add(s, size), dlen)
-	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
-}
-
-func UseGas(gas, amount *big.Int) bool {
-	if gas.Cmp(amount) < 0 {
-		return false
+func allZero(b []byte) bool {
+	for _, byte := range b {
+		if byte != 0 {
+			return false
+		}
 	}
-
-	// Sub the amount of gas from the remaining
-	gas.Sub(gas, amount)
 	return true
 }

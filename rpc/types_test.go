@@ -1,204 +1,155 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rpc
 
 import (
-	"bytes"
 	"encoding/json"
-	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
-func TestInvalidTypeError(t *testing.T) {
-	err := NewInvalidTypeError("testField", "not string")
-	expected := "invalid type on field testField: not string"
+func TestBlockNumberJSONUnmarshal(t *testing.T) {
+	tests := []struct {
+		input    string
+		mustFail bool
+		expected BlockNumber
+	}{
+		0:  {`"0x"`, true, BlockNumber(0)},
+		1:  {`"0x0"`, false, BlockNumber(0)},
+		2:  {`"0X1"`, false, BlockNumber(1)},
+		3:  {`"0x00"`, true, BlockNumber(0)},
+		4:  {`"0x01"`, true, BlockNumber(0)},
+		5:  {`"0x1"`, false, BlockNumber(1)},
+		6:  {`"0x12"`, false, BlockNumber(18)},
+		7:  {`"0x7fffffffffffffff"`, false, BlockNumber(math.MaxInt64)},
+		8:  {`"0x8000000000000000"`, true, BlockNumber(0)},
+		9:  {"0", true, BlockNumber(0)},
+		10: {`"ff"`, true, BlockNumber(0)},
+		11: {`"pending"`, false, PendingBlockNumber},
+		12: {`"latest"`, false, LatestBlockNumber},
+		13: {`"earliest"`, false, EarliestBlockNumber},
+		14: {`someString`, true, BlockNumber(0)},
+		15: {`""`, true, BlockNumber(0)},
+		16: {``, true, BlockNumber(0)},
+	}
 
-	if err.Error() != expected {
-		t.Error(err.Error())
+	for i, test := range tests {
+		var num BlockNumber
+		err := json.Unmarshal([]byte(test.input), &num)
+		if test.mustFail && err == nil {
+			t.Errorf("Test %d should fail", i)
+			continue
+		}
+		if !test.mustFail && err != nil {
+			t.Errorf("Test %d should pass but got err: %v", i, err)
+			continue
+		}
+		if num != test.expected {
+			t.Errorf("Test %d got unexpected value, want %d, got %d", i, test.expected, num)
+		}
 	}
 }
 
-func TestInsufficientParamsError(t *testing.T) {
-	err := NewInsufficientParamsError(0, 1)
-	expected := "insufficient params, want 1 have 0"
+func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		input    string
+		mustFail bool
+		expected BlockNumberOrHash
+	}{
+		0:  {`"0x"`, true, BlockNumberOrHash{}},
+		1:  {`"0x0"`, false, BlockNumberOrHashWithNumber(0)},
+		2:  {`"0X1"`, false, BlockNumberOrHashWithNumber(1)},
+		3:  {`"0x00"`, true, BlockNumberOrHash{}},
+		4:  {`"0x01"`, true, BlockNumberOrHash{}},
+		5:  {`"0x1"`, false, BlockNumberOrHashWithNumber(1)},
+		6:  {`"0x12"`, false, BlockNumberOrHashWithNumber(18)},
+		7:  {`"0x7fffffffffffffff"`, false, BlockNumberOrHashWithNumber(math.MaxInt64)},
+		8:  {`"0x8000000000000000"`, true, BlockNumberOrHash{}},
+		9:  {"0", true, BlockNumberOrHash{}},
+		10: {`"ff"`, true, BlockNumberOrHash{}},
+		11: {`"pending"`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		12: {`"latest"`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		13: {`"earliest"`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		14: {`someString`, true, BlockNumberOrHash{}},
+		15: {`""`, true, BlockNumberOrHash{}},
+		16: {``, true, BlockNumberOrHash{}},
+		17: {`"0x0000000000000000000000000000000000000000000000000000000000000000"`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		18: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		19: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":false}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		20: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":true}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), true)},
+		21: {`{"blockNumber":"0x1"}`, false, BlockNumberOrHashWithNumber(1)},
+		22: {`{"blockNumber":"pending"}`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		23: {`{"blockNumber":"latest"}`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		24: {`{"blockNumber":"earliest"}`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		25: {`{"blockNumber":"0x1", "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, true, BlockNumberOrHash{}},
+	}
 
-	if err.Error() != expected {
-		t.Error(err.Error())
+	for i, test := range tests {
+		var bnh BlockNumberOrHash
+		err := json.Unmarshal([]byte(test.input), &bnh)
+		if test.mustFail && err == nil {
+			t.Errorf("Test %d should fail", i)
+			continue
+		}
+		if !test.mustFail && err != nil {
+			t.Errorf("Test %d should pass but got err: %v", i, err)
+			continue
+		}
+		hash, hashOk := bnh.Hash()
+		expectedHash, expectedHashOk := test.expected.Hash()
+		num, numOk := bnh.Number()
+		expectedNum, expectedNumOk := test.expected.Number()
+		if bnh.RequireCanonical != test.expected.RequireCanonical ||
+			hash != expectedHash || hashOk != expectedHashOk ||
+			num != expectedNum || numOk != expectedNumOk {
+			t.Errorf("Test %d got unexpected value, want %v, got %v", i, test.expected, bnh)
+		}
 	}
 }
 
-func TestNotImplementedError(t *testing.T) {
-	err := NewNotImplementedError("foo")
-	expected := "foo method not implemented"
-
-	if err.Error() != expected {
-		t.Error(err.Error())
+func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
+	tests := []struct {
+		name   string
+		number int64
+	}{
+		{"max", math.MaxInt64},
+		{"pending", int64(PendingBlockNumber)},
+		{"latest", int64(LatestBlockNumber)},
+		{"earliest", int64(EarliestBlockNumber)},
 	}
-}
-
-func TestDecodeParamError(t *testing.T) {
-	err := NewDecodeParamError("foo")
-	expected := "could not decode, foo"
-
-	if err.Error() != expected {
-		t.Error(err.Error())
-	}
-}
-
-func TestValidationError(t *testing.T) {
-	err := NewValidationError("foo", "should be `bar`")
-	expected := "foo not valid, should be `bar`"
-
-	if err.Error() != expected {
-		t.Error(err.Error())
-	}
-}
-
-func TestHexdataMarshalNil(t *testing.T) {
-	hd := newHexData([]byte{})
-	hd.isNil = true
-	v, _ := json.Marshal(hd)
-	if string(v) != "null" {
-		t.Errorf("Expected null, got %s", v)
-	}
-}
-
-func TestHexnumMarshalNil(t *testing.T) {
-	hn := newHexNum([]byte{})
-	hn.isNil = true
-	v, _ := json.Marshal(hn)
-	if string(v) != "null" {
-		t.Errorf("Expected null, got %s", v)
-	}
-}
-
-func TestHexdataNil(t *testing.T) {
-	v := newHexData(nil)
-	if v.isNil != true {
-		t.Errorf("Expected isNil to be true, but is %v", v.isNil)
-	}
-}
-
-func TestHexdataPtrHash(t *testing.T) {
-	in := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	v := newHexData(&in)
-	if bytes.Compare(in.Bytes(), v.data) != 0 {
-		t.Errorf("Got % x expected % x", in, v.data)
-	}
-}
-
-func TestHexdataPtrHashNil(t *testing.T) {
-	var in *common.Hash
-	in = nil
-	v := newHexData(in)
-	if !v.isNil {
-		t.Errorf("Expect isNil to be true, but is %v", v.isNil)
-	}
-}
-
-func TestHexdataPtrAddress(t *testing.T) {
-	in := common.Address{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
-	v := newHexData(&in)
-	if bytes.Compare(in.Bytes(), v.data) != 0 {
-		t.Errorf("Got % x expected % x", in, v.data)
-	}
-}
-
-func TestHexdataPtrAddressNil(t *testing.T) {
-	var in *common.Address
-	in = nil
-	v := newHexData(in)
-	if !v.isNil {
-		t.Errorf("Expect isNil to be true, but is %v", v.isNil)
-	}
-}
-
-func TestHexdataPtrBloom(t *testing.T) {
-	in := types.Bloom{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
-	v := newHexData(&in)
-	if bytes.Compare(in.Bytes(), v.data) != 0 {
-		t.Errorf("Got % x expected % x", in, v.data)
-	}
-}
-
-func TestHexdataPtrBloomNil(t *testing.T) {
-	var in *types.Bloom
-	in = nil
-	v := newHexData(in)
-	if !v.isNil {
-		t.Errorf("Expect isNil to be true, but is %v", v.isNil)
-	}
-}
-
-func TestHexdataBigintNil(t *testing.T) {
-	var in *big.Int
-	in = nil
-	v := newHexData(in)
-	if !v.isNil {
-		t.Errorf("Expect isNil to be true, but is %v", v.isNil)
-	}
-}
-
-func TestHexdataUint(t *testing.T) {
-	var in = uint(16)
-	var expected = []byte{0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataInt8(t *testing.T) {
-	var in = int8(16)
-	var expected = []byte{0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataUint8(t *testing.T) {
-	var in = uint8(16)
-	var expected = []byte{0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataInt16(t *testing.T) {
-	var in = int16(16)
-	var expected = []byte{0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataUint16(t *testing.T) {
-	var in = uint16(16)
-	var expected = []byte{0x0, 0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataInt32(t *testing.T) {
-	var in = int32(16)
-	var expected = []byte{0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
-	}
-}
-
-func TestHexdataUint32(t *testing.T) {
-	var in = uint32(16)
-	var expected = []byte{0x0, 0x0, 0x0, 0x10}
-	v := newHexData(in)
-	if bytes.Compare(expected, v.data) != 0 {
-		t.Errorf("Expected % x got % x", expected, v.data)
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			bnh := BlockNumberOrHashWithNumber(BlockNumber(test.number))
+			marshalled, err := json.Marshal(bnh)
+			if err != nil {
+				t.Fatal("cannot marshal:", err)
+			}
+			var unmarshalled BlockNumberOrHash
+			err = json.Unmarshal(marshalled, &unmarshalled)
+			if err != nil {
+				t.Fatal("cannot unmarshal:", err)
+			}
+			if !reflect.DeepEqual(bnh, unmarshalled) {
+				t.Fatalf("wrong result: expected %v, got %v", bnh, unmarshalled)
+			}
+		})
 	}
 }

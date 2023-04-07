@@ -1,49 +1,54 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package tests
 
 import (
 	"testing"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestTransactions(t *testing.T) {
-	notWorking := make(map[string]bool, 100)
+func TestTransaction(t *testing.T) {
+	t.Parallel()
 
-	// TODO: all these tests should work! remove them from the array when they work
-	snafus := []string{
-		"TransactionWithHihghNonce", // fails due to testing upper bound of 256 bit nonce
-		"TransactionWithSvalueHigh", // fails due to C++ wrong ECDSA r,s ranges. see https://github.com/ethereum/yellowpaper/pull/112
-		"TransactionWithSvalue0",    // Invalid, 0 < s according to YP eq 205. probably typo/copy-paste error
-	}
+	txt := new(testMatcher)
+	// These can't be parsed, invalid hex in RLP
+	txt.skipLoad("^ttWrongRLP/.*")
+	// We don't allow more than uint64 in gas amount
+	// This is a pseudo-consensus vulnerability, but not in practice
+	// because of the gas limit
+	txt.skipLoad("^ttGasLimit/TransactionWithGasLimitxPriceOverflow.json")
+	// We _do_ allow more than uint64 in gas price, as opposed to the tests
+	// This is also not a concern, as long as tx.Cost() uses big.Int for
+	// calculating the final cozt
+	txt.skipLoad(".*TransactionWithGasPriceOverflow.*")
 
-	for _, name := range snafus {
-		notWorking[name] = true
-	}
+	// The nonce is too large for uint64. Not a concern, it means geth won't
+	// accept transactions at a certain point in the distant future
+	txt.skipLoad("^ttNonce/TransactionWithHighNonce256.json")
 
-	var err error
-	err = RunTransactionTests("./files/TransactionTests/ttTransactionTest.json",
-		notWorking)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestWrongRLPTransactions(t *testing.T) {
-	notWorking := make(map[string]bool, 100)
-	var err error
-	err = RunTransactionTests("./files/TransactionTests/ttWrongRLPTransaction.json",
-		notWorking)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-//Not working until it's fields are in HEX
-func Test10MBtx(t *testing.T) {
-	t.Skip("Skipped in lieu of HEX encoding fix in this file.")
-	notWorking := make(map[string]bool, 100)
-	var err error
-	err = RunTransactionTests("./files/TransactionTests/tt10mbDataField.json",
-		notWorking)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The value is larger than uint64, which according to the test is invalid.
+	// Geth accepts it, which is not a consensus issue since we use big.Int's
+	// internally to calculate the cost
+	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
+	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
+		cfg := params.MainnetChainConfig
+		if err := txt.checkFailure(t, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
+	})
 }

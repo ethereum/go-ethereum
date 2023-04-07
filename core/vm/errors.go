@@ -1,52 +1,73 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package vm
 
 import (
+	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
-type OutOfGasError struct {
-	req, has *big.Int
+// List evm execution errors
+var (
+	ErrOutOfGas                 = errors.New("out of gas")
+	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
+	ErrDepth                    = errors.New("max call depth exceeded")
+	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
+	ErrContractAddressCollision = errors.New("contract address collision")
+	ErrExecutionReverted        = errors.New("execution reverted")
+	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
+	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
+	ErrInvalidJump              = errors.New("invalid jump destination")
+	ErrWriteProtection          = errors.New("write protection")
+	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
+	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
+	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
+	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
+
+	// errStopToken is an internal token indicating interpreter loop termination,
+	// never returned to outside callers.
+	errStopToken = errors.New("stop token")
+)
+
+// ErrStackUnderflow wraps an evm error when the items on the stack less
+// than the minimal requirement.
+type ErrStackUnderflow struct {
+	stackLen int
+	required int
 }
 
-func OOG(req, has *big.Int) OutOfGasError {
-	return OutOfGasError{req, has}
+func (e *ErrStackUnderflow) Error() string {
+	return fmt.Sprintf("stack underflow (%d <=> %d)", e.stackLen, e.required)
 }
 
-func (self OutOfGasError) Error() string {
-	return fmt.Sprintf("out of gas! require %v, have %v", self.req, self.has)
+// ErrStackOverflow wraps an evm error when the items on the stack exceeds
+// the maximum allowance.
+type ErrStackOverflow struct {
+	stackLen int
+	limit    int
 }
 
-func IsOOGErr(err error) bool {
-	_, ok := err.(OutOfGasError)
-	return ok
+func (e *ErrStackOverflow) Error() string {
+	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.limit)
 }
 
-type StackError struct {
-	req, has int
+// ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
+type ErrInvalidOpCode struct {
+	opcode OpCode
 }
 
-func StackErr(req, has int) StackError {
-	return StackError{req, has}
-}
-
-func (self StackError) Error() string {
-	return fmt.Sprintf("stack error! require %v, have %v", self.req, self.has)
-}
-
-func IsStack(err error) bool {
-	_, ok := err.(StackError)
-	return ok
-}
-
-type DepthError struct{}
-
-func (self DepthError) Error() string {
-	return fmt.Sprintf("Max call depth exceeded (%d)", params.CallCreateDepth)
-}
-
-func IsDepthErr(err error) bool {
-	_, ok := err.(DepthError)
-	return ok
-}
+func (e *ErrInvalidOpCode) Error() string { return fmt.Sprintf("invalid opcode: %s", e.opcode) }

@@ -1,81 +1,131 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package p2p implements the Ethereum p2p network protocols.
 package p2p
 
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 const (
-	defaultDialTimeout      = 10 * time.Second
-	refreshPeersInterval    = 30 * time.Second
-	staticPeerCheckInterval = 15 * time.Second
+	defaultDialTimeout = 15 * time.Second
 
-	// This is the maximum number of inbound connection
-	// that are allowed to linger between 'accepted' and
-	// 'added as peer'.
-	maxAcceptConns = 50
+	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
+	// wait this long for a single source of candidates before moving on and trying other
+	// sources.
+	discmixTimeout = 5 * time.Second
 
-	// total timeout for encryption handshake and protocol
-	// handshake in both directions.
-	handshakeTimeout = 5 * time.Second
-	// maximum time allowed for reading a complete message.
-	// this is effectively the amount of time a connection can be idle.
-	frameReadTimeout = 1 * time.Minute
-	// maximum amount of time allowed for writing a complete message.
-	frameWriteTimeout = 5 * time.Second
+	// Connectivity defaults.
+	defaultMaxPendingPeers = 50
+	defaultDialRatio       = 3
+
+	// This time limits inbound connection attempts per source IP.
+	inboundThrottleTime = 30 * time.Second
+
+	// Maximum time allowed for reading a complete message.
+	// This is effectively the amount of time a connection can be idle.
+	frameReadTimeout = 30 * time.Second
+
+	// Maximum amount of time allowed for writing a complete message.
+	frameWriteTimeout = 20 * time.Second
 )
 
-var srvjslog = logger.NewJsonLogger()
+var errServerStopped = errors.New("server stopped")
 
-// Server manages all peer connections.
-//
-// The fields of Server are used as configuration parameters.
-// You should set them before starting the Server. Fields may not be
-// modified while the server is running.
-type Server struct {
+// Config holds Server options.
+type Config struct {
 	// This field must be set to a valid secp256k1 private key.
-	PrivateKey *ecdsa.PrivateKey
+	PrivateKey *ecdsa.PrivateKey `toml:"-"`
 
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
 	MaxPeers int
 
-	// Name sets the node name of this server.
-	// Use common.MakeName to create a name that follows existing conventions.
-	Name string
+	// MaxPendingPeers is the maximum number of peers that can be pending in the
+	// handshake phase, counted separately for inbound and outbound connections.
+	// Zero defaults to preset values.
+	MaxPendingPeers int `toml:",omitempty"`
 
-	// Bootstrap nodes are used to establish connectivity
+	// DialRatio controls the ratio of inbound to dialed connections.
+	// Example: a DialRatio of 2 allows 1/2 of connections to be dialed.
+	// Setting DialRatio to zero defaults it to 3.
+	DialRatio int `toml:",omitempty"`
+
+	// NoDiscovery can be used to disable the peer discovery mechanism.
+	// Disabling is useful for protocol debugging (manual topology).
+	NoDiscovery bool
+
+	// DiscoveryV5 specifies whether the new topic-discovery based V5 discovery
+	// protocol should be started or not.
+	DiscoveryV5 bool `toml:",omitempty"`
+
+	// Name sets the node name of this server.
+	Name string `toml:"-"`
+
+	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network.
-	BootstrapNodes []*discover.Node
+	BootstrapNodes []*enode.Node
+
+	// BootstrapNodesV5 are used to establish connectivity
+	// with the rest of the network using the V5 discovery
+	// protocol.
+	BootstrapNodesV5 []*enode.Node `toml:",omitempty"`
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
-	StaticNodes []*discover.Node
+	StaticNodes []*enode.Node
 
 	// Trusted nodes are used as pre-configured connections which are always
 	// allowed to connect, even above the peer limit.
-	TrustedNodes []*discover.Node
+	TrustedNodes []*enode.Node
+
+	// Connectivity can be restricted to certain IP networks.
+	// If this option is set to a non-nil value, only hosts which match one of the
+	// IP networks contained in the list are considered.
+	NetRestrict *netutil.Netlist `toml:",omitempty"`
 
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
-	NodeDatabase string
+	NodeDatabase string `toml:",omitempty"`
 
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []Protocol
+	Protocols []Protocol `toml:"-" json:"-"`
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
@@ -85,202 +135,259 @@ type Server struct {
 	// the server is started.
 	ListenAddr string
 
+	// If DiscAddr is set to a non-nil value, the server will use ListenAddr
+	// for TCP and DiscAddr for the UDP discovery protocol.
+	DiscAddr string
+
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT nat.Interface
+	NAT nat.Interface `toml:",omitempty"`
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
-	Dialer *net.Dialer
+	Dialer NodeDialer `toml:"-"`
 
 	// If NoDial is true, the server will not dial any peers.
-	NoDial bool
+	NoDial bool `toml:",omitempty"`
+
+	// If EnableMsgEvents is set then the server will emit PeerEvents
+	// whenever a message is sent to or received from a peer
+	EnableMsgEvents bool
+
+	// Logger is a custom logger to use with the p2p.Server.
+	Logger log.Logger `toml:",omitempty"`
+
+	clock mclock.Clock
+}
+
+// Server manages all peer connections.
+type Server struct {
+	// Config fields may not be modified while the server is running.
+	Config
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.
-	setupFunc
-	newPeerHook
+	newTransport func(net.Conn, *ecdsa.PublicKey) transport
+	newPeerHook  func(*Peer)
+	listenFunc   func(network, addr string) (net.Listener, error)
 
+	lock    sync.Mutex // protects running
+	running bool
+
+	listener     net.Listener
 	ourHandshake *protoHandshake
+	loopWG       sync.WaitGroup // loop, listenLoop
+	peerFeed     event.Feed
+	log          log.Logger
 
-	lock         sync.RWMutex // protects running, peers and the trust fields
-	running      bool
-	peers        map[discover.NodeID]*Peer
-	staticNodes  map[discover.NodeID]*discover.Node // Map of currently maintained static remote nodes
-	staticDial   chan *discover.Node                // Dial request channel reserved for the static nodes
-	staticCycle  time.Duration                      // Overrides staticPeerCheckInterval, used for testing
-	trustedNodes map[discover.NodeID]bool           // Set of currently trusted remote nodes
+	nodedb    *enode.DB
+	localnode *enode.LocalNode
+	ntab      *discover.UDPv4
+	DiscV5    *discover.UDPv5
+	discmix   *enode.FairMix
+	dialsched *dialScheduler
 
-	ntab     *discover.Table
-	listener net.Listener
+	// Channels into the run loop.
+	quit                    chan struct{}
+	addtrusted              chan *enode.Node
+	removetrusted           chan *enode.Node
+	peerOp                  chan peerOpFunc
+	peerOpDone              chan struct{}
+	delpeer                 chan peerDrop
+	checkpointPostHandshake chan *conn
+	checkpointAddPeer       chan *conn
 
-	quit   chan struct{}
-	loopWG sync.WaitGroup // {dial,listen,nat}Loop
-	peerWG sync.WaitGroup // active peer goroutines
+	// State of run loop and listenLoop.
+	inboundHistory expHeap
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
-type newPeerHook func(*Peer)
+type peerOpFunc func(map[enode.ID]*Peer)
 
-// Peers returns all connected peers.
-func (srv *Server) Peers() (peers []*Peer) {
-	srv.lock.RLock()
-	defer srv.lock.RUnlock()
-	for _, peer := range srv.peers {
-		if peer != nil {
-			peers = append(peers, peer)
+type peerDrop struct {
+	*Peer
+	err       error
+	requested bool // true if signaled by the peer
+}
+
+type connFlag int32
+
+const (
+	dynDialedConn connFlag = 1 << iota
+	staticDialedConn
+	inboundConn
+	trustedConn
+)
+
+// conn wraps a network connection with information gathered
+// during the two handshakes.
+type conn struct {
+	fd net.Conn
+	transport
+	node  *enode.Node
+	flags connFlag
+	cont  chan error // The run loop uses cont to signal errors to SetupConn.
+	caps  []Cap      // valid after the protocol handshake
+	name  string     // valid after the protocol handshake
+}
+
+type transport interface {
+	// The two handshakes.
+	doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error)
+	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
+	// The MsgReadWriter can only be used after the encryption
+	// handshake has completed. The code uses conn.id to track this
+	// by setting it to a non-nil value after the encryption handshake.
+	MsgReadWriter
+	// transports must provide Close because we use MsgPipe in some of
+	// the tests. Closing the actual network connection doesn't do
+	// anything in those tests because MsgPipe doesn't use it.
+	close(err error)
+}
+
+func (c *conn) String() string {
+	s := c.flags.String()
+	if (c.node.ID() != enode.ID{}) {
+		s += " " + c.node.ID().String()
+	}
+	s += " " + c.fd.RemoteAddr().String()
+	return s
+}
+
+func (f connFlag) String() string {
+	s := ""
+	if f&trustedConn != 0 {
+		s += "-trusted"
+	}
+	if f&dynDialedConn != 0 {
+		s += "-dyndial"
+	}
+	if f&staticDialedConn != 0 {
+		s += "-staticdial"
+	}
+	if f&inboundConn != 0 {
+		s += "-inbound"
+	}
+	if s != "" {
+		s = s[1:]
+	}
+	return s
+}
+
+func (c *conn) is(f connFlag) bool {
+	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	return flags&f != 0
+}
+
+func (c *conn) set(f connFlag, val bool) {
+	for {
+		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		flags := oldFlags
+		if val {
+			flags |= f
+		} else {
+			flags &= ^f
+		}
+		if atomic.CompareAndSwapInt32((*int32)(&c.flags), int32(oldFlags), int32(flags)) {
+			return
 		}
 	}
-	return
+}
+
+// LocalNode returns the local node record.
+func (srv *Server) LocalNode() *enode.LocalNode {
+	return srv.localnode
+}
+
+// Peers returns all connected peers.
+func (srv *Server) Peers() []*Peer {
+	var ps []*Peer
+	srv.doPeerOp(func(peers map[enode.ID]*Peer) {
+		for _, p := range peers {
+			ps = append(ps, p)
+		}
+	})
+	return ps
 }
 
 // PeerCount returns the number of connected peers.
 func (srv *Server) PeerCount() int {
-	srv.lock.RLock()
-	n := len(srv.peers)
-	srv.lock.RUnlock()
-	return n
+	var count int
+	srv.doPeerOp(func(ps map[enode.ID]*Peer) {
+		count = len(ps)
+	})
+	return count
 }
 
-// AddPeer connects to the given node and maintains the connection until the
-// server is shut down. If the connection fails for any reason, the server will
-// attempt to reconnect the peer.
-func (srv *Server) AddPeer(node *discover.Node) {
-	srv.lock.Lock()
-	defer srv.lock.Unlock()
-
-	srv.staticNodes[node.ID] = node
+// AddPeer adds the given node to the static node set. When there is room in the peer set,
+// the server will connect to the node. If the connection fails for any reason, the server
+// will attempt to reconnect the peer.
+func (srv *Server) AddPeer(node *enode.Node) {
+	srv.dialsched.addStatic(node)
 }
 
-// Broadcast sends an RLP-encoded message to all connected peers.
-// This method is deprecated and will be removed later.
-func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) error {
-	return srv.BroadcastLimited(protocol, code, func(i float64) float64 { return i }, data)
-}
-
-// BroadcastsRange an RLP-encoded message to a random set of peers using the limit function to limit the amount
-// of peers.
-func (srv *Server) BroadcastLimited(protocol string, code uint64, limit func(float64) float64, data interface{}) error {
-	var payload []byte
-	if data != nil {
-		var err error
-		payload, err = rlp.EncodeToBytes(data)
-		if err != nil {
-			return err
+// RemovePeer removes a node from the static node set. It also disconnects from the given
+// node if it is currently connected as a peer.
+//
+// This method blocks until all protocols have exited and the peer is removed. Do not use
+// RemovePeer in protocol implementations, call Disconnect on the Peer instead.
+func (srv *Server) RemovePeer(node *enode.Node) {
+	var (
+		ch  chan *PeerEvent
+		sub event.Subscription
+	)
+	// Disconnect the peer on the main loop.
+	srv.doPeerOp(func(peers map[enode.ID]*Peer) {
+		srv.dialsched.removeStatic(node)
+		if peer := peers[node.ID()]; peer != nil {
+			ch = make(chan *PeerEvent, 1)
+			sub = srv.peerFeed.Subscribe(ch)
+			peer.Disconnect(DiscRequested)
 		}
-	}
-	srv.lock.RLock()
-	defer srv.lock.RUnlock()
-
-	i, max := 0, int(limit(float64(len(srv.peers))))
-	for _, peer := range srv.peers {
-		if i >= max {
-			break
-		}
-
-		if peer != nil {
-			var msg = Msg{Code: code}
-			if data != nil {
-				msg.Payload = bytes.NewReader(payload)
-				msg.Size = uint32(len(payload))
+	})
+	// Wait for the peer connection to end.
+	if ch != nil {
+		defer sub.Unsubscribe()
+		for ev := range ch {
+			if ev.Peer == node.ID() && ev.Type == PeerEventTypeDrop {
+				return
 			}
-			peer.writeProtoMsg(protocol, msg)
-			i++
 		}
 	}
-	return nil
 }
 
-// Start starts running the server.
-// Servers can be re-used and started again after stopping.
-func (srv *Server) Start() (err error) {
+// AddTrustedPeer adds the given node to a reserved trusted list which allows the
+// node to always connect, even if the slot are full.
+func (srv *Server) AddTrustedPeer(node *enode.Node) {
+	select {
+	case srv.addtrusted <- node:
+	case <-srv.quit:
+	}
+}
+
+// RemoveTrustedPeer removes the given node from the trusted peer set.
+func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
+	select {
+	case srv.removetrusted <- node:
+	case <-srv.quit:
+	}
+}
+
+// SubscribeEvents subscribes the given channel to peer events
+func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
+	return srv.peerFeed.Subscribe(ch)
+}
+
+// Self returns the local node's endpoint information.
+func (srv *Server) Self() *enode.Node {
 	srv.lock.Lock()
-	defer srv.lock.Unlock()
-	if srv.running {
-		return errors.New("server already running")
-	}
-	glog.V(logger.Info).Infoln("Starting Server")
+	ln := srv.localnode
+	srv.lock.Unlock()
 
-	// static fields
-	if srv.PrivateKey == nil {
-		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
+	if ln == nil {
+		return enode.NewV4(&srv.PrivateKey.PublicKey, net.ParseIP("0.0.0.0"), 0, 0)
 	}
-	if srv.MaxPeers <= 0 {
-		return fmt.Errorf("Server.MaxPeers must be > 0")
-	}
-	srv.quit = make(chan struct{})
-	srv.peers = make(map[discover.NodeID]*Peer)
-
-	// Create the current trust maps, and the associated dialing channel
-	srv.trustedNodes = make(map[discover.NodeID]bool)
-	for _, node := range srv.TrustedNodes {
-		srv.trustedNodes[node.ID] = true
-	}
-	srv.staticNodes = make(map[discover.NodeID]*discover.Node)
-	for _, node := range srv.StaticNodes {
-		srv.staticNodes[node.ID] = node
-	}
-	srv.staticDial = make(chan *discover.Node)
-
-	if srv.setupFunc == nil {
-		srv.setupFunc = setupConn
-	}
-
-	// node table
-	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase)
-	if err != nil {
-		return err
-	}
-	srv.ntab = ntab
-
-	// handshake
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self().ID}
-	for _, p := range srv.Protocols {
-		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
-	}
-
-	// listen/dial
-	if srv.ListenAddr != "" {
-		if err := srv.startListening(); err != nil {
-			return err
-		}
-	}
-	if srv.Dialer == nil {
-		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
-	}
-	if !srv.NoDial {
-		srv.loopWG.Add(1)
-		go srv.dialLoop()
-	}
-	if srv.NoDial && srv.ListenAddr == "" {
-		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
-	}
-	// maintain the static peers
-	go srv.staticNodesLoop()
-
-	srv.running = true
-	return nil
-}
-
-func (srv *Server) startListening() error {
-	listener, err := net.Listen("tcp", srv.ListenAddr)
-	if err != nil {
-		return err
-	}
-	laddr := listener.Addr().(*net.TCPAddr)
-	srv.ListenAddr = laddr.String()
-	srv.listener = listener
-	srv.loopWG.Add(1)
-	go srv.listenLoop()
-	if !laddr.IP.IsLoopback() && srv.NAT != nil {
-		srv.loopWG.Add(1)
-		go func() {
-			nat.Map(srv.NAT, srv.quit, "tcp", laddr.Port, laddr.Port, "ethereum p2p")
-			srv.loopWG.Done()
-		}()
-	}
-	return nil
+	return ln.Node()
 }
 
 // Stop terminates the server and all active peer connections.
@@ -292,287 +399,733 @@ func (srv *Server) Stop() {
 		return
 	}
 	srv.running = false
-	srv.lock.Unlock()
-
-	glog.V(logger.Info).Infoln("Stopping Server")
-	srv.ntab.Close()
 	if srv.listener != nil {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
 	close(srv.quit)
-	srv.loopWG.Wait()
-
-	// No new peers can be added at this point because dialLoop and
-	// listenLoop are down. It is safe to call peerWG.Wait because
-	// peerWG.Add is not called outside of those loops.
-	srv.lock.Lock()
-	for _, peer := range srv.peers {
-		peer.Disconnect(DiscQuitting)
-	}
 	srv.lock.Unlock()
-	srv.peerWG.Wait()
+	srv.loopWG.Wait()
 }
 
-// Self returns the local node's endpoint information.
-func (srv *Server) Self() *discover.Node {
-	srv.lock.RLock()
-	defer srv.lock.RUnlock()
-	if !srv.running {
-		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
+// sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
+// messages that were found unprocessable and sent to the unhandled channel by the primary listener.
+type sharedUDPConn struct {
+	*net.UDPConn
+	unhandled chan discover.ReadPacket
+}
+
+// ReadFromUDP implements discover.UDPConn
+func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
+	packet, ok := <-s.unhandled
+	if !ok {
+		return 0, nil, errors.New("connection was closed")
 	}
-	return srv.ntab.Self()
+	l := len(packet.Data)
+	if l > len(b) {
+		l = len(b)
+	}
+	copy(b[:l], packet.Data[:l])
+	return l, packet.Addr, nil
 }
 
-// main loop for adding connections via listening
-func (srv *Server) listenLoop() {
-	defer srv.loopWG.Done()
+// Close implements discover.UDPConn
+func (s *sharedUDPConn) Close() error {
+	return nil
+}
 
-	// This channel acts as a semaphore limiting
-	// active inbound connections that are lingering pre-handshake.
-	// If all slots are taken, no further connections are accepted.
-	slots := make(chan struct{}, maxAcceptConns)
-	for i := 0; i < maxAcceptConns; i++ {
+// Start starts running the server.
+// Servers can not be re-used after stopping.
+func (srv *Server) Start() (err error) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	if srv.running {
+		return errors.New("server already running")
+	}
+	srv.running = true
+	srv.log = srv.Config.Logger
+	if srv.log == nil {
+		srv.log = log.Root()
+	}
+	if srv.clock == nil {
+		srv.clock = mclock.System{}
+	}
+	if srv.NoDial && srv.ListenAddr == "" {
+		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
+	}
+
+	// static fields
+	if srv.PrivateKey == nil {
+		return errors.New("Server.PrivateKey must be set to a non-nil key")
+	}
+	if srv.newTransport == nil {
+		srv.newTransport = newRLPX
+	}
+	if srv.listenFunc == nil {
+		srv.listenFunc = net.Listen
+	}
+	srv.quit = make(chan struct{})
+	srv.delpeer = make(chan peerDrop)
+	srv.checkpointPostHandshake = make(chan *conn)
+	srv.checkpointAddPeer = make(chan *conn)
+	srv.addtrusted = make(chan *enode.Node)
+	srv.removetrusted = make(chan *enode.Node)
+	srv.peerOp = make(chan peerOpFunc)
+	srv.peerOpDone = make(chan struct{})
+
+	if err := srv.setupLocalNode(); err != nil {
+		return err
+	}
+	if srv.ListenAddr != "" {
+		if err := srv.setupListening(); err != nil {
+			return err
+		}
+	}
+	if err := srv.setupDiscovery(); err != nil {
+		return err
+	}
+	srv.setupDialScheduler()
+
+	srv.loopWG.Add(1)
+	go srv.run()
+	return nil
+}
+
+func (srv *Server) setupLocalNode() error {
+	// Create the devp2p handshake.
+	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
+	for _, p := range srv.Protocols {
+		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
+	}
+	sort.Sort(capsByNameAndVersion(srv.ourHandshake.Caps))
+
+	// Create the local node.
+	db, err := enode.OpenDB(srv.Config.NodeDatabase)
+	if err != nil {
+		return err
+	}
+	srv.nodedb = db
+	srv.localnode = enode.NewLocalNode(db, srv.PrivateKey)
+	srv.localnode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	// TODO: check conflicts
+	for _, p := range srv.Protocols {
+		for _, e := range p.Attributes {
+			srv.localnode.Set(e)
+		}
+	}
+	switch srv.NAT.(type) {
+	case nil:
+		// No NAT interface, do nothing.
+	case nat.ExtIP:
+		// ExtIP doesn't block, set the IP right away.
+		ip, _ := srv.NAT.ExternalIP()
+		srv.localnode.SetStaticIP(ip)
+	default:
+		// Ask the router about the IP. This takes a while and blocks startup,
+		// do it in the background.
+		srv.loopWG.Add(1)
+		go func() {
+			defer srv.loopWG.Done()
+			if ip, err := srv.NAT.ExternalIP(); err == nil {
+				srv.localnode.SetStaticIP(ip)
+			}
+		}()
+	}
+	return nil
+}
+
+func (srv *Server) setupDiscovery() error {
+	srv.discmix = enode.NewFairMix(discmixTimeout)
+
+	// Add protocol-specific discovery sources.
+	added := make(map[string]bool)
+	for _, proto := range srv.Protocols {
+		if proto.DialCandidates != nil && !added[proto.Name] {
+			srv.discmix.AddSource(proto.DialCandidates)
+			added[proto.Name] = true
+		}
+	}
+
+	// Don't listen on UDP endpoint if DHT is disabled.
+	if srv.NoDiscovery && !srv.DiscoveryV5 {
+		return nil
+	}
+
+	listenAddr := srv.ListenAddr
+
+	// Use an alternate listening address for UDP if
+	// a custom discovery address is configured.
+	if srv.DiscAddr != "" {
+		listenAddr = srv.DiscAddr
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", listenAddr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return err
+	}
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	srv.log.Debug("UDP listener up", "addr", realaddr)
+	if srv.NAT != nil {
+		if !realaddr.IP.IsLoopback() {
+			srv.loopWG.Add(1)
+			go func() {
+				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				srv.loopWG.Done()
+			}()
+		}
+	}
+	srv.localnode.SetFallbackUDP(realaddr.Port)
+
+	// Discovery V4
+	var unhandled chan discover.ReadPacket
+	var sconn *sharedUDPConn
+	if !srv.NoDiscovery {
+		if srv.DiscoveryV5 {
+			unhandled = make(chan discover.ReadPacket, 100)
+			sconn = &sharedUDPConn{conn, unhandled}
+		}
+		cfg := discover.Config{
+			PrivateKey:  srv.PrivateKey,
+			NetRestrict: srv.NetRestrict,
+			Bootnodes:   srv.BootstrapNodes,
+			Unhandled:   unhandled,
+			Log:         srv.log,
+		}
+		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
+		if err != nil {
+			return err
+		}
+		srv.ntab = ntab
+		srv.discmix.AddSource(ntab.RandomNodes())
+	}
+
+	// Discovery V5
+	if srv.DiscoveryV5 {
+		cfg := discover.Config{
+			PrivateKey:  srv.PrivateKey,
+			NetRestrict: srv.NetRestrict,
+			Bootnodes:   srv.BootstrapNodesV5,
+			Log:         srv.log,
+		}
+		var err error
+		if sconn != nil {
+			srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
+		} else {
+			srv.DiscV5, err = discover.ListenV5(conn, srv.localnode, cfg)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (srv *Server) setupDialScheduler() {
+	config := dialConfig{
+		self:           srv.localnode.ID(),
+		maxDialPeers:   srv.maxDialedConns(),
+		maxActiveDials: srv.MaxPendingPeers,
+		log:            srv.Logger,
+		netRestrict:    srv.NetRestrict,
+		dialer:         srv.Dialer,
+		clock:          srv.clock,
+	}
+	if srv.ntab != nil {
+		config.resolver = srv.ntab
+	}
+	if config.dialer == nil {
+		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
+	}
+	srv.dialsched = newDialScheduler(config, srv.discmix, srv.SetupConn)
+	for _, n := range srv.StaticNodes {
+		srv.dialsched.addStatic(n)
+	}
+}
+
+func (srv *Server) maxInboundConns() int {
+	return srv.MaxPeers - srv.maxDialedConns()
+}
+
+func (srv *Server) maxDialedConns() (limit int) {
+	if srv.NoDial || srv.MaxPeers == 0 {
+		return 0
+	}
+	if srv.DialRatio == 0 {
+		limit = srv.MaxPeers / defaultDialRatio
+	} else {
+		limit = srv.MaxPeers / srv.DialRatio
+	}
+	if limit == 0 {
+		limit = 1
+	}
+	return limit
+}
+
+func (srv *Server) setupListening() error {
+	// Launch the listener.
+	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
+	if err != nil {
+		return err
+	}
+	srv.listener = listener
+	srv.ListenAddr = listener.Addr().String()
+
+	// Update the local node record and map the TCP listening port if NAT is configured.
+	if tcp, ok := listener.Addr().(*net.TCPAddr); ok {
+		srv.localnode.Set(enr.TCP(tcp.Port))
+		if !tcp.IP.IsLoopback() && srv.NAT != nil {
+			srv.loopWG.Add(1)
+			go func() {
+				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
+				srv.loopWG.Done()
+			}()
+		}
+	}
+
+	srv.loopWG.Add(1)
+	go srv.listenLoop()
+	return nil
+}
+
+// doPeerOp runs fn on the main loop.
+func (srv *Server) doPeerOp(fn peerOpFunc) {
+	select {
+	case srv.peerOp <- fn:
+		<-srv.peerOpDone
+	case <-srv.quit:
+	}
+}
+
+// run is the main loop of the server.
+func (srv *Server) run() {
+	srv.log.Info("Started P2P networking", "self", srv.localnode.Node().URLv4())
+	defer srv.loopWG.Done()
+	defer srv.nodedb.Close()
+	defer srv.discmix.Close()
+	defer srv.dialsched.stop()
+
+	var (
+		peers        = make(map[enode.ID]*Peer)
+		inboundCount = 0
+		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
+	)
+	// Put trusted nodes into a map to speed up checks.
+	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
+	for _, n := range srv.TrustedNodes {
+		trusted[n.ID()] = true
+	}
+
+running:
+	for {
+		select {
+		case <-srv.quit:
+			// The server was stopped. Run the cleanup logic.
+			break running
+
+		case n := <-srv.addtrusted:
+			// This channel is used by AddTrustedPeer to add a node
+			// to the trusted node set.
+			srv.log.Trace("Adding trusted node", "node", n)
+			trusted[n.ID()] = true
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(trustedConn, true)
+			}
+
+		case n := <-srv.removetrusted:
+			// This channel is used by RemoveTrustedPeer to remove a node
+			// from the trusted node set.
+			srv.log.Trace("Removing trusted node", "node", n)
+			delete(trusted, n.ID())
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(trustedConn, false)
+			}
+
+		case op := <-srv.peerOp:
+			// This channel is used by Peers and PeerCount.
+			op(peers)
+			srv.peerOpDone <- struct{}{}
+
+		case c := <-srv.checkpointPostHandshake:
+			// A connection has passed the encryption handshake so
+			// the remote identity is known (but hasn't been verified yet).
+			if trusted[c.node.ID()] {
+				// Ensure that the trusted flag is set before checking against MaxPeers.
+				c.flags |= trustedConn
+			}
+			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
+			c.cont <- srv.postHandshakeChecks(peers, inboundCount, c)
+
+		case c := <-srv.checkpointAddPeer:
+			// At this point the connection is past the protocol handshake.
+			// Its capabilities are known and the remote identity is verified.
+			err := srv.addPeerChecks(peers, inboundCount, c)
+			if err == nil {
+				// The handshakes are done and it passed all checks.
+				p := srv.launchPeer(c)
+				peers[c.node.ID()] = p
+				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
+				srv.dialsched.peerAdded(c)
+				if p.Inbound() {
+					inboundCount++
+				}
+			}
+			c.cont <- err
+
+		case pd := <-srv.delpeer:
+			// A peer disconnected.
+			d := common.PrettyDuration(mclock.Now() - pd.created)
+			delete(peers, pd.ID())
+			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
+			srv.dialsched.peerRemoved(pd.rw)
+			if pd.Inbound() {
+				inboundCount--
+			}
+		}
+	}
+
+	srv.log.Trace("P2P networking is spinning down")
+
+	// Terminate discovery. If there is a running lookup it will terminate soon.
+	if srv.ntab != nil {
+		srv.ntab.Close()
+	}
+	if srv.DiscV5 != nil {
+		srv.DiscV5.Close()
+	}
+	// Disconnect all peers.
+	for _, p := range peers {
+		p.Disconnect(DiscQuitting)
+	}
+	// Wait for peers to shut down. Pending connections and tasks are
+	// not handled here and will terminate soon-ish because srv.quit
+	// is closed.
+	for len(peers) > 0 {
+		p := <-srv.delpeer
+		p.log.Trace("<-delpeer (spindown)")
+		delete(peers, p.ID())
+	}
+}
+
+func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+	switch {
+	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
+		return DiscTooManyPeers
+	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+		return DiscTooManyPeers
+	case peers[c.node.ID()] != nil:
+		return DiscAlreadyConnected
+	case c.node.ID() == srv.localnode.ID():
+		return DiscSelf
+	default:
+		return nil
+	}
+}
+
+func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+	// Drop connections with no matching protocols.
+	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
+		return DiscUselessPeer
+	}
+	// Repeat the post-handshake checks because the
+	// peer set might have changed since those checks were performed.
+	return srv.postHandshakeChecks(peers, inboundCount, c)
+}
+
+// listenLoop runs in its own goroutine and accepts
+// inbound connections.
+func (srv *Server) listenLoop() {
+	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
+
+	// The slots channel limits accepts of new connections.
+	tokens := defaultMaxPendingPeers
+	if srv.MaxPendingPeers > 0 {
+		tokens = srv.MaxPendingPeers
+	}
+	slots := make(chan struct{}, tokens)
+	for i := 0; i < tokens; i++ {
 		slots <- struct{}{}
 	}
 
-	glog.V(logger.Info).Infoln("Listening on", srv.listener.Addr())
-	for {
-		<-slots
-		conn, err := srv.listener.Accept()
-		if err != nil {
-			return
+	// Wait for slots to be returned on exit. This ensures all connection goroutines
+	// are down before listenLoop returns.
+	defer srv.loopWG.Done()
+	defer func() {
+		for i := 0; i < cap(slots); i++ {
+			<-slots
 		}
-		glog.V(logger.Debug).Infof("Accepted conn %v\n", conn.RemoteAddr())
-		srv.peerWG.Add(1)
+	}()
+
+	for {
+		// Wait for a free slot before accepting.
+		<-slots
+
+		var (
+			fd      net.Conn
+			err     error
+			lastLog time.Time
+		)
+		for {
+			fd, err = srv.listener.Accept()
+			if netutil.IsTemporaryError(err) {
+				if time.Since(lastLog) > 1*time.Second {
+					srv.log.Debug("Temporary read error", "err", err)
+					lastLog = time.Now()
+				}
+				time.Sleep(time.Millisecond * 200)
+				continue
+			} else if err != nil {
+				srv.log.Debug("Read error", "err", err)
+				slots <- struct{}{}
+				return
+			}
+			break
+		}
+
+		remoteIP := netutil.AddrIP(fd.RemoteAddr())
+		if err := srv.checkInboundConn(remoteIP); err != nil {
+			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", err)
+			fd.Close()
+			slots <- struct{}{}
+			continue
+		}
+		if remoteIP != nil {
+			var addr *net.TCPAddr
+			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+				addr = tcp
+			}
+			fd = newMeteredConn(fd, true, addr)
+			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
+		}
 		go func() {
-			srv.startPeer(conn, nil)
+			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
 }
 
-// staticNodesLoop is responsible for periodically checking that static
-// connections are actually live, and requests dialing if not.
-func (srv *Server) staticNodesLoop() {
-	// Create a default maintenance ticker, but override it requested
-	cycle := staticPeerCheckInterval
-	if srv.staticCycle != 0 {
-		cycle = srv.staticCycle
+func (srv *Server) checkInboundConn(remoteIP net.IP) error {
+	if remoteIP == nil {
+		return nil
 	}
-	tick := time.NewTicker(cycle)
-
-	for {
-		select {
-		case <-srv.quit:
-			return
-
-		case <-tick.C:
-			// Collect all the non-connected static nodes
-			needed := []*discover.Node{}
-			srv.lock.RLock()
-			for id, node := range srv.staticNodes {
-				if _, ok := srv.peers[id]; !ok {
-					needed = append(needed, node)
-				}
-			}
-			srv.lock.RUnlock()
-
-			// Try to dial each of them (don't hang if server terminates)
-			for _, node := range needed {
-				glog.V(logger.Debug).Infof("Dialing static peer %v", node)
-				select {
-				case srv.staticDial <- node:
-				case <-srv.quit:
-					return
-				}
-			}
-		}
+	// Reject connections that do not match NetRestrict.
+	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
+		return fmt.Errorf("not in netrestrict list")
 	}
+	// Reject Internet peers that try too often.
+	now := srv.clock.Now()
+	srv.inboundHistory.expire(now, nil)
+	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
+		return fmt.Errorf("too many attempts")
+	}
+	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
+	return nil
 }
 
-func (srv *Server) dialLoop() {
-	var (
-		dialed      = make(chan *discover.Node)
-		dialing     = make(map[discover.NodeID]bool)
-		findresults = make(chan []*discover.Node)
-		refresh     = time.NewTimer(0)
-	)
-	defer srv.loopWG.Done()
-	defer refresh.Stop()
-
-	// TODO: maybe limit number of active dials
-	dial := func(dest *discover.Node) {
-		// Don't dial nodes that would fail the checks in addPeer.
-		// This is important because the connection handshake is a lot
-		// of work and we'd rather avoid doing that work for peers
-		// that can't be added.
-		srv.lock.RLock()
-		ok, _ := srv.checkPeer(dest.ID)
-		srv.lock.RUnlock()
-		if !ok || dialing[dest.ID] {
-			return
-		}
-
-		dialing[dest.ID] = true
-		srv.peerWG.Add(1)
-		go func() {
-			srv.dialNode(dest)
-			dialed <- dest
-		}()
+// SetupConn runs the handshakes and attempts to add the connection
+// as a peer. It returns when the connection has been added as a peer
+// or the handshakes have failed.
+func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
+	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
+	if dialDest == nil {
+		c.transport = srv.newTransport(fd, nil)
+	} else {
+		c.transport = srv.newTransport(fd, dialDest.Pubkey())
 	}
 
-	srv.ntab.Bootstrap(srv.BootstrapNodes)
-	for {
-		select {
-		case <-refresh.C:
-			// Grab some nodes to connect to if we're not at capacity.
-			srv.lock.RLock()
-			needpeers := len(srv.peers) < srv.MaxPeers/2
-			srv.lock.RUnlock()
-			if needpeers {
-				go func() {
-					var target discover.NodeID
-					rand.Read(target[:])
-					findresults <- srv.ntab.Lookup(target)
-				}()
-			} else {
-				// Make sure we check again if the peer count falls
-				// below MaxPeers.
-				refresh.Reset(refreshPeersInterval)
-			}
-		case dest := <-srv.staticDial:
-			dial(dest)
-		case dests := <-findresults:
-			for _, dest := range dests {
-				dial(dest)
-			}
-			refresh.Reset(refreshPeersInterval)
-		case dest := <-dialed:
-			delete(dialing, dest.ID)
-			if len(dialing) == 0 {
-				// Check again immediately after dialing all current candidates.
-				refresh.Reset(0)
-			}
-		case <-srv.quit:
-			// TODO: maybe wait for active dials
-			return
-		}
-	}
-}
-
-func (srv *Server) dialNode(dest *discover.Node) {
-	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
-	glog.V(logger.Debug).Infof("Dialing %v\n", dest)
-	conn, err := srv.Dialer.Dial("tcp", addr.String())
+	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
-		// dialLoop adds to the wait group counter when launching
-		// dialNode, so we need to count it down again. startPeer also
-		// does that when an error occurs.
-		srv.peerWG.Done()
-		glog.V(logger.Detail).Infof("dial error: %v", err)
-		return
+		c.close(err)
 	}
-	srv.startPeer(conn, dest)
+	return err
 }
 
-func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
-	// TODO: handle/store session token
+func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) error {
+	// Prevent leftover pending conns from entering the handshake.
+	srv.lock.Lock()
+	running := srv.running
+	srv.lock.Unlock()
+	if !running {
+		return errServerStopped
+	}
 
-	// Run setupFunc, which should create an authenticated connection
-	// and run the capability exchange. Note that any early error
-	// returns during that exchange need to call peerWG.Done because
-	// the callers of startPeer added the peer to the wait group already.
-	fd.SetDeadline(time.Now().Add(handshakeTimeout))
-
-	// Check capacity, but override for static nodes
-	srv.lock.RLock()
-	atcap := len(srv.peers) == srv.MaxPeers
-	if dest != nil {
-		if _, ok := srv.staticNodes[dest.ID]; ok {
-			atcap = false
+	// If dialing, figure out the remote public key.
+	if dialDest != nil {
+		dialPubkey := new(ecdsa.PublicKey)
+		if err := dialDest.Load((*enode.Secp256k1)(dialPubkey)); err != nil {
+			err = errors.New("dial destination doesn't have a secp256k1 public key")
+			srv.log.Trace("Setting up connection failed", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
+			return err
 		}
 	}
-	srv.lock.RUnlock()
 
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, srv.trustedNodes)
+	// Run the RLPx handshake.
+	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
 	if err != nil {
-		fd.Close()
-		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
-		srv.peerWG.Done()
-		return
+		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
+		return err
 	}
-	conn.MsgReadWriter = &netWrapper{
-		wrapped: conn.MsgReadWriter,
-		conn:    fd, rtimeout: frameReadTimeout, wtimeout: frameWriteTimeout,
+	if dialDest != nil {
+		c.node = dialDest
+	} else {
+		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
-	p := newPeer(fd, conn, srv.Protocols)
-	if ok, reason := srv.addPeer(conn.ID, p); !ok {
-		glog.V(logger.Detail).Infof("Not adding %v (%v)\n", p, reason)
-		p.politeDisconnect(reason)
-		srv.peerWG.Done()
-		return
+	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
+	err = srv.checkpoint(c, srv.checkpointPostHandshake)
+	if err != nil {
+		clog.Trace("Rejected peer", "err", err)
+		return err
 	}
-	// The handshakes are done and it passed all checks.
-	// Spawn the Peer loops.
+
+	// Run the capability negotiation handshake.
+	phs, err := c.doProtoHandshake(srv.ourHandshake)
+	if err != nil {
+		clog.Trace("Failed p2p handshake", "err", err)
+		return err
+	}
+	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
+		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
+		return DiscUnexpectedIdentity
+	}
+	c.caps, c.name = phs.Caps, phs.Name
+	err = srv.checkpoint(c, srv.checkpointAddPeer)
+	if err != nil {
+		clog.Trace("Rejected peer", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
+	var ip net.IP
+	var port int
+	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+		ip = tcp.IP
+		port = tcp.Port
+	}
+	return enode.NewV4(pubkey, ip, port, port)
+}
+
+// checkpoint sends the conn to run, which performs the
+// post-handshake checks for the stage (posthandshake, addpeer).
+func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
+	select {
+	case stage <- c:
+	case <-srv.quit:
+		return errServerStopped
+	}
+	return <-c.cont
+}
+
+func (srv *Server) launchPeer(c *conn) *Peer {
+	p := newPeer(srv.log, c, srv.Protocols)
+	if srv.EnableMsgEvents {
+		// If message events are enabled, pass the peerFeed
+		// to the peer.
+		p.events = &srv.peerFeed
+	}
 	go srv.runPeer(p)
+	return p
 }
 
+// runPeer runs in its own goroutine for each peer.
 func (srv *Server) runPeer(p *Peer) {
-	glog.V(logger.Debug).Infof("Added %v\n", p)
-	srvjslog.LogJson(&logger.P2PConnected{
-		RemoteId:            p.ID().String(),
-		RemoteAddress:       p.RemoteAddr().String(),
-		RemoteVersionString: p.Name(),
-		NumConnections:      srv.PeerCount(),
-	})
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
-	discreason := p.run()
-	srv.removePeer(p)
-	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
-	srvjslog.LogJson(&logger.P2PDisconnected{
-		RemoteId:       p.ID().String(),
-		NumConnections: srv.PeerCount(),
+	srv.peerFeed.Send(&PeerEvent{
+		Type:          PeerEventTypeAdd,
+		Peer:          p.ID(),
+		RemoteAddress: p.RemoteAddr().String(),
+		LocalAddress:  p.LocalAddr().String(),
+	})
+
+	// Run the per-peer main loop.
+	remoteRequested, err := p.run()
+
+	// Announce disconnect on the main loop to update the peer set.
+	// The main loop waits for existing peers to be sent on srv.delpeer
+	// before returning, so this send should not select on srv.quit.
+	srv.delpeer <- peerDrop{p, err, remoteRequested}
+
+	// Broadcast peer drop to external subscribers. This needs to be
+	// after the send to delpeer so subscribers have a consistent view of
+	// the peer set (i.e. Server.Peers() doesn't include the peer when the
+	// event is received).
+	srv.peerFeed.Send(&PeerEvent{
+		Type:          PeerEventTypeDrop,
+		Peer:          p.ID(),
+		Error:         err.Error(),
+		RemoteAddress: p.RemoteAddr().String(),
+		LocalAddress:  p.LocalAddr().String(),
 	})
 }
 
-func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
-	srv.lock.Lock()
-	defer srv.lock.Unlock()
-	if ok, reason := srv.checkPeer(id); !ok {
-		return false, reason
-	}
-	srv.peers[id] = p
-	return true, 0
+// NodeInfo represents a short summary of the information known about the host.
+type NodeInfo struct {
+	ID    string `json:"id"`    // Unique node identifier (also the encryption key)
+	Name  string `json:"name"`  // Name of the node, including client type, version, OS, custom data
+	Enode string `json:"enode"` // Enode URL for adding this peer from remote peers
+	ENR   string `json:"enr"`   // Ethereum Node Record
+	IP    string `json:"ip"`    // IP address of the node
+	Ports struct {
+		Discovery int `json:"discovery"` // UDP listening port for discovery protocol
+		Listener  int `json:"listener"`  // TCP listening port for RLPx
+	} `json:"ports"`
+	ListenAddr string                 `json:"listenAddr"`
+	Protocols  map[string]interface{} `json:"protocols"`
 }
 
-// checkPeer verifies whether a peer looks promising and should be allowed/kept
-// in the pool, or if it's of no use.
-func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
-	// First up, figure out if the peer is static or trusted
-	_, static := srv.staticNodes[id]
-	trusted := srv.trustedNodes[id]
-
-	// Make sure the peer passes all required checks
-	switch {
-	case !srv.running:
-		return false, DiscQuitting
-	case !static && !trusted && len(srv.peers) >= srv.MaxPeers:
-		return false, DiscTooManyPeers
-	case srv.peers[id] != nil:
-		return false, DiscAlreadyConnected
-	case id == srv.ntab.Self().ID:
-		return false, DiscSelf
-	default:
-		return true, 0
+// NodeInfo gathers and returns a collection of metadata known about the host.
+func (srv *Server) NodeInfo() *NodeInfo {
+	// Gather and assemble the generic node infos
+	node := srv.Self()
+	info := &NodeInfo{
+		Name:       srv.Name,
+		Enode:      node.URLv4(),
+		ID:         node.ID().String(),
+		IP:         node.IP().String(),
+		ListenAddr: srv.ListenAddr,
+		Protocols:  make(map[string]interface{}),
 	}
+	info.Ports.Discovery = node.UDP()
+	info.Ports.Listener = node.TCP()
+	info.ENR = node.String()
+
+	// Gather all the running protocol infos (only once per protocol type)
+	for _, proto := range srv.Protocols {
+		if _, ok := info.Protocols[proto.Name]; !ok {
+			nodeInfo := interface{}("unknown")
+			if query := proto.NodeInfo; query != nil {
+				nodeInfo = proto.NodeInfo()
+			}
+			info.Protocols[proto.Name] = nodeInfo
+		}
+	}
+	return info
 }
 
-func (srv *Server) removePeer(p *Peer) {
-	srv.lock.Lock()
-	delete(srv.peers, p.ID())
-	srv.lock.Unlock()
-	srv.peerWG.Done()
+// PeersInfo returns an array of metadata objects describing connected peers.
+func (srv *Server) PeersInfo() []*PeerInfo {
+	// Gather all the generic and sub-protocol specific infos
+	infos := make([]*PeerInfo, 0, srv.PeerCount())
+	for _, peer := range srv.Peers() {
+		if peer != nil {
+			infos = append(infos, peer.Info())
+		}
+	}
+	// Sort the result array alphabetically by node identifier
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			if infos[i].ID > infos[j].ID {
+				infos[i], infos[j] = infos[j], infos[i]
+			}
+		}
+	}
+	return infos
 }

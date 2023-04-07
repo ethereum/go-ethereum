@@ -1,14 +1,36 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package p2p
 
 import (
-	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 var discard = Protocol{
@@ -28,31 +50,68 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
-	fd1, _ := net.Pipe()
-	hs1 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
-	hs2 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
+// uintID encodes i into a node ID.
+func uintID(i uint16) enode.ID {
+	var id enode.ID
+	binary.BigEndian.PutUint16(id[:], i)
+	return id
+}
+
+// newNode creates a node record with the given address.
+func newNode(id enode.ID, addr string) *enode.Node {
+	var r enr.Record
+	if addr != "" {
+		// Set the port if present.
+		if strings.Contains(addr, ":") {
+			hs, ps, err := net.SplitHostPort(addr)
+			if err != nil {
+				panic(fmt.Errorf("invalid address %q", addr))
+			}
+			port, err := strconv.Atoi(ps)
+			if err != nil {
+				panic(fmt.Errorf("invalid port in %q", addr))
+			}
+			r.Set(enr.TCP(port))
+			r.Set(enr.UDP(port))
+			addr = hs
+		}
+		// Set the IP.
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			panic(fmt.Errorf("invalid IP %q", addr))
+		}
+		r.Set(enr.IP(ip))
+	}
+	return enode.SignNull(&r, id)
+}
+
+func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
+	var (
+		fd1, fd2   = net.Pipe()
+		key1, key2 = newkey(), newkey()
+		t1         = newTestTransport(&key2.PublicKey, fd1, nil)
+		t2         = newTestTransport(&key1.PublicKey, fd2, &key1.PublicKey)
+	)
+
+	c1 := &conn{fd: fd1, node: newNode(uintID(1), ""), transport: t1}
+	c2 := &conn{fd: fd2, node: newNode(uintID(2), ""), transport: t2}
 	for _, p := range protos {
-		hs1.Caps = append(hs1.Caps, p.cap())
-		hs2.Caps = append(hs2.Caps, p.cap())
+		c1.caps = append(c1.caps, p.cap())
+		c2.caps = append(c2.caps, p.cap())
 	}
 
-	p1, p2 := MsgPipe()
-	peer := newPeer(fd1, &conn{p1, hs1}, protos)
-	errc := make(chan DiscReason, 1)
-	go func() { errc <- peer.run() }()
+	peer := newPeer(log.Root(), c1, protos)
+	errc := make(chan error, 1)
+	go func() {
+		_, err := peer.run()
+		errc <- err
+	}()
 
-	closer := func() {
-		p1.Close()
-		fd1.Close()
-	}
-	return closer, &conn{p2, hs2}, peer, errc
+	closer := func() { c2.close(errors.New("close func called")) }
+	return closer, c2, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
-	defer testlog(t).detach()
-
-	done := make(chan struct{})
 	proto := Protocol{
 		Name:   "a",
 		Length: 5,
@@ -66,7 +125,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if err := ExpectMsg(rw, 4, []uint{3}); err != nil {
 				t.Error(err)
 			}
-			close(done)
 			return nil
 		},
 	}
@@ -79,17 +137,16 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	Send(rw, baseProtocolLength+4, []uint{3})
 
 	select {
-	case <-done:
 	case err := <-errc:
-		t.Errorf("peer returned: %v", err)
+		if err != errProtocolReturned {
+			t.Errorf("peer returned error: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("receive timeout")
 	}
 }
 
 func TestPeerProtoEncodeMsg(t *testing.T) {
-	defer testlog(t).detach()
-
 	proto := Protocol{
 		Name:   "a",
 		Length: 2,
@@ -111,49 +168,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 	}
 }
 
-func TestPeerWriteForBroadcast(t *testing.T) {
-	defer testlog(t).detach()
-
-	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
-	defer closer()
-
-	emptymsg := func(code uint64) Msg {
-		return Msg{Code: code, Size: 0, Payload: bytes.NewReader(nil)}
-	}
-
-	// test write errors
-	if err := peer.writeProtoMsg("b", emptymsg(3)); err == nil {
-		t.Errorf("expected error for unknown protocol, got nil")
-	}
-	if err := peer.writeProtoMsg("discard", emptymsg(8)); err == nil {
-		t.Errorf("expected error for out-of-range msg code, got nil")
-	} else if perr, ok := err.(*peerError); !ok || perr.Code != errInvalidMsgCode {
-		t.Errorf("wrong error for out-of-range msg code, got %#v", err)
-	}
-
-	// setup for reading the message on the other end
-	read := make(chan struct{})
-	go func() {
-		if err := ExpectMsg(rw, 16, nil); err != nil {
-			t.Error(err)
-		}
-		close(read)
-	}()
-
-	// test successful write
-	if err := peer.writeProtoMsg("discard", emptymsg(0)); err != nil {
-		t.Errorf("expect no error for known protocol: %v", err)
-	}
-	select {
-	case <-read:
-	case err := <-peerErr:
-		t.Fatalf("peer stopped: %v", err)
-	}
-}
-
 func TestPeerPing(t *testing.T) {
-	defer testlog(t).detach()
-
 	closer, rw, _, _ := testPeer(nil)
 	defer closer()
 	if err := SendItems(rw, pingMsg); err != nil {
@@ -164,28 +179,29 @@ func TestPeerPing(t *testing.T) {
 	}
 }
 
+// This test checks that a disconnect message sent by a peer is returned
+// as the error from Peer.run.
 func TestPeerDisconnect(t *testing.T) {
-	defer testlog(t).detach()
-
 	closer, rw, _, disc := testPeer(nil)
 	defer closer()
+
 	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}
-	if err := ExpectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
-		t.Error(err)
-	}
-	closer()
-	if reason := <-disc; reason != DiscRequested {
-		t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+	select {
+	case reason := <-disc:
+		if reason != DiscQuitting {
+			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscQuitting)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("peer did not return")
 	}
 }
 
 // This test is supposed to verify that Peer can reliably handle
 // multiple causes of disconnection occurring at the same time.
 func TestPeerDisconnectRace(t *testing.T) {
-	defer testlog(t).detach()
-	maybe := func() bool { return rand.Intn(1) == 1 }
+	maybe := func() bool { return rand.Intn(2) == 1 }
 
 	for i := 0; i < 1000; i++ {
 		protoclose := make(chan error)
@@ -248,4 +264,99 @@ func TestNewPeer(t *testing.T) {
 	}
 
 	p.Disconnect(DiscAlreadyConnected) // Should not hang
+}
+
+func TestMatchProtocols(t *testing.T) {
+	tests := []struct {
+		Remote []Cap
+		Local  []Protocol
+		Match  map[string]protoRW
+	}{
+		{
+			// No remote capabilities
+			Local: []Protocol{{Name: "a"}},
+		},
+		{
+			// No local protocols
+			Remote: []Cap{{Name: "a"}},
+		},
+		{
+			// No mutual protocols
+			Remote: []Cap{{Name: "a"}},
+			Local:  []Protocol{{Name: "b"}},
+		},
+		{
+			// Some matches, some differences
+			Remote: []Cap{{Name: "local"}, {Name: "match1"}, {Name: "match2"}},
+			Local:  []Protocol{{Name: "match1"}, {Name: "match2"}, {Name: "remote"}},
+			Match:  map[string]protoRW{"match1": {Protocol: Protocol{Name: "match1"}}, "match2": {Protocol: Protocol{Name: "match2"}}},
+		},
+		{
+			// Various alphabetical ordering
+			Remote: []Cap{{Name: "aa"}, {Name: "ab"}, {Name: "bb"}, {Name: "ba"}},
+			Local:  []Protocol{{Name: "ba"}, {Name: "bb"}, {Name: "ab"}, {Name: "aa"}},
+			Match:  map[string]protoRW{"aa": {Protocol: Protocol{Name: "aa"}}, "ab": {Protocol: Protocol{Name: "ab"}}, "ba": {Protocol: Protocol{Name: "ba"}}, "bb": {Protocol: Protocol{Name: "bb"}}},
+		},
+		{
+			// No mutual versions
+			Remote: []Cap{{Version: 1}},
+			Local:  []Protocol{{Version: 2}},
+		},
+		{
+			// Multiple versions, single common
+			Remote: []Cap{{Version: 1}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 2}}},
+		},
+		{
+			// Multiple versions, multiple common
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Version: 4}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Various version orderings
+			Remote: []Cap{{Version: 4}, {Version: 1}, {Version: 3}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}, {Version: 1}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Versions overriding sub-protocol lengths
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Name: "a"}},
+			Local:  []Protocol{{Version: 1, Length: 1}, {Version: 2, Length: 2}, {Version: 3, Length: 3}, {Name: "a"}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}, "a": {Protocol: Protocol{Name: "a"}, offset: 3}},
+		},
+	}
+
+	for i, tt := range tests {
+		result := matchProtocols(tt.Local, tt.Remote, nil)
+		if len(result) != len(tt.Match) {
+			t.Errorf("test %d: negotiation mismatch: have %v, want %v", i, len(result), len(tt.Match))
+			continue
+		}
+		// Make sure all negotiated protocols are needed and correct
+		for name, proto := range result {
+			match, ok := tt.Match[name]
+			if !ok {
+				t.Errorf("test %d, proto '%s': negotiated but shouldn't have", i, name)
+				continue
+			}
+			if proto.Name != match.Name {
+				t.Errorf("test %d, proto '%s': name mismatch: have %v, want %v", i, name, proto.Name, match.Name)
+			}
+			if proto.Version != match.Version {
+				t.Errorf("test %d, proto '%s': version mismatch: have %v, want %v", i, name, proto.Version, match.Version)
+			}
+			if proto.offset-baseProtocolLength != match.offset {
+				t.Errorf("test %d, proto '%s': offset mismatch: have %v, want %v", i, name, proto.offset-baseProtocolLength, match.offset)
+			}
+		}
+		// Make sure no protocols missed negotiation
+		for name := range tt.Match {
+			if _, ok := result[name]; !ok {
+				t.Errorf("test %d, proto '%s': not negotiated, should have", i, name)
+				continue
+			}
+		}
+	}
 }

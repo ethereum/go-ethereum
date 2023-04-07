@@ -2,27 +2,37 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth mist all test travis-test-with-coverage clean
-GOBIN = build/bin
+.PHONY: geth android ios evm all test clean
+
+GOBIN = ./build/bin
+GO ?= latest
+GORUN = env GO111MODULE=on go run
 
 geth:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/geth
+	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-mist:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
-
 all:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./...
+	$(GORUN) build/ci.go install
 
 test: all
-	build/env.sh go test ./...
+	$(GORUN) build/ci.go test
 
-travis-test-with-coverage: all
-	build/env.sh build/test-global-coverage.sh
+lint: ## Run linters.
+	$(GORUN) build/ci.go lint
 
 clean:
-	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*
+	env GO111MODULE=on go clean -cache
+	rm -fr build/_workspace/pkg/ $(GOBIN)/*
+
+# The devtools target installs tools required for 'go generate'.
+# You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
+
+devtools:
+	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
+	env GOBIN= go install github.com/fjl/gencodec@latest
+	env GOBIN= go install github.com/golang/protobuf/protoc-gen-go@latest
+	env GOBIN= go install ./cmd/abigen
+	@type "solc" 2> /dev/null || echo 'Please install solc'
+	@type "protoc" 2> /dev/null || echo 'Please install protoc'
