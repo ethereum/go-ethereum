@@ -82,7 +82,7 @@ func IsEqual(a, b ProofFormat) bool {
 // ValueCount returns the number of merkle values required for this proof format
 func ValueCount(f ProofFormat) int {
 	if f == nil {
-		return 0
+		return 1
 	}
 	l, r := f.Children()
 	return ValueCount(l) + ValueCount(r)

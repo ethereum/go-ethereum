@@ -107,11 +107,12 @@ func (lc *LightChain) loadChainRange() {
 			return
 		}
 		if cr.ChainInit {
-			if lc.chainHead, err = lc.getHeaderBySlot(cr.ChainHead); err != nil {
+			// cannot use getHeaderBySlot until chainHead and chainTail are initialized
+			if lc.chainHead, err = lc.getHeader(cr.ChainHead, lc.getCanonicalHash(cr.ChainHead)); err != nil {
 				log.Error("Chain head not found")
 				return
 			}
-			if lc.chainTail, err = lc.getHeaderBySlot(cr.ChainTail); err != nil {
+			if lc.chainTail, err = lc.getHeader(cr.ChainTail, lc.getCanonicalHash(cr.ChainTail)); err != nil {
 				log.Error("Chain tail not found")
 				return
 			}
@@ -144,6 +145,7 @@ func (lc *LightChain) storeChainRange(batch ethdb.Batch) {
 	if cr == lc.lastStoredRange {
 		return
 	}
+	lc.lastStoredRange = cr
 	rangeEnc, err := rlp.EncodeToBytes(&cr)
 	if err != nil {
 		log.Error("Failed to encode chain range data", "error", err)
@@ -152,10 +154,10 @@ func (lc *LightChain) storeChainRange(batch ethdb.Batch) {
 	batch.Put(chainRangeKey, rangeEnc)
 }
 
-// SetChainHead sets the canonical chain head and also finds the new tail if it
+// SetHead sets the canonical chain head and also finds the new tail if it
 // does not share a common ancestor with the old head. The state range is also
 // automatically updated so that it applies to the new canonical chain.
-func (lc *LightChain) SetChainHead(head types.Header) {
+func (lc *LightChain) SetHead(head types.Header) {
 	lc.lock.Lock()
 	defer lc.lock.Unlock()
 
@@ -176,16 +178,29 @@ func (lc *LightChain) SetChainHead(head types.Header) {
 		lc.deleteCanonicalHash(batch, slot)
 	}
 	lc.chainHead = head
+	var (
+		hasStateRange, lastHasState bool //applies to the new chain section after the common ancestor
+		firstState, lastState       types.Header
+	)
 	for !lc.IsCanonical(head) {
 		lc.storeCanonicalHash(batch, head.Slot, head.Hash())
+		if lc.HasStateProof(head) {
+			if !lastHasState {
+				hasStateRange, lastHasState = true, true
+				lastState = head
+			}
+			firstState = head
+		} else {
+			lastHasState = false
+		}
 		parent, err := lc.GetParent(head)
 		if err != nil {
 			for slot := lc.chainTail.Slot; slot < head.Slot; slot++ {
 				lc.deleteCanonicalHash(batch, slot)
 			}
 			lc.chainTail = head
-			lc.stateInit = false
-			lc.reinitStateChain(batch, head)
+			// set state range to the new section if there is one
+			lc.stateInit, lc.stateTail, lc.stateHead = hasStateRange, firstState, lastState
 			return
 		}
 		for slot := parent.Slot + 1; slot < head.Slot; slot++ {
@@ -193,7 +208,9 @@ func (lc *LightChain) SetChainHead(head types.Header) {
 		}
 		head = parent
 	}
-	if lc.stateInit && lc.stateHead.Slot >= head.Slot {
+	// head is now at the common ancestor
+	if lc.stateInit && lc.stateHead.Slot > head.Slot {
+		// first revert state range to common ancestor
 		if head.Slot >= lc.stateTail.Slot {
 			lc.stateHead = head
 		} else {
@@ -201,9 +218,13 @@ func (lc *LightChain) SetChainHead(head types.Header) {
 		}
 	}
 	if lc.stateInit {
-		lc.extendStateHead(batch)
+		// extend with new state range if they are adjacent (otherwise leave old continuous range)
+		if lastHasState && lc.stateHead == head {
+			lc.stateHead = lastState
+		}
 	} else {
-		lc.reinitStateChain(batch, head)
+		// set state range to the new section if there is one
+		lc.stateInit, lc.stateTail, lc.stateHead = hasStateRange, firstState, lastState
 	}
 }
 
@@ -554,9 +575,14 @@ func (lc *LightChain) GetStateProof(header types.Header) (merkle.MultiProof, err
 	return merkle.MultiProof{Format: lc.stateProofFormat, Values: state.Values}, nil
 }
 
+// StateProofFormat returns the expected state proof format for the given header.
+func (lc *LightChain) StateProofFormat(header types.Header) merkle.ProofFormat {
+	return lc.stateProofFormat
+}
+
 // AddStateProof adds a state proof. If it belongs to a canonical header then
 // the state range is also updated.
-func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof) error {
+func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof) (err error) {
 	lc.lock.Lock()
 	defer lc.lock.Unlock()
 
@@ -567,6 +593,11 @@ func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof
 		return ErrInvalidStateRoot
 	}
 	batch := lc.db.NewBatch()
+	defer func() {
+		if err = batch.Write(); err != nil {
+			log.Error("Failed to write batch to database", "error", err)
+		}
+	}()
 
 	stateEnc, err := rlp.EncodeToBytes(&stateProofData{Values: proof.Values})
 	if err != nil {
@@ -589,18 +620,8 @@ func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof
 	} else if header.Slot < lc.stateTail.Slot && header.Slot >= lc.chainTail.Slot {
 		lc.extendStateTail(batch)
 	}
-
 	lc.storeChainRange(batch)
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to write batch to database", "error", err)
-		return err
-	}
 	return nil
-}
-
-// StateProofFormat returns the expected state proof format for the given header.
-func (lc *LightChain) StateProofFormat(header types.Header) merkle.ProofFormat {
-	return lc.stateProofFormat
 }
 
 func (lc *LightChain) extendStateHead(batch ethdb.Batch) {
@@ -619,25 +640,14 @@ func (lc *LightChain) extendStateTail(batch ethdb.Batch) {
 	if lc.stateTail.Slot == 0 {
 		return
 	}
-	for slot := lc.stateTail.Slot - 1; slot >= lc.chainTail.Slot; slot-- {
-		if header, err := lc.getHeaderBySlot(slot); err == nil {
+	for slotP1 := lc.stateTail.Slot; slotP1 > lc.chainTail.Slot; slotP1-- {
+		// slotP1 == slot+1 to avoid uint64 underflow
+		if header, err := lc.getHeaderBySlot(slotP1 - 1); err == nil {
 			if lc.HasStateProof(header) {
 				lc.stateTail = header
 			} else {
 				break
 			}
-		}
-	}
-}
-
-func (lc *LightChain) reinitStateChain(batch ethdb.Batch, header types.Header) {
-	for slot := header.Slot; slot <= lc.chainHead.Slot; slot++ {
-		if header, err := lc.getHeaderBySlot(slot); err == nil && lc.HasStateProof(header) {
-			lc.stateInit = true
-			lc.stateHead = header
-			lc.stateTail = header
-			lc.extendStateHead(batch)
-			return
 		}
 	}
 }

@@ -82,7 +82,7 @@ func (s *HeaderSync) Process(env *request.Environment) {
 	chainHead, chainTail, chainInit := s.chain.HeaderRange()
 	if !chainInit {
 		s.chain.AddHeader(s.targetHead)
-		s.chain.SetChainHead(s.targetHead)
+		s.chain.SetHead(s.targetHead)
 		s.selfTrigger.Trigger()
 		s.chainTrigger.Trigger()
 	}
@@ -104,7 +104,7 @@ func (s *HeaderSync) Process(env *request.Environment) {
 func (s *HeaderSync) trySyncHead(env *request.Environment, chainTailSlot uint64) bool {
 	for {
 		if s.syncPtr.Slot <= chainTailSlot || s.chain.IsCanonical(s.syncPtr) {
-			s.chain.SetChainHead(s.targetHead)
+			s.chain.SetHead(s.targetHead)
 			s.chainTrigger.Trigger()
 			return true
 		}
