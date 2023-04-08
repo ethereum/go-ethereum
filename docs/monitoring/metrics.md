@@ -60,7 +60,6 @@ chain/account/commits.fifteen-minute:       0.029134344092314267
 chain/account/commits.five-minute:          0.029134344092314267
 
 ...
-
 ```
 
 Any developer is free to add, remove or modify the available metrics as they see fit. The precise list of available metrics is always available by opening the metrics server in the browser.
@@ -77,6 +76,34 @@ Geth also supports dumping metrics directly into an influx database. In order to
 --metrics.influxdb.token value         Token to authorize access to the database (v2 only) (default: "test")
 --metrics.influxdb.bucket value        InfluxDB bucket name to push reported metrics to (v2 only) (default: "geth")
 --metrics.influxdb.organization value  InfluxDB organization name (v2 only) (default: "geth")
+```
+
+We also provide Prometheus-formatted metrics data, which can be obtained through the `http://127.0.0.1:6060/debug/metrics/prometheus` URL, eg:
+
+```sh
+# TYPE chain_account_commits_count counter
+chain_account_commits_count 6506
+
+# TYPE chain_account_commits summary
+chain_account_commits {quantile="0.5"} 8.194577e+06
+chain_account_commits {quantile="0.75"} 1.016841725e+07
+chain_account_commits {quantile="0.95"} 1.4334824899999999e+07
+chain_account_commits {quantile="0.99"} 1.923948246000001e+07
+chain_account_commits {quantile="0.999"} 5.038267952400009e+07
+chain_account_commits {quantile="0.9999"} 5.108694e+07
+
+# TYPE chain_account_hashes_count counter
+chain_account_hashes_count 6506
+
+# TYPE chain_account_hashes summary
+chain_account_hashes {quantile="0.5"} 1.565746e+06
+chain_account_hashes {quantile="0.75"} 1.87953975e+06
+chain_account_hashes {quantile="0.95"} 4.6262716e+06
+chain_account_hashes {quantile="0.99"} 8.655076970000029e+06
+chain_account_hashes {quantile="0.999"} 4.823811956800011e+07
+chain_account_hashes {quantile="0.9999"} 4.9055682e+07
+
+...
 ```
 
 ## Creating and updating metrics {#creating-and-updating-metrics}

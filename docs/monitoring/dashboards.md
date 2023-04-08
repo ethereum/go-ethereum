@@ -69,6 +69,66 @@ exit
 
 InfluxDB is running and configured to store metrics from Geth.
 
+## Setting up Prometheus {#setting-up-prometheus}
+
+Prometheus can be downloaded from the [Prometheus](https://prometheus.io/download/). There is also a Docker image at [prom/prometheus](https://hub.docker.com/r/prom/prometheus), you can run in containerized environments. eg:
+
+```sh
+docker run \
+    -p 9090:9090 \
+    -v /path/to/prometheus:/etc/prometheus \
+    prom/prometheus:latest
+```
+
+Here a example directoy of `/path/to/promethus`:
+
+```sh
+prometheus/
+├── prometheus.yml
+└── record.geth.rules.yml
+```
+
+And an example of `prometheus.yml` is:
+
+```yaml
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+  # Load and evaluate rules in this file every 'evaluation_interval' seconds.
+  rule_files:
+    - 'record.geth.rules.yml'
+
+  # A scrape configuration containing exactly one endpoint to scrape.
+  scrape_configs:
+    - job_name: 'go-ethereum'
+      scrape_interval: 10s
+      metrics_path: /debug/metrics/prometheus
+      static_configs:
+        - targets:
+            - '127.0.0.1:6060'
+          labels:
+            chain: ethereum
+```
+
+We use [Prometheus recording rule](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) to recrod Geth's RPC metrics, the recording rules are inside `record.geth.rules.yml`:
+
+```yaml
+groups:
+- name: geth_rpc_requests_rules
+  rules:
+    - expr: label_replace({__name__=~"rpc_duration_.*_success"}, "method", "$1", "__name__", "rpc_duration_(.+)_success")
+      record: geth_rpc_requests_success
+    - expr: label_replace({__name__=~"rpc_duration_.*_failure"}, "method", "$1", "__name__", "rpc_duration_(.+)_failure")
+      record: geth_rpc_requests_failure
+
+    - expr: label_replace({__name__=~"rpc_duration_.*_success_count"}, "method", "$1", "__name__", "rpc_duration_(.+)_success_count")
+      record: geth_rpc_requests_success_count
+    - expr: label_replace({__name__=~"rpc_duration_.*_failure_count"}, "method", "$1", "__name__", "rpc_duration_(.+)_failure_count")
+      record: geth_rpc_requests_failure_count
+```
+
+
 ## Preparing Geth {#preparing-geth}
 
 After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS`
@@ -128,9 +188,13 @@ Click on "Save and test" and wait for the confirmation to pop up.
 
 Grafana is now set up to read data from InfluxDB. Now a dashboard can be created to interpret and display it. Dashboards properties are encoded in JSON files which can be created by anybody and easily imported. On the left bar, click on the "Dashboards" icon, then "Import".
 
-For a Geth monitoring dashboard, copy the URL of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
+For a Geth InfluxDB monitoring dashboard, copy the URL of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
 
 ![Grafana 1](/images/docs/grafana.png)
+
+For a Geth Prometheus monitoring dashboard, copy the URL of [this dashboard](https://grafana.com/grafana/dashboards/18463/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
+
+![Grafana 2](/images/docs/grafana2.png)
 
 ## Customization {#customization}
 
