@@ -27,7 +27,7 @@ package vm
 // }
 
 /*
-#cgo LDFLAGS: mina/target/release/libmina.a -ldl
+#cgo LDFLAGS: ${SRCDIR}/../../mina/target/release/libmina.a -ldl
 #include "../../mina/target/mina.h"
 */
 import "C"
@@ -66,7 +66,7 @@ func (c *MinaPoseidon) RequiredGas(input []byte) uint64 {
 var poseidonHashSignature = crypto.Keccak256([]byte("poseidonHash(uint8,bytes32[])"))[:4]
 
 func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
-	if len(input) < 4+64 || !bytes.Equal(input[:4], poseidonHashSignature) {
+	if len(input) < 4 || !bytes.Equal(input[:4], poseidonHashSignature) {
 		return packErr("Invalid signature"), ErrExecutionReverted
 	}
 
@@ -112,7 +112,7 @@ func (c *MinaSigner) RequiredGas(input []byte) uint64 {
 var verifySignature = crypto.Keccak256([]byte("verify(uint8,bytes32,bytes32,bytes32,bytes32,bytes32[])"))[:4]
 
 func (c *MinaSigner) Run(input []byte) ([]byte, error) {
-	if len(input) < 4+64 || !bytes.Equal(input[:4], verifySignature) {
+	if len(input) < 4 || !bytes.Equal(input[:4], verifySignature) {
 		return packErr("Invalid signature"), ErrExecutionReverted
 	}
 
