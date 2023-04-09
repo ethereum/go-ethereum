@@ -148,41 +148,41 @@ func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshol
 	}
 
 	// check validity constraints
-	if !s.updates.periodRange.IsEmpty() {
+	if !s.updates.IsEmpty() {
 		if !s.genesisInit {
 			log.Crit("Inconsistent database error: updates present but genesis data is not initialized")
 		}
-		if s.fixedRoots.periodRange.IsEmpty() || s.updates.periodRange.First < s.fixedRoots.periodRange.First ||
-			s.updates.periodRange.First >= s.fixedRoots.periodRange.AfterLast {
+		if s.fixedRoots.IsEmpty() || s.updates.First < s.fixedRoots.First ||
+			s.updates.First >= s.fixedRoots.AfterLast {
 			log.Crit("Inconsistent database error: first update is not in the fixed roots range")
 		}
-		if s.committees.periodRange.First > s.updates.periodRange.First || s.committees.periodRange.AfterLast <= s.updates.periodRange.AfterLast {
+		if s.committees.First > s.updates.First || s.committees.AfterLast <= s.updates.AfterLast {
 			log.Crit("Inconsistent database error: missing committees in update range")
 		}
 	}
-	if !s.committees.periodRange.IsEmpty() {
-		if s.fixedRoots.periodRange.IsEmpty() || s.committees.periodRange.First < s.fixedRoots.periodRange.First ||
-			s.committees.periodRange.First >= s.fixedRoots.periodRange.AfterLast {
+	if !s.committees.IsEmpty() {
+		if s.fixedRoots.IsEmpty() || s.committees.First < s.fixedRoots.First ||
+			s.committees.First >= s.fixedRoots.AfterLast {
 			log.Crit("Inconsistent database error: first committee is not in the fixed roots range")
 		}
-		if s.committees.periodRange.AfterLast > s.fixedRoots.periodRange.AfterLast && s.committees.periodRange.AfterLast > s.updates.periodRange.AfterLast+1 {
+		if s.committees.AfterLast > s.fixedRoots.AfterLast && s.committees.AfterLast > s.updates.AfterLast+1 {
 			log.Crit("Inconsistent database error: last committee is neither in the fixed roots range nor proven by updates")
 		}
-		log.Trace("Sync committee chain loaded", "first period", s.committees.periodRange.First, "last period", s.committees.periodRange.AfterLast-1)
+		log.Trace("Sync committee chain loaded", "first period", s.committees.First, "last period", s.committees.AfterLast-1)
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	var batch ethdb.Batch
-	for !s.updates.periodRange.IsEmpty() {
-		if update := s.updates.get(s.updates.periodRange.AfterLast - 1); update == nil || s.verifyUpdate(update) {
+	for !s.updates.IsEmpty() {
+		if update := s.updates.get(s.updates.AfterLast - 1); update == nil || s.verifyUpdate(update) {
 			if update == nil {
-				log.Crit("Sync committee update missing", "period", s.updates.periodRange.AfterLast-1)
+				log.Crit("Sync committee update missing", "period", s.updates.AfterLast-1)
 			}
 			break
 		}
 		if batch == nil {
 			batch = s.db.NewBatch()
 		}
-		s.rollback(batch, s.updates.periodRange.AfterLast)
+		s.rollback(batch, s.updates.AfterLast)
 	}
 	if batch != nil {
 		if err := batch.Write(); err != nil {
@@ -241,11 +241,11 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)
-	if !s.fixedRoots.periodRange.CanExpand(period) {
+	if !s.fixedRoots.CanExpand(period) {
 		if root != oldRoot {
 			return ErrInvalidPeriod
 		}
-		for p := s.fixedRoots.periodRange.AfterLast; p <= period; p++ {
+		for p := s.fixedRoots.AfterLast; p <= period; p++ {
 			s.fixedRoots.add(batch, p, s.getCommitteeRoot(p))
 		}
 	}
@@ -265,16 +265,16 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if period >= s.fixedRoots.periodRange.AfterLast {
+	if period >= s.fixedRoots.AfterLast {
 		return nil
 	}
 	batch := s.db.NewBatch()
 	s.fixedRoots.deleteFrom(batch, period)
-	if s.updates.periodRange.IsEmpty() || period <= s.updates.periodRange.First {
+	if s.updates.IsEmpty() || period <= s.updates.First {
 		s.updates.deleteFrom(batch, period)
 		s.deleteCommitteesFrom(batch, period)
 	} else {
-		fromPeriod := s.updates.periodRange.AfterLast + 1
+		fromPeriod := s.updates.AfterLast + 1
 		if period > fromPeriod {
 			fromPeriod = period
 		}
@@ -298,7 +298,7 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if !s.committees.periodRange.CanExpand(period) {
+	if !s.committees.CanExpand(period) {
 		return ErrInvalidPeriod
 	}
 	root := s.getCommitteeRoot(period)
@@ -308,7 +308,7 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 	if root != committee.Root() {
 		return ErrWrongCommitteeRoot
 	}
-	if !s.committees.periodRange.Includes(period) {
+	if !s.committees.Includes(period) {
 		s.committees.add(nil, period, committee)
 		s.syncCommitteeCache.Remove(period)
 	}
@@ -323,7 +323,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		return ErrNotInitialized
 	}
 	period := update.Header.SyncPeriod()
-	if !s.updates.periodRange.CanExpand(period) || !s.committees.periodRange.Includes(period) {
+	if !s.updates.CanExpand(period) || !s.committees.Includes(period) {
 		return ErrInvalidPeriod
 	}
 	if s.minimumUpdateScore.BetterThan(update.Score()) {
@@ -338,13 +338,13 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		}
 		return nil
 	}
-	if s.fixedRoots.periodRange.Includes(period+1) && reorg {
+	if s.fixedRoots.Includes(period+1) && reorg {
 		return ErrCannotReorg
 	}
 	if !s.verifyUpdate(update) {
 		return ErrInvalidUpdate
 	}
-	addCommittee := !s.committees.periodRange.Includes(period+1) || reorg
+	addCommittee := !s.committees.Includes(period+1) || reorg
 	if addCommittee {
 		if nextCommittee == nil {
 			return ErrNeedCommittee
@@ -374,13 +374,13 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	if !s.genesisInit || s.committees.periodRange.IsEmpty() {
+	if !s.genesisInit || s.committees.IsEmpty() {
 		return 0, false
 	}
-	if !s.updates.periodRange.IsEmpty() {
-		return s.updates.periodRange.AfterLast, true
+	if !s.updates.IsEmpty() {
+		return s.updates.AfterLast, true
 	}
-	return s.committees.periodRange.AfterLast - 1, true
+	return s.committees.AfterLast - 1, true
 }
 
 func (s *CommitteeChain) rollback(batch ethdb.Batch, period uint64) {
@@ -468,12 +468,12 @@ func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
 }
 
 type canonicalStore[T any] struct {
-	db          ethdb.KeyValueStore
-	keyPrefix   []byte
-	cache       *lru.Cache[uint64, T]
-	periodRange types.PeriodRange //TODO make it a parent struct?
-	encode      func(T) ([]byte, error)
-	decode      func([]byte) (T, error)
+	types.PeriodRange
+	db        ethdb.KeyValueStore
+	keyPrefix []byte
+	cache     *lru.Cache[uint64, T]
+	encode    func(T) ([]byte, error)
+	decode    func([]byte) (T, error)
 }
 
 func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
@@ -491,15 +491,15 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 	)
 	for iter.Next() {
 		period := binary.BigEndian.Uint64(iter.Key()[kl : kl+8])
-		if cs.periodRange.First == 0 {
-			cs.periodRange.First = period
-		} else if cs.periodRange.AfterLast != period {
+		if cs.First == 0 {
+			cs.First = period
+		} else if cs.AfterLast != period {
 			if iter.Next() {
 				log.Error("Gap in the canonical chain database")
 			}
 			break // continuity guaranteed
 		}
-		cs.periodRange.AfterLast = period + 1
+		cs.AfterLast = period + 1
 	}
 	iter.Release()
 	return cs
@@ -516,8 +516,8 @@ func (cs *canonicalStore[T]) getDbKey(period uint64) []byte {
 }
 
 func (cs *canonicalStore[T]) add(batch ethdb.Batch, period uint64, value T) {
-	if !cs.periodRange.CanExpand(period) {
-		log.Error("Cannot expand canonical store", "range.first", cs.periodRange.First, "range.afterLast", cs.periodRange.AfterLast, "new period", period)
+	if !cs.CanExpand(period) {
+		log.Error("Cannot expand canonical store", "range.first", cs.First, "range.afterLast", cs.AfterLast, "new period", period)
 		return
 	}
 	enc, err := cs.encode(value)
@@ -534,25 +534,25 @@ func (cs *canonicalStore[T]) add(batch ethdb.Batch, period uint64, value T) {
 	if err != nil {
 		log.Error("Error writing into canonical store value database", "error", err)
 	}
-	cs.periodRange.Expand(period)
+	cs.Expand(period)
 }
 
 // should only be used in batch mode
 func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted types.PeriodRange) {
-	if fromPeriod >= cs.periodRange.AfterLast {
+	if fromPeriod >= cs.AfterLast {
 		return
 	}
-	if fromPeriod < cs.periodRange.First {
-		fromPeriod = cs.periodRange.First
+	if fromPeriod < cs.First {
+		fromPeriod = cs.First
 	}
-	deleted = types.PeriodRange{First: fromPeriod, AfterLast: cs.periodRange.AfterLast}
-	for period := fromPeriod; period < cs.periodRange.AfterLast; period++ {
+	deleted = types.PeriodRange{First: fromPeriod, AfterLast: cs.AfterLast}
+	for period := fromPeriod; period < cs.AfterLast; period++ {
 		batch.Delete(cs.getDbKey(period))
 	}
-	if fromPeriod > cs.periodRange.First {
-		cs.periodRange.AfterLast = fromPeriod
+	if fromPeriod > cs.First {
+		cs.AfterLast = fromPeriod
 	} else {
-		cs.periodRange = types.PeriodRange{}
+		cs.PeriodRange = types.PeriodRange{}
 	}
 	return
 }
