@@ -165,10 +165,29 @@ func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshol
 			s.committees.periodRange.First >= s.fixedRoots.periodRange.AfterLast {
 			log.Crit("Inconsistent database error: first committee is not in the fixed roots range")
 		}
-		if s.committees.periodRange.AfterLast > s.fixedRoots.periodRange.AfterLast && s.committees.periodRange.AfterLast >= s.updates.periodRange.AfterLast {
+		if s.committees.periodRange.AfterLast > s.fixedRoots.periodRange.AfterLast && s.committees.periodRange.AfterLast > s.updates.periodRange.AfterLast+1 {
 			log.Crit("Inconsistent database error: last committee is neither in the fixed roots range nor proven by updates")
 		}
 		log.Trace("Sync committee chain loaded", "first period", s.committees.periodRange.First, "last period", s.committees.periodRange.AfterLast-1)
+	}
+	// roll back invalid updates (might be necessary if forks have been changed since last time)
+	var batch ethdb.Batch
+	for !s.updates.periodRange.IsEmpty() {
+		if update := s.updates.get(s.updates.periodRange.AfterLast - 1); update == nil || s.verifyUpdate(update) {
+			if update == nil {
+				log.Crit("Sync committee update missing", "period", s.updates.periodRange.AfterLast-1)
+			}
+			break
+		}
+		if batch == nil {
+			batch = s.db.NewBatch()
+		}
+		s.rollback(batch, s.updates.periodRange.AfterLast)
+	}
+	if batch != nil {
+		if err := batch.Write(); err != nil {
+			log.Error("Error writing batch into chain database", "error", err)
+		}
 	}
 	return s
 }
@@ -306,6 +325,9 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	period := update.Header.SyncPeriod()
 	if !s.updates.periodRange.CanExpand(period) || !s.committees.periodRange.Includes(period) {
 		return ErrInvalidPeriod
+	}
+	if s.minimumUpdateScore.BetterThan(update.Score()) {
+		return ErrInvalidUpdate
 	}
 	oldRoot := s.getCommitteeRoot(period + 1)
 	reorg := oldRoot != (common.Hash{}) && oldRoot != update.NextSyncCommitteeRoot

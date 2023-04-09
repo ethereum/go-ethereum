@@ -136,7 +136,7 @@ func (update *LightClientUpdate) Validate() error {
 // Note that in addition to this, a sufficient signer participation is also needed
 // in order to fulfill the quasi-finality condition (see UpdateScore.isFinalized).
 func (l *LightClientUpdate) hasFinalizedHeader() bool {
-	return l.FinalizedHeader.BodyRoot != (common.Hash{}) && l.FinalizedHeader.SyncPeriod() == l.Header.SyncPeriod()
+	return l.FinalizedHeader.StateRoot != (common.Hash{}) && l.FinalizedHeader.SyncPeriod() == l.Header.SyncPeriod()
 }
 
 // Score returns the UpdateScore describing the proof strength of the update

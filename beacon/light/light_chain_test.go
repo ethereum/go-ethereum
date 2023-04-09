@@ -28,7 +28,7 @@ import (
 
 func TestLightChainSetHead(t *testing.T) {
 	for _, reload := range []bool{false, true} {
-		c := newChainTest(t)
+		c := newLightChainTest(t)
 		a1, a2 := c.makeChain(types.Header{}, 100, false, false)
 		b1, b2 := c.makeChain(a2, 150, true, false)
 		c1, c2 := c.makeChain(b2, 200, true, true)
@@ -88,7 +88,7 @@ func TestLightChainSetHead(t *testing.T) {
 func TestLightChainExtendHeaderTail(t *testing.T) {
 	for _, reload := range []bool{false, true} {
 		for _, reverse := range []bool{false, true} {
-			c := newChainTest(t)
+			c := newLightChainTest(t)
 			a1, a2 := c.makeChain(types.Header{}, 50, false, false)
 			b1, b2 := c.makeChain(a2, 100, true, false)
 			c.chain.SetHead(b2)
@@ -118,7 +118,7 @@ func TestLightChainExtendHeaderTail(t *testing.T) {
 func TestLightChainExtendStateRange(t *testing.T) {
 	for _, reload := range []bool{false /*, true*/} {
 		for _, reverse := range []bool{false, true} {
-			c := newChainTest(t)
+			c := newLightChainTest(t)
 			a1, a2 := c.makeChain(types.Header{}, 50, true, false)
 			b1, b2 := c.makeChain(a2, 100, true, true)
 			_, c2 := c.makeChain(b2, 150, true, false)
@@ -145,7 +145,7 @@ func TestLightChainExtendStateRange(t *testing.T) {
 	}
 }
 
-type chainTest struct {
+type lightChainTest struct {
 	t           *testing.T
 	db          *memorydb.Database
 	proofFormat merkle.ProofFormat
@@ -159,8 +159,8 @@ type testProof struct {
 	proof  merkle.MultiProof
 }
 
-func newChainTest(t *testing.T) *chainTest {
-	c := &chainTest{
+func newLightChainTest(t *testing.T) *lightChainTest {
+	c := &lightChainTest{
 		t:           t,
 		db:          memorydb.New(),
 		proofFormat: merkle.NewIndexMapFormat().AddLeaf(42, nil).AddLeaf(67, nil),
@@ -169,7 +169,7 @@ func newChainTest(t *testing.T) *chainTest {
 	return c
 }
 
-func (c *chainTest) checkRange(chainInit bool, chainTail, chainHead types.Header, stateInit bool, stateTail, stateHead types.Header) {
+func (c *lightChainTest) checkRange(chainInit bool, chainTail, chainHead types.Header, stateInit bool, stateTail, stateHead types.Header) {
 	ch, ct, ci := c.chain.HeaderRange()
 	if ci != chainInit || (ci && (ct != chainTail || ch != chainHead)) {
 		c.t.Errorf("Incorrect header chain range (expected: %v %d %d, got: %v %d %d)", chainInit, chainTail.Slot, chainHead.Slot, ci, ct.Slot, ch.Slot)
@@ -188,13 +188,13 @@ func (c *chainTest) checkRange(chainInit bool, chainTail, chainHead types.Header
 	}
 }
 
-func (c *chainTest) checkCanonical(header types.Header, expected bool) {
+func (c *lightChainTest) checkCanonical(header types.Header, expected bool) {
 	if canonical := c.chain.IsCanonical(header); canonical != expected {
 		c.t.Errorf("Canonical status of header at slot %d is incorrect (expected: %v, got: %v)", header.Slot, expected, canonical)
 	}
 }
 
-func (c *chainTest) checkTail(header, expTail types.Header) {
+func (c *lightChainTest) checkTail(header, expTail types.Header) {
 	for {
 		if parent, err := c.chain.GetParent(header); err == nil {
 			header = parent
@@ -207,11 +207,11 @@ func (c *chainTest) checkTail(header, expTail types.Header) {
 	}
 }
 
-func (c *chainTest) reloadChain() {
+func (c *lightChainTest) reloadChain() {
 	c.chain = NewLightChain(c.db, c.proofFormat)
 }
 
-func (c *chainTest) makeChain(from types.Header, targetHeadSlot uint64, addHeaders, addStateProofs bool) (tail, head types.Header) {
+func (c *lightChainTest) makeChain(from types.Header, targetHeadSlot uint64, addHeaders, addStateProofs bool) (tail, head types.Header) {
 	head = from
 	valueCount := merkle.ValueCount(c.proofFormat)
 	for head.Slot < targetHeadSlot {
