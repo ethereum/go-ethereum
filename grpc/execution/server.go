@@ -104,8 +104,7 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 	}
 
 	res := &executionv1.DoBlockResponse{
-		// TODO: RENAME THIS - this is not the state root!! it's the block hash
-		StateRoot: fcEndResp.PayloadStatus.LatestValidHash.Bytes(),
+		BlockHash: fcEndResp.PayloadStatus.LatestValidHash.Bytes(),
 	}
 	return res, nil
 }
@@ -113,8 +112,7 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 func (s *ExecutionServiceServer) InitState(ctx context.Context, req *executionv1.InitStateRequest) (*executionv1.InitStateResponse, error) {
 	currHead := s.eth.BlockChain().CurrentHeader()
 	res := &executionv1.InitStateResponse{
-		// TODO: RENAME THIS - this is not the state root!! it's the block hash
-		StateRoot: currHead.Hash().Bytes(),
+		BlockHash: currHead.Hash().Bytes(),
 	}
 
 	return res, nil
