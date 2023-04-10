@@ -71,13 +71,15 @@ func newBeaconBlockSyncer(lightChain *light.LightChain) *beaconBlockSync {
 	}
 }
 
-func (s *beaconBlockSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *beaconBlockSync) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.reqLock.Trigger = trigger("beaconBlockSync", true)
 	trigger("validatedHead", true)
 	s.headBlockTrigger = trigger("headBlock", false)
 	s.prefetchHeaderTrigger = trigger("prefetchHeader", false)
 }
 
+// Process implements request.Module
 func (s *beaconBlockSync) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -95,10 +97,11 @@ func (s *beaconBlockSync) Process(env *request.Environment) {
 		}
 	}
 
+	if !env.CanRequestNow() {
+		return
+	}
 	if s.headBlock == nil && s.validatedHead != (types.Header{}) {
-		if !s.tryRequestBlock(env, s.validatedHead.Hash(), false) {
-			return
-		}
+		s.tryRequestBlock(env, s.validatedHead.Hash(), false)
 	}
 
 	prefetchHead := env.PrefetchHead()
@@ -114,16 +117,15 @@ func (s *beaconBlockSync) getHeadBlock() *capella.BeaconBlock {
 	return s.headBlock
 }
 
-func (s *beaconBlockSync) tryRequestBlock(env *request.Environment, blockRoot common.Hash, prefetch bool) bool {
+func (s *beaconBlockSync) tryRequestBlock(env *request.Environment, blockRoot common.Hash, prefetch bool) {
 	if !s.reqLock.CanRequest(blockRoot) {
-		return true
+		return
 	}
-	_, tryMore := env.TryRequest(blockRequest{
+	env.TryRequest(blockRequest{
 		beaconBlockSync: s,
 		blockRoot:       blockRoot,
 		prefetch:        prefetch,
 	})
-	return tryMore
 }
 
 type blockRequest struct {
@@ -230,12 +232,14 @@ type engineApiUpdater struct {
 	selfTrigger *request.ModuleTrigger
 }
 
-func (s *engineApiUpdater) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *engineApiUpdater) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	trigger("headBlock", true)
 	trigger("headState", true)
 	s.selfTrigger = trigger("engineApiUpdater", true)
 }
 
+// Process implements request.Module
 func (s *engineApiUpdater) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()

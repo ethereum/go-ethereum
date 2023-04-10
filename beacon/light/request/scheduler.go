@@ -26,24 +26,47 @@ import (
 
 const softRequestTimeout = time.Second
 
+// Module represents an update mechanism which is typically responsible for a
+// passive data structure or a certain aspect of it. When registered to a Scheduler,
+// it can be triggered either by server events, other modules or itself.
 type Module interface {
-	SetupTriggers(trigger func(id string, subscribe bool) *ModuleTrigger)
+	// SetupModuleTriggers allows modules to set up module triggers while getting
+	// registered to a Scheduler. Module trigger signals are typically emitted
+	// when the sender has changed the data structure it's responsible for in a
+	// way that might allow subscriber modules to start new requests or do more
+	// data processing.
+	SetupModuleTriggers(trigger func(id string, subscribe bool) *ModuleTrigger)
+	// Process is a non-blocking function that is called whenever the module is
+	// triggered. It can start network requests through the received Environment
+	// and/or do other data processing tasks. If triggers are set up correctly,
+	// Process is eventually called whenever it might have something new to do
+	// either because the data structures have been changed or because new servers
+	// became available or new requests became available at existing ones.
+	//
+	// Note: Process functions of different modules are never called concurrently;
+	// they are called by Scheduler in the same order of priority as they were
+	// registered in.
 	Process(env *Environment)
 }
 
+// RequestServer is a general server interface that can be extended by modules
+// with specific request types.
 type RequestServer interface {
 	SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHead))
 	UnsubscribeHeads()
-	Delay() time.Duration
-	Fail(string)
+	Delay() time.Duration // if non-zero then no requests should be sent for the given duration
+	Fail(string)          // report server failure
 }
 
-// initialized when first trigger is added
-type ModuleTrigger struct { // Scheduler lock
+// ModuleTrigger allows modules to trigger themselves or each other when changes
+// in their underlying data structures could have made further operations possible.
+type ModuleTrigger struct {
 	s        *Scheduler
 	triggers map[Module]struct{}
 }
 
+// Trigger ensures that subscribed modules will be processed in the next processing
+// round which is started either immediately or after the current round has been finished.
 func (t *ModuleTrigger) Trigger() {
 	if t.triggers == nil {
 		return
@@ -56,6 +79,10 @@ func (t *ModuleTrigger) Trigger() {
 	}
 }
 
+// Scheduler is a modular network data retrieval framework that coordinates multiple
+// servers and retrieval mechanisms (modules). It implements a trigger mechanism
+// that calls the Process function of registered modules whenever either the state
+// of existing data structures or connected servers could allow new operations.
 type Scheduler struct {
 	headTracker *HeadTracker
 
@@ -73,41 +100,35 @@ type Scheduler struct {
 	trServers             map[*Server]struct{}
 }
 
+// NewScheduler creates a new Scheduler.
 func NewScheduler(headTracker *HeadTracker) *Scheduler {
-	return &Scheduler{
+	s := &Scheduler{
 		headTracker: headTracker,
 		stopCh:      make(chan chan struct{}),
 		triggerCh:   make(chan struct{}, 1),
 		triggers:    make(map[string]*ModuleTrigger),
 		triggeredBy: make(map[Module][]*ModuleTrigger),
 	}
+	headTracker.setupModuleTriggers(s.GetModuleTrigger)
+	return s
 }
 
-// call before starting the scheduler
+// RegisterModule registers a module. Should be called before starting the scheduler.
+// In each processing round the order of module processing depends on the order of
+// registration.
 func (s *Scheduler) RegisterModule(m Module) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.modules = append(s.modules, m)
-	m.SetupTriggers(func(id string, subscribe bool) *ModuleTrigger { return s.addTrigger(m, id, subscribe) })
-}
-
-func (s *Scheduler) addTrigger(m Module, id string, subscribe bool) *ModuleTrigger {
-	t, ok := s.triggers[id]
-	if !ok {
-		t = new(ModuleTrigger)
-		s.triggers[id] = t
-	}
-	if !subscribe {
+	m.SetupModuleTriggers(func(id string, subscribe bool) *ModuleTrigger {
+		t := s.getModuleTrigger(id)
+		if subscribe {
+			s.triggeredBy[m] = append(s.triggeredBy[m], t)
+			t.triggers[m] = struct{}{}
+		}
 		return t
-	}
-	s.triggeredBy[m] = append(s.triggeredBy[m], t)
-	if t.triggers == nil {
-		t.s = s
-		t.triggers = make(map[Module]struct{})
-	}
-	t.triggers[m] = struct{}{}
-	return t
+	})
 }
 
 // GetModuleTrigger returns the ModuleTrigger with the given id or creates a new one.
@@ -115,9 +136,17 @@ func (s *Scheduler) GetModuleTrigger(id string) *ModuleTrigger {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	return s.getModuleTrigger(id)
+}
+
+// getModuleTrigger returns the ModuleTrigger with the given id or creates a new one.
+func (s *Scheduler) getModuleTrigger(id string) *ModuleTrigger {
 	t, ok := s.triggers[id]
 	if !ok {
-		t = new(ModuleTrigger)
+		t = &ModuleTrigger{
+			s:        s,
+			triggers: make(map[Module]struct{}),
+		}
 		s.triggers[id] = t
 	}
 	return t
@@ -149,7 +178,8 @@ func (s *Scheduler) UnregisterServer(RequestServer RequestServer) {
 	}
 }
 
-// Start starts the scheduler. It should be called after registering all modules and before registering any servers.
+// Start starts the scheduler. It should be called after registering all modules
+// and before registering any servers.
 func (s *Scheduler) Start() {
 	go s.syncLoop()
 }
@@ -167,7 +197,10 @@ func (s *Scheduler) Stop() {
 	<-stop
 }
 
-// syncLoop calls all processable modules in the order of their registration. A round of processing starts whenever there is at least one processable module. Triggers triggered during a processing round do not affect the current round but ensure that there is going to be a next round.
+// syncLoop calls all processable modules in the order of their registration.
+// A round of processing starts whenever there is at least one processable module.
+// Triggers triggered during a processing round do not affect the current round
+// but ensure that there is going to be a next round.
 func (s *Scheduler) syncLoop() {
 	s.lock.Lock()
 	s.triggerLock.Lock()
@@ -197,7 +230,8 @@ func (s *Scheduler) syncLoop() {
 	}
 }
 
-// processModules runs an entire processing round, calling processable modules with the appropriate Environment.
+// processModules runs an entire processing round, calling processable modules
+// with the appropriate Environment.
 func (s *Scheduler) processModules(trModules map[Module]struct{}, trServers map[*Server]struct{}) {
 	mtEnv := Environment{ // enables all servers for triggered modules
 		HeadTracker:   s.headTracker,
@@ -212,7 +246,7 @@ func (s *Scheduler) processModules(trModules map[Module]struct{}, trServers map[
 		canRequestNow: make(map[*Server]struct{}),
 	}
 	for _, server := range s.servers {
-		if canRequest, _ := server.CanRequestNow(); !canRequest {
+		if canRequest, _ := server.canRequestNow(); !canRequest {
 			continue
 		}
 		mtEnv.canRequestNow[server] = struct{}{}
@@ -230,7 +264,11 @@ func (s *Scheduler) processModules(trModules map[Module]struct{}, trServers map[
 	}
 }
 
-// triggerServer ensures that a next processing round is initiated as soon as possible and every module will be called with the given server enabled in its Environment. Should be called when the given server has become available (again) or when its range of servable requests has been expanded.
+// triggerServer ensures that a next processing round is initiated as soon as
+// possible and every module will be called with the given server enabled in its
+// Environment. Should be called when the given server has (again) become available
+// for requests or when its range of servable requests has been expanded (typically
+// when it announces a new head).
 func (s *Scheduler) triggerServer(server *Server) {
 	s.triggerLock.Lock()
 	if s.trServers == nil {
@@ -244,7 +282,10 @@ func (s *Scheduler) triggerServer(server *Server) {
 	s.triggerLock.Unlock()
 }
 
-// triggerModule ensures that a next processing round is initiated as soon as possible and the given module will be called with all servers enabled in its Environment. Called by ModuleTrigger.Trigger when the range of possible requests or processable data might have been expanded.
+// triggerModule ensures that a next processing round is initiated as soon as possible
+// and the given module will be called with all servers enabled in its Environment.
+// Called by ModuleTrigger.Trigger when the range of possible requests or processable
+// data might have been expanded.
 func (s *Scheduler) triggerModule(module Module) {
 	if s.trModules == nil {
 		s.trModules = make(map[Module]struct{})

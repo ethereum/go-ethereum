@@ -23,6 +23,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// HeadTracker subscribes to the head events of each connected server and keeps
+// track of validated and prefetch heads.
+// Note that it does not do signed head validation; it simply passes signed heads
+// received from server event feeds to the callback received in the constructor.
+// The actual validated head is set externally. In a light client setup its source
+// is the signed head validation mechanism but in a different setup it can be
+// something else. In a local full beacon node setup the head can be validated by
+// the trusted engine API while head BLS signatures are validated later as they
+// appear, in order to be passed on to other clients.
 type HeadTracker struct {
 	newSignedHead func(server *Server, signedHead types.SignedHead)
 
@@ -43,6 +52,8 @@ type serverHeadInfo struct {
 	headCounter uint64
 }
 
+// NewHeadTracker creates a new HeadTracker. The newSignedHead head callback is
+// called whenever a signed head is received from any of the connected servers.
 func NewHeadTracker(newSignedHead func(server *Server, signedHead types.SignedHead)) *HeadTracker {
 	return &HeadTracker{
 		serverHeads:   make(map[*Server]common.Hash),
@@ -51,11 +62,14 @@ func NewHeadTracker(newSignedHead func(server *Server, signedHead types.SignedHe
 	}
 }
 
-func (s *HeadTracker) SetupTriggers(trigger func(id string) *ModuleTrigger) {
+// setupModuleTriggers sets up triggers for new validated and prefetch heads when
+// HeadTracker is added to a Scheduler.
+func (s *HeadTracker) setupModuleTriggers(trigger func(id string) *ModuleTrigger) {
 	s.validatedHeadTrigger = trigger("validatedHead")
 	s.prefetchHeadTrigger = trigger("prefetchHead")
 }
 
+// SetValidatedHead is called by the external validated head source.
 func (s *HeadTracker) SetValidatedHead(head types.Header) {
 	s.validatedLock.Lock()
 	defer s.validatedLock.Unlock()
@@ -64,6 +78,7 @@ func (s *HeadTracker) SetValidatedHead(head types.Header) {
 	s.validatedHeadTrigger.Trigger()
 }
 
+// ValidatedHead returns the latest validated head.
 func (s *HeadTracker) ValidatedHead() types.Header {
 	s.validatedLock.RLock()
 	defer s.validatedLock.RUnlock()
@@ -71,6 +86,7 @@ func (s *HeadTracker) ValidatedHead() types.Header {
 	return s.validatedHead
 }
 
+// registerServer registers a server and subscribes to its head events.
 func (s *HeadTracker) registerServer(server *Server) {
 	s.prefetchLock.Lock()
 	defer s.prefetchLock.Unlock()
@@ -84,12 +100,13 @@ func (s *HeadTracker) registerServer(server *Server) {
 		}
 		server.setHead(slot, blockRoot)
 		s.setServerHead(server, blockRoot)
-		server.trigger()
+		server.scheduler.triggerServer(server)
 	}, func(signedHead types.SignedHead) {
 		s.newSignedHead(server, signedHead)
 	})
 }
 
+// unregisterServer removes a server and unsubscribes from its events.
 func (s *HeadTracker) unregisterServer(server *Server) {
 	s.prefetchLock.Lock()
 	defer s.prefetchLock.Unlock()
@@ -99,6 +116,9 @@ func (s *HeadTracker) unregisterServer(server *Server) {
 	s.setServerHead(server, common.Hash{})
 }
 
+// setServerHead processes non-validated server head announcements and updates
+// the prefetch head if necessary.
+//TODO report server failure if a server announces many heads that do not become validated soon.
 func (s *HeadTracker) setServerHead(server *Server, head common.Hash) {
 	if oldHead, ok := s.serverHeads[server]; ok {
 		if head == oldHead {
@@ -134,10 +154,16 @@ func (s *HeadTracker) setServerHead(server *Server, head common.Hash) {
 		s.prefetchHead = bestHead
 		s.prefetchHeadTrigger.Trigger()
 	} else if head == s.prefetchHead {
-		server.trigger()
+		server.scheduler.triggerServer(server)
 	}
 }
 
+// PrefetchHead returns the current prefetch head block root. The prefetch head
+// is defined as the one that the most currently connected servers have as their
+// latest announced head. If multiple heads are announced by the same number of
+// servers then the newest one is selected.
+// Prefetch heads should not be trusted but can be used to start fetching
+// block-related data before it becomes validated.
 func (s *HeadTracker) PrefetchHead() common.Hash {
 	s.prefetchLock.RLock()
 	defer s.prefetchLock.RUnlock()

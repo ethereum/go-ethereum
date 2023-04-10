@@ -54,7 +54,8 @@ func NewStateSync(chain *light.LightChain, prefetch bool) *StateSync {
 	}
 }
 
-func (s *StateSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *StateSync) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.selfTrigger = trigger("stateSync", true)
 	s.reqLock.Trigger = s.selfTrigger
 	trigger("headerChain", true)
@@ -72,12 +73,16 @@ func (s *StateSync) SetTailTarget(targetTailSlot uint64) {
 	s.targetTailSlot = targetTailSlot
 }
 
+// Process implements request.Module
 func (s *StateSync) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	chainHead, chainTail, chainInit := s.chain.HeaderRange()
 	if !chainInit {
+		return
+	}
+	if !env.CanRequestNow() {
 		return
 	}
 	if s.prefetch {
@@ -173,8 +178,7 @@ func (s *StateSync) tryRequestState(env *request.Environment, header types.Heade
 		header:    header,
 		prefetch:  prefetch,
 	}
-	sentOrLocked, _ = env.TryRequest(req)
-	if !sentOrLocked {
+	if sentOrLocked = env.TryRequest(req); !sentOrLocked {
 		tryLater = env.CanRequestLater(req)
 	}
 	return

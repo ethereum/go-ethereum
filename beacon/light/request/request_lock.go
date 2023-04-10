@@ -21,12 +21,15 @@ type sentRequest struct {
 	reqId  uint64
 }
 
-// Trigger is triggered when the request has been answered, failed or timed out, ensuring that wh
+// SingleLock ensures that a certain request (or a certain type of request) is not
+// sent again while there is one that has not been answered or timed out yet.
+// If Trigger is not nil then it is triggered whenever the request is unlocked.
 type SingleLock struct {
 	sentRequest
 	Trigger *ModuleTrigger
 }
 
+// CanRequest returns true if the request is not locked.
 func (s *SingleLock) CanRequest() bool {
 	if s.sentTo != nil && s.sentTo.hasTimedOut(s.reqId) {
 		s.sentTo = nil
@@ -34,12 +37,17 @@ func (s *SingleLock) CanRequest() bool {
 	return s.sentTo == nil
 }
 
+// Send acquires the request lock and returns a request ID.
+// Note: since Module.Process is never called concurrently, there is no risk of
+// two processes simultaneously acquiring the same lock so we can always assume
+// that Send is successful after CanRequest returned true.
 func (s *SingleLock) Send(srv *Server) uint64 {
 	reqId := srv.sendRequest(s.Trigger)
 	s.sentTo, s.reqId = srv, reqId
 	return reqId
 }
 
+// Returned releases the request lock.
 func (s *SingleLock) Returned(srv *Server, reqId uint64) {
 	if srv == s.sentTo && reqId == s.reqId {
 		s.sentTo = nil
@@ -50,18 +58,25 @@ func (s *SingleLock) Returned(srv *Server, reqId uint64) {
 	}
 }
 
+// MultiLock ensures that no request with a given lockId is sent again while there
+// is one sent with the same lockId that has not been answered or timed out yet.
+// If Trigger is not nil then it is triggered whenever one of the requests is unlocked.
+// Note that the lockId is different from the request ID of actually sent requests
+// and it can be of any comparable type.
 type MultiLock struct {
-	locks   map[interface{}]sentRequest // locks are only present in the map when sentTo != nil
+	// locks are only present in the map when sentTo != nil
+	locks   map[interface{}]sentRequest
 	Trigger *ModuleTrigger
 }
 
-func (s *MultiLock) CanRequest(id interface{}) bool {
+// CanRequest returns true if the request identified by lockId is not locked.
+func (s *MultiLock) CanRequest(lockId interface{}) bool {
 	if s.locks == nil {
 		s.locks = make(map[interface{}]sentRequest)
 	}
-	if sl, ok := s.locks[id]; ok {
+	if sl, ok := s.locks[lockId]; ok {
 		if sl.sentTo.hasTimedOut(sl.reqId) {
-			delete(s.locks, id)
+			delete(s.locks, lockId)
 		} else {
 			return false
 		}
@@ -69,15 +84,20 @@ func (s *MultiLock) CanRequest(id interface{}) bool {
 	return true
 }
 
-func (s *MultiLock) Send(srv *Server, id interface{}) uint64 {
+// Send acquires the request lock identified by lockId and returns a request ID.
+// Note: since Module.Process is never called concurrently, there is no risk of
+// two processes simultaneously acquiring the same lock so we can always assume
+// that Send is successful after CanRequest returned true.
+func (s *MultiLock) Send(srv *Server, lockId interface{}) uint64 {
 	reqId := srv.sendRequest(s.Trigger)
-	s.locks[id] = sentRequest{sentTo: srv, reqId: reqId}
+	s.locks[lockId] = sentRequest{sentTo: srv, reqId: reqId}
 	return reqId
 }
 
-func (s *MultiLock) Returned(srv *Server, reqId uint64, id interface{}) {
-	if s.locks[id] == (sentRequest{sentTo: srv, reqId: reqId}) {
-		delete(s.locks, id)
+// Returned releases the request lock identified by lockId.
+func (s *MultiLock) Returned(srv *Server, reqId uint64, lockId interface{}) {
+	if s.locks[lockId] == (sentRequest{sentTo: srv, reqId: reqId}) {
+		delete(s.locks, lockId)
 	}
 	srv.returned(reqId)
 	if s.Trigger != nil {

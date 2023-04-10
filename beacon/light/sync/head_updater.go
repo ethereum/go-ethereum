@@ -44,7 +44,8 @@ func NewHeadUpdater(headValidator *light.HeadValidator, chain *light.CommitteeCh
 	return s
 }
 
-func (s *HeadUpdater) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *HeadUpdater) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	trigger("newUpdate", true)
 }
 
@@ -61,6 +62,7 @@ func (s *HeadUpdater) NewSignedHead(server *request.Server, signedHead types.Sig
 	}
 }
 
+// Process implements request.Module
 func (s *HeadUpdater) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()

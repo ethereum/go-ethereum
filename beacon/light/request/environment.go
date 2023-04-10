@@ -16,12 +16,20 @@
 
 package request
 
+// request represents a new request to be sent. CanSendTo checks request-specific
+// conditions under which it can be sent to a certain server while SendTo sends it
+// to the selected one. Both should be non-blocking and are never called concurrently.
 type request interface {
 	CanSendTo(server *Server) (canSend bool, priority uint64)
 	SendTo(server *Server)
 }
 
-// Environment allows Module.Process to send requests to a set of servers. The enabled server set can either be all servers that are not delayed or timed out (in case of a module trigger) or a subset of them that have been triggered by a server trigger.
+// Environment allows modules to start network requests when triggered. It is
+// responsible for selecting a server for each request. The set of potential
+// servers to choose from depends on the type of the trigger; module triggers
+// trigger certain modules and allow all available servers to be selected while
+// server triggers triggers all modules but only allow triggering servers to be
+// selected.
 type Environment struct {
 	*HeadTracker
 	scheduler     *Scheduler
@@ -29,13 +37,14 @@ type Environment struct {
 	canRequestNow map[*Server]struct{}
 }
 
-func (s *Environment) TryRequest(req request) (sent, tryMore bool) {
+// TryRequest tries to send the given request and returns true in case of success.
+func (s *Environment) TryRequest(req request) bool {
 	var (
 		maxServerPriority, maxRequestPriority uint64
 		bestServer                            *Server
 	)
 	for server := range s.canRequestNow {
-		canRequest, serverPriority := server.CanRequestNow()
+		canRequest, serverPriority := server.canRequestNow()
 		if !canRequest {
 			delete(s.canRequestNow, server)
 			continue
@@ -50,15 +59,25 @@ func (s *Environment) TryRequest(req request) (sent, tryMore bool) {
 	}
 	if bestServer != nil {
 		req.SendTo(bestServer)
-		return true, true
+		return true
 	}
-	return false, len(s.canRequestNow) > 0
+	return false
 }
 
+// CanRequestNow returns true if there are any servers where a request could be
+// sent at the moment.
+// Note: when triggered by a module trigger, Module.Process is still called if
+// the environment has no servers ready at the moment because it might process
+// existing data that does not require further requests to be made. Checking
+// CanRequestNow before requesting is optional as a failed TryRequest is also
+// cheap; doing a check makes sense if building the request or finding out what to
+// request has a significant cost, or if many requests are going to be attempted.
 func (s *Environment) CanRequestNow() bool {
 	return len(s.canRequestNow) > 0
 }
 
+// CanRequestLater returns true if there are connected servers (even if not ready
+// at the moment) that could serve the given request.
 func (s *Environment) CanRequestLater(req request) bool {
 	for _, server := range s.allServers {
 		if canSend, _ := req.CanSendTo(server); canSend {

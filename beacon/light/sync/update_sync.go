@@ -53,11 +53,13 @@ func NewCheckpointInit(chain *light.CommitteeChain, cs *light.CheckpointStore, c
 	}
 }
 
-func (s *CheckpointInit) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *CheckpointInit) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.reqLock.Trigger = trigger("checkpointInit", true)
 	s.initTrigger = trigger("committeeChainInit", false)
 }
 
+// Process implements request.Module
 func (s *CheckpointInit) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -69,6 +71,9 @@ func (s *CheckpointInit) Process(env *request.Environment) {
 		checkpoint.InitChain(s.chain)
 		s.initialized = true
 		s.initTrigger.Trigger()
+		return
+	}
+	if !env.CanRequestNow() {
 		return
 	}
 	if s.reqLock.CanRequest() {
@@ -127,7 +132,8 @@ func NewForwardUpdateSync(chain *light.CommitteeChain) *ForwardUpdateSync {
 	return &ForwardUpdateSync{chain: chain}
 }
 
-func (s *ForwardUpdateSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *ForwardUpdateSync) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.reqLock.Trigger = trigger("forwardUpdateSync", true)
 	// committeeChainInit signals that the committee chain is initialized (has fixed committee roots) and the first update request can be constructed.
 	trigger("committeeChainInit", true)
@@ -137,10 +143,14 @@ func (s *ForwardUpdateSync) SetupTriggers(trigger func(id string, subscribe bool
 	s.newUpdateTrigger = trigger("newUpdate", true)
 }
 
+// Process implements request.Module
 func (s *ForwardUpdateSync) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	if !env.CanRequestNow() {
+		return
+	}
 	first, ok := s.chain.NextSyncPeriod()
 	if !ok {
 		return

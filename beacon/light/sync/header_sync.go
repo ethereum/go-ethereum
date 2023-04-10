@@ -49,7 +49,8 @@ func NewHeaderSync(chain *light.LightChain, prefetch bool) *HeaderSync {
 	}
 }
 
-func (s *HeaderSync) SetupTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
+// SetupModuleTriggers implements request.Module
+func (s *HeaderSync) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.selfTrigger = trigger("headerSync", true)
 	s.reqLock.Trigger = s.selfTrigger
 	trigger("validatedHead", true)
@@ -66,6 +67,7 @@ func (s *HeaderSync) SetTailTarget(targetTailSlot uint64) {
 	s.targetTailSlot = targetTailSlot
 }
 
+// Process implements request.Module
 func (s *HeaderSync) Process(env *request.Environment) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -85,6 +87,9 @@ func (s *HeaderSync) Process(env *request.Environment) {
 		s.chain.SetHead(s.targetHead)
 		s.selfTrigger.Trigger()
 		s.chainTrigger.Trigger()
+	}
+	if !env.CanRequestNow() {
+		return
 	}
 	if s.prefetch {
 		if prefetchHead := env.PrefetchHead(); !s.chain.HasHeader(prefetchHead) {
