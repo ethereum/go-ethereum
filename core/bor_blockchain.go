@@ -19,7 +19,7 @@ func (bc *BlockChain) GetBorReceiptByHash(hash common.Hash) *types.Receipt {
 	}
 
 	// read bor reciept by hash and number
-	receipt := rawdb.ReadBorReceipt(bc.db, hash, *number)
+	receipt := rawdb.ReadBorReceipt(bc.db, hash, *number, bc.chainConfig)
 	if receipt == nil {
 		return nil
 	}

@@ -89,7 +89,7 @@ func (c *ChainSpanner) GetCurrentSpan(ctx context.Context, headerHash common.Has
 }
 
 // GetCurrentValidators get current validators
-func (c *ChainSpanner) GetCurrentValidators(ctx context.Context, headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {
+func (c *ChainSpanner) GetCurrentValidatorsByBlockNrOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64) ([]*valset.Validator, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -107,16 +107,13 @@ func (c *ChainSpanner) GetCurrentValidators(ctx context.Context, headerHash comm
 	toAddress := c.validatorContractAddress
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
-	// block
-	blockNr := rpc.BlockNumberOrHashWithHash(headerHash, false)
-
 	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr, nil)
+	}, blockNrOrHash, nil)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	var (
@@ -142,6 +139,12 @@ func (c *ChainSpanner) GetCurrentValidators(ctx context.Context, headerHash comm
 	}
 
 	return valz, nil
+}
+
+func (c *ChainSpanner) GetCurrentValidatorsByHash(ctx context.Context, headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {
+	blockNr := rpc.BlockNumberOrHashWithHash(headerHash, false)
+
+	return c.GetCurrentValidatorsByBlockNrOrHash(ctx, blockNr, blockNumber)
 }
 
 const method = "commitSpan"

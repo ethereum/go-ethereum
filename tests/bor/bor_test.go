@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -391,11 +392,17 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
 
+	spanner := getMockedSpanner(t, currentValidators)
+	_bor.SetSpanner(spanner)
+
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= spanSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
+
+	spanner = getMockedSpanner(t, currentSpan.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 
 	validators, err := _bor.GetCurrentValidators(context.Background(), block.Hash(), spanSize) // check validator set at the first block of new span
 	if err != nil {
@@ -425,6 +432,9 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	res, _ := loadSpanFromFile(t)
 
 	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
+
+	spanner := getMockedSpanner(t, currentValidators)
+	_bor.SetSpanner(spanner)
 
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i < sprintSize; i++ {
@@ -458,7 +468,19 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	_bor.SetHeimdallClient(h)
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
+
+	// Validate the state sync transactions set by consensus
+	validateStateSyncEvents(t, eventRecords, chain.GetStateSync())
+
 	insertNewBlock(t, chain, block)
+}
+
+func validateStateSyncEvents(t *testing.T, expected []*clerk.EventRecordWithTime, got []*types.StateSyncData) {
+	require.Equal(t, len(expected), len(got), "number of state sync events should be equal")
+
+	for i := 0; i < len(expected); i++ {
+		require.Equal(t, expected[i].ID, got[i].ID, fmt.Sprintf("state sync ids should be equal - index: %d, expected: %d, got: %d", i, expected[i].ID, got[i].ID))
+	}
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {
@@ -515,6 +537,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
 		}
 
+		spanner := getMockedSpanner(t, currentValidators)
+		_bor.SetSpanner(spanner)
+
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
@@ -540,6 +565,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		} else {
 			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
 		}
+
+		spanner := getMockedSpanner(t, currentValidators)
+		_bor.SetSpanner(spanner)
 
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
@@ -567,6 +595,8 @@ func TestOutOfTurnSigning(t *testing.T) {
 
 	h.EXPECT().Close().AnyTimes()
 
+	spanner := getMockedSpanner(t, heimdallSpan.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -1068,6 +1098,9 @@ func TestJaipurFork(t *testing.T) {
 	block := init.genesis.ToBlock(db)
 
 	res, _ := loadSpanFromFile(t)
+
+	spanner := getMockedSpanner(t, res.Result.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 
 	for i := uint64(1); i < sprintSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)

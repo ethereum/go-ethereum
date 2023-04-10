@@ -234,7 +234,7 @@ func Test_checkPath(t *testing.T) {
 func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
 	t.Helper()
 
-	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
+	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts, 100)
 	assert.NoError(t, srv.enableRPC(nil, *conf))
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))

@@ -5,6 +5,8 @@ chain = "mainnet"
 datadir = "/var/lib/bor/data"
 # ancient = ""
 # keystore = ""
+# "rpc.batchlimit" = 100
+# "rpc.returndatalimit" = 100000
 syncmode = "full"
 gcmode = "archive"
 # snapshot = true
@@ -79,6 +81,8 @@ gcmode = "archive"
         vhosts = ["*"]
         corsdomain = ["*"]
         # prefix = ""
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
     [jsonrpc.ws]
         enabled = true
         port = 8546
@@ -86,6 +90,8 @@ gcmode = "archive"
         # host = "localhost"
         # api = ["web3", "net"]
         origins = ["*"]
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
     # [jsonrpc.graphql]
         # enabled = false
         # port = 0
@@ -99,7 +105,7 @@ gcmode = "archive"
         # port = 8551
         # vhosts = ["localhost"]
     # [jsonrpc.timeouts]
-        # read = "30s"
+        # read = "10s"
         # write = "30s"
         # idle = "2m0s"
 
