@@ -61,7 +61,6 @@ jobs:
       - name: Copying systemd file
         run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor/lib/systemd/system/bor.service
 
-############### Bootnode
       - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} bootnode for ${{ env.ARCH }}
         run: cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
@@ -116,8 +115,7 @@ jobs:
           ARCH: amd64
           NODE: bootnode
           NETWORK: mumbai
-####################################################################################
-############### Bootnode
+
       - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} bootnode for ${{ env.ARCH }}
         run: cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
@@ -172,7 +170,6 @@ jobs:
           ARCH: amd64
           NODE: bootnode
           NETWORK: mainnet
-####################################################################################
 
       - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} node for ${{ env.ARCH }}
         run:  cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
@@ -529,7 +526,6 @@ jobs:
       - name: Updating the control file to use with the arm64 profile
         run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
 
-############### Bootnode
       - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} bootnode for ${{ env.ARCH }}
         run: cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
@@ -584,7 +580,7 @@ jobs:
           ARCH: arm64
           NODE: bootnode
           NETWORK: mumbai
-############### Bootnode
+
       - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} bootnode for ${{ env.ARCH }}
         run: cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
