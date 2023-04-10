@@ -249,7 +249,7 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 	lc.lock.Lock()
 	defer lc.lock.Unlock()
 
-	if !lc.chainInit {
+	if !removeCanonical && !lc.chainInit {
 		return
 	}
 	batch := lc.db.NewBatch()
@@ -265,7 +265,7 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 		kl := len(canonicalKey)
 		for {
 			if !iter.Next() {
-				lc.chainInit = false
+				lc.chainInit, lc.stateInit = false, false
 				break
 			}
 			key := iter.Key()
@@ -278,11 +278,14 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 				var err error
 				if lc.chainTail, err = lc.getHeaderBySlot(slot); err != nil {
 					log.Error("Could not find new chain tail")
-					lc.chainInit = false
+					lc.chainInit, lc.stateInit = false, false
 					break
 				}
 				if lc.stateInit && lc.chainTail.Slot > lc.stateTail.Slot {
 					lc.stateTail = lc.chainTail
+					if lc.stateTail.Slot > lc.stateHead.Slot {
+						lc.stateInit = false
+					}
 				}
 				break
 			}
@@ -313,7 +316,7 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 			lc.headerCache.Remove(slotAndHash{slot: slot, hash: blockRoot})
 		}
 	}
-	if !lc.stateInit {
+	if !removeCanonical && !lc.stateInit {
 		return
 	}
 	// remove states
@@ -332,7 +335,7 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 		var stateRoot common.Hash
 		copy(stateRoot[:], key[kl+8:])
 		if !removeCanonical {
-			if header, err := lc.getHeaderBySlot(slot); err != nil && header.StateRoot == stateRoot {
+			if header, err := lc.getHeaderBySlot(slot); err == nil && header.StateRoot == stateRoot {
 				continue
 			}
 		}
