@@ -48,6 +48,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{major}}.{{minor}}.{{patch}}
             type=sha
+            # set latest tag for `astria` branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'astria') }}
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
