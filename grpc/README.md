@@ -8,9 +8,11 @@ brew install leveldb
 # build geth
 make geth
 
-# run geth
-./build/bin/geth --goerli --grpc --grpc.addr "0.0.0.0" --grpc.port 50051
+# generating protobuf files
+buf generate buf.build/astria/execution-apis
 ```
+
+See [private_network.md](../private_network.md) for running a local geth node.
 
 ### Running with remote Docker image:
 ```bash

@@ -274,12 +274,14 @@ func (n *Node) openEndpoints() error {
 	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
+		n.log.Error("failed to start RPC endpoints", "err", err)
 		n.stopRPC()
 		n.server.Stop()
 	}
 	// start GRPC endpoints
 	err = n.startGRPC()
 	if err != nil {
+		n.log.Error("failed to start gRPC endpoints", "err", err)
 		n.stopGRPC()
 	}
 	return err

@@ -4,9 +4,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/grpc/execution"
 	executionv1 "github.com/ethereum/go-ethereum/grpc/gen/proto/execution/v1"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"google.golang.org/grpc"
 )
@@ -18,28 +16,24 @@ type GRPCServerHandler struct {
 
 	endpoint               string
 	server                 *grpc.Server
-	executionServiceServer *execution.ExecutionServiceServer
+	executionServiceServer *executionv1.ExecutionServiceServer
 }
 
 // NewServer creates a new gRPC server.
 // It registers the execution service server.
 // It registers the gRPC server with the node so it can be stopped on shutdown.
-func NewGRPCServerHandler(node *Node, backend ethapi.Backend, cfg *Config) error {
+func NewGRPCServerHandler(node *Node, execService executionv1.ExecutionServiceServer, cfg *Config) error {
 	server := grpc.NewServer()
-
-	executionServiceServer := &execution.ExecutionServiceServer{
-		Backend: backend,
-	}
 
 	log.Info("gRPC server enabled", "endpoint", cfg.GRPCEndpoint())
 
 	serverHandler := &GRPCServerHandler{
 		endpoint:               cfg.GRPCEndpoint(),
 		server:                 server,
-		executionServiceServer: executionServiceServer,
+		executionServiceServer: &execService,
 	}
 
-	executionv1.RegisterExecutionServiceServer(server, executionServiceServer)
+	executionv1.RegisterExecutionServiceServer(server, execService)
 
 	node.RegisterGRPCServer(serverHandler)
 	return nil

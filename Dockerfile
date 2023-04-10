@@ -20,6 +20,10 @@ RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
+# Astria - add bash and jq to support start-geth.sh in conductor
+RUN apk add bash jq
+# Astria - copy genesis.json so it can be used in start-geth.sh
+COPY genesis.json /genesis.json
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 # Astria - add 50051 for GRPC

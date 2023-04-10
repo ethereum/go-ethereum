@@ -1,30 +1,59 @@
 name: Build and Publish Docker image
+
+# Trigger on pushes to astria branch, new semantic version tags, and pull request updates
 on:
   workflow_dispatch:
   push:
     branches:
-      - astria # Running this job only for astria branch
+      - "astria"
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-alpha.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+  # trigger on pull request updates when target is `astria` branch
+  pull_request:
+    branches:
+      - "astria"
+
 jobs:
   build-and-publish-latest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2 # Checking out the repo
+      # Checking out the repo
+      - uses: actions/checkout@v2
+      # Setting up Go
       - uses: actions/setup-go@v4
         with:
           go-version: "^1.20.x" # The Go version to download (if necessary) and use.
       - run: go version
 
+      # https://github.com/docker/setup-qemu-action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
-
-      # TODO - build for amd64 and arm64?
-      # FIXME - version needs to be autoincrement, probably from git tags?
-      - name: Build latest Docker image
-        run: |
-          docker build \
-            --build-arg COMMIT=${GITHUB_SHA} \
-            --build-arg VERSION=0.1 \
-            --build-arg BUILDNUM=${GITHUB_RUN_NUMBER} \
-            --tag ghcr.io/astriaorg/go-ethereum:latest .
-      - name: Push latest Docker image
-        run: docker push ghcr.io/astriaorg/go-ethereum:latest
+      # Generate correct tabs and labels
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ghcr.io/astriaorg/go-ethereum
+          tags: |
+            type=ref,event=pr
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+            type=sha
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          # It takes over 30 minutes to build the arm image right now, so we only build it on tags which is what we use for releases.
+          platforms: ${{ contains(github.ref, 'refs/tags/v') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}

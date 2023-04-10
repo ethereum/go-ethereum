@@ -57,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
+	executionv1 "github.com/ethereum/go-ethereum/grpc/gen/proto/execution/v1"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/les"
@@ -2042,9 +2043,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
-	if err := ethcatalyst.Register(stack, backend); err != nil {
-		Fatalf("Failed to register the Engine API service: %v", err)
-	}
+
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
@@ -2066,8 +2065,8 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 
 // RegisterGRPCService adds the gRPC API to the node.
 // It was done this way so that our grpc execution server can access the ethapi.Backend
-func RegisterGRPCService(stack *node.Node, backend ethapi.Backend, cfg *node.Config) {
-	if err := node.NewGRPCServerHandler(stack, backend, cfg); err != nil {
+func RegisterGRPCService(stack *node.Node, execServer executionv1.ExecutionServiceServer, cfg *node.Config) {
+	if err := node.NewGRPCServerHandler(stack, execServer, cfg); err != nil {
 		Fatalf("Failed to register the gRPC service: %v", err)
 	}
 }
