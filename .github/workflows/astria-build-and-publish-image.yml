@@ -51,7 +51,7 @@ jobs:
             # set latest tag for `astria` branch
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'astria') }}
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           context: .
           # It takes over 30 minutes to build the arm image right now, so we only build it on tags which is what we use for releases.
