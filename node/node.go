@@ -357,7 +357,10 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
 		return nil, errors.New("invalid JWT secret")
 	}
-	// Need to generate one
+	// Need to generate one, make sure custom destination folder exists
+	if err := os.MkdirAll(filepath.Dir(fileName), 0700); err != nil {
+		return nil, err
+	}
 	jwtSecret := make([]byte, 32)
 	crand.Read(jwtSecret)
 	// if we're in --dev mode, don't bother saving, just show it
