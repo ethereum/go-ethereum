@@ -27,8 +27,8 @@ package vm
 // }
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/../../mina/target/release/libmina.a -ldl
-#include "../../mina/target/mina.h"
+#cgo LDFLAGS: ${SRCDIR}/../../mina/lib/libmina.a -ldl
+#include "../../mina/lib/mina.h"
 */
 import "C"
 import (

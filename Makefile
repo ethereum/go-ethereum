@@ -10,6 +10,8 @@ GORUN = env GO111MODULE=on go run
 
 mina:
 	cd mina && cargo build --release
+	cp mina/target/mina.h mina/lib/mina.h
+	cp mina/target/release/libmina.a mina/lib/libmina.a
 
 geth: mina
 	$(GORUN) build/ci.go install ./cmd/geth
