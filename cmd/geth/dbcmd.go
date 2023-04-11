@@ -108,7 +108,7 @@ a data corruption.`,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command performs a database compaction. 
+		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
@@ -130,7 +130,7 @@ corruption if it is aborted during execution'!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command deletes the specified database key from the database. 
+		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = &cli.Command{
@@ -141,7 +141,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command sets a given database key to the given value. 
+		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbGetSlotsCmd = &cli.Command{
@@ -196,7 +196,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 )
 
 func removeDB(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	stack, config := makeConfigNode(ctx, true)
 
 	// Remove the full node state database
 	path := stack.ResolvePath("chaindata")
@@ -277,7 +277,7 @@ func inspect(ctx *cli.Context) error {
 			start = d
 		}
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -301,7 +301,7 @@ func checkStateContent(ctx *cli.Context) error {
 			start = d
 		}
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -354,7 +354,7 @@ func showLeveldbStats(db ethdb.KeyValueStater) {
 }
 
 func dbStats(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -365,7 +365,7 @@ func dbStats(ctx *cli.Context) error {
 }
 
 func dbCompact(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
@@ -389,7 +389,7 @@ func dbGet(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -415,7 +415,7 @@ func dbDelete(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
@@ -442,7 +442,7 @@ func dbPut(ctx *cli.Context) error {
 	if ctx.NArg() != 2 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
@@ -476,7 +476,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -550,7 +550,7 @@ func freezerInspect(ctx *cli.Context) error {
 		log.Info("Could not read count param", "err", err)
 		return err
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	ancient := stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name))
 	stack.Close()
 	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end)
@@ -572,7 +572,7 @@ func importLDBdata(ctx *cli.Context) error {
 	}
 	var (
 		fName     = ctx.Args().Get(0)
-		stack, _  = makeConfigNode(ctx)
+		stack, _  = makeConfigNode(ctx, true)
 		interrupt = make(chan os.Signal, 1)
 		stop      = make(chan struct{})
 	)
@@ -668,7 +668,7 @@ func exportChaindata(ctx *cli.Context) error {
 		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
 	}
 	var (
-		stack, _  = makeConfigNode(ctx)
+		stack, _  = makeConfigNode(ctx, true)
 		interrupt = make(chan os.Signal, 1)
 		stop      = make(chan struct{})
 	)
@@ -687,7 +687,7 @@ func exportChaindata(ctx *cli.Context) error {
 }
 
 func showMetaData(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	ancients, err := db.Ancients()

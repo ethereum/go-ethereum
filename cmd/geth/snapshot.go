@@ -160,7 +160,7 @@ block is used.
 // Deprecation: this command should be deprecated once the hash-based
 // scheme is deprecated.
 func pruneState(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	stack, config := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
@@ -196,7 +196,7 @@ func pruneState(ctx *cli.Context) error {
 }
 
 func verifyState(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
@@ -241,7 +241,7 @@ func verifyState(ctx *cli.Context) error {
 // checkDanglingStorage iterates the snap storage data, and verifies that all
 // storage also has corresponding account data.
 func checkDanglingStorage(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	return snapshot.CheckDanglingStorage(utils.MakeChainDatabase(ctx, stack, true))
@@ -251,7 +251,7 @@ func checkDanglingStorage(ctx *cli.Context) error {
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present.
 func traverseState(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
@@ -341,7 +341,7 @@ func traverseState(ctx *cli.Context) error {
 // contract codes are present. It's basically identical to traverseState
 // but it will check each trie node.
 func traverseRawState(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
@@ -483,7 +483,7 @@ func parseRoot(input string) (common.Hash, error) {
 }
 
 func dumpState(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	conf, db, root, err := parseDumpConfig(ctx, stack)
@@ -577,7 +577,7 @@ func checkAccount(ctx *cli.Context) error {
 	default:
 		return errors.New("malformed address or hash")
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()

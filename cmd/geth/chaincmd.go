@@ -187,7 +187,7 @@ func initGenesis(ctx *cli.Context) error {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
 	// Open and initialise both full and light databases
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
@@ -218,7 +218,7 @@ func dumpGenesis(ctx *cli.Context) error {
 		return nil
 	}
 	// dump whatever already exists in the datadir
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		db, err := stack.OpenDatabase(name, 0, 0, "", true)
 		if err != nil {
@@ -254,7 +254,7 @@ func importChain(ctx *cli.Context) error {
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack, false)
@@ -329,7 +329,7 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	chain, _ := utils.MakeChain(ctx, stack, true)
@@ -368,7 +368,7 @@ func importPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
@@ -386,7 +386,7 @@ func exportPreimages(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -458,7 +458,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 }
 
 func dump(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx, true)
 	defer stack.Close()
 
 	conf, db, root, err := parseDumpConfig(ctx, stack)
