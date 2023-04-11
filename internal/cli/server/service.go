@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
+	"time"
 
 	grpc_net_conn "github.com/JekaMas/go-grpc-net-conn"
-	empty "google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,6 +23,9 @@ import (
 )
 
 const chunkSize = 1024 * 1024 * 1024
+
+var ErrUnavailable = errors.New("bor service is currently unavailable, try again later")
+var ErrUnavailable2 = errors.New("bor service unavailable even after waiting for 10 seconds, make sure bor is running")
 
 func sendStreamDebugFile(stream proto.Bor_DebugPprofServer, headers map[string]string, data []byte) error {
 	// open the stream and send the headers
@@ -164,7 +168,30 @@ func (s *Server) ChainSetHead(ctx context.Context, req *proto.ChainSetHeadReques
 	return &proto.ChainSetHeadResponse{}, nil
 }
 
-func (s *Server) Status(ctx context.Context, _ *empty.Empty) (*proto.StatusResponse, error) {
+func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.StatusResponse, error) {
+	if s.backend == nil && !in.Wait {
+		return nil, ErrUnavailable
+	}
+
+	// check for s.backend at an interval of 2 seconds
+	// wait for a maximum of 10 seconds (5 iterations)
+	if s.backend == nil && in.Wait {
+		i := 1
+
+		for {
+			time.Sleep(2 * time.Second)
+
+			if s.backend == nil {
+				if i == 5 {
+					return nil, ErrUnavailable2
+				}
+			} else {
+				break
+			}
+			i++
+		}
+	}
+
 	apiBackend := s.backend.APIBackend
 	syncProgress := apiBackend.SyncProgress()
 

@@ -1,0 +1,6 @@
+#!/bin/bash
+#
+###############
+# Remove bor installs
+##############
+sudo rm -rf /usr/bin/bor

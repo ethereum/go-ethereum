@@ -1796,7 +1796,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	spanner := bor.NewMockSpanner(ctrl)
-	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
 		{
 			ID:               0,
 			Address:          miner.TestBankAddress,
@@ -1815,7 +1815,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0)
+	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0, 0, 0)
 	defer closeFn()
 
 	genesis := back.BlockChain().Genesis()

@@ -11,36 +11,68 @@ func (c *Command) Flags() *flagset.Flagset {
 
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "chain",
-		Usage:   "Name of the chain to sync",
+		Usage:   "Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file",
 		Value:   &c.cliConfig.Chain,
 		Default: c.cliConfig.Chain,
 	})
 	f.StringFlag(&flagset.StringFlag{
-		Name:    "identity",
-		Usage:   "Name/Identity of the node",
-		Value:   &c.cliConfig.Identity,
-		Default: c.cliConfig.Identity,
+		Name:               "identity",
+		Usage:              "Name/Identity of the node",
+		Value:              &c.cliConfig.Identity,
+		Default:            c.cliConfig.Identity,
+		HideDefaultFromDoc: true,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "verbosity",
+		Usage:   "Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit), default = 3",
+		Value:   &c.cliConfig.Verbosity,
+		Default: c.cliConfig.Verbosity,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "log-level",
-		Usage:   "Set log level for the server",
+		Usage:   "Log level for the server (trace|debug|info|warn|error|crit), will be deprecated soon. Use verbosity instead",
 		Value:   &c.cliConfig.LogLevel,
 		Default: c.cliConfig.LogLevel,
 	})
 	f.StringFlag(&flagset.StringFlag{
-		Name:    "datadir",
-		Usage:   "Path of the data directory to store information",
-		Value:   &c.cliConfig.DataDir,
-		Default: c.cliConfig.DataDir,
+		Name:               "datadir",
+		Usage:              "Path of the data directory to store information",
+		Value:              &c.cliConfig.DataDir,
+		Default:            c.cliConfig.DataDir,
+		HideDefaultFromDoc: true,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "vmdebug",
+		Usage:   "Record information useful for VM and contract debugging",
+		Value:   &c.cliConfig.EnablePreimageRecording,
+		Default: c.cliConfig.EnablePreimageRecording,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "datadir.ancient",
+		Usage:   "Data directory for ancient chain segments (default = inside chaindata)",
+		Value:   &c.cliConfig.Ancient,
+		Default: c.cliConfig.Ancient,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
-		Usage: "Path of the directory to store keystores",
+		Usage: "Path of the directory where keystores are located",
 		Value: &c.cliConfig.KeyStoreDir,
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "rpc.batchlimit",
+		Usage:   "Maximum number of messages in a batch (default=100, use 0 for no limits)",
+		Value:   &c.cliConfig.RPCBatchLimit,
+		Default: c.cliConfig.RPCBatchLimit,
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "rpc.returndatalimit",
+		Usage:   "Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)",
+		Value:   &c.cliConfig.RPCReturnDataLimit,
+		Default: c.cliConfig.RPCReturnDataLimit,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "config",
-		Usage: "File for the config file",
+		Usage: "Path to the TOML configuration file",
 		Value: &c.configFile,
 	})
 	f.StringFlag(&flagset.StringFlag{
@@ -56,21 +88,52 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.GcMode,
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
-		Name:  "eth.requiredblocks",
-		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
-		Value: &c.cliConfig.RequiredBlocks,
+		Name:    "eth.requiredblocks",
+		Usage:   "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
+		Value:   &c.cliConfig.RequiredBlocks,
+		Default: c.cliConfig.RequiredBlocks,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "snapshot",
-		Usage:   `Enables the snapshot-database mode (default = true)`,
+		Usage:   `Enables the snapshot-database mode`,
 		Value:   &c.cliConfig.Snapshot,
 		Default: c.cliConfig.Snapshot,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "bor.logs",
-		Usage:   `Enables bor log retrieval (default = false)`,
+		Usage:   `Enables bor log retrieval`,
 		Value:   &c.cliConfig.BorLogs,
 		Default: c.cliConfig.BorLogs,
+	})
+
+	// logging related flags (log-level and verbosity is present above, it will be removed soon)
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "vmodule",
+		Usage:   "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:   &c.cliConfig.Logging.Vmodule,
+		Default: c.cliConfig.Logging.Vmodule,
+		Group:   "Logging",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "log.json",
+		Usage:   "Format logs with JSON",
+		Value:   &c.cliConfig.Logging.Json,
+		Default: c.cliConfig.Logging.Json,
+		Group:   "Logging",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "log.backtrace",
+		Usage:   "Request a stack trace at a specific logging statement (e.g. 'block.go:271')",
+		Value:   &c.cliConfig.Logging.Backtrace,
+		Default: c.cliConfig.Logging.Backtrace,
+		Group:   "Logging",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "log.debug",
+		Usage:   "Prepends log messages with call-site location (file and line number)",
+		Value:   &c.cliConfig.Logging.Debug,
+		Default: c.cliConfig.Logging.Debug,
+		Group:   "Logging",
 	})
 
 	// heimdall
@@ -86,11 +149,35 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.Without,
 		Default: c.cliConfig.Heimdall.Without,
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.devfakeauthor",
+		Usage:   "Run miner without validator set authorization [dev mode] : Use with '--bor.withoutheimdall'",
+		Value:   &c.cliConfig.DevFakeAuthor,
+		Default: c.cliConfig.DevFakeAuthor,
+	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "bor.heimdallgRPC",
 		Usage:   "Address of Heimdall gRPC service",
 		Value:   &c.cliConfig.Heimdall.GRPCAddress,
 		Default: c.cliConfig.Heimdall.GRPCAddress,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.runheimdall",
+		Usage:   "Run Heimdall service as a child process",
+		Value:   &c.cliConfig.Heimdall.RunHeimdall,
+		Default: c.cliConfig.Heimdall.RunHeimdall,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "bor.runheimdallargs",
+		Usage:   "Arguments to pass to Heimdall service",
+		Value:   &c.cliConfig.Heimdall.RunHeimdallArgs,
+		Default: c.cliConfig.Heimdall.RunHeimdallArgs,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.useheimdallapp",
+		Usage:   "Use child heimdall process to fetch data, Only works when bor.runheimdall is true",
+		Value:   &c.cliConfig.Heimdall.UseHeimdallApp,
+		Default: c.cliConfig.Heimdall.UseHeimdallApp,
 	})
 
 	// txpool options
@@ -182,7 +269,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "miner.etherbase",
-		Usage:   "Public address for block mining rewards (default = first account)",
+		Usage:   "Public address for block mining rewards",
 		Value:   &c.cliConfig.Sealer.Etherbase,
 		Default: c.cliConfig.Sealer.Etherbase,
 		Group:   "Sealer",
@@ -196,16 +283,24 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "miner.gaslimit",
-		Usage:   "Target gas ceiling for mined blocks",
+		Usage:   "Target gas ceiling (gas limit) for mined blocks",
 		Value:   &c.cliConfig.Sealer.GasCeil,
 		Default: c.cliConfig.Sealer.GasCeil,
 		Group:   "Sealer",
 	})
 	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "miner.gasprice",
-		Usage: "Minimum gas price for mining a transaction",
-		Value: c.cliConfig.Sealer.GasPrice,
-		Group: "Sealer",
+		Name:    "miner.gasprice",
+		Usage:   "Minimum gas price for mining a transaction",
+		Value:   c.cliConfig.Sealer.GasPrice,
+		Group:   "Sealer",
+		Default: c.cliConfig.Sealer.GasPrice,
+	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "miner.recommit",
+		Usage:   "The time interval for miner to re-create mining work",
+		Value:   &c.cliConfig.Sealer.Recommit,
+		Default: c.cliConfig.Sealer.Recommit,
+		Group:   "Sealer",
 	})
 
 	// ethstats
@@ -229,21 +324,35 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Gpo.Percentile,
 		Default: c.cliConfig.Gpo.Percentile,
 	})
-	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "gpo.maxprice",
-		Usage: "Maximum gas price will be recommended by gpo",
-		Value: c.cliConfig.Gpo.MaxPrice,
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "gpo.maxheaderhistory",
+		Usage:   "Maximum header history of gasprice oracle",
+		Value:   &c.cliConfig.Gpo.MaxHeaderHistory,
+		Default: c.cliConfig.Gpo.MaxHeaderHistory,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "gpo.maxblockhistory",
+		Usage:   "Maximum block history of gasprice oracle",
+		Value:   &c.cliConfig.Gpo.MaxBlockHistory,
+		Default: c.cliConfig.Gpo.MaxBlockHistory,
 	})
 	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "gpo.ignoreprice",
-		Usage: "Gas price below which gpo will ignore transactions",
-		Value: c.cliConfig.Gpo.IgnorePrice,
+		Name:    "gpo.maxprice",
+		Usage:   "Maximum gas price will be recommended by gpo",
+		Value:   c.cliConfig.Gpo.MaxPrice,
+		Default: c.cliConfig.Gpo.MaxPrice,
+	})
+	f.BigIntFlag(&flagset.BigIntFlag{
+		Name:    "gpo.ignoreprice",
+		Usage:   "Gas price below which gpo will ignore transactions",
+		Value:   c.cliConfig.Gpo.IgnorePrice,
+		Default: c.cliConfig.Gpo.IgnorePrice,
 	})
 
 	// cache options
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache",
-		Usage:   "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node)",
+		Usage:   "Megabytes of memory allocated to internal caching",
 		Value:   &c.cliConfig.Cache.Cache,
 		Default: c.cliConfig.Cache.Cache,
 		Group:   "Cache",
@@ -257,7 +366,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.trie",
-		Usage:   "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for trie caching",
 		Value:   &c.cliConfig.Cache.PercTrie,
 		Default: c.cliConfig.Cache.PercTrie,
 		Group:   "Cache",
@@ -278,14 +387,14 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.gc",
-		Usage:   "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for trie pruning",
 		Value:   &c.cliConfig.Cache.PercGc,
 		Default: c.cliConfig.Cache.PercGc,
 		Group:   "Cache",
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.snapshot",
-		Usage:   "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for snapshot caching",
 		Value:   &c.cliConfig.Cache.PercSnapshot,
 		Default: c.cliConfig.Cache.PercSnapshot,
 		Group:   "Cache",
@@ -313,9 +422,16 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "txlookuplimit",
-		Usage:   "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
+		Usage:   "Number of recent blocks to maintain transactions index for",
 		Value:   &c.cliConfig.Cache.TxLookupLimit,
 		Default: c.cliConfig.Cache.TxLookupLimit,
+		Group:   "Cache",
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "fdlimit",
+		Usage:   "Raise the open file descriptor resource limit (default = system fd limit)",
+		Value:   &c.cliConfig.Cache.FDLimit,
+		Default: c.cliConfig.Cache.FDLimit,
 		Group:   "Cache",
 	})
 
@@ -327,11 +443,25 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.JsonRPC.GasCap,
 		Group:   "JsonRPC",
 	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "rpc.evmtimeout",
+		Usage:   "Sets a timeout used for eth_call (0=infinite)",
+		Value:   &c.cliConfig.JsonRPC.RPCEVMTimeout,
+		Default: c.cliConfig.JsonRPC.RPCEVMTimeout,
+		Group:   "JsonRPC",
+	})
 	f.Float64Flag(&flagset.Float64Flag{
 		Name:    "rpc.txfeecap",
 		Usage:   "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value:   &c.cliConfig.JsonRPC.TxFeeCap,
 		Default: c.cliConfig.JsonRPC.TxFeeCap,
+		Group:   "JsonRPC",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "rpc.allow-unprotected-txs",
+		Usage:   "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
+		Value:   &c.cliConfig.JsonRPC.AllowUnprotectedTxs,
+		Default: c.cliConfig.JsonRPC.AllowUnprotectedTxs,
 		Group:   "JsonRPC",
 	})
 	f.BoolFlag(&flagset.BoolFlag{
@@ -346,6 +476,34 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 		Value:   &c.cliConfig.JsonRPC.IPCPath,
 		Default: c.cliConfig.JsonRPC.IPCPath,
+		Group:   "JsonRPC",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "authrpc.jwtsecret",
+		Usage:   "Path to a JWT secret to use for authenticated RPC endpoints",
+		Value:   &c.cliConfig.JsonRPC.Auth.JWTSecret,
+		Default: c.cliConfig.JsonRPC.Auth.JWTSecret,
+		Group:   "JsonRPC",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "authrpc.addr",
+		Usage:   "Listening address for authenticated APIs",
+		Value:   &c.cliConfig.JsonRPC.Auth.Addr,
+		Default: c.cliConfig.JsonRPC.Auth.Addr,
+		Group:   "JsonRPC",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "authrpc.port",
+		Usage:   "Listening port for authenticated APIs",
+		Value:   &c.cliConfig.JsonRPC.Auth.Port,
+		Default: c.cliConfig.JsonRPC.Auth.Port,
+		Group:   "JsonRPC",
+	})
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name:    "authrpc.vhosts",
+		Usage:   "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value:   &c.cliConfig.JsonRPC.Auth.VHosts,
+		Default: c.cliConfig.JsonRPC.Auth.VHosts,
 		Group:   "JsonRPC",
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
@@ -420,6 +578,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.JsonRPC.Http.API,
 		Group:   "JsonRPC",
 	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "http.ep-size",
+		Usage:   "Maximum size of workers to run in rpc execution pool for HTTP requests",
+		Value:   &c.cliConfig.JsonRPC.Http.ExecutionPoolSize,
+		Default: c.cliConfig.JsonRPC.Http.ExecutionPoolSize,
+		Group:   "JsonRPC",
+	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "http.ep-requesttimeout",
+		Usage:   "Request Timeout for rpc execution pool for HTTP requests",
+		Value:   &c.cliConfig.JsonRPC.Http.ExecutionPoolRequestTimeout,
+		Default: c.cliConfig.JsonRPC.Http.ExecutionPoolRequestTimeout,
+		Group:   "JsonRPC",
+	})
 
 	// ws options
 	f.BoolFlag(&flagset.BoolFlag{
@@ -455,6 +627,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "API's offered over the WS-RPC interface",
 		Value:   &c.cliConfig.JsonRPC.Ws.API,
 		Default: c.cliConfig.JsonRPC.Ws.API,
+		Group:   "JsonRPC",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "ws.ep-size",
+		Usage:   "Maximum size of workers to run in rpc execution pool for WS requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.ExecutionPoolSize,
+		Default: c.cliConfig.JsonRPC.Ws.ExecutionPoolSize,
+		Group:   "JsonRPC",
+	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "ws.ep-requesttimeout",
+		Usage:   "Request Timeout for rpc execution pool for WS requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.ExecutionPoolRequestTimeout,
+		Default: c.cliConfig.JsonRPC.Ws.ExecutionPoolRequestTimeout,
 		Group:   "JsonRPC",
 	})
 
@@ -498,7 +684,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "maxpendpeers",
-		Usage:   "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Usage:   "Maximum number of pending connection attempts",
 		Value:   &c.cliConfig.P2P.MaxPendPeers,
 		Default: c.cliConfig.P2P.MaxPendPeers,
 		Group:   "P2P",
@@ -508,6 +694,27 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value:   &c.cliConfig.P2P.NAT,
 		Default: c.cliConfig.P2P.NAT,
+		Group:   "P2P",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "netrestrict",
+		Usage:   "Restricts network communication to the given IP networks (CIDR masks)",
+		Value:   &c.cliConfig.P2P.NetRestrict,
+		Default: c.cliConfig.P2P.NetRestrict,
+		Group:   "P2P",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "nodekey",
+		Usage:   " P2P node key file",
+		Value:   &c.cliConfig.P2P.NodeKey,
+		Default: c.cliConfig.P2P.NodeKey,
+		Group:   "P2P",
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "nodekeyhex",
+		Usage:   "P2P node key as hex",
+		Value:   &c.cliConfig.P2P.NodeKeyHex,
+		Default: c.cliConfig.P2P.NodeKeyHex,
 		Group:   "P2P",
 	})
 	f.BoolFlag(&flagset.BoolFlag{
@@ -576,10 +783,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "Telemetry",
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
-		Name:  "metrics.influxdb.tags",
-		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Value: &c.cliConfig.Telemetry.InfluxDB.Tags,
-		Group: "Telemetry",
+		Name:    "metrics.influxdb.tags",
+		Usage:   "Comma-separated InfluxDB tags (key/values) attached to all measurements",
+		Value:   &c.cliConfig.Telemetry.InfluxDB.Tags,
+		Group:   "Telemetry",
+		Default: c.cliConfig.Telemetry.InfluxDB.Tags,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "metrics.prometheus-addr",
@@ -696,5 +904,50 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.ParallelEVM.SpeculativeProcesses,
 		Default: c.cliConfig.ParallelEVM.SpeculativeProcesses,
 	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "dev.gaslimit",
+		Usage:   "Initial block gas limit",
+		Value:   &c.cliConfig.Developer.GasLimit,
+		Default: c.cliConfig.Developer.GasLimit,
+	})
+
+	// pprof
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "pprof",
+		Usage:   "Enable the pprof HTTP server",
+		Value:   &c.cliConfig.Pprof.Enabled,
+		Default: c.cliConfig.Pprof.Enabled,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "pprof.port",
+		Usage:   "pprof HTTP server listening port",
+		Value:   &c.cliConfig.Pprof.Port,
+		Default: c.cliConfig.Pprof.Port,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "pprof.addr",
+		Usage:   "pprof HTTP server listening interface",
+		Value:   &c.cliConfig.Pprof.Addr,
+		Default: c.cliConfig.Pprof.Addr,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "pprof.memprofilerate",
+		Usage:   "Turn on memory profiling with the given rate",
+		Value:   &c.cliConfig.Pprof.MemProfileRate,
+		Default: c.cliConfig.Pprof.MemProfileRate,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "pprof.blockprofilerate",
+		Usage:   "Turn on block profiling with the given rate",
+		Value:   &c.cliConfig.Pprof.BlockProfileRate,
+		Default: c.cliConfig.Pprof.BlockProfileRate,
+	})
+	// f.StringFlag(&flagset.StringFlag{
+	// 	Name:    "pprof.cpuprofile",
+	// 	Usage:   "Write CPU profile to the given file",
+	// 	Value:   &c.cliConfig.Pprof.CPUProfile,
+	// 	Default: c.cliConfig.Pprof.CPUProfile,
+	// })
+
 	return f
 }

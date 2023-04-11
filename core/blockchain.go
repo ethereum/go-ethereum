@@ -18,21 +18,29 @@
 package core
 
 import (
+	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -68,6 +76,7 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 
+	blockImportTimer     = metrics.NewRegisteredMeter("chain/imports", nil)
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
@@ -1361,43 +1370,89 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockAndSetHead(ctx context.Context, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	return bc.writeBlockAndSetHead(block, receipts, logs, state, emitHeadEvent)
+	return bc.writeBlockAndSetHead(ctx, block, receipts, logs, state, emitHeadEvent)
 }
 
 // writeBlockAndSetHead writes the block and all associated state to the database,
 // and also it applies the given block as the new chain head. This function expects
 // the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	writeBlockAndSetHeadCtx, span := tracing.StartSpan(ctx, "blockchain.writeBlockAndSetHead")
+	defer tracing.EndSpan(span)
+
 	var stateSyncLogs []*types.Log
-	if stateSyncLogs, err = bc.writeBlockWithState(block, receipts, logs, state); err != nil {
-		return NonStatTy, err
-	}
-	currentBlock := bc.CurrentBlock()
-	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeBlockWithState", func(_ context.Context, span trace.Span) {
+		stateSyncLogs, err = bc.writeBlockWithState(block, receipts, logs, state)
+		tracing.SetAttributes(
+			span,
+			attribute.Int("number", int(block.Number().Uint64())),
+			attribute.Bool("error", err != nil),
+		)
+	})
+
 	if err != nil {
 		return NonStatTy, err
 	}
-	if reorg {
-		// Reorganise the chain if the parent is not the head block
-		if block.ParentHash() != currentBlock.Hash() {
-			if err := bc.reorg(currentBlock, block); err != nil {
-				return NonStatTy, err
-			}
-		}
-		status = CanonStatTy
-	} else {
-		status = SideStatTy
+
+	currentBlock := bc.CurrentBlock()
+
+	var reorg bool
+
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.ReorgNeeded", func(_ context.Context, span trace.Span) {
+		reorg, err = bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+		tracing.SetAttributes(
+			span,
+			attribute.Int("number", int(block.Number().Uint64())),
+			attribute.Int("current block", int(currentBlock.Number().Uint64())),
+			attribute.Bool("reorg needed", reorg),
+			attribute.Bool("error", err != nil),
+		)
+	})
+	if err != nil {
+		return NonStatTy, err
 	}
+
+	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.reorg", func(_ context.Context, span trace.Span) {
+		if reorg {
+			// Reorganise the chain if the parent is not the head block
+			if block.ParentHash() != currentBlock.Hash() {
+				if err = bc.reorg(currentBlock, block); err != nil {
+					status = NonStatTy
+				}
+			}
+			status = CanonStatTy
+		} else {
+			status = SideStatTy
+		}
+
+		tracing.SetAttributes(
+			span,
+			attribute.Int("number", int(block.Number().Uint64())),
+			attribute.Int("current block", int(currentBlock.Number().Uint64())),
+			attribute.Bool("reorg needed", reorg),
+			attribute.Bool("error", err != nil),
+			attribute.String("status", string(status)),
+		)
+	})
+
+	if status == NonStatTy {
+		return
+	}
+
 	// Set new head.
 	if status == CanonStatTy {
-		bc.writeHeadBlock(block)
+		tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeHeadBlock", func(_ context.Context, _ trace.Span) {
+			bc.writeHeadBlock(block)
+		})
 	}
+
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
@@ -1530,6 +1585,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
+
+	// Update the block import meter; it will just record chains we've received
+	// from other peers. (Note that the actual chain which gets imported would be
+	// quite low).
+	blockImportTimer.Mark(int64(len(headers)))
 
 	// Check the validity of incoming chain
 	isValid, err1 := bc.forker.ValidateReorg(bc.CurrentBlock().Header(), headers)
@@ -1789,7 +1849,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			// Don't set the head, only insert the block
 			_, err = bc.writeBlockWithState(block, receipts, logs, statedb)
 		} else {
-			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
+			status, err = bc.writeBlockAndSetHead(context.Background(), block, receipts, logs, statedb, false)
 		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
@@ -2066,7 +2126,7 @@ func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
 	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 
 	// Append bor receipt
-	borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number)
+	borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number, bc.chainConfig)
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 	}
@@ -2198,6 +2258,35 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		// len(newChain) == 0 && len(oldChain) > 0
 		// rewind the canonical chain to a lower point.
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Println("Impossible reorg : Unable to get user home dir", "Error", err)
+		}
+		outPath := filepath.Join(home, "impossible-reorgs", fmt.Sprintf("%v-impossibleReorg", time.Now().Format(time.RFC3339)))
+
+		if _, err := os.Stat(outPath); errors.Is(err, os.ErrNotExist) {
+			err := os.MkdirAll(outPath, os.ModePerm)
+			if err != nil {
+				log.Error("Impossible reorg : Unable to create Dir", "Error", err)
+			}
+		} else {
+			err = ExportBlocks(oldChain, filepath.Join(outPath, "oldChain.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export oldChain", "Error", err)
+			}
+
+			err = ExportBlocks([]*types.Block{oldBlock}, filepath.Join(outPath, "oldBlock.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export oldBlock", "Error", err)
+			}
+
+			err = ExportBlocks([]*types.Block{newBlock}, filepath.Join(outPath, "newBlock.gz"))
+			if err != nil {
+				log.Error("Impossible reorg : Unable to export newBlock", "Error", err)
+			}
+		}
+
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
 	// Insert the new chain(except the head block(reverse order)),
@@ -2247,6 +2336,44 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 		}
 	}
+	return nil
+}
+
+// ExportBlocks exports blocks into the specified file, truncating any data
+// already present in the file.
+func ExportBlocks(blocks []*types.Block, fn string) error {
+	log.Info("Exporting blockchain", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the blocks and export them
+	if err := ExportN(writer, blocks); err != nil {
+		return err
+	}
+
+	log.Info("Exported blocks", "file", fn)
+
+	return nil
+}
+
+// ExportBlock writes a block to the given writer.
+func ExportN(w io.Writer, blocks []*types.Block) error {
+	for _, block := range blocks {
+		if err := block.EncodeRLP(w); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

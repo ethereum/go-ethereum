@@ -357,10 +357,6 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 		return err // This is an expected fault, don't keep printing it in a spin-loop
 	}
 
-	if errors.Is(err, whitelist.ErrNoRemoteCheckoint) {
-		log.Warn("Doesn't have remote checkpoint yet", "peer", id, "err", err)
-	}
-
 	log.Warn("Synchronisation failed, retrying", "peer", id, "err", err)
 
 	return err
@@ -1581,6 +1577,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 			// of the blocks delivered from the downloader, and the indexing will be off.
 			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
 		}
+
+		// If we've received too long future chain error (from whitelisting service),
+		// return that as the root error and `errInvalidChain` as context.
+		if errors.Is(err, whitelist.ErrLongFutureChain) {
+			return fmt.Errorf("%v: %w", errInvalidChain, err)
+		}
+
 		return fmt.Errorf("%w: %v", errInvalidChain, err)
 	}
 	return nil

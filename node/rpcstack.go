@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/rs/cors"
 
@@ -42,6 +43,10 @@ type httpConfig struct {
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
 	jwtSecret          []byte // optional JWT secret
+
+	// Execution pool config
+	executionPoolSize           uint64
+	executionPoolRequestTimeout time.Duration
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
@@ -50,6 +55,10 @@ type wsConfig struct {
 	Modules   []string
 	prefix    string // path prefix on which to mount ws handler
 	jwtSecret []byte // optional JWT secret
+
+	// Execution pool config
+	executionPoolSize           uint64
+	executionPoolRequestTimeout time.Duration
 }
 
 type rpcHandler struct {
@@ -81,10 +90,12 @@ type httpServer struct {
 	port     int
 
 	handlerNames map[string]string
+
+	RPCBatchLimit uint64
 }
 
-func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
-	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts, rpcBatchLimit uint64) *httpServer {
+	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string), RPCBatchLimit: rpcBatchLimit}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
@@ -282,7 +293,8 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 
 	// Create RPC server and handler.
-	srv := rpc.NewServer()
+	srv := rpc.NewServer(config.executionPoolSize, config.executionPoolRequestTimeout)
+	srv.SetRPCBatchLimit(h.RPCBatchLimit)
 	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
@@ -313,7 +325,8 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
 	// Create RPC server and handler.
-	srv := rpc.NewServer()
+	srv := rpc.NewServer(config.executionPoolSize, config.executionPoolRequestTimeout)
+	srv.SetRPCBatchLimit(h.RPCBatchLimit)
 	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}

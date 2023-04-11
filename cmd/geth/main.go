@@ -18,11 +18,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -44,6 +47,7 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
+	"github.com/maticnetwork/heimdall/cmd/heimdalld/service"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -343,6 +347,15 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
+	if ctx.GlobalBool(utils.RunHeimdallFlag.Name) {
+		shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
+		go func() {
+			service.NewHeimdallService(shutdownCtx, getHeimdallArgs(ctx))
+		}()
+	}
+
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
@@ -476,4 +489,9 @@ func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 	for i, account := range unlocks {
 		unlockAccount(ks, account, i, passwords)
 	}
+}
+
+func getHeimdallArgs(ctx *cli.Context) []string {
+	heimdallArgs := strings.Split(ctx.GlobalString(utils.RunHeimdallArgsFlag.Name), ",")
+	return append([]string{"start"}, heimdallArgs...)
 }

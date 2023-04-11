@@ -28,27 +28,27 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// nolint: gofmt
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
 // because RPCs are processed on background goroutines launched by handler.
 //
 // The entry points for incoming messages are:
 //
-//    h.handleMsg(message)
-//    h.handleBatch(message)
+//	h.handleMsg(message)
+//	h.handleBatch(message)
 //
 // Outgoing calls use the requestOp struct. Register the request before sending it
 // on the connection:
 //
-//    op := &requestOp{ids: ...}
-//    h.addRequestOp(op)
+//	op := &requestOp{ids: ...}
+//	h.addRequestOp(op)
 //
 // Now send the request, then wait for the reply to be delivered through handleMsg:
 //
-//    if err := op.wait(...); err != nil {
-//        h.removeRequestOp(op) // timeout, etc.
-//    }
-//
+//	if err := op.wait(...); err != nil {
+//	    h.removeRequestOp(op) // timeout, etc.
+//	}
 type handler struct {
 	reg            *serviceRegistry
 	unsubscribeCb  *callback
@@ -64,6 +64,8 @@ type handler struct {
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
+
+	executionPool *SafePool
 }
 
 type callProc struct {
@@ -71,7 +73,7 @@ type callProc struct {
 	notifiers []*Notifier
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, pool *SafePool) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:            reg,
@@ -84,11 +86,13 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
 		log:            log.Root(),
+		executionPool:  pool,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
+
 	return h
 }
 
@@ -219,12 +223,16 @@ func (h *handler) cancelServerSubscriptions(err error) {
 // startCallProc runs fn in a new goroutine and starts tracking it in the h.calls wait group.
 func (h *handler) startCallProc(fn func(*callProc)) {
 	h.callWG.Add(1)
-	go func() {
-		ctx, cancel := context.WithCancel(h.rootCtx)
+
+	ctx, cancel := context.WithCancel(h.rootCtx)
+
+	h.executionPool.Submit(context.Background(), func() error {
 		defer h.callWG.Done()
 		defer cancel()
 		fn(&callProc{ctx: ctx})
-	}()
+
+		return nil
+	})
 }
 
 // handleImmediate executes non-call messages. It returns false if the message is a
@@ -261,6 +269,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 
 // handleResponse processes method call responses.
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
+
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
 		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
@@ -281,7 +290,11 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 		return
 	}
 	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
-		go op.sub.run()
+		h.executionPool.Submit(context.Background(), func() error {
+			op.sub.run()
+			return nil
+		})
+
 		h.clientSubs[op.sub.subid] = op.sub
 	}
 }

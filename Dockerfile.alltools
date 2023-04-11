@@ -13,6 +13,6 @@ RUN set -x \
     && apk add --update --no-cache \
        ca-certificates \
     && rm -rf /var/cache/apk/*
-COPY --from=builder /bor/build/bin/* /usr/local/bin/
+COPY --from=builder /bor/build/bin/* /usr/bin/
 
 EXPOSE 8545 8546 30303 30303/udp

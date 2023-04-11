@@ -6,4 +6,4 @@ The `account new` command creates a new local account file on the Bor data direc
 
 - ```datadir```: Path of the data directory to store information
 
-- ```keystore```: Path of the data directory to store information
+- ```keystore```: Path of the data directory to store keys

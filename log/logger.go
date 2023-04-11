@@ -106,6 +106,8 @@ type RecordKeyNames struct {
 	Ctx  string
 }
 
+type Logging func(msg string, ctx ...interface{})
+
 // A Logger writes key/value pairs to a Handler
 type Logger interface {
 	// New returns a new Logger that has this logger's context plus the given context
@@ -124,6 +126,13 @@ type Logger interface {
 	Warn(msg string, ctx ...interface{})
 	Error(msg string, ctx ...interface{})
 	Crit(msg string, ctx ...interface{})
+
+	OnTrace(func(l Logging))
+	OnDebug(func(l Logging))
+	OnInfo(func(l Logging))
+	OnWarn(func(l Logging))
+	OnError(func(l Logging))
+	OnCrit(func(l Logging))
 }
 
 type logger struct {
@@ -196,6 +205,38 @@ func (l *logger) GetHandler() Handler {
 
 func (l *logger) SetHandler(h Handler) {
 	l.h.Swap(h)
+}
+
+func (l *logger) OnTrace(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlTrace {
+		fn(l.Trace)
+	}
+}
+
+func (l *logger) OnDebug(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlDebug {
+		fn(l.Debug)
+	}
+}
+func (l *logger) OnInfo(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlInfo {
+		fn(l.Info)
+	}
+}
+func (l *logger) OnWarn(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlWarn {
+		fn(l.Warn)
+	}
+}
+func (l *logger) OnError(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlError {
+		fn(l.Error)
+	}
+}
+func (l *logger) OnCrit(fn func(l Logging)) {
+	if l.GetHandler().Level() >= LvlCrit {
+		fn(l.Crit)
+	}
 }
 
 func normalize(ctx []interface{}) []interface{} {

@@ -114,9 +114,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 func (f *ForkChoice) ValidateReorg(current *types.Header, chain []*types.Header) (bool, error) {
 	// Call the bor chain validator service
 	if f.validator != nil {
-		if isValid := f.validator.IsValidChain(current, chain); !isValid {
-			return false, nil
-		}
+		return f.validator.IsValidChain(current, chain)
 	}
 
 	return true, nil

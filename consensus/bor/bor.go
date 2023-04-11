@@ -227,7 +227,8 @@ type Bor struct {
 	HeimdallClient         IHeimdallClient
 
 	// The fields below are for testing only
-	fakeDiff bool // Skip difficulty verifications
+	fakeDiff      bool // Skip difficulty verifications
+	devFakeAuthor bool
 
 	closeOnce sync.Once
 }
@@ -245,6 +246,7 @@ func New(
 	spanner Spanner,
 	heimdallClient IHeimdallClient,
 	genesisContracts GenesisContract,
+	devFakeAuthor bool,
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor
@@ -267,6 +269,7 @@ func New(
 		spanner:                spanner,
 		GenesisContractsClient: genesisContracts,
 		HeimdallClient:         heimdallClient,
+		devFakeAuthor:          devFakeAuthor,
 	}
 
 	c.authorizedSigner.Store(&signer{
@@ -296,6 +299,14 @@ func (c *Bor) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *Bor) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, _ bool) error {
 	return c.verifyHeader(chain, header, nil)
+}
+
+func (c *Bor) GetSpanner() Spanner {
+	return c.spanner
+}
+
+func (c *Bor) SetSpanner(spanner Spanner) {
+	c.spanner = spanner
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
@@ -454,6 +465,33 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 		return err
 	}
 
+	// Verify the validator list match the local contract
+	if IsSprintStart(number+1, c.config.CalculateSprint(number)) {
+		newValidators, err := c.spanner.GetCurrentValidatorsByBlockNrOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), number+1)
+
+		if err != nil {
+			return err
+		}
+
+		sort.Sort(valset.ValidatorsByAddress(newValidators))
+
+		headerVals, err := valset.ParseValidators(header.Extra[extraVanity : len(header.Extra)-extraSeal])
+
+		if err != nil {
+			return err
+		}
+
+		if len(newValidators) != len(headerVals) {
+			return errInvalidSpanValidators
+		}
+
+		for i, val := range newValidators {
+			if !bytes.Equal(val.HeaderBytes(), headerVals[i].HeaderBytes()) {
+				return errInvalidSpanValidators
+			}
+		}
+	}
+
 	// verify the validator list in the last sprint block
 	if IsSprintStart(number, c.config.CalculateSprint(number)) {
 		parentValidatorBytes := parent.Extra[extraVanity : len(parent.Extra)-extraSeal]
@@ -480,6 +518,19 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 // nolint: gocognit
 func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
+
+	signer := common.BytesToAddress(c.authorizedSigner.Load().signer.Bytes())
+	if c.devFakeAuthor && signer.String() != "0x0000000000000000000000000000000000000000" {
+		log.Info("👨‍💻Using DevFakeAuthor", "signer", signer)
+
+		val := valset.NewValidator(signer, 1000)
+		validatorset := valset.NewValidatorSet([]*valset.Validator{val})
+
+		snapshot := newSnapshot(c.config, c.signatures, number, hash, validatorset.Validators)
+
+		return snapshot, nil
+	}
+
 	var snap *Snapshot
 
 	headers := make([]*types.Header, 0, 16)
@@ -518,7 +569,7 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 				hash := checkpoint.Hash()
 
 				// get validators and current span
-				validators, err := c.spanner.GetCurrentValidators(context.Background(), hash, number+1)
+				validators, err := c.spanner.GetCurrentValidatorsByHash(context.Background(), hash, number+1)
 				if err != nil {
 					return nil, err
 				}
@@ -688,7 +739,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 	// get validator set if number
 	if IsSprintStart(number+1, c.config.CalculateSprint(number)) {
-		newValidators, err := c.spanner.GetCurrentValidators(context.Background(), header.ParentHash, number+1)
+		newValidators, err := c.spanner.GetCurrentValidatorsByHash(context.Background(), header.ParentHash, number+1)
 		if err != nil {
 			return errUnknownValidators
 		}
@@ -1161,7 +1212,7 @@ func (c *Bor) CommitStates(
 	processStart := time.Now()
 	totalGas := 0 /// limit on gas for state sync per block
 	chainID := c.chainConfig.ChainID.String()
-	stateSyncs := make([]*types.StateSyncData, len(eventRecords))
+	stateSyncs := make([]*types.StateSyncData, 0, len(eventRecords))
 
 	var gasUsed uint64
 
@@ -1218,7 +1269,7 @@ func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 }
 
 func (c *Bor) GetCurrentValidators(ctx context.Context, headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {
-	return c.spanner.GetCurrentValidators(ctx, headerHash, blockNumber)
+	return c.spanner.GetCurrentValidatorsByHash(ctx, headerHash, blockNumber)
 }
 
 //

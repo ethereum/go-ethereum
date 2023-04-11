@@ -10,7 +10,7 @@ import (
 )
 
 // GetDeveloperChain returns the developer mode configs.
-func GetDeveloperChain(period uint64, faucet common.Address) *Chain {
+func GetDeveloperChain(period uint64, gasLimitt uint64, faucet common.Address) *Chain {
 	// Override the default period to the user requested one
 	config := *params.AllCliqueProtocolChanges
 	config.Clique = &params.CliqueConfig{
@@ -26,7 +26,7 @@ func GetDeveloperChain(period uint64, faucet common.Address) *Chain {
 		Genesis: &core.Genesis{
 			Config:     &config,
 			ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
-			GasLimit:   11500000,
+			GasLimit:   gasLimitt,
 			BaseFee:    big.NewInt(params.InitialBaseFee),
 			Difficulty: big.NewInt(1),
 			Alloc: map[common.Address]core.GenesisAccount{

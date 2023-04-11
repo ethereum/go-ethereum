@@ -105,13 +105,16 @@ func New(conf *Config) (*Node, error) {
 
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer(),
+		inprocHandler: rpc.NewServer(0, 0),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
+
+	// set RPC batch limit
+	node.inprocHandler.SetRPCBatchLimit(conf.RPCBatchLimit)
 
 	// Register built-in APIs.
 	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
@@ -153,10 +156,10 @@ func New(conf *Config) (*Node, error) {
 	}
 
 	// Configure RPC servers.
-	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.http = newHTTPServer(node.log, conf.HTTPTimeouts, conf.RPCBatchLimit)
+	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts, conf.RPCBatchLimit)
+	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts, conf.RPCBatchLimit)
+	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts, conf.RPCBatchLimit)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
@@ -402,10 +405,12 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableRPC(apis, httpConfig{
-			CorsAllowedOrigins: n.config.HTTPCors,
-			Vhosts:             n.config.HTTPVirtualHosts,
-			Modules:            n.config.HTTPModules,
-			prefix:             n.config.HTTPPathPrefix,
+			CorsAllowedOrigins:          n.config.HTTPCors,
+			Vhosts:                      n.config.HTTPVirtualHosts,
+			Modules:                     n.config.HTTPModules,
+			prefix:                      n.config.HTTPPathPrefix,
+			executionPoolSize:           n.config.HTTPJsonRPCExecutionPoolSize,
+			executionPoolRequestTimeout: n.config.HTTPJsonRPCExecutionPoolRequestTimeout,
 		}); err != nil {
 			return err
 		}
@@ -419,9 +424,11 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(n.rpcAPIs, wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
+			Modules:                     n.config.WSModules,
+			Origins:                     n.config.WSOrigins,
+			prefix:                      n.config.WSPathPrefix,
+			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
+			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
 		}); err != nil {
 			return err
 		}

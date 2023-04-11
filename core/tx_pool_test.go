@@ -49,6 +49,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+
+	"github.com/JekaMas/crand"
 )
 
 var (
@@ -180,6 +182,10 @@ func validateTxPoolInternals(pool *TxPool) error {
 
 		if nonce := pool.pendingNonces.get(addr); nonce != last+1 {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
+		}
+
+		if txs.totalcost.Cmp(common.Big0) < 0 {
+			return fmt.Errorf("totalcost went negative: %v", txs.totalcost)
 		}
 	}
 
@@ -890,6 +896,7 @@ func TestTransactionGapFilling(t *testing.T) {
 	if queued != 1 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 	}
+
 	if err := validateEvents(events, 1); err != nil {
 		t.Fatalf("original event firing failed: %v", err)
 	}
@@ -951,6 +958,53 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 	}
 	if pool.all.Count() != int(testTxPoolConfig.AccountQueue) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), testTxPoolConfig.AccountQueue)
+	}
+}
+
+// Test that txpool rejects unprotected txs by default
+// FIXME: The below test causes some tests to fail randomly (probably due to parallel execution)
+//
+//nolint:paralleltest
+func TestRejectUnprotectedTransaction(t *testing.T) {
+	//nolint:paralleltest
+	t.Skip()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool.chainconfig.ChainID = big.NewInt(5)
+	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
+	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
+
+	if err := pool.AddRemote(tx); !errors.Is(err, types.ErrInvalidChainId) {
+		t.Error("expected", types.ErrInvalidChainId, "got", err)
+	}
+}
+
+// Test that txpool allows unprotected txs when AllowUnprotectedTxs flag is set
+// FIXME: The below test causes some tests to fail randomly (probably due to parallel execution)
+//
+//nolint:paralleltest
+func TestAllowUnprotectedTransactionWhenSet(t *testing.T) {
+	t.Skip()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	// Allow unprotected txs
+	pool.config.AllowUnprotectedTxs = true
+	pool.chainconfig.ChainID = big.NewInt(5)
+	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
+	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
+
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
 	}
 }
 
@@ -1212,7 +1266,7 @@ func TestTransactionPendingLimiting(t *testing.T) {
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	testAddBalance(pool, account, big.NewInt(1000000))
+	testAddBalance(pool, account, big.NewInt(1000000000000))
 
 	// Keep track of transaction events to ensure all executables get announced
 	events := make(chan NewTxsEvent, testTxPoolConfig.AccountQueue+5)
@@ -1752,7 +1806,7 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 3)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(100000*1000000))
 	}
 	// Create transaction (both pending and queued) with a linearly growing gasprice
 	for i := uint64(0); i < 500; i++ {
@@ -1831,7 +1885,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Create a number of test accounts and fund them
-	keys := make([]*ecdsa.PrivateKey, 4)
+	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
@@ -1867,6 +1921,10 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
 	}
+	// Replace a future transaction with a future transaction
+	if err := pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(2), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
+		t.Fatalf("failed to add well priced transaction: %v", err)
+	}
 	// Ensure that adding high priced transactions drops cheap ones, but not own
 	if err := pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil { // +K1:0 => -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
 		t.Fatalf("failed to add well priced transaction: %v", err)
@@ -1877,6 +1935,10 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(3, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:3 => -K0:1 => Pend K1:0, K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
+	// Ensure that replacing a pending transaction with a future transaction fails
+	if err := pool.AddRemote(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); err != ErrFutureReplacePending {
+		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, ErrFutureReplacePending)
+	}
 	pending, queued = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
@@ -1884,9 +1946,11 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-	if err := validateEvents(events, 1); err != nil {
+
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("additional event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -2046,11 +2110,12 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 
-	tx = pricedTransaction(2, 100000, big.NewInt(3), keys[1])
+	tx = pricedTransaction(1, 100000, big.NewInt(3), keys[1])
 	if err := pool.AddRemote(tx); err != nil { // +K1:2, -K0:1 => Pend K0:0 K1:0, K2:0; Que K1:2
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	tx = dynamicFeeTx(3, 100000, big.NewInt(4), big.NewInt(1), keys[1])
+
+	tx = dynamicFeeTx(2, 100000, big.NewInt(4), big.NewInt(1), keys[1])
 	if err := pool.AddRemote(tx); err != nil { // +K1:3, -K1:0 => Pend K0:0 K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
@@ -2061,9 +2126,11 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-	if err := validateEvents(events, 1); err != nil {
+
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("additional event firing failed: %v", err)
 	}
+
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -2675,7 +2742,7 @@ func BenchmarkPoolBatchInsert(b *testing.B) {
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	testAddBalance(pool, account, big.NewInt(1000000))
+	testAddBalance(pool, account, big.NewInt(1000000000000000000))
 
 	const format = "size %d, is local %t"
 
@@ -3690,6 +3757,45 @@ func MakeWithPromoteTxCh(ch chan struct{}) func(*TxPool) {
 	return func(pool *TxPool) {
 		pool.promoteTxCh = ch
 	}
+}
+
+func BenchmarkBigs(b *testing.B) {
+	// max 256-bit
+	max := new(big.Int)
+	max.Exp(big.NewInt(2), big.NewInt(256), nil).Sub(max, big.NewInt(1))
+
+	ints := make([]*big.Int, 1000000)
+	intUs := make([]*uint256.Int, 1000000)
+
+	var over bool
+
+	for i := 0; i < len(ints); i++ {
+		ints[i] = crand.BigInt(max)
+		intUs[i], over = uint256.FromBig(ints[i])
+
+		if over {
+			b.Fatal(ints[i], over)
+		}
+	}
+
+	b.Run("*big.Int", func(b *testing.B) {
+		var r int
+
+		for i := 0; i < b.N; i++ {
+			r = ints[i%len(ints)%b.N].Cmp(ints[(i+1)%len(ints)%b.N])
+		}
+
+		fmt.Fprintln(io.Discard, r)
+	})
+	b.Run("*uint256.Int", func(b *testing.B) {
+		var r int
+
+		for i := 0; i < b.N; i++ {
+			r = intUs[i%len(intUs)%b.N].Cmp(intUs[(i+1)%len(intUs)%b.N])
+		}
+
+		fmt.Fprintln(io.Discard, r)
+	})
 }
 
 //nolint:thelper

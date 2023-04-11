@@ -101,100 +101,102 @@ var flagMap = map[string][]string{
 
 // map from cli flags to corresponding toml tags
 var nameTagMap = map[string]string{
-	"chain":                  "chain",
-	"identity":               "identity",
-	"log-level":              "log-level",
-	"datadir":                "datadir",
-	"keystore":               "keystore",
-	"syncmode":               "syncmode",
-	"gcmode":                 "gcmode",
-	"eth.requiredblocks":     "eth.requiredblocks",
-	"0-snapshot":             "snapshot",
-	"\"bor.logs\"":           "bor.logs",
-	"url":                    "bor.heimdall",
-	"\"bor.without\"":        "bor.withoutheimdall",
-	"grpc-address":           "bor.heimdallgRPC",
-	"locals":                 "txpool.locals",
-	"nolocals":               "txpool.nolocals",
-	"journal":                "txpool.journal",
-	"rejournal":              "txpool.rejournal",
-	"pricelimit":             "txpool.pricelimit",
-	"pricebump":              "txpool.pricebump",
-	"accountslots":           "txpool.accountslots",
-	"globalslots":            "txpool.globalslots",
-	"accountqueue":           "txpool.accountqueue",
-	"globalqueue":            "txpool.globalqueue",
-	"lifetime":               "txpool.lifetime",
-	"mine":                   "mine",
-	"etherbase":              "miner.etherbase",
-	"extradata":              "miner.extradata",
-	"gaslimit":               "miner.gaslimit",
-	"gasprice":               "miner.gasprice",
-	"ethstats":               "ethstats",
-	"blocks":                 "gpo.blocks",
-	"percentile":             "gpo.percentile",
-	"maxprice":               "gpo.maxprice",
-	"ignoreprice":            "gpo.ignoreprice",
-	"cache":                  "cache",
-	"1-database":             "cache.database",
-	"trie":                   "cache.trie",
-	"trie.journal":           "cache.journal",
-	"trie.rejournal":         "cache.rejournal",
-	"gc":                     "cache.gc",
-	"1-snapshot":             "cache.snapshot",
-	"noprefetch":             "cache.noprefetch",
-	"preimages":              "cache.preimages",
-	"txlookuplimit":          "txlookuplimit",
-	"gascap":                 "rpc.gascap",
-	"txfeecap":               "rpc.txfeecap",
-	"ipcdisable":             "ipcdisable",
-	"ipcpath":                "ipcpath",
-	"1-corsdomain":           "http.corsdomain",
-	"1-vhosts":               "http.vhosts",
-	"origins":                "ws.origins",
-	"3-corsdomain":           "graphql.corsdomain",
-	"3-vhosts":               "graphql.vhosts",
-	"1-enabled":              "http",
-	"1-host":                 "http.addr",
-	"1-port":                 "http.port",
-	"1-prefix":               "http.rpcprefix",
-	"1-api":                  "http.api",
-	"2-enabled":              "ws",
-	"2-host":                 "ws.addr",
-	"2-port":                 "ws.port",
-	"2-prefix":               "ws.rpcprefix",
-	"2-api":                  "ws.api",
-	"3-enabled":              "graphql",
-	"bind":                   "bind",
-	"0-port":                 "port",
-	"bootnodes":              "bootnodes",
-	"maxpeers":               "maxpeers",
-	"maxpendpeers":           "maxpendpeers",
-	"nat":                    "nat",
-	"nodiscover":             "nodiscover",
-	"v5disc":                 "v5disc",
-	"metrics":                "metrics",
-	"expensive":              "metrics.expensive",
-	"influxdb":               "metrics.influxdb",
-	"endpoint":               "metrics.influxdb.endpoint",
-	"0-database":             "metrics.influxdb.database",
-	"username":               "metrics.influxdb.username",
-	"0-password":             "metrics.influxdb.password",
-	"tags":                   "metrics.influxdb.tags",
-	"prometheus-addr":        "metrics.prometheus-addr",
-	"opencollector-endpoint": "metrics.opencollector-endpoint",
-	"influxdbv2":             "metrics.influxdbv2",
-	"token":                  "metrics.influxdb.token",
-	"bucket":                 "metrics.influxdb.bucket",
-	"organization":           "metrics.influxdb.organization",
-	"unlock":                 "unlock",
-	"1-password":             "password",
-	"allow-insecure-unlock":  "allow-insecure-unlock",
-	"lightkdf":               "lightkdf",
-	"disable-bor-wallet":     "disable-bor-wallet",
-	"addr":                   "grpc.addr",
-	"dev":                    "dev",
-	"period":                 "dev.period",
+	"chain":                   "chain",
+	"identity":                "identity",
+	"verbosity":               "verbosity",
+	"datadir":                 "datadir",
+	"keystore":                "keystore",
+	"syncmode":                "syncmode",
+	"gcmode":                  "gcmode",
+	"eth.requiredblocks":      "eth.requiredblocks",
+	"0-snapshot":              "snapshot",
+	"\"bor.logs\"":            "bor.logs",
+	"url":                     "bor.heimdall",
+	"\"bor.without\"":         "bor.withoutheimdall",
+	"grpc-address":            "bor.heimdallgRPC",
+	"\"bor.runheimdall\"":     "bor.runheimdall",
+	"\"bor.runheimdallargs\"": "bor.runheimdallargs",
+	"locals":                  "txpool.locals",
+	"nolocals":                "txpool.nolocals",
+	"journal":                 "txpool.journal",
+	"rejournal":               "txpool.rejournal",
+	"pricelimit":              "txpool.pricelimit",
+	"pricebump":               "txpool.pricebump",
+	"accountslots":            "txpool.accountslots",
+	"globalslots":             "txpool.globalslots",
+	"accountqueue":            "txpool.accountqueue",
+	"globalqueue":             "txpool.globalqueue",
+	"lifetime":                "txpool.lifetime",
+	"mine":                    "mine",
+	"etherbase":               "miner.etherbase",
+	"extradata":               "miner.extradata",
+	"gaslimit":                "miner.gaslimit",
+	"gasprice":                "miner.gasprice",
+	"ethstats":                "ethstats",
+	"blocks":                  "gpo.blocks",
+	"percentile":              "gpo.percentile",
+	"maxprice":                "gpo.maxprice",
+	"ignoreprice":             "gpo.ignoreprice",
+	"cache":                   "cache",
+	"1-database":              "cache.database",
+	"trie":                    "cache.trie",
+	"trie.journal":            "cache.journal",
+	"trie.rejournal":          "cache.rejournal",
+	"gc":                      "cache.gc",
+	"1-snapshot":              "cache.snapshot",
+	"noprefetch":              "cache.noprefetch",
+	"preimages":               "cache.preimages",
+	"txlookuplimit":           "txlookuplimit",
+	"gascap":                  "rpc.gascap",
+	"txfeecap":                "rpc.txfeecap",
+	"ipcdisable":              "ipcdisable",
+	"ipcpath":                 "ipcpath",
+	"1-corsdomain":            "http.corsdomain",
+	"1-vhosts":                "http.vhosts",
+	"origins":                 "ws.origins",
+	"3-corsdomain":            "graphql.corsdomain",
+	"3-vhosts":                "graphql.vhosts",
+	"1-enabled":               "http",
+	"1-host":                  "http.addr",
+	"1-port":                  "http.port",
+	"1-prefix":                "http.rpcprefix",
+	"1-api":                   "http.api",
+	"2-enabled":               "ws",
+	"2-host":                  "ws.addr",
+	"2-port":                  "ws.port",
+	"2-prefix":                "ws.rpcprefix",
+	"2-api":                   "ws.api",
+	"3-enabled":               "graphql",
+	"bind":                    "bind",
+	"0-port":                  "port",
+	"bootnodes":               "bootnodes",
+	"maxpeers":                "maxpeers",
+	"maxpendpeers":            "maxpendpeers",
+	"nat":                     "nat",
+	"nodiscover":              "nodiscover",
+	"v5disc":                  "v5disc",
+	"metrics":                 "metrics",
+	"expensive":               "metrics.expensive",
+	"influxdb":                "metrics.influxdb",
+	"endpoint":                "metrics.influxdb.endpoint",
+	"0-database":              "metrics.influxdb.database",
+	"username":                "metrics.influxdb.username",
+	"0-password":              "metrics.influxdb.password",
+	"tags":                    "metrics.influxdb.tags",
+	"prometheus-addr":         "metrics.prometheus-addr",
+	"opencollector-endpoint":  "metrics.opencollector-endpoint",
+	"influxdbv2":              "metrics.influxdbv2",
+	"token":                   "metrics.influxdb.token",
+	"bucket":                  "metrics.influxdb.bucket",
+	"organization":            "metrics.influxdb.organization",
+	"unlock":                  "unlock",
+	"1-password":              "password",
+	"allow-insecure-unlock":   "allow-insecure-unlock",
+	"lightkdf":                "lightkdf",
+	"disable-bor-wallet":      "disable-bor-wallet",
+	"addr":                    "grpc.addr",
+	"dev":                     "dev",
+	"period":                  "dev.period",
 }
 
 var removedFlagsAndValues = map[string]string{}
@@ -213,15 +215,15 @@ var replacedFlagsMapFlagAndValue = map[string]map[string]map[string]string{
 	},
 	"verbosity": {
 		"flag": {
-			"verbosity": "log-level",
+			"verbosity": "verbosity",
 		},
 		"value": {
-			"0": "SILENT",
+			"0": "CRIT",
 			"1": "ERROR",
 			"2": "WARN",
 			"3": "INFO",
 			"4": "DEBUG",
-			"5": "DETAIL",
+			"5": "TRACE",
 		},
 	},
 }
@@ -233,6 +235,7 @@ var currentBoolFlags = []string{
 	"snapshot",
 	"bor.logs",
 	"bor.withoutheimdall",
+	"bor.runheimdall",
 	"txpool.nolocals",
 	"mine",
 	"cache.noprefetch",
@@ -358,6 +361,34 @@ func writeTempStaticTrustedTOML(path string) {
 			log.Fatal(err)
 		}
 	}
+
+	if data.Has("Node.HTTPTimeouts.ReadTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsReadTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.ReadTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Node.HTTPTimeouts.WriteTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsWriteTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.WriteTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Node.HTTPTimeouts.IdleTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsIdleTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.IdleTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Eth.TrieTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsTrieTimeout.toml", []byte(data.Get("Eth.TrieTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 func getStaticTrustedNodes(args []string) {
@@ -376,7 +407,7 @@ func getStaticTrustedNodes(args []string) {
 			fmt.Println("only TOML config file is supported through CLI")
 		}
 	} else {
-		path := "~/.bor/data/bor/static-nodes.json"
+		path := "./static-nodes.json"
 		if !checkFileExists(path) {
 			return
 		}
@@ -581,7 +612,7 @@ func commentFlags(path string, updatedArgs []string) {
 				flag = strconv.Itoa(passwordFlag) + "-" + flag
 			}
 
-			if flag != "static-nodes" && flag != "trusted-nodes" {
+			if flag != "static-nodes" && flag != "trusted-nodes" && flag != "read" && flag != "write" && flag != "idle" && flag != "timeout" {
 				flag = nameTagMap[flag]
 
 				tempFlag := false
