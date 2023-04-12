@@ -18,6 +18,7 @@ package vm
 
 import (
 	"hash"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -34,6 +35,11 @@ type Config struct {
 	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
 
 	ExtraEips []int // Additional EIPS that are to be enabled
+
+	ExternalContracts []common.Address
+	// TODO: add read-only argument - or separate function?
+	// TODO: could also put all the arguments into an object which can be json serialized
+	ExternalCallback func(caller common.Address, callee common.Address, value *big.Int, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error)
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
