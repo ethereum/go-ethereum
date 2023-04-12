@@ -1,0 +1,16 @@
+[Unit]
+  Description=bor
+  StartLimitIntervalSec=500
+  StartLimitBurst=5
+
+[Service]
+  Restart=on-failure
+  RestartSec=5s
+  ExecStart=/usr/bin/bor server -config "/var/lib/bor/config.toml"
+  Type=simple
+  KillSignal=SIGINT
+  User=bor
+  TimeoutStopSec=120
+
+[Install]
+  WantedBy=multi-user.target

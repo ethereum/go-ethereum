@@ -19,6 +19,7 @@ package core
 import (
 	"container/heap"
 	"math"
+	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -149,19 +151,38 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transac
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
-		m.reheap()
+		m.reheap(false)
 	}
 	return removed
 }
 
-func (m *txSortedMap) reheap() {
-	*m.index = make([]uint64, 0, len(m.items))
+func (m *txSortedMap) reheap(withRlock bool) {
+	index := make(nonceHeap, 0, len(m.items))
 
-	for nonce := range m.items {
-		*m.index = append(*m.index, nonce)
+	if withRlock {
+		m.m.RLock()
+		log.Info("[DEBUG] Acquired lock over txpool map while performing reheap")
 	}
 
-	heap.Init(m.index)
+	for nonce := range m.items {
+		index = append(index, nonce)
+	}
+
+	if withRlock {
+		m.m.RUnlock()
+	}
+
+	heap.Init(&index)
+
+	if withRlock {
+		m.m.Lock()
+	}
+
+	m.index = &index
+
+	if withRlock {
+		m.m.Unlock()
+	}
 
 	m.cacheMu.Lock()
 	m.cache = nil
@@ -351,9 +372,8 @@ func (m *txSortedMap) lastElement() *types.Transaction {
 
 		m.cacheMu.Unlock()
 
-		cache = make(types.Transactions, 0, len(m.items))
-
 		m.m.RLock()
+		cache = make(types.Transactions, 0, len(m.items))
 
 		for _, tx := range m.items {
 			cache = append(cache, tx)
@@ -371,6 +391,11 @@ func (m *txSortedMap) lastElement() *types.Transaction {
 		missCacheCounter.Inc(1)
 	} else {
 		hitCacheCounter.Inc(1)
+	}
+
+	ln := len(cache)
+	if ln == 0 {
+		return nil
 	}
 
 	return cache[len(cache)-1]
@@ -398,16 +423,18 @@ type txList struct {
 	strict bool         // Whether nonces are strictly continuous or not
 	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
 
-	costcap *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap  uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	totalcost *big.Int     // Total cost of all transactions in the list
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
 func newTxList(strict bool) *txList {
 	return &txList{
-		strict: strict,
-		txs:    newTxSortedMap(),
+		strict:    strict,
+		txs:       newTxSortedMap(),
+		totalcost: new(big.Int),
 	}
 }
 
@@ -446,7 +473,12 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 		if tx.GasFeeCapUIntLt(thresholdFeeCap) || tx.GasTipCapUIntLt(thresholdTip) {
 			return false, nil
 		}
+		// Old is being replaced, subtract old cost
+		l.subTotalCost([]*types.Transaction{old})
 	}
+
+	// Add new tx cost to totalcost
+	l.totalcost.Add(l.totalcost, tx.Cost())
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
@@ -466,7 +498,10 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (l *txList) Forward(threshold uint64) types.Transactions {
-	return l.txs.Forward(threshold)
+	txs := l.txs.Forward(threshold)
+	l.subTotalCost(txs)
+
+	return txs
 }
 
 // Filter removes all transactions from the list with a cost or gas limit higher
@@ -506,16 +541,27 @@ func (l *txList) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transact
 				lowest = nonce
 			}
 		}
+
+		l.txs.m.Lock()
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
+		l.txs.m.Unlock()
 	}
-	l.txs.reheap()
+	// Reset total cost
+	l.subTotalCost(removed)
+	l.subTotalCost(invalids)
+
+	l.txs.reheap(true)
+
 	return removed, invalids
 }
 
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (l *txList) Cap(threshold int) types.Transactions {
-	return l.txs.Cap(threshold)
+	txs := l.txs.Cap(threshold)
+	l.subTotalCost(txs)
+
+	return txs
 }
 
 // Remove deletes a transaction from the maintained list, returning whether the
@@ -527,9 +573,14 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
+
+	l.subTotalCost([]*types.Transaction{tx})
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
-		return true, l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
+		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
+		l.subTotalCost(txs)
+
+		return true, txs
 	}
 	return true, nil
 }
@@ -542,7 +593,10 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *txList) Ready(start uint64) types.Transactions {
-	return l.txs.Ready(start)
+	txs := l.txs.Ready(start)
+	l.subTotalCost(txs)
+
+	return txs
 }
 
 // Len returns the length of the transaction list.
@@ -570,6 +624,14 @@ func (l *txList) LastElement() *types.Transaction {
 
 func (l *txList) Has(nonce uint64) bool {
 	return l != nil && l.txs.items[nonce] != nil
+}
+
+// subTotalCost subtracts the cost of the given transactions from the
+// total cost of all transactions.
+func (l *txList) subTotalCost(txs []*types.Transaction) {
+	for _, tx := range txs {
+		l.totalcost.Sub(l.totalcost, tx.Cost())
+	}
 }
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving

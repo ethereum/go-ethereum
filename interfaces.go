@@ -242,7 +242,7 @@ type StateSyncFilter struct {
 // interface for whitelist service
 type ChainValidator interface {
 	IsValidPeer(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
-	IsValidChain(currentHeader *types.Header, chain []*types.Header) bool
+	IsValidChain(currentHeader *types.Header, chain []*types.Header) (bool, error)
 	ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash)
 	GetCheckpointWhitelist() map[uint64]common.Hash
 	PurgeCheckpointWhitelist()

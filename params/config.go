@@ -407,14 +407,17 @@ var (
 		Bor: &BorConfig{
 			JaipurBlock:           big.NewInt(23850000),
 			ParallelUniverseBlock: big.NewInt(0),
+			DelhiBlock:            big.NewInt(38189056),
 			Period: map[string]uint64{
 				"0": 2,
 			},
 			ProducerDelay: map[string]uint64{
-				"0": 6,
+				"0":        6,
+				"38189056": 4,
 			},
 			Sprint: map[string]uint64{
-				"0": 64,
+				"0":        64,
+				"38189056": 16,
 			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
@@ -625,6 +628,10 @@ func (c *BorConfig) IsParallelUniverse(number *big.Int) bool {
 	}
 
 	return isForked(c.ParallelUniverseBlock, number)
+}
+
+func (c *BorConfig) IsSprintStart(number uint64) bool {
+	return number%c.CalculateSprint(number) == 0
 }
 
 func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {

@@ -47,7 +47,7 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 	ethAPI.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	spanner := bor.NewMockSpanner(ctrl)
-	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
 		{
 			ID:               0,
 			Address:          common.Address{0x1},
@@ -152,7 +152,7 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 		chainConfig.Bor = params.BorUnittestChainConfig.Bor
 	}
 
-	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
 }
 
 type mockBackend struct {

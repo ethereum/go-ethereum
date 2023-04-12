@@ -23,7 +23,8 @@ func TestCommand_DebugBlock(t *testing.T) {
 
 	// enable developer mode
 	config.Developer.Enabled = true
-	config.Developer.Period = 2 // block time
+	config.Developer.Period = 2          // block time
+	config.Developer.GasLimit = 11500000 // initial block gaslimit
 
 	// enable archive mode for getting traces of ancient blocks
 	config.GcMode = "archive"

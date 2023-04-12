@@ -56,7 +56,7 @@ We believe one of the things that makes Polygon special is its coherent design a
 
 ### Building the source
 
-- Building `bor` requires both a Go (version 1.14 or later) and a C compiler. You can install
+- Building `bor` requires both a Go (version 1.19 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
      ```shell
@@ -74,7 +74,7 @@ them using your favourite package manager. Once the dependencies are installed, 
 2. Commit and prepare for pull request (PR). In your PR commit message, reference the issue it resolves (see [how to link a commit message to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword).
 
 
-    Checkout our [Git-Rules](https://docs.polygon.technology/docs/contribute/orientation#git-rules)
+    Checkout our [Git-Rules](https://wiki.polygon.technology/docs/contribute/orientation/#git-rules)
 
     ```
     $ git commit -m "brief description of changes [Fixes #1234]"

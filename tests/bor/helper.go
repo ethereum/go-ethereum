@@ -352,6 +352,17 @@ func getMockedHeimdallClient(t *testing.T, heimdallSpan *span.HeimdallSpan) (*mo
 	return h, ctrl
 }
 
+func getMockedSpanner(t *testing.T, validators []*valset.Validator) *bor.MockSpanner {
+	t.Helper()
+
+	spanner := bor.NewMockSpanner(gomock.NewController(t))
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return(validators, nil).AnyTimes()
+	spanner.EXPECT().GetCurrentValidatorsByBlockNrOrHash(gomock.Any(), gomock.Any(), gomock.Any()).Return(validators, nil).AnyTimes()
+	spanner.EXPECT().GetCurrentSpan(gomock.Any(), gomock.Any()).Return(&span.Span{0, 0, 0}, nil).AnyTimes()
+	spanner.EXPECT().CommitSpan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	return spanner
+}
+
 func generateFakeStateSyncEvents(sample *clerk.EventRecordWithTime, count int) []*clerk.EventRecordWithTime {
 	events := make([]*clerk.EventRecordWithTime, count)
 	event := *sample
@@ -360,7 +371,7 @@ func generateFakeStateSyncEvents(sample *clerk.EventRecordWithTime, count int) [
 	*events[0] = event
 
 	for i := 1; i < count; i++ {
-		event.ID = uint64(i)
+		event.ID = uint64(i + 1)
 		event.Time = event.Time.Add(1 * time.Second)
 		events[i] = &clerk.EventRecordWithTime{}
 		*events[i] = event

@@ -628,6 +628,10 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 		return nil, err
 	}
 
+	if block == nil {
+		return nil, errors.New("block not found")
+	}
+
 	receipts, err := s.b.GetReceipts(ctx, block.Hash())
 	if err != nil {
 		return nil, err
@@ -637,7 +641,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 
 	var txHash common.Hash
 
-	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64())
+	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64(), s.b.ChainConfig())
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
@@ -820,20 +824,6 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 	return nil
 }
 
-// getAuthor: returns the author of the Block
-func (s *PublicBlockChainAPI) getAuthor(head *types.Header) *common.Address {
-	// get author using Author() function from: /consensus/clique/clique.go
-	// In Production: get author using Author() function from: /consensus/bor/bor.go
-	author, err := s.b.Engine().Author(head)
-	// make sure we don't send error to the user, return 0x0 instead
-	if err != nil {
-		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
-		return &add
-	}
-	// change the coinbase (0x0) with the miner address
-	return &author
-}
-
 // GetBlockByNumber returns the requested canonical block.
 //   - When blockNr is -1 the chain head is returned.
 //   - When blockNr is -2 the pending chain head is returned.
@@ -842,19 +832,12 @@ func (s *PublicBlockChainAPI) getAuthor(head *types.Header) *common.Address {
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
-		}
-
-		if err == nil && number != rpc.PendingBlockNumber {
-			author := s.getAuthor(block.Header())
-
-			response["miner"] = author
 		}
 
 		// append marshalled bor transaction
@@ -875,10 +858,6 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Ha
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		// append marshalled bor transaction
 		if err == nil && response != nil {
-			author := s.getAuthor(block.Header())
-
-			response["miner"] = author
-
 			return s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
 		}
 		return response, err
@@ -1104,6 +1083,11 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if err != nil {
 		return nil, err
 	}
+
+	if int(s.b.RPCRpcReturnDataLimit()) > 0 && len(result.ReturnData) > int(s.b.RPCRpcReturnDataLimit()) {
+		return nil, fmt.Errorf("call returned result of length %d exceeding limit %d", len(result.ReturnData), int(s.b.RPCRpcReturnDataLimit()))
+	}
+
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
 		return nil, newRevertError(result)
@@ -1474,19 +1458,38 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig, db ethdb.Database) *RPCTransaction {
 	txs := b.Transactions()
 
-	borReceipt := rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64())
-	if borReceipt != nil {
-		tx, _, _, _ := rawdb.ReadBorTransaction(db, borReceipt.TxHash)
+	if index >= uint64(len(txs)+1) {
+		return nil
+	}
 
-		if tx != nil {
-			txs = append(txs, tx)
+	var borReceipt *types.Receipt
+
+	// Read bor receipts if a state-sync transaction is requested
+	if index == uint64(len(txs)) {
+		borReceipt = rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
+		if borReceipt != nil {
+			if borReceipt.TxHash != (common.Hash{}) {
+				borTx, _, _, _ := rawdb.ReadBorTransactionWithBlockHash(db, borReceipt.TxHash, b.Hash())
+				if borTx != nil {
+					txs = append(txs, borTx)
+				}
+			}
 		}
 	}
 
+	// If the index is still out of the range after checking bor state sync transaction, it means that the transaction index is invalid
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
+	if borReceipt != nil && index == uint64(len(txs)-1) {
+		rpcTx.Hash = borReceipt.TxHash
+	}
+
+	return rpcTx
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1545,9 +1548,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
-	// If the gas amount is not set, extract this as it will depend on access
-	// lists and we'll need to reestimate every time
-	nogas := args.Gas == nil
+
+	// If the gas amount is not set, default to RPC gas cap.
+	if args.Gas == nil {
+		tmp := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &tmp
+	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
 	if err := args.setDefaults(ctx, b); err != nil {
@@ -1573,15 +1579,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)
 
-		// If no gas amount was specified, each unique access list needs it's own
-		// gas calculation. This is quite expensive, but we need to be accurate
-		// and it's convered by the sender only anyway.
-		if nogas {
-			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
-				return nil, 0, nil, err // shouldn't happen, just in case
-			}
-		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		// Set the accesslist to the last al
@@ -1623,7 +1620,7 @@ func (api *PublicTransactionPoolAPI) getAllBlockTransactions(ctx context.Context
 
 	stateSyncPresent := false
 
-	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64())
+	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
 	if borReceipt != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {
@@ -1793,7 +1790,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 	if borTx {
 		// Fetch bor block receipt
-		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber)
+		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber, s.b.ChainConfig())
 	} else {
 		receipts, err := s.b.GetReceipts(ctx, blockHash)
 		if err != nil {
@@ -1881,7 +1878,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	// Print a log with full tx details for manual investigations and interventions
 	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 	from, err := types.Sender(signer, tx)
-	if err != nil {
+
+	if err != nil && (!b.UnprotectedAllowed() || (b.UnprotectedAllowed() && err != types.ErrInvalidChainId)) {
 		return common.Hash{}, err
 	}
 
@@ -2071,6 +2069,10 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	for _, p := range pending {
 		wantSigHash := s.signer.Hash(matchTx)
 		pFrom, err := types.Sender(s.signer, p)
+
+		if err != nil && (s.b.UnprotectedAllowed() && err == types.ErrInvalidChainId) {
+			err = nil
+		}
 		if err == nil && pFrom == sendArgs.from() && s.signer.Hash(p) == wantSigHash {
 			// Match. Re-sign and send the transaction.
 			if gasPrice != nil && (*big.Int)(gasPrice).Sign() != 0 {

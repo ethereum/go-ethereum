@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -33,49 +34,28 @@ func borTxLookupKey(hash common.Hash) []byte {
 	return append(borTxLookupPrefix, hash.Bytes()...)
 }
 
-// HasBorReceipt verifies the existence of all block receipt belonging
-// to a block.
-func HasBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
-		return true
-	}
-
-	if has, err := db.Has(borReceiptKey(number, hash)); !has || err != nil {
-		return false
-	}
-
-	return true
-}
-
-// ReadBorReceiptRLP retrieves the block receipt belonging to a block in RLP encoding.
 func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	// First try to look up the data in ancient database. Extra hash
-	// comparison is necessary since ancient database only maintains
-	// the canonical data.
-	data, _ := db.Ancient(freezerBorReceiptTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
+	var data []byte
+
+	err := db.ReadAncients(func(reader ethdb.AncientReader) error {
+		// Check if the data is in ancients
+		if isCanon(reader, number, hash) {
+			data, _ = reader.Ancient(freezerBorReceiptTable, number)
+
+			return nil
 		}
+
+		// If not, try reading from leveldb
+		data, _ = db.Get(borReceiptKey(number, hash))
+
+		return nil
+	})
+
+	if err != nil {
+		log.Warn("during ReadBorReceiptRLP", "number", number, "hash", hash, "err", err)
 	}
-	// Then try to look up the data in leveldb.
-	data, _ = db.Get(borReceiptKey(number, hash))
-	if len(data) > 0 {
-		return data
-	}
-	// In the background freezer is moving data from leveldb to flatten files.
-	// So during the first check for ancient db, the data is not yet in there,
-	// but when we reach into leveldb, the data was already moved. That would
-	// result in a not found error.
-	data, _ = db.Ancient(freezerBorReceiptTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
-		}
-	}
-	return nil // Can't find the data anywhere.
+
+	return data
 }
 
 // ReadRawBorReceipt retrieves the block receipt belonging to a block.
@@ -101,7 +81,11 @@ func ReadRawBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.
 // ReadBorReceipt retrieves all the bor block receipts belonging to a block, including
 // its correspoinding metadata fields. If it is unable to populate these metadata
 // fields then nil is returned.
-func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64) *types.Receipt {
+func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) *types.Receipt {
+	if config != nil && config.Bor != nil && config.Bor.Sprint != nil && !config.Bor.IsSprintStart(number) {
+		return nil
+	}
+
 	// We're deriving many fields from the block body, retrieve beside the receipt
 	borReceipt := ReadRawBorReceipt(db, hash, number)
 	if borReceipt == nil {

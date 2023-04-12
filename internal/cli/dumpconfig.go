@@ -52,12 +52,20 @@ func (c *DumpconfigCommand) Run(args []string) int {
 	userConfig := command.GetConfig()
 
 	// convert the big.Int and time.Duration fields to their corresponding Raw fields
+	userConfig.JsonRPC.RPCEVMTimeoutRaw = userConfig.JsonRPC.RPCEVMTimeout.String()
+	userConfig.JsonRPC.HttpTimeout.ReadTimeoutRaw = userConfig.JsonRPC.HttpTimeout.ReadTimeout.String()
+	userConfig.JsonRPC.HttpTimeout.WriteTimeoutRaw = userConfig.JsonRPC.HttpTimeout.WriteTimeout.String()
+	userConfig.JsonRPC.HttpTimeout.IdleTimeoutRaw = userConfig.JsonRPC.HttpTimeout.IdleTimeout.String()
+	userConfig.JsonRPC.Http.ExecutionPoolRequestTimeoutRaw = userConfig.JsonRPC.Http.ExecutionPoolRequestTimeout.String()
+	userConfig.JsonRPC.Ws.ExecutionPoolRequestTimeoutRaw = userConfig.JsonRPC.Ws.ExecutionPoolRequestTimeout.String()
 	userConfig.TxPool.RejournalRaw = userConfig.TxPool.Rejournal.String()
 	userConfig.TxPool.LifeTimeRaw = userConfig.TxPool.LifeTime.String()
 	userConfig.Sealer.GasPriceRaw = userConfig.Sealer.GasPrice.String()
+	userConfig.Sealer.RecommitRaw = userConfig.Sealer.Recommit.String()
 	userConfig.Gpo.MaxPriceRaw = userConfig.Gpo.MaxPrice.String()
 	userConfig.Gpo.IgnorePriceRaw = userConfig.Gpo.IgnorePrice.String()
 	userConfig.Cache.RejournalRaw = userConfig.Cache.Rejournal.String()
+	userConfig.Cache.TrieTimeoutRaw = userConfig.Cache.TrieTimeout.String()
 
 	if err := toml.NewEncoder(os.Stdout).Encode(userConfig); err != nil {
 		c.UI.Error(err.Error())
