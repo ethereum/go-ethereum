@@ -36,10 +36,9 @@ type Config struct {
 
 	ExtraEips []int // Additional EIPS that are to be enabled
 
+	// TODO: mark external contracts via magic CodeHash instead of using a static list
 	ExternalContracts []common.Address
-	// TODO: add read-only argument - or separate function?
-	// TODO: could also put all the arguments into an object which can be json serialized
-	ExternalCallback func(caller common.Address, callee common.Address, value *big.Int, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error)
+	ExternalCallback  func(caller, callee common.Address, value *big.Int, input []byte, gas uint64, readOnly bool) (ret []byte, leftOverGas uint64, err error)
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
