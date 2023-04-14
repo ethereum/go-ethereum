@@ -76,11 +76,13 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 
-	blockImportTimer     = metrics.NewRegisteredMeter("chain/imports", nil)
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
+	blockImportTimer              = metrics.NewRegisteredMeter("chain/imports", nil)
+	blockInsertTimer              = metrics.NewRegisteredTimer("chain/inserts", nil)
+	blockValidationTimer          = metrics.NewRegisteredTimer("chain/validation", nil)
+	blockExecutionTimer           = metrics.NewRegisteredTimer("chain/execution", nil)
+	blockWriteTimer               = metrics.NewRegisteredTimer("chain/write", nil)
+	blockExecutionParallelCounter = metrics.NewRegisteredCounter("chain/execution/parallel", nil)
+	blockExecutionSerialCounter   = metrics.NewRegisteredCounter("chain/execution/serial", nil)
 
 	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -216,12 +218,13 @@ type BlockChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	forker     *ForkChoice
-	vmConfig   vm.Config
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor // Block transaction processor interface
+	parallelProcessor Processor // Parallel block transaction processor interface
+	forker            *ForkChoice
+	vmConfig          vm.Config
 
 	// Bor related changes
 	borReceiptsCache *lru.Cache             // Cache for the most recent bor receipt receipts per block
@@ -443,9 +446,71 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainCon
 		return nil, err
 	}
 
-	bc.processor = NewParallelStateProcessor(chainConfig, bc, engine)
+	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
 
 	return bc, nil
+}
+
+func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (types.Receipts, []*types.Log, uint64, *state.StateDB, error) {
+	// Process the block using processor and parallelProcessor at the same time, take the one which finishes first, cancel the other, and return the result
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type Result struct {
+		receipts types.Receipts
+		logs     []*types.Log
+		usedGas  uint64
+		err      error
+		statedb  *state.StateDB
+		counter  metrics.Counter
+	}
+
+	resultChan := make(chan Result, 2)
+
+	processorCount := 0
+
+	if bc.parallelProcessor != nil {
+		parallelStatedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return nil, nil, 0, nil, err
+		}
+
+		processorCount++
+
+		go func() {
+			parallelStatedb.StartPrefetcher("chain")
+			receipts, logs, usedGas, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig, ctx)
+			resultChan <- Result{receipts, logs, usedGas, err, parallelStatedb, blockExecutionParallelCounter}
+		}()
+	}
+
+	if bc.processor != nil {
+		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return nil, nil, 0, nil, err
+		}
+
+		processorCount++
+
+		go func() {
+			statedb.StartPrefetcher("chain")
+			receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
+			resultChan <- Result{receipts, logs, usedGas, err, statedb, blockExecutionSerialCounter}
+		}()
+	}
+
+	result := <-resultChan
+	result.counter.Inc(1)
+
+	// Make sure we are not leaking any prefetchers
+	if processorCount == 2 {
+		go func() {
+			second_result := <-resultChan
+			second_result.statedb.StopPrefetcher()
+		}()
+	}
+
+	return result.receipts, result.logs, result.usedGas, result.statedb, result.err
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1774,14 +1839,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-		if err != nil {
-			return it.index, err
-		}
-
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
-		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -1803,7 +1860,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, nil)
+		receipts, logs, usedGas, statedb, err := bc.ProcessBlock(block, parent)
+		activeState = statedb
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

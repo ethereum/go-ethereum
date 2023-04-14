@@ -17,7 +17,6 @@
 package core
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -125,7 +123,7 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 		cur := blockchain.CurrentBlock()
 		tdPre = blockchain.GetTd(cur.Hash(), cur.NumberU64())
 
-		if err := testBlockChainImport(blockChainB, blockchain, nil); err != nil {
+		if err := testBlockChainImport(blockChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked block chain: %v", err)
 		}
 
@@ -146,7 +144,7 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 
 // testBlockChainImport tries to process a chain of blocks, writing them into
 // the database if successful.
-func testBlockChainImport(chain types.Blocks, blockchain *BlockChain, ctx context.Context) error {
+func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 	for _, block := range chain {
 		// Try and process the block
 		err := blockchain.engine.VerifyHeader(blockchain, block.Header(), true)
@@ -160,13 +158,8 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain, ctx contex
 			return err
 		}
 
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
+		receipts, _, usedGas, statedb, err := blockchain.ProcessBlock(block, blockchain.GetBlockByHash(block.ParentHash()).Header())
 
-		if err != nil {
-			return err
-		}
-
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{}, ctx)
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -186,10 +179,12 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain, ctx contex
 	return nil
 }
 
-func TestBlockChainImportInterrupt(t *testing.T) {
+func TestParallelBlockChainImport(t *testing.T) {
 	t.Parallel()
 
 	db, blockchain, err := newCanonical(ethash.NewFaker(), 10, true)
+	blockchain.parallelProcessor = NewParallelStateProcessor(blockchain.chainConfig, blockchain, blockchain.engine)
+
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -198,11 +193,8 @@ func TestBlockChainImportInterrupt(t *testing.T) {
 
 	blockChainB := makeFakeNonEmptyBlockChain(blockchain.CurrentBlock(), 5, ethash.NewFaker(), db, forkSeed, 5)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if err := testBlockChainImport(blockChainB, blockchain, ctx); err != context.Canceled {
-		t.Errorf("block chain import is not cancelled correctly, got %v, want %v", err, context.Canceled)
+	if err := testBlockChainImport(blockChainB, blockchain); err == nil {
+		t.Fatalf("expected error for bad tx")
 	}
 }
 
@@ -502,7 +494,7 @@ func testBrokenChain(t *testing.T, full bool) {
 	// Create a forked chain, and try to insert with a missing link
 	if full {
 		chain := makeBlockChain(blockchain.CurrentBlock(), 5, ethash.NewFaker(), db, forkSeed)[1:]
-		if err := testBlockChainImport(chain, blockchain, nil); err == nil {
+		if err := testBlockChainImport(chain, blockchain); err == nil {
 			t.Errorf("broken block chain not reported")
 		}
 	} else {

@@ -290,7 +290,7 @@ func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool) *Paralle
 }
 
 // nolint: gocognit
-func (pe *ParallelExecutor) Prepare() {
+func (pe *ParallelExecutor) Prepare() error {
 	prevSenderTx := make(map[common.Address]int)
 
 	for i, t := range pe.tasks {
@@ -382,11 +382,16 @@ func (pe *ParallelExecutor) Prepare() {
 
 	// bootstrap first execution
 	tx := pe.execTasks.takeNextPending()
-	if tx != -1 {
-		pe.cntExec++
 
-		pe.chTasks <- ExecVersionView{ver: Version{tx, 0}, et: pe.tasks[tx], mvh: pe.mvh, sender: pe.tasks[tx].Sender()}
+	if tx == -1 {
+		return fmt.Errorf("no transaction to execute")
 	}
+
+	pe.cntExec++
+
+	pe.chTasks <- ExecVersionView{ver: Version{tx, 0}, et: pe.tasks[tx], mvh: pe.mvh, sender: pe.tasks[tx].Sender()}
+
+	return nil
 }
 
 func (pe *ParallelExecutor) Close(wait bool) {
@@ -587,16 +592,17 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	}
 
 	pe := NewParallelExecutor(tasks, profile, metadata)
-	pe.Prepare()
+	err = pe.Prepare()
+
+	if err != nil {
+		pe.Close(true)
+		return
+	}
 
 	for range pe.chResults {
-		if interruptCtx != nil {
-			select {
-			case <-interruptCtx.Done():
-				pe.Close(true)
-				return result, interruptCtx.Err()
-			default:
-			}
+		if interruptCtx != nil && interruptCtx.Err() != nil {
+			pe.Close(true)
+			return result, interruptCtx.Err()
 		}
 
 		res := pe.resultQueue.Pop().(ExecResult)
