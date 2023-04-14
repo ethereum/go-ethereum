@@ -127,7 +127,7 @@ func blsync(ctx *cli.Context) error {
 	}
 
 	// set up sync modules and triggers
-	scheduler := request.NewScheduler(headTracker)
+	scheduler := request.NewScheduler(headTracker, &mclock.System{})
 	scheduler.RegisterModule(checkpointInit)
 	scheduler.RegisterModule(forwardSync)
 	scheduler.RegisterModule(headUpdater)

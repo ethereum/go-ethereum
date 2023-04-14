@@ -18,12 +18,12 @@ package api
 
 import (
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 )
@@ -71,7 +71,7 @@ func (s *SyncServer) UnsubscribeHeads() {
 	s.lock.Unlock()
 }
 
-func (s *SyncServer) Delay() time.Duration { return 0 } //TODO
+func (s *SyncServer) DelayUntil() mclock.AbsTime { return 0 } //TODO
 
 func (s *SyncServer) Fail(desc string) {
 	log.Warn("API endpoint failure", "URL", s.api.url, "error", desc)

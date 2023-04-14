@@ -21,8 +21,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
+
+// RequestServer is a general server interface that can be extended by modules
+// with specific request types.
+type RequestServer interface {
+	SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHead))
+	UnsubscribeHeads()
+	DelayUntil() mclock.AbsTime // no requests should be sent before this
+	Fail(string)                // report server failure
+}
 
 // Server is a wrapper around RequestServer that handles request timeouts, delays
 // and keeps track of the server's latest reported (not necessarily validated) head.
@@ -38,8 +49,8 @@ type Server struct {
 	lock         sync.Mutex
 	sent         map[uint64]chan struct{} // closed when returned; nil when timed out
 	timeoutCount int
-	delayed      bool
-	delayChecked bool
+	delayUntil   mclock.AbsTime
+	delayTimer   mclock.ChanTimer // if non-nil then expires at delayUntil
 	needTrigger  bool
 	lastReqId    uint64
 	stopCh       chan struct{}
@@ -95,29 +106,53 @@ func (s *Server) canRequestNow() (bool, uint64) {
 // delayed. In this case it also starts a timer to ensure that a server trigger
 // can be emitted when the server becomes available again.
 func (s *Server) isDelayed() bool {
-	if s.delayChecked {
-		return s.delayed
+	delayUntil := s.RequestServer.DelayUntil()
+	if delayUntil == s.delayUntil {
+		return s.delayTimer != nil
 	}
-	s.delayChecked = true
-	delay := s.RequestServer.Delay()
-	if s.delayed = delay > 0; s.delayed {
-		go func() {
-			timer := time.NewTimer(delay)
-			select {
-			case <-timer.C:
-				s.lock.Lock()
-				s.delayed = false
+	s.delayUntil = delayUntil
+	if s.delayTimer != nil {
+		if s.delayTimer.Stop() {
+			if s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- false // simulated timer stopped
+			}
+		} else {
+			s.delayTimer = nil
+		}
+	}
+	delay := time.Duration(delayUntil - s.scheduler.clock.Now())
+	if delay <= 0 {
+		s.delayTimer = nil
+		return false
+	}
+	if s.delayTimer == nil {
+		s.delayTimer = s.scheduler.clock.NewTimer(delay)
+	} else {
+		s.delayTimer.Reset(delay)
+	}
+	timer := s.delayTimer
+	go func() {
+		select {
+		case <-timer.C():
+			s.lock.Lock()
+			if s.delayTimer == timer {
+				s.delayTimer = nil
 				if s.needTrigger && s.timeoutCount == 0 {
 					s.needTrigger = false
 					s.scheduler.triggerServer(s)
 				}
-				s.lock.Unlock()
-			case <-s.stopCh:
-				timer.Stop()
 			}
-		}()
-	}
-	return s.delayed
+			s.lock.Unlock()
+			if s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- true // simulated timer processed
+			}
+		case <-s.stopCh:
+			if timer.Stop() && s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- false // simulated timer stopped
+			}
+		}
+	}()
+	return true
 }
 
 // sendRequest generates a request ID and starts a timeout timer. If the timeout
@@ -130,11 +165,10 @@ func (s *Server) sendRequest(timeoutTrigger *ModuleTrigger) uint64 {
 	reqId := s.lastReqId
 	returnCh := make(chan struct{})
 	s.sent[reqId] = returnCh
-	s.delayChecked = false
+	timer := s.scheduler.clock.NewTimer(softRequestTimeout)
 	go func() {
-		timer := time.NewTimer(softRequestTimeout)
 		select {
-		case <-timer.C:
+		case <-timer.C():
 			s.lock.Lock()
 			if _, ok := s.sent[reqId]; ok {
 				s.sent[reqId] = nil
@@ -144,10 +178,17 @@ func (s *Server) sendRequest(timeoutTrigger *ModuleTrigger) uint64 {
 			if timeoutTrigger != nil {
 				timeoutTrigger.Trigger()
 			}
+			if s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- true // simulated timer processed
+			}
 		case <-returnCh:
-			timer.Stop()
+			if timer.Stop() && s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- false // simulated timer stopped
+			}
 		case <-s.stopCh:
-			timer.Stop()
+			if timer.Stop() && s.scheduler.testTimerCh != nil {
+				s.scheduler.testTimerCh <- false // simulated timer stopped
+			}
 		}
 	}()
 	return reqId
