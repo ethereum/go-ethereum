@@ -515,6 +515,27 @@ func TestUDPv5_talkRequest(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+
+	// Also check requesting without ENR.
+	go func() {
+		_, err := test.udp.TalkRequestToID(remote.ID(), test.remoteaddr, "test", []byte("test request 2"))
+		done <- err
+	}()
+	test.waitPacketOut(func(p *v5wire.TalkRequest, addr *net.UDPAddr, _ v5wire.Nonce) {
+		if p.Protocol != "test" {
+			t.Errorf("wrong protocol ID in talk request: %q", p.Protocol)
+		}
+		if string(p.Message) != "test request 2" {
+			t.Errorf("wrong message talk request: %q", p.Message)
+		}
+		test.packetInFrom(test.remotekey, test.remoteaddr, &v5wire.TalkResponse{
+			ReqID:   p.ReqID,
+			Message: []byte("test response 2"),
+		})
+	})
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
 }
 
 // This test checks that lookupDistances works.
