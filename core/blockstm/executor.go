@@ -2,6 +2,7 @@ package blockstm
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -369,13 +370,14 @@ func (pe *ParallelExecutor) Prepare() {
 		}(i)
 	}
 
-	pe.settleWg.Add(len(pe.tasks))
+	pe.settleWg.Add(1)
 
 	go func() {
 		for t := range pe.chSettle {
 			pe.tasks[t].Settle()
-			pe.settleWg.Done()
 		}
+
+		pe.settleWg.Done()
 	}()
 
 	// bootstrap first execution
@@ -390,18 +392,15 @@ func (pe *ParallelExecutor) Prepare() {
 func (pe *ParallelExecutor) Close(wait bool) {
 	close(pe.chTasks)
 	close(pe.chSpeculativeTasks)
+	close(pe.chSettle)
 
 	if wait {
 		pe.workerWg.Wait()
 	}
 
-	close(pe.chResults)
-
 	if wait {
 		pe.settleWg.Wait()
 	}
-
-	close(pe.chSettle)
 }
 
 // nolint: gocognit
@@ -412,7 +411,7 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 		// If the transaction failed when we know it should not fail, this means the transaction itself is
 		// bad (e.g. wrong nonce), and we should exit the execution immediately
 		err = fmt.Errorf("could not apply tx %d [%v]: %w", tx, pe.tasks[tx].Hash(), abortErr.OriginError)
-		pe.Close(false)
+		pe.Close(true)
 
 		return
 	}
@@ -582,7 +581,7 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 type PropertyCheck func(*ParallelExecutor) error
 
-func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck, metadata bool) (result ParallelExecutionResult, err error) {
+func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck, metadata bool, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
 	if len(tasks) == 0 {
 		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil, nil}, nil
 	}
@@ -591,6 +590,15 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	pe.Prepare()
 
 	for range pe.chResults {
+		if interruptCtx != nil {
+			select {
+			case <-interruptCtx.Done():
+				pe.Close(true)
+				return result, interruptCtx.Err()
+			default:
+			}
+		}
+
 		res := pe.resultQueue.Pop().(ExecResult)
 
 		result, err = pe.Step(&res)
@@ -611,6 +619,6 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	return
 }
 
-func ExecuteParallel(tasks []ExecTask, profile bool, metadata bool) (result ParallelExecutionResult, err error) {
-	return executeParallelWithCheck(tasks, profile, nil, metadata)
+func ExecuteParallel(tasks []ExecTask, profile bool, metadata bool, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
+	return executeParallelWithCheck(tasks, profile, nil, metadata, interruptCtx)
 }

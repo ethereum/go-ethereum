@@ -424,7 +424,7 @@ func runParallel(t *testing.T, tasks []ExecTask, validation PropertyCheck, metad
 	profile := false
 
 	start := time.Now()
-	result, err := executeParallelWithCheck(tasks, false, validation, metadata)
+	result, err := executeParallelWithCheck(tasks, false, validation, metadata, nil)
 
 	if result.Deps != nil && profile {
 		result.Deps.Report(*result.Stats, func(str string) { fmt.Println(str) })
@@ -458,7 +458,7 @@ func runParallelGetMetadata(t *testing.T, tasks []ExecTask, validation PropertyC
 	t.Helper()
 
 	// fmt.Println("len(tasks)", len(tasks))
-	res, err := executeParallelWithCheck(tasks, true, validation, false)
+	res, err := executeParallelWithCheck(tasks, true, validation, false, nil)
 
 	assert.NoError(t, err, "error occur during parallel execution")
 
