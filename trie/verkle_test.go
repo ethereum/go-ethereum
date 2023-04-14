@@ -87,7 +87,7 @@ func TestReproduceTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("serialized: %x", p)
+	t.Logf("serialized: %v", p)
 	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commitment().Bytes())
 }
 
@@ -308,7 +308,7 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("serialized: %x", p)
+	t.Logf("serialized: %p", p)
 	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commitment().Bytes())
 
 	t.Logf("%d", len(proof.ExtStatus))
@@ -355,7 +355,7 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("serialized: %x", p)
+	t.Logf("serialized: %p", p)
 	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commitment().Bytes())
 
 	t.Logf("%d", len(proof.ExtStatus))

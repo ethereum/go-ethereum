@@ -88,6 +88,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2 h1:p1EgwI/C7NhT0JmVkwCD2ZBK8j4aeHQX2pMHH
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/crate-crypto/go-ipa v0.0.0-20230315201338-1643fdc2ead8 h1:2EBbIwPDRqlCD2K34Eojyy0x9d3RhOuHAZfbQm508X8=
 github.com/crate-crypto/go-ipa v0.0.0-20230315201338-1643fdc2ead8/go.mod h1:gzbVz57IDJgQ9rLQwfSk696JGWof8ftznEL9GoAv3NI=
+github.com/crate-crypto/go-ipa v0.0.0-20230410135559-ce4a96995014 h1:bbyTlFQ12wkFA6aVL+9HrBZwVl85AN0VS/Bwam7o93U=
+github.com/crate-crypto/go-ipa v0.0.0-20230410135559-ce4a96995014/go.mod h1:gzbVz57IDJgQ9rLQwfSk696JGWof8ftznEL9GoAv3NI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cyberdelia/templates v0.0.0-20141128023046-ca7fffd4298c/go.mod h1:GyV+0YP4qX0UQ7r2MoYZ+AvYDp12OF5yg4q8rGnyNh4=
 github.com/dave/jennifer v1.2.0/go.mod h1:fIb+770HOpJ2fmN9EPPKOqm1vMGhB+TwXKMZhrIygKg=
@@ -137,6 +139,14 @@ github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff h1:tY80oXqG
 github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff/go.mod h1:x7DCsMOv1taUwEWCzT4cmDeAkigA5/QCwUodaVOe8Ww=
 github.com/gballet/go-verkle v0.0.0-20230317174103-141354da6b11 h1:x4hiQFgr1SlqR4IoAZiXLFZK4L7KbibqkORqa1fwKp8=
 github.com/gballet/go-verkle v0.0.0-20230317174103-141354da6b11/go.mod h1:IyOnn1kujMWaT+wet/6Ix1BtvYwateOBy9puuWH/8sw=
+github.com/gballet/go-verkle v0.0.0-20230412090410-4015adc3d072 h1:gKcktHMBKLdtCSZnaG8tv9bFG80p1tp7MjU1Uvl9nag=
+github.com/gballet/go-verkle v0.0.0-20230412090410-4015adc3d072/go.mod h1:P3bwGrLhsUNIsUDlq2yzMPvO1c/15oiB3JS85P+hNfw=
+github.com/gballet/go-verkle v0.0.0-20230413104310-bd8d6d33de95 h1:s8p8L/dQVmr/mgMjGIsGnnpvJMYCdfv4GHadLd/ALug=
+github.com/gballet/go-verkle v0.0.0-20230413104310-bd8d6d33de95/go.mod h1:P3bwGrLhsUNIsUDlq2yzMPvO1c/15oiB3JS85P+hNfw=
+github.com/gballet/go-verkle v0.0.0-20230413135631-4bea2763ed0f h1:gP4uR2/1qx6hsIzbRI28JWcsVuP7xyjyj6SpLnoFobc=
+github.com/gballet/go-verkle v0.0.0-20230413135631-4bea2763ed0f/go.mod h1:P3bwGrLhsUNIsUDlq2yzMPvO1c/15oiB3JS85P+hNfw=
+github.com/gballet/go-verkle v0.0.0-20230414192453-2838510d5ee0 h1:ENyj6hcn+dtO8iJ1GTzM/gkhdrAFqMi65Yf99cppdPA=
+github.com/gballet/go-verkle v0.0.0-20230414192453-2838510d5ee0/go.mod h1:P3bwGrLhsUNIsUDlq2yzMPvO1c/15oiB3JS85P+hNfw=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
@@ -556,6 +566,8 @@ golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.6.0 h1:MVltZSvRTcU2ljQOhs94SXPftV6DCNnZViHeQps87pQ=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=
+golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 h1:JGgROgKl9N8DuW20oFS5gxc+lE67/N3FcwmBPMe7ArY=

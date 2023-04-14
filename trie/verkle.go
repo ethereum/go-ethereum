@@ -273,7 +273,7 @@ func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[string][]byte) ([]byte, []verkle.KeyValuePair, error) {
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[string][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
 	proof, _, _, _, err := verkle.MakeVerkleMultiProof(trie.root, keys, kv)
 	if err != nil {
 		return nil, nil, err
@@ -293,10 +293,10 @@ func addKey(s set, key []byte) {
 	s[string(key)] = struct{}{}
 }
 
-func DeserializeAndVerifyVerkleProof(serialized []byte, root []byte, keyvals []verkle.KeyValuePair) error {
+func DeserializeAndVerifyVerkleProof(vp *verkle.VerkleProof, root []byte, statediff verkle.StateDiff) error {
 	rootC := new(verkle.Point)
 	rootC.SetBytesTrusted(root)
-	proof, cis, indices, yis, err := deserializeVerkleProof(serialized, rootC, keyvals)
+	proof, cis, indices, yis, err := deserializeVerkleProof(vp, rootC, statediff)
 	if err != nil {
 		return fmt.Errorf("could not deserialize proof: %w", err)
 	}
@@ -308,10 +308,10 @@ func DeserializeAndVerifyVerkleProof(serialized []byte, root []byte, keyvals []v
 	return nil
 }
 
-func deserializeVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []verkle.KeyValuePair) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, error) {
+func deserializeVerkleProof(vp *verkle.VerkleProof, rootC *verkle.Point, statediff verkle.StateDiff) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, error) {
 	var others set = set{} // Mark when an "other" stem has been seen
 
-	proof, err := verkle.DeserializeProof(serialized, keyvals)
+	proof, err := verkle.DeserializeProof(vp, statediff)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
 	}
@@ -328,14 +328,25 @@ func deserializeVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []ve
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("error rebuilding the tree from proof: %w", err)
 	}
-	for _, kv := range keyvals {
-		val, err := tree.Get(kv.Key, nil)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not find key %x in tree rebuilt from proof: %w", kv.Key, err)
-		}
+	for _, stemdiff := range statediff {
+		for _, suffixdiff := range stemdiff.SuffixDiffs {
+			var key [32]byte
+			copy(key[:31], stemdiff.Stem[:])
+			key[31] = suffixdiff.Suffix
 
-		if !bytes.Equal(val, kv.Value) {
-			return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", kv.Key, val, kv.Value)
+			val, err := tree.Get(key[:], nil)
+			if err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("could not find key %x in tree rebuilt from proof: %w", key, err)
+			}
+			if len(val) > 0 {
+				if !bytes.Equal(val, suffixdiff.CurrentValue[:]) {
+					return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
+				}
+			} else {
+				if suffixdiff.CurrentValue != nil && len(suffixdiff.CurrentValue) != 0 {
+					return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
+				}
+			}
 		}
 	}
 
