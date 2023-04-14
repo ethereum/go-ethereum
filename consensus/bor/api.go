@@ -75,12 +75,34 @@ func rankMapDifficulties(values map[common.Address]uint64) []difficultiesKV {
 }
 
 // GetSnapshotProposerSequence retrieves the in-turn signers of all sprints in a span
-func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigners, error) {
-	snapNumber := *number - 1
+func (api *API) GetSnapshotProposerSequence(blockNrOrHash *rpc.BlockNumberOrHash) (BlockSigners, error) {
+	var (
+		snap       *Snapshot
+		snapNumber rpc.BlockNumber
+		err        error
+	)
+
+	if blockNrOrHash == nil {
+		header := api.chain.CurrentHeader()
+		snapNumber = rpc.BlockNumber(header.Number.Int64() - 1)
+		snap, err = api.GetSnapshot(&snapNumber)
+	} else {
+		if blockNr, ok := blockNrOrHash.Number(); ok {
+			snapNumber = blockNr - 1
+			if blockNr == rpc.LatestBlockNumber {
+				header := api.chain.CurrentHeader()
+				snapNumber = rpc.BlockNumber(header.Number.Int64() - 1)
+			}
+			snap, err = api.GetSnapshot(&snapNumber)
+		} else {
+			if blockHash, ok := blockNrOrHash.Hash(); ok {
+				blockHeader := api.chain.GetHeaderByHash(blockHash)
+				snap, err = api.GetSnapshotAtHash(blockHeader.ParentHash)
+			}
+		}
+	}
 
 	var difficulties = make(map[common.Address]uint64)
-
-	snap, err := api.GetSnapshot(&snapNumber)
 
 	if err != nil {
 		return BlockSigners{}, err
@@ -101,7 +123,7 @@ func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigne
 
 	rankedDifficulties := rankMapDifficulties(difficulties)
 
-	author, err := api.GetAuthor(number)
+	author, err := api.GetAuthor(blockNrOrHash)
 	if err != nil {
 		return BlockSigners{}, err
 	}
@@ -117,9 +139,32 @@ func (api *API) GetSnapshotProposerSequence(number *rpc.BlockNumber) (BlockSigne
 }
 
 // GetSnapshotProposer retrieves the in-turn signer at a given block.
-func (api *API) GetSnapshotProposer(number *rpc.BlockNumber) (common.Address, error) {
-	*number -= 1
-	snap, err := api.GetSnapshot(number)
+func (api *API) GetSnapshotProposer(blockNrOrHash *rpc.BlockNumberOrHash) (common.Address, error) {
+	var (
+		snap       *Snapshot
+		snapNumber rpc.BlockNumber
+		err        error
+	)
+
+	if blockNrOrHash == nil {
+		header := api.chain.CurrentHeader()
+		snapNumber = rpc.BlockNumber(header.Number.Int64() - 1)
+		snap, err = api.GetSnapshot(&snapNumber)
+	} else {
+		if blockNr, ok := blockNrOrHash.Number(); ok {
+			snapNumber = blockNr - 1
+			if blockNr == rpc.LatestBlockNumber {
+				header := api.chain.CurrentHeader()
+				snapNumber = rpc.BlockNumber(header.Number.Int64() - 1)
+			}
+			snap, err = api.GetSnapshot(&snapNumber)
+		} else {
+			if blockHash, ok := blockNrOrHash.Hash(); ok {
+				blockHeader := api.chain.GetHeaderByHash(blockHash)
+				snap, err = api.GetSnapshotAtHash(blockHeader.ParentHash)
+			}
+		}
+	}
 
 	if err != nil {
 		return common.Address{}, err
@@ -129,17 +174,27 @@ func (api *API) GetSnapshotProposer(number *rpc.BlockNumber) (common.Address, er
 }
 
 // GetAuthor retrieves the author a block.
-func (api *API) GetAuthor(number *rpc.BlockNumber) (*common.Address, error) {
+func (api *API) GetAuthor(blockNrOrHash *rpc.BlockNumberOrHash) (*common.Address, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
+	if blockNrOrHash == nil {
 		header = api.chain.CurrentHeader()
 	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+		if blockNr, ok := blockNrOrHash.Number(); ok {
+			header = api.chain.GetHeaderByNumber(uint64(blockNr))
+			if blockNr == rpc.LatestBlockNumber {
+				header = api.chain.CurrentHeader()
+			}
+		} else {
+			if blockHash, ok := blockNrOrHash.Hash(); ok {
+				header = api.chain.GetHeaderByHash(blockHash)
+			}
+		}
 	}
+
 	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return &common.Address{}, errUnknownBlock
 	}
 
 	author, err := api.bor.Author(header)
