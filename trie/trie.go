@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
@@ -104,11 +105,12 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 	return newNodeIterator(t, start)
 }
 
-// MustGet is a wrapper of Get and panic if any error is encountered.
+// MustGet is a wrapper of Get and will omit any encountered error but just
+// print out an error message.
 func (t *Trie) MustGet(key []byte) []byte {
 	res, err := t.Get(key)
 	if err != nil {
-		panic(fmt.Errorf("unexpected error in trie.Get: %w", err))
+		log.Error("Unhandled trie error in Trie.Get", "err", err)
 	}
 	return res
 }
@@ -162,11 +164,12 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 	}
 }
 
-// MustGetNode is a wrapper of GetNode and panic if any error is encountered.
+// MustGetNode is a wrapper of GetNode and will omit any encountered error but
+// just print out an error message.
 func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
 	item, resolved, err := t.GetNode(path)
 	if err != nil {
-		panic(fmt.Errorf("unexpected error in tre.GetNode: %w", err))
+		log.Error("Unhandled trie error in Trie.GetNode", "err", err)
 	}
 	return item, resolved
 }
@@ -251,11 +254,12 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 	}
 }
 
-// MustUpdate is a wrapper of Update and panic if any error is encountered.
+// MustUpdate is a wrapper of Update and will omit any encountered error but
+// just print out an error message.
 func (t *Trie) MustUpdate(key, value []byte) {
 	err := t.Update(key, value)
 	if err != nil {
-		panic(fmt.Errorf("unexpected error in trie.Update: %w", err))
+		log.Error("Unhandled trie error in Trie.Update", "err", err)
 	}
 }
 
@@ -370,11 +374,12 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	}
 }
 
-// MustDelete is a wrapper of Delete and panic if any error is encountered.
+// MustDelete is a wrapper of Delete and will omit any encountered error but
+// just print out an error message.
 func (t *Trie) MustDelete(key []byte) {
 	err := t.Delete(key)
 	if err != nil {
-		panic(fmt.Errorf("unexpected error in trie.Delete: %w", err))
+		log.Error("Unhandled trie error in Trie.Delete", "err", err)
 	}
 }
 

@@ -21,12 +21,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var ErrCommitDisabled = errors.New("no database for committing")
@@ -212,10 +212,11 @@ func (st *StackTrie) Update(key, value []byte) error {
 	return nil
 }
 
-// MustUpdate is a wrapper of Update and panic if any error is encountered.
+// MustUpdate is a wrapper of Update and will omit any encountered error but
+// just print out an error message.
 func (st *StackTrie) MustUpdate(key, value []byte) {
 	if err := st.Update(key, value); err != nil {
-		panic(fmt.Errorf("unexpected error in StackTrie.Update: %w", err))
+		log.Error("Unhandled trie error in StackTrie.Update", "err", err)
 	}
 }
 
