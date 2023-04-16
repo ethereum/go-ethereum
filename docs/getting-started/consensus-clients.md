@@ -3,7 +3,7 @@ title: Connecting to Consensus Clients
 description: Instructions for connecting Geth to a consensus client
 ---
 
-Geth is an [execution client](https://ethereum.org/en/glossary/#execution-client). Historically, an execution client alone was enough to run a full Ethereum node. However, ever since Ethereum swapped from [proof-of-work](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow) (PoW) to [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos) (PoS) based consensus, Geth has needed to be coupled to another piece of software called a ["consensus client"](https://ethereum.org/en/glossary/#consensus-client).
+Geth is an [execution client](https://ethereum.org/en/glossary/#execution-client). Historically, an execution client alone was enough to run a full Ethereum node. However, since Ethereum swapped from [proof-of-work](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow) (PoW) to [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos) (PoS) based consensus, Geth needs to be coupled to another piece of software called a ["consensus client"](https://ethereum.org/en/glossary/#consensus-client).
 
 There are five consensus clients available, all of which connect to Geth in the same way. This page will outline how Geth can be set up with a consensus client to form a complete Ethereum node.
 
@@ -45,7 +45,7 @@ The consensus clients all expose a [Beacon API](https://ethereum.github.io/beaco
 
 ## Validators {#validators}
 
-Validators are responsible for securing the Ethereum blockchain. Validators have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients have their own validator software that is described in detail in their respective documentation. The easiest way to handle staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad](https://launchpad.ethereum.org/). The Launchpad guides users through the process of generating validator keys and connecting the validator to the consensus client.
+Validators are responsible for securing the Ethereum blockchain. Validators have staked at least 32 ETH into a deposit contract and run validator software. Each consensus client has its own validator software that is described in detail in its respective documentation. The easiest way to handle staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad](https://launchpad.ethereum.org/). The Launchpad guides users through the process of generating validator keys and connecting the validator to the consensus client.
 
 ## Syncing {#syncing}
 

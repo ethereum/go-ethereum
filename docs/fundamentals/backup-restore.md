@@ -51,4 +51,4 @@ Import binary-format blockchain exports with:
 geth import <filename>
 ```
 
-And finally: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**
+And finally: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**!

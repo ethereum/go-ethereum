@@ -70,7 +70,7 @@ The same can be achieved using raw JSON requests (this example send the request 
 curl -X POST --data '{"id": 0, "jsonrpc": "2.0", "method": "account_new", "params": []}' http://localhost:8550 -H "Content-Type: application/json"
 ```
 
-The console will hang because Clef is waiting for manual approval. Switch to the Clef terminal and approve the action. Clef will prompt for a account password and then confirm the account creation in the terminal logs. A new keyfile has been added to the keystore in `go-ethereum/sepolia-data`. A JSON response is returned to the terminal the request originated from, containing the new account address in the `result` field.
+The console will hang because Clef is waiting for manual approval. Switch to the Clef terminal and approve the action. Clef will prompt for an account password and then confirm the account creation in the terminal logs. A new keyfile has been added to the keystore in `go-ethereum/sepolia-data`. A JSON response is returned to the terminal the request originated from, containing the new account address in the `result` field.
 
 ```terminal
 {"jsonrpc": "2.0", "id": 0, "result": "0x168bc315a2ee09042d83d7c5811b533620531f67"}
@@ -78,7 +78,7 @@ The console will hang because Clef is waiting for manual approval. Switch to the
 
 It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
-<Note>If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**</Note>
+<Note>If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS!**</Note>
 
 The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
 
@@ -128,7 +128,7 @@ The ordering of accounts when they are listed is lexicographic, but is effective
 
 Accounts can also be listed in the Javascript console using `eth.accounts`, which will defer to Clef for approval.
 
-As well as individual account, any wallets managed by Clef can be listed (which will also print the wallet status and the address and URl of any accounts they contain. This uses the `list-wallets` CLI command.
+As well as individual accounts, any wallets managed by Clef can be listed (which will also print the wallet status and the address and URl of any accounts they contain. This uses the `list-wallets` CLI command.
 
 ```sh
 clef list-wallets --keystore <path-to-keystore>
@@ -145,7 +145,7 @@ which returns:
 
 ### Import a keyfile {#importing-a-keyfile}
 
-It is also possible to create an account by importing an existing private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. It is possible to do this using Clef, but currently the method is not externally exposed and requires implementing a UI. There is a Python UI on the Geth GitHub that could be used as an example or it can be done using the default console UI. However, for now the most straightforward way to import an accoutn from a private key is to use Geth's `account import`.
+It is also possible to create an account by importing an existing private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. It is possible to do this using Clef, but currently the method is not externally exposed and requires implementing a UI. There is a Python UI on the Geth GitHub that could be used as an example or it can be done using the default console UI. However, for now, the most straightforward way to import an account from a private key is to use Geth's `account import`.
 
 Geth requires the private key to be stored as a file which contains the private key as unencrypted canonical elliptic curve bytes encoded into hex (i.e. plain text key without leading 0x). The new account is then saved in encrypted format, protected by a passphrase the user provides on request. As always, this passphrase must be securely and safely backed up - there is no way to retrieve or reset it if it is forgotten!
 
