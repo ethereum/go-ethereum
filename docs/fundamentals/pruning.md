@@ -61,4 +61,4 @@ Messages about "state snapshot generation" indicate that a snapshot is not fully
 
 [Pruning Geth guide (@yorickdowne)](https://gist.github.com/yorickdowne/3323759b4cbf2022e191ab058a4276b2)
 
-[Pruning Geth in a RocketPool node](https://docs.rocketpool.net/guides/node/geth-pruning.html)
+[Pruning Geth in a RocketPool node](https://docs.rocketpool.net/guides/node/pruning.html)
