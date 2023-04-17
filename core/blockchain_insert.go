@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,9 +38,13 @@ type insertStats struct {
 // always print out progress. This avoids the user wondering what's going on.
 const statsReportLimit = 8 * time.Second
 
+// blocksPerSecondCheckLength is the number of blocks to look back when estimating
+// remaining time to sync
+const blocksPerSecondCheckLength = 128
+
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
-func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize, setHead bool) {
+func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize, setHead bool, bc *BlockChain) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -62,6 +67,20 @@ func (st *insertStats) report(chain []*types.Block, index int, dirty common.Stor
 		}
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+			// estimate remaining time by comparing age to the rate at which recent blocks were processed
+			// this is approximate but seems to work adequately for rough tracking
+			curBlockNum := bc.CurrentHeader().Number.Int64()
+			prevBlockNum := math.Max64(0, curBlockNum-blocksPerSecondCheckLength)
+			prevHeader := bc.GetHeaderByNumber(uint64(prevBlockNum))
+			if prevHeader != nil {
+				chainSecondsPerBlock := float64(bc.CurrentHeader().Time-prevHeader.Time) / float64(curBlockNum-prevBlockNum)
+				blocksToDo := float64(time.Since(timestamp).Seconds()) / chainSecondsPerBlock
+				ingestSecondsPerBlock := float64(elapsed.Seconds()) / float64(st.processed)
+				secondsToGo := blocksToDo * ingestSecondsPerBlock
+				expectedTime := time.Unix(time.Now().Unix()+int64(secondsToGo), 0)
+				expectedDuration := expectedTime.Sub(time.Now())
+				context = append(context, []interface{}{"remaining", common.PrettyDuration(expectedDuration)}...)
+			}
 		}
 		context = append(context, []interface{}{"dirty", dirty}...)
 
