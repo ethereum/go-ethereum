@@ -46,7 +46,7 @@ func (c *VersionCommand) Synopsis() string {
 
 // Run implements the cli.Command interface
 func (c *VersionCommand) Run(args []string) int {
-	c.UI.Output(params.VersionWithMeta)
+	c.UI.Output(params.VersionWithMetaCommitDetails)
 
 	return 0
 }

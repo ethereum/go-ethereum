@@ -162,9 +162,16 @@ func main() {
 		}
 	}
 	// Load up the account key and decrypt its password
-	blob, err := ioutil.ReadFile(*accPassFlag)
+
+	canonicalPath, err := common.VerifyPath(*accPassFlag)
 	if err != nil {
-		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
+		fmt.Println("path not verified: " + err.Error())
+		return
+	}
+
+	blob, err := ioutil.ReadFile(canonicalPath)
+	if err != nil {
+		log.Crit("Failed to read account password contents", "file", canonicalPath, "err", err)
 	}
 	pass := strings.TrimSuffix(string(blob), "\n")
 

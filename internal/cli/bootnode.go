@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/ethereum/go-ethereum/internal/cli/server"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -27,6 +28,7 @@ type BootnodeCommand struct {
 
 	listenAddr string
 	v5         bool
+	verbosity  int
 	logLevel   string
 	nat        string
 	nodeKey    string
@@ -64,10 +66,16 @@ func (b *BootnodeCommand) Flags() *flagset.Flagset {
 		Usage:   "Enable UDP v5",
 		Value:   &b.v5,
 	})
+	flags.IntFlag(&flagset.IntFlag{
+		Name:    "verbosity",
+		Default: 3,
+		Usage:   "Logging verbosity (5=trace|4=debug|3=info|2=warn|1=error|0=crit)",
+		Value:   &b.verbosity,
+	})
 	flags.StringFlag(&flagset.StringFlag{
 		Name:    "log-level",
 		Default: "info",
-		Usage:   "Log level (trace|debug|info|warn|error|crit)",
+		Usage:   "log level (trace|debug|info|warn|error|crit), will be deprecated soon. Use verbosity instead",
 		Value:   &b.logLevel,
 	})
 	flags.StringFlag(&flagset.StringFlag{
@@ -114,7 +122,18 @@ func (b *BootnodeCommand) Run(args []string) int {
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 
-	lvl, err := log.LvlFromString(strings.ToLower(b.logLevel))
+	var logInfo string
+
+	if b.verbosity != 0 && b.logLevel != "" {
+		b.UI.Warn(fmt.Sprintf("Both verbosity and log-level provided, using verbosity: %v", b.verbosity))
+		logInfo = server.VerbosityIntToString(b.verbosity)
+	} else if b.verbosity != 0 {
+		logInfo = server.VerbosityIntToString(b.verbosity)
+	} else {
+		logInfo = b.logLevel
+	}
+
+	lvl, err := log.LvlFromString(strings.ToLower(logInfo))
 	if err == nil {
 		glogger.Verbosity(lvl)
 	} else {

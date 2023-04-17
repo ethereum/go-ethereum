@@ -6,10 +6,13 @@
 package metrics
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/BurntSushi/toml"
 )
@@ -74,7 +77,13 @@ func init() {
 func updateMetricsFromConfig(path string) {
 	// Don't act upon any errors here. They're already taken into
 	// consideration when the toml config file will be parsed in the cli.
-	data, err := os.ReadFile(path)
+	canonicalPath, err := common.VerifyPath(path)
+	if err != nil {
+		fmt.Println("path not verified: " + err.Error())
+		return
+	}
+
+	data, err := os.ReadFile(canonicalPath)
 	tomlData := string(data)
 
 	if err != nil {

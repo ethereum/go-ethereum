@@ -3,8 +3,9 @@
 
 chain = "mainnet"
 # chain = "mumbai"
-# identity = "Pratiks-MacBook-Pro.local"
-# log-level = "INFO"
+# identity = "Annon-Identity"
+# verbosity = 3
+# vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
 # keystore = "/var/lib/bor/keystore"
@@ -15,8 +16,14 @@ syncmode = "full"
 # snapshot = true
 # "bor.logs" = false
 # ethstats = ""
-
+# devfakeauthor = false
 # ["eth.requiredblocks"]
+
+# [log]
+  # vmodule = ""
+  # json = false
+  # backtrace = ""
+  # debug = true
 
 [p2p]
   # maxpeers = 1
@@ -25,6 +32,9 @@ syncmode = "full"
   # bind = "0.0.0.0"
   # port = 30303
   # nat = "any"
+  # netrestrict = ""
+  # nodekey = ""
+  # nodekeyhex = ""
   [p2p.discovery]
     # v5disc = false
     bootnodes = ["enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303", "enode://88116f4295f5a31538ae409e4d44ad40d22e44ee9342869e7d68bdec55b0f83c1530355ce8b41fbec0928a7d75a5745d528450d30aec92066ab6ba1ee351d710@159.203.9.164:30303"]
@@ -60,13 +70,16 @@ syncmode = "full"
   # mine = true
   # etherbase = "VALIDATOR ADDRESS"
   # extradata = ""
+  # recommit = "2m5s"
 
 
 # [jsonrpc]
 #   ipcdisable = false
 #   ipcpath = ""
 #   gascap = 50000000
+#   evmtimeout = "5s"
 #   txfeecap = 5.0
+#   allow-unprotected-txs = false
 #   [jsonrpc.http]
 #     enabled = false
 #     port = 8545
@@ -93,6 +106,11 @@ syncmode = "full"
 #     host = ""
 #     vhosts = ["*"]
 #     corsdomain = ["*"]
+#   [jsonrpc.auth]
+#     jwtsecret = ""
+#     addr = "localhost"
+#     port = 8551
+#     vhosts = ["localhost"]
 #   [jsonrpc.timeouts]
 #     read = "10s"
 #     write = "30s"
@@ -101,6 +119,8 @@ syncmode = "full"
 [gpo]
   # blocks = 20
   # percentile = 60
+  # maxheaderhistory = 1024
+  # maxblockhistory = 1024
   # maxprice = "5000000000000"
   ignoreprice = "30000000000"
 
@@ -134,6 +154,7 @@ syncmode = "full"
   # txlookuplimit = 2350000
   # triesinmemory = 128
   # timeout = "1h0m0s"
+  # fdlimit = 0
 
 [accounts]
   # allow-insecure-unlock = true
@@ -148,3 +169,11 @@ syncmode = "full"
 # [developer]
   # dev = false
   # period = 0
+  # gaslimit = 11500000
+
+# [pprof]
+#   pprof = false
+#   port = 6060
+#   addr = "127.0.0.1"
+#   memprofilerate = 524288
+#   blockprofilerate = 0

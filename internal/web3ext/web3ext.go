@@ -193,6 +193,15 @@ web3._extend({
 			call: 'admin_stopWS'
 		}),
 		new web3._extend.Method({
+			name: 'getMaxPeers',
+			call: 'admin_getMaxPeers'
+		}),
+		new web3._extend.Method({
+			name: 'setMaxPeers',
+			call: 'admin_setMaxPeers',
+			params: 1
+		}),
+		new web3._extend.Method({			
 			name: 'getExecutionPoolSize',
 			call: 'admin_getExecutionPoolSize'
 		}),
@@ -218,7 +227,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'setHttpExecutionPoolSize',
 			call: 'admin_setHttpExecutionPoolSize',
-			params: 1
 		}),
 	],
 	properties: [

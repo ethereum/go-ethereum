@@ -30,7 +30,7 @@ linters:
     - gocognit
     - gofmt
     # - gomnd
-    - gomoddirectives
+    # - gomoddirectives
     - gosec
     - makezero
     - nestif
@@ -65,10 +65,10 @@ linters-settings:
 
   goimports:
     local-prefixes: github.com/ethereum/go-ethereum
-  
+
   nestif:
     min-complexity: 5
-  
+
   prealloc:
     for-loops: true
 
@@ -79,7 +79,7 @@ linters-settings:
     # By default list of stable checks is used.
     enabled-checks:
       - badLock
-      - filepathJoin	
+      - filepathJoin
       - sortSlice
       - sprintfQuotedString
       - syncMapLoadAndDelete

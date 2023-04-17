@@ -17,7 +17,7 @@ service Bor {
 
     rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
 
-    rpc Status(google.protobuf.Empty) returns (StatusResponse);
+    rpc Status(StatusRequest) returns (StatusResponse);
 
     rpc ChainWatch(ChainWatchRequest) returns (stream ChainWatchResponse);
 
@@ -95,6 +95,10 @@ message ChainSetHeadRequest {
 }
 
 message ChainSetHeadResponse {
+}
+
+message StatusRequest {
+    bool Wait = 1;
 }
 
 message StatusResponse {

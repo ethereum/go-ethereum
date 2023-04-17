@@ -166,7 +166,7 @@ func TestIsValidChain(t *testing.T) {
 	// create a future chain to be imported of length <= `checkpointInterval`
 	chainB := createMockChain(21, 30) // B21->B22...B29->B30
 
-	// case5: Try importing a future chain of acceptable length
+	// case5: Try importing a future chain (1)
 	res, err = s.IsValidChain(chainA[len(chainA)-1], chainB)
 	require.Equal(t, res, true, "expected chain to be valid")
 	require.Equal(t, err, nil, "expected error to be nil")
@@ -174,10 +174,13 @@ func TestIsValidChain(t *testing.T) {
 	// create a future chain to be imported of length > `checkpointInterval`
 	chainB = createMockChain(21, 40) // C21->C22...C39->C40
 
-	// case5: Try importing a future chain of unacceptable length
+	// Note: Earlier, it used to reject future chains longer than some threshold.
+	// That check is removed for now.
+
+	// case6: Try importing a future chain (2)
 	res, err = s.IsValidChain(chainA[len(chainA)-1], chainB)
-	require.Equal(t, res, false, "expected chain to be invalid")
-	require.Equal(t, err, ErrLongFutureChain, "expected error")
+	require.Equal(t, res, true, "expected chain to be valid")
+	require.Equal(t, err, nil, "expected error to be nil")
 }
 
 func TestSplitChain(t *testing.T) {

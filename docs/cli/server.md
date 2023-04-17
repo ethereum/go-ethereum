@@ -8,9 +8,13 @@ The ```bor server``` command runs the Bor client.
 
 - ```identity```: Name/Identity of the node
 
-- ```log-level```: Set log level for the server (default: INFO)
+- ```verbosity```: Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit), default = 3 (default: 3)
+
+- ```log-level```: Log level for the server (trace|debug|info|warn|error|crit), will be deprecated soon. Use verbosity instead
 
 - ```datadir```: Path of the data directory to store information
+
+- ```vmdebug```: Record information useful for VM and contract debugging (default: false)
 
 - ```datadir.ancient```: Data directory for ancient chain segments (default = inside chaindata)
 
@@ -20,7 +24,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```rpc.returndatalimit```: Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits) (default: 100000)
 
-- ```config```: File for the config file
+- ```config```: Path to the TOML configuration file
 
 - ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
 
@@ -36,13 +40,25 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
+- ```bor.devfakeauthor```: Run miner without validator set authorization [dev mode] : Use with '--bor.withoutheimdall' (default: false)
+
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
+
+- ```bor.runheimdall```: Run Heimdall service as a child process (default: false)
+
+- ```bor.runheimdallargs```: Arguments to pass to Heimdall service
+
+- ```bor.useheimdallapp```: Use child heimdall process to fetch data, Only works when bor.runheimdall is true (default: false)
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
 - ```gpo.blocks```: Number of recent blocks to check for gas prices (default: 20)
 
 - ```gpo.percentile```: Suggested gas price is the given percentile of a set of recent transaction gas prices (default: 60)
+
+- ```gpo.maxheaderhistory```: Maximum header history of gasprice oracle (default: 1024)
+
+- ```gpo.maxblockhistory```: Maximum block history of gasprice oracle (default: 1024)
 
 - ```gpo.maxprice```: Maximum gas price will be recommended by gpo (default: 5000000000000)
 
@@ -55,6 +71,18 @@ The ```bor server``` command runs the Bor client.
 - ```dev```: Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled (default: false)
 
 - ```dev.period```: Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
+
+- ```dev.gaslimit```: Initial block gas limit (default: 11500000)
+
+- ```pprof```: Enable the pprof HTTP server (default: false)
+
+- ```pprof.port```: pprof HTTP server listening port (default: 6060)
+
+- ```pprof.addr```: pprof HTTP server listening interface (default: 127.0.0.1)
+
+- ```pprof.memprofilerate```: Turn on memory profiling with the given rate (default: 524288)
+
+- ```pprof.blockprofilerate```: Turn on block profiling with the given rate (default: 0)
 
 ### Account Management Options
 
@@ -90,15 +118,29 @@ The ```bor server``` command runs the Bor client.
 
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default: 2350000)
 
+- ```fdlimit```: Raise the open file descriptor resource limit (default = system fd limit) (default: 0)
+
 ### JsonRPC Options
 
 - ```rpc.gascap```: Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 50000000)
 
+- ```rpc.evmtimeout```: Sets a timeout used for eth_call (0=infinite) (default: 5s)
+
 - ```rpc.txfeecap```: Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 5)
+
+- ```rpc.allow-unprotected-txs```: Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC (default: false)
 
 - ```ipcdisable```: Disable the IPC-RPC server (default: false)
 
 - ```ipcpath```: Filename for IPC socket/pipe within the datadir (explicit paths escape it)
+
+- ```authrpc.jwtsecret```: Path to a JWT secret to use for authenticated RPC endpoints
+
+- ```authrpc.addr```: Listening address for authenticated APIs (default: localhost)
+
+- ```authrpc.port```: Listening port for authenticated APIs (default: 8551)
+
+- ```authrpc.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: localhost)
 
 - ```http.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
 
@@ -140,6 +182,16 @@ The ```bor server``` command runs the Bor client.
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well. (default: false)
 
+### Logging Options
+
+- ```vmodule```: Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
+
+- ```log.json```: Format logs with JSON (default: false)
+
+- ```log.backtrace```: Request a stack trace at a specific logging statement (e.g. 'block.go:271')
+
+- ```log.debug```: Prepends log messages with call-site location (file and line number) (default: false)
+
 ### P2P Options
 
 - ```bind```: Network binding address (default: 0.0.0.0)
@@ -153,6 +205,12 @@ The ```bor server``` command runs the Bor client.
 - ```maxpendpeers```: Maximum number of pending connection attempts (default: 50)
 
 - ```nat```: NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: any)
+
+- ```netrestrict```: Restricts network communication to the given IP networks (CIDR masks)
+
+- ```nodekey```:  P2P node key file
+
+- ```nodekeyhex```: P2P node key as hex
 
 - ```nodiscover```: Disables the peer discovery mechanism (manual peer addition) (default: false)
 
@@ -169,6 +227,8 @@ The ```bor server``` command runs the Bor client.
 - ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 30000000)
 
 - ```miner.gasprice```: Minimum gas price for mining a transaction (default: 1000000000)
+
+- ```miner.recommit```: The time interval for miner to re-create mining work (default: 2m5s)
 
 ### Telemetry Options
 
