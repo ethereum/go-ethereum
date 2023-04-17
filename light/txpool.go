@@ -405,7 +405,7 @@ func (pool *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		return fmt.Errorf("Known transaction (%x)", hash[:4])
 	}
 
-	if pool.config.UsingScroll {
+	if pool.config.Scroll.L1FeeEnabled() {
 		if err := fees.VerifyFee(pool.signer, tx, pool.currentState(ctx)); err != nil {
 			return err
 		}

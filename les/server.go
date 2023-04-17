@@ -83,7 +83,7 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		return nil, err
 	}
 	// Now disable for zktrie
-	if e.BlockChain().Config().Zktrie {
+	if e.BlockChain().Config().Scroll.ZktrieEnabled() {
 		return nil, errors.New("light server not work with zktrie storage")
 	}
 

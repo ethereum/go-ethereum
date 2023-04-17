@@ -188,10 +188,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if storedcfg == nil {
 			log.Warn("Found genesis block without chain config")
 		} else {
-			trieCfg = &trie.Config{Zktrie: storedcfg.Zktrie}
+			trieCfg = &trie.Config{Zktrie: storedcfg.Scroll.ZktrieEnabled()}
 		}
 	} else {
-		trieCfg = &trie.Config{Zktrie: genesis.Config.Zktrie}
+		trieCfg = &trie.Config{Zktrie: genesis.Config.Scroll.ZktrieEnabled()}
 	}
 
 	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, trieCfg), nil); err != nil {
@@ -277,7 +277,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	var trieCfg *trie.Config
 	if g.Config != nil {
-		trieCfg = &trie.Config{Zktrie: g.Config.Zktrie}
+		trieCfg = &trie.Config{Zktrie: g.Config.Scroll.ZktrieEnabled()}
 	}
 	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	if err != nil {
@@ -315,7 +315,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
-		} else if g.Config.EnableEIP2718 && g.Config.EnableEIP1559 {
+		} else if g.Config.Scroll.BaseFeeEnabled() {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		} else {
 			head.BaseFee = nil

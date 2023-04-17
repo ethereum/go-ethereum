@@ -98,8 +98,8 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 
 	// get coinbase
 	var coinbase common.Address
-	if api.backend.ChainConfig().FeeVaultAddress != nil {
-		coinbase = *api.backend.ChainConfig().FeeVaultAddress
+	if api.backend.ChainConfig().Scroll.L1FeeEnabled() {
+		coinbase = *api.backend.ChainConfig().Scroll.FeeVaultAddress
 	} else {
 		coinbase, err = api.backend.Engine().Author(block.Header())
 		if err != nil {
@@ -391,15 +391,13 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 	}
 
 	// only zktrie model has the ability to get `mptwitness`.
-	if api.backend.ChainConfig().Zktrie {
+	if api.backend.ChainConfig().Scroll.ZktrieEnabled() {
 		if err := zkproof.FillBlockTraceForMPTWitness(zkproof.MPTWitnessType(api.backend.CacheConfig().MPTWitness), blockTrace); err != nil {
 			log.Error("fill mpt witness fail", "error", err)
 		}
 	}
 
-	if api.backend.ChainConfig().UsingScroll {
-		blockTrace.WithdrawTrieRoot = withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, env.state)
-	}
+	blockTrace.WithdrawTrieRoot = withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, env.state)
 
 	return blockTrace, nil
 }
