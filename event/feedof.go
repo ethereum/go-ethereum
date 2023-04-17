@@ -153,7 +153,7 @@ func (f *FeedOf[T]) Send(value T) (nsent int) {
 
 // If ctx passes deadline, the send is being aborted.
 // Slow consumers can be dropped by setting drop to true.
-// It returns number of subscribers that the value was sent to and number of dropped subsribers.
+// It returns number of subscribers that the value was sent to and number of dropped subscribers.
 func (f *FeedOf[T]) SendWithCtx(ctx context.Context, drop bool, value T) (nsent int, ndropped int) {
 	rvalue := reflect.ValueOf(value)
 
