@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/crate-crypto/go-proto-danksharding-crypto/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -85,23 +84,18 @@ func TestEIP4844Signing(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	signer := NewDankSigner(big.NewInt(18))
-	txdata := &SignedBlobTx{
-		Message: BlobTxMessage{
-			Nonce:               view.Uint64View(0),
-			Gas:                 view.Uint64View(123457),
-			To:                  AddressOptionalSSZ{Address: (*AddressSSZ)(&addr)},
-			GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
-			GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
-			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(10)),
-			Value:               view.Uint256View(*uint256.NewInt(10)),
-			BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014")},
-		},
+	msg := BlobTxMessage{
+		Nonce:            view.Uint64View(0),
+		Gas:              view.Uint64View(123457),
+		To:               AddressOptionalSSZ{Address: (*AddressSSZ)(&addr)},
+		GasTipCap:        view.Uint256View(*uint256.NewInt(42)),
+		GasFeeCap:        view.Uint256View(*uint256.NewInt(10)),
+		MaxFeePerDataGas: view.Uint256View(*uint256.NewInt(10)),
+		Value:            view.Uint256View(*uint256.NewInt(10)),
 	}
-	wrapData := &BlobTxWrapData{
-		BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
-		Blobs:    Blobs{Blob{}},
-		Proofs:   KZGProofs{api.ZERO_POINT},
-	}
+	var wrapData TxWrapData
+	wrapData, msg.BlobVersionedHashes = oneEmptyBlobWrapData()
+	txdata := &SignedBlobTx{Message: msg}
 	tx := NewTx(txdata, WithTxWrapData(wrapData))
 	tx, err := SignTx(tx, signer, key)
 	if err != nil {

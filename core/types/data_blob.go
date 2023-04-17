@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/crate-crypto/go-proto-danksharding-crypto/serialization"
+	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/kzg"
@@ -51,7 +51,7 @@ func (p *KZGCommitment) UnmarshalText(text []byte) error {
 }
 
 func (c KZGCommitment) ComputeVersionedHash() common.Hash {
-	return common.Hash(kzg.KZGToVersionedHash(serialization.KZGCommitment(c)))
+	return common.Hash(kzg.KZGToVersionedHash(gokzg4844.KZGCommitment(c)))
 }
 
 // Compressed BLS12-381 G1 element
@@ -267,41 +267,41 @@ func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, v
 
 	cryptoCtx := kzg.CrpytoCtx()
 	for i, blob := range blobs {
-		commitment, err := cryptoCtx.BlobToKZGCommitment(serialization.Blob(blob))
+		commitment, err := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not convert blob to commitment: %v", err)
 		}
 
-		proof, err := cryptoCtx.ComputeBlobKZGProof(serialization.Blob(blob), commitment)
+		proof, err := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not compute proof for blob: %v", err)
 		}
 		commitments[i] = KZGCommitment(commitment)
 		proofs[i] = KZGProof(proof)
-		versionedHashes[i] = common.Hash(kzg.KZGToVersionedHash(serialization.KZGCommitment(commitment)))
+		versionedHashes[i] = common.Hash(kzg.KZGToVersionedHash(gokzg4844.KZGCommitment(commitment)))
 	}
 
 	return commitments, versionedHashes, proofs, nil
 }
 
-func toBlobs(_blobs Blobs) []serialization.Blob {
-	blobs := make([]serialization.Blob, len(_blobs))
+func toBlobs(_blobs Blobs) []gokzg4844.Blob {
+	blobs := make([]gokzg4844.Blob, len(_blobs))
 	for i, _blob := range _blobs {
-		blobs[i] = serialization.Blob(_blob)
+		blobs[i] = gokzg4844.Blob(_blob)
 	}
 	return blobs
 }
-func toComms(_comms BlobKzgs) []serialization.KZGCommitment {
-	comms := make([]serialization.KZGCommitment, len(_comms))
+func toComms(_comms BlobKzgs) []gokzg4844.KZGCommitment {
+	comms := make([]gokzg4844.KZGCommitment, len(_comms))
 	for i, _comm := range _comms {
-		comms[i] = serialization.KZGCommitment(_comm)
+		comms[i] = gokzg4844.KZGCommitment(_comm)
 	}
 	return comms
 }
-func toProofs(_proofs KZGProofs) []serialization.KZGProof {
-	proofs := make([]serialization.KZGProof, len(_proofs))
+func toProofs(_proofs KZGProofs) []gokzg4844.KZGProof {
+	proofs := make([]gokzg4844.KZGProof, len(_proofs))
 	for i, _proof := range _proofs {
-		proofs[i] = serialization.KZGProof(_proof)
+		proofs[i] = gokzg4844.KZGProof(_proof)
 	}
 	return proofs
 }
@@ -349,8 +349,9 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	l1 := len(b.BlobKzgs)
 	l2 := len(blobTx.Message.BlobVersionedHashes)
 	l3 := len(b.Blobs)
-	if l1 != l2 || l2 != l3 {
-		return fmt.Errorf("lengths don't match %v %v %v", l1, l2, l3)
+	l4 := len(b.Proofs)
+	if l1 != l2 || l1 != l3 || l1 != l4 {
+		return fmt.Errorf("lengths don't match %v %v %v %v", l1, l2, l3, l4)
 	}
 	// the following check isn't strictly necessary as it would be caught by data gas processing
 	// (and hence it is not explicitly in the spec for this function), but it doesn't hurt to fail

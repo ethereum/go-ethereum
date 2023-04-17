@@ -28,12 +28,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crate-crypto/go-proto-danksharding-crypto/api"
+	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/ztyp/view"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -76,6 +77,21 @@ var (
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
+
+// Returns a wrapper consisting of a single blob of all zeros that passes validation along with its
+// versioned hash.
+func oneEmptyBlobWrapData() (wrap *BlobTxWrapData, versionedHashes VersionedHashesView) {
+	cryptoCtx := kzg.CrpytoCtx()
+	blob := Blob{}
+	commitment, _ := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob))
+	proof, _ := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment)
+	wrapData := &BlobTxWrapData{
+		BlobKzgs: BlobKzgs{KZGCommitment(commitment)},
+		Blobs:    Blobs{Blob(blob)},
+		Proofs:   KZGProofs{KZGProof(proof)},
+	}
+	return wrapData, VersionedHashesView{common.Hash(kzg.KZGToVersionedHash(gokzg4844.KZGCommitment(wrapData.BlobKzgs[0])))}
+}
 
 func TestDecodeEmptyTypedTx(t *testing.T) {
 	input := []byte{0x80}
@@ -482,22 +498,16 @@ func TestTransactionCoding(t *testing.T) {
 				AccessList: accesses,
 			}
 		case 6:
-			txdata = &SignedBlobTx{
-				Message: BlobTxMessage{
-					ChainID:             view.Uint256View(*uint256.NewInt(1)),
-					Nonce:               view.Uint64View(i),
-					Gas:                 view.Uint64View(123457),
-					GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
-					GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
-					AccessList:          AccessListView(accesses),
-					BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014")},
-				},
+			msg := BlobTxMessage{
+				ChainID:    view.Uint256View(*uint256.NewInt(1)),
+				Nonce:      view.Uint64View(i),
+				Gas:        view.Uint64View(123457),
+				GasTipCap:  view.Uint256View(*uint256.NewInt(42)),
+				GasFeeCap:  view.Uint256View(*uint256.NewInt(10)),
+				AccessList: AccessListView(accesses),
 			}
-			wrapData = &BlobTxWrapData{
-				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
-				Blobs:    Blobs{Blob{}},
-				Proofs:   KZGProofs{api.ZERO_POINT},
-			}
+			wrapData, msg.BlobVersionedHashes = oneEmptyBlobWrapData()
+			txdata = &SignedBlobTx{Message: msg}
 		}
 		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))
 		if err != nil {
