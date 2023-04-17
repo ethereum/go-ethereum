@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -55,14 +56,6 @@ const (
 	// above some healthy uncle limit, so use that.
 	maxQueuedBlockAnns = 4
 )
-
-// max is a helper function which returns the larger of the two given integers.
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // Peer is a collection of relevant information we have about a `eth` peer.
 type Peer struct {
@@ -516,7 +509,7 @@ func newKnownCache(max int) *knownCache {
 
 // Add adds a list of elements to the set.
 func (k *knownCache) Add(hashes ...common.Hash) {
-	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
+	for k.hashes.Cardinality() > math.Max(0, k.max-len(hashes)) {
 		k.hashes.Pop()
 	}
 	for _, hash := range hashes {

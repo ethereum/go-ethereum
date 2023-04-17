@@ -107,3 +107,19 @@ func SafeMul(x, y uint64) (uint64, bool) {
 	hi, lo := bits.Mul64(x, y)
 	return lo, hi != 0
 }
+
+// Max is a helper function which returns the larger of the two given integers.
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Max64 is a helper function which returns the larger of the two int64s
+func Max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
