@@ -17,7 +17,9 @@
 package event
 
 import (
+	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -146,6 +148,43 @@ func TestFeedOfSubscribeBlockedPost(t *testing.T) {
 	}
 }
 
+func TestFeedOfSubscribeBlockedCanceled(t *testing.T) {
+	t.Parallel()
+	var (
+		feed   FeedOf[int]
+		nsends = 2000
+		ch1    = make(chan int)
+		ch2    = make(chan int)
+		wg     sync.WaitGroup
+	)
+	defer wg.Wait()
+	wg.Add(nsends / 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	feed.Subscribe(ch1)
+	for i := 0; i < (nsends / 2); i++ {
+		go func(i int) {
+			feed.SendWithCtx(ctx, true, 99)
+			wg.Done()
+		}(i)
+	}
+
+	sub2 := feed.Subscribe(ch2)
+	defer sub2.Unsubscribe()
+	for i := 0; i < nsends; {
+		select {
+		case _, ok := <-ch1:
+			i++
+			if i == nsends/2 && ok {
+				cancel()
+			}
+		case _, ok := <-ch2:
+			if !ok {
+				i++
+			}
+		}
+	}
+}
+
 func TestFeedOfUnsubscribeBlockedPost(t *testing.T) {
 	var (
 		feed   FeedOf[int]
@@ -220,6 +259,129 @@ func TestFeedOfUnsubscribeSentChan(t *testing.T) {
 	wg.Wait()
 }
 
+// Checks that unsubscribing a channel during Send works even if that
+// channel has already been used with ctx.
+func TestFeedOfUnsubscribeSentChanWithCtx(t *testing.T) {
+	t.Parallel()
+	var (
+		feed FeedOf[int]
+		ch1  = make(chan int)
+		ch2  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch2)
+		wg   sync.WaitGroup
+	)
+	defer sub2.Unsubscribe()
+
+	wg.Add(1)
+	go func() {
+		feed.SendWithCtx(context.Background(), false, 0)
+		wg.Done()
+	}()
+
+	// Wait for the value on ch1.
+	_, ok := <-ch1
+	if !ok {
+		t.Fatal("should not be dropped")
+	}
+	// Unsubscribe ch1, removing it from the send cases.
+	sub1.Unsubscribe()
+
+	// Receive ch2, finishing Send.
+	_, ok = <-ch2
+	if !ok {
+		t.Fatal("should not be dropped")
+	}
+	wg.Wait()
+
+	// Send again. This should send to ch2 only, so the wait group will unblock
+	// as soon as a value is received on ch2.
+	wg.Add(1)
+	go func() {
+		feed.Send(0)
+		wg.Done()
+	}()
+	<-ch2
+	wg.Wait()
+}
+
+// Checks that unsubscribing a channel during Send works even if that
+// channel has already been sent on with background ctx.
+func TestFeedOfDropSlowConsumer(t *testing.T) {
+	t.Parallel()
+	var (
+		feed FeedOf[int]
+		ch1  = make(chan int)
+		ch2  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch2)
+		wg   sync.WaitGroup
+	)
+	defer sub2.Unsubscribe()
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		feed.SendWithCtx(ctx, true, 0)
+		wg.Done()
+	}()
+
+	// Wait for the value on ch1.
+	<-ch1
+	// Unsubscribe ch1, removing it from the send cases.
+	sub1.Unsubscribe()
+	cancel() // drop ch2
+	// make sure that ch2 is not active otherwise there is 50% chance to be selected instead.
+	time.Sleep(1 * time.Second)
+	_, ok := <-ch2
+	if ok {
+		t.Fatal("should be dropped")
+	}
+	wg.Wait()
+}
+
+// Checks that normal send is still possible after canceling previous ctx.
+func TestFeedOfSendNormalAfterCancel(t *testing.T) {
+	t.Parallel()
+	var (
+		feed FeedOf[int]
+		ch1  = make(chan int)
+		ch2  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch2)
+		wg   sync.WaitGroup
+	)
+	defer sub1.Unsubscribe()
+	defer sub2.Unsubscribe()
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		feed.SendWithCtx(ctx, true, 0)
+		wg.Done()
+	}()
+
+	<-ch1
+	<-ch2
+	cancel()
+	wg.Wait()
+
+	wg.Add(1)
+	go func() {
+		feed.Send(0)
+		wg.Done()
+	}()
+
+	_, ok := <-ch1
+	if !ok {
+		t.Log("shouldn't be dropped")
+	}
+	_, ok = <-ch2
+	if !ok {
+		t.Log("shouldn't be dropped")
+	}
+
+	wg.Wait()
+}
+
 func TestFeedOfUnsubscribeFromInbox(t *testing.T) {
 	var (
 		feed FeedOf[int]
@@ -232,7 +394,7 @@ func TestFeedOfUnsubscribeFromInbox(t *testing.T) {
 	if len(feed.inbox) != 3 {
 		t.Errorf("inbox length != 3 after subscribe")
 	}
-	if len(feed.sendCases) != 1 {
+	if len(feed.sendCases) != 2 {
 		t.Errorf("sendCases is non-empty after unsubscribe")
 	}
 
@@ -242,8 +404,97 @@ func TestFeedOfUnsubscribeFromInbox(t *testing.T) {
 	if len(feed.inbox) != 0 {
 		t.Errorf("inbox is non-empty after unsubscribe")
 	}
-	if len(feed.sendCases) != 1 {
+	if len(feed.sendCases) != 2 {
 		t.Errorf("sendCases is non-empty after unsubscribe")
+	}
+}
+
+func TestFeedOfUnsubscribeAfterDrop(t *testing.T) {
+	t.Parallel()
+	var (
+		feed FeedOf[int]
+		ch1  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go feed.SendWithCtx(ctx, true, 0)
+	cancel()
+	time.Sleep(1 * time.Second)
+	sub1.Unsubscribe() //should not panic
+	t.Log(sub1.Err())
+	if len(feed.inbox) != 0 {
+		t.Errorf("inbox is non-empty after unsubscribe")
+	}
+	if len(feed.sendCases) != 2 {
+		t.Errorf("sendCases is non-empty after unsubscribe")
+	}
+}
+
+func TestFeedOfDropAfterUnsubscribe(t *testing.T) {
+	t.Parallel()
+	var (
+		feed FeedOf[int]
+		ch1  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go feed.SendWithCtx(ctx, true, 0)
+	time.Sleep(1 * time.Second)
+	sub1.Unsubscribe()
+	cancel() // shouldn't have anything to drop
+}
+
+func TestFeedOfNdropAmount(t *testing.T) {
+	var (
+		feed   FeedOf[int]
+		nsends = 2000
+		chans  = make([]chan int, nsends)
+		subs   = make([]Subscription, len(chans))
+		wg     sync.WaitGroup
+	)
+	for i := range chans {
+		chans[i] = make(chan int)
+	}
+
+	// Subscribe the other channels.
+	for i, ch := range chans {
+		subs[i] = feed.Subscribe(ch)
+	}
+
+	wg.Add(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	var sent, dropped atomic.Uint32
+	go func() {
+		nsent, ndropped := feed.SendWithCtx(ctx, true, 0)
+		sent.Store(uint32(nsent))
+		dropped.Store(uint32(ndropped))
+		wg.Done()
+	}()
+
+	for i := 0; i < nsends/2; i++ {
+		ch := chans[i]
+		_, ok := <-ch
+		if !ok {
+			t.Fatal("should not be dropped")
+		}
+	}
+	cancel()
+	wg.Wait()
+	for i := nsends / 2; i < nsends; i++ {
+		ch := chans[i]
+		_, ok := <-ch
+		if ok {
+			t.Fatal("Should be dropped")
+		}
+	}
+	if sent.Load() != uint32(nsends)/2 {
+		t.Fatal("send amount mismatch")
+	}
+
+	if dropped.Load() != uint32(nsends)/2 {
+		t.Fatal("drop amount mismatch")
 	}
 }
 
@@ -270,6 +521,38 @@ func BenchmarkFeedOfSend1000(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if feed.Send(i) != nsubs {
+			panic("wrong number of sends")
+		}
+	}
+
+	b.StopTimer()
+	done.Wait()
+}
+
+func BenchmarkFeedOfSend1000Ctx(b *testing.B) {
+	var (
+		done  sync.WaitGroup
+		feed  FeedOf[int]
+		nsubs = 1000
+	)
+	subscriber := func(ch <-chan int) {
+		for i := 0; i < b.N; i++ {
+			<-ch
+		}
+		done.Done()
+	}
+	done.Add(nsubs)
+	for i := 0; i < nsubs; i++ {
+		ch := make(chan int, 200)
+		feed.Subscribe(ch)
+		go subscriber(ch)
+	}
+
+	ctx := context.Background()
+	// The actual benchmark.
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if sent, _ := feed.SendWithCtx(ctx, false, i); sent != nsubs {
 			panic("wrong number of sends")
 		}
 	}

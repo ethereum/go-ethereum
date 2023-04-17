@@ -17,6 +17,7 @@
 package event
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync"
@@ -46,7 +47,11 @@ type Feed struct {
 
 // This is the index of the first actual subscription channel in sendCases.
 // sendCases[0] is a SelectRecv case for the removeSub channel.
+// sendCases[1] is a Ctx case.
 const firstSubSendCase = 1
+const secondSubSendCase = 2
+
+var cachedNullCtx = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(context.Background().Done())}
 
 type feedTypeError struct {
 	got, want reflect.Type
@@ -221,6 +226,9 @@ func (cs caseList) find(channel interface{}) int {
 
 // delete removes the given case from cs.
 func (cs caseList) delete(index int) caseList {
+	if index == -1 {
+		return cs
+	}
 	return append(cs[:index], cs[index+1:]...)
 }
 
