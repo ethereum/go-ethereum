@@ -142,17 +142,17 @@ var (
 			WaitPeriod:           2,
 			MinePeriod:           2,
 		},
-		1962900: {
-			SwitchRound:          1962900,
-			CertThreshold:        50, // attack fix by reduce this number
+		1962899: {
+			SwitchRound:          1962899, // start from next round
+			CertThreshold:        50,      // attack fix by reduce this number
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           2,
 			MinePeriod:           2,
 		},
-		1964900: {
-			SwitchRound:          1964900,
-			CertThreshold:        73, // recover back to normal number, expect all nodes is back into masternode list
+		1964899: {
+			SwitchRound:          1964899, // start from next round
+			CertThreshold:        73,      // recover back to normal number, expect all nodes is back into masternode list
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           2,
