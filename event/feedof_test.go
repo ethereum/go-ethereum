@@ -160,6 +160,7 @@ func TestFeedOfSubscribeBlockedCanceled(t *testing.T) {
 	defer wg.Wait()
 	wg.Add(nsends / 2)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // prevent automatic checks from reporting "leak"
 	feed.Subscribe(ch1)
 	for i := 0; i < (nsends / 2); i++ {
 		go func(i int) {
