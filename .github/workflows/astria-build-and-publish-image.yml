@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checking out the repo
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       # Setting up Go
       - uses: actions/setup-go@v4
         with:
@@ -30,13 +30,17 @@ jobs:
 
       # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
       # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Log in to registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+        uses: docker/setup-buildx-action@v2
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       # Generate correct tabs and labels
       - name: Docker metadata
         id: metadata
@@ -54,8 +58,8 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          # It takes over 30 minutes to build the arm image right now, so we only build it on tags which is what we use for releases.
-          platforms: ${{ contains(github.ref, 'refs/tags/v') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          # It takes a long time to build the arm image right now, so we only build it on tags which is what we use for releases, or on merges to the default branch.
+          platforms: ${{ (contains(github.ref, 'refs/tags/v') || github.ref == join('refs/heads/', github.event.repository.default_branch)) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

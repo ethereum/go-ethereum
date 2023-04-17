@@ -4,7 +4,7 @@ ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
-FROM --platform=$BUILDPLATFORM golang:1.20-alpine as builder
+FROM golang:1.20-alpine as builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
@@ -17,7 +17,7 @@ ADD . /go-ethereum
 RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
 
 # Pull Geth into a second stage deploy alpine container
-FROM --platform=$BUILDPLATFORM alpine:latest
+FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
 # Astria - add bash and jq to support start-geth.sh in conductor
