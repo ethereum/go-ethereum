@@ -24,7 +24,7 @@ const (
 	GitCommit    = ""
 	VersionMajor = 0      // Major version component of the current release
 	VersionMinor = 3      // Minor version component of the current release
-	VersionPatch = 8      // Patch version component of the current release
+	VersionPatch = 9      // Patch version component of the current release
 	VersionMeta  = "beta" // Version metadata to append to the version string
 )
 
@@ -42,7 +42,7 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
-// VersionWithCommitDetails holds the textual version string including the metadata and Git Details.
+// VersionWithMetaCommitDetails holds the textual version string including the metadata and Git Details.
 var VersionWithMetaCommitDetails = func() string {
 	v := Version
 	if VersionMeta != "" {
