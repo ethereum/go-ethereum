@@ -73,6 +73,22 @@ const (
 	closedState
 )
 
+// checkConfigName is used to check whether the name of an Ethereum node configuration is valid.
+func checkConfigName(name string) error {
+	// Ensure that the instance name doesn't cause weird conflicts with
+	// other files in the data directory.
+	if strings.ContainsAny(name, `/\`) {
+		return errors.New(`Config.Name must not contain '/' or '\'`)
+	}
+	if name == datadirDefaultKeyStore {
+		return errors.New(`Config.Name cannot be "` + datadirDefaultKeyStore + `"`)
+	}
+	if strings.HasSuffix(name, ".ipc") {
+		return errors.New(`Config.Name cannot end in ".ipc"`)
+	}
+	return nil
+}
+
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
 	// Copy config and resolve the datadir so future changes to the current
@@ -89,17 +105,8 @@ func New(conf *Config) (*Node, error) {
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
-
-	// Ensure that the instance name doesn't cause weird conflicts with
-	// other files in the data directory.
-	if strings.ContainsAny(conf.Name, `/\`) {
-		return nil, errors.New(`Config.Name must not contain '/' or '\'`)
-	}
-	if conf.Name == datadirDefaultKeyStore {
-		return nil, errors.New(`Config.Name cannot be "` + datadirDefaultKeyStore + `"`)
-	}
-	if strings.HasSuffix(conf.Name, ".ipc") {
-		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
+	if err := checkConfigName(conf.Name); err != nil {
+		return nil, err
 	}
 
 	node := &Node{
@@ -112,48 +119,83 @@ func New(conf *Config) (*Node, error) {
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
 
-	// Register built-in APIs.
-	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
-
 	// Acquire the instance directory lock.
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-	keyDir, isEphem, err := getKeyStoreDir(conf)
-	if err != nil {
+
+	if err := node.init(conf); err != nil {
 		return nil, err
 	}
-	node.keyDir = keyDir
-	node.keyDirTemp = isEphem
+
+	return node, nil
+}
+
+// NewNonfunctional creates a new P2P node which is incapable of networking, and is not chain-aware.
+func NewNonfunctional(conf *Config) (*Node, error) {
+	if err := checkConfigName(conf.Name); err != nil {
+		return nil, err
+	}
+
+	logger := conf.Logger
+	if logger == nil {
+		logger = log.New()
+	}
+
+	node := &Node{
+		config:        conf,
+		inprocHandler: rpc.NewServer(),
+		eventmux:      new(event.TypeMux),
+		log:           logger,
+		stop:          make(chan struct{}),
+		server:        &p2p.Server{Config: conf.P2P},
+		databases:     make(map[*closeTrackingDB]struct{}),
+	}
+	if err := node.init(conf); err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+func (n *Node) init(conf *Config) error {
+	// Register built-in APIs.
+	n.rpcAPIs = append(n.rpcAPIs, n.apis()...)
+
+	keyDir, isEphem, err := getKeyStoreDir(conf)
+	if err != nil {
+		return err
+	}
+	n.keyDir = keyDir
+	n.keyDirTemp = isEphem
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
 	// are required to add the backends later on.
-	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
+	n.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
 
 	// Initialize the p2p server. This creates the node key and discovery databases.
-	node.server.Config.PrivateKey = node.config.NodeKey()
-	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = node.log
-	node.config.checkLegacyFiles()
-	if node.server.Config.NodeDatabase == "" {
-		node.server.Config.NodeDatabase = node.config.NodeDB()
+	n.server.Config.PrivateKey = n.config.NodeKey()
+	n.server.Config.Name = n.config.NodeName()
+	n.server.Config.Logger = n.log
+	n.config.checkLegacyFiles()
+	if n.server.Config.NodeDatabase == "" {
+		n.server.Config.NodeDatabase = n.config.NodeDB()
 	}
 
 	// Check HTTP/WS prefixes are valid.
 	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
-		return nil, err
+		return err
 	}
 	if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Configure RPC servers.
-	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
-
-	return node, nil
+	n.http = newHTTPServer(n.log, conf.HTTPTimeouts)
+	n.httpAuth = newHTTPServer(n.log, conf.HTTPTimeouts)
+	n.ws = newHTTPServer(n.log, rpc.DefaultHTTPTimeouts)
+	n.wsAuth = newHTTPServer(n.log, rpc.DefaultHTTPTimeouts)
+	n.ipc = newIPCServer(n.log, conf.IPCEndpoint())
+	return nil
 }
 
 // Start starts all registered lifecycles, RPC services and p2p networking.
