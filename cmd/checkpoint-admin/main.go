@@ -22,10 +22,11 @@ import (
 	"fmt"
 	"os"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/common/fdlimit"
 	"github.com/scroll-tech/go-ethereum/internal/flags"
 	"github.com/scroll-tech/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

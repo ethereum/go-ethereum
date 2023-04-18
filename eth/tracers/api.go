@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -41,6 +42,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -72,6 +74,7 @@ type Backend interface {
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
+	CacheConfig() *core.CacheConfig
 	Engine() consensus.Engine
 	ChainDb() ethdb.Database
 	// StateAtBlock returns the state corresponding to the stateroot of the block.
@@ -896,6 +899,16 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
+	// If gasPrice is 0, make sure that the account has sufficient balance to cover `l1Fee`.
+	if api.backend.ChainConfig().Scroll.L1FeeEnabled() && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
+		l1Fee, err := fees.CalculateL1MsgFee(message, vmenv.StateDB)
+		if err != nil {
+			return nil, err
+		}
+
+		statedb.AddBalance(message.From(), l1Fee)
+	}
+
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 
@@ -912,11 +925,11 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		if len(result.Revert()) > 0 {
 			returnVal = fmt.Sprintf("%x", result.Revert())
 		}
-		return &ethapi.ExecutionResult{
+		return &types.ExecutionResult{
 			Gas:         result.UsedGas,
 			Failed:      result.Failed(),
 			ReturnValue: returnVal,
-			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+			StructLogs:  vm.FormatLogs(tracer.StructLogs()),
 		}, nil
 
 	case Tracer:
@@ -936,6 +949,12 @@ func APIs(backend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewAPI(backend),
 			Public:    false,
+		},
+		{
+			Namespace: "scroll",
+			Version:   "1.0",
+			Service:   TraceBlock(NewAPI(backend)),
+			Public:    true,
 		},
 	}
 }

@@ -68,7 +68,7 @@ type JumpTable [256]*operation
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
-	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+	// enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return instructionSet
 }
 
@@ -1021,13 +1021,8 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryReturn,
 			halts:      true,
 		},
-		SELFDESTRUCT: {
-			execute:    opSuicide,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
-			halts:      true,
-			writes:     true,
-		},
+		// SELFDESTRUCT is disabled in Scroll.
+		// SELFDESTRUCT has the same behavior as INVALID.
+		SELFDESTRUCT: nil,
 	}
 }

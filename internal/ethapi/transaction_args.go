@@ -93,10 +93,16 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
 			if args.MaxFeePerGas == nil {
-				gasFeeCap := new(big.Int).Add(
-					(*big.Int)(args.MaxPriorityFeePerGas),
-					new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-				)
+				var gasFeeCap *big.Int
+				if head.BaseFee != nil {
+					gasFeeCap = new(big.Int).Add(
+						(*big.Int)(args.MaxPriorityFeePerGas),
+						new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+					)
+				} else {
+					gasFeeCap = new(big.Int).Set(
+						(*big.Int)(args.MaxPriorityFeePerGas))
+				}
 				args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
 			}
 			if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
@@ -115,7 +121,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 					// The legacy tx gas price suggestion should not add 2x base fee
 					// because all fees are consumed, so it would result in a spiral
 					// upwards.
-					price.Add(price, head.BaseFee)
+					if head.BaseFee != nil {
+						price.Add(price, head.BaseFee)
+					}
 				}
 				args.GasPrice = (*hexutil.Big)(price)
 			}

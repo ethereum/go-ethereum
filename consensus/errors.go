@@ -34,4 +34,7 @@ var (
 	// ErrInvalidNumber is returned if a block's number doesn't equal its parent's
 	// plus one.
 	ErrInvalidNumber = errors.New("invalid block number")
+
+	// ErrInvalidTxCount is returned if a block contains too many transactions.
+	ErrInvalidTxCount = errors.New("invalid transaction count")
 )

@@ -34,6 +34,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 )
 
 const (
@@ -127,6 +128,19 @@ var (
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
+)
+
+var (
+	addrsPool = sync.Pool{
+		New: func() interface{} {
+			return make([]common.Address, 0, 8)
+		},
+	}
+	addrBeatPool = sync.Pool{
+		New: func() interface{} {
+			return make(addressesByHeartbeat, 0, 8)
+		},
+	}
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -267,6 +281,8 @@ type TxPool struct {
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
+	spammers *prque.Prque
+
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
 }
 
@@ -298,6 +314,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		spammers:        prque.New(nil),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -664,6 +681,14 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.locals.containsTx(tx)
+
+	if pool.chainconfig.Scroll.L1FeeEnabled() {
+		if err := fees.VerifyFee(pool.signer, tx, pool.currentState); err != nil {
+			log.Trace("Discarding insufficient l1fee transaction", "hash", hash, "err", err)
+			invalidTxMeter.Mark(1)
+			return false, err
+		}
+	}
 
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, isLocal); err != nil {
@@ -1166,13 +1191,14 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			}
 		}
 		// Reset needs promote for all addresses
-		promoteAddrs = make([]common.Address, 0, len(pool.queue))
+		promoteAddrs = addrsPool.Get().([]common.Address)
 		for addr := range pool.queue {
 			promoteAddrs = append(promoteAddrs, addr)
 		}
 	}
 	// Check for pending transactions for every account that sent new ones
 	promoted := pool.promoteExecutables(promoteAddrs)
+	defer addrsPool.Put(promoteAddrs[:0])
 
 	// If a new block appeared, validate the pool of pending transactions. This will
 	// remove any transaction that has been included in the block or was invalidated
@@ -1303,8 +1329,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	pool.eip2718 = pool.chainconfig.IsBerlin(next)
-	pool.eip1559 = pool.chainconfig.IsLondon(next)
+
+	pool.eip2718 = pool.chainconfig.Scroll.EnableEIP2718 && pool.chainconfig.IsBerlin(next)
+	pool.eip1559 = pool.chainconfig.Scroll.EnableEIP1559 && pool.chainconfig.IsLondon(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the
@@ -1387,18 +1414,19 @@ func (pool *TxPool) truncatePending() {
 
 	pendingBeforeCap := pending
 	// Assemble a spam order to penalize large transactors first
-	spammers := prque.New(nil)
+	pool.spammers.Reset()
 	for addr, list := range pool.pending {
 		// Only evict transactions from high rollers
 		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {
-			spammers.Push(addr, int64(list.Len()))
+			pool.spammers.Push(addr, int64(list.Len()))
 		}
 	}
 	// Gradually drop transactions from offenders
-	offenders := []common.Address{}
-	for pending > pool.config.GlobalSlots && !spammers.Empty() {
+	offenders := addrsPool.Get().([]common.Address)
+	defer addrsPool.Put(offenders[:0])
+	for pending > pool.config.GlobalSlots && !pool.spammers.Empty() {
 		// Retrieve the next offender if not local address
-		offender, _ := spammers.Pop()
+		offender, _ := pool.spammers.Pop()
 		offenders = append(offenders, offender.(common.Address))
 
 		// Equalize balances until all the same or below threshold
@@ -1471,7 +1499,8 @@ func (pool *TxPool) truncateQueue() {
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
-	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
+	addresses := addrBeatPool.Get().(addressesByHeartbeat)
+	defer addrBeatPool.Put(addresses[:0])
 	for addr := range pool.queue {
 		if !pool.locals.contains(addr) { // don't drop locals
 			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
@@ -1620,7 +1649,10 @@ func (as *accountSet) containsTx(tx *types.Transaction) bool {
 // add inserts a new address into the set to track.
 func (as *accountSet) add(addr common.Address) {
 	as.accounts[addr] = struct{}{}
-	as.cache = nil
+	if as.cache != nil {
+		addrsPool.Put((*as.cache)[:0])
+		as.cache = nil
+	}
 }
 
 // addTx adds the sender of tx into the set.
@@ -1634,7 +1666,7 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 // reuse. The returned slice should not be changed!
 func (as *accountSet) flatten() []common.Address {
 	if as.cache == nil {
-		accounts := make([]common.Address, 0, len(as.accounts))
+		accounts := addrsPool.Get().([]common.Address)
 		for account := range as.accounts {
 			accounts = append(accounts, account)
 		}
@@ -1648,7 +1680,10 @@ func (as *accountSet) merge(other *accountSet) {
 	for addr := range other.accounts {
 		as.accounts[addr] = struct{}{}
 	}
-	as.cache = nil
+	if as.cache != nil {
+		addrsPool.Put((*as.cache)[:0])
+		as.cache = nil
+	}
 }
 
 // txLookup is used internally by TxPool to track transactions while allowing

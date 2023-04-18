@@ -35,6 +35,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/accounts/keystore"
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
@@ -54,9 +58,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/signer/fourbyte"
 	"github.com/scroll-tech/go-ethereum/signer/rules"
 	"github.com/scroll-tech/go-ethereum/signer/storage"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
-	"gopkg.in/urfave/cli.v1"
 )
 
 const legalWarning = `

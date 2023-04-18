@@ -24,6 +24,8 @@ import (
 	"sort"
 	"time"
 
+	zkt "github.com/scroll-tech/zktrie/types"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state/snapshot"
@@ -39,11 +41,6 @@ type revision struct {
 	id           int
 	journalIndex int
 }
-
-var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-)
 
 type proofList [][]byte
 
@@ -187,6 +184,10 @@ func (s *StateDB) Error() error {
 	return s.dbErr
 }
 
+func (s *StateDB) IsZktrie() bool {
+	return s.db.TrieDB().Zktrie
+}
+
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.append(addLogChange{txhash: s.thash})
 
@@ -288,20 +289,28 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 	return nil
 }
 
-func (s *StateDB) GetCodeSize(addr common.Address) int {
+func (s *StateDB) GetCodeSize(addr common.Address) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CodeSize(s.db)
+		return stateObject.CodeSize()
 	}
 	return 0
 }
 
-func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
+func (s *StateDB) GetPoseidonCodeHash(addr common.Address) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return common.Hash{}
 	}
-	return common.BytesToHash(stateObject.CodeHash())
+	return common.BytesToHash(stateObject.PoseidonCodeHash())
+}
+
+func (s *StateDB) GetKeccakCodeHash(addr common.Address) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return common.Hash{}
+	}
+	return common.BytesToHash(stateObject.KeccakCodeHash())
 }
 
 // GetState retrieves a value from the given account's storage trie.
@@ -315,6 +324,10 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
+	if s.IsZktrie() {
+		addr_s, _ := zkt.ToSecureKeyBytes(addr.Bytes())
+		return s.GetProofByHash(common.BytesToHash(addr_s.Bytes()))
+	}
 	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
 }
 
@@ -325,6 +338,53 @@ func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
 	return proof, err
 }
 
+func (s *StateDB) GetLiveStateAccount(addr common.Address) *types.StateAccount {
+	obj, ok := s.stateObjects[addr]
+	if !ok {
+		return nil
+	}
+	return &obj.data
+}
+
+func (s *StateDB) GetRootHash() common.Hash {
+	return s.trie.Hash()
+}
+
+// StorageTrieProof is not in Db interface and used explictily for reading proof in storage trie (not the dirty value)
+// For zktrie it also provide required data for predict the deletion, else it just fallback to GetStorageProof
+func (s *StateDB) GetStorageTrieProof(a common.Address, key common.Hash) ([][]byte, []byte, error) {
+
+	// try the trie in stateObject first, else we would create one
+	stateObject := s.getStateObject(a)
+	if stateObject == nil {
+		return nil, nil, errors.New("storage trie for requested address does not exist")
+	}
+
+	trieS := stateObject.trie
+	var err error
+	if trieS == nil {
+		// use a new, temporary trie
+		trieS, err = s.db.OpenStorageTrie(stateObject.addrHash, stateObject.data.Root)
+		if err != nil {
+			return nil, nil, fmt.Errorf("can't create storage trie on root %s: %v ", stateObject.data.Root, err)
+		}
+	}
+
+	var proof proofList
+	var sibling []byte
+	if s.IsZktrie() {
+		zkTrie := trieS.(*trie.ZkTrie)
+		if zkTrie == nil {
+			panic("unexpected trie type for zktrie")
+		}
+		key_s, _ := zkt.ToSecureKeyBytes(key.Bytes())
+		sibling, err = zkTrie.ProveWithDeletion(key_s.Bytes(), 0, &proof)
+	} else {
+		err = trieS.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	}
+	return proof, sibling, err
+}
+
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
 	var proof proofList
@@ -332,7 +392,13 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
 	}
-	err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	var err error
+	if s.IsZktrie() {
+		key_s, _ := zkt.ToSecureKeyBytes(key.Bytes())
+		err = trie.Prove(key_s.Bytes(), 0, &proof)
+	} else {
+		err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	}
 	return proof, err
 }
 
@@ -407,7 +473,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		stateObject.SetCode(code)
 	}
 }
 
@@ -469,7 +535,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.KeccakCodeHash, obj.data.PoseidonCodeHash, obj.data.CodeSize)
 	}
 }
 
@@ -520,16 +586,20 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				return nil
 			}
 			data = &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(acc.Root),
+				Nonce:            acc.Nonce,
+				Balance:          acc.Balance,
+				Root:             common.BytesToHash(acc.Root),
+				KeccakCodeHash:   acc.KeccakCodeHash,
+				PoseidonCodeHash: acc.PoseidonCodeHash,
+				CodeSize:         acc.CodeSize,
 			}
-			if len(data.CodeHash) == 0 {
-				data.CodeHash = emptyCodeHash
+			if len(data.KeccakCodeHash) == 0 {
+				data.KeccakCodeHash = emptyKeccakCodeHash
+				data.PoseidonCodeHash = emptyPoseidonCodeHash
+				data.CodeSize = 0
 			}
 			if data.Root == (common.Hash{}) {
-				data.Root = emptyRoot
+				data.Root = s.db.TrieDB().EmptyRoot()
 			}
 		}
 	}
@@ -546,8 +616,13 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		if len(enc) == 0 {
 			return nil
 		}
-		data = new(types.StateAccount)
-		if err := rlp.DecodeBytes(enc, data); err != nil {
+		if s.IsZktrie() {
+			data, err = types.UnmarshalStateAccount(enc)
+		} else {
+			data = new(types.StateAccount)
+			err = rlp.DecodeBytes(enc, data)
+		}
+		if err != nil {
 			log.Error("Failed to decode state object", "addr", addr, "err", err)
 			return nil
 		}
@@ -602,8 +677,8 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 // CreateAccount is called during the EVM CREATE operation. The situation might arise that
 // a contract does the following:
 //
-//   1. sends funds to sha(account ++ (nonce + 1))
-//   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
+//  1. sends funds to sha(account ++ (nonce + 1))
+//  2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
@@ -911,7 +986,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
-				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.KeccakCodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
@@ -942,7 +1017,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
-		if account.Root != emptyRoot {
+		if account.Root != s.db.TrieDB().EmptyRoot() {
 			s.db.TrieDB().Reference(account.Root, parent)
 		}
 		return nil

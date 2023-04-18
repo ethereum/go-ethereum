@@ -25,8 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
+
+	"github.com/scroll-tech/go-ethereum/metrics"
 )
 
 func init() {

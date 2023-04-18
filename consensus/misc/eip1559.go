@@ -39,11 +39,24 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return err
 	}
 	// Verify the header is not malformed
-	if header.BaseFee == nil {
+	if header.BaseFee == nil && config.Scroll.BaseFeeEnabled() {
 		return fmt.Errorf("header is missing baseFee")
 	}
+	// Now BaseFee can be nil, because !config.Scroll.BaseFeeEnabled()
+	if header.BaseFee == nil {
+		return nil
+	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
+
+	var expectedBaseFee *big.Int
+
+	// compatible check with the logic in commitNewWork
+	if config.Clique == nil || config.Scroll.BaseFeeEnabled() {
+		expectedBaseFee = CalcBaseFee(config, parent)
+	} else {
+		expectedBaseFee = big.NewInt(0)
+	}
+
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
@@ -63,6 +76,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(params.BaseFeeChangeDenominator)
 	)
+	if !config.Scroll.BaseFeeEnabled() {
+		return nil
+	}
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)

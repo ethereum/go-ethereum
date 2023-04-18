@@ -26,8 +26,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/scroll-tech/go-ethereum/common/math"
 	"gopkg.in/urfave/cli.v1"
+
+	"github.com/scroll-tech/go-ethereum/common/math"
 )
 
 // Custom type which is registered in the flags library which cli uses for

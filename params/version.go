@@ -18,13 +18,14 @@ package params
 
 import (
 	"fmt"
+	"runtime/debug"
 )
 
 const (
-	VersionMajor = 1        // Major version component of the current release
-	VersionMinor = 10       // Minor version component of the current release
-	VersionPatch = 13       // Patch version component of the current release
-	VersionMeta  = "stable" // Version metadata to append to the version string
+	VersionMajor = 3       // Major version component of the current release
+	VersionMinor = 1       // Minor version component of the current release
+	VersionPatch = 3       // Patch version component of the current release
+	VersionMeta  = "alpha" // Version metadata to append to the version string
 )
 
 // Version holds the textual version string.
@@ -43,7 +44,8 @@ var VersionWithMeta = func() string {
 
 // ArchiveVersion holds the textual version string used for Geth archives.
 // e.g. "1.8.11-dea1ce05" for stable releases, or
-//      "1.8.13-unstable-21c059b6" for unstable releases
+//
+//	"1.8.13-unstable-21c059b6" for unstable releases
 func ArchiveVersion(gitCommit string) string {
 	vsn := Version
 	if VersionMeta != "stable" {
@@ -65,3 +67,14 @@ func VersionWithCommit(gitCommit, gitDate string) string {
 	}
 	return vsn
 }
+
+var CommitHash = func() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				return setting.Value
+			}
+		}
+	}
+	return ""
+}()

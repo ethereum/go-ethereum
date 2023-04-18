@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"compress/flate"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -28,17 +29,18 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/gorilla/websocket"
+
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 const (
-	wsReadBuffer       = 1024
-	wsWriteBuffer      = 1024
+	wsReadBuffer       = 3 * 1024
+	wsWriteBuffer      = 3 * 1024
 	wsPingInterval     = 60 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsMessageSizeLimit = 15 * 1024 * 1024
+	wsMessageSizeLimit = 10 * 15 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
@@ -48,17 +50,22 @@ var wsBufferPool = new(sync.Pool)
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
 func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
+	enableCompression := s.compressionLevel != flate.NoCompression
 	var upgrader = websocket.Upgrader{
-		ReadBufferSize:  wsReadBuffer,
-		WriteBufferSize: wsWriteBuffer,
-		WriteBufferPool: wsBufferPool,
-		CheckOrigin:     wsHandshakeValidator(allowedOrigins),
+		EnableCompression: enableCompression,
+		ReadBufferSize:    wsReadBuffer,
+		WriteBufferSize:   wsWriteBuffer,
+		WriteBufferPool:   wsBufferPool,
+		CheckOrigin:       wsHandshakeValidator(allowedOrigins),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Debug("WebSocket upgrade failed", "err", err)
 			return
+		}
+		if enableCompression {
+			_ = conn.SetCompressionLevel(s.compressionLevel)
 		}
 		codec := newWebsocketCodec(conn)
 		s.ServeCodec(codec, 0)

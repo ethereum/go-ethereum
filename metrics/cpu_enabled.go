@@ -20,8 +20,9 @@
 package metrics
 
 import (
-	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/shirou/gopsutil/cpu"
+
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 // ReadCPUStats retrieves the current CPU stats.

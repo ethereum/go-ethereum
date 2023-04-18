@@ -390,7 +390,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			bytes uint64
 		)
 		for _, hash := range req.Hashes {
-			if hash == emptyCode {
+			if hash == emptyKeccakCodeHash {
 				// Peers should not request the empty code, but if they do, at
 				// least sent them back a correct response without db lookups
 				codes = append(codes, []byte{})

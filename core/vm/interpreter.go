@@ -265,6 +265,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			in.returnData = res
 		}
 
+		if in.cfg.Debug {
+			in.cfg.Tracer.CaptureStateAfter(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+		}
+
 		switch {
 		case err != nil:
 			return nil, err

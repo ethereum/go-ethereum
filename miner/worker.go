@@ -25,6 +25,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
@@ -396,7 +397,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
+			commit(true, commitInterruptNewHead)
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
@@ -462,6 +463,7 @@ func (w *worker) mainLoop() {
 		select {
 		case req := <-w.newWorkCh:
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
+			// new block created.
 
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
@@ -816,6 +818,11 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
+		// If we have collected enough transactions then we're done
+		if !w.chainConfig.Scroll.IsValidTxCount(w.current.tcount + 1) {
+			log.Trace("Transaction count limit reached", "have", w.current.tcount, "want", w.chainConfig.Scroll.MaxTxPerBlock)
+			break
+		}
 		// If we don't have enough gas for any further transactions then we're done
 		if w.current.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
@@ -922,7 +929,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
+		if w.chainConfig.Scroll.BaseFeeEnabled() {
+			header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
+		} else {
+			// When disabling EIP-2718 or EIP-1559, we do not set baseFeePerGas in RPC response.
+			// Setting BaseFee as nil here can help outside SDK calculates l2geth's RLP encoding,
+			// otherwise the l2geth's BaseFee is not known from the outside.
+			header.BaseFee = nil
+		}
 		if !w.chainConfig.IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
@@ -1024,6 +1038,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			return
 		}
 	}
+
+	// do not produce empty blocks
+	if w.current.tcount == 0 {
+		return
+	}
+
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 

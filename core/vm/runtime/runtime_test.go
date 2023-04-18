@@ -86,6 +86,26 @@ func TestEVM(t *testing.T) {
 	}, nil, nil)
 }
 
+func TestDifficulty(t *testing.T) {
+	ret, _, err := Execute([]byte{
+		byte(vm.DIFFICULTY),
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	}, nil, &Config{Difficulty: big.NewInt(1)})
+
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+
+	num := new(big.Int).SetBytes(ret)
+	if num.Cmp(big.NewInt(0)) != 0 {
+		t.Error("Expected 0, got", num)
+	}
+}
+
 func TestExecute(t *testing.T) {
 	ret, _, err := Execute([]byte{
 		byte(vm.PUSH1), 10,
@@ -317,10 +337,10 @@ func TestBlockhash(t *testing.T) {
 	if first.Uint64() != 999 {
 		t.Fatalf("second block should be 999, got %d (%x)", first, ret[32:64])
 	}
-	if last.Uint64() != 744 {
-		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
+	if last.Uint64() != 0 {
+		t.Fatalf("last block should be 0, got %d (%x)", last, ret[64:96])
 	}
-	if exp, got := 255, chain.counter; exp != got {
+	if exp, got := 0, chain.counter; exp != got {
 		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
 	}
 }

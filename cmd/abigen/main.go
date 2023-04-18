@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/accounts/abi/bind"
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
@@ -32,7 +34,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/internal/flags"
 	"github.com/scroll-tech/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

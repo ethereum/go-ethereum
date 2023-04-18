@@ -25,9 +25,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
 	"gopkg.in/urfave/cli.v1"
+
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 var gethPubKeys []string = []string{

@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
+//go:build gofuzz
 // +build gofuzz
 
 package bn256
@@ -13,6 +14,7 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
+
 	cloudflare "github.com/scroll-tech/go-ethereum/crypto/bn256/cloudflare"
 	google "github.com/scroll-tech/go-ethereum/crypto/bn256/google"
 )

@@ -36,15 +36,15 @@ import (
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
 // Parameters:
-// - block: The block for which we want the state (== state at the stateRoot of the parent)
-// - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
-// - base: If the caller is tracing multiple blocks, the caller can provide the parent state
-//         continuously from the callsite.
-// - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
-//        perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
-//        storing trash persistently
-// - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
-//        it would be preferrable to start from a fresh state, if we have it on disk.
+//   - block: The block for which we want the state (== state at the stateRoot of the parent)
+//   - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
+//   - base: If the caller is tracing multiple blocks, the caller can provide the parent state
+//     continuously from the callsite.
+//   - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
+//     perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
+//     storing trash persistently
+//   - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
+//     it would be preferrable to start from a fresh state, if we have it on disk.
 func (eth *Ethereum) stateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block

@@ -19,8 +19,9 @@ package vm
 import (
 	"math/big"
 
-	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/holiman/uint256"
+
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 // ContractRef is a reference to the contract's backing object
@@ -54,7 +55,7 @@ type Contract struct {
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
-	CodeHash common.Hash
+	CodeHash common.Hash // Keccak code hash
 	CodeAddr *common.Address
 	Input    []byte
 

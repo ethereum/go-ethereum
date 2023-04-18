@@ -19,6 +19,8 @@ package main
 import (
 	"strconv"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/accounts/abi/bind"
 	"github.com/scroll-tech/go-ethereum/accounts/external"
@@ -28,7 +30,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethclient"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rpc"
-	"gopkg.in/urfave/cli.v1"
 )
 
 // newClient creates a client with specified remote URL.

@@ -132,7 +132,11 @@ func (b *BlockGen) Number() *big.Int {
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee)
+	if b.header.BaseFee != nil {
+		return new(big.Int).Set(b.header.BaseFee)
+	} else {
+		return big.NewInt(0)
+	}
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a

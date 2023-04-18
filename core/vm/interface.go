@@ -34,10 +34,11 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
 
-	GetCodeHash(common.Address) common.Hash
+	GetKeccakCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)
-	GetCodeSize(common.Address) int
+	GetPoseidonCodeHash(common.Address) common.Hash
+	GetCodeSize(common.Address) uint64
 
 	AddRefund(uint64)
 	SubRefund(uint64)
@@ -46,6 +47,12 @@ type StateDB interface {
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
+
+	GetRootHash() common.Hash
+	GetLiveStateAccount(addr common.Address) *types.StateAccount
+	GetProof(addr common.Address) ([][]byte, error)
+	GetProofByHash(addrHash common.Hash) ([][]byte, error)
+	GetStorageProof(a common.Address, key common.Hash) ([][]byte, error)
 
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool

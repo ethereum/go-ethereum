@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dop251/goja"
+
 	"github.com/scroll-tech/go-ethereum/internal/ethapi"
 	"github.com/scroll-tech/go-ethereum/internal/jsre/deps"
 	"github.com/scroll-tech/go-ethereum/log"

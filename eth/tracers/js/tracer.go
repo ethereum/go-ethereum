@@ -28,6 +28,8 @@ import (
 	"unicode"
 	"unsafe"
 
+	"gopkg.in/olebedev/go-duktape.v3"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -36,7 +38,6 @@ import (
 	tracers2 "github.com/scroll-tech/go-ethereum/eth/tracers"
 	"github.com/scroll-tech/go-ethereum/eth/tracers/js/internal/tracers"
 	"github.com/scroll-tech/go-ethereum/log"
-	"gopkg.in/olebedev/go-duktape.v3"
 )
 
 // camel converts a snake cased input string into a camel cased output.
@@ -744,6 +745,10 @@ func (jst *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	if _, err := jst.call(true, "step", "log", "db"); err != nil {
 		jst.err = wrapError("step", err)
 	}
+}
+
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (jst *jsTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
