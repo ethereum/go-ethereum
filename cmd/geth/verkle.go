@@ -111,7 +111,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 }
 
 func verifyVerkle(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx, true)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
@@ -159,7 +159,7 @@ func verifyVerkle(ctx *cli.Context) error {
 }
 
 func expandVerkle(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx, true)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)

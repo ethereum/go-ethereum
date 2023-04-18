@@ -158,7 +158,7 @@ func makeConfigNode(ctx *cli.Context, openDataDir bool) (*node.Node, gethConfig)
 
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
-	stack, cfg := makeConfigNode(ctx, true)
+	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideShanghai.Name) {
 		v := ctx.Uint64(utils.OverrideShanghai.Name)
 		cfg.Eth.OverrideShanghai = &v
@@ -187,7 +187,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	_, cfg := makeConfigNode(ctx, true)
+	_, cfg := makeConfigNode(ctx)
 	comment := ""
 
 	if cfg.Eth.Genesis != nil {
