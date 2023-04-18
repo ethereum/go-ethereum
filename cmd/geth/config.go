@@ -120,14 +120,13 @@ func defaultNodeConfig() node.Config {
 }
 
 // makeConfigNode loads geth configuration and creates a blank node instance.
-func makeConfigNode(ctx *cli.Context, openDataDir bool) (*node.Node, gethConfig) {
+func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:     ethconfig.Defaults,
 		Node:    defaultNodeConfig(),
 		Metrics: metrics.DefaultConfig,
 	}
-	cfg.Node.NoOpenDataDir = !openDataDir
 
 	// Load config file.
 	if file := ctx.String(configFileFlag.Name); file != "" {
