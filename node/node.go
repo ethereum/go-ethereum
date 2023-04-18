@@ -116,10 +116,8 @@ func New(conf *Config) (*Node, error) {
 	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
 
 	// Acquire the instance directory lock.
-	if !conf.NoOpenDataDir {
-		if err := node.openDataDir(); err != nil {
-			return nil, err
-		}
+	if err := node.openDataDir(); err != nil {
+		return nil, err
 	}
 	keyDir, isEphem, err := getKeyStoreDir(conf)
 	if err != nil {

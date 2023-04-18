@@ -203,11 +203,7 @@ type Config struct {
 	// EnablePersonal enables the deprecated personal namespace.
 	EnablePersonal bool `toml:"-"`
 
-	// DBEngine is the backing database implementation to use
 	DBEngine string `toml:",omitempty"`
-
-	// NoOpenDataDir stands for weather or not opens the datadir
-	NoOpenDataDir bool `toml:"-"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
