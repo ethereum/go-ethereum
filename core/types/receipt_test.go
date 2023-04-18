@@ -24,6 +24,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -99,6 +102,20 @@ func TestDeriveFields(t *testing.T) {
 	to3 := common.HexToAddress("0x3")
 	to4 := common.HexToAddress("0x4")
 	to5 := common.HexToAddress("0x5")
+	to6 := common.HexToAddress("0x6")
+
+	blobTx := &SignedBlobTx{
+		Message: BlobTxMessage{
+			To:        AddressOptionalSSZ{Address: (*AddressSSZ)(&to6)},
+			Nonce:     view.Uint64View(6),
+			Value:     view.Uint256View(*uint256.NewInt(6)),
+			Gas:       view.Uint64View(6),
+			GasTipCap: view.Uint256View(*uint256.NewInt(66)),
+			GasFeeCap: view.Uint256View(*uint256.NewInt(1066)),
+		},
+	}
+	_, blobTx.Message.BlobVersionedHashes = oneEmptyBlobWrapData()
+
 	txs := Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
@@ -134,9 +151,10 @@ func TestDeriveFields(t *testing.T) {
 			Nonce:     5,
 			Value:     big.NewInt(5),
 			Gas:       5,
-			GasTipCap: big.NewInt(56),
+			GasTipCap: big.NewInt(55),
 			GasFeeCap: big.NewInt(1055),
 		}),
+		NewTx(blobTx),
 	}
 
 	blockNumber := big.NewInt(1)
@@ -246,12 +264,28 @@ func TestDeriveFields(t *testing.T) {
 			BlockNumber:       blockNumber,
 			TransactionIndex:  4,
 		},
+		&Receipt{
+			Type:              BlobTxType,
+			PostState:         common.Hash{6}.Bytes(),
+			CumulativeGasUsed: 21,
+			Logs:              []*Log{},
+			// derived fields:
+			TxHash:            txs[5].Hash(),
+			GasUsed:           6,
+			DataGasUsed:       131072,
+			EffectiveGasPrice: big.NewInt(1066),
+			DataGasPrice:      big.NewInt(1),
+			BlockHash:         blockHash,
+			BlockNumber:       blockNumber,
+			TransactionIndex:  5,
+		},
 	}
 
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), 0, basefee, txs)
+	excessDataGas := new(big.Int)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), 0, basefee, excessDataGas, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}

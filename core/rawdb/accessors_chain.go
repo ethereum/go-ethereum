@@ -638,12 +638,17 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 	}
 	header := ReadHeader(db, hash, number)
 	var baseFee *big.Int
+	var parentExcessDataGas *big.Int
 	if header == nil {
 		baseFee = big.NewInt(0)
 	} else {
 		baseFee = header.BaseFee
+		parentHeader := ReadHeader(db, header.ParentHash, number-1)
+		if parentHeader != nil {
+			parentExcessDataGas = parentHeader.ExcessDataGas
+		}
 	}
-	if err := receipts.DeriveFields(config, hash, number, header.Time, baseFee, body.Transactions); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, header.Time, baseFee, parentExcessDataGas, body.Transactions); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}

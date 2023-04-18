@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/conv"
 	. "github.com/protolambda/ztyp/view"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type ECDSASignature struct {
@@ -397,4 +399,32 @@ func (tx *SignedBlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.I
 		tip.Set(tx.gasTipCap())
 	}
 	return tip.Add(tip, baseFee)
+}
+
+// fakeExponential approximates factor * e ** (num / denom) using a taylor expansion
+// as described in the EIP-4844 spec.
+func fakeExponential(factor, num, denom *big.Int) *big.Int {
+	output := new(big.Int)
+	numAccum := new(big.Int).Mul(factor, denom)
+	for i := 1; numAccum.Sign() > 0; i++ {
+		output.Add(output, numAccum)
+		numAccum.Mul(numAccum, num)
+		iBig := big.NewInt(int64(i))
+		numAccum.Div(numAccum, iBig.Mul(iBig, denom))
+	}
+	return output.Div(output, denom)
+}
+
+// GetDataGasPrice implements get_data_gas_price from EIP-4844
+func GetDataGasPrice(excessDataGas *big.Int) *big.Int {
+	if excessDataGas == nil {
+		return nil
+	}
+	return fakeExponential(big.NewInt(params.MinDataGasPrice), excessDataGas, big.NewInt(params.DataGasPriceUpdateFraction))
+}
+
+// GetDataGasUsed returns the amount of datagas consumed by a transaction with the specified number
+// of blobs
+func GetDataGasUsed(blobs int) uint64 {
+	return uint64(blobs) * params.DataGasPerBlob
 }

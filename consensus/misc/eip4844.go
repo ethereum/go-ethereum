@@ -42,20 +42,6 @@ func CalcExcessDataGas(parentExcessDataGas *big.Int, newBlobs int) *big.Int {
 	return new(big.Int).Set(excessDataGas.Sub(excessDataGas, targetGas))
 }
 
-// fakeExponential approximates factor * e ** (num / denom) using a taylor expansion
-// as described in the EIP-4844 spec.
-func fakeExponential(factor, num, denom *big.Int) *big.Int {
-	output := new(big.Int)
-	numAccum := new(big.Int).Mul(factor, denom)
-	for i := 1; numAccum.Sign() > 0; i++ {
-		output.Add(output, numAccum)
-		numAccum.Mul(numAccum, num)
-		iBig := big.NewInt(int64(i))
-		numAccum.Div(numAccum, iBig.Mul(iBig, denom))
-	}
-	return output.Div(output, denom)
-}
-
 // CountBlobs returns the number of blob transactions in txs
 func CountBlobs(txs []*types.Transaction) int {
 	var count int
@@ -99,11 +85,6 @@ func VerifyExcessDataGas(chainReader ChainReader, block *types.Block) error {
 		return fmt.Errorf("invalid excessDataGas: have %s want %v", excessDataGas, expectedEDG)
 	}
 	return nil
-}
-
-// GetDataGasPrice implements get_data_gas_price from EIP-4844
-func GetDataGasPrice(excessDataGas *big.Int) *big.Int {
-	return fakeExponential(big.NewInt(params.MinDataGasPrice), excessDataGas, big.NewInt(params.DataGasPriceUpdateFraction))
 }
 
 // ChainReader defines a small collection of methods needed to access the local

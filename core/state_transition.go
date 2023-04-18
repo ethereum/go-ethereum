@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -242,7 +241,7 @@ func (st *StateTransition) buyGas() error {
 		if st.evm.Context.ExcessDataGas == nil {
 			return fmt.Errorf("%w: sharding is active but ExcessDataGas is nil. Time: %v", ErrInternalFailure, st.evm.Context.Time)
 		}
-		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), new(big.Int).SetUint64(dataGasUsed))
+		dgval.Mul(types.GetDataGasPrice(st.evm.Context.ExcessDataGas), new(big.Int).SetUint64(dataGasUsed))
 	}
 
 	// perform the required user balance checks
@@ -325,7 +324,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	if st.dataGasUsed() > 0 && st.evm.ChainConfig().IsSharding(st.evm.Context.Time) {
-		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
+		dataGasPrice := types.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.msg.MaxFeePerDataGas) > 0 {
 			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
 				ErrMaxFeePerDataGas,
@@ -466,5 +465,5 @@ func (st *StateTransition) gasUsed() uint64 {
 }
 
 func (st *StateTransition) dataGasUsed() uint64 {
-	return uint64(len(st.msg.DataHashes)) * params.DataGasPerBlob
+	return types.GetDataGasUsed(len(st.msg.DataHashes))
 }

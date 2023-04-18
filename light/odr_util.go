@@ -175,7 +175,15 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), block.Transactions()); err != nil {
+		var excessDataGas *big.Int
+		if number > 0 {
+			parentHeader, err := GetHeaderByNumber(ctx, odr, number-1)
+			if err != nil {
+				return nil, err
+			}
+			excessDataGas = parentHeader.ExcessDataGas
+		}
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), excessDataGas, block.Transactions()); err != nil {
 			return nil, err
 		}
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)

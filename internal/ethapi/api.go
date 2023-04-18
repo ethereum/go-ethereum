@@ -1674,6 +1674,10 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		"type":              hexutil.Uint(tx.Type()),
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
+	if receipt.DataGasUsed > 0 {
+		fields["dataGasUsed"] = hexutil.Uint64(receipt.DataGasUsed)
+		fields["dataGasPrice"] = (*hexutil.Big)(receipt.DataGasPrice)
+	}
 
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
