@@ -14,7 +14,6 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
-
 	cloudflare "github.com/scroll-tech/go-ethereum/crypto/bn256/cloudflare"
 	google "github.com/scroll-tech/go-ethereum/crypto/bn256/google"
 )

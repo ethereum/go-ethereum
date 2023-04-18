@@ -40,7 +40,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/signer/storage"
 )
 
-// Used for testing
+//Used for testing
 type headlessUi struct {
 	approveCh chan string // to send approve/deny
 	inputCh   chan string // to send password

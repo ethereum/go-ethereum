@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-
 	"github.com/scroll-tech/go-ethereum/accounts/scwallet"
 	"github.com/scroll-tech/go-ethereum/accounts/usbwallet"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"

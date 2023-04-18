@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-
 	"github.com/scroll-tech/go-ethereum/common/mclock"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/internal/testlog"

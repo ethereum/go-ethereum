@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -39,6 +37,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestHashing(t *testing.T) {
@@ -369,8 +368,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 	return hashes, slots, proofs
 }
 
-//	the createStorageRequestResponseAlwaysProve tests a cornercase, where it always
-//
+//  the createStorageRequestResponseAlwaysProve tests a cornercase, where it always
 // supplies the proof for the last account, even if it is 'complete'.h
 func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max uint64) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
 	var size uint64

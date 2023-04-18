@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/dop251/goja"
-
 	"github.com/scroll-tech/go-ethereum/internal/jsre"
 )
 

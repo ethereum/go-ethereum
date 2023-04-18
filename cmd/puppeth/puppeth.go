@@ -23,9 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/scroll-tech/go-ethereum/log"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // main is just a boring entry point to set up the CLI app.

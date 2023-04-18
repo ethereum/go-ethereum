@@ -22,9 +22,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/scroll-tech/go-ethereum/core/asm"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var disasmCommand = cli.Command{

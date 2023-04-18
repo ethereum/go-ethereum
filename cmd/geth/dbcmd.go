@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
@@ -39,6 +37,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/trie"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

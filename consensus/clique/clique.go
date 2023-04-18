@@ -27,9 +27,6 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-	"golang.org/x/crypto/sha3"
-
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
@@ -44,6 +41,8 @@ import (
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/rpc"
 	"github.com/scroll-tech/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 const (

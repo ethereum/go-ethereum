@@ -1,3 +1,4 @@
+//
 // The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
@@ -12,11 +13,10 @@ import (
 	"fmt"
 	"time"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/influxdata/influxdb-client-go/v2/api"
-
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 )
 
 type v2Reporter struct {

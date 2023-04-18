@@ -33,15 +33,14 @@ import (
 	"sync"
 	"time"
 
-	pcsc "github.com/gballet/go-libpcsclite"
-	"github.com/status-im/keycard-go/derivationpath"
-
 	"github.com/scroll-tech/go-ethereum"
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/log"
+	pcsc "github.com/gballet/go-libpcsclite"
+	"github.com/status-im/keycard-go/derivationpath"
 )
 
 // ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing
@@ -880,7 +879,6 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 }
 
 // derivationPath fetches the wallet's current derivation path from the card.
-//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
@@ -996,7 +994,6 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 }
 
 // keyExport contains information on an exported keypair.
-//
 //lint:ignore U1000 needs to be added to the console interface
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
@@ -1004,7 +1001,6 @@ type keyExport struct {
 }
 
 // publicKey returns the public key for the current derivation path.
-//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)

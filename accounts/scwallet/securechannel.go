@@ -26,11 +26,10 @@ import (
 	"crypto/sha512"
 	"fmt"
 
+	"github.com/scroll-tech/go-ethereum/crypto"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
-
-	"github.com/scroll-tech/go-ethereum/crypto"
 )
 
 const (

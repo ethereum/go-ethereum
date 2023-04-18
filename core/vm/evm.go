@@ -21,12 +21,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/holiman/uint256"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // emptyKeccakCodeHash is used by create to ensure deployment is disallowed to already

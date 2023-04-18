@@ -24,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/math"
@@ -39,6 +37,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // StateTest checks transaction processing without block context.

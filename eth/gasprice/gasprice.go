@@ -22,8 +22,6 @@ import (
 	"sort"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -31,6 +29,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rpc"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block

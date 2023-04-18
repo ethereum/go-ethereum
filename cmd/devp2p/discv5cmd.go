@@ -20,11 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/scroll-tech/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/p2p/discover"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

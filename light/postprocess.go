@@ -26,7 +26,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/bitutil"
 	"github.com/scroll-tech/go-ethereum/core"

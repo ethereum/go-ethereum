@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-
 	"github.com/scroll-tech/go-ethereum/common"
 )
 

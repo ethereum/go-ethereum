@@ -25,11 +25,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
-	"golang.org/x/crypto/pbkdf2"
-
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON

@@ -29,9 +29,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/gorilla/websocket"
-
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -53,10 +52,10 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	enableCompression := s.compressionLevel != flate.NoCompression
 	var upgrader = websocket.Upgrader{
 		EnableCompression: enableCompression,
-		ReadBufferSize:    wsReadBuffer,
-		WriteBufferSize:   wsWriteBuffer,
-		WriteBufferPool:   wsBufferPool,
-		CheckOrigin:       wsHandshakeValidator(allowedOrigins),
+		ReadBufferSize:  wsReadBuffer,
+		WriteBufferSize: wsWriteBuffer,
+		WriteBufferPool: wsBufferPool,
+		CheckOrigin:     wsHandshakeValidator(allowedOrigins),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)

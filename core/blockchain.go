@@ -28,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/mclock"
 	"github.com/scroll-tech/go-ethereum/common/prque"
@@ -47,6 +45,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/trie"
 	"github.com/scroll-tech/go-ethereum/trie/zkproof"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (

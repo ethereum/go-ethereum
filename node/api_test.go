@@ -25,9 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/scroll-tech/go-ethereum/rpc"
+	"github.com/stretchr/testify/assert"
 )
 
 // This test uses the admin_startRPC and admin_startWS APIs,

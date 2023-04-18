@@ -20,9 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReadBufferReset(t *testing.T) {

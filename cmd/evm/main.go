@@ -22,11 +22,10 @@ import (
 	"math/big"
 	"os"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/scroll-tech/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/internal/flags"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)

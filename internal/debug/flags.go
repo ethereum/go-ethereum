@@ -24,14 +24,13 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
+	"github.com/scroll-tech/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
-
-	"github.com/scroll-tech/go-ethereum/log"
-	"github.com/scroll-tech/go-ethereum/metrics"
-	"github.com/scroll-tech/go-ethereum/metrics/exp"
 )
 
 var Memsize memsizeui.Handler

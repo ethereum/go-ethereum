@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/p2p"

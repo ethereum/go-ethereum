@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/p2p/enode"
 )

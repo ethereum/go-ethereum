@@ -21,9 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/scroll-tech/go-ethereum/common"
+	"golang.org/x/crypto/sha3"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -280,7 +279,6 @@ var (
 			EnableEIP1559:   true,
 			MaxTxPerBlock:   nil,
 		}}
-
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
 		ScrollConfig{
 			UseZktrie:       false,

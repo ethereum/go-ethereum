@@ -20,12 +20,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/holiman/uint256"
-
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
