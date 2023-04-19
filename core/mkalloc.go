@@ -37,7 +37,14 @@ import (
 	"github.com/scroll-tech/go-ethereum/rlp"
 )
 
-type allocItem struct{ Addr, Balance *big.Int }
+type storageItem struct{ Key, Value *big.Int }
+type storageList []storageItem
+
+type allocItem struct {
+	Addr, Balance *big.Int
+	Code          []byte
+	Storage       storageList
+}
 
 type allocList []allocItem
 
@@ -48,11 +55,17 @@ func (a allocList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func makelist(g *core.Genesis) allocList {
 	a := make(allocList, 0, len(g.Alloc))
 	for addr, account := range g.Alloc {
-		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
+		if account.Nonce != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
-		a = append(a, allocItem{bigAddr, account.Balance})
+
+		s := make(storageList, 0, len(account.Storage))
+		for key, value := range account.Storage {
+			s = append(s, storageItem{Key: new(big.Int).SetBytes(key.Bytes()), Value: new(big.Int).SetBytes(value.Bytes())})
+		}
+
+		a = append(a, allocItem{bigAddr, account.Balance, account.Code, s})
 	}
 	sort.Sort(a)
 	return a

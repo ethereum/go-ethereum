@@ -161,29 +161,30 @@ func TestSetupGenesis(t *testing.T) {
 	}
 }
 
-// // TestGenesisHashes checks the congruity of default genesis data to
-// // corresponding hardcoded genesis hash values.
-// func TestGenesisHashes(t *testing.T) {
-// 	for i, c := range []struct {
-// 		genesis *Genesis
-// 		want    common.Hash
-// 	}{
-// 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
-// 		{DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
-// 		{DefaultRopstenGenesisBlock(), params.RopstenGenesisHash},
-// 		{DefaultRinkebyGenesisBlock(), params.RinkebyGenesisHash},
-// 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
-// 	} {
-// 		// Test via MustCommit
-// 		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
-// 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
-// 		}
-// 		// Test via ToBlock
-// 		if have := c.genesis.ToBlock(nil).Hash(); have != c.want {
-// 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
-// 		}
-// 	}
-// }
+// TestGenesisHashes checks the congruity of default genesis data to
+// corresponding hardcoded genesis hash values.
+func TestGenesisHashes(t *testing.T) {
+	for i, c := range []struct {
+		genesis *Genesis
+		want    common.Hash
+	}{
+		// {DefaultGenesisBlock(), params.MainnetGenesisHash},
+		// {DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
+		// {DefaultRopstenGenesisBlock(), params.RopstenGenesisHash},
+		// {DefaultRinkebyGenesisBlock(), params.RinkebyGenesisHash},
+		// {DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
+		{DefaultScrollAlphaGenesisBlock(), params.ScrollAlphaGenesisHash},
+	} {
+		// Test via MustCommit
+		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
+			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
+		}
+		// Test via ToBlock
+		if have := c.genesis.ToBlock(nil).Hash(); have != c.want {
+			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
+		}
+	}
+}
 
 func TestGenesis_Commit(t *testing.T) {
 	genesis := &Genesis{

@@ -66,6 +66,7 @@ var (
 					utils.SepoliaFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
+					utils.ScrollAlphaFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -97,6 +98,7 @@ the trie clean cache with default directory will be deleted.
 					utils.SepoliaFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
+					utils.ScrollAlphaFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -118,6 +120,7 @@ In other words, this command does the snapshot to trie conversion.
 					utils.SepoliaFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
+					utils.ScrollAlphaFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -141,6 +144,7 @@ It's also usable without snapshot enabled.
 					utils.SepoliaFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
+					utils.ScrollAlphaFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -165,6 +169,7 @@ It's also usable without snapshot enabled.
 					utils.SepoliaFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
+					utils.ScrollAlphaFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
