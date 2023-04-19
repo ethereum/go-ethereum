@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"io"
 	"math/big"
 	"runtime"
@@ -90,13 +91,14 @@ var (
 )
 
 const (
-	bodyCacheLimit      = 256
-	blockCacheLimit     = 256
-	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 1024
-	maxFutureBlocks     = 256
-	maxTimeFutureBlocks = 30
-	TriesInMemory       = 128
+	bodyCacheLimit             = 256
+	blockCacheLimit            = 256
+	receiptsCacheLimit         = 32
+	txLookupCacheLimit         = 1024
+	maxFutureBlocks            = 256
+	maxTimeFutureBlocks        = 30
+	TriesInMemory              = 128
+	BlocksPerSecondCheckLength = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -1814,7 +1816,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		stats.usedGas += usedGas
 
 		dirty, _ := bc.triedb.Size()
-		stats.report(chain, it.index, dirty, setHead, bc)
+		spb, spbErr := bc.RealizedSecondsPerBlock(0)
+		if spbErr != nil {
+			log.Error("Could not compute realized seconds per block, using 1.0, remaining time may be unreliable")
+			spb = 1.0
+		}
+		stats.report(chain, it.index, dirty, setHead, spb)
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
@@ -2497,4 +2504,20 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 // It is thread-safe and can be called repeatedly without side effects.
 func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 	bc.flushInterval.Store(int64(interval))
+}
+
+// RealizedSecondsPerBlock computes the average seconds per block for the last n blocks
+// if n <= 0 the BlocksPerSecondCheckLength is used
+func (bc *BlockChain) RealizedSecondsPerBlock(n int64) (float64, error) {
+	if n <= 0 {
+		n = BlocksPerSecondCheckLength
+	}
+	curBlockNum := bc.CurrentHeader().Number.Int64()
+	prevBlockNum := math.Max64(0, curBlockNum-n)
+	prevHeader := bc.GetHeaderByNumber(uint64(prevBlockNum))
+	if prevHeader == nil {
+		return 0, ErrNoBlockHeader
+	}
+	chainSecondsPerBlock := float64(bc.CurrentHeader().Time-prevHeader.Time) / float64(curBlockNum-prevBlockNum)
+	return chainSecondsPerBlock, nil
 }

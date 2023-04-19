@@ -33,6 +33,9 @@ var (
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
+
+	// ErrNoBlockHeader is returned when we cannot find requested block header
+	ErrNoBlockHeader = errors.New("could not find requested block header")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
