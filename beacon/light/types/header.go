@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+var headerFormat = merkle.EncodeCompactProofFormat(merkle.NewRangeFormat(8, 15, nil))
+
 // Header defines a beacon header
 //
 // See data structure definition here:
@@ -83,7 +85,7 @@ func (bh *Header) Hash() common.Hash {
 	values[params.BhiParentRoot-8] = merkle.Value(bh.ParentRoot)
 	values[params.BhiStateRoot-8] = merkle.Value(bh.StateRoot)
 	values[params.BhiBodyRoot-8] = merkle.Value(bh.BodyRoot)
-	return merkle.MultiProof{Format: merkle.NewRangeFormat(8, 15, nil), Values: values[:]}.RootHash()
+	return merkle.MultiProof{Format: headerFormat, Values: values[:]}.RootHash()
 }
 
 // Epoch returns the epoch the header belongs to
@@ -127,7 +129,7 @@ func (bh *HeaderWithoutState) Proof(stateRoot common.Hash) merkle.MultiProof {
 	values[params.BhiParentRoot-8] = merkle.Value(bh.ParentRoot)
 	values[params.BhiStateRoot-8] = merkle.Value(stateRoot)
 	values[params.BhiBodyRoot-8] = merkle.Value(bh.BodyRoot)
-	return merkle.MultiProof{Format: merkle.NewRangeFormat(8, 15, nil), Values: values[:]}
+	return merkle.MultiProof{Format: headerFormat, Values: values[:]}
 }
 
 // FullHeader reconstructs a full Header from a HeaderWithoutState and a state root

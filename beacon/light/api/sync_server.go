@@ -145,7 +145,7 @@ func (s *SyncServer) BeaconStateTail() uint64 {
 	return s.firstState
 }
 
-func (s *SyncServer) RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.ProofFormat, response func(*merkle.MultiProof)) {
+func (s *SyncServer) RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof)) {
 	go func() {
 		if proof, err := s.api.GetStateProof(stateRoot, format); err == nil {
 			response(&proof)

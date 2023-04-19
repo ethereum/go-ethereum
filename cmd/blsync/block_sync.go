@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	lsync "github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/light/types"
-	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
@@ -44,12 +43,6 @@ const reverseSyncHeaders = 128
 type beaconBlockServer interface {
 	request.RequestServer
 	RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock))
-}
-
-type beaconStateServer interface {
-	request.RequestServer
-	BeaconStateTail() uint64
-	RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.ProofFormat, response func(merkle.MultiProof))
 }
 
 type beaconBlockSync struct {

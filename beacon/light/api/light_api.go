@@ -207,16 +207,8 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 	return header, nil
 }
 
-// does not verify state root
-//TODO ...
-/*func (api *BeaconLightApi) GetHeadStateProof(format merkle.ProofFormat) (merkle.MultiProof, error) {
-	encFormat, bitLength := EncodeCompactProofFormat(format) //TODO cache encoding?
-	return api.getStateProof("head", format, encFormat, bitLength)
-}*/
-
-func (api *BeaconLightApi) GetStateProof(stateRoot common.Hash, format merkle.ProofFormat) (merkle.MultiProof, error) {
-	encFormat, bitLength := EncodeCompactProofFormat(format) //TODO cache encoding?
-	proof, err := api.getStateProof(stateRoot.Hex(), format, encFormat, bitLength)
+func (api *BeaconLightApi) GetStateProof(stateRoot common.Hash, format merkle.CompactProofFormat) (merkle.MultiProof, error) {
+	proof, err := api.getStateProof(stateRoot.Hex(), format)
 	if err != nil {
 		return merkle.MultiProof{}, err
 	}
@@ -226,12 +218,12 @@ func (api *BeaconLightApi) GetStateProof(stateRoot common.Hash, format merkle.Pr
 	return proof, nil
 }
 
-func (api *BeaconLightApi) getStateProof(stateId string, format merkle.ProofFormat, encFormat []byte, bitLength int) (merkle.MultiProof, error) {
-	resp, err := api.httpGetf("/eth/v0/beacon/proof/state/%s?format=0x%x", stateId, encFormat)
+func (api *BeaconLightApi) getStateProof(stateId string, format merkle.CompactProofFormat) (merkle.MultiProof, error) {
+	resp, err := api.httpGetf("/eth/v0/beacon/proof/state/%s?format=0x%x", stateId, format.Format)
 	if err != nil {
 		return merkle.MultiProof{}, err
 	}
-	valueCount := (bitLength + 1) / 2
+	valueCount := format.ValueCount()
 	if len(resp) != valueCount*32 {
 		return merkle.MultiProof{}, errors.New("Invalid state proof length")
 	}
@@ -240,32 +232,6 @@ func (api *BeaconLightApi) getStateProof(stateId string, format merkle.ProofForm
 		copy(values[i][:], resp[i*32:(i+1)*32])
 	}
 	return merkle.MultiProof{Format: format, Values: values}, nil
-}
-
-// EncodeCompactProofFormat encodes a merkle.ProofFormat into a binary compact
-// proof format. See description here:
-// https://github.com/ChainSafe/consensus-specs/blob/feat/multiproof/ssz/merkle-proofs.md#compact-multiproofs
-func EncodeCompactProofFormat(format merkle.ProofFormat) ([]byte, int) {
-	target := make([]byte, 0, 64)
-	var bitLength int
-	encodeProofFormatSubtree(format, &target, &bitLength)
-	return target, bitLength
-}
-
-// encodeProofFormatSubtree recursively encodes a subtree of a proof format into
-// binary compact format.
-func encodeProofFormatSubtree(format merkle.ProofFormat, target *[]byte, bitLength *int) {
-	bytePtr, bitMask := *bitLength>>3, byte(128)>>(*bitLength&7)
-	*bitLength++
-	if bytePtr == len(*target) {
-		*target = append(*target, byte(0))
-	}
-	if left, right := format.Children(); left == nil {
-		(*target)[bytePtr] += bitMask
-	} else {
-		encodeProofFormatSubtree(left, target, bitLength)
-		encodeProofFormatSubtree(right, target, bitLength)
-	}
 }
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.

@@ -40,7 +40,7 @@ var (
 var (
 	chainRangeKey = []byte("range-")     // RLP(chainRangeData)
 	headerKey     = []byte("header-")    // bigEndian64(slot) + blockRoot -> RLP(types.Header)
-	stateKey      = []byte("state-")     // bigEndian64(slot) + stateRoot -> RLP(stateProofData)
+	stateKey      = []byte("state-")     // bigEndian64(slot) + stateRoot -> RLP(merkle.MultiProof)
 	canonicalKey  = []byte("canonical-") // bigEndian64(slot) -> canonical root
 	hashToSlotKey = []byte("hash2slot-") // blockRoot -> RLP(slot)
 )
@@ -61,11 +61,10 @@ type LightChain struct {
 	stateHead, stateTail types.Header // state proofs of canonical headers are available in this section
 	lastStoredRange      chainRangeData
 
-	headerCache      *lru.Cache[slotAndHash, types.Header]
-	canonicalCache   *lru.Cache[uint64, common.Hash]
-	hashToSlotCache  *lru.Cache[common.Hash, uint64]
-	stateCache       *lru.Cache[slotAndHash, merkle.Values]
-	stateProofFormat merkle.ProofFormat //TODO slot/parentSlot dependent format
+	headerCache     *lru.Cache[slotAndHash, types.Header]
+	canonicalCache  *lru.Cache[uint64, common.Hash]
+	hashToSlotCache *lru.Cache[common.Hash, uint64]
+	stateProofCache *lru.Cache[slotAndHash, merkle.MultiProof]
 }
 
 type slotAndHash struct {
@@ -80,20 +79,14 @@ type chainRangeData struct {
 	StateHead, StateTail uint64
 }
 
-type stateProofData struct {
-	FormatId uint //TODO compact binary format?
-	Values   merkle.Values
-}
-
 // NewLightChain creates a new LightChain and loads canonical chain info from the database.
-func NewLightChain(db ethdb.KeyValueStore, stateProofFormat merkle.ProofFormat) *LightChain {
+func NewLightChain(db ethdb.KeyValueStore) *LightChain {
 	lc := &LightChain{
-		db:               db,
-		stateProofFormat: stateProofFormat,
-		headerCache:      lru.NewCache[slotAndHash, types.Header](500),
-		canonicalCache:   lru.NewCache[uint64, common.Hash](2000),
-		hashToSlotCache:  lru.NewCache[common.Hash, uint64](2000),
-		stateCache:       lru.NewCache[slotAndHash, merkle.Values](100),
+		db:              db,
+		headerCache:     lru.NewCache[slotAndHash, types.Header](500),
+		canonicalCache:  lru.NewCache[uint64, common.Hash](2000),
+		hashToSlotCache: lru.NewCache[common.Hash, uint64](2000),
+		stateProofCache: lru.NewCache[slotAndHash, merkle.MultiProof](100),
 	}
 	lc.loadChainRange()
 	return lc
@@ -340,7 +333,7 @@ func (lc *LightChain) Prune(beforeSlot uint64, removeCanonical bool) {
 			}
 		}
 		batch.Delete(key)
-		lc.stateCache.Remove(slotAndHash{slot: slot, hash: stateRoot})
+		lc.stateProofCache.Remove(slotAndHash{slot: slot, hash: stateRoot})
 	}
 }
 
@@ -355,7 +348,7 @@ func getHeaderKey(slot uint64, blockRoot common.Hash) []byte {
 	return key
 }
 
-func getStateKey(slot uint64, stateRoot common.Hash) []byte {
+func getStateProofKey(slot uint64, stateRoot common.Hash) []byte {
 	var (
 		kl  = len(stateKey)
 		key = make([]byte, kl+8+32)
@@ -554,44 +547,39 @@ func (lc *LightChain) getSlotByHash(blockRoot common.Hash) (uint64, bool) {
 
 // HasStateProof returns true if a state proof belonging to the given header exists.
 func (lc *LightChain) HasStateProof(header types.Header) bool {
-	if _, ok := lc.stateCache.Get(slotAndHash{header.Slot, header.StateRoot}); ok {
+	if _, ok := lc.stateProofCache.Get(slotAndHash{header.Slot, header.StateRoot}); ok {
 		return true
 	}
-	ok, err := lc.db.Has(getStateKey(header.Slot, header.StateRoot))
+	ok, err := lc.db.Has(getStateProofKey(header.Slot, header.StateRoot))
 	return ok && err == nil
 }
 
 // GetStateProof returns the state proof belonging to the given header.
 func (lc *LightChain) GetStateProof(header types.Header) (merkle.MultiProof, error) {
-	if values, ok := lc.stateCache.Get(slotAndHash{header.Slot, header.StateRoot}); ok {
-		return merkle.MultiProof{Format: lc.stateProofFormat, Values: values}, nil
+	if proof, ok := lc.stateProofCache.Get(slotAndHash{header.Slot, header.StateRoot}); ok {
+		return proof, nil
 	}
-	stateEnc, err := lc.db.Get(getStateKey(header.Slot, header.StateRoot))
+	proofEnc, err := lc.db.Get(getStateProofKey(header.Slot, header.StateRoot))
 	if err != nil {
 		return merkle.MultiProof{}, ErrNotFound
 	}
-	var state stateProofData
-	if err := rlp.DecodeBytes(stateEnc, &state); err != nil {
+	var proof merkle.MultiProof
+	if err := proof.Decode(proofEnc); err != nil {
 		log.Error("Failed to decode state proof data", "error", err)
 		return merkle.MultiProof{}, ErrNotFound
 	}
-	return merkle.MultiProof{Format: lc.stateProofFormat, Values: state.Values}, nil
-}
-
-// StateProofFormat returns the expected state proof format for the given header.
-func (lc *LightChain) StateProofFormat(header types.Header) merkle.ProofFormat {
-	return lc.stateProofFormat
+	return proof, nil
 }
 
 // AddStateProof adds a state proof. If it belongs to a canonical header then
 // the state range is also updated.
+// Note: it is the caller's responsibility to make sure that the proof has the
+// right format for the given application; this function only verifies the state
+// root against the corresponding header.
 func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof) (err error) {
 	lc.lock.Lock()
 	defer lc.lock.Unlock()
 
-	if !merkle.IsEqual(proof.Format, lc.StateProofFormat(header)) {
-		return ErrInvalidProofFormat
-	}
 	if proof.RootHash() != header.StateRoot {
 		return ErrInvalidStateRoot
 	}
@@ -602,13 +590,8 @@ func (lc *LightChain) AddStateProof(header types.Header, proof merkle.MultiProof
 		}
 	}()
 
-	stateEnc, err := rlp.EncodeToBytes(&stateProofData{Values: proof.Values})
-	if err != nil {
-		log.Error("Failed to encode state proof data", "error", err)
-		return err
-	}
-	batch.Put(getStateKey(header.Slot, header.StateRoot), stateEnc)
-	lc.stateCache.Add(slotAndHash{header.Slot, header.StateRoot}, proof.Values)
+	batch.Put(getStateProofKey(header.Slot, header.StateRoot), proof.Encode())
+	lc.stateProofCache.Add(slotAndHash{header.Slot, header.StateRoot}, proof)
 	if !lc.IsCanonical(header) {
 		return nil
 	}

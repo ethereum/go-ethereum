@@ -33,7 +33,7 @@ import (
 type beaconStateServer interface {
 	request.RequestServer
 	BeaconStateTail() uint64
-	RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.ProofFormat, response func(*merkle.MultiProof))
+	RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof))
 }
 
 type StateSync struct {
@@ -41,16 +41,18 @@ type StateSync struct {
 	reqLock                       request.MultiLock
 	chain                         *light.LightChain
 	prefetch                      bool
+	syncProofFormat               merkle.CompactProofFormat
 	targetTailSlot                uint64
 	headSyncPossible              uint32
 	selfTrigger, headStateTrigger *request.ModuleTrigger
 }
 
-func NewStateSync(chain *light.LightChain, prefetch bool) *StateSync {
+func NewStateSync(chain *light.LightChain, syncProofFormat merkle.CompactProofFormat, prefetch bool) *StateSync {
 	return &StateSync{
-		chain:          chain,
-		prefetch:       prefetch,
-		targetTailSlot: math.MaxUint64,
+		chain:           chain,
+		syncProofFormat: syncProofFormat,
+		prefetch:        prefetch,
+		targetTailSlot:  math.MaxUint64,
 	}
 }
 
@@ -203,7 +205,7 @@ func (r stateRequest) CanSendTo(server *request.Server) (canSend bool, priority 
 
 func (r stateRequest) SendTo(server *request.Server) {
 	reqId := r.reqLock.Send(server, r.header.StateRoot)
-	server.RequestServer.(beaconStateServer).RequestBeaconState(r.header.Slot, r.header.StateRoot, r.chain.StateProofFormat(r.header), func(proof *merkle.MultiProof) {
+	server.RequestServer.(beaconStateServer).RequestBeaconState(r.header.Slot, r.header.StateRoot, r.syncProofFormat, func(proof *merkle.MultiProof) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 

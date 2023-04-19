@@ -70,16 +70,16 @@ func main() {
 }
 
 var (
-	stateProofFormat    merkle.ProofFormat // requested multiproof format
-	execBlockIndex      int                // index of execution block root in proof.Values where proof.Format == stateProofFormat
-	finalizedBlockIndex int                // index of finalized block root in proof.Values where proof.Format == stateProofFormat
+	stateProofFormat    merkle.CompactProofFormat // requested multiproof format
+	execBlockIndex      int                       // index of execution block root in proof.Values where proof.Format == stateProofFormat
+	finalizedBlockIndex int                       // index of finalized block root in proof.Values where proof.Format == stateProofFormat
 )
 
 func blsync(ctx *cli.Context) error {
 	if !ctx.IsSet(utils.BeaconApiFlag.Name) {
 		utils.Fatalf("Beacon node light client API URL not specified")
 	}
-	stateProofFormat = merkle.NewIndexMapFormat().AddLeaf(params.BsiExecHead, nil).AddLeaf(params.BsiFinalBlock, nil)
+	stateProofFormat = merkle.EncodeCompactProofFormat(merkle.NewIndexMapFormat().AddLeaf(params.BsiExecHead, nil).AddLeaf(params.BsiFinalBlock, nil))
 	var (
 		stateIndexMap = merkle.ProofFormatIndexMap(stateProofFormat)
 		chainConfig   = makeChainConfig(ctx)
@@ -103,7 +103,7 @@ func blsync(ctx *cli.Context) error {
 		committeeChain  = light.NewCommitteeChain(db, chainConfig.Forks, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name), light.BLSVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 		checkpointStore = light.NewCheckpointStore(db, committeeChain)
 		headValidator   = light.NewHeadValidator(committeeChain)
-		lightChain      = light.NewLightChain(db, stateProofFormat)
+		lightChain      = light.NewLightChain(db)
 	)
 	committeeChain.SetGenesisData(chainConfig.GenesisData)
 	headUpdater := sync.NewHeadUpdater(headValidator, committeeChain)
@@ -116,7 +116,7 @@ func blsync(ctx *cli.Context) error {
 	checkpointInit := sync.NewCheckpointInit(committeeChain, checkpointStore, chainConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	headerSync := sync.NewHeaderSync(lightChain, false)
-	stateSync := sync.NewStateSync(lightChain, true)
+	stateSync := sync.NewStateSync(lightChain, stateProofFormat, true)
 	beaconBlockSync := newBeaconBlockSyncer(lightChain)
 	engineApiUpdater := &engineApiUpdater{ //TODO constructor
 		client:     makeRPCClient(ctx),

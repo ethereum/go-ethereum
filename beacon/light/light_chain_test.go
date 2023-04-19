@@ -230,7 +230,7 @@ func TestLightChainPrune(t *testing.T) {
 type lightChainTest struct {
 	t           *testing.T
 	db          *memorydb.Database
-	proofFormat merkle.ProofFormat
+	proofFormat merkle.CompactProofFormat
 	chain       *LightChain
 	headers     []types.Header // not added to the chain yet
 	stateProofs []testProof    // not added to the chain yet
@@ -246,10 +246,10 @@ func newLightChainTest(t *testing.T) *lightChainTest {
 	c := &lightChainTest{
 		t:           t,
 		db:          memorydb.New(),
-		proofFormat: merkle.NewIndexMapFormat().AddLeaf(42, nil).AddLeaf(67, nil),
+		proofFormat: merkle.EncodeCompactProofFormat(merkle.NewIndexMapFormat().AddLeaf(42, nil).AddLeaf(67, nil)),
 		emptyRatio:  20,
 	}
-	c.chain = NewLightChain(c.db, c.proofFormat)
+	c.chain = NewLightChain(c.db)
 	return c
 }
 
@@ -292,12 +292,12 @@ func (c *lightChainTest) checkTail(header, expTail types.Header) {
 }
 
 func (c *lightChainTest) reloadChain() {
-	c.chain = NewLightChain(c.db, c.proofFormat)
+	c.chain = NewLightChain(c.db)
 }
 
 func (c *lightChainTest) makeChain(from types.Header, targetHeadSlot uint64, addHeaders, addStateProofs bool) (tail, head types.Header) {
 	head = from
-	valueCount := merkle.ValueCount(c.proofFormat)
+	valueCount := c.proofFormat.ValueCount()
 	for head.Slot < targetHeadSlot {
 		var (
 			slot       uint64

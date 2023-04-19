@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/minio/sha256-simd"
 )
 
@@ -67,16 +66,6 @@ func VerifySingleProof(proof Values, index uint64, value Value) (common.Hash, bo
 // ProofFormat defines the shape of a partial proof and allows traversing a subset of a tree
 type ProofFormat interface {
 	Children() (left, right ProofFormat) // either both or neither should be nil
-}
-
-// IsEqual returns true if the two formats are the same
-func IsEqual(a, b ProofFormat) bool {
-	al, ar := a.Children()
-	bl, br := b.Children()
-	if al == nil || bl == nil {
-		return al == nil && bl == nil
-	}
-	return IsEqual(al, bl) && IsEqual(ar, br)
 }
 
 // ValueCount returns the number of merkle values required for this proof format
@@ -145,127 +134,6 @@ func TraverseProof(reader ProofReader, writer ProofWriter) (common.Hash, bool) {
 		writer.WriteNode(node)
 	}
 	return common.Hash(node), true
-}
-
-// MultiProof stores a partial Merkle tree proof
-type MultiProof struct {
-	Format ProofFormat
-	Values Values
-}
-
-// multiProofReader implements ProofReader based on a MultiProof and also allows
-// attaching further subtree readers at certain indices
-// Note: valuePtr is stored and copied as a reference because child readers read
-// from the same value list as the tree is traversed
-type multiProofReader struct {
-	format   ProofFormat              // corresponding proof format
-	values   Values                   // proof values
-	valuePtr *int                     // next index to be read from values
-	index    uint64                   // generalized tree index
-	subtrees func(uint64) ProofReader // attached subtrees
-}
-
-// children implements ProofReader
-func (mpr multiProofReader) Children() (left, right ProofReader) {
-	lf, rf := mpr.format.Children()
-	if lf == nil {
-		if mpr.subtrees != nil {
-			if subtree := mpr.subtrees(mpr.index); subtree != nil {
-				return subtree.Children()
-			}
-		}
-		return nil, nil
-	}
-	return multiProofReader{format: lf, values: mpr.values, valuePtr: mpr.valuePtr, index: mpr.index * 2, subtrees: mpr.subtrees},
-		multiProofReader{format: rf, values: mpr.values, valuePtr: mpr.valuePtr, index: mpr.index*2 + 1, subtrees: mpr.subtrees}
-}
-
-// readNode implements ProofReader
-func (mpr multiProofReader) ReadNode() (Value, bool) {
-	if l, _ := mpr.format.Children(); l == nil && len(mpr.values) > *mpr.valuePtr {
-		hash := mpr.values[*mpr.valuePtr]
-		(*mpr.valuePtr)++
-		return hash, true
-	}
-	return Value{}, false
-}
-
-// Reader creates a multiProofReader for the given proof; if subtrees != nil
-// then also attaches subtree readers at indices where the function returns a
-// non-nil reader.
-// Note that the reader can only be traversed once as the values slice is
-// sequentially consumed.
-func (mp MultiProof) Reader(subtrees func(uint64) ProofReader) multiProofReader {
-	return multiProofReader{format: mp.Format, values: mp.Values, valuePtr: new(int), index: 1, subtrees: subtrees}
-}
-
-// Finished returns true if all values have been consumed by the traversal.
-// Should be checked after TraverseProof if received from an untrusted source in
-// order to prevent DoS attacks by excess proof values.
-func (mpr multiProofReader) Finished() bool {
-	return len(mpr.values) == *mpr.valuePtr
-}
-
-// rootHash returns the root hash of the proven structure.
-func (mp MultiProof) RootHash() common.Hash {
-	reader := mp.Reader(nil)
-	hash, ok := TraverseProof(reader, nil)
-	if !ok || !reader.Finished() {
-		log.Error("MultiProof.rootHash: invalid proof format")
-	}
-	return hash
-}
-
-// multiProofWriter implements ProofWriter and creates a MultiProof with the
-// previously specified format. Also allows attaching further subtree writers at
-// certain indices.
-// Note: values is stored and copied as a reference because child writers append
-// to the same value list as the tree is traversed
-type multiProofWriter struct {
-	format   ProofFormat              // target proof format
-	values   *Values                  // target proof value list
-	index    uint64                   // generalized tree index
-	subtrees func(uint64) ProofWriter // attached subtrees
-}
-
-// NewMultiProofWriter creates a new multiproof writer with the specified format.
-// If subtrees != nil then further subtree writers are attached at indices where
-// the function returns a non-nil writer.
-// Note that the specified format should not include these attached subtrees;
-// they should be attached at leaf indices of the given format.
-// Also note that target can be nil in which case the nodes specified by the format
-// are traversed but not stored; subtree writers might still store tree data.
-func NewMultiProofWriter(format ProofFormat, target *Values, subtrees func(uint64) ProofWriter) multiProofWriter {
-	return multiProofWriter{format: format, values: target, index: 1, subtrees: subtrees}
-}
-
-// children implements ProofWriter
-func (mpw multiProofWriter) Children() (left, right ProofWriter) {
-	if mpw.subtrees != nil {
-		if subtree := mpw.subtrees(mpw.index); subtree != nil {
-			return subtree.Children()
-		}
-	}
-	lf, rf := mpw.format.Children()
-	if lf == nil {
-		return nil, nil
-	}
-	return multiProofWriter{format: lf, values: mpw.values, index: mpw.index * 2, subtrees: mpw.subtrees},
-		multiProofWriter{format: rf, values: mpw.values, index: mpw.index*2 + 1, subtrees: mpw.subtrees}
-}
-
-// writeNode implements ProofWriter
-func (mpw multiProofWriter) WriteNode(node Value) {
-	if mpw.values != nil {
-		if lf, _ := mpw.format.Children(); lf == nil {
-			*mpw.values = append(*mpw.values, node)
-		}
-	}
-	if mpw.subtrees != nil {
-		if subtree := mpw.subtrees(mpw.index); subtree != nil {
-			subtree.WriteNode(node)
-		}
-	}
 }
 
 // ProofFormatIndexMap creates a generalized tree index -> MultiProof value
