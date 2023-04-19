@@ -900,7 +900,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
 	// If gasPrice is 0, make sure that the account has sufficient balance to cover `l1Fee`.
-	if api.backend.ChainConfig().Scroll.L1FeeEnabled() && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
+	if api.backend.ChainConfig().Scroll.FeeVaultEnabled() && message.GasPrice().Cmp(big.NewInt(0)) == 0 {
 		l1Fee, err := fees.CalculateL1MsgFee(message, vmenv.StateDB)
 		if err != nil {
 			return nil, err

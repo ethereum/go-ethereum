@@ -166,7 +166,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	l1Fee := new(big.Int)
-	if evm.ChainConfig().Scroll.L1FeeEnabled() {
+	if evm.ChainConfig().Scroll.FeeVaultEnabled() {
 		l1Fee, _ = fees.CalculateL1MsgFee(msg, evm.StateDB)
 	}
 
@@ -207,7 +207,7 @@ func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
 	mgval = mgval.Mul(mgval, st.gasPrice)
 
-	if st.evm.ChainConfig().Scroll.L1FeeEnabled() {
+	if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
 		// always add l1fee, because all tx are L2-to-L1 ATM
 		log.Debug("Adding L1 fee", "l1_fee", st.l1Fee)
 		mgval = mgval.Add(mgval, st.l1Fee)
@@ -218,7 +218,7 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
 		balanceCheck.Add(balanceCheck, st.value)
-		if st.evm.ChainConfig().Scroll.L1FeeEnabled() {
+		if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
 			// always add l1fee, because all tx are L2-to-L1 ATM
 			balanceCheck.Add(balanceCheck, st.l1Fee)
 		}
@@ -370,7 +370,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 	}
 
-	if st.evm.ChainConfig().Scroll.L1FeeEnabled() {
+	if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
 		// The L2 Fee is the same as the fee that is charged in the normal geth
 		// codepath. Add the L1 fee to the L2 fee for the total fee that is sent
 		// to the sequencer.

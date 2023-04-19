@@ -445,7 +445,7 @@ func (s ScrollConfig) BaseFeeEnabled() bool {
 	return s.EnableEIP2718 && s.EnableEIP1559
 }
 
-func (s ScrollConfig) L1FeeEnabled() bool {
+func (s ScrollConfig) FeeVaultEnabled() bool {
 	return s.FeeVaultAddress != nil
 }
 
