@@ -75,7 +75,7 @@ type Receipt struct {
 	ReturnValue []byte `json:"returnValue,omitempty"`
 
 	// Scroll rollup
-	L1Fee *big.Int `json:"l1Fee,omitempty" gencodec:"required"`
+	L1Fee *big.Int `json:"l1Fee,omitempty"`
 }
 
 type receiptMarshaling struct {
@@ -86,6 +86,7 @@ type receiptMarshaling struct {
 	GasUsed           hexutil.Uint64
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
+	L1Fee             *hexutil.Big
 }
 
 // receiptRLP is the consensus encoding of a receipt.
