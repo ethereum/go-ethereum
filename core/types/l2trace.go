@@ -3,24 +3,10 @@ package types
 import (
 	"encoding/json"
 	"math/big"
-	"runtime"
-	"sync"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/params"
-)
-
-var (
-	loggerResPool = sync.Pool{
-		New: func() interface{} {
-			// init arrays here; other types are inited with default values
-			return &StructLogRes{
-				Stack:  []string{},
-				Memory: []string{},
-			}
-		},
-	}
 )
 
 // BlockTrace contains block execution traces and results required for rollers.
@@ -97,22 +83,21 @@ type StructLogRes struct {
 	ExtraData     *ExtraData        `json:"extraData,omitempty"`
 }
 
-// Basic StructLogRes skeleton, Stack&Memory&Storage&ExtraData are separated from it for GC optimization;
+// NewStructLogResBasic Basic StructLogRes skeleton, Stack&Memory&Storage&ExtraData are separated from it for GC optimization;
 // still need to fill in with Stack&Memory&Storage&ExtraData
 func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, refundCounter uint64, err error) *StructLogRes {
-	logRes := loggerResPool.Get().(*StructLogRes)
-	logRes.Pc, logRes.Op, logRes.Gas, logRes.GasCost, logRes.Depth, logRes.RefundCounter = pc, op, gas, gasCost, depth, refundCounter
+	logRes := &StructLogRes{
+		Pc:            pc,
+		Op:            op,
+		Gas:           gas,
+		GasCost:       gasCost,
+		Depth:         depth,
+		RefundCounter: refundCounter,
+	}
+
 	if err != nil {
 		logRes.Error = err.Error()
 	}
-	runtime.SetFinalizer(logRes, func(logRes *StructLogRes) {
-		logRes.Stack = logRes.Stack[:0]
-		logRes.Memory = logRes.Memory[:0]
-		logRes.Storage = nil
-		logRes.ExtraData = nil
-		logRes.Error = ""
-		loggerResPool.Put(logRes)
-	})
 	return logRes
 }
 
@@ -151,7 +136,7 @@ type AccountWrapper struct {
 	Storage          *StorageWrapper `json:"storage,omitempty"` // StorageWrapper can be empty if irrelated to storage operation
 }
 
-// while key & value can also be retrieved from StructLogRes.Storage,
+// StorageWrapper while key & value can also be retrieved from StructLogRes.Storage,
 // we still stored in here for roller's processing convenience.
 type StorageWrapper struct {
 	Key   string `json:"key,omitempty"`

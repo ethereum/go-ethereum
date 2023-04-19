@@ -15,7 +15,7 @@ import (
 var _ = (*structLogMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (s StructLog) MarshalJSON() ([]byte, error) {
+func (s *StructLog) MarshalJSON() ([]byte, error) {
 	type StructLog struct {
 		Pc            uint64                      `json:"pc"`
 		Op            OpCode                      `json:"op"`
