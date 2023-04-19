@@ -554,7 +554,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			origin = 0
 		} else {
 			pivotNumber := pivot.Number.Uint64()
-			if pivotNumber <= origin {
+			if pivotNumber > 0 && pivotNumber <= origin {
 				origin = pivotNumber - 1
 			}
 			// Write out the pivot into the database so a rollback beyond it will
