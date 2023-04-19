@@ -24,11 +24,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	fuzz "github.com/google/gofuzz"
 
-	// We use the L1 version of secp256k1 here in order to avoid linker errors when
-	// compiling the sequencer. In addition, this crypto library is used for L1
-	// keys, and we should never diverge from how L1 keys are handled as it is
-	// necessary for compatibility with L1.
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/scroll-tech/go-ethereum/crypto/secp256k1"
 )
 
 func Fuzz(input []byte) int {
