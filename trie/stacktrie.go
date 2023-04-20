@@ -202,7 +202,7 @@ const (
 	hashedNode
 )
 
-// Update inserts a (key, value) pair into the stack trie
+// Update inserts a (key, value) pair into the stack trie.
 func (st *StackTrie) Update(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {

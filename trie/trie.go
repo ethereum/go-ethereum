@@ -257,8 +257,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 // MustUpdate is a wrapper of Update and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustUpdate(key, value []byte) {
-	err := t.Update(key, value)
-	if err != nil {
+	if err := t.Update(key, value); err != nil {
 		log.Error("Unhandled trie error in Trie.Update", "err", err)
 	}
 }
@@ -377,8 +376,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 // MustDelete is a wrapper of Delete and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustDelete(key []byte) {
-	err := t.Delete(key)
-	if err != nil {
+	if err := t.Delete(key); err != nil {
 		log.Error("Unhandled trie error in Trie.Delete", "err", err)
 	}
 }
