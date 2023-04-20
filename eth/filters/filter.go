@@ -94,29 +94,37 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
-func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
+func (f *Filter) Logs(ctx context.Context, logChan chan *types.Log) error {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != nil {
 		header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if header == nil {
-			return nil, errors.New("unknown block")
+			return errors.New("unknown block")
 		}
-		return f.blockLogs(ctx, header)
+		logs, err := f.blockLogs(ctx, header)
+		if err == nil {
+			for _, log := range logs {
+				logChan <- log
+			}
+		}
+		return err
 	}
 	// Short-cut if all we care about is pending logs
 	if f.begin == rpc.PendingBlockNumber.Int64() {
 		if f.end != rpc.PendingBlockNumber.Int64() {
-			return nil, errors.New("invalid block range")
+			return errors.New("invalid block range")
 		}
-		return f.pendingLogs(), nil
+		for _, log := range f.pendingLogs() {
+			logChan <- log
+		}
 	}
 	// Figure out the limits of the filter range
 	header, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
-		return nil, nil
+		return nil
 	}
 	var (
 		err     error
@@ -148,52 +156,49 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return hdr.Number.Int64(), nil
 	}
 	if f.begin, err = resolveSpecial(f.begin); err != nil {
-		return nil, err
+		return err
 	}
 	if f.end, err = resolveSpecial(f.end); err != nil {
-		return nil, err
+		return err
 	}
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
-		logs           []*types.Log
 		end            = uint64(f.end)
 		size, sections = f.sys.backend.BloomStatus()
 	)
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
-			logs, err = f.indexedLogs(ctx, end)
+			err = f.indexedLogs(ctx, end, logChan)
 		} else {
-			logs, err = f.indexedLogs(ctx, indexed-1)
+			err = f.indexedLogs(ctx, indexed-1, logChan)
 		}
 		if err != nil {
-			return logs, err
+			return err
 		}
 	}
-	rest, err := f.unindexedLogs(ctx, end)
-	logs = append(logs, rest...)
+	// TODO: why error was not checked?
+	err = f.unindexedLogs(ctx, end, logChan)
 	if pending {
-		pendingLogs := f.pendingLogs()
-		logs = append(logs, pendingLogs...)
+		for _, log := range f.pendingLogs() {
+			logChan <- log
+		}
 	}
-	return logs, err
+	return err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
 	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer session.Close()
 
 	f.sys.backend.ServiceFilter(ctx, session)
-
-	// Iterate over the matches until exhausted or context closed
-	var logs []*types.Log
 
 	for {
 		select {
@@ -204,47 +209,49 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 				if err == nil {
 					f.begin = int64(end) + 1
 				}
-				return logs, err
+				return err
 			}
 			f.begin = int64(number) + 1
 
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {
-				return logs, err
+				return err
 			}
 			found, err := f.checkMatches(ctx, header)
 			if err != nil {
-				return logs, err
+				return err
 			}
-			logs = append(logs, found...)
+			for _, log := range found {
+				logChan <- log
+			}
 
 		case <-ctx.Done():
-			return logs, ctx.Err()
+			return ctx.Err()
 		}
 	}
 }
 
 // unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
-	var logs []*types.Log
-
+func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
 	for ; f.begin <= int64(end); f.begin++ {
 		if f.begin%10 == 0 && ctx.Err() != nil {
-			return logs, ctx.Err()
+			return ctx.Err()
 		}
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
-			return logs, err
+			return err
 		}
 		found, err := f.blockLogs(ctx, header)
 		if err != nil {
-			return logs, err
+			return err
 		}
-		logs = append(logs, found...)
+		for _, log := range found {
+			logChan <- log
+		}
 	}
-	return logs, nil
+	return nil
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
