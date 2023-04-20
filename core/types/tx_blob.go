@@ -48,7 +48,7 @@ type BlobTx struct {
 func (tx *BlobTx) copy() TxData {
 	cpy := &BlobTx{
 		Nonce: tx.Nonce,
-		To:    tx.To, //copyAddressPtr(tx.To),
+		To:    copyAddressPtr(tx.To),
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
@@ -96,7 +96,7 @@ func (tx *BlobTx) copy() TxData {
 // accessors for innerTx.
 func (tx *BlobTx) txType() byte              { return BlobTxType }
 func (tx *BlobTx) chainID() *big.Int         { return tx.ChainID.ToBig() }
-func (tx *BlobTx) accessList() AccessList    { return nil /*tx.AccessList*/ }
+func (tx *BlobTx) accessList() AccessList    { return tx.AccessList }
 func (tx *BlobTx) data() []byte              { return tx.Data }
 func (tx *BlobTx) gas() uint64               { return tx.Gas }
 func (tx *BlobTx) gasFeeCap() *big.Int       { return tx.GasFeeCap.ToBig() }
