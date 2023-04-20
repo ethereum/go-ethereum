@@ -15,6 +15,10 @@ pub extern "C" fn poseidon(
     field_len: usize,
     output_ptr: *mut u8, // 32 bytes
 ) -> bool {
+    if (field_ptr.is_null() && field_len != 0) || output_ptr.is_null() {
+        return false;
+    }
+
     let network_id = match network_id {
         0x00 => NetworkId::MAINNET,
         0x01 => NetworkId::TESTNET,
@@ -58,6 +62,16 @@ pub extern "C" fn verify(
     field_len: usize,
     output_ptr: *mut bool,
 ) -> bool {
+    if pubkey_x.is_null()
+        || pubkey_y.is_null()
+        || sig_rx.is_null()
+        || sig_s.is_null()
+        || (field_ptr.is_null() && field_len != 0)
+        || output_ptr.is_null()
+    {
+        return false;
+    }
+
     let network_id = match network_id {
         0x00 => NetworkId::MAINNET,
         0x01 => NetworkId::TESTNET,
@@ -119,8 +133,139 @@ pub extern "C" fn verify(
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use std::str::FromStr;
+
+    use super::*;
+    use num_bigint::BigUint;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    struct PoseidonTestVector {
+        input: Vec<String>,
+        output: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct PoseidonTestVectors {
+        test_vectors: Vec<PoseidonTestVector>,
+    }
 
     #[test]
-    fn it_works() {}
+    fn poseidon_test_vectors() {
+        let test_vectors: PoseidonTestVectors =
+            serde_json::from_str(include_str!("test/poseidon_test_vectors.json")).unwrap();
+
+        for test_vector in test_vectors.test_vectors {
+            let mut output = [0u8; 32];
+
+            let input = test_vector
+                .input
+                .iter()
+                .map(|input| BaseField::from_hex(input).unwrap().to_bytes())
+                .flatten()
+                .collect::<Vec<u8>>();
+
+            assert_eq!(
+                poseidon(
+                    0x02,
+                    input.as_ptr(),
+                    test_vector.input.len(),
+                    output.as_mut_ptr()
+                ),
+                true
+            );
+
+            assert_eq!(
+                BaseField::from_bytes(&output).unwrap().to_hex(),
+                test_vector.output
+            );
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct SignerTestVector {
+        pub_key_x: String,
+        pub_key_y: String,
+        sig_rx: String,
+        sig_s: String,
+        fields: Vec<String>,
+        output: bool,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct SignerTestVectors {
+        test_vectors: Vec<SignerTestVector>,
+    }
+
+    #[test]
+    fn test_signer() {
+        let test_vectors: SignerTestVectors =
+            serde_json::from_str(include_str!("test/signer_test_vectors.json")).unwrap();
+
+        for test_vector in test_vectors.test_vectors {
+            let mut output = false;
+
+            let pub_key_x =
+                BaseField::from_biguint(&BigUint::from_str(&test_vector.pub_key_x).unwrap())
+                    .unwrap()
+                    .to_bytes();
+            let pub_key_y =
+                BaseField::from_biguint(&BigUint::from_str(&test_vector.pub_key_y).unwrap())
+                    .unwrap()
+                    .to_bytes();
+            let sig_rx = BaseField::from_biguint(&BigUint::from_str(&test_vector.sig_rx).unwrap())
+                .unwrap()
+                .to_bytes();
+            let sig_s = ScalarField::from_biguint(&BigUint::from_str(&test_vector.sig_s).unwrap())
+                .unwrap()
+                .to_bytes();
+            let fields = test_vector
+                .fields
+                .iter()
+                .map(|input| {
+                    BaseField::from_biguint(&BigUint::from_str(&input).unwrap())
+                        .unwrap()
+                        .to_bytes()
+                })
+                .flatten()
+                .collect::<Vec<u8>>();
+
+            assert_eq!(
+                verify(
+                    0x01,
+                    pub_key_x.as_ptr(),
+                    pub_key_y.as_ptr(),
+                    sig_rx.as_ptr(),
+                    sig_s.as_ptr(),
+                    fields.as_ptr(),
+                    test_vector.fields.len(),
+                    &mut output
+                ),
+                true
+            );
+
+            assert_eq!(output, test_vector.output);
+        }
+    }
+
+    #[test]
+    fn null_pointer() {
+        assert_eq!(
+            poseidon(0x00, std::ptr::null(), 1, std::ptr::null_mut()),
+            false
+        );
+        assert_eq!(
+            verify(
+                0x00,
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut()
+            ),
+            false
+        );
+    }
 }
