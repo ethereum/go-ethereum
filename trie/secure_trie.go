@@ -74,7 +74,8 @@ func NewStateTrie(id *ID, db *Database) (*StateTrie, error) {
 // MustGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 //
-// This function will panic if any error is encountered.
+// This function will omit any encountered error but just
+// print out an error message.
 func (t *StateTrie) MustGet(key []byte) []byte {
 	return t.trie.MustGet(t.hashKey(key))
 }
@@ -128,7 +129,8 @@ func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 //
-// This function will panic if any error is encountered.
+// This function will omit any encountered error but just print out an
+// error message.
 func (t *StateTrie) MustUpdate(key, value []byte) {
 	hk := t.hashKey(key)
 	t.trie.MustUpdate(hk, value)
@@ -167,9 +169,8 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	return nil
 }
 
-// MustDelete removes any existing value for key from the trie.
-//
-// This function will panic if any error is encountered.
+// MustDelete removes any existing value for key from the trie. This function
+// will omit any encountered error but just print out an error message.
 func (t *StateTrie) MustDelete(key []byte) {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
