@@ -33,6 +33,7 @@ package vm
 import "C"
 import (
 	"bytes"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -65,9 +66,14 @@ func (c *MinaPoseidon) RequiredGas(input []byte) uint64 {
 // 0x1f831f84
 var poseidonHashSignature = crypto.Keccak256([]byte("poseidonHash(uint8,bytes32[])"))[:4]
 
+var (
+	errMinaPoseidonInvalidSignature = errors.New("invalid function signature")
+	errMinaPoseidonCallingRustLibFailed = errors.New("calling rust library failed")
+)
+
 func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	if len(input) < 4 || !bytes.Equal(input[:4], poseidonHashSignature) {
-		return packErr("Invalid signature"), ErrExecutionReverted
+		return packErr("Invalid signature"), errMinaPoseidonInvalidSignature
 	}
 
 	calldata := input[4:]
@@ -84,19 +90,22 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	networkId := unpacked[0].(uint8)
 	fields := unpacked[1].([][32]uint8)
 
-	if len(fields) == 0 {
-		return packErr("Unable to verify for 0 fields"), ErrExecutionReverted
-	}
-
 	output_buffer := [32]byte{}
+
+	var fields_ptr *C.uint8_t
+	if len(fields) == 0 {
+		fields_ptr = (*C.uint8_t)(nil)
+	} else {
+		fields_ptr = (*C.uint8_t)(&fields[0][0])
+	}
 
 	if !C.poseidon(
 		C.uint8_t(networkId),
-		(*C.uint8_t)(&fields[0][0]),
+		fields_ptr,
 		C.uintptr_t(len(fields)),
 		(*C.uint8_t)(&output_buffer[0]),
 	) {
-		return packErr("Calling Poseidon hash failed"), ErrExecutionReverted
+		return packErr("Calling Poseidon hash failed"), errMinaPoseidonCallingRustLibFailed
 	}
 
 	return output_buffer[:], nil

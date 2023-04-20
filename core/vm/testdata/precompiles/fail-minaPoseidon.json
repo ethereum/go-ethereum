@@ -1,0 +1,22 @@
+[
+  {
+    "Input": "aabbccdd",
+    "ExpectedError": "invalid function signature",
+    "Name": "mina_poseidon_invalid_signature"
+  },
+  {
+    "Input": "1f831f84",
+    "ExpectedError": "abi: attempting to unmarshall an empty string while arguments are expected",
+    "Name": "mina_poseidon_invalid_calldata 1"
+  },
+  {
+    "Input": "1f831f84aabbccdd",
+    "ExpectedError": "abi: cannot marshal in to go type: length insufficient 4 require 32",
+    "Name": "mina_poseidon_invalid_calldata 2"
+  },
+  {
+    "Input": "1f831f84000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ExpectedError": "calling rust library failed",
+    "Name": "mina_poseidon_invalid_field"
+  }
+]
