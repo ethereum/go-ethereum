@@ -40,7 +40,8 @@ import (
 
 // To regenerate discv5 test vectors, run
 //
-//	go test -run TestVectors -write-test-vectors
+//     go test -run TestVectors -write-test-vectors
+//
 var writeTestVectorsFlag = flag.Bool("write-test-vectors", false, "Overwrite discv5 test vectors in testdata/")
 
 var (

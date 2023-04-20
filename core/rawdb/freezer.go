@@ -70,10 +70,10 @@ const (
 // freezer is an memory mapped append-only database to store immutable chain data
 // into flat files:
 //
-//   - The append only nature ensures that disk writes are minimized.
-//   - The memory mapping ensures we can max out system memory for caching without
-//     reserving it for go-ethereum. This would also reduce the memory requirements
-//     of Geth, and thus also GC overhead.
+// - The append only nature ensures that disk writes are minimized.
+// - The memory mapping ensures we can max out system memory for caching without
+//   reserving it for go-ethereum. This would also reduce the memory requirements
+//   of Geth, and thus also GC overhead.
 type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
@@ -205,9 +205,9 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//   - at most 'max' items,
-//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//     return as many items as fit into maxByteSize.
+//  - at most 'max' items,
+//  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
+//   return as many items as fit into maxByteSize.
 func (f *freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
