@@ -57,6 +57,11 @@ func packErr(message string) []byte {
 	return append(revertSelector, bytes...)
 }
 
+var (
+	errMinaInvalidSignature     = errors.New("invalid function signature")
+	errMinaCallingRustLibFailed = errors.New("calling rust library failed")
+)
+
 type MinaPoseidon struct{}
 
 func (c *MinaPoseidon) RequiredGas(input []byte) uint64 {
@@ -66,14 +71,9 @@ func (c *MinaPoseidon) RequiredGas(input []byte) uint64 {
 // 0x1f831f84
 var poseidonHashSignature = crypto.Keccak256([]byte("poseidonHash(uint8,bytes32[])"))[:4]
 
-var (
-	errMinaPoseidonInvalidSignature = errors.New("invalid function signature")
-	errMinaPoseidonCallingRustLibFailed = errors.New("calling rust library failed")
-)
-
 func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	if len(input) < 4 || !bytes.Equal(input[:4], poseidonHashSignature) {
-		return packErr("Invalid signature"), errMinaPoseidonInvalidSignature
+		return packErr("Invalid signature"), errMinaInvalidSignature
 	}
 
 	calldata := input[4:]
@@ -105,7 +105,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 		C.uintptr_t(len(fields)),
 		(*C.uint8_t)(&output_buffer[0]),
 	) {
-		return packErr("Calling Poseidon hash failed"), errMinaPoseidonCallingRustLibFailed
+		return packErr("Calling Poseidon hash failed"), errMinaCallingRustLibFailed
 	}
 
 	return output_buffer[:], nil
@@ -122,7 +122,7 @@ var verifySignature = crypto.Keccak256([]byte("verify(uint8,bytes32,bytes32,byte
 
 func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	if len(input) < 4 || !bytes.Equal(input[:4], verifySignature) {
-		return packErr("Invalid signature"), ErrExecutionReverted
+		return packErr("Invalid signature"), errMinaInvalidSignature
 	}
 
 	calldata := input[4:]
@@ -147,11 +147,14 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	signatureS := unpacked[4].([32]uint8)
 	fields := unpacked[5].([][32]uint8)
 
-	if len(fields) == 0 {
-		return packErr("Unable to verify for 0 fields"), ErrExecutionReverted
-	}
-
 	output_buffer := false
+
+	var fields_ptr *C.uint8_t
+	if len(fields) == 0 {
+		fields_ptr = (*C.uint8_t)(nil)
+	} else {
+		fields_ptr = (*C.uint8_t)(&fields[0][0])
+	}
 
 	if !C.verify(
 		C.uint8_t(networkId),
@@ -159,11 +162,11 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 		(*C.uint8_t)(&pubKeyY[0]),
 		(*C.uint8_t)(&signatureRX[0]),
 		(*C.uint8_t)(&signatureS[0]),
-		(*C.uint8_t)(&fields[0][0]),
+		fields_ptr,
 		C.uintptr_t(len(fields)),
 		(*C.bool)(&output_buffer),
 	) {
-		return packErr("Calling verify failed"), ErrExecutionReverted
+		return packErr("Calling verify failed"), errMinaCallingRustLibFailed
 	}
 
 	return abi.Arguments{{Type: sol_bool}}.Pack(output_buffer)

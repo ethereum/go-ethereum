@@ -65,8 +65,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}):   &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}):   &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
-	common.BytesToAddress([]byte{0x50}):   &MinaPoseidon{},
-	common.BytesToAddress([]byte{0x51}):   &MinaSigner{},
+	common.BytesToAddress([]byte{0x50}): &MinaPoseidon{},
+	common.BytesToAddress([]byte{0x51}): &MinaSigner{},
 }
 
 // EIP-152 test vectors
@@ -314,6 +314,7 @@ func TestPrecompiledBLS12381Pairing(t *testing.T)    { testJson("blsPairing", "1
 func TestPrecompiledBLS12381MapG1(t *testing.T)      { testJson("blsMapG1", "11", t) }
 func TestPrecompiledBLS12381MapG2(t *testing.T)      { testJson("blsMapG2", "12", t) }
 func TestPrecompiledMinaPoseidon(t *testing.T)       { testJson("minaPoseidon", "50", t) }
+func TestPrecompiledMinaSigner(t *testing.T)         { testJson("minaSigner", "51", t) }
 
 func BenchmarkPrecompiledBLS12381G1Add(b *testing.B)      { benchJson("blsG1Add", "0a", b) }
 func BenchmarkPrecompiledBLS12381G1Mul(b *testing.B)      { benchJson("blsG1Mul", "0b", b) }
@@ -325,6 +326,7 @@ func BenchmarkPrecompiledBLS12381Pairing(b *testing.B)    { benchJson("blsPairin
 func BenchmarkPrecompiledBLS12381MapG1(b *testing.B)      { benchJson("blsMapG1", "11", b) }
 func BenchmarkPrecompiledBLS12381MapG2(b *testing.B)      { benchJson("blsMapG2", "12", b) }
 func BenchmarkPrecompiledMinaPoseidon(b *testing.B)       { benchJson("minaPoseidon", "50", b) }
+func BenchmarkPrecompiledMinaSigner(b *testing.B)         { benchJson("minaSigner", "51", b) }
 
 // Failure tests
 func TestPrecompiledBLS12381G1AddFail(t *testing.T)      { testJsonFail("blsG1Add", "0a", t) }
@@ -337,6 +339,7 @@ func TestPrecompiledBLS12381PairingFail(t *testing.T)    { testJsonFail("blsPair
 func TestPrecompiledBLS12381MapG1Fail(t *testing.T)      { testJsonFail("blsMapG1", "11", t) }
 func TestPrecompiledBLS12381MapG2Fail(t *testing.T)      { testJsonFail("blsMapG2", "12", t) }
 func TestPrecompiledMinaPoseidonFail(t *testing.T)       { testJsonFail("minaPoseidon", "50", t) }
+func TestPrecompiledMinaSignerFail(t *testing.T)         { testJsonFail("minaSigner", "51", t) }
 
 func loadJson(name string) ([]precompiledTest, error) {
 	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
