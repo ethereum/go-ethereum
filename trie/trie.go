@@ -105,28 +105,30 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 	return newNodeIterator(t, start)
 }
 
-// Get returns the value for key stored in the trie.
-// The value bytes must not be modified by the caller.
-func (t *Trie) Get(key []byte) []byte {
-	res, err := t.TryGet(key)
+// MustGet is a wrapper of Get and will omit any encountered error but just
+// print out an error message.
+func (t *Trie) MustGet(key []byte) []byte {
+	res, err := t.Get(key)
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.Get", "err", err)
 	}
 	return res
 }
 
-// TryGet returns the value for key stored in the trie.
+// Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+//
+// If the requested node is not present in trie, no error will be returned.
+// If the trie is corrupted, a MissingNodeError is returned.
+func (t *Trie) Get(key []byte) ([]byte, error) {
+	value, newroot, didResolve, err := t.get(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
 	}
 	return value, err
 }
 
-func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
@@ -137,14 +139,14 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 			// key not found in trie
 			return nil, n, false, nil
 		}
-		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
+		value, newnode, didResolve, err = t.get(n.Val, key, pos+len(n.Key))
 		if err == nil && didResolve {
 			n = n.copy()
 			n.Val = newnode
 		}
 		return value, n, didResolve, err
 	case *fullNode:
-		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
+		value, newnode, didResolve, err = t.get(n.Children[key[pos]], key, pos+1)
 		if err == nil && didResolve {
 			n = n.copy()
 			n.Children[key[pos]] = newnode
@@ -155,17 +157,30 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		if err != nil {
 			return nil, n, true, err
 		}
-		value, newnode, _, err := t.tryGet(child, key, pos)
+		value, newnode, _, err := t.get(child, key, pos)
 		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
 }
 
-// TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
-// possible to use keybyte-encoding as the path might contain odd nibbles.
-func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
-	item, newroot, resolved, err := t.tryGetNode(t.root, compactToHex(path), 0)
+// MustGetNode is a wrapper of GetNode and will omit any encountered error but
+// just print out an error message.
+func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
+	item, resolved, err := t.GetNode(path)
+	if err != nil {
+		log.Error("Unhandled trie error in Trie.GetNode", "err", err)
+	}
+	return item, resolved
+}
+
+// GetNode retrieves a trie node by compact-encoded path. It is not possible
+// to use keybyte-encoding as the path might contain odd nibbles.
+//
+// If the requested node is not present in trie, no error will be returned.
+// If the trie is corrupted, a MissingNodeError is returned.
+func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
+	item, newroot, resolved, err := t.getNode(t.root, compactToHex(path), 0)
 	if err != nil {
 		return nil, resolved, err
 	}
@@ -175,10 +190,10 @@ func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
 	if item == nil {
 		return nil, resolved, nil
 	}
-	return item, resolved, err
+	return item, resolved, nil
 }
 
-func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
+func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
 	// If non-existent path requested, abort
 	if origNode == nil {
 		return nil, nil, 0, nil
@@ -211,7 +226,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 			// Path branches off from short node
 			return nil, n, 0, nil
 		}
-		item, newnode, resolved, err = t.tryGetNode(n.Val, path, pos+len(n.Key))
+		item, newnode, resolved, err = t.getNode(n.Val, path, pos+len(n.Key))
 		if err == nil && resolved > 0 {
 			n = n.copy()
 			n.Val = newnode
@@ -219,7 +234,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		return item, n, resolved, err
 
 	case *fullNode:
-		item, newnode, resolved, err = t.tryGetNode(n.Children[path[pos]], path, pos+1)
+		item, newnode, resolved, err = t.getNode(n.Children[path[pos]], path, pos+1)
 		if err == nil && resolved > 0 {
 			n = n.copy()
 			n.Children[path[pos]] = newnode
@@ -231,11 +246,19 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if err != nil {
 			return nil, n, 1, err
 		}
-		item, newnode, resolved, err := t.tryGetNode(child, path, pos)
+		item, newnode, resolved, err := t.getNode(child, path, pos)
 		return item, newnode, resolved + 1, err
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
+// MustUpdate is a wrapper of Update and will omit any encountered error but
+// just print out an error message.
+func (t *Trie) MustUpdate(key, value []byte) {
+	if err := t.Update(key, value); err != nil {
+		log.Error("Unhandled trie error in Trie.Update", "err", err)
 	}
 }
 
@@ -245,27 +268,14 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil {
-		log.Error("Unhandled trie error in Trie.Update", "err", err)
-	}
+//
+// If the requested node is not present in trie, no error will be returned.
+// If the trie is corrupted, a MissingNodeError is returned.
+func (t *Trie) Update(key, value []byte) error {
+	return t.update(key, value)
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-//
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryUpdate(key, value []byte) error {
-	return t.tryUpdate(key, value)
-}
-
-// tryUpdate expects an RLP-encoded value and performs the core function
-// for TryUpdate and TryUpdateAccount.
-func (t *Trie) tryUpdate(key, value []byte) error {
+func (t *Trie) update(key, value []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
@@ -363,16 +373,19 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	}
 }
 
-// Delete removes any existing value for key from the trie.
-func (t *Trie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil {
+// MustDelete is a wrapper of Delete and will omit any encountered error but
+// just print out an error message.
+func (t *Trie) MustDelete(key []byte) {
+	if err := t.Delete(key); err != nil {
 		log.Error("Unhandled trie error in Trie.Delete", "err", err)
 	}
 }
 
-// TryDelete removes any existing value for key from the trie.
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryDelete(key []byte) error {
+// Delete removes any existing value for key from the trie.
+//
+// If the requested node is not present in trie, no error will be returned.
+// If the trie is corrupted, a MissingNodeError is returned.
+func (t *Trie) Delete(key []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)

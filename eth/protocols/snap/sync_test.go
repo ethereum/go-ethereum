@@ -216,7 +216,7 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 	for _, pathset := range paths {
 		switch len(pathset) {
 		case 1:
-			blob, _, err := t.accountTrie.TryGetNode(pathset[0])
+			blob, _, err := t.accountTrie.GetNode(pathset[0])
 			if err != nil {
 				t.logger.Info("Error handling req", "error", err)
 				break
@@ -225,7 +225,7 @@ func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, 
 		default:
 			account := t.storageTries[(common.BytesToHash(pathset[0]))]
 			for _, path := range pathset[1:] {
-				blob, _, err := account.TryGetNode(path)
+				blob, _, err := account.GetNode(path)
 				if err != nil {
 					t.logger.Info("Error handling req", "error", err)
 					break
@@ -1381,7 +1381,7 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 		})
 		key := key32(i)
 		elem := &kv{key, value}
-		accTrie.Update(elem.k, elem.v)
+		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
@@ -1431,7 +1431,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, entrySlice) {
 			CodeHash: getCodeHash(uint64(i)),
 		})
 		elem := &kv{boundaries[i].Bytes(), value}
-		accTrie.Update(elem.k, elem.v)
+		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	// Fill other accounts if required
@@ -1443,7 +1443,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, entrySlice) {
 			CodeHash: getCodeHash(i),
 		})
 		elem := &kv{key32(i), value}
-		accTrie.Update(elem.k, elem.v)
+		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
@@ -1487,7 +1487,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 			CodeHash: codehash,
 		})
 		elem := &kv{key, value}
-		accTrie.Update(elem.k, elem.v)
+		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 
 		storageRoots[common.BytesToHash(key)] = stRoot
@@ -1551,7 +1551,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 			CodeHash: codehash,
 		})
 		elem := &kv{key, value}
-		accTrie.Update(elem.k, elem.v)
+		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 
 		// we reuse the same one for all accounts
@@ -1599,7 +1599,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		key := crypto.Keccak256Hash(slotKey[:])
 
 		elem := &kv{key[:], rlpSlotValue}
-		trie.Update(elem.k, elem.v)
+		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
@@ -1638,7 +1638,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		val := []byte{0xde, 0xad, 0xbe, 0xef}
 
 		elem := &kv{key[:], val}
-		trie.Update(elem.k, elem.v)
+		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	// Fill other slots if required
@@ -1650,7 +1650,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
 
 		elem := &kv{key[:], rlpSlotValue}
-		trie.Update(elem.k, elem.v)
+		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
