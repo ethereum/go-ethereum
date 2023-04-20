@@ -94,96 +94,140 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
-func (f *Filter) Logs(ctx context.Context, logChan chan *types.Log) error {
-	// If we're doing singleton block filtering, execute and return
-	if f.block != nil {
-		header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
-		if err != nil {
-			return err
+func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
+	var (
+		logs []*types.Log
+		err  error
+	)
+	logChan, errChan := f.LogsAsync(ctx)
+LOOP:
+	for {
+		select {
+		case log := <-logChan:
+			logs = append(logs, log)
+		case ierr := <-errChan:
+			close(logChan)
+			err = ierr
+			break LOOP
 		}
-		if header == nil {
-			return errors.New("unknown block")
-		}
-		logs, err := f.blockLogs(ctx, header)
-		if err == nil {
+	}
+	return logs, err
+}
+
+// LogsAsync retrieves logs that match the filter criteria asynchronously,
+// it creates and returns two channels: one for delivering log data, and one for reporting errors.
+func (f *Filter) LogsAsync(ctx context.Context) (chan *types.Log, chan error) {
+	var (
+		logChan = make(chan *types.Log)
+		errChan = make(chan error)
+	)
+	go func() {
+		// If we're doing singleton block filtering, execute and return
+		if f.block != nil {
+			header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if header == nil {
+				errChan <- errors.New("unknown block")
+				return
+			}
+			logs, err := f.blockLogs(ctx, header)
+			if err != nil {
+				errChan <- err
+				return
+			}
 			for _, log := range logs {
 				logChan <- log
 			}
+			return
 		}
-		return err
-	}
-	// Short-cut if all we care about is pending logs
-	if f.begin == rpc.PendingBlockNumber.Int64() {
-		if f.end != rpc.PendingBlockNumber.Int64() {
-			return errors.New("invalid block range")
-		}
-		for _, log := range f.pendingLogs() {
-			logChan <- log
-		}
-	}
-	// Figure out the limits of the filter range
-	header, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if header == nil {
-		return nil
-	}
-	var (
-		err     error
-		head    = header.Number.Int64()
-		pending = f.end == rpc.PendingBlockNumber.Int64()
-	)
-	resolveSpecial := func(number int64) (int64, error) {
-		var hdr *types.Header
-		switch number {
-		case rpc.LatestBlockNumber.Int64():
-			return head, nil
-		case rpc.PendingBlockNumber.Int64():
-			// we should return head here since we've already captured
-			// that we need to get the pending logs in the pending boolean above
-			return head, nil
-		case rpc.FinalizedBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("finalized header not found")
+		// Short-cut if all we care about is pending logs
+		if f.begin == rpc.PendingBlockNumber.Int64() {
+			if f.end != rpc.PendingBlockNumber.Int64() {
+				errChan <- errors.New("invalid block range")
+				return
 			}
-		case rpc.SafeBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("safe header not found")
+			for _, log := range f.pendingLogs() {
+				logChan <- log
 			}
-		default:
-			return number, nil
+			return
 		}
-		return hdr.Number.Int64(), nil
-	}
-	if f.begin, err = resolveSpecial(f.begin); err != nil {
-		return err
-	}
-	if f.end, err = resolveSpecial(f.end); err != nil {
-		return err
-	}
-	// Gather all indexed logs, and finish with non indexed ones
-	var (
-		end            = uint64(f.end)
-		size, sections = f.sys.backend.BloomStatus()
-	)
-	if indexed := sections * size; indexed > uint64(f.begin) {
-		if indexed > end {
-			err = f.indexedLogs(ctx, end, logChan)
-		} else {
-			err = f.indexedLogs(ctx, indexed-1, logChan)
+		// Figure out the limits of the filter range
+		header, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if header == nil {
+			errChan <- nil
+			return
 		}
+		var (
+			err     error
+			head    = header.Number.Int64()
+			pending = f.end == rpc.PendingBlockNumber.Int64()
+		)
+		resolveSpecial := func(number int64) (int64, error) {
+			var hdr *types.Header
+			switch number {
+			case rpc.LatestBlockNumber.Int64():
+				return head, nil
+			case rpc.PendingBlockNumber.Int64():
+				// we should return head here since we've already captured
+				// that we need to get the pending logs in the pending boolean above
+				return head, nil
+			case rpc.FinalizedBlockNumber.Int64():
+				hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+				if hdr == nil {
+					return 0, errors.New("finalized header not found")
+				}
+			case rpc.SafeBlockNumber.Int64():
+				hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+				if hdr == nil {
+					return 0, errors.New("safe header not found")
+				}
+			default:
+				return number, nil
+			}
+			return hdr.Number.Int64(), nil
+		}
+		if f.begin, err = resolveSpecial(f.begin); err != nil {
+			errChan <- err
+			return
+		}
+		if f.end, err = resolveSpecial(f.end); err != nil {
+			errChan <- err
+			return
+		}
+		// Gather all indexed logs, and finish with non indexed ones
+		var (
+			end            = uint64(f.end)
+			size, sections = f.sys.backend.BloomStatus()
+		)
+		if indexed := sections * size; indexed > uint64(f.begin) {
+			if indexed > end {
+				err = f.indexedLogs(ctx, end, logChan)
+			} else {
+				err = f.indexedLogs(ctx, indexed-1, logChan)
+			}
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+
+		err = f.unindexedLogs(ctx, end, logChan)
 		if err != nil {
-			return err
+			errChan <- err
+			return
 		}
-	}
-	// TODO: why error was not checked?
-	err = f.unindexedLogs(ctx, end, logChan)
-	if pending {
-		for _, log := range f.pendingLogs() {
-			logChan <- log
+
+		if pending {
+			for _, log := range f.pendingLogs() {
+				logChan <- log
+			}
 		}
-	}
-	return err
+		errChan <- nil
+	}()
+	return logChan, errChan
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
