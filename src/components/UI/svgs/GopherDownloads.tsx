@@ -1,13 +1,12 @@
-import { IconProps } from '@chakra-ui/react';
 import { createIcon } from '@chakra-ui/icons';
 
 const [w, h] = [276, 268];
 
-const Icon = createIcon({
+export const GopherDownloads = createIcon({
   displayName: 'GopherDownloads',
   viewBox: `0 0 ${w} ${h}`,
   path: (
-    <svg width={w} height={h} fill='none' xmlns='http://www.w3.org/2000/svg'>
+    <>
       <path
         d='m251.136 147.087-.133-21.001-60.366-4.17-31.877 2.886.186 117.761 32.094 4.502 60.688-6.502-.574-90.674M191.04 247.065l-.403-125.149'
         stroke='var(--chakra-colors-secondary)'
@@ -351,10 +350,12 @@ const Icon = createIcon({
         d='m213.164 134.693.107 24.31-1.414.03M233.952 159.282l-.009-1.784M233.826 136.11l-.003-.569M217.332 134.664l-2.147-2.769-1.413.097M217.443 158.992l-2.124 2.959-2.048-2.949'
         stroke='currentColor'
       />
-    </svg>
-  )
+    </>
+  ),
+  defaultProps: {
+    color: 'primary',
+    fill: 'none',
+    h,
+    w
+  }
 });
-
-export const GopherDownloads: React.FC<IconProps> = props => (
-  <Icon h={h} w={w} color='primary' {...props} />
-);
