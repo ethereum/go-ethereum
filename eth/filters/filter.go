@@ -111,7 +111,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if f.end != rpc.PendingBlockNumber.Int64() {
 			return nil, errors.New("invalid block range")
 		}
-		return f.pendingLogs()
+		return f.pendingLogs(), nil
 	}
 	// Figure out the limits of the filter range
 	header, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -172,10 +172,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	rest, err := f.unindexedLogs(ctx, end)
 	logs = append(logs, rest...)
 	if pending {
-		pendingLogs, err := f.pendingLogs()
-		if err != nil {
-			return nil, err
-		}
+		pendingLogs := f.pendingLogs()
 		logs = append(logs, pendingLogs...)
 	}
 	return logs, err
@@ -294,7 +291,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 }
 
 // pendingLogs returns the logs matching the filter criteria within the pending block.
-func (f *Filter) pendingLogs() ([]*types.Log, error) {
+func (f *Filter) pendingLogs() []*types.Log {
 	block, receipts := f.sys.backend.PendingBlockAndReceipts()
 	if block == nil {
 		return nil, errors.New("pending state not available")
@@ -304,9 +301,9 @@ func (f *Filter) pendingLogs() ([]*types.Log, error) {
 		for _, r := range receipts {
 			unfiltered = append(unfiltered, r.Logs...)
 		}
-		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics), nil
+		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 	}
-	return nil, nil
+	return nil
 }
 
 func includes(addresses []common.Address, a common.Address) bool {
