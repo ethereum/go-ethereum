@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -127,6 +128,8 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	lock sync.Mutex
 }
 
 // New creates a new state from a given trie.
@@ -606,6 +609,9 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 }
 
 func (s *StateDB) setStateObject(object *stateObject) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.stateObjects[object.Address()] = object
 }
 
@@ -722,7 +728,9 @@ func (s *StateDB) Copy() *StateDB {
 			// Even though the original object is dirty, we are not copying the journal,
 			// so we need to make sure that any side-effect the journal would have caused
 			// during a commit (or similar op) is already applied to the copy.
+			state.lock.Lock()
 			state.stateObjects[addr] = object.deepCopy(state)
+			state.lock.Unlock()
 
 			state.stateObjectsDirty[addr] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
 			state.stateObjectsPending[addr] = struct{}{} // Mark the copy pending to force external (account) commits
@@ -734,13 +742,17 @@ func (s *StateDB) Copy() *StateDB {
 	// of copies.
 	for addr := range s.stateObjectsPending {
 		if _, exist := state.stateObjects[addr]; !exist {
+			state.lock.Lock()
 			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
+			state.lock.Unlock()
 		}
 		state.stateObjectsPending[addr] = struct{}{}
 	}
 	for addr := range s.stateObjectsDirty {
 		if _, exist := state.stateObjects[addr]; !exist {
+			state.lock.Lock()
 			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
+			state.lock.Unlock()
 		}
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
