@@ -206,8 +206,7 @@ func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) e
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)
 	data, _ := rlp.EncodeToBytes(ChtNode{hash, td})
-	c.trie.Update(encNumber[:], data)
-	return nil
+	return c.trie.Update(encNumber[:], data)
 }
 
 // Commit implements core.ChainIndexerBackend
@@ -450,10 +449,15 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 
 		decompSize += uint64(len(decomp))
 		compSize += uint64(len(comp))
+
+		var terr error
 		if len(comp) > 0 {
-			b.trie.Update(encKey[:], comp)
+			terr = b.trie.Update(encKey[:], comp)
 		} else {
-			b.trie.Delete(encKey[:])
+			terr = b.trie.Delete(encKey[:])
+		}
+		if terr != nil {
+			return terr
 		}
 	}
 	root, nodes := b.trie.Commit(false)

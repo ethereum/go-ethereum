@@ -62,7 +62,7 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 // This is internal, do not use.
 type TrieHasher interface {
 	Reset()
-	Update([]byte, []byte)
+	Update([]byte, []byte) error
 	Hash() common.Hash
 }
 
@@ -93,6 +93,9 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	// StackTrie requires values to be inserted in increasing hash order, which is not the
 	// order that `list` provides hashes in. This insertion sequence ensures that the
 	// order is correct.
+	//
+	// The error returned by hasher is omitted because hasher will produce an incorrect
+	// hash in case any error occurs.
 	var indexBuf []byte
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
