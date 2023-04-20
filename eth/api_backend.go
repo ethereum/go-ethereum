@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -349,6 +350,10 @@ func (b *EthAPIBackend) ExtRPCEnabled() bool {
 
 func (b *EthAPIBackend) UnprotectedAllowed() bool {
 	return b.allowUnprotectedTxs
+}
+
+func (b *EthAPIBackend) MetroGRPCEndpoint() string {
+	return fmt.Sprintf("%s:%d", b.eth.config.MetroGRPCHost, b.eth.config.MetroGRPCPort)
 }
 
 func (b *EthAPIBackend) RPCGasCap() uint64 {

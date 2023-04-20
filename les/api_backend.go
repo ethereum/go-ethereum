@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -290,6 +291,10 @@ func (b *LesApiBackend) ExtRPCEnabled() bool {
 
 func (b *LesApiBackend) UnprotectedAllowed() bool {
 	return b.allowUnprotectedTxs
+}
+
+func (b *LesApiBackend) MetroGRPCEndpoint() string {
+	return fmt.Sprintf("%s:%d", b.eth.config.MetroGRPCHost, b.eth.config.MetroGRPCPort)
 }
 
 func (b *LesApiBackend) RPCGasCap() uint64 {

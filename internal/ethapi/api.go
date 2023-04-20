@@ -1694,12 +1694,19 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 
+	// save transaction in geth mempool as well, so things like forge can look it up
+	if err := b.SendTx(ctx, tx); err != nil {
+		return common.Hash{}, err
+	}
+
 	// send to metro instead of eth mempool
 	txBytes, err := tx.MarshalBinary()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if err := submitMetroTransaction(txBytes); err != nil {
+
+	metroAPI := NewMetroAPI(b.MetroGRPCEndpoint())
+	if err := metroAPI.SubmitTransaction(txBytes); err != nil {
 		return common.Hash{}, err
 	}
 

@@ -90,6 +90,10 @@ var Defaults = Config{
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
 	RPCTxFeeCap:             1, // 1 ether
+
+	// Metro GRPC
+	MetroGRPCHost: "localhost",
+	MetroGRPCPort: 9090,
 }
 
 func init() {
@@ -207,6 +211,10 @@ type Config struct {
 
 	// OverrideShanghai (TODO: remove after the fork)
 	OverrideShanghai *uint64 `toml:",omitempty"`
+
+	// Metro GRPC Host and Port
+	MetroGRPCHost string `toml:",omitempty"`
+	MetroGRPCPort int    `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
