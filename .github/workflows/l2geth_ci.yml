@@ -1,6 +1,30 @@
-on: [pull_request]
-name: Continuous Integration
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - develop
+      - alpha
+  pull_request:
+    branches:
+      - main
+      - staging
+      - develop
+      - alpha
+name: CI
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Build
+      run: |
+        make geth
   check:
     runs-on: ubuntu-latest
     steps:
@@ -14,12 +38,6 @@ jobs:
       run: |
         rm -rf $HOME/.cache/golangci-lint
         make lint
-    - name: Test
-      run: |
-        go get ./...
-        make test
-    - name: Upload coverage report
-      run: bash <(curl -s https://codecov.io/bash)
   goimports-lint:
     runs-on: ubuntu-latest
     steps:
@@ -39,3 +57,18 @@ jobs:
         if [ -n "$(git status --porcelain)" ]; then
           exit 1
         fi
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: |
+        go get ./...
+        make test
+    - name: Upload coverage report
+      run: bash <(curl -s https://codecov.io/bash)
