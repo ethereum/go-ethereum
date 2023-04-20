@@ -580,7 +580,9 @@ func (w *worker) mainLoop(ctx context.Context) {
 		select {
 		case req := <-w.newWorkCh:
 			//nolint:contextcheck
-			w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			if w.isRunning() {
+				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			}
 
 		case req := <-w.getWorkCh:
 			//nolint:contextcheck
