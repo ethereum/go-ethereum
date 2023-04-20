@@ -15,10 +15,7 @@ ZK-Rollup adapts the Go Ethereum to run as Layer 2 Sequencer. The codebase is ba
 
 ### ZKTrie Storage
 
-Another implement for storage trie, base on patricia merkle tree, has been induced. It is feasible to zk proving in the storage part. It is specified as a flag
-in gensis, set `config.zktrie` to true for enabling it. Using `genesis_zktrie.json` as an example to create a L2 chain with zktrie sotrage:
-
-> geth init \<repo root\>/genesis_zktrie.json
+Another implement for storage trie, base on patricia merkle tree, has been induced. It is feasible to zk proving in the storage part. It is specified as a flag in gensis, set `config.scroll.useZktrie` to true for enabling it.
 
 Notice current the snapshot would be disabled by the zktrie implement.
 
@@ -78,7 +75,7 @@ This command will:
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
  * Start up `geth`'s built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://web3js.readthedocs.io/)
+   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://web3js.readthedocs.io/) 
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
    as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/rpc/server).
    This tool is optional and if you leave it out you can always attach to an already running
