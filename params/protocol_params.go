@@ -160,6 +160,7 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
+	BlobTxDataGasPerBlob             = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
 	BlobTxMinDataGasprice            = 1       // Minimum gas price for data blobs
 	BlobTxDataGaspriceUpdateFraction = 2225652 // Controls the maximum rate of change for data gas price
 )

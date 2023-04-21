@@ -51,7 +51,7 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 		}
 
 		//  rpcTransaction
-		rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, nil, config)
+		rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, nil, config)
 		if data, err := json.Marshal(rpcTx); err != nil {
 			t.Fatalf("test %d: marshalling failed; %v", i, err)
 		} else if err = tx2.UnmarshalJSON(data); err != nil {
