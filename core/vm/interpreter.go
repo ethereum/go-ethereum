@@ -102,7 +102,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, initialGas uint64, refundQuotient uint64, isRefunded bool) (ret []byte, refunded bool, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -142,6 +142,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		gasCopy uint64 // for EVMLogger to log gas remaining before execution
 		logged  bool   // deferred EVMLogger should ignore already logged steps
 		res     []byte // result of the opcode execution function
+		rfd     bool   // result of the gas been refunded
 		debug   = in.evm.Config.Tracer != nil
 	)
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
@@ -184,6 +185,20 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		if !contract.UseGas(cost) {
+			//If there has been no refund yet and an out of gas situation occurs
+			//grant a merciful opportunity here by releasing the allowed gas refund 
+			//in order to increase the chances of success as much as possible.
+			if(!isRefunded){
+				refund :=  (initialGas - contract.gas) / refundQuotient
+				if refund > in.vm.StateDB.state.GetRefund() {
+					refund = in.vm.StateDB.state.GetRefund()
+				}
+				contract.gas += refund
+				rfd = true
+				!contract.UseGas(cost){
+					return nil, ErrOutOfGas
+				}
+			}
 			return nil, ErrOutOfGas
 		}
 		if operation.dynamicGas != nil {
@@ -210,6 +225,20 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
+				//If there has been no refund yet and an out of gas situation occurs
+				//grant a merciful opportunity here by releasing the allowed gas refund 
+				//in order to increase the chances of success as much as possible.
+				if(!isRefunded){
+					refund :=  (initialGas - contract.gas) / refundQuotient
+					if refund > in.vm.StateDB.state.GetRefund() {
+						refund = in.vm.StateDB.state.GetRefund()
+					}
+					contract.gas += refund
+					rfd = true
+					!contract.UseGas(dynamicCost){
+						return nil, ErrOutOfGas
+					}
+				}
 				return nil, ErrOutOfGas
 			}
 			// Do tracing before memory expansion
@@ -236,5 +265,5 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		err = nil // clear stop token error
 	}
 
-	return res, err
+	return res, rfd, err
 }
