@@ -120,20 +120,16 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 	return tx
 }
 
-func blobTx(nonce uint64, gaslimit uint64, gasFee uint64, tip uint64, dataGasFee uint64, key *ecdsa.PrivateKey) *types.Transaction {
+func blobTx(nonce uint64, gaslimit uint64, gasFee uint64, tip uint64, dataGasFee uint64, numBlobs int, key *ecdsa.PrivateKey) *types.Transaction {
 	// Need tx wrap data that will pass blob verification
 	blobData := &types.BlobTxWrapData{
-		BlobKzgs: []types.KZGCommitment{},
-		Blobs:    []types.Blob{},
+		Blobs: make([]types.Blob, numBlobs),
 	}
-	var hashes []common.Hash
-	for i := 0; i < len(blobData.BlobKzgs); i++ {
-		hashes = append(hashes, blobData.BlobKzgs[i].ComputeVersionedHash())
-	}
-	_, _, proofs, err := blobData.Blobs.ComputeCommitmentsAndProofs()
+	commitments, hashes, proofs, err := blobData.Blobs.ComputeCommitmentsAndProofs()
 	if err != nil {
 		panic(err)
 	}
+	blobData.BlobKzgs = commitments
 	blobData.Proofs = proofs
 
 	address := types.AddressSSZ(common.Address{})
@@ -2293,22 +2289,22 @@ func TestReplacementDynamicFee(t *testing.T) {
 			t.Fatalf("replacement %s event firing failed: %v", stage, err)
 		}
 		// 12.  Send initial tx => accept
-		tx = blobTx(nonce, 100000, uint64(2), uint64(1), uint64(100), key2)
+		tx = blobTx(nonce, 100000, uint64(2), uint64(1), uint64(100), 1, key2)
 		if err := pool.addRemoteSync(tx); err != nil {
 			t.Fatalf("failed to add original cheap %s transaction: %v", stage, err)
 		}
 		// 13.  Bump cap & tip, but don't bump datagasfee => discard
-		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(100), key2)
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(100), 1, key2)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 14.  Bump cap, tip, & insufficiently bump datagasfee => discard
-		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(109), key2)
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(109), 1, key2)
 		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
 			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
 		}
 		// 15.  Bump cap, tip, & datagasfee => accept
-		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(110), key2)
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(110), 1, key2)
 		if err := pool.AddRemote(tx); err != nil {
 			t.Fatalf("failed to replace cheap %s blob tx: %v", stage, err)
 		}
@@ -2511,6 +2507,23 @@ func TestSlotCount(t *testing.T) {
 	bigTx := pricedDataTransaction(0, 0, big.NewInt(0), key, uint64(10*txSlotSize))
 	if slots := numSlots(bigTx); slots != 11 {
 		t.Fatalf("big transactions slot count mismatch: have %d want %d", slots, 11)
+	}
+}
+
+func TestBlobTransactionLimits(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPoolWithConfig(eip1559Config)
+	defer pool.Stop()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+
+	tx := blobTx(0, 100000, uint64(2), uint64(1), uint64(100), 4, key)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add blob transaction with max blobs: %v", err)
+	}
+	tx = blobTx(1, 100000, uint64(2), uint64(1), uint64(100), 5, key)
+	if err := pool.addRemoteSync(tx); err == nil {
+		t.Fatalf("added blob transaction with too many blobs")
 	}
 }
 
