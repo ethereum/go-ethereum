@@ -423,18 +423,13 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 
 // GetPayloadV3 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	pl, err := api.GetPayloadV2(payloadID)
+	pl, err := api.localBlocks.getPayloadWithBlobsBundle(payloadID)
 	if err != nil {
 		return nil, err
 	}
-	data, err := api.localBlocks.getBlobsBundle(payloadID)
-	if err != nil {
-		return nil, err
-	}
-	if data == nil {
+	if pl == nil {
 		return nil, engine.UnknownPayload
 	}
-	pl.BlobsBundle = data
 	return pl, nil
 }
 

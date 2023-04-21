@@ -88,8 +88,9 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 	return nil
 }
 
-// get retrieves a previously stored blobs bundle item or nil if it does not exist.
-func (q *payloadQueue) getBlobsBundle(id engine.PayloadID) (*engine.BlobsBundle, error) {
+// get retrieves a previously stored payload along with its blobs bundle, or nil if it does not
+// exist.
+func (q *payloadQueue) getPayloadWithBlobsBundle(id engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -98,7 +99,7 @@ func (q *payloadQueue) getBlobsBundle(id engine.PayloadID) (*engine.BlobsBundle,
 			return nil, nil // no more items
 		}
 		if item.id == id {
-			return item.payload.ResolveToBlobsBundle()
+			return item.payload.ResolveWithBlobsBundle()
 		}
 	}
 	return nil, nil

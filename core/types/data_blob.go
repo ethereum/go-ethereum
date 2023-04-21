@@ -346,8 +346,11 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if !ok {
 		return fmt.Errorf("expected signed blob tx, got %T", inner)
 	}
-	l1 := len(b.BlobKzgs)
-	l2 := len(blobTx.Message.BlobVersionedHashes)
+	l1 := len(blobTx.Message.BlobVersionedHashes)
+	if l1 == 0 {
+		return errors.New("blob transactions must have at least one blob")
+	}
+	l2 := len(b.BlobKzgs)
 	l3 := len(b.Blobs)
 	l4 := len(b.Proofs)
 	if l1 != l2 || l1 != l3 || l1 != l4 {

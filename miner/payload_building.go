@@ -125,21 +125,29 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
-// ResolveToBlobsBundle returns the latest built blobs bundle payload and also terminates the
-// background thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) ResolveToBlobsBundle() (*engine.BlobsBundle, error) {
+// ResolveWithBlobsBundle returns the latest built payload, including its blobs bundle, and also
+// terminates the background thread for updating payload. It's safe to be called multiple times.
+func (payload *Payload) ResolveWithBlobsBundle() (*engine.ExecutionPayloadEnvelope, error) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
+	var err error
 	select {
 	case <-payload.stop:
 	default:
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return engine.BlockToBlobData(payload.full)
+		pl := engine.BlockToExecutableData(payload.full, payload.fullFees)
+		pl.BlobsBundle, err = engine.BlockToBlobData(payload.full)
+		if err != nil {
+			return nil, err
+		}
+		return pl, nil
 	}
-	return engine.BlockToBlobData(payload.empty)
+	pl := engine.BlockToExecutableData(payload.empty, big.NewInt(0))
+	pl.BlobsBundle, err = engine.BlockToBlobData(payload.empty)
+	return pl, err
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
