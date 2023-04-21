@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 	"github.com/kylelemons/godebug/diff"
 )
 
@@ -99,6 +100,8 @@ func TestDeriveFields(t *testing.T) {
 	to3 := common.HexToAddress("0x3")
 	to4 := common.HexToAddress("0x4")
 	to5 := common.HexToAddress("0x5")
+	to6 := common.HexToAddress("0x6")
+	to7 := common.HexToAddress("0x7")
 	txs := Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
@@ -127,19 +130,39 @@ func TestDeriveFields(t *testing.T) {
 			Value:     big.NewInt(4),
 			Gas:       4,
 			GasTipCap: big.NewInt(44),
-			GasFeeCap: big.NewInt(1045),
+			GasFeeCap: big.NewInt(1044),
 		}),
 		NewTx(&DynamicFeeTx{
 			To:        &to5,
 			Nonce:     5,
 			Value:     big.NewInt(5),
 			Gas:       5,
-			GasTipCap: big.NewInt(56),
+			GasTipCap: big.NewInt(55),
 			GasFeeCap: big.NewInt(1055),
+		}),
+		// EIP-4844 transactions.
+		NewTx(&BlobTx{
+			To:         &to6,
+			Nonce:      6,
+			Value:      uint256.NewInt(6),
+			Gas:        6,
+			GasTipCap:  uint256.NewInt(66),
+			GasFeeCap:  uint256.NewInt(1066),
+			BlobFeeCap: uint256.NewInt(100066),
+		}),
+		NewTx(&BlobTx{
+			To:         &to7,
+			Nonce:      7,
+			Value:      uint256.NewInt(7),
+			Gas:        7,
+			GasTipCap:  uint256.NewInt(77),
+			GasFeeCap:  uint256.NewInt(1077),
+			BlobFeeCap: uint256.NewInt(100077),
 		}),
 	}
 
 	blockNumber := big.NewInt(1)
+	blockTime := uint64(2)
 	blockHash := common.BytesToHash([]byte{0x03, 0x14})
 
 	// Create the corresponding receipts
@@ -246,12 +269,38 @@ func TestDeriveFields(t *testing.T) {
 			BlockNumber:       blockNumber,
 			TransactionIndex:  4,
 		},
+		&Receipt{
+			Type:              BlobTxType,
+			PostState:         common.Hash{6}.Bytes(),
+			CumulativeGasUsed: 21,
+			Logs:              []*Log{},
+			// derived fields:
+			TxHash:            txs[5].Hash(),
+			GasUsed:           6,
+			EffectiveGasPrice: big.NewInt(1066),
+			BlockHash:         blockHash,
+			BlockNumber:       blockNumber,
+			TransactionIndex:  5,
+		},
+		&Receipt{
+			Type:              BlobTxType,
+			PostState:         common.Hash{7}.Bytes(),
+			CumulativeGasUsed: 28,
+			Logs:              []*Log{},
+			// derived fields:
+			TxHash:            txs[6].Hash(),
+			GasUsed:           7,
+			EffectiveGasPrice: big.NewInt(1077),
+			BlockHash:         blockHash,
+			BlockNumber:       blockNumber,
+			TransactionIndex:  6,
+		},
 	}
 
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), basefee, txs)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
