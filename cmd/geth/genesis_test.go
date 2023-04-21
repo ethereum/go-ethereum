@@ -146,8 +146,8 @@ func TestCustomBackend(t *testing.T) {
 		return nil
 	}
 	for i, tt := range []backendTest{
-		{ // When not specified, it should default to leveldb
-			execArgs:   []string{"--db.engine", "leveldb"},
+		{ // When not specified, it should default to pebble
+			execArgs:   []string{"--db.engine", "pebble"},
 			execExpect: "0x0000000000001338",
 		},
 		{ // Explicit leveldb
