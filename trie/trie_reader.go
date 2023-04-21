@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Reader wraps the Node and NodeBlob method of a backing trie store.
+// Reader wraps the Node method of a backing trie store.
 type Reader interface {
 	// Node retrieves the RLP-encoded trie node blob with the provided trie
 	// identifier, node path and the corresponding node hash. No error will
