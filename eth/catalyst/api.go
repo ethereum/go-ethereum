@@ -92,7 +92,6 @@ var caps = []string{
 	"engine_newPayloadV3",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
-	"engine_getBlobsBundleV1",
 }
 
 type ConsensusAPI struct {
@@ -424,12 +423,10 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 
 // GetPayloadV3 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	return api.GetPayloadV2(payloadID)
-}
-
-// GetBlobsBundleV1 returns a bundle of all blob and corresponding KZG commitments by payload id
-func (api *ConsensusAPI) GetBlobsBundleV1(payloadID engine.PayloadID) (*engine.BlobsBundle, error) {
-	log.Trace("Engine API request received", "method", "GetBlobsBundle")
+	pl, err := api.GetPayloadV2(payloadID)
+	if err != nil {
+		return nil, err
+	}
 	data, err := api.localBlocks.getBlobsBundle(payloadID)
 	if err != nil {
 		return nil, err
@@ -437,7 +434,8 @@ func (api *ConsensusAPI) GetBlobsBundleV1(payloadID engine.PayloadID) (*engine.B
 	if data == nil {
 		return nil, engine.UnknownPayload
 	}
-	return data, nil
+	pl.BlobsBundle = data
+	return pl, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.

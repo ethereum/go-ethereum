@@ -42,11 +42,10 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
-// BlobsBundle holds the blobs of an execution payload, to be retrieved separately
+// BlobsBundle holds the blobs of an execution payload
 type BlobsBundle struct {
-	BlockHash common.Hash           `json:"blockHash"     gencodec:"required"`
-	KZGs      []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
-	Blobs     []types.Blob          `json:"blobs"      gencodec:"required"`
+	KZGs  []types.KZGCommitment `json:"kzgs"  gencodec:"required"`
+	Blobs []types.Blob          `json:"blobs" gencodec:"required"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
@@ -87,8 +86,9 @@ type executableDataMarshaling struct {
 //go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
 
 type ExecutionPayloadEnvelope struct {
-	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
-	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+	ExecutionPayload *ExecutableData `json:"executionPayload" gencodec:"required"`
+	BlockValue       *big.Int        `json:"blockValue"       gencodec:"required"`
+	BlobsBundle      *BlobsBundle    `json:"blobsBundle"      gencodec:"omitempty"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -248,18 +248,16 @@ type ExecutionPayloadBodyV1 struct {
 }
 
 func BlockToBlobData(block *types.Block) (*BlobsBundle, error) {
-	blockHash := block.Hash()
 	blobsBundle := &BlobsBundle{
-		BlockHash: blockHash,
-		Blobs:     []types.Blob{},
-		KZGs:      []types.KZGCommitment{},
+		Blobs: []types.Blob{},
+		KZGs:  []types.KZGCommitment{},
 	}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
 			versionedHashes, kzgs, blobs, proofs := tx.BlobWrapData()
 			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) || len(blobs) != len(proofs) {
 				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
-					" / versioned hashes (%d) / proofs (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes), len(proofs))
+					" / versioned hashes (%d) / proofs (%d)", i, block.Hash(), len(blobs), len(kzgs), len(versionedHashes), len(proofs))
 			}
 
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
