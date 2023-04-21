@@ -205,6 +205,7 @@ type StateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
+	isRefunded   bool
 }
 
 // NewStateTransition initialises and returns a new state transition object.
@@ -366,21 +367,31 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
+		ejectionRefundQuotient uint64 // To handle cases where the gas limit has been exhausted, but the refund might still be sufficient to support the operation.
 	)
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
+		if !rules.IsLondon {
+			ejectionRefundQuotient = params.RefundQuotient
+		} else {
+			ejectionRefundQuotient = params.RefundQuotientEIP3529
+		}
+		ret, st.gasRemaining, st.isRefunded, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value, st.initialGas, ejectionRefundQuotient, st.isRefunded)
 	}
-
-	if !rules.IsLondon {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
-		st.refundGas(params.RefundQuotient)
+	// Refund only once per transaction.
+    if !st.isRefunded{
+		if !rules.IsLondon {
+			// Before EIP-3529: refunds were capped to gasUsed / 2
+			st.refundGas(params.RefundQuotient)
+		} else {
+			// After EIP-3529: refunds are capped to gasUsed / 5
+			st.refundGas(params.RefundQuotientEIP3529)
+		}
 	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
-		st.refundGas(params.RefundQuotientEIP3529)
+		st.handleEjectionRefundGas()
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -412,6 +423,16 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	}
 	st.gasRemaining += refund
 
+	// Return ETH for remaining gas, exchanged at the original rate.
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
+	st.state.AddBalance(st.msg.From, remaining)
+
+	// Also return remaining gas to the block gas counter so it is
+	// available for the next transaction.
+	st.gp.AddGas(st.gasRemaining)
+}
+
+func (st *StateTransition) handleEjectionRefundGas(){
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
 	st.state.AddBalance(st.msg.From, remaining)
