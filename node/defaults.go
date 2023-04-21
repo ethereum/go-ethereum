@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -63,6 +64,13 @@ var DefaultConfig = Config{
 		NAT:        nat.Any(),
 	},
 	DBEngine: "pebble",
+}
+
+func init() {
+	// Fall back to leveldb as the default on unsupported Pebble platforms
+	if !rawdb.PebbleEnabled {
+		DefaultConfig.DBEngine = "leveldb"
+	}
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other
