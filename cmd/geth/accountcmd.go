@@ -189,8 +189,8 @@ nodes.
 	}
 )
 
-// makeKeyStore creates a keystore with given datadir and keystore dir
-func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
+// getAccountConfig gets accountcmd related config options
+func getAccountConfig(ctx *cli.Context) node.Config {
 	cfg := node.DefaultConfig
 
 	// Apply flags.
@@ -202,9 +202,15 @@ func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
 		cfg.UseLightweightKDF = ctx.Bool(utils.LightKDFFlag.Name)
 	}
 
+	return cfg
+}
+
+// makeKeyStore creates a keystore with given datadir and keystore dir
+func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
+	cfg := getAccountConfig(ctx)
 	keydir, err := cfg.KeyDirConfig()
 	if err != nil {
-		utils.Fatalf("Failed to geth the keystore directory: %v", err)
+		utils.Fatalf("Failed to get the keystore directory: %v", err)
 	}
 
 	scryptN := keystore.StandardScryptN
@@ -284,21 +290,14 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	cfg := gethConfig{Node: defaultNodeConfig()}
-	// Load config file.
-	if file := ctx.String(configFileFlag.Name); file != "" {
-		if err := loadConfig(file, &cfg); err != nil {
-			utils.Fatalf("%v", err)
-		}
-	}
-	utils.SetNodeConfig(ctx, &cfg.Node)
-	keydir, err := cfg.Node.KeyDirConfig()
+	cfg := getAccountConfig(ctx)
+	keydir, err := cfg.KeyDirConfig()
 	if err != nil {
-		utils.Fatalf("Failed to read configuration: %v", err)
+		utils.Fatalf("Failed to get the keystore directory: %v", err)
 	}
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
-	if cfg.Node.UseLightweightKDF {
+	if cfg.UseLightweightKDF {
 		scryptN = keystore.LightScryptN
 		scryptP = keystore.LightScryptP
 	}
