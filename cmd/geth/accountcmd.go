@@ -198,6 +198,9 @@ func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
 	if ctx.IsSet(utils.KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.String(utils.KeyStoreDirFlag.Name)
 	}
+	if ctx.IsSet(utils.LightKDFFlag.Name) {
+		cfg.UseLightweightKDF = ctx.Bool(utils.LightKDFFlag.Name)
+	}
 
 	keydir, err := cfg.KeyDirConfig()
 	if err != nil {
@@ -206,6 +209,10 @@ func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
 
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
+	if cfg.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
 	ks := keystore.NewKeyStore(keydir, scryptN, scryptP)
 
 	return ks
