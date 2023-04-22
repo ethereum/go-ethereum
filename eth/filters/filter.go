@@ -99,7 +99,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		logs []*types.Log
 		err  error
 	)
-	logChan, errChan := f.LogsAsync(ctx)
+	logChan, errChan := f.logsAsync(ctx)
 LOOP:
 	for {
 		select {
@@ -114,9 +114,9 @@ LOOP:
 	return logs, err
 }
 
-// LogsAsync retrieves logs that match the filter criteria asynchronously,
+// logsAsync retrieves logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) LogsAsync(ctx context.Context) (chan *types.Log, chan error) {
+func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error) {
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)

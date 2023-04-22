@@ -205,7 +205,7 @@ func (sub *subscription) backfilling(ev *EventSystem, crit ethereum.FilterQuery)
 		}
 		filter := ev.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
 
-		logChan, errChan := filter.LogsAsync(ctx)
+		logChan, errChan := filter.logsAsync(ctx)
 	LOOP:
 		for {
 			select {
