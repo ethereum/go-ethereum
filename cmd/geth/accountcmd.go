@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/urfave/cli/v2"
 )
 
@@ -188,14 +189,32 @@ nodes.
 	}
 )
 
+// makeKeyStore creates a keystore with given datadir and keystore dir
+func makeKeyStore(ctx *cli.Context) *keystore.KeyStore {
+	cfg := node.DefaultConfig
+
+	// Apply flags.
+	utils.SetDataDir(ctx, &cfg)
+	if ctx.IsSet(utils.KeyStoreDirFlag.Name) {
+		cfg.KeyStoreDir = ctx.String(utils.KeyStoreDirFlag.Name)
+	}
+
+	keydir, err := cfg.KeyDirConfig()
+	if err != nil {
+		utils.Fatalf("Failed to geth the keystore directory: %v", err)
+	}
+
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	ks := keystore.NewKeyStore(keydir, scryptN, scryptP)
+
+	return ks
+}
+
 func accountList(ctx *cli.Context) error {
-	stack, _ := makeSlimNode(ctx)
-	var index int
-	for _, wallet := range stack.AccountManager().Wallets() {
-		for _, account := range wallet.Accounts() {
-			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
-			index++
-		}
+	ks := makeKeyStore(ctx)
+	for index, account := range ks.Accounts() {
+		fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
 	}
 	return nil
 }
@@ -300,12 +319,7 @@ func accountUpdate(ctx *cli.Context) error {
 	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	stack, _ := makeSlimNode(ctx)
-	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
-	if len(backends) == 0 {
-		utils.Fatalf("Keystore is not available")
-	}
-	ks := backends[0].(*keystore.KeyStore)
+	ks := makeKeyStore(ctx)
 
 	for _, addr := range ctx.Args().Slice() {
 		account, oldPassword := unlockAccount(ks, addr, 0, nil)
@@ -327,14 +341,9 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	stack, _ := makeSlimNode(ctx)
+	ks := makeKeyStore(ctx)
 	passphrase := utils.GetPassPhraseWithList("", false, 0, utils.MakePasswordList(ctx))
 
-	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
-	if len(backends) == 0 {
-		utils.Fatalf("Keystore is not available")
-	}
-	ks := backends[0].(*keystore.KeyStore)
 	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -352,14 +361,9 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	stack, _ := makeSlimNode(ctx)
+	ks := makeKeyStore(ctx)
 	passphrase := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
-	if len(backends) == 0 {
-		utils.Fatalf("Keystore is not available")
-	}
-	ks := backends[0].(*keystore.KeyStore)
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
