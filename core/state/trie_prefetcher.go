@@ -40,6 +40,8 @@ type triePrefetcher struct {
 	fetches  map[string]Trie        // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
+	// what are these metrics for?
+
 	deliveryMissMeter metrics.Meter
 	accountLoadMeter  metrics.Meter
 	accountDupMeter   metrics.Meter

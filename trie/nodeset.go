@@ -94,6 +94,9 @@ func (n *nodeWithPrev) memorySize(pathlen int) int {
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
 	owner   common.Hash            // the identifier of the trie
+	// nodes is a mapping to a memoryNode
+	// what does the string represent? just a path?
+	// we need to keep track of the path, it is important
 	nodes   map[string]*memoryNode // the set of dirty nodes(inserted, updated, deleted)
 	leaves  []*leaf                // the list of dirty leaves
 	updates int                    // the count of updated and inserted nodes
@@ -208,6 +211,7 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
+// isn't actually owning, just changing the parent pointer?
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	_, present := set.sets[other.owner]
 	if present {
@@ -216,3 +220,57 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	set.sets[other.owner] = other
 	return nil
 }
+// <------ MY FUNCTIONS ----->
+
+// gets the size of all the nodes
+func (set *MergedNodeSet) Size() (int, int) {
+	var updates := 0
+	var deleted := 0
+	for _, set := range sets {
+		numUpdated, numDeleted := set.Size()
+		updates += numUpdated
+		deleted += numDeleted
+	}
+
+	return updates, deleted
+}
+
+// idea: any state that is touched will have to be submitted back onto chain
+// could we optimize by only submitting nodes that have a different state than original? would need to store a copy of the original state 
+// and then iterate through all dirty nodes and compare.....
+// possible, but we should ask
+
+// ALSO: Super inefficient. O(n) time for each operation vs O(1)
+// IDK how else you would merge two sets.
+func (set *MergedNodeSet) Combine(other *NodeSet) error {
+	_, present := set.sets[other.owner]
+	if present == nil {
+		set.sets[other.owner] = other
+		return nil
+	}
+	for path, node := range other.nodes {
+		if exists := set.sets[other.owner].nodes[path]; exists == nil {
+			set.sets[other.owner].nodes[path] = node
+		}
+	}
+	return nil
+}
+
+/*
+func (set *MergedNodeSet) CombineWithOptimization(other *nodeSet, copy *nodeSet) {
+	_, present := set.sets[other.owner]
+	if present == nil {
+		set.sets[other.owner] = other
+		return
+	}
+
+	for path, node := range other.nodes {
+		if exists := set.sets[other.owner].nodes[path]; exists == nil {
+			set.sets[other.owner].nodes[path] = node;
+		}
+		if node == copy.nodes[path] {
+			set.sets[other.owner].nodes[path] = nil;
+		}
+	}
+}
+*/

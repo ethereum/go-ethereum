@@ -48,6 +48,7 @@ func (n *proofList) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// lol
 func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
@@ -74,7 +75,11 @@ type StateDB struct {
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects         map[common.Address]*stateObject
+
+	// maps from an address to some kind of struct
 	stateObjectsPending  map[common.Address]struct{} // State objects finalized but not yet written to the trie
+
+	// IMPORANT
 	stateObjectsDirty    map[common.Address]struct{} // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]struct{} // State objects destructed in the block
 
@@ -195,6 +200,7 @@ func (s *StateDB) Error() error {
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
+	// what does the journal do?
 	s.journal.append(addLogChange{txhash: s.thash})
 
 	log.TxHash = s.thash
@@ -956,6 +962,12 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
 }
 
+// keeps track of the nodes in each account that get modified. If a node is modified twice, it is updated, not re-added
+var globalNodes = trie.NewMergedNodeSet()
+// number of commits/blocks
+var counter := 0
+// number of blocks after which we reset
+var BLOCK_DELTA = 1
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
@@ -982,6 +994,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
+			// TODO: do we just care about the length? or what exactly we are commiting?
+			// we want the size of the nodes. these are the ones of each trie that get committed
 			set, err := obj.commitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
@@ -991,6 +1005,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
 				}
+				// TODO: With the optimization, the size of this set is not necessarily the size that we need...
 				updates, deleted := set.Size()
 				storageTrieNodesUpdated += updates
 				storageTrieNodesDeleted += deleted
@@ -1022,6 +1037,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if err := nodes.Merge(set); err != nil {
 			return common.Hash{}, err
 		}
+		// TODO: can we use this size???
 		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 	}
 	if metrics.EnabledExpensive {
@@ -1071,6 +1087,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if root != origin {
 		start := time.Now()
+		// TODO: Where nodes shows up again, we update it in the trie database.
 		if err := s.db.TrieDB().Update(nodes); err != nil {
 			return common.Hash{}, err
 		}
@@ -1078,6 +1095,23 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if metrics.EnabledExpensive {
 			s.TrieDBCommits += time.Since(start)
 		}
+	}
+	// this may always throw an error...
+	// because the same globalNodes being used across same tries, how do we update for each individual trie??
+	if err := globalNodes.Combine(nodes); err != nil {
+		return common.Hash{}, err
+	}
+	counter = counter + 1
+	if counter == BLOCK_DELTA {
+		counter = 0;
+		// TODO: write the globalNodes to a csv file
+		
+		// get the size
+		globalUpdates, globalDeletes = globalNodes.Size()
+		// print stuff
+		fmt.Println("Global Updates: ", globalUpdates)
+		fmt.Println("Global Deletes: ", globalDeletes)
+		globalNodes = trie.NewMergedNodeSet()
 	}
 	return root, nil
 }

@@ -33,10 +33,14 @@ import (
 
 type Code []byte
 
+// basically adding a method to Code type
+// can do code.String()
 func (c Code) String() string {
 	return string(c) //strings.Join(Disassemble(c), " ")
 }
 
+// common.Hash is just 32 byte code representing the Keccak hash
+// this is a map with key common.Hash and value common.Hash
 type Storage map[common.Hash]common.Hash
 
 func (s Storage) String() (str string) {
@@ -61,9 +65,10 @@ func (s Storage) Copy() Storage {
 // Account values can be accessed and modified through the object.
 // Finally, call commitTrie to write the modified storage trie into a database.
 type stateObject struct {
+	// 20 byte address of ethereum
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
-	data     types.StateAccount
+	data     types.StateAccount // contains nonce, balance, hash of merkle root, and code hash
 	db       *StateDB
 
 	// Write caches.
@@ -72,6 +77,8 @@ type stateObject struct {
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
+
+	/* IMPORTANT */
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
 
 	// Cache flags.
@@ -118,6 +125,7 @@ func (s *stateObject) markSuicided() {
 	s.suicided = true
 }
 
+// creates the new state in db?
 func (s *stateObject) touch() {
 	s.db.journal.append(touchChange{
 		account: &s.address,
@@ -238,6 +246,7 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
+// what's the point of making this a helper function?
 func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
@@ -245,10 +254,12 @@ func (s *stateObject) setState(key, value common.Hash) {
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise(prefetch bool) {
+	// this is a slice of type 2d array containing bytes, and initial length 0 and maximum capacity length of the dirty storage
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		s.pendingStorage[key] = value
 		if value != s.originStorage[key] {
+			// thenw e add an array containing the key
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
@@ -293,12 +304,14 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		s.originStorage[key] = value
 
 		var v []byte
+		// if new value is empty, then we can delete it
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
 			s.db.StorageDeleted += 1
+			// otherwise, we update the trie
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
@@ -375,6 +388,7 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 	// clearing (0,0,0 objects) can take effect.
 	if amount.Sign() == 0 {
 		if s.empty() {
+			// does this just initialize?
 			s.touch()
 		}
 		return
