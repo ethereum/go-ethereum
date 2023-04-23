@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"sort"
 	"time"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -968,6 +969,10 @@ var globalNodes = trie.NewMergedNodeSet()
 var counter := 0
 // number of blocks after which we reset
 var BLOCK_DELTA = 1
+// file writer
+f, err := os.Create("/data/one")
+check(err)
+defer f.Close()
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
@@ -1111,6 +1116,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// print stuff
 		fmt.Println("Global Updates: ", globalUpdates)
 		fmt.Println("Global Deletes: ", globalDeletes)
+		totalSize = globalUpdates + globalDeletes
+		n, err := f.WriteString(totalSize + "\n")
+		check(err)
 		globalNodes = trie.NewMergedNodeSet()
 	}
 	return root, nil
