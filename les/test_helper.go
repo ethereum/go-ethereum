@@ -69,18 +69,11 @@ var (
 	testEventEmitterCode = common.Hex2Bytes("60606040523415600e57600080fd5b7f57050ab73f6b9ebdd9f76b8d4997793f48cf956e965ee070551b9ca0bb71584e60405160405180910390a160358060476000396000f3006060604052600080fd00a165627a7a723058203f727efcad8b5811f8cb1fc2620ce5e8c63570d697aef968172de296ea3994140029")
 
 	// Checkpoint oracle relative fields
-	oracleAddr   common.Address
 	signerKey, _ = crypto.GenerateKey()
 	signerAddr   = crypto.PubkeyToAddress(signerKey.PublicKey)
 )
 
 var (
-	// The block frequency for creating checkpoint(only used in test)
-	sectionSize = big.NewInt(128)
-
-	// The number of confirmations needed to generate a checkpoint(only used in test).
-	processConfirms = big.NewInt(1)
-
 	// The token bucket buffer limit for testing purpose.
 	testBufLimit = uint64(1000000)
 
