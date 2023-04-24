@@ -27,9 +27,7 @@ type BlobsSidecar struct {
 }
 
 const (
-	BlobTxType                = 5
-	PrecompileInputLength     = 192
-	BlobVersionedHashesOffset = 258 // position of blob_versioned_hashes offset in a serialized blob tx, see TxPeekBlobVersionedHashes
+	PrecompileInputLength = 192
 )
 
 var (
@@ -42,8 +40,8 @@ var precompileReturnValue [64]byte
 var gCryptoCtx gokzg4844.Context
 var initCryptoCtx sync.Once
 
-// InitializeCrypytoCtx initializes the global context object returned via CryptoCtx
-func InitializeCrypytoCtx() {
+// InitializeCryptoCtx initializes the global context object returned via CryptoCtx
+func InitializeCryptoCtx() {
 	initCryptoCtx.Do(func() {
 		// Initialize context to match the configurations that the
 		// specs are using.
@@ -63,7 +61,7 @@ func InitializeCrypytoCtx() {
 // This function is expensive to run if the crypto context isn't initialized, so it is recommended to
 // pre-initialize by calling InitializeCryptoCtx
 func CrpytoCtx() gokzg4844.Context {
-	InitializeCrypytoCtx()
+	InitializeCryptoCtx()
 	return gCryptoCtx
 }
 
