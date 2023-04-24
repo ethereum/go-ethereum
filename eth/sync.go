@@ -260,16 +260,11 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		log.Info("Snap sync complete, auto disabling")
 		atomic.StoreUint32(&h.snapSync, 0)
 	}
-	// If we've successfully finished a sync cycle and passed any required checkpoint,
-	// enable accepting transactions from the network.
+	// If we've successfully finished a sync cycle, enable accepting transactions
+	// from the network.
+	atomic.StoreUint32(&h.acceptTxs, 1)
+
 	head := h.chain.CurrentBlock()
-	if head.Number.Uint64() >= h.checkpointNumber {
-		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
-		// for non-checkpointed (number = 0) private networks.
-		if head.Time >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
-			atomic.StoreUint32(&h.acceptTxs, 1)
-		}
-	}
 	if head.Number.Uint64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify
