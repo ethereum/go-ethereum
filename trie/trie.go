@@ -212,7 +212,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.reader.nodeBlob(path, common.BytesToHash(hash))
+		blob, err := t.reader.node(path, common.BytesToHash(hash))
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -549,7 +549,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 // node's original value. The rlp-encoded blob is preferred to be loaded from
 // database because it's easy to decode node while complex to encode node to blob.
 func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
-	blob, err := t.reader.nodeBlob(prefix, common.BytesToHash(n))
+	blob, err := t.reader.node(prefix, common.BytesToHash(n))
 	if err != nil {
 		return nil, err
 	}
