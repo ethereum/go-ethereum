@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -42,9 +43,11 @@ type TalkRequestHandler func(enode.ID, *net.UDPAddr, []byte) []byte
 type talkSystem struct {
 	transport *UDPv5
 
-	mutex    sync.Mutex
-	handlers map[string]TalkRequestHandler
-	slots    chan struct{}
+	mutex     sync.Mutex
+	handlers  map[string]TalkRequestHandler
+	slots     chan struct{}
+	lastLog   time.Time
+	dropCount int
 }
 
 func newTalkSystem(transport *UDPv5) *talkSystem {
@@ -89,10 +92,15 @@ func (t *talkSystem) handleRequest(id enode.ID, addr *net.UDPAddr, req *v5wire.T
 			resp := &v5wire.TalkResponse{ReqID: req.ReqID, Message: respMessage}
 			t.transport.sendFromAnotherThread(id, addr, resp)
 		}()
-	case <-t.transport.closeCtx.Done():
-		// Transport closed, drop the request.
 	case <-timeout.C:
 		// Couldn't get it in time, drop the request.
+		if time.Since(t.lastLog) > 5*time.Second {
+			log.Warn("Dropping TALKREQ due to overload", "ndrop", t.dropCount)
+			t.lastLog = time.Now()
+			t.dropCount++
+		}
+	case <-t.transport.closeCtx.Done():
+		// Transport closed, drop the request.
 	}
 }
 
