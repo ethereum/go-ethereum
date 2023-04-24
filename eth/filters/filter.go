@@ -95,11 +95,12 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
-	var (
-		logs []*types.Log
-		err  error
-	)
-	logChan, errChan := f.logsAsync(ctx)
+	logChan, errChan, err := f.logsAsync(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var logs []*types.Log
 LOOP:
 	for {
 		select {
@@ -115,11 +116,59 @@ LOOP:
 
 // logsAsync retrieves logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error) {
+func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error, error) {
+	resolveSpecial := func(number int64) (int64, error) {
+		var hdr *types.Header
+		switch number {
+		case rpc.LatestBlockNumber.Int64(), rpc.PendingBlockNumber.Int64():
+			// we should return head here since we've already captured
+			// that we need to get the pending logs in the pending boolean above
+			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+			if hdr == nil {
+				return 0, errors.New("latest header not found")
+			}
+		case rpc.FinalizedBlockNumber.Int64():
+			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+			if hdr == nil {
+				return 0, errors.New("finalized header not found")
+			}
+		case rpc.SafeBlockNumber.Int64():
+			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+			if hdr == nil {
+				return 0, errors.New("safe header not found")
+			}
+		default:
+			return number, nil
+		}
+		return hdr.Number.Int64(), nil
+	}
+
+	var (
+		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
+		endPending   = f.end == rpc.PendingBlockNumber.Int64()
+		err          error
+	)
+
+	// range query need to resolve the special begin/end block number
+	if f.block == nil {
+		// special case for pending logs
+		if beginPending && !endPending {
+			return nil, nil, errors.New("invalid block range")
+		}
+
+		// resolve the special
+		if f.begin, err = resolveSpecial(f.begin); err != nil {
+			return nil, nil, err
+		}
+		if f.end, err = resolveSpecial(f.end); err != nil {
+			return nil, nil, err
+		}
+	}
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)
 	)
+
 	go func() {
 		defer func() {
 			close(errChan)
@@ -147,60 +196,15 @@ func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error) {
 			}
 			return
 		}
+
 		// Short-cut if all we care about is pending logs
-		if f.begin == rpc.PendingBlockNumber.Int64() {
-			if f.end != rpc.PendingBlockNumber.Int64() {
-				errChan <- errors.New("invalid block range")
-				return
-			}
+		if beginPending && endPending {
 			for _, log := range f.pendingLogs() {
 				logChan <- log
 			}
 			return
 		}
-		// Figure out the limits of the filter range
-		header, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-		if header == nil {
-			errChan <- nil
-			return
-		}
-		var (
-			err     error
-			head    = header.Number.Int64()
-			pending = f.end == rpc.PendingBlockNumber.Int64()
-		)
-		resolveSpecial := func(number int64) (int64, error) {
-			var hdr *types.Header
-			switch number {
-			case rpc.LatestBlockNumber.Int64():
-				return head, nil
-			case rpc.PendingBlockNumber.Int64():
-				// we should return head here since we've already captured
-				// that we need to get the pending logs in the pending boolean above
-				return head, nil
-			case rpc.FinalizedBlockNumber.Int64():
-				hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
-				if hdr == nil {
-					return 0, errors.New("finalized header not found")
-				}
-			case rpc.SafeBlockNumber.Int64():
-				hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
-				if hdr == nil {
-					return 0, errors.New("safe header not found")
-				}
-			default:
-				return number, nil
-			}
-			return hdr.Number.Int64(), nil
-		}
-		if f.begin, err = resolveSpecial(f.begin); err != nil {
-			errChan <- err
-			return
-		}
-		if f.end, err = resolveSpecial(f.end); err != nil {
-			errChan <- err
-			return
-		}
+
 		// Gather all indexed logs, and finish with non indexed ones
 		var (
 			end            = uint64(f.end)
@@ -224,14 +228,15 @@ func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error) {
 			return
 		}
 
-		if pending {
+		if endPending {
 			for _, log := range f.pendingLogs() {
 				logChan <- log
 			}
 		}
 		errChan <- nil
 	}()
-	return logChan, errChan
+
+	return logChan, errChan, nil
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
