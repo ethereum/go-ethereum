@@ -44,9 +44,9 @@ type payloadAttributesMarshaling struct {
 
 // BlobsBundle holds the blobs of an execution payload
 type BlobsBundle struct {
-	KZGs   []types.KZGCommitment `json:"kzgs"   gencodec:"required"`
-	Blobs  []types.Blob          `json:"blobs"  gencodec:"required"`
-	Proofs []types.KZGProof      `json:"proofs" gencodec:"required"`
+	Commitments []types.KZGCommitment `json:"commitments" gencodec:"required"`
+	Blobs       []types.Blob          `json:"blobs"       gencodec:"required"`
+	Proofs      []types.KZGProof      `json:"proofs"      gencodec:"required"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
@@ -250,20 +250,20 @@ type ExecutionPayloadBodyV1 struct {
 
 func BlockToBlobData(block *types.Block) (*BlobsBundle, error) {
 	blobsBundle := &BlobsBundle{
-		Blobs:  []types.Blob{},
-		KZGs:   []types.KZGCommitment{},
-		Proofs: []types.KZGProof{},
+		Blobs:       []types.Blob{},
+		Commitments: []types.KZGCommitment{},
+		Proofs:      []types.KZGProof{},
 	}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
-			versionedHashes, kzgs, blobs, proofs := tx.BlobWrapData()
-			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) || len(blobs) != len(proofs) {
-				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
-					" / versioned hashes (%d) / proofs (%d)", i, block.Hash(), len(blobs), len(kzgs), len(versionedHashes), len(proofs))
+			versionedHashes, commitments, blobs, proofs := tx.BlobWrapData()
+			if len(versionedHashes) != len(commitments) || len(versionedHashes) != len(blobs) || len(blobs) != len(proofs) {
+				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / commitments (%d)"+
+					" / versioned hashes (%d) / proofs (%d)", i, block.Hash(), len(blobs), len(commitments), len(versionedHashes), len(proofs))
 			}
 
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
-			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
+			blobsBundle.Commitments = append(blobsBundle.Commitments, commitments...)
 			blobsBundle.Proofs = append(blobsBundle.Proofs, proofs...)
 		}
 	}
