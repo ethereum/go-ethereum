@@ -106,7 +106,6 @@ LOOP:
 		case log := <-logChan:
 			logs = append(logs, log)
 		case ierr := <-errChan:
-			close(logChan)
 			err = ierr
 			break LOOP
 		}
@@ -122,6 +121,11 @@ func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error) {
 		errChan = make(chan error)
 	)
 	go func() {
+		defer func() {
+			close(errChan)
+			close(logChan)
+		}()
+
 		// If we're doing singleton block filtering, execute and return
 		if f.block != nil {
 			header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
