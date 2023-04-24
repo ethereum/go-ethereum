@@ -77,3 +77,53 @@ func TestKZGWithBlob(t *testing.T) {
 		t.Fatalf("failed to verify KZG proof for blob: %v", err)
 	}
 }
+
+func BenchmarkBlobToCommitment(b *testing.B) {
+	blob := randBlob()
+	for i := 0; i < b.N; i++ {
+		BlobToCommitment(blob)
+	}
+}
+
+func BenchmarkComputeProof(b *testing.B) {
+	var (
+		blob  = randBlob()
+		point = randFieldElement()
+	)
+	for i := 0; i < b.N; i++ {
+		ComputeProof(blob, point)
+	}
+}
+
+func BenchmarkVerifyProof(b *testing.B) {
+	var (
+		blob            = randBlob()
+		point           = randFieldElement()
+		commitment, _   = BlobToCommitment(blob)
+		proof, claim, _ = ComputeProof(blob, point)
+	)
+	for i := 0; i < b.N; i++ {
+		VerifyProof(commitment, point, claim, proof)
+	}
+}
+
+func BenchmarkComputeBlobProof(b *testing.B) {
+	var (
+		blob          = randBlob()
+		commitment, _ = BlobToCommitment(blob)
+	)
+	for i := 0; i < b.N; i++ {
+		ComputeBlobProof(blob, commitment)
+	}
+}
+
+func BenchmarkVerifyBlobProof(b *testing.B) {
+	var (
+		blob          = randBlob()
+		commitment, _ = BlobToCommitment(blob)
+		proof, _      = ComputeBlobProof(blob, commitment)
+	)
+	for i := 0; i < b.N; i++ {
+		VerifyBlobProof(blob, commitment, proof)
+	}
+}
