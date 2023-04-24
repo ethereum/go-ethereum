@@ -1201,6 +1201,20 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		hi = gasCap
 	}
 	cap = hi
+
+	// Create a helper to check if a gas allowance results in an executable transaction
+	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
+		args.Gas = (*hexutil.Uint64)(&gas)
+
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		if err != nil {
+			if errors.Is(err, core.ErrIntrinsicGas) {
+				return true, nil, nil // Special case, raise gas limit
+			}
+			return true, nil, err // Bail out
+		}
+		return result.Failed(), result, nil
+	}
 	// Create a helper to get the gasUsed before the gas refund.
 	getGasBeforeRefund := func(gas uint64) (uint64, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
@@ -1224,8 +1238,49 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	} else {
 		return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 	}
+    failed, _, err := executable(lo)
+	if err != nil {
+		return 0, err
+	}
+	if failed {
+		// Execute the binary search and hone in on an executable gas limit
+		for lo+1 < hi {
+			mid := (hi + lo) / 2
+			failed, _, err := executable(mid)
 
-	return hexutil.Uint64(lo), nil
+			// If the error is not nil(consensus error), it means the provided message
+			// call or transaction will never be accepted no matter how much gas it is
+			// assigned. Return the error directly, don't struggle any more.
+			if err != nil {
+				return 0, err
+			}
+			if failed {
+				lo = mid
+			} else {
+				hi = mid
+			}
+		}
+		// Reject the transaction as invalid if it still fails at the highest allowance
+		if hi == cap {
+			failed, result, err := executable(hi)
+			if err != nil {
+				return 0, err
+			}
+			if failed {
+				if result != nil && result.Err != vm.ErrOutOfGas {
+					if len(result.Revert()) > 0 {
+						return 0, newRevertError(result)
+					}
+					return 0, result.Err
+				}
+				// Otherwise, the specified gas cap is too low
+				return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			}
+		}
+		return hexutil.Uint64(hi), nil
+	} else {
+		return hexutil.Uint64(lo), nil
+	}
 }
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
