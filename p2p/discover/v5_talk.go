@@ -104,7 +104,8 @@ func (t *talkSystem) handleRequest(id enode.ID, addr *net.UDPAddr, req *v5wire.T
 	}
 }
 
-// wait blocks until all active requests have finished.
+// wait blocks until all active requests have finished, and prevents new request
+// handlers from being launched.
 func (t *talkSystem) wait() {
 	for i := 0; i < cap(t.slots); i++ {
 		<-t.slots
