@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -287,6 +286,11 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	return nil
 }
 
+type exportPreimage struct {
+	key []byte
+	val []byte
+}
+
 // ImportPreimages imports a batch of exported hash preimages into the database.
 // It's a part of the deprecated functionality, should be removed in the future.
 func ImportPreimages(db ethdb.Database, fn string) error {
@@ -308,11 +312,11 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk thrashing
-	preimages := make(map[common.Hash][]byte)
+	preimages := make(map[string][]byte)
 
 	for {
 		// Read the next entry and ensure it's not junk
-		var blob []byte
+		var blob exportPreimage
 
 		if err := stream.Decode(&blob); err != nil {
 			if err == io.EOF {
@@ -321,10 +325,10 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 		// Accumulate the preimages and flush when enough ws gathered
-		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
+		preimages[string(blob.key)] = common.CopyBytes(blob.val)
 		if len(preimages) > 1024 {
 			rawdb.WritePreimages(db, preimages)
-			preimages = make(map[common.Hash][]byte)
+			preimages = make(map[string][]byte)
 		}
 	}
 	// Flush the last batch preimage data
@@ -357,7 +361,9 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	defer it.Release()
 
 	for it.Next() {
-		if err := rlp.Encode(writer, it.Value()); err != nil {
+		key := it.Key()
+		key = key[len("secure-key-"):]
+		if err := rlp.Encode(writer, &exportPreimage{key, it.Value()}); err != nil {
 			return err
 		}
 	}

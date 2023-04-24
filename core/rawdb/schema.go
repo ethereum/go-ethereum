@@ -211,8 +211,8 @@ func skeletonHeaderKey(number uint64) []byte {
 }
 
 // preimageKey = PreimagePrefix + hash
-func preimageKey(hash common.Hash) []byte {
-	return append(PreimagePrefix, hash.Bytes()...)
+func preimageKey(hash []byte) []byte {
+	return append(PreimagePrefix, hash...)
 }
 
 // codeKey = CodePrefix + hash

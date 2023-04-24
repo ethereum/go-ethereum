@@ -249,7 +249,7 @@ func (ch addLogChange) dirtied() *common.Address {
 }
 
 func (ch addPreimageChange) revert(s *StateDB) {
-	delete(s.preimages, ch.hash)
+	delete(s.preimages, string(ch.hash[:]))
 }
 
 func (ch addPreimageChange) dirtied() *common.Address {

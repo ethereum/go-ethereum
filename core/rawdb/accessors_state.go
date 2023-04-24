@@ -23,15 +23,15 @@ import (
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.
-func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
+func ReadPreimage(db ethdb.KeyValueReader, hash []byte) []byte {
 	data, _ := db.Get(preimageKey(hash))
 	return data
 }
 
 // WritePreimages writes the provided set of preimages to the database.
-func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
-	for hash, preimage := range preimages {
-		if err := db.Put(preimageKey(hash), preimage); err != nil {
+func WritePreimages(db ethdb.KeyValueWriter, preimages map[string][]byte) {
+	for hashstr, preimage := range preimages {
+		if err := db.Put(preimageKey([]byte(hashstr)), preimage); err != nil {
 			log.Crit("Failed to store trie preimage", "err", err)
 		}
 	}

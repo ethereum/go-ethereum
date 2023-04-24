@@ -202,7 +202,10 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	if t.preimages == nil {
 		return nil
 	}
-	return t.preimages.preimage(common.BytesToHash(shaKey))
+	if t.trie.owner != (common.Hash{}) {
+		return t.preimages.preimage(append(t.trie.owner[:], shaKey...))
+	}
+	return t.preimages.preimage(shaKey[:])
 }
 
 // Commit collects all dirty nodes in the trie and replaces them with the
@@ -216,9 +219,17 @@ func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		if t.preimages != nil {
-			preimages := make(map[common.Hash][]byte)
+			preimages := make(map[string][]byte)
 			for hk, key := range t.secKeyCache {
-				preimages[common.BytesToHash([]byte(hk))] = key
+				// If the trie is owned by an account, we need to prefix the
+				// key with the hash of the account address to ensure that
+				// the order follows that of the snapshot.
+				if t.trie.owner != (common.Hash{}) {
+					hk = string(append(t.trie.owner[:], key...))
+					preimages[hk] = key
+				} else {
+					preimages[hk] = key
+				}
 			}
 			t.preimages.insertPreimage(preimages)
 		}

@@ -95,7 +95,7 @@ type StateDB struct {
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
-	preimages map[common.Hash][]byte
+	preimages map[string][]byte
 
 	// Per-transaction access list
 	accessList *accessList
@@ -145,7 +145,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsDirty:    make(map[common.Address]struct{}),
 		stateObjectsDestruct: make(map[common.Address]struct{}),
 		logs:                 make(map[common.Hash][]*types.Log),
-		preimages:            make(map[common.Hash][]byte),
+		preimages:            make(map[string][]byte),
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
@@ -225,16 +225,16 @@ func (s *StateDB) Logs() []*types.Log {
 
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
-	if _, ok := s.preimages[hash]; !ok {
+	if _, ok := s.preimages[string(hash[:])]; !ok {
 		s.journal.append(addPreimageChange{hash: hash})
 		pi := make([]byte, len(preimage))
 		copy(pi, preimage)
-		s.preimages[hash] = pi
+		s.preimages[string(hash[:])] = pi
 	}
 }
 
 // Preimages returns a list of SHA3 preimages that have been submitted.
-func (s *StateDB) Preimages() map[common.Hash][]byte {
+func (s *StateDB) Preimages() map[string][]byte {
 	return s.preimages
 }
 
@@ -708,7 +708,7 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
-		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
+		preimages:            make(map[string][]byte, len(s.preimages)),
 		journal:              newJournal(),
 		hasher:               crypto.NewKeccakState(),
 	}
