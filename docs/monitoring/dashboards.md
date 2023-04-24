@@ -111,22 +111,7 @@ And an example of `prometheus.yml` is:
             chain: ethereum
 ```
 
-We use [Prometheus recording rule](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) to recrod Geth's RPC metrics, the recording rules are inside `record.geth.rules.yml`:
-
-```yaml
-groups:
-- name: geth_rpc_requests_rules
-  rules:
-    - expr: label_replace({__name__=~"rpc_duration_.*_success"}, "method", "$1", "__name__", "rpc_duration_(.+)_success")
-      record: geth_rpc_requests_success
-    - expr: label_replace({__name__=~"rpc_duration_.*_failure"}, "method", "$1", "__name__", "rpc_duration_(.+)_failure")
-      record: geth_rpc_requests_failure
-
-    - expr: label_replace({__name__=~"rpc_duration_.*_success_count"}, "method", "$1", "__name__", "rpc_duration_(.+)_success_count")
-      record: geth_rpc_requests_success_count
-    - expr: label_replace({__name__=~"rpc_duration_.*_failure_count"}, "method", "$1", "__name__", "rpc_duration_(.+)_failure_count")
-      record: geth_rpc_requests_failure_count
-```
+Meanwhile, [Recording rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) are a powerful feature that allow you to precompute frequently needed or computationally expensive expressions and save their results as new sets of time series. Read more about setting up recording rules at the [official prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/).
 
 
 ## Preparing Geth {#preparing-geth}
