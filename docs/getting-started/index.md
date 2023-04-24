@@ -410,7 +410,7 @@ curl -X POST http://127.0.0.1:8545 \
 This requires approval in Clef. Once approved, the following information is returned to the terminal:
 
 ```terminal
-{"jsonrpc":"2.0","id":1,"result":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec", "0xce8dba5e4157c2b284d8853afeeea259344c1653"]}
+{"jsonrpc":"2.0","id":1,"result":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"]}
 ```
 
 ### Sending Transactions {#sending-transactions}
