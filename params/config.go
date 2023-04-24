@@ -453,6 +453,16 @@ func (s ScrollConfig) ZktrieEnabled() bool {
 	return s.UseZktrie
 }
 
+func (s ScrollConfig) String() string {
+	if s.MaxTxPerBlock == nil {
+		return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: <nil>, feeVaultAddress: %v, enableEIP2718:%v, enableEIP1559:%v}",
+			s.UseZktrie, s.FeeVaultAddress, s.EnableEIP2718, s.EnableEIP1559)
+	}
+
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, feeVaultAddress: %v, enableEIP2718:%v, enableEIP1559:%v}",
+		s.UseZktrie, *s.MaxTxPerBlock, s.FeeVaultAddress, s.EnableEIP2718, s.EnableEIP1559)
+}
+
 // IsValidTxCount returns whether the given block's transaction count is below the limit.
 func (s ScrollConfig) IsValidTxCount(count int) bool {
 	return s.MaxTxPerBlock == nil || count <= *s.MaxTxPerBlock
@@ -488,7 +498,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -505,6 +515,7 @@ func (c *ChainConfig) String() string {
 		c.LondonBlock,
 		c.ArrowGlacierBlock,
 		engine,
+		c.Scroll,
 	)
 }
 
