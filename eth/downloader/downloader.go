@@ -101,10 +101,9 @@ type Downloader struct {
 	mode atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
-	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. snap sync)
-	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
-	queue      *queue   // Scheduler for selecting the hashes to download
-	peers      *peerSet // Set of active peers from which download can proceed
+	genesis uint64   // Genesis block number to limit sync to (e.g. light client CHT)
+	queue   *queue   // Scheduler for selecting the hashes to download
+	peers   *peerSet // Set of active peers from which download can proceed
 
 	stateDB ethdb.Database // Database to state sync into (and deduplicate via)
 
@@ -219,14 +218,13 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
 	dl := &Downloader{
 		stateDB:        stateDb,
 		mux:            mux,
-		checkpoint:     checkpoint,
 		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:          newPeerSet(),
 		blockchain:     chain,
@@ -593,11 +591,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 				d.ancientLimit = 0
 			}
 		} else {
-			// Legacy sync, use any hardcoded checkpoints or the best announcement
-			// we have from the remote peer. TODO(karalabe): Drop this pathway.
-			if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
-				d.ancientLimit = d.checkpoint
-			} else if height > fullMaxForkAncestry+1 {
+			// Legacy sync, use the best announcement we have from the remote peer.
+			// TODO(karalabe): Drop this pathway.
+			if height > fullMaxForkAncestry+1 {
 				d.ancientLimit = height - fullMaxForkAncestry - 1
 			} else {
 				d.ancientLimit = 0
@@ -742,13 +738,10 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 	if len(headers) == 0 || len(headers) > fetch {
 		return nil, nil, fmt.Errorf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch)
 	}
-	// The first header needs to be the head, validate against the checkpoint
-	// and request. If only 1 header was returned, make sure there's no pivot
-	// or there was not one requested.
+	// The first header needs to be the head, validate against the request. If
+	// only 1 header was returned, make sure there's no pivot or there was not
+	// one requested.
 	head = headers[0]
-	if (mode == SnapSync || mode == LightSync) && head.Number.Uint64() < d.checkpoint {
-		return nil, nil, fmt.Errorf("%w: remote head %d below checkpoint %d", errUnsyncedPeer, head.Number, d.checkpoint)
-	}
 	if len(headers) == 1 {
 		if mode == SnapSync && head.Number.Uint64() > uint64(fsMinFullBlocks) {
 			return nil, nil, fmt.Errorf("%w: no pivot included along head header", errBadPeer)

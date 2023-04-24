@@ -78,7 +78,7 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine) (*LightChain, error) {
 	bc := &LightChain{
 		chainDb:       odr.Database(),
 		indexerConfig: odr.IndexerConfig(),
@@ -99,9 +99,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if checkpoint != nil {
-		bc.AddTrustedCheckpoint(checkpoint)
-	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -114,22 +111,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 	return bc, nil
-}
-
-// AddTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
-	if lc.odr.ChtIndexer() != nil {
-		StoreChtRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.CHTRoot)
-		lc.odr.ChtIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-	if lc.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.BloomRoot)
-		lc.odr.BloomTrieIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-	if lc.odr.BloomIndexer() != nil {
-		lc.odr.BloomIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-	log.Info("Added trusted checkpoint", "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
 
 func (lc *LightChain) getProcInterrupt() bool {
@@ -519,38 +500,6 @@ func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (
 
 // Config retrieves the header chain's chain configuration.
 func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
-
-// SyncCheckpoint fetches the checkpoint point block header according to
-// the checkpoint provided by the remote peer.
-//
-// Note if we are running the clique, fetches the last epoch snapshot header
-// which covered by checkpoint.
-func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
-	// Ensure the remote checkpoint head is ahead of us
-	head := lc.CurrentHeader().Number.Uint64()
-
-	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
-	if clique := lc.hc.Config().Clique; clique != nil {
-		latest -= latest % clique.Epoch // epoch snapshot for clique
-	}
-	if head >= latest {
-		return true
-	}
-	// Retrieve the latest useful header and update to it
-	if header, err := GetHeaderByNumber(ctx, lc.odr, latest); header != nil && err == nil {
-		lc.chainmu.Lock()
-		defer lc.chainmu.Unlock()
-
-		// Ensure the chain didn't move past the latest block while retrieving it
-		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
-			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
-			lc.hc.SetCurrentHeader(header)
-		}
-		return true
-	}
-	return false
-}
 
 // LockChain locks the chain mutex for reading so that multiple canonical hashes can be
 // retrieved while it is guaranteed that they belong to the same version of the chain

@@ -125,18 +125,15 @@ func (req *BlockRequest) StoreResult(db ethdb.Database) {
 
 // ReceiptsRequest is the ODR request type for retrieving receipts.
 type ReceiptsRequest struct {
-	Untrusted bool // Indicator whether the result retrieved is trusted or not
-	Hash      common.Hash
-	Number    uint64
-	Header    *types.Header
-	Receipts  types.Receipts
+	Hash     common.Hash
+	Number   uint64
+	Header   *types.Header
+	Receipts types.Receipts
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
-	if !req.Untrusted {
-		rawdb.WriteReceipts(db, req.Hash, req.Number, req.Receipts)
-	}
+	rawdb.WriteReceipts(db, req.Hash, req.Number, req.Receipts)
 }
 
 // ChtRequest is the ODR request type for retrieving header by Canonical Hash Trie
