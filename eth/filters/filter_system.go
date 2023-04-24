@@ -187,41 +187,6 @@ type subscription struct {
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
-	backfill  atomic.Bool   // weather we are in the backfilling state, if so no need to handle the new logs
-}
-
-// backfilling runs in a separate goroutine and is responsible for retrieving historical data.
-// After the backfilling process is complete, the flow for new log subscription is resumed.
-func (sub *subscription) backfilling(ev *EventSystem, crit ethereum.FilterQuery) {
-	defer sub.backfill.Store(false)
-
-	ctx := context.Background()
-	begin := crit.FromBlock.Int64()
-	for {
-		header := ev.backend.CurrentHeader()
-		end := header.Number.Int64()
-		if begin > end {
-			break
-		}
-		filter := ev.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
-
-		logChan, errChan := filter.logsAsync(ctx)
-	LOOP:
-		for {
-			select {
-			case log := <-logChan:
-				sub.logs <- []*types.Log{log}
-			case err := <-errChan:
-				if err != nil {
-					sub.err <- err
-				}
-				close(logChan)
-				break LOOP
-			}
-		}
-
-		begin = end + 1
-	}
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -383,10 +348,6 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
-	if crit.FromBlock != nil {
-		sub.backfill.Store(true)
-		go sub.backfilling(es, crit)
-	}
 	return es.subscribe(sub)
 }
 
@@ -403,10 +364,6 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
-	}
-	if crit.FromBlock != nil {
-		sub.backfill.Store(true)
-		go sub.backfilling(es, crit)
 	}
 	return es.subscribe(sub)
 }
@@ -467,9 +424,6 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 		return
 	}
 	for _, f := range filters[LogsSubscription] {
-		if backfill := f.backfill.Load(); backfill {
-			continue
-		}
 		matchedLogs := filterLogs(ev, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
@@ -491,9 +445,6 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 
 func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLogsEvent) {
 	for _, f := range filters[LogsSubscription] {
-		if backfill := f.backfill.Load(); backfill {
-			continue
-		}
 		matchedLogs := filterLogs(ev.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
