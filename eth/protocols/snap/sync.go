@@ -449,10 +449,10 @@ type Syncer struct {
 	trienodeHealReqs map[uint64]*trienodeHealRequest // Trie node requests currently running
 	bytecodeHealReqs map[uint64]*bytecodeHealRequest // Bytecode requests currently running
 
-	trienodeHealRate      float64   // Average heal rate for processing trie node data
-	trienodeHealPend      uint64    // Number of trie nodes currently pending for processing
-	trienodeHealThrottle  float64   // Divisor for throttling the amount of trienode heal data requested
-	trienodeHealThrottled time.Time // Timestamp the last time the throttle was updated
+	trienodeHealRate      float64       // Average heal rate for processing trie node data
+	trienodeHealPend      atomic.Uint64 // Number of trie nodes currently pending for processing
+	trienodeHealThrottle  float64       // Divisor for throttling the amount of trienode heal data requested
+	trienodeHealThrottled time.Time     // Timestamp the last time the throttle was updated
 
 	trienodeHealSynced uint64             // Number of state trie nodes downloaded
 	trienodeHealBytes  common.StorageSize // Number of state trie bytes persisted to disk
@@ -2189,7 +2189,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	//   HR(N) = (1-MI)^N*(OR-NR) + NR
 	s.trienodeHealRate = gomath.Pow(1-trienodeHealRateMeasurementImpact, float64(fills))*(s.trienodeHealRate-rate) + rate
 
-	pending := atomic.LoadUint64(&s.trienodeHealPend)
+	pending := s.trienodeHealPend.Load()
 	if time.Since(s.trienodeHealThrottled) > time.Second {
 		// Periodically adjust the trie node throttler
 		if float64(pending) > 2*s.trienodeHealRate {
@@ -2776,9 +2776,9 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 		return errors.New("unexpected healing trienode")
 	}
 	// Response validated, send it to the scheduler for filling
-	atomic.AddUint64(&s.trienodeHealPend, fills)
+	s.trienodeHealPend.Add(fills)
 	defer func() {
-		atomic.AddUint64(&s.trienodeHealPend, ^(fills - 1))
+		s.trienodeHealPend.Add(^(fills - 1))
 	}()
 	response := &trienodeHealResponse{
 		paths:  req.paths,
