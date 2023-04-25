@@ -171,7 +171,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		return msg, err
 	}
 	numBlobsTx := len(tx.DataHashes())
-	if numBlobsTx == 0 || numBlobsTx > params.MaxBlobsPerBlock {
+	if tx.Type() >= 3 && (numBlobsTx == 0 || numBlobsTx > params.MaxBlobsPerBlock) {
 		return nil, ErrInvalidNumberBlobs
 	}
 	return msg, err
