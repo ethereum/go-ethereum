@@ -822,7 +822,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	env.tcount = 0
 
 	// Initialize the prestate excess_data_gas field used during state transition
-	if w.chainConfig.IsSharding(header.Time) {
+	if w.chainConfig.IsCancun(header.Time) {
 		// TODO(EIP-4844): Unit test this
 		env.excessDataGas = new(big.Int)
 		if parent.ExcessDataGas != nil {

@@ -1490,7 +1490,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
 	now := uint64(time.Now().Unix())
 	pool.shanghai = pool.chainconfig.IsShanghai(now)
-	pool.eip4844 = pool.chainconfig.IsSharding(now)
+	pool.eip4844 = pool.chainconfig.IsCancun(now)
 }
 
 // promoteExecutables moves transactions that have become processable from the

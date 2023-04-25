@@ -1480,7 +1480,7 @@ func TestEIP4844(t *testing.T) {
 	lastBlockTime := blocks[len(blocks)-1].Time()
 	nextBlockTime := lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
 	genesis.Config.ShanghaiTime = &nextBlockTime
-	genesis.Config.ShardingForkTime = &nextBlockTime
+	genesis.Config.CancunTime = &nextBlockTime
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, blocks)
@@ -1540,7 +1540,7 @@ func TestEIP4844WithBlobTransactions(t *testing.T) {
 	lastBlockTime := blocks[len(blocks)-1].Time()
 	nextBlockTime := lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
 	genesis.Config.ShanghaiTime = &nextBlockTime
-	genesis.Config.ShardingForkTime = &nextBlockTime
+	genesis.Config.CancunTime = &nextBlockTime
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, blocks)

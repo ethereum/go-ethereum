@@ -40,7 +40,7 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, time uint64) Signer {
 	var signer Signer
 	switch {
-	case config.IsSharding(time):
+	case config.IsCancun(time):
 		signer = NewDankSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
@@ -65,7 +65,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, time uint64) S
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
-		if config.ShardingForkTime != nil {
+		if config.CancunTime != nil {
 			return NewDankSigner(config.ChainID)
 		}
 		if config.LondonBlock != nil {

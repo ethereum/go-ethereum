@@ -160,7 +160,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmContext.Random = &rnd
 	}
 	// If excess data gas is defined, add it to vmContext
-	if chainConfig.IsSharding(pre.Env.Timestamp) {
+	if chainConfig.IsCancun(pre.Env.Timestamp) {
 		if pre.Env.ParentExcessDataGas != nil {
 			vmContext.ExcessDataGas = pre.Env.ParentExcessDataGas
 		} else {

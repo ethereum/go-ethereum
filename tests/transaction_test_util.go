@@ -37,7 +37,7 @@ type TransactionTest struct {
 	EIP158         ttFork
 	Frontier       ttFork
 	Homestead      ttFork
-	Sharding       ttFork
+	Cancun         ttFork
 }
 
 type ttFork struct {
@@ -46,7 +46,7 @@ type ttFork struct {
 }
 
 func (tt *TransactionTest) Run(config *params.ChainConfig) error {
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead bool, isIstanbul bool, isSharding bool) (*common.Address, *common.Hash, error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead bool, isIstanbul bool, isCancun bool) (*common.Address, *common.Hash, error) {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(rlpData, tx); err != nil {
 			return nil, nil, err
@@ -73,7 +73,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		fork        ttFork
 		isHomestead bool
 		isIstanbul  bool
-		isSharding  bool
+		isCancun    bool
 	}{
 		{"Frontier", types.FrontierSigner{}, tt.Frontier, false, false, false},
 		{"Homestead", types.HomesteadSigner{}, tt.Homestead, true, false, false},
@@ -82,9 +82,9 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false, false},
 		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false, false},
 		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true, false},
-		{"Sharding", types.NewEIP155Signer(config.ChainID), tt.Sharding, true, true, false},
+		{"Cancun", types.NewEIP155Signer(config.ChainID), tt.Cancun, true, true, false},
 	} {
-		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isSharding)
+		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isCancun)
 
 		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {

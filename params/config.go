@@ -245,7 +245,6 @@ var (
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
-		ShardingForkTime:              nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
@@ -276,7 +275,6 @@ var (
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
-		ShardingForkTime:              nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
@@ -307,7 +305,6 @@ var (
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
-		ShardingForkTime:              nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
@@ -338,7 +335,6 @@ var (
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
-		ShardingForkTime:              nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
@@ -438,10 +434,9 @@ type ChainConfig struct {
 
 	// Fork scheduling was switched from blocks to timestamps here
 
-	ShanghaiTime     *uint64 `json:"shanghaiTime,omitempty"`     // Shanghai switch time (nil = no fork, 0 = already on shanghai)
-	ShardingForkTime *uint64 `json:"shardingForkTime,omitempty"` // Mini-Danksharding switch block (nil = no fork, 0 = already activated)
-	CancunTime       *uint64 `json:"cancunTime,omitempty"`       // Cancun switch time (nil = no fork, 0 = already on cancun)
-	PragueTime       *uint64 `json:"pragueTime,omitempty"`       // Prague switch time (nil = no fork, 0 = already on prague)
+	ShanghaiTime *uint64 `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
+	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -556,9 +551,6 @@ func (c *ChainConfig) Description() string {
 	if c.ShanghaiTime != nil {
 		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiTime)
 	}
-	if c.ShardingForkTime != nil {
-		banner += fmt.Sprintf(" - ShardingFork:                @%-10v\n", *c.ShardingForkTime)
-	}
 	if c.CancunTime != nil {
 		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", *c.CancunTime)
 	}
@@ -653,11 +645,6 @@ func (c *ChainConfig) IsShanghai(time uint64) bool {
 	return isTimestampForked(c.ShanghaiTime, time)
 }
 
-// IsSharding returns whether time is either equal to the Mini-Danksharding fork time or greater.
-func (c *ChainConfig) IsSharding(time uint64) bool {
-	return isTimestampForked(c.ShardingForkTime, time)
-}
-
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
 func (c *ChainConfig) IsCancun(time uint64) bool {
 	return isTimestampForked(c.CancunTime, time)
@@ -720,7 +707,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
-		{name: "shardingForkTime", timestamp: c.ShardingForkTime},
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 	} {
@@ -819,9 +805,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
-	}
-	if isForkTimestampIncompatible(c.ShardingForkTime, newcfg.ShardingForkTime, headTimestamp) {
-		return newTimestampCompatError("Sharding fork timestamp", c.ShardingForkTime, newcfg.ShardingForkTime)
 	}
 	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
 		return newTimestampCompatError("Cancun fork timestamp", c.CancunTime, newcfg.CancunTime)
@@ -973,7 +956,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, IsSharding, isCancun, isPrague     bool
+	IsMerge, IsShanghai, IsCancun, isPrague                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -996,8 +979,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(timestamp),
-		IsSharding:       c.IsSharding(timestamp),
-		isCancun:         c.IsCancun(timestamp),
+		IsCancun:         c.IsCancun(timestamp),
 		isPrague:         c.IsPrague(timestamp),
 	}
 }

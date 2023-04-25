@@ -4178,22 +4178,22 @@ func TestDataBlobTxs(t *testing.T) {
 		}
 	)
 
-	// We test the transition from non-sharding to sharding
+	// We test the transition from non-cancun to cancun
 	// Genesis (block 0): AllEthhashProtocolChanges
 	// Block 1          : ""
-	// Block 2          : Sharding
+	// Block 2          : Cancun
 	var time uint64 = 2 * 10 // block time is 10 seconds, so this corresponds to second block.
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
 	gspec.Config.ShanghaiTime = &time
-	gspec.Config.ShardingForkTime = &time
+	gspec.Config.CancunTime = &time
 	gspec.Config.TerminalTotalDifficulty = common.Big0
 	gspec.Config.TerminalTotalDifficultyPassed = true
 	signer := types.LatestSigner(gspec.Config)
 
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
 		if i == 0 {
-			// i==0 is a non-sharding block
+			// i==0 is a non-cancun block
 			return
 		}
 		b.SetCoinbase(common.Address{1})
