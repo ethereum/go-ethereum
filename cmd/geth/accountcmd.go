@@ -212,6 +212,7 @@ func accountList(ctx *cli.Context) error {
 	for _, wallet := range am.Wallets() {
 		for _, account := range wallet.Accounts() {
 			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
+			index++
 		}
 	}
 
