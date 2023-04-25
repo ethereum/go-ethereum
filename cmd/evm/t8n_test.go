@@ -284,7 +284,7 @@ func TestT8n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Fatalf("test %d file %v:, json parsing failed: %v", i, file, err)
+				t.Fatalf("test %d, file %v: json parsing failed: %v", i, file, err)
 			case !ok:
 				t.Fatalf("test %d file %v: output wrong, have \n%v\nwant\n%v\n", i, file, string(have), string(want))
 			}
