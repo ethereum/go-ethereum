@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"math/big"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -205,7 +204,7 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// If we're in snap sync mode, return that directly
-	if atomic.LoadUint32(&cs.handler.snapSync) == 1 {
+	if cs.handler.snapSync.Load() {
 		block := cs.handler.chain.CurrentSnapBlock()
 		td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
 		return downloader.SnapSync, td
@@ -256,20 +255,15 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	if err != nil {
 		return err
 	}
-	if atomic.LoadUint32(&h.snapSync) == 1 {
+	if h.snapSync.Load() {
 		log.Info("Snap sync complete, auto disabling")
-		atomic.StoreUint32(&h.snapSync, 0)
+		h.snapSync.Store(false)
 	}
-	// If we've successfully finished a sync cycle and passed any required checkpoint,
-	// enable accepting transactions from the network.
+	// If we've successfully finished a sync cycle, enable accepting transactions
+	// from the network.
+	h.acceptTxs.Store(true)
+
 	head := h.chain.CurrentBlock()
-	if head.Number.Uint64() >= h.checkpointNumber {
-		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
-		// for non-checkpointed (number = 0) private networks.
-		if head.Time >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
-			atomic.StoreUint32(&h.acceptTxs, 1)
-		}
-	}
 	if head.Number.Uint64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify

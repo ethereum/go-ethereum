@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -28,41 +27,28 @@ import (
 // memoryNode is all the information we know about a single cached trie node
 // in the memory.
 type memoryNode struct {
-	hash common.Hash // Node hash, computed by hashing rlp value, empty for deleted nodes
-	size uint16      // Byte size of the useful cached data, 0 for deleted nodes
-	node node        // Cached collapsed trie node, or raw rlp data, nil for deleted nodes
+	hash common.Hash // Node hash by hashing node blob, empty for deleted nodes
+	node []byte      // Encoded node blob, nil for deleted nodes
 }
-
-// memoryNodeSize is the raw size of a memoryNode data structure without any
-// node data included. It's an approximate size, but should be a lot better
-// than not counting them.
-// nolint:unused
-var memoryNodeSize = int(reflect.TypeOf(memoryNode{}).Size())
 
 // memorySize returns the total memory size used by this node.
 // nolint:unused
 func (n *memoryNode) memorySize(pathlen int) int {
-	return int(n.size) + memoryNodeSize + pathlen
+	return len(n.node) + common.HashLength + pathlen
 }
 
 // rlp returns the raw rlp encoded blob of the cached trie node, either directly
 // from the cache, or by regenerating it from the collapsed node.
 // nolint:unused
 func (n *memoryNode) rlp() []byte {
-	if node, ok := n.node.(rawNode); ok {
-		return node
-	}
-	return nodeToBytes(n.node)
+	return n.node
 }
 
 // obj returns the decoded and expanded trie node, either directly from the cache,
 // or by regenerating it from the rlp encoded blob.
 // nolint:unused
 func (n *memoryNode) obj() node {
-	if node, ok := n.node.(rawNode); ok {
-		return mustDecodeNode(n.hash[:], node)
-	}
-	return expandNode(n.hash[:], n.node)
+	return mustDecodeNode(n.hash[:], n.node)
 }
 
 // isDeleted returns the indicator if the node is marked as deleted.
