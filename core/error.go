@@ -63,6 +63,10 @@ var (
 	// transaction is higher than what's left in the block.
 	ErrDataGasLimitReached = errors.New("data gas limit reached")
 
+	// ErrInvalidNumberBlobs is returned if the number of blobs in a transaction
+	// is zero or greater than MaxBlobsPerBlock
+	ErrInvalidNumberBlobs = errors.New("invalid number blobs")
+
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
