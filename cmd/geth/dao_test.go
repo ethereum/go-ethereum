@@ -22,9 +22,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/params"
+	"strings"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
@@ -103,6 +105,18 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 	}
 }
 
+type cliDB struct {
+	getter func(key []byte) ([]byte, error)
+}
+
+func (d *cliDB) Has(key []byte) (bool, error) {
+	panic("implement me")
+}
+
+func (d *cliDB) Get(key []byte) ([]byte, error) {
+	return d.getter(key)
+}
+
 func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBlock *big.Int, expectVote bool) {
 	// Create a temporary data directory to use and inspect later
 	datadir := t.TempDir()
@@ -119,21 +133,24 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 		args := []string{"--port", "0", "--networkid", "1337", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
 		runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...).WaitExit()
 	}
-	// Retrieve the DAO config flag from the database
-	path := filepath.Join(datadir, "geth", "chaindata")
-	db, err := rawdb.NewPebbleDBDatabase(path, 0, 0, "", false)
-	if err != nil {
-		t.Fatalf("test %d: failed to open test database: %v", test, err)
+	db := &cliDB{
+		getter: func(key []byte) ([]byte, error) {
+			out := runGeth(t, "--datadir", datadir, "db", "get", fmt.Sprintf("%#x", key)).Output()
+			kv := strings.Split(string(out), ": ")
+			if len(kv) != 2 {
+				t.Logf("output: %s", string(out))
+				return nil, fmt.Errorf("failed to read data")
+			}
+			return common.FromHex(strings.TrimSpace(kv[1])), nil
+		},
 	}
-	defer db.Close()
-
 	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
 	config := rawdb.ReadChainConfig(db, genesisHash)
 	if config == nil {
-		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
+		t.Errorf("test %d: failed to retrieve chain config", test)
 		return // we want to return here, the other checks can't make it past this point (nil panic).
 	}
 	// Validate the DAO hard-fork block number against the expected value
