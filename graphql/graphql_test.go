@@ -80,17 +80,17 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	}{
 		{ // Should return latest block
 			body: `{"query": "{block{number}}","variables": null}`,
-			want: `{"data":{"block":{"number":10}}}`,
+			want: `{"data":{"block":{"number":"0xa"}}}`,
 			code: 200,
 		},
 		{ // Should return info about latest block
 			body: `{"query": "{block{number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"data":{"block":{"number":10,"gasUsed":0,"gasLimit":11500000}}}`,
+			want: `{"data":{"block":{"number":"0xa","gasUsed":"0x0","gasLimit":"0xaf79e0"}}}`,
 			code: 200,
 		},
 		{
 			body: `{"query": "{block(number:0){number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			want: `{"data":{"block":{"number":"0x0","gasUsed":"0x0","gasLimit":"0xaf79e0"}}}`,
 			code: 200,
 		},
 		{
@@ -105,7 +105,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		},
 		{
 			body: `{"query": "{block(number:\"0\"){number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"data":{"block":{"number":0,"gasUsed":0,"gasLimit":11500000}}}`,
+			want: `{"data":{"block":{"number":"0x0","gasUsed":"0x0","gasLimit":"0xaf79e0"}}}`,
 			code: 200,
 		},
 		{
@@ -119,14 +119,10 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 200,
 		},
 		{
-			body: `{"query": "{block(number:\"0xbad\"){number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0xbad\": invalid syntax"}],"data":{}}`,
-			code: 400,
-		},
-		{ // hex strings are currently not supported. If that's added to the spec, this test will need to change
 			body: `{"query": "{block(number:\"0x0\"){number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0x0\": invalid syntax"}],"data":{}}`,
-			code: 400,
+			want: `{"data":{"block":{"number":"0x0","gasUsed":"0x0","gasLimit":"0xaf79e0"}}}`,
+			//want: `{"errors":[{"message":"strconv.ParseInt: parsing \"0x0\": invalid syntax"}],"data":{}}`,
+			code: 200,
 		},
 		{
 			body: `{"query": "{block(number:\"a\"){number,gasUsed,gasLimit}}","variables": null}`,
@@ -141,13 +137,13 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		// should return `estimateGas` as decimal
 		{
 			body: `{"query": "{block{ estimateGas(data:{}) }}"}`,
-			want: `{"data":{"block":{"estimateGas":53000}}}`,
+			want: `{"data":{"block":{"estimateGas":"0xcf08"}}}`,
 			code: 200,
 		},
 		// should return `status` as decimal
 		{
 			body: `{"query": "{block {number call (data : {from : \"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b\", to: \"0x6295ee1b4f6dd65047762f924ecd367c17eabf8f\", data :\"0x12a7b914\"}){data status}}}"}`,
-			want: `{"data":{"block":{"number":10,"call":{"data":"0x","status":1}}}}`,
+			want: `{"data":{"block":{"number":"0xa","call":{"data":"0x","status":"0x1"}}}}`,
 			code: 200,
 		},
 	} {
@@ -231,7 +227,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	}{
 		{
 			body: `{"query": "{block {number transactions { from { address } to { address } value hash type accessList { address storageKeys } index}}}"}`,
-			want: `{"data":{"block":{"number":1,"transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b","type":0,"accessList":[],"index":0},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x19b35f8187b4e15fb59a9af469dca5dfa3cd363c11d372058c12f6482477b474","type":1,"accessList":[{"address":"0x0000000000000000000000000000000000000dad","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"index":1}]}}}`,
+			want: `{"data":{"block":{"number":"0x1","transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b","type":"0x0","accessList":[],"index":"0x0"},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x19b35f8187b4e15fb59a9af469dca5dfa3cd363c11d372058c12f6482477b474","type":"0x1","accessList":[{"address":"0x0000000000000000000000000000000000000dad","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"index":"0x1"}]}}}`,
 			code: 200,
 		},
 	} {
@@ -327,17 +323,17 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		// Multiple txes of a block race to set/retrieve receipts of a block.
 		{
 			body: "{block { transactions { status gasUsed } } }",
-			want: `{"block":{"transactions":[{"status":1,"gasUsed":21768},{"status":1,"gasUsed":21768},{"status":1,"gasUsed":21768}]}}`,
+			want: `{"block":{"transactions":[{"status":"0x1","gasUsed":"0x5508"},{"status":"0x1","gasUsed":"0x5508"},{"status":"0x1","gasUsed":"0x5508"}]}}`,
 		},
 		// Multiple fields of block race to resolve header and body.
 		{
 			body: "{ block { number hash gasLimit ommerCount transactionCount totalDifficulty } }",
-			want: fmt.Sprintf(`{"block":{"number":1,"hash":"%s","gasLimit":11500000,"ommerCount":0,"transactionCount":3,"totalDifficulty":"0x200000"}}`, chain[len(chain)-1].Hash()),
+			want: fmt.Sprintf(`{"block":{"number":"0x1","hash":"%s","gasLimit":"0xaf79e0","ommerCount":"0x0","transactionCount":"0x3","totalDifficulty":"0x200000"}}`, chain[len(chain)-1].Hash()),
 		},
 		// Multiple fields of a block race to resolve the header and body.
 		{
 			body: fmt.Sprintf(`{ transaction(hash: "%s") { block { number hash gasLimit ommerCount transactionCount } } }`, tx.Hash()),
-			want: fmt.Sprintf(`{"transaction":{"block":{"number":1,"hash":"%s","gasLimit":11500000,"ommerCount":0,"transactionCount":3}}}`, chain[len(chain)-1].Hash()),
+			want: fmt.Sprintf(`{"transaction":{"block":{"number":"0x1","hash":"%s","gasLimit":"0xaf79e0","ommerCount":"0x0","transactionCount":"0x3"}}}`, chain[len(chain)-1].Hash()),
 		},
 		// Account fields race the resolve the state object.
 		{
