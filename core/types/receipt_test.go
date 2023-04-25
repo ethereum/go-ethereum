@@ -84,13 +84,13 @@ var (
 	}
 
 	// Create a few transactions to have receipts for
-	to2     = common.HexToAddress("0x2")
-	to3     = common.HexToAddress("0x3")
-	to4     = common.HexToAddress("0x4")
-	to5     = common.HexToAddress("0x5")
-	to6     = common.HexToAddress("0x6")
-	to7     = common.HexToAddress("0x7")
-	testTxs = Transactions{
+	to2 = common.HexToAddress("0x2")
+	to3 = common.HexToAddress("0x3")
+	to4 = common.HexToAddress("0x4")
+	to5 = common.HexToAddress("0x5")
+	to6 = common.HexToAddress("0x6")
+	to7 = common.HexToAddress("0x7")
+	txs = Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
 			Value:    big.NewInt(1),
@@ -149,11 +149,12 @@ var (
 		}),
 	}
 
-	// Create corresponding receipts for the testTxs
-	blockNumber  = big.NewInt(1)
-	blockTime    = uint64(2)
-	blockHash    = common.BytesToHash([]byte{0x03, 0x14})
-	testReceipts = Receipts{
+	blockNumber = big.NewInt(1)
+	blockTime   = uint64(2)
+	blockHash   = common.BytesToHash([]byte{0x03, 0x14})
+
+	// Create the corresponding receipts
+	receipts = Receipts{
 		&Receipt{
 			Status:            ReceiptStatusFailed,
 			CumulativeGasUsed: 1,
@@ -163,7 +164,7 @@ var (
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
-					TxHash:      testTxs[0].Hash(),
+					TxHash:      txs[0].Hash(),
 					TxIndex:     0,
 					BlockHash:   blockHash,
 					Index:       0,
@@ -173,14 +174,14 @@ var (
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
-					TxHash:      testTxs[0].Hash(),
+					TxHash:      txs[0].Hash(),
 					TxIndex:     0,
 					BlockHash:   blockHash,
 					Index:       1,
 				},
 			},
 			// derived fields:
-			TxHash:            testTxs[0].Hash(),
+			TxHash:            txs[0].Hash(),
 			ContractAddress:   common.HexToAddress("0x5a443704dd4b594b382c22a083e2bd3090a6fef3"),
 			GasUsed:           1,
 			EffectiveGasPrice: big.NewInt(11),
@@ -197,7 +198,7 @@ var (
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
-					TxHash:      testTxs[1].Hash(),
+					TxHash:      txs[1].Hash(),
 					TxIndex:     1,
 					BlockHash:   blockHash,
 					Index:       2,
@@ -207,14 +208,14 @@ var (
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
-					TxHash:      testTxs[1].Hash(),
+					TxHash:      txs[1].Hash(),
 					TxIndex:     1,
 					BlockHash:   blockHash,
 					Index:       3,
 				},
 			},
 			// derived fields:
-			TxHash:            testTxs[1].Hash(),
+			TxHash:            txs[1].Hash(),
 			GasUsed:           2,
 			EffectiveGasPrice: big.NewInt(22),
 			BlockHash:         blockHash,
@@ -227,7 +228,7 @@ var (
 			CumulativeGasUsed: 6,
 			Logs:              []*Log{},
 			// derived fields:
-			TxHash:            testTxs[2].Hash(),
+			TxHash:            txs[2].Hash(),
 			GasUsed:           3,
 			EffectiveGasPrice: big.NewInt(33),
 			BlockHash:         blockHash,
@@ -240,7 +241,7 @@ var (
 			CumulativeGasUsed: 10,
 			Logs:              []*Log{},
 			// derived fields:
-			TxHash:            testTxs[3].Hash(),
+			TxHash:            txs[3].Hash(),
 			GasUsed:           4,
 			EffectiveGasPrice: big.NewInt(1044),
 			BlockHash:         blockHash,
@@ -253,7 +254,7 @@ var (
 			CumulativeGasUsed: 15,
 			Logs:              []*Log{},
 			// derived fields:
-			TxHash:            testTxs[4].Hash(),
+			TxHash:            txs[4].Hash(),
 			GasUsed:           5,
 			EffectiveGasPrice: big.NewInt(1055),
 			BlockHash:         blockHash,
@@ -266,7 +267,7 @@ var (
 			CumulativeGasUsed: 21,
 			Logs:              []*Log{},
 			// derived fields:
-			TxHash:            testTxs[5].Hash(),
+			TxHash:            txs[5].Hash(),
 			GasUsed:           6,
 			EffectiveGasPrice: big.NewInt(1066),
 			BlockHash:         blockHash,
@@ -279,7 +280,7 @@ var (
 			CumulativeGasUsed: 28,
 			Logs:              []*Log{},
 			// derived fields:
-			TxHash:            testTxs[6].Hash(),
+			TxHash:            txs[6].Hash(),
 			GasUsed:           7,
 			EffectiveGasPrice: big.NewInt(1077),
 			BlockHash:         blockHash,
@@ -302,14 +303,14 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
-	derivedReceipts := clearComputedFieldsOnReceipts(testReceipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, testTxs)
+	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
 
 	// Check diff of receipts against derivedReceipts.
-	r1, err := json.MarshalIndent(testReceipts, "", "  ")
+	r1, err := json.MarshalIndent(receipts, "", "  ")
 	if err != nil {
 		t.Fatal("error marshaling input receipts:", err)
 	}
@@ -327,8 +328,8 @@ func TestDeriveFields(t *testing.T) {
 // Test that we can marshal/unmarshal receipts to/from json without errors.
 // This also confirms that our test receipts contain all the required fields.
 func TestReceiptJSON(t *testing.T) {
-	for i := range testReceipts {
-		b, err := testReceipts[i].MarshalJSON()
+	for i := range receipts {
+		b, err := receipts[i].MarshalJSON()
 		if err != nil {
 			t.Fatal("error marshaling receipt to json:", err)
 		}
@@ -343,7 +344,7 @@ func TestReceiptJSON(t *testing.T) {
 // Test we can still parse receipt without EffectiveGasPrice for backwards compatibility, even
 // though it is required per the spec.
 func TestEffectiveGasPriceNotRequired(t *testing.T) {
-	r := *testReceipts[0]
+	r := *receipts[0]
 	r.EffectiveGasPrice = nil
 	b, err := r.MarshalJSON()
 	if err != nil {
