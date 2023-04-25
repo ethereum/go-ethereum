@@ -139,7 +139,7 @@ INFO [09-06|01:31:59.910] Resuming state snapshot generation root=bc64d4..fc1edd
 The sync can be confirmed using [`eth.syncing`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_syncing) - it will return `false` if the node is in sync. If `eth.syncing` returns anything other than `false` it has not finished syncing. Generally, if syncing is still ongoing, `eth.syncing` will return block info that looks as follows:
 
 ```json
-> eth.sycing
+> eth.syncing
 {
   currentBlock: 15285946,
   healedBytecodeBytes: 991164713,
