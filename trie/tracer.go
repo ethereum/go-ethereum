@@ -18,7 +18,7 @@ package trie
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie/types"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // tracer tracks the changes of trie nodes. During the trie operations,
@@ -124,6 +124,6 @@ func (t *tracer) markDeletions(set *NodeSet) {
 		if !ok {
 			continue
 		}
-		set.addNode([]byte(path), types.NewDeletedNodeWithPrev(prev))
+		set.addNode([]byte(path), trienode.NewWithPrev(common.Hash{}, nil, prev))
 	}
 }

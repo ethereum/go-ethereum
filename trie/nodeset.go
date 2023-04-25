@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie/types"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // NodeSet contains all dirty nodes collected during the commit operation.
@@ -37,7 +37,7 @@ type NodeSet struct {
 	// deleted nodes and updated nodes. The original value of the newly
 	// inserted node must be nil, and the original value of the other two
 	// types must be non-nil.
-	nodes map[string]*types.NodeWithPrev
+	nodes map[string]*trienode.WithPrev
 }
 
 // NewNodeSet initializes an empty node set to be used for tracking dirty nodes
@@ -46,13 +46,13 @@ type NodeSet struct {
 func NewNodeSet(owner common.Hash) *NodeSet {
 	return &NodeSet{
 		owner: owner,
-		nodes: make(map[string]*types.NodeWithPrev),
+		nodes: make(map[string]*trienode.WithPrev),
 	}
 }
 
 // forEachWithOrder iterates the dirty nodes with the order from bottom to top,
 // right to left, nodes with the longest path will be iterated first.
-func (set *NodeSet) forEachWithOrder(callback func(path string, n *types.Node)) {
+func (set *NodeSet) forEachWithOrder(callback func(path string, n *trienode.Node)) {
 	var paths sort.StringSlice
 	for path := range set.nodes {
 		paths = append(paths, path)
@@ -65,7 +65,7 @@ func (set *NodeSet) forEachWithOrder(callback func(path string, n *types.Node)) 
 }
 
 // addNode adds the provided dirty node into set.
-func (set *NodeSet) addNode(path []byte, n *types.NodeWithPrev) {
+func (set *NodeSet) addNode(path []byte, n *trienode.WithPrev) {
 	if n.IsDeleted() {
 		set.deletes += 1
 	} else {

@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie/types"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // leaf represents a trie leaf node
@@ -139,14 +139,14 @@ func (c *committer) store(path []byte, n node) node {
 		// deleted only if the node was existent in database before.
 		prev, ok := c.tracer.accessList[string(path)]
 		if ok {
-			c.nodes.addNode(path, types.NewDeletedNodeWithPrev(prev))
+			c.nodes.addNode(path, trienode.NewWithPrev(common.Hash{}, nil, prev))
 		}
 		return n
 	}
 	// Collect the dirty node to nodeset for return.
 	var (
 		nhash = common.BytesToHash(hash)
-		node  = types.NewNodeWithPrev(
+		node  = trienode.NewWithPrev(
 			nhash,
 			nodeToBytes(n),
 			c.tracer.accessList[string(path)],

@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	ntype "github.com/ethereum/go-ethereum/trie/types"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -608,7 +608,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	for _, owner := range order {
 		subset := nodes.sets[owner]
-		subset.forEachWithOrder(func(path string, n *ntype.Node) {
+		subset.forEachWithOrder(func(path string, n *trienode.Node) {
 			if n.IsDeleted() {
 				return // ignore deletion
 			}

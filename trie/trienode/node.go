@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
 
-package types
+package trienode
 
 import "github.com/ethereum/go-ethereum/common"
 
@@ -36,46 +36,32 @@ func (n *Node) IsDeleted() bool {
 	return n.Hash == (common.Hash{})
 }
 
-// NodeWithPrev wraps the Node with the previous node value attached.
-type NodeWithPrev struct {
+// WithPrev wraps the Node with the previous node value attached.
+type WithPrev struct {
 	*Node
 	Prev []byte // Encoded original value, nil means it's non-existent
 }
 
 // Unwrap returns the internal Node object.
-func (n *NodeWithPrev) Unwrap() *Node {
+func (n *WithPrev) Unwrap() *Node {
 	return n.Node
 }
 
 // Size returns the total memory size used by this node. It overloads
 // the function in Node by counting the size of previous value as well.
-func (n *NodeWithPrev) Size() int {
+func (n *WithPrev) Size() int {
 	return n.Node.Size() + len(n.Prev)
 }
 
-// NewNode constructs a node with provided node information.
-func NewNode(hash common.Hash, blob []byte) *Node {
+// New constructs a node with provided node information.
+func New(hash common.Hash, blob []byte) *Node {
 	return &Node{Hash: hash, Blob: blob}
 }
 
-// NewDeletedNode constructs a deletion marker for deleted node.
-func NewDeletedNode() *Node {
-	return &Node{}
-}
-
-// NewNodeWithPrev constructs a node with provided node information.
-func NewNodeWithPrev(hash common.Hash, blob []byte, prev []byte) *NodeWithPrev {
-	return &NodeWithPrev{
-		Node: NewNode(hash, blob),
-		Prev: prev,
-	}
-}
-
-// NewDeletedNodeWithPrev constructs a deletion marker for deleted node with
-// provided original value.
-func NewDeletedNodeWithPrev(prev []byte) *NodeWithPrev {
-	return &NodeWithPrev{
-		Node: NewDeletedNode(),
+// NewWithPrev constructs a node with provided node information.
+func NewWithPrev(hash common.Hash, blob []byte, prev []byte) *WithPrev {
+	return &WithPrev{
+		Node: New(hash, blob),
 		Prev: prev,
 	}
 }
