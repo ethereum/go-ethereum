@@ -188,27 +188,9 @@ nodes.
 	}
 )
 
-// getAccountConfig gets configuration from command line and config file
-func getAccountConfig(ctx *cli.Context) gethConfig {
-	// Load defaults.
-	cfg := gethConfig{Node: defaultNodeConfig()}
-
-	// Load config file.
-	if file := ctx.String(configFileFlag.Name); file != "" {
-		if err := loadConfig(file, &cfg); err != nil {
-			utils.Fatalf("%v", err)
-		}
-	}
-
-	// Apply flags.
-	utils.SetNodeConfig(ctx, &cfg.Node)
-
-	return cfg
-}
-
 // makeAccountManager creates an account manager with backends
 func makeAccountManager(ctx *cli.Context) *accounts.Manager {
-	cfg := getAccountConfig(ctx)
+	cfg := loadBaseConfig(ctx)
 	am := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.Node.InsecureUnlockAllowed})
 	keydir, isEphemeral, err := cfg.Node.GetKeyStoreDir()
 	if err != nil {
@@ -294,7 +276,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	cfg := getAccountConfig(ctx)
+	cfg := loadBaseConfig(ctx)
 	keydir, isEphemeral, err := cfg.Node.GetKeyStoreDir()
 	if err != nil {
 		utils.Fatalf("Failed to get the keystore directory: %v", err)
