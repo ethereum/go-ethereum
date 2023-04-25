@@ -471,7 +471,7 @@ func (g *Genesis) ToBlock() *types.Block {
 		if g.Config.IsShanghai(g.Timestamp) {
 			head.WithdrawalsHash = &types.EmptyRootHash
 		}
-		if g.Config.IsSharding(g.Timestamp) {
+		if g.Config.IsCancun(g.Timestamp) {
 			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}

@@ -235,7 +235,7 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// enable3198 applies mini-danksharding (DATAHASH Opcode)
+// enableSharding applies mini-danksharding (DATAHASH Opcode)
 // - Adds an opcode that returns the versioned data hash of the tx at a index.
 func enableSharding(jt *JumpTable) {
 	jt[DATAHASH] = &operation{

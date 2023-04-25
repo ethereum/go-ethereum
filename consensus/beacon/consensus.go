@@ -269,8 +269,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify existence / non-existence of excessDataGas.
-	sharding := chain.Config().IsSharding(header.Time)
-	if sharding {
+	cancun := chain.Config().IsCancun(header.Time)
+	if cancun {
 		if header.ExcessDataGas == nil {
 			return fmt.Errorf("missing excessDataGas")
 		}
@@ -279,7 +279,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
-	if !sharding && header.ExcessDataGas != nil {
+	if !cancun && header.ExcessDataGas != nil {
 		return fmt.Errorf("invalied ExcessDataGas: have %v, expected nil", header.ExcessDataGas)
 	}
 	return nil
@@ -358,7 +358,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
-	if chain.Config().IsSharding(header.Time) {
+	if chain.Config().IsCancun(header.Time) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		} else {

@@ -58,7 +58,7 @@ func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain Chai
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
-	// In the event excessDataGas is nil (which happens if the parent block is pre-sharding),
+	// In the event excessDataGas is nil (which happens if the parent block is pre-cancun),
 	// we bootstrap BlockContext.ExcessDataGas with the zero value.
 	edg := new(big.Int)
 	if excessDataGas != nil {

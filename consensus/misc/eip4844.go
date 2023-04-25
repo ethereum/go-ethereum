@@ -63,7 +63,7 @@ func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Heade
 // VerifyExcessDataGas verifies the excess_data_gas in the block header
 func VerifyExcessDataGas(chainReader ChainReader, block *types.Block) error {
 	excessDataGas := block.ExcessDataGas()
-	if !chainReader.Config().IsSharding(block.Time()) {
+	if !chainReader.Config().IsCancun(block.Time()) {
 		if excessDataGas != nil {
 			return fmt.Errorf("unexpected excessDataGas in header")
 		}
