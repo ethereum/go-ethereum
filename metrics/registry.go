@@ -94,10 +94,10 @@ func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{}
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
 		i = v.Call(nil)[0].Interface()
 	}
-	if !r.isKnownType(i) {
+	item, _, err := r.loadOrRegister(name, i)
+	if err != nil {
 		return i
 	}
-	item, _ := r.register(name, i)
 	return item
 }
 
@@ -113,10 +113,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
 		i = v.Call(nil)[0].Interface()
 	}
-	if !r.isKnownType(i) {
-		return UnknownMetric(name)
-	}
-	_, loaded := r.register(name, i)
+	_, loaded, _ := r.loadOrRegister(name, i)
 	if loaded {
 		return DuplicateMetric(name)
 	}
@@ -204,21 +201,18 @@ func (r *StandardRegistry) Unregister(name string) {
 	}
 }
 
-func (r *StandardRegistry) register(name string, i interface{}) (interface{}, bool) {
-	item, loaded := r.metrics.LoadOrStore(name, i)
-	if loaded {
-		return item, loaded
-	}
-	r.size.Add(1)
-	return item, loaded
-}
-
-func (r *StandardRegistry) isKnownType(i interface{}) bool {
+func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, error) {
 	switch i.(type) {
 	case Counter, CounterFloat64, Gauge, GaugeFloat64, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
-		return true
+	default:
+		return nil, false, UnknownMetric(name)
 	}
-	return false
+	item, loaded := r.metrics.LoadOrStore(name, i)
+	if loaded {
+		return item, loaded, nil
+	}
+	r.size.Add(1)
+	return item, loaded, nil
 }
 
 func (r *StandardRegistry) registered() map[string]interface{} {
