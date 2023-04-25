@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -500,6 +501,18 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (ty
 	}
 
 	result := <-resultChan
+
+	if _, ok := result.err.(blockstm.ParallelExecFailedError); ok {
+		log.Warn("Parallel state processor failed", "err", result.err)
+
+		// If the parallel processor failed, we will fallback to the serial processor if enabled
+		if processorCount == 2 {
+			result.statedb.StopPrefetcher()
+			result = <-resultChan
+			processorCount--
+		}
+	}
+
 	result.counter.Inc(1)
 
 	// Make sure we are not leaking any prefetchers

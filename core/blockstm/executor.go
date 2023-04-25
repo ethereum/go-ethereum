@@ -69,6 +69,14 @@ func (e ErrExecAbortError) Error() string {
 	}
 }
 
+type ParallelExecFailedError struct {
+	Msg string
+}
+
+func (e ParallelExecFailedError) Error() string {
+	return e.Msg
+}
+
 type IntHeap []int
 
 func (h IntHeap) Len() int           { return len(h) }
@@ -384,7 +392,7 @@ func (pe *ParallelExecutor) Prepare() error {
 	tx := pe.execTasks.takeNextPending()
 
 	if tx == -1 {
-		return fmt.Errorf("no transaction to execute")
+		return ParallelExecFailedError{"no executable transactions due to bad dependency"}
 	}
 
 	pe.cntExec++
