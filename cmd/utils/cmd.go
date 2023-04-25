@@ -287,8 +287,8 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 }
 
 type exportPreimage struct {
-	key []byte
-	val []byte
+	Key []byte
+	Val []byte
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
@@ -325,7 +325,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 		// Accumulate the preimages and flush when enough ws gathered
-		preimages[string(blob.key)] = common.CopyBytes(blob.val)
+		preimages[string(blob.Key)] = common.CopyBytes(blob.Val)
 		if len(preimages) > 1024 {
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[string][]byte)
