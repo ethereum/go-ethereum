@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 // DuplicateMetric is the error returned by Registry.Register when a metric
@@ -59,8 +58,6 @@ type Registry interface {
 // of names to metrics.
 type StandardRegistry struct {
 	metrics sync.Map
-	// not representing 1:1 map size.
-	size atomic.Int32
 }
 
 // Create a new registry.
@@ -196,9 +193,7 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 // Unregister the metric with the given name.
 func (r *StandardRegistry) Unregister(name string) {
 	r.stop(name)
-	if _, ok := r.metrics.LoadAndDelete(name); ok {
-		r.size.Add(-1)
-	}
+	r.metrics.LoadAndDelete(name)
 }
 
 func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, error) {
@@ -208,15 +203,11 @@ func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface
 		return nil, false, UnknownMetric(name)
 	}
 	item, loaded := r.metrics.LoadOrStore(name, i)
-	if loaded {
-		return item, loaded, nil
-	}
-	r.size.Add(1)
 	return item, loaded, nil
 }
 
 func (r *StandardRegistry) registered() map[string]interface{} {
-	metrics := make(map[string]interface{}, r.size.Load())
+	metrics := make(map[string]interface{})
 	r.metrics.Range(func(key, value any) bool {
 		metrics[key.(string)] = value
 		return true
