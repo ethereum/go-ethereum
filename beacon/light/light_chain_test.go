@@ -383,7 +383,7 @@ func (c *lightChainTest) checkStateProof(header types.Header, expFound bool) {
 	if found := c.chain.HasStateProof(header); found != expFound {
 		c.t.Errorf("Incorrect result from HasStateProof (expected %v, got %v)", expFound, found)
 	}
-	if proof, err := c.chain.GetStateProof(header); err == nil {
+	if proof, err := c.chain.GetStateProof(header.Slot, header.StateRoot); err == nil {
 		if !expFound {
 			c.t.Errorf("Unexpected state proof found by GetStateProof")
 		}

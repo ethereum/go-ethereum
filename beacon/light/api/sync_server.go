@@ -17,8 +17,6 @@
 package api
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
@@ -33,42 +31,26 @@ const (
 )
 
 type SyncServer struct {
-	api  *BeaconLightApi
-	lock sync.RWMutex
-
-	unsubscribe                  func()
-	canRequestBootstrap          bool
-	firstUpdate, afterLastUpdate uint64
-	firstState                   uint64 //TODO ...
+	api         *BeaconLightApi
+	unsubscribe func()
 }
 
 func NewSyncServer(api *BeaconLightApi) *SyncServer {
-	return &SyncServer{
-		api:                 api,
-		canRequestBootstrap: true,
-	}
+	return &SyncServer{api: api}
 }
 
 func (s *SyncServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(signedHead types.SignedHead)) {
-	s.lock.Lock()
-	s.unsubscribe = s.api.StartHeadListener(newHead, func(signedHead types.SignedHead) {
-		s.lock.Lock()
-		s.afterLastUpdate = types.PeriodOfSlot(signedHead.Header.Slot + 256)
-		s.lock.Unlock()
-		newSignedHead(signedHead)
-	}, func(err error) {
+	s.unsubscribe = s.api.StartHeadListener(newHead, newSignedHead, func(err error) {
 		log.Warn("Head event stream error", "err", err)
 	})
-	s.lock.Unlock()
 }
 
+// Note: UnsubscribeHeads should not be called concurrently with SubscribeHeads
 func (s *SyncServer) UnsubscribeHeads() {
-	s.lock.Lock()
 	if s.unsubscribe != nil {
 		s.unsubscribe()
 		s.unsubscribe = nil
 	}
-	s.lock.Unlock()
 }
 
 func (s *SyncServer) DelayUntil() mclock.AbsTime { return 0 } //TODO
@@ -77,35 +59,14 @@ func (s *SyncServer) Fail(desc string) {
 	log.Warn("API endpoint failure", "URL", s.api.url, "error", desc)
 }
 
-func (s *SyncServer) CanRequestBootstrap() bool {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.canRequestBootstrap
-}
-
 func (s *SyncServer) RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData)) {
 	go func() {
 		if checkpoint, err := s.api.GetCheckpointData(checkpointHash); err == nil {
 			response(checkpoint)
 		} else {
-			s.lock.Lock()
-			s.canRequestBootstrap = false
-			s.lock.Unlock()
 			response(nil)
 		}
 	}()
-}
-
-func (s *SyncServer) UpdateRange() types.PeriodRange {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	r := types.PeriodRange{First: s.firstUpdate, AfterLast: s.afterLastUpdate}
-	if !r.IsEmpty() {
-		return r
-	}
-	return types.PeriodRange{}
 }
 
 func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee)) {
@@ -138,23 +99,11 @@ func (s *SyncServer) RequestBeaconHeader(blockRoot common.Hash, response func(*t
 	}()
 }
 
-func (s *SyncServer) BeaconStateTail() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.firstState
-}
-
-func (s *SyncServer) RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof)) {
+func (s *SyncServer) RequestBeaconState(stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof)) {
 	go func() {
 		if proof, err := s.api.GetStateProof(stateRoot, format); err == nil {
 			response(&proof)
 		} else {
-			s.lock.Lock()
-			if slot >= s.firstState {
-				s.firstState = slot + 1
-			}
-			s.lock.Unlock()
 			response(nil)
 		}
 	}()

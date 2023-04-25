@@ -30,7 +30,6 @@ const maxUpdateRequest = 8
 
 type checkpointInitServer interface {
 	request.RequestServer
-	CanRequestBootstrap() bool
 	RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData))
 }
 
@@ -89,14 +88,15 @@ type checkpointRequest struct {
 	checkpointHash common.Hash
 }
 
-func (r checkpointRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
-	if cs, ok := server.RequestServer.(checkpointInitServer); !ok || !cs.CanRequestBootstrap() {
+func (r checkpointRequest) CanSendTo(server *request.Server, moduleData *interface{}) (canSend bool, priority uint64) {
+	if _, ok := server.RequestServer.(checkpointInitServer); !ok || (*moduleData) != nil {
+		// if moduleData is not nil then the request has failed once already
 		return false, 0
 	}
 	return true, 0
 }
 
-func (r checkpointRequest) SendTo(server *request.Server) {
+func (r checkpointRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server)
 	server.RequestServer.(checkpointInitServer).RequestBootstrap(r.checkpointHash, func(checkpoint *light.CheckpointData) {
 		r.lock.Lock()
@@ -104,6 +104,7 @@ func (r checkpointRequest) SendTo(server *request.Server) {
 
 		r.reqLock.Returned(server, reqId)
 		if checkpoint == nil || !checkpoint.Validate() {
+			(*moduleData) = struct{}{}
 			server.Fail("error retrieving checkpoint data")
 			return
 		}
@@ -116,7 +117,6 @@ func (r checkpointRequest) SendTo(server *request.Server) {
 
 type updateServer interface {
 	request.RequestServer
-	UpdateRange() types.PeriodRange
 	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee))
 }
 
@@ -135,9 +135,11 @@ func NewForwardUpdateSync(chain *light.CommitteeChain) *ForwardUpdateSync {
 // SetupModuleTriggers implements request.Module
 func (s *ForwardUpdateSync) SetupModuleTriggers(trigger func(id string, subscribe bool) *request.ModuleTrigger) {
 	s.reqLock.Trigger = trigger("forwardUpdateSync", true)
-	// committeeChainInit signals that the committee chain is initialized (has fixed committee roots) and the first update request can be constructed.
+	// committeeChainInit signals that the committee chain is initialized (has
+	// fixed committee roots) and the first update request can be constructed.
 	trigger("committeeChainInit", true)
-	// validatedHead ensures that the UpdateRange of each server is re-checked as new heads appear and new updates are synced as they become available.
+	// validatedHead ensures that the UpdateRange of each server is re-checked
+	// as new heads appear and new updates are synced as they become available.
 	trigger("validatedHead", true)
 	// newUpdate is triggered when a new update is successfully added to the committee chain
 	s.newUpdateTrigger = trigger("newUpdate", true)
@@ -166,19 +168,26 @@ type updateRequest struct {
 	first uint64
 }
 
-func (r updateRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
-	if us, ok := server.RequestServer.(updateServer); ok {
-		if updateRange := us.UpdateRange(); updateRange.Includes(r.first) {
-			return true, updateRange.AfterLast
+func (r updateRequest) CanSendTo(server *request.Server, moduleData *interface{}) (canSend bool, priority uint64) {
+	if _, ok := server.RequestServer.(updateServer); ok {
+		firstUpdate, _ := (*moduleData).(uint64)
+		headSlot, _ := server.LatestHead()
+		afterLastUpdate := types.PeriodOfSlot(headSlot)
+		if r.first >= firstUpdate && r.first < afterLastUpdate {
+			return true, afterLastUpdate
 		}
 	}
 	return false, 0
 }
 
-func (r updateRequest) SendTo(server *request.Server) {
+func (r updateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	us := server.RequestServer.(updateServer)
-	updateRange := us.UpdateRange()
-	count := updateRange.AfterLast - r.first
+	headSlot, _ := server.LatestHead()
+	afterLastUpdate := types.PeriodOfSlot(headSlot)
+	if afterLastUpdate <= r.first {
+		return
+	}
+	count := afterLastUpdate - r.first
 	if count > maxUpdateRequest {
 		count = maxUpdateRequest
 	}

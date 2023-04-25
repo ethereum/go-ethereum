@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
-
 	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,8 +31,7 @@ import (
 
 type beaconStateServer interface {
 	request.RequestServer
-	BeaconStateTail() uint64
-	RequestBeaconState(slot uint64, stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof))
+	RequestBeaconState(stateRoot common.Hash, format merkle.CompactProofFormat, response func(*merkle.MultiProof))
 }
 
 type StateSync struct {
@@ -192,8 +190,9 @@ type stateRequest struct {
 	prefetch bool
 }
 
-func (r stateRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
-	if rs, ok := server.RequestServer.(beaconStateServer); !ok || r.header.Slot < rs.BeaconStateTail() {
+func (r stateRequest) CanSendTo(server *request.Server, moduleData *interface{}) (canSend bool, priority uint64) {
+	stateTail, _ := (*moduleData).(uint64)
+	if _, ok := server.RequestServer.(beaconStateServer); !ok || r.header.Slot < stateTail {
 		return false, 0
 	}
 	if !r.prefetch {
@@ -203,15 +202,18 @@ func (r stateRequest) CanSendTo(server *request.Server) (canSend bool, priority 
 	return r.header.Hash() == headRoot, 0
 }
 
-func (r stateRequest) SendTo(server *request.Server) {
+func (r stateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server, r.header.StateRoot)
-	server.RequestServer.(beaconStateServer).RequestBeaconState(r.header.Slot, r.header.StateRoot, r.syncProofFormat, func(proof *merkle.MultiProof) {
+	server.RequestServer.(beaconStateServer).RequestBeaconState(r.header.StateRoot, r.syncProofFormat, func(proof *merkle.MultiProof) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 
 		r.reqLock.Returned(server, reqId, r.header.StateRoot)
 		if proof == nil {
-			//server.Fail("error retrieving beacon state proof")
+			stateTail, _ := (*moduleData).(uint64)
+			if r.header.Slot >= stateTail {
+				(*moduleData) = r.header.Slot + 1
+			}
 			return
 		}
 		oldStateHead, _, _ := r.chain.StateProofRange()

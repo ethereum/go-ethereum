@@ -156,6 +156,9 @@ func (s *Scheduler) RegisterServer(requestServer RequestServer) {
 	defer s.lock.Unlock()
 
 	server := s.newServer(requestServer)
+	for _, module := range s.modules {
+		server.moduleData[module] = new(interface{})
+	}
 	s.servers = append(s.servers, server)
 	s.headTracker.registerServer(server)
 	s.triggerServer(server)
@@ -260,8 +263,10 @@ func (s *Scheduler) processModules(trModules map[Module]struct{}, trServers map[
 
 	for _, module := range s.modules {
 		if _, ok := trModules[module]; ok {
+			mtEnv.module = module
 			module.Process(&mtEnv)
 		} else if len(stEnv.canRequestNow) > 0 {
+			stEnv.module = module
 			module.Process(&stEnv)
 		}
 	}

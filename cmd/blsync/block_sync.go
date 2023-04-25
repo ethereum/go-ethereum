@@ -127,7 +127,7 @@ type blockRequest struct {
 	prefetch  bool
 }
 
-func (r blockRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
+func (r blockRequest) CanSendTo(server *request.Server, moduleData *interface{}) (canSend bool, priority uint64) {
 	if _, ok := server.RequestServer.(beaconBlockServer); !ok {
 		return false, 0
 	}
@@ -138,7 +138,7 @@ func (r blockRequest) CanSendTo(server *request.Server) (canSend bool, priority 
 	return r.blockRoot == headRoot, 0
 }
 
-func (r blockRequest) SendTo(server *request.Server) {
+func (r blockRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server, r.blockRoot)
 	server.RequestServer.(beaconBlockServer).RequestBeaconBlock(r.blockRoot, func(block *capella.BeaconBlock) {
 		r.lock.Lock()
@@ -223,6 +223,7 @@ type engineApiUpdater struct {
 	chain       *light.LightChain
 	updating    bool
 	selfTrigger *request.ModuleTrigger
+	tailTarget  uint64
 }
 
 // SetupModuleTriggers implements request.Module
@@ -235,7 +236,11 @@ func (s *engineApiUpdater) SetupModuleTriggers(trigger func(id string, subscribe
 // Process implements request.Module
 func (s *engineApiUpdater) Process(env *request.Environment) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
+	defer func() {
+		s.headerSync.SetTailTarget(s.tailTarget)
+		s.chain.Prune(s.tailTarget, true)
+		s.lock.Unlock()
+	}()
 
 	if s.updating {
 		return
@@ -248,25 +253,25 @@ func (s *engineApiUpdater) Process(env *request.Environment) {
 	if headRoot == s.lastHead {
 		return
 	}
-	if headBlock.Slot > reverseSyncHeaders {
-		s.headerSync.SetTailTarget(uint64(headBlock.Slot) - reverseSyncHeaders)
-	} else {
-		s.headerSync.SetTailTarget(0)
-	}
 
 	head, err := s.chain.GetHeaderByHash(headRoot)
 	if err != nil {
 		return
 	}
+	if uint64(headBlock.Slot) > s.tailTarget+reverseSyncHeaders {
+		s.tailTarget = uint64(headBlock.Slot) - reverseSyncHeaders
+	}
 
 	var finalizedExecRoot common.Hash
-	if state, err := s.chain.GetStateProof(head); err == nil {
+	if state, err := s.chain.GetStateProof(head.Slot, head.StateRoot); err == nil {
 		finalizedRoot := common.Hash(state.Values[finalizedBlockIndex])
 		if finalized, err := s.chain.GetHeaderByHash(finalizedRoot); err == nil {
-			if finalizedState, err := s.chain.GetStateProof(finalized); err == nil {
+			if finalizedState, err := s.chain.GetStateProof(finalized.Slot, finalized.StateRoot); err == nil {
 				finalizedExecRoot = common.Hash(finalizedState.Values[execBlockIndex])
 			}
-			s.chain.Prune(finalized.Slot, true)
+			if finalized.Slot > s.tailTarget {
+				s.tailTarget = finalized.Slot
+			}
 		}
 	} else {
 		if s.stateSync.HeadSyncPossible() {

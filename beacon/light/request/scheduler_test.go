@@ -201,11 +201,11 @@ type testRequest struct {
 	returnFns []func()
 }
 
-func (r *testRequest) CanSendTo(server *Server) (canSend bool, priority uint64) {
+func (r *testRequest) CanSendTo(server *Server, moduleData *interface{}) (canSend bool, priority uint64) {
 	return r.reqLock.CanRequest(), 0
 }
 
-func (r *testRequest) SendTo(server *Server) {
+func (r *testRequest) SendTo(server *Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server)
 	r.returnFns = append(r.returnFns, func() {
 		r.reqLock.Returned(server, reqId)

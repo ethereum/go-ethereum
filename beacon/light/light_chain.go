@@ -555,11 +555,11 @@ func (lc *LightChain) HasStateProof(header types.Header) bool {
 }
 
 // GetStateProof returns the state proof belonging to the given header.
-func (lc *LightChain) GetStateProof(header types.Header) (merkle.MultiProof, error) {
-	if proof, ok := lc.stateProofCache.Get(slotAndHash{header.Slot, header.StateRoot}); ok {
+func (lc *LightChain) GetStateProof(slot uint64, stateRoot common.Hash) (merkle.MultiProof, error) {
+	if proof, ok := lc.stateProofCache.Get(slotAndHash{slot, stateRoot}); ok {
 		return proof, nil
 	}
-	proofEnc, err := lc.db.Get(getStateProofKey(header.Slot, header.StateRoot))
+	proofEnc, err := lc.db.Get(getStateProofKey(slot, stateRoot))
 	if err != nil {
 		return merkle.MultiProof{}, ErrNotFound
 	}

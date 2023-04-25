@@ -157,7 +157,7 @@ func TestMultiProof(t *testing.T) {
 		readers := make([]ProofReader, len(indexList))
 		for i, index := range indexList {
 			var mp MultiProof
-			mp.Format = NewIndexMapFormat().AddLeaf(index, nil)
+			mp.Format = EncodeCompactProofFormat(NewIndexMapFormat().AddLeaf(index, nil))
 			writer := NewMultiProofWriter(mp.Format, &mp.Values, nil)
 			testTraverseProof(t, testProofReader, writer, true)
 			readers[i] = mp.Reader(nil)
@@ -170,7 +170,7 @@ func TestMultiProof(t *testing.T) {
 		for i := 0; i < mpCount; i++ {
 			format.AddLeaf(indexList[i], nil)
 		}
-		mp.Format = format
+		mp.Format = EncodeCompactProofFormat(format)
 		expSuccess := rand.Intn(2) == 0
 		if !expSuccess {
 			// add an index that should not be available in the merged reader, expect the traversal to fail
@@ -183,7 +183,7 @@ func TestMultiProof(t *testing.T) {
 			mps := make([]MultiProof, mpwCount)
 			writers := make([]ProofWriter, mpwCount)
 			for i := range mps {
-				mps[i].Format = NewIndexMapFormat().AddLeaf(indexList[i], nil)
+				mps[i].Format = EncodeCompactProofFormat(NewIndexMapFormat().AddLeaf(indexList[i], nil))
 				writers[i] = NewMultiProofWriter(mps[i].Format, &mps[i].Values, nil)
 			}
 			reader := mp.Reader(nil)

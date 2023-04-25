@@ -155,7 +155,7 @@ type headerRequest struct {
 	prefetch  bool
 }
 
-func (r headerRequest) CanSendTo(server *request.Server) (canSend bool, priority uint64) {
+func (r headerRequest) CanSendTo(server *request.Server, moduleData *interface{}) (canSend bool, priority uint64) {
 	if _, ok := server.RequestServer.(beaconHeaderServer); !ok {
 		return false, 0
 	}
@@ -166,7 +166,7 @@ func (r headerRequest) CanSendTo(server *request.Server) (canSend bool, priority
 	return r.blockRoot == headRoot, 0
 }
 
-func (r headerRequest) SendTo(server *request.Server) {
+func (r headerRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server, r.blockRoot)
 	server.RequestServer.(beaconHeaderServer).RequestBeaconHeader(r.blockRoot, func(header *types.Header) {
 		r.lock.Lock()
