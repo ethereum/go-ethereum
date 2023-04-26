@@ -972,7 +972,8 @@ var BLOCK_DELTA = 1
 // file writer
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
-	f, err := os.Create("/data/one")
+	// this should allow us to append to the file
+	f, err := os.OpenFile("/data/one", os.O_WRONLY|os.O_APPEND, 0777)
 	if err != nil {
 		return common.Hash{}, err
 	}
