@@ -121,13 +121,13 @@ type peerCommons struct {
 	*p2p.Peer
 	rw p2p.MsgReadWriter
 
-	id           string    // Peer identity.
-	version      int       // Protocol version negotiated.
-	network      uint64    // Network ID being on.
-	frozen       uint32    // Flag whether the peer is frozen.
-	announceType uint64    // New block announcement type.
-	serving      uint32    // The status indicates the peer is served.
-	headInfo     blockInfo // Last announced block information.
+	id           string      // Peer identity.
+	version      int         // Protocol version negotiated.
+	network      uint64      // Network ID being on.
+	frozen       atomic.Bool // Flag whether the peer is frozen.
+	announceType uint64      // New block announcement type.
+	serving      atomic.Bool // The status indicates the peer is served.
+	headInfo     blockInfo   // Last announced block information.
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
@@ -143,7 +143,7 @@ type peerCommons struct {
 // isFrozen returns true if the client is frozen or the server has put our
 // client in frozen state
 func (p *peerCommons) isFrozen() bool {
-	return atomic.LoadUint32(&p.frozen) != 0
+	return p.frozen.Load()
 }
 
 // canQueue returns an indicator whether the peer can queue an operation.
@@ -398,7 +398,7 @@ func (p *serverPeer) rejectUpdate(size uint64) bool {
 // freeze processes Stop messages from the given server and set the status as
 // frozen.
 func (p *serverPeer) freeze() {
-	if atomic.CompareAndSwapUint32(&p.frozen, 0, 1) {
+	if p.frozen.CompareAndSwap(false, true) {
 		p.sendQueue.Clear()
 	}
 }
@@ -406,7 +406,7 @@ func (p *serverPeer) freeze() {
 // unfreeze processes Resume messages from the given server and set the status
 // as unfrozen.
 func (p *serverPeer) unfreeze() {
-	atomic.StoreUint32(&p.frozen, 0)
+	p.frozen.Store(false)
 }
 
 // sendRequest send a request to the server based on the given message type
@@ -823,11 +823,11 @@ func (p *clientPeer) freeze() {
 	if p.version < lpv3 {
 		// if Stop/Resume is not supported then just drop the peer after setting
 		// its frozen status permanently
-		atomic.StoreUint32(&p.frozen, 1)
+		p.frozen.Store(true)
 		p.Peer.Disconnect(p2p.DiscUselessPeer)
 		return
 	}
-	if atomic.SwapUint32(&p.frozen, 1) == 0 {
+	if !p.frozen.Swap(true) {
 		go func() {
 			p.sendStop()
 			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
@@ -840,7 +840,7 @@ func (p *clientPeer) freeze() {
 					time.Sleep(freezeCheckPeriod)
 					continue
 				}
-				atomic.StoreUint32(&p.frozen, 0)
+				p.frozen.Store(false)
 				p.sendResume(bufValue)
 				return
 			}
