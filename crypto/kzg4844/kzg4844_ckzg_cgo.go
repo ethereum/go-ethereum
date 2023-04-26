@@ -19,35 +19,51 @@
 package kzg4844
 
 import (
+	"encoding/json"
 	"errors"
+	"sync"
 
 	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
 	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// initKZG initializes the KZG library with the provided trusted setup.
-func initKZG(params *gokzg4844.JSONTrustedSetup) error {
-	err := gokzg4844.CheckTrustedSetupIsWellFormed(params)
+// ckzgAvailable signals whether the library was compiled into Geth.
+const ckzgAvailable = true
+
+// ckzgIniter ensures that we initialize the KZG library once before using it.
+var ckzgIniter sync.Once
+
+// ckzgInit initializes the KZG library with the provided trusted setup.
+func ckzgInit() {
+	config, err := content.ReadFile("trusted_setup.json")
 	if err != nil {
-		return err
+		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1)*len(params.SetupG1[0])/2)
+	params := new(gokzg4844.JSONTrustedSetup)
+	if err = json.Unmarshal(config, params); err != nil {
+		panic(err)
+	}
+	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
+		panic(err)
+	}
+	g1s := make([]byte, len(params.SetupG1)*(len(params.SetupG1[0])-2)/2)
 	for i, g1 := range params.SetupG1 {
-		copy(g1s[i*len(g1)/2:], hexutil.MustDecode("0x"+g1))
+		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
-	g2s := make([]byte, len(params.SetupG2)*len(params.SetupG2[0])/2)
+	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
 	for i, g2 := range params.SetupG2 {
-		copy(g2s[i*len(g2)/2:], hexutil.MustDecode("0x"+g2))
+		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err := ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
-		return err
+	if err = ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
+		panic(err)
 	}
-	return nil
 }
 
-// BlobToCommitment creates a small commitment out of a data blob.
-func BlobToCommitment(blob Blob) (Commitment, error) {
+// ckzgBlobToCommitment creates a small commitment out of a data blob.
+func ckzgBlobToCommitment(blob Blob) (Commitment, error) {
+	ckzgIniter.Do(ckzgInit)
+
 	commitment, err := ckzg4844.BlobToKZGCommitment((ckzg4844.Blob)(blob))
 	if err != nil {
 		return Commitment{}, err
@@ -55,9 +71,9 @@ func BlobToCommitment(blob Blob) (Commitment, error) {
 	return (Commitment)(commitment), nil
 }
 
-// ComputeProof computes the KZG proof at the given point for the polynomial
+// ckzgComputeProof computes the KZG proof at the given point for the polynomial
 // represented by the blob.
-func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
+func ckzgComputeProof(blob Blob, point Point) (Proof, Claim, error) {
 	proof, claim, err := ckzg4844.ComputeKZGProof((ckzg4844.Blob)(blob), (ckzg4844.Bytes32)(point))
 	if err != nil {
 		return Proof{}, Claim{}, err
@@ -65,9 +81,9 @@ func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
 	return (Proof)(proof), (Claim)(claim), nil
 }
 
-// VerifyProof verifies the KZG proof that the polynomial represented by the blob
+// ckzgVerifyProof verifies the KZG proof that the polynomial represented by the blob
 // evaluated at the given point is the claimed value.
-func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) error {
+func ckzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) error {
 	valid, err := ckzg4844.VerifyKZGProof((ckzg4844.Bytes48)(commitment), (ckzg4844.Bytes32)(point), (ckzg4844.Bytes32)(claim), (ckzg4844.Bytes48)(proof))
 	if err != nil {
 		return err
@@ -78,11 +94,11 @@ func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) e
 	return nil
 }
 
-// ComputeBlobProof returns the KZG proof that is used to verify the blob against
+// ckzgComputeBlobProof returns the KZG proof that is used to verify the blob against
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
+func ckzgComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
 	proof, err := ckzg4844.ComputeBlobKZGProof((ckzg4844.Blob)(blob), (ckzg4844.Bytes48)(commitment))
 	if err != nil {
 		return Proof{}, err
@@ -90,8 +106,8 @@ func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
 	return (Proof)(proof), nil
 }
 
-// VerifyBlobProof verifies that the blob data corresponds to the provided commitment.
-func VerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
+// ckzgVerifyBlobProof verifies that the blob data corresponds to the provided commitment.
+func ckzgVerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
 	valid, err := ckzg4844.VerifyBlobKZGProof((ckzg4844.Blob)(blob), (ckzg4844.Bytes48)(commitment), (ckzg4844.Bytes48)(proof))
 	if err != nil {
 		return err

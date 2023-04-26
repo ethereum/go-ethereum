@@ -19,27 +19,12 @@ package kzg4844
 
 import (
 	"embed"
-	"encoding/json"
-
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	"errors"
+	"sync/atomic"
 )
 
 //go:embed trusted_setup.json
 var content embed.FS
-
-func init() {
-	config, err := content.ReadFile("trusted_setup.json")
-	if err != nil {
-		panic(err)
-	}
-	params := new(gokzg4844.JSONTrustedSetup)
-	if err := json.Unmarshal(config, params); err != nil {
-		panic(err)
-	}
-	if err := initKZG(params); err != nil {
-		panic(err)
-	}
-}
 
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
@@ -55,3 +40,62 @@ type Point [32]byte
 
 // Claim is a claimed evaluation value in a specific point.
 type Claim [32]byte
+
+// useCKZG controls whether the cryptography should use the Go or C backend.
+var useCKZG atomic.Bool
+
+// UseCKZG can be called to switch the default Go implementation of KZG to the C
+// library if fo some reason the user wishes to do so (e.g. consensus bug in one
+// or the other).
+func UseCKZG(use bool) error {
+	if use && !ckzgAvailable {
+		return errors.New("CKZG unavailable on your platform")
+	}
+	useCKZG.Store(use)
+	return nil
+}
+
+// BlobToCommitment creates a small commitment out of a data blob.
+func BlobToCommitment(blob Blob) (Commitment, error) {
+	if ckzgAvailable && useCKZG.Load() {
+		return ckzgBlobToCommitment(blob)
+	}
+	return gokzgBlobToCommitment(blob)
+}
+
+// ComputeProof computes the KZG proof at the given point for the polynomial
+// represented by the blob.
+func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
+	if ckzgAvailable && useCKZG.Load() {
+		return ckzgComputeProof(blob, point)
+	}
+	return gokzgComputeProof(blob, point)
+}
+
+// VerifyProof verifies the KZG proof that the polynomial represented by the blob
+// evaluated at the given point is the claimed value.
+func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) error {
+	if ckzgAvailable && useCKZG.Load() {
+		return ckzgVerifyProof(commitment, point, claim, proof)
+	}
+	return gokzgVerifyProof(commitment, point, claim, proof)
+}
+
+// ComputeBlobProof returns the KZG proof that is used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
+	if ckzgAvailable && useCKZG.Load() {
+		return ckzgComputeBlobProof(blob, commitment)
+	}
+	return gokzgComputeBlobProof(blob, commitment)
+}
+
+// VerifyBlobProof verifies that the blob data corresponds to the provided commitment.
+func VerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
+	if ckzgAvailable && useCKZG.Load() {
+		return ckzgVerifyBlobProof(blob, commitment, proof)
+	}
+	return gokzgVerifyBlobProof(blob, commitment, proof)
+}

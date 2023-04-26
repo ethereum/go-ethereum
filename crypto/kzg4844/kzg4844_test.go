@@ -45,7 +45,13 @@ func randBlob() Blob {
 	return blob
 }
 
-func TestKZGWithPoint(t *testing.T) {
+func TestCKZGWithPoint(t *testing.T)  { testKZGWithPoint(t, true) }
+func TestGoKZGWithPoint(t *testing.T) { testKZGWithPoint(t, false) }
+
+func testKZGWithPoint(t *testing.T, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	blob := randBlob()
 
 	commitment, err := BlobToCommitment(blob)
@@ -62,7 +68,13 @@ func TestKZGWithPoint(t *testing.T) {
 	}
 }
 
-func TestKZGWithBlob(t *testing.T) {
+func TestCKZGWithBlob(t *testing.T)  { testKZGWithBlob(t, true) }
+func TestGoKZGWithBlob(t *testing.T) { testKZGWithBlob(t, false) }
+
+func testKZGWithBlob(t *testing.T, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	blob := randBlob()
 
 	commitment, err := BlobToCommitment(blob)
@@ -78,14 +90,24 @@ func TestKZGWithBlob(t *testing.T) {
 	}
 }
 
-func BenchmarkBlobToCommitment(b *testing.B) {
+func BenchmarkCKZGBlobToCommitment(b *testing.B)  { benchmarkBlobToCommitment(b, true) }
+func BenchmarkGoKZGBlobToCommitment(b *testing.B) { benchmarkBlobToCommitment(b, false) }
+func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	blob := randBlob()
 	for i := 0; i < b.N; i++ {
 		BlobToCommitment(blob)
 	}
 }
 
-func BenchmarkComputeProof(b *testing.B) {
+func BenchmarkCKZGComputeProof(b *testing.B)  { benchmarkComputeProof(b, true) }
+func BenchmarkGoKZGComputeProof(b *testing.B) { benchmarkComputeProof(b, false) }
+func benchmarkComputeProof(b *testing.B, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	var (
 		blob  = randBlob()
 		point = randFieldElement()
@@ -95,7 +117,12 @@ func BenchmarkComputeProof(b *testing.B) {
 	}
 }
 
-func BenchmarkVerifyProof(b *testing.B) {
+func BenchmarkCKZGVerifyProof(b *testing.B)  { benchmarkVerifyProof(b, true) }
+func BenchmarkGoKZGVerifyProof(b *testing.B) { benchmarkVerifyProof(b, false) }
+func benchmarkVerifyProof(b *testing.B, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	var (
 		blob            = randBlob()
 		point           = randFieldElement()
@@ -107,7 +134,12 @@ func BenchmarkVerifyProof(b *testing.B) {
 	}
 }
 
-func BenchmarkComputeBlobProof(b *testing.B) {
+func BenchmarkCKZGComputeBlobProof(b *testing.B)  { benchmarkComputeBlobProof(b, true) }
+func BenchmarkGoKZGComputeBlobProof(b *testing.B) { benchmarkComputeBlobProof(b, false) }
+func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	var (
 		blob          = randBlob()
 		commitment, _ = BlobToCommitment(blob)
@@ -117,7 +149,12 @@ func BenchmarkComputeBlobProof(b *testing.B) {
 	}
 }
 
-func BenchmarkVerifyBlobProof(b *testing.B) {
+func BenchmarkCKZGVerifyBlobProof(b *testing.B)  { benchmarkVerifyBlobProof(b, true) }
+func BenchmarkGoKZGVerifyBlobProof(b *testing.B) { benchmarkVerifyBlobProof(b, false) }
+func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
 	var (
 		blob          = randBlob()
 		commitment, _ = BlobToCommitment(blob)
