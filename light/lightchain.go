@@ -70,7 +70,7 @@ type LightChain struct {
 	wg      sync.WaitGroup
 
 	// Atomic boolean switches:
-	running          atomic.Bool // whether LightChain is running or stopped
+	stopped          atomic.Bool // whether LightChain is stopped or running
 	procInterrupt    atomic.Bool // interrupts chain insert
 	disableCheckFreq atomic.Bool // disables header verification
 }
@@ -302,7 +302,7 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (lc *LightChain) Stop() {
-	if !lc.running.CompareAndSwap(false, true) {
+	if !lc.stopped.CompareAndSwap(false, true) {
 		return
 	}
 	close(lc.quit)
