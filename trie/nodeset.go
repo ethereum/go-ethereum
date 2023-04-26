@@ -224,9 +224,9 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 
 // gets the size of all the nodes
 func (set *MergedNodeSet) Size() (int, int) {
-	var updates := 0
-	var deleted := 0
-	for _, set := range sets {
+	var updates = 0
+	var deleted = 0
+	for _, set := range set.sets {
 		numUpdated, numDeleted := set.Size()
 		updates += numUpdated
 		deleted += numDeleted
@@ -242,15 +242,17 @@ func (set *MergedNodeSet) Size() (int, int) {
 
 // ALSO: Super inefficient. O(n) time for each operation vs O(1)
 // IDK how else you would merge two sets.
-func (set *MergedNodeSet) Combine(other *NodeSet) error {
-	_, present := set.sets[other.owner]
-	if present == nil {
-		set.sets[other.owner] = other
-		return nil
-	}
-	for path, node := range other.nodes {
-		if exists := set.sets[other.owner].nodes[path]; exists == nil {
-			set.sets[other.owner].nodes[path] = node
+func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet) error {
+	for _, other := range otherMerged.sets {
+		_, present := set.sets[other.owner]
+		if present == false {
+			set.sets[other.owner] = other
+			return nil
+		}
+		for path, node := range other.nodes {
+			if exists := set.sets[other.owner].nodes[path]; exists == nil {
+				set.sets[other.owner].nodes[path] = node
+			}
 		}
 	}
 	return nil

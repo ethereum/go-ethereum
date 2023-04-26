@@ -966,15 +966,16 @@ func (s *StateDB) clearJournalAndRefund() {
 // keeps track of the nodes in each account that get modified. If a node is modified twice, it is updated, not re-added
 var globalNodes = trie.NewMergedNodeSet()
 // number of commits/blocks
-var counter := 0
+var counter = 0
 // number of blocks after which we reset
 var BLOCK_DELTA = 1
 // file writer
-f, err := os.Create("/data/one")
-check(err)
-defer f.Close()
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	f, err := os.Create("/data/one")
+	if err != nil {
+		return common.Hash{}, err
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1112,13 +1113,15 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// TODO: write the globalNodes to a csv file
 		
 		// get the size
-		globalUpdates, globalDeletes = globalNodes.Size()
+		globalUpdates, globalDeletes := globalNodes.Size()
 		// print stuff
 		fmt.Println("Global Updates: ", globalUpdates)
 		fmt.Println("Global Deletes: ", globalDeletes)
-		totalSize = globalUpdates + globalDeletes
-		n, err := f.WriteString(totalSize + "\n")
-		check(err)
+		totalSize := globalUpdates + globalDeletes
+		_, err := f.WriteString(fmt.Sprintf("%d\n", totalSize))
+		if err != nil {
+			return common.Hash{}, err
+		}
 		globalNodes = trie.NewMergedNodeSet()
 	}
 	return root, nil
