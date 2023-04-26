@@ -1132,10 +1132,8 @@ func TestJaipurFork(t *testing.T) {
 		}
 
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
-		fmt.Println("SHIVAM 1")
 
 		insertNewBlock(t, chain, block)
-		fmt.Println("SHIVAM 2")
 
 		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64()-1 {
 			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
