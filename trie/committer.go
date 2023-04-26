@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // leaf represents a trie leaf node
@@ -33,13 +34,15 @@ type leaf struct {
 // insertion order.
 type committer struct {
 	nodes       *NodeSet
+	tracer      *tracer
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodeset *NodeSet, collectLeaf bool) *committer {
+func newCommitter(nodeset *NodeSet, tracer *tracer, collectLeaf bool) *committer {
 	return &committer{
 		nodes:       nodeset,
+		tracer:      tracer,
 		collectLeaf: collectLeaf,
 	}
 }
@@ -134,22 +137,22 @@ func (c *committer) store(path []byte, n node) node {
 		// The node is embedded in its parent, in other words, this node
 		// will not be stored in the database independently, mark it as
 		// deleted only if the node was existent in database before.
-		if _, ok := c.nodes.accessList[string(path)]; ok {
-			c.nodes.markDeleted(path)
+		prev, ok := c.tracer.accessList[string(path)]
+		if ok {
+			c.nodes.addNode(path, trienode.NewWithPrev(common.Hash{}, nil, prev))
 		}
 		return n
 	}
-	// We have the hash already, estimate the RLP encoding-size of the node.
-	// The size is used for mem tracking, does not need to be exact
+	// Collect the dirty node to nodeset for return.
 	var (
 		nhash = common.BytesToHash(hash)
-		mnode = &memoryNode{
-			hash: nhash,
-			node: nodeToBytes(n),
-		}
+		node  = trienode.NewWithPrev(
+			nhash,
+			nodeToBytes(n),
+			c.tracer.accessList[string(path)],
+		)
 	)
-	// Collect the dirty node to nodeset for return.
-	c.nodes.markUpdated(path, mnode)
+	c.nodes.addNode(path, node)
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
