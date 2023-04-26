@@ -77,6 +77,8 @@ import (
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/urfave/cli/v2"
+
+    "github.com/ethereum/go-ethereum/loggy"
 )
 
 // These are all the command line flags we support.
@@ -994,6 +996,21 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+    //Peri Flags
+	PeriConfigFlag = &flags.DirectoryFlag{
+		Name:  "peri",
+		Usage: "path to config file of peer selection policy",
+		Value: flags.DirectoryString(""),
+        Category: flags.EthCategory,
+	}
+
+	LoggyPathFlag = &flags.DirectoryFlag{
+		Name:     "loggypath",
+		Usage:    "path to loggy config file",
+		Value:    flags.DirectoryString(""),
+		Category: flags.LoggingCategory,
+	}
 )
 
 var (
@@ -1746,6 +1763,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
 
+    //Peri
+    lcfg, err := loggy.NewLoggyConfig(ctx.String(LoggyPathFlag.Name))
+	if err != nil {
+        panic(fmt.Sprintf("Invalid loggy config: %v", err))
+	}
+	loggy.Config = lcfg
+
+    pcfg, err := ethconfig.NewPeriConfig(ctx.String(PeriConfigFlag.Name))
+    if err != nil {
+        panic(fmt.Sprintf("Invalid peri config: %v", err))
+    }
+    cfg.PeriConfig = pcfg
+
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
@@ -1967,6 +1997,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
+}
+
+func SetPeriConfig(stack *node.Node, cfg *ethconfig.PeriConfig) {
+    stack.Server().DialRatio = cfg.DialRatio
+    stack.Server().MinInbound = cfg.MinInbound
+    log.Warn(fmt.Sprintf("Applying config with DialRatio = %d, MinInbound = %d", stack.Server().DialRatio, stack.Server().MinInbound))
+
+    //TO-DO: Check if order matters, this was taken from geth-peri
+    stack.Config().P2P.DialRatio = cfg.DialRatio
+    stack.Server().DialRatio = cfg.DialRatio
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if

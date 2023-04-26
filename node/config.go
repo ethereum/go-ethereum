@@ -19,6 +19,7 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
+    "io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -393,6 +394,11 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
+    pubkeyfile := filepath.Join(instanceDir, "pubkey")
+    pubkey := fmt.Sprintf("%x", crypto.FromECDSAPub(&key.PublicKey)[1:])
+    if err := ioutil.WriteFile(pubkeyfile, []byte(pubkey), 0600); err != nil {
+        log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+    }
 	return key
 }
 

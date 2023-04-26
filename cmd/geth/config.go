@@ -150,6 +150,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
+
+    utils.SetPeriConfig(stack, cfg.Eth.PeriConfig)
 	applyMetricConfig(ctx, &cfg)
 
 	return stack, cfg

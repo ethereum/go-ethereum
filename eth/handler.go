@@ -17,7 +17,9 @@
 package eth
 
 import (
+    "encoding/json"
 	"errors"
+    "fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -25,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
@@ -38,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/loggy"
 )
 
 const (
@@ -309,6 +313,20 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
+
+    //PERI
+    peerEnode := peer.Node().URLv4()
+	if PeriConfig.IsBanned(peerEnode) {
+		log.Error("Rejected experimental node " + peerEnode)
+		loggy.LogBan(peerEnode, "Another_Listener_Node")
+		return p2p.DiscSelf
+	}
+	if isBlocked(peerEnode) {
+		log.Error("Rejected node in the blocklist: " + peerEnode)
+		loggy.LogBan(peerEnode, "Evicted_by_Perigee")
+		return p2p.DiscSelf
+	}
+
 	reject := false // reserved peer slots
 	if h.snapSync.Load() {
 		if snap == nil {
@@ -448,6 +466,37 @@ func (h *handler) unregisterPeer(id string) {
 	// Remove the `eth` peer if it exists
 	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
 
+	// PERI_AND_LATENCY_RECORDER_CODE_PIECE
+	// Log peer disconnection events along with the connection time of the peer
+	if loggy.Config.FlagConn {
+		if true {
+			peerjson, err1 := json.Marshal(peer.Info())
+			if err1 == nil {
+				absNow := mclock.Now()
+
+				connectionDuration := time.Since(peer.Peer.Loggy_connectionStartTime)
+				connectionDurationAbs := common.PrettyDuration(absNow - peer.Loggy_connectionStartTimeAbs)
+
+				s := fmt.Sprintf(" { \"timestamp_removed\": \"%s\", "+
+					"\"timestamp_started\": \"%s\", "+
+					"\"timestamp_abs_removed\": %d, "+
+					"\"timestamp_abs_started\": %d, "+
+					"\"Duration\": \"%s\", "+
+					"\"AbsDuration\": \"%s\", "+
+					"\"peer\": %s}",
+					time.Now().String(), peer.Peer.Loggy_connectionStartTime, absNow,
+					peer.Loggy_connectionStartTimeAbs,
+					connectionDuration.String(), connectionDurationAbs.String(), peerjson)
+				go loggy.Log(s, loggy.RemovePeerMsg, loggy.Outbound)
+			} else {
+				log.Error("Cannot log peer removal")
+			}
+		}
+	}
+	if loggy.Config.FlagConnWarn {
+		log.Warn(fmt.Sprintf("Detected peer removal: %s", id))
+	}
+
 	// Remove the `snap` extension if it exists
 	if peer.snapExt != nil {
 		h.downloader.SnapSyncer.Unregister(id)
@@ -559,6 +608,44 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
+		//PERI
+        flag_found, flag_skip, err_last := false, false, error(nil)
+		signers := [...]types.Signer{types.NewLondonSigner(tx.ChainId()), types.NewEIP2930Signer(tx.ChainId()), types.NewEIP155Signer(tx.ChainId()), types.HomesteadSigner{}}
+		signer_names := [...]string{"London", "EIP2930", "EIP155", "Frontier"}
+		
+        for i, signer := range signers {
+			if sender, err := types.Sender(signer, tx); err == nil {
+				if isVictimAccount(sender) { // Relevant for targeted latency
+					log.Warn(fmt.Sprintf("<Tx %s blocked from sender %s>", tx.Hash().String(), sender.String()))
+					go loggy.Log(fmt.Sprintf(" {\"txhash\": \"%s\"}", tx.Hash().String()), loggy.VictimTxMsg, loggy.Inbound)
+					flag_skip = true
+				} else if !isMyself(sender) && isSampledByHashDivision(tx.Hash()) && !loggy.Config.FlagForward { // Relevant for global latency
+					flag_skip = true
+				} else if isMyself(sender) {
+					go loggy.Log(fmt.Sprintf(" {\"timestamp\": \"%s\", \"txhash\": \"%s\"}", time.Now().String(), tx.Hash().String()), loggy.MyTxMsg, loggy.Inbound)
+				}
+				if i == 1 {
+					log.Warn(fmt.Sprintf("Found signer of %s -- %s", tx.Hash().String(), signer_names[i]))
+				}
+				flag_found = true
+				break
+			} else {
+				err_last = err
+				continue
+			}
+		}
+
+		if !flag_found {
+			log.Warn("Error getting sender of tx " + tx.Hash().String() + ": " + err_last.Error())
+		}
+		if flag_skip {
+			continue
+		}
+
+		if loggy.Config.FlagBroadcast {
+			go loggy.Log(fmt.Sprintf(" {\"txhash\": \"%s\", \"timestamp\": \"%s\", \"abstime\": %d}", tx.Hash().String(), time.Now().String(), int64(time.Now().UnixNano())), loggy.MyTxMsg, loggy.Inbound)
+		} //PERI END
+
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 		// Send the tx unconditionally to a subset of our peers
 		numDirect := int(math.Sqrt(float64(len(peers))))

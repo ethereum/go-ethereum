@@ -20,12 +20,14 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+    "github.com/ethereum/go-ethereum/common/mclock"
 )
 
 const (
@@ -90,6 +92,10 @@ type Peer struct {
 
 	term chan struct{} // Termination channel to stop the broadcasters
 	lock sync.RWMutex  // Mutex protecting the internal fields
+
+    //PERI
+    Loggy_connectionStartTime    time.Time
+    Loggy_connectionStartTimeAbs mclock.AbsTime
 }
 
 // NewPeer create a wrapper for a network connection and negotiated  protocol
@@ -111,6 +117,11 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		resDispatch:     make(chan *response),
 		txpool:          txpool,
 		term:            make(chan struct{}),
+
+        //PERI
+        Loggy_connectionStartTime:    time.Now(),
+        Loggy_connectionStartTimeAbs: mclock.Now(),
+
 	}
 	// Start up all the broadcasters
 	go peer.broadcastBlocks()

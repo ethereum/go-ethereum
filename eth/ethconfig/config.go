@@ -200,6 +200,9 @@ type Config struct {
 
 	// OverrideShanghai (TODO: remove after the fork)
 	OverrideShanghai *uint64 `toml:",omitempty"`
+
+    //Peri config
+    PeriConfig *PeriConfig
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

@@ -150,6 +150,9 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
 		configFileFlag,
+
+        utils.PeriConfigFlag,
+        utils.LoggyPathFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
 	rpcFlags = []cli.Flag{
@@ -339,6 +342,8 @@ func geth(ctx *cli.Context) error {
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
+
+    log.Warn(fmt.Sprintf("Starting full node with DialRatio = %d", stack.Server().DialRatio))
 
 	startNode(ctx, stack, backend, false)
 	stack.Wait()
