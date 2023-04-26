@@ -82,27 +82,15 @@ var (
 		},
 		Type: DynamicFeeTxType,
 	}
-)
 
-func TestDecodeEmptyTypedReceipt(t *testing.T) {
-	input := []byte{0x80}
-	var r Receipt
-	err := rlp.DecodeBytes(input, &r)
-	if err != errShortTypedReceipt {
-		t.Fatal("wrong error:", err)
-	}
-}
-
-// Tests that receipt data can be correctly derived from the contextual infos
-func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
-	to2 := common.HexToAddress("0x2")
-	to3 := common.HexToAddress("0x3")
-	to4 := common.HexToAddress("0x4")
-	to5 := common.HexToAddress("0x5")
-	to6 := common.HexToAddress("0x6")
-	to7 := common.HexToAddress("0x7")
-	txs := Transactions{
+	to2 = common.HexToAddress("0x2")
+	to3 = common.HexToAddress("0x3")
+	to4 = common.HexToAddress("0x4")
+	to5 = common.HexToAddress("0x5")
+	to6 = common.HexToAddress("0x6")
+	to7 = common.HexToAddress("0x7")
+	txs = Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
 			Value:    big.NewInt(1),
@@ -161,18 +149,19 @@ func TestDeriveFields(t *testing.T) {
 		}),
 	}
 
-	blockNumber := big.NewInt(1)
-	blockTime := uint64(2)
-	blockHash := common.BytesToHash([]byte{0x03, 0x14})
+	blockNumber = big.NewInt(1)
+	blockTime   = uint64(2)
+	blockHash   = common.BytesToHash([]byte{0x03, 0x14})
 
 	// Create the corresponding receipts
-	receipts := Receipts{
+	receipts = Receipts{
 		&Receipt{
 			Status:            ReceiptStatusFailed,
 			CumulativeGasUsed: 1,
 			Logs: []*Log{
 				{
 					Address: common.BytesToAddress([]byte{0x11}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[0].Hash(),
@@ -182,6 +171,7 @@ func TestDeriveFields(t *testing.T) {
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x01, 0x11}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[0].Hash(),
@@ -205,6 +195,7 @@ func TestDeriveFields(t *testing.T) {
 			Logs: []*Log{
 				{
 					Address: common.BytesToAddress([]byte{0x22}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[1].Hash(),
@@ -214,6 +205,7 @@ func TestDeriveFields(t *testing.T) {
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x02, 0x22}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[1].Hash(),
@@ -296,7 +288,19 @@ func TestDeriveFields(t *testing.T) {
 			TransactionIndex:  6,
 		},
 	}
+)
 
+func TestDecodeEmptyTypedReceipt(t *testing.T) {
+	input := []byte{0x80}
+	var r Receipt
+	err := rlp.DecodeBytes(input, &r)
+	if err != errShortTypedReceipt {
+		t.Fatal("wrong error:", err)
+	}
+}
+
+// Tests that receipt data can be correctly derived from the contextual infos
+func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
@@ -310,6 +314,7 @@ func TestDeriveFields(t *testing.T) {
 	if err != nil {
 		t.Fatal("error marshaling input receipts:", err)
 	}
+
 	r2, err := json.MarshalIndent(derivedReceipts, "", "  ")
 	if err != nil {
 		t.Fatal("error marshaling derived receipts:", err)
@@ -317,6 +322,38 @@ func TestDeriveFields(t *testing.T) {
 	d := diff.Diff(string(r1), string(r2))
 	if d != "" {
 		t.Fatal("receipts differ:", d)
+	}
+}
+
+// Test that we can marshal/unmarshal receipts to/from json without errors.
+// This also confirms that our test receipts contain all the required fields.
+func TestReceiptJSON(t *testing.T) {
+	for i := range receipts {
+		b, err := receipts[i].MarshalJSON()
+		if err != nil {
+			t.Fatal("error marshaling receipt to json:", err)
+		}
+		r := Receipt{}
+		err = r.UnmarshalJSON(b)
+		if err != nil {
+			t.Fatal("error unmarshaling receipt from json:", err)
+		}
+	}
+}
+
+// Test we can still parse receipt without EffectiveGasPrice for backwards compatibility, even
+// though it is required per the spec.
+func TestEffectiveGasPriceNotRequired(t *testing.T) {
+	r := *receipts[0]
+	r.EffectiveGasPrice = nil
+	b, err := r.MarshalJSON()
+	if err != nil {
+		t.Fatal("error marshaling receipt to json:", err)
+	}
+	r2 := Receipt{}
+	err = r2.UnmarshalJSON(b)
+	if err != nil {
+		t.Fatal("error unmarshaling receipt from json:", err)
 	}
 }
 
