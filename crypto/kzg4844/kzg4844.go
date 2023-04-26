@@ -52,6 +52,15 @@ func UseCKZG(use bool) error {
 		return errors.New("CKZG unavailable on your platform")
 	}
 	useCKZG.Store(use)
+
+	// Initializing the library can take 2-4 seconds - and can potentially crash
+	// on CKZG and non-ADX CPUs - so might as well so it now and don't wait until
+	// a crpyto operation is actually needed live.
+	if use {
+		ckzgIniter.Do(ckzgInit)
+	} else {
+		gokzgIniter.Do(gokzgInit)
+	}
 	return nil
 }
 
