@@ -16,7 +16,10 @@
 
 package trie
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+)
 
 // tracer tracks the changes of trie nodes. During the trie operations,
 // some nodes can be deleted from the trie, while these deleted nodes
@@ -117,9 +120,10 @@ func (t *tracer) markDeletions(set *NodeSet) {
 		// It's possible a few deleted nodes were embedded
 		// in their parent before, the deletions can be no
 		// effect by deleting nothing, filter them out.
-		if _, ok := set.accessList[path]; !ok {
+		prev, ok := t.accessList[path]
+		if !ok {
 			continue
 		}
-		set.markDeleted([]byte(path))
+		set.addNode([]byte(path), trienode.NewWithPrev(common.Hash{}, nil, prev))
 	}
 }
