@@ -58,15 +58,16 @@ type ServerPool struct {
 	unixTime func() int64
 	db       ethdb.KeyValueStore
 
-	ns                  *nodestate.NodeStateMachine
-	vt                  *ValueTracker
-	mixer               *enode.FairMix
-	mixSources          []enode.Iterator
-	dialIterator        enode.Iterator
-	validSchemes        enr.IdentityScheme
-	trustedURLs         []string
-	fillSet             *FillSet
-	started, queryFails uint32
+	ns           *nodestate.NodeStateMachine
+	vt           *ValueTracker
+	mixer        *enode.FairMix
+	mixSources   []enode.Iterator
+	dialIterator enode.Iterator
+	validSchemes enr.IdentityScheme
+	trustedURLs  []string
+	fillSet      *FillSet
+	started      atomic.Bool
+	queryFails   atomic.Uint32
 
 	timeoutLock      sync.RWMutex
 	timeout          time.Duration
@@ -256,7 +257,7 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 			}
 			return
 		}
-		fails := atomic.LoadUint32(&s.queryFails)
+		fails := s.queryFails.Load()
 		failMax := fails
 		if failMax > maxQueryFails {
 			failMax = maxQueryFails
@@ -273,14 +274,14 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 		go func() {
 			q := query(n)
 			if q == -1 {
-				atomic.AddUint32(&s.queryFails, 1)
+				s.queryFails.Add(1)
 				fails++
 				if fails%warnQueryFails == 0 {
 					// warn if a large number of consecutive queries have failed
 					log.Warn("UDP connection queries failed", "count", fails)
 				}
 			} else {
-				atomic.StoreUint32(&s.queryFails, 0)
+				s.queryFails.Store(0)
 			}
 			s.ns.Operation(func() {
 				// we are no longer running in the operation that the callback belongs to, start a new one because of setRedialWait
@@ -333,7 +334,7 @@ func (s *ServerPool) Start() {
 			}
 		})
 	})
-	atomic.StoreUint32(&s.started, 1)
+	s.started.Store(true)
 }
 
 // Stop stops the server pool
@@ -353,7 +354,7 @@ func (s *ServerPool) Stop() {
 
 // RegisterNode implements serverPeerSubscriber
 func (s *ServerPool) RegisterNode(node *enode.Node) (*NodeValueTracker, error) {
-	if atomic.LoadUint32(&s.started) == 0 {
+	if !s.started.Load() {
 		return nil, errors.New("server pool not started yet")
 	}
 	nvt := s.vt.Register(node.ID())
