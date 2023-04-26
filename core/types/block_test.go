@@ -232,9 +232,10 @@ func (h *testHasher) Reset() {
 	h.hasher.Reset()
 }
 
-func (h *testHasher) Update(key, val []byte) {
+func (h *testHasher) Update(key, val []byte) error {
 	h.hasher.Write(key)
 	h.hasher.Write(val)
+	return nil
 }
 
 func (h *testHasher) Hash() common.Hash {

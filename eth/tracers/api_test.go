@@ -169,7 +169,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(b.chainConfig, block.Number())
+	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time())
 	for idx, tx := range block.Transactions() {
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
@@ -835,8 +835,8 @@ func TestTraceChain(t *testing.T) {
 	signer := types.HomesteadSigner{}
 
 	var (
-		ref   uint32 // total refs has made
-		rel   uint32 // total rels has made
+		ref   atomic.Uint32 // total refs has made
+		rel   atomic.Uint32 // total rels has made
 		nonce uint64
 	)
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -849,8 +849,8 @@ func TestTraceChain(t *testing.T) {
 			nonce += 1
 		}
 	})
-	backend.refHook = func() { atomic.AddUint32(&ref, 1) }
-	backend.relHook = func() { atomic.AddUint32(&rel, 1) }
+	backend.refHook = func() { ref.Add(1) }
+	backend.relHook = func() { rel.Add(1) }
 	api := NewAPI(backend)
 
 	single := `{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}`
@@ -863,7 +863,8 @@ func TestTraceChain(t *testing.T) {
 		{10, 20, nil}, // the middle chain range, blocks [11, 20]
 	}
 	for _, c := range cases {
-		ref, rel = 0, 0 // clean up the counters
+		ref.Store(0)
+		rel.Store(0)
 
 		from, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.start))
 		to, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.end))
@@ -888,8 +889,9 @@ func TestTraceChain(t *testing.T) {
 		if next != c.end+1 {
 			t.Error("Missing tracing block")
 		}
-		if ref != rel {
-			t.Errorf("Ref and deref actions are not equal, ref %d rel %d", ref, rel)
+
+		if nref, nrel := ref.Load(), rel.Load(); nref != nrel {
+			t.Errorf("Ref and deref actions are not equal, ref %d rel %d", nref, nrel)
 		}
 	}
 }

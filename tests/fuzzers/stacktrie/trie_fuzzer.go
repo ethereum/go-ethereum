@@ -175,7 +175,7 @@ func (f *fuzzer) fuzz() int {
 		}
 		keys[string(k)] = struct{}{}
 		vals = append(vals, kv{k: k, v: v})
-		trieA.Update(k, v)
+		trieA.MustUpdate(k, v)
 		useful = true
 	}
 	if !useful {
@@ -195,7 +195,7 @@ func (f *fuzzer) fuzz() int {
 		if f.debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
-		trieB.Update(kv.k, kv.v)
+		trieB.MustUpdate(kv.k, kv.v)
 	}
 	rootB := trieB.Hash()
 	trieB.Commit()
@@ -223,7 +223,7 @@ func (f *fuzzer) fuzz() int {
 		checked int
 	)
 	for _, kv := range vals {
-		trieC.Update(kv.k, kv.v)
+		trieC.MustUpdate(kv.k, kv.v)
 	}
 	rootC, _ := trieC.Commit()
 	if rootA != rootC {
