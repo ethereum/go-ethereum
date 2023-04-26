@@ -17,7 +17,7 @@
 package kzg4844
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
