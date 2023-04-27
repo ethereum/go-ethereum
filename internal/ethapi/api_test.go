@@ -21,23 +21,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-type backendTest struct {
-	backendMock
-	backends []accounts.Backend
-}
-
-func (b *backendTest) AccountManager() *accounts.Manager {
-	ac := accounts.Config{InsecureUnlockAllowed: false}
-	return accounts.NewManager(&ac, b.backends...)
-}
 
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 	var (
@@ -167,23 +155,5 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []type
 			R:          big.NewInt(10),
 			S:          big.NewInt(11),
 		},
-	}
-}
-
-func TestNewPersonalAccount(t *testing.T) {
-	d := t.TempDir()
-	ks := keystore.NewKeyStore(d, keystore.StandardScryptN, keystore.StandardScryptP)
-	b := &backendTest{
-		backends: []accounts.Backend{ks},
-	}
-	nonceLock := new(AddrLocker)
-	pa := NewPersonalAccountAPI(b, nonceLock)
-	addr, err := pa.NewAccount("password")
-	if err != nil {
-		t.Fatalf("failed to create account: %v", err)
-	}
-
-	if !common.IsHexAddress(addr.String()) {
-		t.Fatalf("address isn't hex encoded: %s", addr)
 	}
 }
