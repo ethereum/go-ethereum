@@ -72,8 +72,8 @@ func NewWithPrev(hash common.Hash, blob []byte, prev []byte) *WithPrev {
 	}
 }
 
-// Leaf represents a trie leaf node
-type Leaf struct {
+// leaf represents a trie leaf node
+type leaf struct {
 	Blob   []byte      // raw blob of leaf
 	Parent common.Hash // the hash of parent node
 }
@@ -82,7 +82,7 @@ type Leaf struct {
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
 	Owner   common.Hash
-	Leaves  []*Leaf
+	Leaves  []*leaf
 	Nodes   map[string]*WithPrev
 	updates int // the count of updated and inserted nodes
 	deletes int // the count of deleted nodes
@@ -124,7 +124,7 @@ func (set *NodeSet) AddNode(path []byte, n *WithPrev) {
 // AddLeaf adds the provided leaf node into set. TODO(rjl493456442) how can
 // we get rid of it?
 func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
-	set.Leaves = append(set.Leaves, &Leaf{Blob: blob, Parent: parent})
+	set.Leaves = append(set.Leaves, &leaf{Blob: blob, Parent: parent})
 }
 
 // Size returns the number of dirty nodes in set.

@@ -86,8 +86,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 // database entry belongs to a trie node or not.
 func isTrieNode(scheme string, key, val []byte) (bool, common.Hash) {
 	if scheme == rawdb.HashScheme {
-		ok := rawdb.IsLegacyTrieNode(key, val)
-		if ok {
+		if rawdb.IsLegacyTrieNode(key, val) {
 			return true, common.BytesToHash(key)
 		}
 	} else {

@@ -270,11 +270,10 @@ func IsAccountTrieNode(key []byte) (bool, []byte) {
 	// The remaining key should only consist a hex node path
 	// whose length is in the range 0 to 64 (64 is excluded
 	// since leaves are always embedded in parent).
-	remain := key[len(trieNodeAccountPrefix):]
-	if len(remain) >= common.HashLength*2 {
+	if len(key) >= len(trieNodeAccountPrefix)+common.HashLength*2 {
 		return false, nil
 	}
-	return true, remain
+	return true, key[len(trieNodeAccountPrefix):]
 }
 
 // IsStorageTrieNode reports whether a provided database entry is a storage
@@ -286,15 +285,12 @@ func IsStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	// The remaining key consists of 2 parts:
 	// - 32 bytes account hash
 	// - hex node path whose length is in the range 0 to 64
-	remain := key[len(trieNodeStoragePrefix):]
-	if len(remain) < common.HashLength {
+	if len(key) < len(trieNodeStoragePrefix)+common.HashLength {
 		return false, common.Hash{}, nil
 	}
-	accountHash := common.BytesToHash(remain[:common.HashLength])
-	remain = remain[common.HashLength:]
-
-	if len(remain) >= common.HashLength*2 {
+	if len(key) >= len(trieNodeStoragePrefix)+common.HashLength+common.HashLength*2 {
 		return false, common.Hash{}, nil
 	}
-	return true, accountHash, remain
+	accountHash := common.BytesToHash(key[len(trieNodeStoragePrefix) : len(trieNodeStoragePrefix)+common.HashLength])
+	return true, accountHash, key[len(trieNodeStoragePrefix)+common.HashLength:]
 }
