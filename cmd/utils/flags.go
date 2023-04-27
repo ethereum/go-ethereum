@@ -325,54 +325,6 @@ var (
 		Usage:    "Enables serving light clients before syncing",
 		Category: flags.LightCategory,
 	}
-
-	// Ethash settings
-	EthashCacheDirFlag = &flags.DirectoryFlag{
-		Name:     "ethash.cachedir",
-		Usage:    "Directory to store the ethash verification caches (default = inside the datadir)",
-		Category: flags.EthashCategory,
-	}
-	EthashCachesInMemoryFlag = &cli.IntFlag{
-		Name:     "ethash.cachesinmem",
-		Usage:    "Number of recent ethash caches to keep in memory (16MB each)",
-		Value:    ethconfig.Defaults.Ethash.CachesInMem,
-		Category: flags.EthashCategory,
-	}
-	EthashCachesOnDiskFlag = &cli.IntFlag{
-		Name:     "ethash.cachesondisk",
-		Usage:    "Number of recent ethash caches to keep on disk (16MB each)",
-		Value:    ethconfig.Defaults.Ethash.CachesOnDisk,
-		Category: flags.EthashCategory,
-	}
-	EthashCachesLockMmapFlag = &cli.BoolFlag{
-		Name:     "ethash.cacheslockmmap",
-		Usage:    "Lock memory maps of recent ethash caches",
-		Category: flags.EthashCategory,
-	}
-	EthashDatasetDirFlag = &flags.DirectoryFlag{
-		Name:     "ethash.dagdir",
-		Usage:    "Directory to store the ethash mining DAGs",
-		Value:    flags.DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
-		Category: flags.EthashCategory,
-	}
-	EthashDatasetsInMemoryFlag = &cli.IntFlag{
-		Name:     "ethash.dagsinmem",
-		Usage:    "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value:    ethconfig.Defaults.Ethash.DatasetsInMem,
-		Category: flags.EthashCategory,
-	}
-	EthashDatasetsOnDiskFlag = &cli.IntFlag{
-		Name:     "ethash.dagsondisk",
-		Usage:    "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value:    ethconfig.Defaults.Ethash.DatasetsOnDisk,
-		Category: flags.EthashCategory,
-	}
-	EthashDatasetsLockMmapFlag = &cli.BoolFlag{
-		Name:     "ethash.dagslockmmap",
-		Usage:    "Lock memory maps for recent ethash mining DAGs",
-		Category: flags.EthashCategory,
-	}
-
 	// Transaction pool settings
 	TxPoolLocalsFlag = &cli.StringFlag{
 		Name:     "txpool.locals",
@@ -1604,33 +1556,6 @@ func setTxPool(ctx *cli.Context, cfg *txpool.Config) {
 	}
 }
 
-func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
-	if ctx.IsSet(EthashCacheDirFlag.Name) {
-		cfg.Ethash.CacheDir = ctx.String(EthashCacheDirFlag.Name)
-	}
-	if ctx.IsSet(EthashDatasetDirFlag.Name) {
-		cfg.Ethash.DatasetDir = ctx.String(EthashDatasetDirFlag.Name)
-	}
-	if ctx.IsSet(EthashCachesInMemoryFlag.Name) {
-		cfg.Ethash.CachesInMem = ctx.Int(EthashCachesInMemoryFlag.Name)
-	}
-	if ctx.IsSet(EthashCachesOnDiskFlag.Name) {
-		cfg.Ethash.CachesOnDisk = ctx.Int(EthashCachesOnDiskFlag.Name)
-	}
-	if ctx.IsSet(EthashCachesLockMmapFlag.Name) {
-		cfg.Ethash.CachesLockMmap = ctx.Bool(EthashCachesLockMmapFlag.Name)
-	}
-	if ctx.IsSet(EthashDatasetsInMemoryFlag.Name) {
-		cfg.Ethash.DatasetsInMem = ctx.Int(EthashDatasetsInMemoryFlag.Name)
-	}
-	if ctx.IsSet(EthashDatasetsOnDiskFlag.Name) {
-		cfg.Ethash.DatasetsOnDisk = ctx.Int(EthashDatasetsOnDiskFlag.Name)
-	}
-	if ctx.IsSet(EthashDatasetsLockMmapFlag.Name) {
-		cfg.Ethash.DatasetsLockMmap = ctx.Bool(EthashDatasetsLockMmapFlag.Name)
-	}
-}
-
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.String(MinerNotifyFlag.Name), ",")
@@ -1741,7 +1666,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.String(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
-	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
