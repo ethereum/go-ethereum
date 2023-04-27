@@ -53,10 +53,9 @@ var (
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
-	fsHeaderSafetyNet   = 2048            // Number of headers to discard in case a chain violation is detected
-	fsHeaderForceVerify = 24              // Number of headers to verify before and after the pivot to accept it
-	fsHeaderContCheck   = 3 * time.Second // Time interval to check for header continuations during state download
-	fsMinFullBlocks     = 64              // Number of blocks to retrieve fully even in snap sync
+	fsHeaderSafetyNet = 2048            // Number of headers to discard in case a chain violation is detected
+	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
+	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in snap sync
 )
 
 var (

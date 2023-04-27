@@ -18,8 +18,6 @@
 package ethconfig
 
 import (
-	"os"
-	"os/user"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,15 +75,6 @@ var Defaults = Config{
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
 	RPCTxFeeCap:             1, // 1 ether
-}
-
-func init() {
-	home := os.Getenv("HOME")
-	if home == "" {
-		if user, err := user.Current(); err == nil {
-			home = user.HomeDir
-		}
-	}
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
