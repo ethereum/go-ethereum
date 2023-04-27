@@ -1,6 +1,7 @@
 package blockstm
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -457,7 +458,6 @@ func runParallel(t *testing.T, tasks []ExecTask, validation PropertyCheck, metad
 func runParallelGetMetadata(t *testing.T, tasks []ExecTask, validation PropertyCheck) map[int]map[int]bool {
 	t.Helper()
 
-	// fmt.Println("len(tasks)", len(tasks))
 	res, err := executeParallelWithCheck(tasks, true, validation, false, nil)
 
 	assert.NoError(t, err, "error occur during parallel execution")
@@ -922,4 +922,63 @@ func TestDexScenarioWithMetadata(t *testing.T) {
 	}
 
 	testExecutorCombWithMetadata(t, totalTxs, numReads, numWrites, numNonIO, taskRunner)
+}
+
+func TestBreakFromCircularDependency(t *testing.T) {
+	t.Parallel()
+	rand.Seed(0)
+
+	tasks := make([]ExecTask, 5)
+
+	for i := range tasks {
+		tasks[i] = &testExecTask{
+			txIdx: i,
+			dependencies: []int{
+				(i + len(tasks) - 1) % len(tasks),
+			},
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// This should not hang
+	_, err := ExecuteParallel(tasks, false, true, ctx)
+
+	if err == nil {
+		t.Error("Expected cancel error")
+	}
+}
+
+func TestBreakFromPartialCircularDependency(t *testing.T) {
+	t.Parallel()
+	rand.Seed(0)
+
+	tasks := make([]ExecTask, 5)
+
+	for i := range tasks {
+		if i < 3 {
+			tasks[i] = &testExecTask{
+				txIdx: i,
+				dependencies: []int{
+					(i + 2) % 3,
+				},
+			}
+		} else {
+			tasks[i] = &testExecTask{
+				txIdx:        i,
+				dependencies: []int{},
+			}
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// This should not hang
+	_, err := ExecuteParallel(tasks, false, true, ctx)
+
+	if err == nil {
+		t.Error("Expected cancel error")
+	}
 }

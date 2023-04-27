@@ -87,8 +87,7 @@ type ExecutionTask struct {
 	//                                       (0 -> delay is not allowed, 1 -> delay is allowed)
 	// next k elements in dependencies -> transaction indexes on which transaction i is dependent on
 	dependencies []int
-
-	coinbase common.Address
+	coinbase     common.Address
 }
 
 func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (err error) {
@@ -339,6 +338,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				receipts:          &receipts,
 				allLogs:           &allLogs,
 				dependencies:      deps[i],
+				coinbase:          coinbase,
 			}
 
 			tasks = append(tasks, task)
@@ -394,6 +394,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		task := task.(*ExecutionTask)
 		if task.shouldRerunWithoutFeeDelay {
 			shouldDelayFeeCal = false
+
+			statedb.StopPrefetcher()
 			*statedb = *backupStateDB
 
 			allLogs = []*types.Log{}
@@ -415,10 +417,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	if err != nil {
-		if err != context.Canceled {
-			log.Error("blockstm error executing block", "err", err)
-		}
-
 		return nil, nil, 0, err
 	}
 
