@@ -64,7 +64,7 @@ var (
 		utils.NoUSBFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideCancun,
+		utils.OverrideShanghai,
 		utils.EnablePersonal,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
