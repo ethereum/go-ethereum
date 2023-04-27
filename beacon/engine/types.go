@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	param "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -194,18 +193,9 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		withdrawalsRoot = &h
 	}
 	// Check that number of blobs are valid
-	numBlobsBlock := 0
 	for _, tx := range txs {
-		if tx.Type() < 3 {
-			continue
-		}
-		numBlobsTx := len(tx.DataHashes())
-		numBlobsBlock += numBlobsTx
-		if numBlobsTx == 0 || numBlobsTx > param.MaxBlobsPerBlock {
-			return nil, fmt.Errorf("invalid number of blobs in tx: %v", numBlobsTx)
-		}
-		if numBlobsBlock > param.MaxBlobsPerBlock {
-			return nil, fmt.Errorf("invalid number of blobs in block: %v", numBlobsBlock)
+		if tx.Type() == types.BlobTxType && len(tx.DataHashes()) == 0 {
+			return nil, fmt.Errorf("zero blobs within a blob transaction")
 		}
 	}
 	header := &types.Header{
