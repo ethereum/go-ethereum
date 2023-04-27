@@ -101,6 +101,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	if err != nil {
+		return nil, err
+	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
@@ -126,7 +130,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		reqDist:         newRequestDistributor(peers, &mclock.System{}),
 		accountManager:  stack.AccountManager(),
 		merger:          merger,
-		engine:          ethconfig.CreateConsensusEngine(chainConfig.Clique, chainDb),
+		engine:          engine,
 		bloomRequests:   make(chan chan *bloombits.Retrieval),
 		bloomIndexer:    core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:       stack.Server(),

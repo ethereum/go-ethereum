@@ -2116,11 +2116,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, readonly)
 	)
-	cliqueConfig, err := core.LoadCliqueConfig(chainDb, gspec)
+	config, err := core.LoadChainConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	engine := ethconfig.CreateConsensusEngine(cliqueConfig, chainDb)
+	engine, err := ethconfig.CreateConsensusEngine(config, chainDb)
+	if err != nil {
+		Fatalf("%v", err)
+	}
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}

@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -163,14 +164,19 @@ type Config struct {
 	OverrideCancun *uint64 `toml:",omitempty"`
 }
 
-// CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(cliqueConfig *params.CliqueConfig, db ethdb.Database) consensus.Engine {
+// CreateConsensusEngine creates a consensus engine for the given chain config.
+// Clique is allowed for now to live standalone, but ethash is forbidden and can
+// only exist on already merged networks.
+func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
 	// If proof-of-authority is requested, set it up
-	var engine consensus.Engine
-	if cliqueConfig != nil {
-		engine = clique.New(cliqueConfig, db)
-	} else {
-		engine = ethash.NewFaker()
+	if config.Clique != nil {
+		return beacon.New(clique.New(config.Clique, db)), nil
 	}
-	return beacon.New(engine)
+	// If defaulting to proof-of-work, enforce an already merged network since
+	// we cannot run PoW algorithms and more, so we cannot even follow a chain
+	// not coordinated by a beacon node.
+	if !config.TerminalTotalDifficultyPassed {
+		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
+	}
+	return beacon.New(ethash.NewFaker()), nil
 }

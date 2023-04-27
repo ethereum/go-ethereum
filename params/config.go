@@ -152,7 +152,7 @@ var (
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
-		TerminalTotalDifficultyPassed: false,
+		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 	}

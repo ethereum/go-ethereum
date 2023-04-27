@@ -134,12 +134,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Error("Failed to recover state", "error", err)
 	}
 	// Transfer mining-related config to the ethash config.
-	cliqueConfig, err := core.LoadCliqueConfig(chainDb, config.Genesis)
+	chainConfig, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
-	engine := ethconfig.CreateConsensusEngine(cliqueConfig, chainDb)
-
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	if err != nil {
+		return nil, err
+	}
 	eth := &Ethereum{
 		config:            config,
 		merger:            consensus.NewMerger(chainDb),
