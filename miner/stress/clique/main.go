@@ -104,7 +104,7 @@ func main() {
 	// Iterate over all the nodes and start signing on them
 	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
+		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
 	}
