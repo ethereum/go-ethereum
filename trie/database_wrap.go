@@ -36,8 +36,8 @@ type Config struct {
 	Preimages bool   // Flag whether the preimage of trie key is recorded
 }
 
-// backend defines the methods needed to access/update trie nodes in
-// different state scheme. It's implemented by hashDatabase and snapDatabase.
+// backend defines the methods needed to access/update trie nodes in different
+// state scheme.
 type backend interface {
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to

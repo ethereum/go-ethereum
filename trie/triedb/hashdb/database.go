@@ -540,19 +540,6 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
-// Size returns the current storage size of the memory cache in front of the
-// persistent database layer.
-func (db *Database) Size() common.StorageSize {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	// db.dirtiesSize only contains the useful data in the cache, but when reporting
-	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted.
-	var metadataSize = common.StorageSize(len(db.dirties) * cachedNodeSize)
-	return db.dirtiesSize + db.childrenSize + metadataSize
-}
-
 // Initialized returns an indicator if state data is already initialized
 // in hash-based scheme by checking the presence of genesis state.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
@@ -604,6 +591,19 @@ func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode
 		}
 	}
 	return nil
+}
+
+// Size returns the current storage size of the memory cache in front of the
+// persistent database layer.
+func (db *Database) Size() common.StorageSize {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	// db.dirtiesSize only contains the useful data in the cache, but when reporting
+	// the total memory consumption, the maintenance metadata is also needed to be
+	// counted.
+	var metadataSize = common.StorageSize(len(db.dirties) * cachedNodeSize)
+	return db.dirtiesSize + db.childrenSize + metadataSize
 }
 
 // Close closes the trie database and releases all held resources.
