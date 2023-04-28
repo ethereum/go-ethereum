@@ -34,7 +34,7 @@ type ShutdownTracker struct {
 }
 
 // NewShutdownTracker creates a new ShutdownTracker instance and has
-// no other side-effect.
+// no other side effect.
 func NewShutdownTracker(db ethdb.Database) *ShutdownTracker {
 	return &ShutdownTracker{
 		db:     db,

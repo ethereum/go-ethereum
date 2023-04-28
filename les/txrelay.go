@@ -56,7 +56,7 @@ func (ltrx *lesTxRelay) registerPeer(p *serverPeer) {
 	ltrx.lock.Lock()
 	defer ltrx.lock.Unlock()
 
-	// Short circuit if the peer is announce only.
+	// Short circuit if the peer is announced only.
 	if p.onlyAnnounce {
 		return
 	}
