@@ -719,6 +719,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 			}
 		}
 	}
+
 	*timer = f.clock.AfterFunc(
 		f.txArrivalWait-time.Duration(now-earliest),
 		func() { trigger <- struct{}{} },
