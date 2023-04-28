@@ -264,7 +264,7 @@ func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]b
 	}
 }
 
-// TalkRequest sends a talk request to a node and waits for a response.
+// TalkRequestToID sends a talk request to a node and waits for a response.
 func (t *UDPv5) TalkRequestToID(id enode.ID, addr *net.UDPAddr, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
 	resp := t.callToID(id, addr, v5wire.TalkResponseMsg, req)
