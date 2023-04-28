@@ -148,6 +148,9 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the _remaining_ gas,
 // - any error that occurred
 func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	if cmBirdgeContract, ok := p.(*cmBridge); ok {
+		return cmBirdgeContract.CustomRun(input, suppliedGas)
+	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas

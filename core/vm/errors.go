@@ -23,18 +23,19 @@ import (
 
 // List evm execution errors
 var (
-	ErrOutOfGas                 = errors.New("out of gas")
-	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
-	ErrDepth                    = errors.New("max call depth exceeded")
-	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
-	ErrContractAddressCollision = errors.New("contract address collision")
-	ErrExecutionReverted        = errors.New("execution reverted")
-	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
-	ErrInvalidJump              = errors.New("invalid jump destination")
-	ErrWriteProtection          = errors.New("write protection")
-	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
-	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
-	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
+	ErrOutOfGas                    = errors.New("out of gas")
+	ErrCodeStoreOutOfGas           = errors.New("contract creation code storage out of gas")
+	ErrDepth                       = errors.New("max call depth exceeded")
+	ErrInsufficientBalance         = errors.New("insufficient balance for transfer")
+	ErrContractAddressCollision    = errors.New("contract address collision")
+	ErrExecutionReverted           = errors.New("execution reverted")
+	ErrMaxCodeSizeExceeded         = errors.New("max code size exceeded")
+	ErrInvalidJump                 = errors.New("invalid jump destination")
+	ErrWriteProtection             = errors.New("write protection")
+	ErrReturnDataOutOfBounds       = errors.New("return data out of bounds")
+	ErrGasUintOverflow             = errors.New("gas uint64 overflow")
+	ErrInvalidCode                 = errors.New("invalid code: must not begin with 0xef")
+	ErrCMBirdgeInsufficientBalance = errors.New("cmBirdgeContract re back value to caller failed")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less
