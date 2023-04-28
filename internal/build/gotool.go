@@ -74,7 +74,7 @@ func (g *GoToolchain) Install(gobin string, args ...string) *exec.Cmd {
 	// Ensure GOPATH is set because go install seems to absolutely require it. This uses
 	// 'go env' because it resolves the default value when GOPATH is not set in the
 	// environment. Ignore errors running go env and leave any complaining about GOPATH to
-	// the installation command.
+	// the install command.
 	pathTool := g.goTool("env", "GOPATH")
 	output, _ := pathTool.Output()
 	tool.Env = append(tool.Env, "GOPATH="+string(output))

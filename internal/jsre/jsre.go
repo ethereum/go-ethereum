@@ -220,7 +220,7 @@ loop:
 	}
 }
 
-// Do execute the given function on the JS event loop.
+// Do executes the given function on the JS event loop.
 // When the runtime is stopped, fn will not execute.
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)

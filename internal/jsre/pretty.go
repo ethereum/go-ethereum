@@ -208,7 +208,7 @@ func (ctx ppctx) fields(obj *goja.Object) []string {
 		key := SafeGet(obj, k)
 		if key == nil {
 			// The value corresponding to that key could not be found
-			// typically because it is backed by an RPC call that is
+			// (typically because it is backed by an RPC call that is
 			// not supported by this instance.  Add it to the list of
 			// values so that it appears as `undefined` to the user.
 			vals = append(vals, k)
