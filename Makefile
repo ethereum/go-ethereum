@@ -17,7 +17,7 @@ GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
 
 PACKAGE = github.com/ethereum/go-ethereum
 GO_FLAGS += -buildvcs=false
-GO_LDFLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} "
+GO_LDFLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT}"
 
 TESTALL = $$(go list ./... | grep -v go-ethereum/cmd/)
 TESTE2E = ./tests/...

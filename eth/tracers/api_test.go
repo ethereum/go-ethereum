@@ -126,6 +126,10 @@ func (b *testBackend) RPCGasCap() uint64 {
 	return 25000000
 }
 
+func (b *testBackend) RPCRpcReturnDataLimit() uint64 {
+	return 100000
+}
+
 func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chainConfig
 }

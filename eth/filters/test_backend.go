@@ -38,7 +38,7 @@ func (b *TestBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) 
 		return &types.Receipt{}, nil
 	}
 
-	receipt := rawdb.ReadBorReceipt(b.DB, hash, *number)
+	receipt := rawdb.ReadBorReceipt(b.DB, hash, *number, nil)
 	if receipt == nil {
 		return &types.Receipt{}, nil
 	}

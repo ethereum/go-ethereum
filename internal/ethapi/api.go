@@ -641,7 +641,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 
 	var txHash common.Hash
 
-	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64())
+	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64(), s.b.ChainConfig())
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
@@ -1083,6 +1083,11 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if err != nil {
 		return nil, err
 	}
+
+	if int(s.b.RPCRpcReturnDataLimit()) > 0 && len(result.ReturnData) > int(s.b.RPCRpcReturnDataLimit()) {
+		return nil, fmt.Errorf("call returned result of length %d exceeding limit %d", len(result.ReturnData), int(s.b.RPCRpcReturnDataLimit()))
+	}
+
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
 		return nil, newRevertError(result)
@@ -1453,19 +1458,38 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig, db ethdb.Database) *RPCTransaction {
 	txs := b.Transactions()
 
-	borReceipt := rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64())
-	if borReceipt != nil {
-		tx, _, _, _ := rawdb.ReadBorTransaction(db, borReceipt.TxHash)
+	if index >= uint64(len(txs)+1) {
+		return nil
+	}
 
-		if tx != nil {
-			txs = append(txs, tx)
+	var borReceipt *types.Receipt
+
+	// Read bor receipts if a state-sync transaction is requested
+	if index == uint64(len(txs)) {
+		borReceipt = rawdb.ReadBorReceipt(db, b.Hash(), b.NumberU64(), config)
+		if borReceipt != nil {
+			if borReceipt.TxHash != (common.Hash{}) {
+				borTx, _, _, _ := rawdb.ReadBorTransactionWithBlockHash(db, borReceipt.TxHash, b.Hash())
+				if borTx != nil {
+					txs = append(txs, borTx)
+				}
+			}
 		}
 	}
 
+	// If the index is still out of the range after checking bor state sync transaction, it means that the transaction index is invalid
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+
+	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
+	if borReceipt != nil && index == uint64(len(txs)-1) {
+		rpcTx.Hash = borReceipt.TxHash
+	}
+
+	return rpcTx
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1596,7 +1620,7 @@ func (api *PublicTransactionPoolAPI) getAllBlockTransactions(ctx context.Context
 
 	stateSyncPresent := false
 
-	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64())
+	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
 	if borReceipt != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {
@@ -1766,7 +1790,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 	if borTx {
 		// Fetch bor block receipt
-		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber)
+		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber, s.b.ChainConfig())
 	} else {
 		receipts, err := s.b.GetReceipts(ctx, blockHash)
 		if err != nil {

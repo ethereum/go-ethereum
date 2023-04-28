@@ -20,6 +20,10 @@ The ```bor server``` command runs the Bor client.
 
 - ```keystore```: Path of the directory where keystores are located
 
+- ```rpc.batchlimit```: Maximum number of messages in a batch (default=100, use 0 for no limits) (default: 100)
+
+- ```rpc.returndatalimit```: Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits) (default: 100000)
+
 - ```config```: Path to the TOML configuration file
 
 - ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
@@ -43,6 +47,8 @@ The ```bor server``` command runs the Bor client.
 - ```bor.runheimdall```: Run Heimdall service as a child process (default: false)
 
 - ```bor.runheimdallargs```: Arguments to pass to Heimdall service
+
+- ```bor.useheimdallapp```: Use child heimdall process to fetch data, Only works when bor.runheimdall is true (default: false)
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
@@ -156,6 +162,10 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.api```: API's offered over the HTTP-RPC interface (default: eth,net,web3,txpool,bor)
 
+- ```http.ep-size```: Maximum size of workers to run in rpc execution pool for HTTP requests (default: 40)
+
+- ```http.ep-requesttimeout```: Request Timeout for rpc execution pool for HTTP requests (default: 0s)
+
 - ```ws```: Enable the WS-RPC server (default: false)
 
 - ```ws.addr```: WS-RPC server listening interface (default: localhost)
@@ -165,6 +175,10 @@ The ```bor server``` command runs the Bor client.
 - ```ws.rpcprefix```: HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
 
 - ```ws.api```: API's offered over the WS-RPC interface (default: net,web3)
+
+- ```ws.ep-size```: Maximum size of workers to run in rpc execution pool for WS requests (default: 40)
+
+- ```ws.ep-requesttimeout```: Request Timeout for rpc execution pool for WS requests (default: 0s)
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well. (default: false)
 

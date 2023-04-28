@@ -580,7 +580,9 @@ func (w *worker) mainLoop(ctx context.Context) {
 		select {
 		case req := <-w.newWorkCh:
 			//nolint:contextcheck
-			w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			if w.isRunning() {
+				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			}
 
 		case req := <-w.getWorkCh:
 			//nolint:contextcheck
@@ -810,8 +812,8 @@ func (w *worker) resultLoop() {
 				}
 
 				// Commit block and state to database.
-				tracing.ElapsedTime(ctx, span, "WriteBlockAndSetHead time taken", func(_ context.Context, _ trace.Span) {
-					_, err = w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
+				tracing.Exec(ctx, "", "resultLoop.WriteBlockAndSetHead", func(ctx context.Context, span trace.Span) {
+					_, err = w.chain.WriteBlockAndSetHead(ctx, block, receipts, logs, task.state, true)
 				})
 
 				tracing.SetAttributes(

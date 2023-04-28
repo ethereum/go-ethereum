@@ -70,6 +70,12 @@ type Config struct {
 	// KeyStoreDir is the directory to store keystores
 	KeyStoreDir string `hcl:"keystore,optional" toml:"keystore,optional"`
 
+	// Maximum number of messages in a batch (default=100, use 0 for no limits)
+	RPCBatchLimit uint64 `hcl:"rpc.batchlimit,optional" toml:"rpc.batchlimit,optional"`
+
+	// Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)
+	RPCReturnDataLimit uint64 `hcl:"rpc.returndatalimit,optional" toml:"rpc.returndatalimit,optional"`
+
 	// SyncMode selects the sync protocol
 	SyncMode string `hcl:"syncmode,optional" toml:"syncmode,optional"`
 
@@ -385,6 +391,13 @@ type APIConfig struct {
 
 	// Origins is the list of endpoints to accept requests from (only consumed for websockets)
 	Origins []string `hcl:"origins,optional" toml:"origins,optional"`
+
+	// ExecutionPoolSize is max size of workers to be used for rpc execution
+	ExecutionPoolSize uint64 `hcl:"ep-size,optional" toml:"ep-size,optional"`
+
+	// ExecutionPoolRequestTimeout is timeout used by execution pool for rpc execution
+	ExecutionPoolRequestTimeout    time.Duration `hcl:"-,optional" toml:"-"`
+	ExecutionPoolRequestTimeoutRaw string        `hcl:"ep-requesttimeout,optional" toml:"ep-requesttimeout,optional"`
 }
 
 // Used from rpc.HTTPTimeouts
@@ -571,6 +584,8 @@ func DefaultConfig() *Config {
 			Backtrace: "",
 			Debug:     false,
 		},
+		RPCBatchLimit:      100,
+		RPCReturnDataLimit: 100000,
 		P2P: &P2PConfig{
 			MaxPeers:      50,
 			MaxPendPeers:  50,
@@ -636,21 +651,25 @@ func DefaultConfig() *Config {
 			RPCEVMTimeout:       ethconfig.Defaults.RPCEVMTimeout,
 			AllowUnprotectedTxs: false,
 			Http: &APIConfig{
-				Enabled: false,
-				Port:    8545,
-				Prefix:  "",
-				Host:    "localhost",
-				API:     []string{"eth", "net", "web3", "txpool", "bor"},
-				Cors:    []string{"localhost"},
-				VHost:   []string{"localhost"},
+				Enabled:                     false,
+				Port:                        8545,
+				Prefix:                      "",
+				Host:                        "localhost",
+				API:                         []string{"eth", "net", "web3", "txpool", "bor"},
+				Cors:                        []string{"localhost"},
+				VHost:                       []string{"localhost"},
+				ExecutionPoolSize:           40,
+				ExecutionPoolRequestTimeout: 0,
 			},
 			Ws: &APIConfig{
-				Enabled: false,
-				Port:    8546,
-				Prefix:  "",
-				Host:    "localhost",
-				API:     []string{"net", "web3"},
-				Origins: []string{"localhost"},
+				Enabled:                     false,
+				Port:                        8546,
+				Prefix:                      "",
+				Host:                        "localhost",
+				API:                         []string{"net", "web3"},
+				Origins:                     []string{"localhost"},
+				ExecutionPoolSize:           40,
+				ExecutionPoolRequestTimeout: 0,
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
@@ -658,7 +677,7 @@ func DefaultConfig() *Config {
 				VHost:   []string{"localhost"},
 			},
 			HttpTimeout: &HttpTimeouts{
-				ReadTimeout:  30 * time.Second,
+				ReadTimeout:  10 * time.Second,
 				WriteTimeout: 30 * time.Second,
 				IdleTimeout:  120 * time.Second,
 			},
@@ -776,6 +795,8 @@ func (c *Config) fillTimeDurations() error {
 		{"jsonrpc.timeouts.read", &c.JsonRPC.HttpTimeout.ReadTimeout, &c.JsonRPC.HttpTimeout.ReadTimeoutRaw},
 		{"jsonrpc.timeouts.write", &c.JsonRPC.HttpTimeout.WriteTimeout, &c.JsonRPC.HttpTimeout.WriteTimeoutRaw},
 		{"jsonrpc.timeouts.idle", &c.JsonRPC.HttpTimeout.IdleTimeout, &c.JsonRPC.HttpTimeout.IdleTimeoutRaw},
+		{"jsonrpc.ws.ep-requesttimeout", &c.JsonRPC.Ws.ExecutionPoolRequestTimeout, &c.JsonRPC.Ws.ExecutionPoolRequestTimeoutRaw},
+		{"jsonrpc.http.ep-requesttimeout", &c.JsonRPC.Http.ExecutionPoolRequestTimeout, &c.JsonRPC.Http.ExecutionPoolRequestTimeoutRaw},
 		{"txpool.lifetime", &c.TxPool.LifeTime, &c.TxPool.LifeTimeRaw},
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
 		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
@@ -1107,6 +1128,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
 
+	n.RPCReturnDataLimit = c.RPCReturnDataLimit
+
 	if c.Ancient != "" {
 		n.DatabaseFreezer = c.Ancient
 	}
@@ -1257,10 +1280,15 @@ func (c *Config) buildNode() (*node.Config, error) {
 			WriteTimeout: c.JsonRPC.HttpTimeout.WriteTimeout,
 			IdleTimeout:  c.JsonRPC.HttpTimeout.IdleTimeout,
 		},
-		JWTSecret:        c.JsonRPC.Auth.JWTSecret,
-		AuthPort:         int(c.JsonRPC.Auth.Port),
-		AuthAddr:         c.JsonRPC.Auth.Addr,
-		AuthVirtualHosts: c.JsonRPC.Auth.VHosts,
+		JWTSecret:                              c.JsonRPC.Auth.JWTSecret,
+		AuthPort:                               int(c.JsonRPC.Auth.Port),
+		AuthAddr:                               c.JsonRPC.Auth.Addr,
+		AuthVirtualHosts:                       c.JsonRPC.Auth.VHosts,
+		RPCBatchLimit:                          c.RPCBatchLimit,
+		WSJsonRPCExecutionPoolSize:             c.JsonRPC.Ws.ExecutionPoolSize,
+		WSJsonRPCExecutionPoolRequestTimeout:   c.JsonRPC.Ws.ExecutionPoolRequestTimeout,
+		HTTPJsonRPCExecutionPoolSize:           c.JsonRPC.Http.ExecutionPoolSize,
+		HTTPJsonRPCExecutionPoolRequestTimeout: c.JsonRPC.Http.ExecutionPoolRequestTimeout,
 	}
 
 	if c.P2P.NetRestrict != "" {
