@@ -449,6 +449,8 @@ func TestIOdump(t *testing.T) {
 		}
 	}))
 
+	allowIOTracing = true
+
 	ioflag := new(bool)
 
 	*ioflag = true

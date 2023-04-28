@@ -74,6 +74,8 @@ const (
 
 var defaultBorTraceEnabled = newBoolPtr(false)
 
+var allowIOTracing = false // Change this to true to enable IO tracing for debugging
+
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
@@ -719,7 +721,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 
 	ioflag := defaultIOFlag
-	if config != nil && config.IOFlag != nil {
+	if allowIOTracing && config != nil && config.IOFlag != nil {
 		ioflag = *config.IOFlag
 	}
 
