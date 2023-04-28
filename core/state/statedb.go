@@ -56,8 +56,13 @@ func (n *proofList) Delete(key []byte) error {
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
+//
 // * Contracts
 // * Accounts
+//
+// Once the state is committed, it's not usable anymore. A new state instance
+// must be created with new root and updated database for accessing latest
+// states.
 type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
@@ -680,19 +685,19 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	so := db.getStateObject(addr)
+func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
+	so := s.getStateObject(addr)
 	if so == nil {
 		return nil
 	}
-	tr, err := so.getTrie(db.db)
+	tr, err := so.getTrie(s.db)
 	if err != nil {
 		return err
 	}
 	it := trie.NewIterator(tr.NodeIterator(nil))
 
 	for it.Next() {
-		key := common.BytesToHash(db.trie.GetKey(it.Key))
+		key := common.BytesToHash(s.trie.GetKey(it.Key))
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			if !cb(key, value) {
 				return nil
@@ -977,6 +982,9 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // Commit writes the state to the underlying in-memory trie database.
+// Once the state is committed, it's not usable anymore and a new state
+// instance must be created with new root upon the updated database for
+// accessing latest state.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {

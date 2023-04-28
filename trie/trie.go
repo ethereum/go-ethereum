@@ -74,7 +74,7 @@ func (t *Trie) Copy() *Trie {
 // zero hash or the sha3 hash of an empty string, then trie is initially
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
-func New(id *ID, db NodeReader) (*Trie, error) {
+func New(id *ID, db *Database) (*Trie, error) {
 	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err
