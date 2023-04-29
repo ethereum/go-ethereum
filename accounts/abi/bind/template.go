@@ -72,15 +72,9 @@ type tmplStruct struct {
 	Fields []*tmplField // Struct fields definition depends on the binding language.
 }
 
-// tmplSource is language to template mapping containing all the supported
-// programming languages the package can generate to.
-var tmplSource = map[Lang]string{
-	LangGo: tmplSourceGo,
-}
-
-// tmplSourceGo is the Go source template that the generated Go contract binding
+// tmplSource is the Go source template that the generated Go contract binding
 // is based on.
-const tmplSourceGo = `
+const tmplSource = `
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
