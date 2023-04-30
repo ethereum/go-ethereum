@@ -137,4 +137,92 @@ type Storage struct {
 
 `Storage.go` contains all the bindings required to interact with `Storage.sol` from a Go application.
 
+
+Here's a complete Go program that demonstrates how to interact with the Storage smart contract. [here](https://gist.github.com/joohhnnn/f137bfc2a8a9288543ebef04c17f025a).
+
+This example demonstrates how to use the `Storage.sol` to interact with the Ethereum smart contract named Storage.
+
+```go
+package main
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"fmt"
+	"log"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"path/to/your/package/main"
+)
+
+func main() {
+	// Create an Ethereum client instance
+	client, err := ethclient.Dial("http://localhost:8545")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Instantiate the generated contract structure
+	contractAddress := common.HexToAddress("0xYourContractAddressHere")
+	storageInstance, err := main.NewStorage(contractAddress, client)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set up call and transaction options
+	privateKey, err := crypto.HexToECDSA("0xYourPrivateKeyHere")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	publicKey := privateKey.Public()
+	publickeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Fatal("error casting public key to ECDSA")
+	}
+
+	fromAddress := crypto.PubkeyToAddress(*publickeyECDSA)
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0)     // in wei
+	auth.GasLimit = uint64(300000) // in units
+	auth.GasPrice = gasPrice
+
+	// Use the Store method to store an integer in the contract
+	number := big.NewInt(42)
+	tx, err := storageInstance.Store(auth, number)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Transaction sent: %s\n", tx.Hash().Hex())
+
+	// Wait for the transaction to complete
+	_, err = bind.WaitMined(context.Background(), client, tx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Use the Retrieve method to retrieve the stored integer from the contract
+	storedNumber, err := storageInstance.Retrieve(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Stored number: %d\n", storedNumber)
+}
+```
+
 For instructions on how to deploy this contract to Ethereum from a Go native application read our [Go bindings page](/docs/developers/dapp-developer/native). To browse the Abigen source code visit the Geth [GitHub repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).
