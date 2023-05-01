@@ -9,6 +9,7 @@ import (
 type PoolObj interface {
 	Hash() common.Hash
 	PoolKey() string
+	GetSigner() common.Address
 }
 type Pool struct {
 	objList map[string]map[common.Hash]PoolObj
@@ -19,6 +20,9 @@ func NewPool() *Pool {
 	return &Pool{
 		objList: make(map[string]map[common.Hash]PoolObj),
 	}
+}
+func (p *Pool) Get() map[string]map[common.Hash]PoolObj {
+	return p.objList
 }
 
 // return true if it has reached threshold

@@ -41,11 +41,11 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 }
 
 /*
-	Function that will be called by timeoutPool when it reached threshold.
-	In the engine v2, we will need to:
-		1. Genrate TC
-		2. processTC()
-		3. generateSyncInfo()
+Function that will be called by timeoutPool when it reached threshold.
+In the engine v2, we will need to:
+ 1. Genrate TC
+ 2. processTC()
+ 3. generateSyncInfo()
 */
 func (x *XDPoS_v2) onTimeoutPoolThresholdReached(blockChainReader consensus.ChainReader, pooledTimeouts map[common.Hash]utils.PoolObj, currentTimeoutMsg utils.PoolObj, gapNumber uint64) error {
 	signatures := []types.Signature{}
@@ -142,8 +142,8 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 }
 
 /*
-	1. Update highestTC
-	2. Check TC round >= node's currentRound. If yes, call setNewRound
+1. Update highestTC
+2. Check TC round >= node's currentRound. If yes, call setNewRound
 */
 func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert *types.TimeoutCert) error {
 	if timeoutCert.Round > x.highestTimeoutCert.Round {
@@ -191,7 +191,7 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 		GapNumber: gapNumber,
 	}))
 	if err != nil {
-		log.Error("[sendTimeout] signSignature when sending out TC", "Error", err)
+		log.Error("[sendTimeout] signSignature when sending out TC", "Error", err, "round", x.currentRound, "gap", gapNumber)
 		return err
 	}
 	timeoutMsg := &types.Timeout{
@@ -210,8 +210,8 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 }
 
 /*
-	Function that will be called by timer when countdown reaches its threshold.
-	In the engine v2, we would need to broadcast timeout messages to other peers
+Function that will be called by timer when countdown reaches its threshold.
+In the engine v2, we would need to broadcast timeout messages to other peers
 */
 func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 	x.lock.Lock()
@@ -225,7 +225,7 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 
 	err := x.sendTimeout(chain.(consensus.ChainReader))
 	if err != nil {
-		log.Error("Error while sending out timeout message at time: ", time)
+		log.Error("Error while sending out timeout message at time: ", "time", time, "err", err)
 		return err
 	}
 
@@ -258,4 +258,8 @@ func (x *XDPoS_v2) hygieneTimeoutPool() {
 			x.timeoutPool.ClearByPoolKey(k)
 		}
 	}
+}
+
+func (x *XDPoS_v2) ReceivedTimeouts() map[string]map[common.Hash]utils.PoolObj {
+	return x.timeoutPool.Get()
 }

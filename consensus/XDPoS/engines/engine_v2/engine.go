@@ -138,7 +138,9 @@ func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 	}()
 }
 
-/* V2 Block
+/*
+	V2 Block
+
 SignerFn is a signer callback function to request a hash to be signed by a
 backing account.
 type SignerFn func(accounts.Account, []byte) ([]byte, error)
@@ -574,7 +576,7 @@ func (x *XDPoS_v2) SyncInfoHandler(chain consensus.ChainReader, syncInfo *types.
 }
 
 /*
-	Vote workflow
+Vote workflow
 */
 func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vote) (bool, error) {
 	/*
@@ -596,7 +598,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "blockNum", vote.ProposedBlockInfo.Number, "blockHash", vote.ProposedBlockInfo.Hash, "voteHash", vote.Hash(), "error", err.Error())
 		return false, err
 	}
-	verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
+	verified, signer, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
 		ProposedBlockInfo: vote.ProposedBlockInfo,
 		GapNumber:         vote.GapNumber,
 	}), vote.Signature, snapshot.NextEpochMasterNodes)
@@ -605,8 +607,11 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 			log.Warn("[VerifyVoteMessage] Master node list item", "index", i, "Master node", mn.Hex())
 		}
 		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "voteHash", vote.Hash(), "error", err.Error())
+		return false, err
 	}
-	return verified, err
+	vote.SetSigner(signer)
+
+	return verified, nil
 }
 
 // Consensus entry point for processing vote message to produce QC
@@ -630,23 +635,31 @@ func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 */
 func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg *types.Timeout) (bool, error) {
 	snap, err := x.getSnapshot(chain, timeoutMsg.GapNumber, true)
-	if err != nil {
-		log.Error("[VerifyTimeoutMessage] Fail to get snapshot when verifying timeout message!", "messageGapNumber", timeoutMsg.GapNumber)
+	if err != nil || snap == nil {
+		log.Error("[VerifyTimeoutMessage] Fail to get snapshot when verifying timeout message!", "messageGapNumber", timeoutMsg.GapNumber, "err", err)
+		return false, err
 	}
-	if snap == nil || len(snap.NextEpochMasterNodes) == 0 {
-		log.Error("[VerifyTimeoutMessage] Something wrong with the snapshot from gapNumber", "messageGapNumber", timeoutMsg.GapNumber, "snapshot", snap)
+	if len(snap.NextEpochMasterNodes) == 0 {
+		log.Error("[VerifyTimeoutMessage] cannot find nextEpochMasterNodes from snapshot", "messageGapNumber", timeoutMsg.GapNumber)
 		return false, fmt.Errorf("Empty master node lists from snapshot")
 	}
 
-	verified, _, err := x.verifyMsgSignature(types.TimeoutSigHash(&types.TimeoutForSign{
+	verified, signer, err := x.verifyMsgSignature(types.TimeoutSigHash(&types.TimeoutForSign{
 		Round:     timeoutMsg.Round,
 		GapNumber: timeoutMsg.GapNumber,
 	}), timeoutMsg.Signature, snap.NextEpochMasterNodes)
-	return verified, err
+
+	if err != nil {
+		log.Warn("[VerifyTimeoutMessage] cannot verify timeout signature", "err", err)
+		return false, err
+	}
+
+	timeoutMsg.SetSigner(signer)
+	return verified, nil
 }
 
 /*
-	Entry point for handling timeout message to process below:
+Entry point for handling timeout message to process below:
 */
 func (x *XDPoS_v2) TimeoutHandler(blockChainReader consensus.ChainReader, timeout *types.Timeout) error {
 	x.lock.Lock()
@@ -655,7 +668,7 @@ func (x *XDPoS_v2) TimeoutHandler(blockChainReader consensus.ChainReader, timeou
 }
 
 /*
-	Proposed Block workflow
+Proposed Block workflow
 */
 func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader *types.Header) error {
 	x.lock.Lock()
@@ -866,17 +879,18 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuo
 }
 
 /*
-	1. Set currentRound = QC round + 1 (or TC round +1)
-	2. Reset timer
-	3. Reset vote and timeout Pools
+1. Set currentRound = QC round + 1 (or TC round +1)
+2. Reset timer
+3. Reset vote and timeout Pools
 */
 func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round types.Round) {
 	log.Info("[setNewRound] new round and reset pools and workers", "round", round)
 	x.currentRound = round
 	x.timeoutCount = 0
 	x.timeoutWorker.Reset(blockChainReader)
-	//TODO: vote pools
 	x.timeoutPool.Clear()
+	// don't need to clean vote pool, we have other process to clean and it's not good to clean here, some edge case may break
+	// for example round gets bump during collecting vote, so we have to keep vote.
 }
 
 func (x *XDPoS_v2) broadcastToBftChannel(msg interface{}) {
@@ -892,7 +906,7 @@ func (x *XDPoS_v2) getSyncInfo() *types.SyncInfo {
 	}
 }
 
-//Find parent and grandparent, check round number, if so, commit grandparent(grandGrandParent of currentBlock)
+// Find parent and grandparent, check round number, if so, commit grandparent(grandGrandParent of currentBlock)
 func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *types.Round, incomingQc *types.QuorumCert) (bool, error) {
 	// XDPoS v1.0 switch to v2.0, skip commit
 	if big.NewInt(0).Sub(proposedBlockHeader.Number, big.NewInt(2)).Cmp(x.config.V2.SwitchBlock) <= 0 {
@@ -962,6 +976,10 @@ func (x *XDPoS_v2) GetMasternodes(chain consensus.ChainReader, header *types.Hea
 		return []common.Address{}
 	}
 	return epochSwitchInfo.Masternodes
+}
+
+func (x *XDPoS_v2) CalcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
+	return x.calcMasternodes(chain, blockNum, parentHash)
 }
 
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {

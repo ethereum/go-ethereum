@@ -146,6 +146,16 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'getMasternodesByNumber',
+			call: 'XDPoS_getMasternodesByNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getLatestPoolStatus',
+			call: 'XDPoS_getLatestPoolStatus'
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

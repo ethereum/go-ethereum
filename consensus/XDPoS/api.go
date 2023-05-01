@@ -53,6 +53,22 @@ type NetworkInformation struct {
 	LendingAddress             common.Address
 }
 
+type SignerTypes struct {
+	CurrentNumber  int
+	CurrentSigners []common.Address
+	MissingSigners []common.Address
+}
+
+type MasternodesStatus struct {
+	MasternodesLen int
+	Masternodes    []common.Address
+
+	PenaltyLen int
+	Penalty    []common.Address
+}
+
+type MessageStatus map[string]map[string]SignerTypes
+
 // GetSnapshot retrieves the state snapshot at a given block.
 func (api *API) GetSnapshot(number *rpc.BlockNumber) (*utils.PublicApiSnapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
@@ -104,9 +120,44 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
-// Get the latest v2 committed block information. Note: This only applies to v2 engine. it doesn't make sense for v1
-func (api *API) GetLatestCommittedBlockHeader() *types.BlockInfo {
-	return api.XDPoS.EngineV2.GetLatestCommittedBlockInfo()
+func (api *API) GetMasternodesByNumber(number *rpc.BlockNumber) MasternodesStatus {
+	var header *types.Header
+	if number == nil || *number == rpc.LatestBlockNumber {
+		header = api.chain.CurrentHeader()
+	} else if *number == rpc.CommittedBlockNumber {
+		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
+		header = api.chain.GetHeaderByHash(hash)
+	} else {
+		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+	masternodes, penalties, err := api.XDPoS.EngineV2.CalcMasternodes(api.chain, header.Number, header.ParentHash)
+	if err != nil {
+		return MasternodesStatus{}
+	}
+	info := MasternodesStatus{
+		MasternodesLen: len(masternodes),
+		Masternodes:    masternodes,
+		PenaltyLen:     len(penalties),
+		Penalty:        penalties,
+	}
+	return info
+}
+
+// Get current vote pool and timeout pool content and missing messages
+func (api *API) GetLatestPoolStatus() MessageStatus {
+	header := api.chain.CurrentHeader()
+	masternodes := api.XDPoS.EngineV2.GetMasternodes(api.chain, header)
+
+	receivedVotes := api.XDPoS.EngineV2.ReceivedVotes()
+	receivedTimeouts := api.XDPoS.EngineV2.ReceivedTimeouts()
+	info := make(MessageStatus)
+	info["vote"] = make(map[string]SignerTypes)
+	info["timeout"] = make(map[string]SignerTypes)
+
+	calculateSigners(info["vote"], receivedVotes, masternodes)
+	calculateSigners(info["timeout"], receivedTimeouts, masternodes)
+
+	return info
 }
 
 func (api *API) GetV2BlockByHeader(header *types.Header, uncle bool) *V2BlockInfo {
@@ -208,4 +259,29 @@ func (api *API) NetworkInformation() NetworkInformation {
 		info.XDCZAddress = common.TRC21IssuerSMC
 	}
 	return info
+}
+
+func calculateSigners(message map[string]SignerTypes, pool map[string]map[common.Hash]utils.PoolObj, masternodes []common.Address) {
+	for name, objs := range pool {
+		var currentSigners []common.Address
+		missingSigners := make([]common.Address, len(masternodes))
+		copy(missingSigners, masternodes)
+
+		num := len(objs)
+		for _, obj := range objs {
+			signer := obj.GetSigner()
+			currentSigners = append(currentSigners, signer)
+			for i, mn := range missingSigners {
+				if mn == signer {
+					missingSigners = append(missingSigners[:i], missingSigners[i+1:]...)
+					break
+				}
+			}
+		}
+		message[name] = SignerTypes{
+			CurrentNumber:  num,
+			CurrentSigners: currentSigners,
+			MissingSigners: missingSigners,
+		}
+	}
 }
