@@ -175,17 +175,6 @@ func (task *ExecutionTask) Dependencies() []int {
 }
 
 func (task *ExecutionTask) Settle() {
-	defer func() {
-		if r := recover(); r != nil {
-			// In some rare cases, ApplyMVWriteSet will panic due to an index out of range error when calculating the
-			// address hash in sha3 module. Recover from panic and continue the execution.
-			// After recovery, block receipts or merckle root will be incorrect, but this is fine, because the block
-			// will be rejected and re-synced.
-			log.Info("Recovered from error", "Error:", r)
-			return
-		}
-	}()
-
 	task.finalStateDB.Prepare(task.tx.Hash(), task.index)
 
 	coinbaseBalance := task.finalStateDB.GetBalance(task.coinbase)
