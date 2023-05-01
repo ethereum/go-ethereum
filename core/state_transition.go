@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -188,15 +189,15 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, interruptCtx context.Context) (*ExecutionResult, error) {
+	return NewStateTransition(evm, msg, gp).TransitionDb(interruptCtx)
 }
 
-func ApplyMessageNoFeeBurnOrTip(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
+func ApplyMessageNoFeeBurnOrTip(evm *vm.EVM, msg Message, gp *GasPool, interruptCtx context.Context) (*ExecutionResult, error) {
 	st := NewStateTransition(evm, msg, gp)
 	st.noFeeBurnAndTip = true
 
-	return st.TransitionDb()
+	return st.TransitionDb(interruptCtx)
 }
 
 // to returns the recipient of the message.
@@ -290,7 +291,7 @@ func (st *StateTransition) preCheck() error {
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
-func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*ExecutionResult, error) {
 	input1 := st.state.GetBalance(st.msg.From())
 
 	var input2 *big.Int
@@ -348,7 +349,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, interruptCtx)
 	}
 
 	if !london {

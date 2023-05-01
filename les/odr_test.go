@@ -137,13 +137,14 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
 
-				context := core.NewEVMBlockContext(header, bc, nil)
+				blockContext := core.NewEVMBlockContext(header, bc, nil)
 				txContext := core.NewEVMTxContext(msg)
-				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{NoBaseFee: true})
+				vmenv := vm.NewEVM(blockContext, txContext, statedb, config, vm.Config{NoBaseFee: true})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
-				result, _ := core.ApplyMessage(vmenv, msg, gp)
+				// nolint : contextcheck
+				result, _ := core.ApplyMessage(vmenv, msg, gp, context.Background())
 				res = append(res, result.Return()...)
 			}
 		} else {
@@ -151,11 +152,12 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			state := light.NewState(ctx, header, lc.Odr())
 			state.SetBalance(bankAddr, math.MaxBig256)
 			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
-			context := core.NewEVMBlockContext(header, lc, nil)
+			blockContext := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
-			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true})
+			vmenv := vm.NewEVM(blockContext, txContext, state, config, vm.Config{NoBaseFee: true})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
-			result, _ := core.ApplyMessage(vmenv, msg, gp)
+			// nolint : contextcheck
+			result, _ := core.ApplyMessage(vmenv, msg, gp, context.Background())
 			if state.Error() == nil {
 				res = append(res, result.Return()...)
 			}

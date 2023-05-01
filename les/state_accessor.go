@@ -57,14 +57,15 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
+		blockContext := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
 		statedb.Prepare(tx.Hash(), idx)
 		if idx == txIndex {
-			return msg, context, statedb, nil
+			return msg, blockContext, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		vmenv := vm.NewEVM(blockContext, txContext, statedb, leth.blockchain.Config(), vm.Config{})
+		// nolint : contextcheck
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state

@@ -117,7 +117,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 
 	// Apply the transaction to the current state (included in the env).
 	if *task.shouldDelayFeeCal {
-		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit), nil)
 
 		if task.result == nil || err != nil {
 			return blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex(), OriginError: err}
@@ -137,7 +137,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 			task.shouldRerunWithoutFeeDelay = true
 		}
 	} else {
-		task.result, err = ApplyMessage(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+		task.result, err = ApplyMessage(evm, task.msg, new(GasPool).AddGas(task.gasLimit), nil)
 	}
 
 	if task.statedb.HadInvalidRead() || err != nil {

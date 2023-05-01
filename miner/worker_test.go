@@ -19,7 +19,6 @@ package miner
 import (
 	"math/big"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,21 +42,18 @@ import (
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, false, false)
 }
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, true, false)
 }
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportBor(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, false, true)
 }
 
@@ -90,7 +86,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 0, 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 0, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -196,7 +192,7 @@ func TestEmptyWorkClique(t *testing.T) {
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
+	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
 	defer w.close()
 
 	var (
@@ -250,7 +246,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b, _ := NewTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, 0, 0)
+	w, b, _ := NewTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, 0, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -312,7 +308,7 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{}, 3)
@@ -383,7 +379,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
+	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -491,7 +487,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, postMerge bool) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0)
+	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
@@ -627,23 +623,41 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
+// nolint : paralleltest
+// TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
 func TestCommitInterruptExperimentBor(t *testing.T) {
-	t.Parallel()
 	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
-	testCommitInterruptExperimentBor(t, 200, 5)
+	testCommitInterruptExperimentBor(t, 200, 5, 0)
+
+	time.Sleep(2 * time.Second)
 
 	// with 1 sec block time and 100 millisec tx delay we should get 10 txs per block
-	testCommitInterruptExperimentBor(t, 100, 10)
+	testCommitInterruptExperimentBor(t, 100, 10, 0)
 }
 
-func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int) {
-	t.Helper()
+// nolint : paralleltest
+// TestCommitInterruptExperimentBorContract tests the commit interrupt experiment for bor consensus by inducing an artificial delay at OPCODE level.
+func TestCommitInterruptExperimentBorContract(t *testing.T) {
+	// pre-calculated number of OPCODES = 123. 7*123=861 < 1000, 1 tx is possible but 2 tx per block will not be possible.
+	testCommitInterruptExperimentBorContract(t, 0, 1, 7)
+	time.Sleep(2 * time.Second)
+	// pre-calculated number of OPCODES = 123. 2*123=246 < 1000, 4 tx is possible but 5 tx per block will not be possible. But 3 happen due to other overheads.
+	testCommitInterruptExperimentBorContract(t, 0, 3, 2)
+	time.Sleep(2 * time.Second)
+	// pre-calculated number of OPCODES = 123. 3*123=369 < 1000, 2 tx is possible but 3 tx per block will not be possible.
+	testCommitInterruptExperimentBorContract(t, 0, 2, 3)
+}
 
+// nolint : thelper
+// testCommitInterruptExperimentBorContract is a helper function for testing the commit interrupt experiment for bor consensus.
+func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
 	var (
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 		ctrl        *gomock.Controller
+		txInTxpool  = 100
+		txs         = make([]*types.Transaction, 0, txInTxpool)
 	)
 
 	chainConfig = params.BorUnittestChainConfig
@@ -651,38 +665,91 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int) {
 	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+
+	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay, opcodeDelay)
 	defer func() {
+		w.close()
 		engine.Close()
+		db.Close()
 		ctrl.Finish()
 	}()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay)
-	defer w.close()
+	// nonce 0 tx
+	tx, addr := b.newStorageCreateContractTx()
+	if err := b.TxPool().AddRemote(tx); err != nil {
+		t.Fatal(err)
+	}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
+	time.Sleep(4 * time.Second)
 
-	go func() {
-		wg.Done()
+	// nonce starts from 1 because we already have one tx
+	initNonce := uint64(1)
 
-		for {
-			tx := b.newRandomTx(false)
-			if err := b.TxPool().AddRemote(tx); err != nil {
-				t.Log(err)
-			}
+	for i := 0; i < txInTxpool; i++ {
+		tx := b.newStorageContractCallTx(addr, initNonce+uint64(i))
+		txs = append(txs, tx)
+	}
 
-			time.Sleep(20 * time.Millisecond)
-		}
-	}()
-
-	wg.Wait()
+	if err := b.TxPool().AddRemotes(txs); err != nil {
+		t.Fatal(err)
+	}
 
 	// Start mining!
 	w.start()
 	time.Sleep(5 * time.Second)
 	w.stop()
 
-	assert.Equal(t, txCount, w.chain.CurrentBlock().Transactions().Len())
+	currentBlockNumber := w.current.header.Number.Uint64()
+	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len()+1)
+}
+
+// nolint : thelper
+// testCommitInterruptExperimentBor is a helper function for testing the commit interrupt experiment for bor consensus.
+func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
+		txInTxpool  = 100
+		txs         = make([]*types.Transaction, 0, txInTxpool)
+	)
+
+	chainConfig = params.BorUnittestChainConfig
+
+	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+
+	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay, opcodeDelay)
+	defer func() {
+		w.close()
+		engine.Close()
+		db.Close()
+		ctrl.Finish()
+	}()
+
+	// nonce starts from 0 because have no txs yet
+	initNonce := uint64(0)
+
+	for i := 0; i < txInTxpool; i++ {
+		tx := b.newRandomTxWithNonce(false, initNonce+uint64(i))
+		txs = append(txs, tx)
+	}
+
+	if err := b.TxPool().AddRemotes(txs); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start mining!
+	w.start()
+	time.Sleep(5 * time.Second)
+	w.stop()
+
+	currentBlockNumber := w.current.header.Number.Uint64()
+	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
 }
 
 func BenchmarkBorMining(b *testing.B) {
@@ -716,7 +783,7 @@ func BenchmarkBorMining(b *testing.B) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0)
+	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -822,7 +889,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0)
+	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
