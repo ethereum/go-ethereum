@@ -302,6 +302,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.Sealer.Recommit,
 		Group:   "Sealer",
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "miner.interruptcommit",
+		Usage:   "Interrupt block commit when block creation time is passed",
+		Value:   &c.cliConfig.Sealer.CommitInterruptFlag,
+		Default: c.cliConfig.Sealer.CommitInterruptFlag,
+		Group:   "Sealer",
+	})
 
 	// ethstats
 	f.StringFlag(&flagset.StringFlag{

@@ -212,7 +212,7 @@ var (
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
 	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000000000000000)
+	testBankFunds   = big.NewInt(8000000000000000000)
 
 	testUserKey, _  = crypto.GenerateKey()
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
@@ -222,8 +222,9 @@ var (
 	newTxs     []*types.Transaction
 
 	testConfig = &Config{
-		Recommit: time.Second,
-		GasCeil:  params.GenesisGasLimit,
+		Recommit:            time.Second,
+		GasCeil:             params.GenesisGasLimit,
+		CommitInterruptFlag: true,
 	}
 )
 
