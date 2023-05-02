@@ -127,7 +127,7 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 }
 
 // UploadSFTP uploads files to a remote host using the sftp command line tool.
-// The destination host may be specified either as [user@]host[: or as a URI in
+// The destination host may be specified either as [user@]host: or as a URI in
 // the form sftp://[user@]host[:port].
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
