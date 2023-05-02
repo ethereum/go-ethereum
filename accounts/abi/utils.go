@@ -16,9 +16,7 @@
 
 package abi
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // ResolveNameConflict returns the next available name for a given thing.
 // This helper can be used for lots of purposes:
