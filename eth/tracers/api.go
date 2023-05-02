@@ -826,6 +826,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			if stateSyncPresent && i == len(txs)-1 {
 				if *config.BorTraceEnabled {
 					callmsg := prepareCallMessage(msg)
+					// nolint : contextcheck
 					if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
 						failed = err
 						break
@@ -834,6 +835,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 					break
 				}
 			} else {
+				// nolint : contextcheck
 				if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), context.Background()); err != nil {
 					failed = err
 					break
@@ -844,7 +846,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			}
 		} else {
 			coinbaseBalance := statedb.GetBalance(blockCtx.Coinbase)
-
+			// nolint : contextcheck
 			result, err := core.ApplyMessageNoFeeBurnOrTip(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), context.Background())
 
 			if err != nil {
