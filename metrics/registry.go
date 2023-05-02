@@ -16,13 +16,6 @@ func (err DuplicateMetric) Error() string {
 	return fmt.Sprintf("duplicate metric: %s", string(err))
 }
 
-// UnknownMetric is the error returned by Registry.Register when a metric type is unknown.
-type UnknownMetric string
-
-func (err UnknownMetric) Error() string {
-	return fmt.Sprintf("unknown metric: %s", string(err))
-}
-
 // A Registry holds references to a set of metrics by name and can iterate
 // over them, calling callback functions provided by the user.
 //
@@ -91,8 +84,8 @@ func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{}
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
 		i = v.Call(nil)[0].Interface()
 	}
-	item, _, err := r.loadOrRegister(name, i)
-	if err != nil {
+	item, _, ok := r.loadOrRegister(name, i)
+	if !ok {
 		return i
 	}
 	return item
@@ -196,14 +189,14 @@ func (r *StandardRegistry) Unregister(name string) {
 	r.metrics.LoadAndDelete(name)
 }
 
-func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, error) {
+func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, bool) {
 	switch i.(type) {
 	case Counter, CounterFloat64, Gauge, GaugeFloat64, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
 	default:
-		return nil, false, UnknownMetric(name)
+		return nil, false, false
 	}
 	item, loaded := r.metrics.LoadOrStore(name, i)
-	return item, loaded, nil
+	return item, loaded, true
 }
 
 func (r *StandardRegistry) registered() map[string]interface{} {
