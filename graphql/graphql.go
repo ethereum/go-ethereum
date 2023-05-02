@@ -196,7 +196,7 @@ type Transaction struct {
 }
 
 // resolve returns the internal transaction object, fetching it if needed.
-// It also returns the block the tx blongs to, unless it is a pending tx.
+// It also returns the block the tx belongs to, unless it is a pending tx.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -1374,9 +1374,9 @@ func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HealingBytecode)
 }
 
-// Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
+// Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock:       block number this node started to synchronise from
+// - startingBlock:       block number this node started to synchronize from
 // - currentBlock:        block number this node is currently importing
 // - highestBlock:        block number of the highest block header this node has received from peers
 // - syncedAccounts:      number of accounts downloaded
