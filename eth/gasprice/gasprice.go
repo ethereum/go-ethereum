@@ -251,7 +251,7 @@ func (s *txSorter) Less(i, j int) bool {
 	return tip1.Cmp(tip2) < 0
 }
 
-// getBlockPrices calculates the lowest transaction gas price in a given block
+// getBlockValues calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty or all transactions
 // are sent by the miner itself(it doesn't make any sense to include this kind of
 // transaction prices for sampling), nil gasprice is returned.
