@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -60,9 +61,10 @@ var DefaultConfig = Config{
 	WSModules:           []string{"net", "web3"},
 	GraphQLVirtualHosts: []string{"localhost"},
 	P2P: p2p.Config{
-		ListenAddr: ":30303",
-		MaxPeers:   50,
-		NAT:        nat.Any(),
+		ListenAddr:    ":30303",
+		MaxPeers:      50,
+		NAT:           nat.Any(),
+		TxArrivalWait: 500 * time.Millisecond,
 	},
 }
 

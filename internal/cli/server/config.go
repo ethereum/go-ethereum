@@ -204,6 +204,11 @@ type P2PConfig struct {
 
 	// Discovery has the p2p discovery related settings
 	Discovery *P2PDiscovery `hcl:"discovery,block" toml:"discovery,block"`
+
+	// TxArrivalWait sets the maximum duration the transaction fetcher will wait for
+	// an announced transaction to arrive before explicitly requesting it
+	TxArrivalWait    time.Duration `hcl:"-,optional" toml:"-"`
+	TxArrivalWaitRaw string        `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
 }
 
 type P2PDiscovery struct {
@@ -583,13 +588,14 @@ func DefaultConfig() *Config {
 		RPCBatchLimit:      100,
 		RPCReturnDataLimit: 100000,
 		P2P: &P2PConfig{
-			MaxPeers:     50,
-			MaxPendPeers: 50,
-			Bind:         "0.0.0.0",
-			Port:         30303,
-			NoDiscover:   false,
-			NAT:          "any",
-			NetRestrict:  "",
+			MaxPeers:      50,
+			MaxPendPeers:  50,
+			Bind:          "0.0.0.0",
+			Port:          30303,
+			NoDiscover:    false,
+			NAT:           "any",
+			NetRestrict:   "",
+			TxArrivalWait: 500 * time.Millisecond,
 			Discovery: &P2PDiscovery{
 				V5Enabled:    false,
 				Bootnodes:    []string{},
@@ -797,6 +803,7 @@ func (c *Config) fillTimeDurations() error {
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
 		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
 		{"cache.timeout", &c.Cache.TrieTimeout, &c.Cache.TrieTimeoutRaw},
+		{"p2p.txarrivalwait", &c.P2P.TxArrivalWait, &c.P2P.TxArrivalWaitRaw},
 	}
 
 	for _, x := range tds {
@@ -1260,6 +1267,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
+			TxArrivalWait:   c.P2P.TxArrivalWait,
 		},
 		HTTPModules:         c.JsonRPC.Http.API,
 		HTTPCors:            c.JsonRPC.Http.Cors,

@@ -33,6 +33,7 @@ syncmode = "full"
     # netrestrict = ""
     # nodekey = ""
     # nodekeyhex = ""
+    # txarrivalwait = "500ms"
     # [p2p.discovery]
         # v5disc = false
         # bootnodes = []

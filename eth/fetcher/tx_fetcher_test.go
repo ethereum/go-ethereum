@@ -38,7 +38,8 @@ var (
 		types.NewTransaction(9828766684487745566, common.Address{0xac}, new(big.Int), 0, new(big.Int), nil),
 	}
 	// testTxsHashes is the hashes of the test transactions above
-	testTxsHashes = []common.Hash{testTxs[0].Hash(), testTxs[1].Hash(), testTxs[2].Hash(), testTxs[3].Hash()}
+	testTxsHashes     = []common.Hash{testTxs[0].Hash(), testTxs[1].Hash(), testTxs[2].Hash(), testTxs[3].Hash()}
+	testTxArrivalWait = 500 * time.Millisecond
 )
 
 type doTxNotify struct {
@@ -81,6 +82,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -113,7 +115,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 
 			// Wait for the arrival timeout which should move all expired items
 			// from the wait list to the scheduler
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -132,7 +134,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 			isWaiting(map[string][]common.Hash{
 				"C": {{0x06}, {0x07}},
 			}),
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isScheduled{
 				tracking: map[string][]common.Hash{
 					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
@@ -171,6 +173,7 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -181,7 +184,7 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -234,6 +237,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -244,7 +248,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -268,7 +272,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 					"A": {{0x01}, {0x02}},
 				},
 			},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -314,6 +318,7 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -324,7 +329,7 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -383,6 +388,7 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -393,7 +399,7 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -422,6 +428,7 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -432,7 +439,7 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -460,6 +467,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -470,7 +478,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -506,6 +514,7 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -516,7 +525,7 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -544,14 +553,15 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Set up three transactions to be in different stats, waiting, queued and fetching
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[1]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[2]}},
 
 			isWaiting(map[string][]common.Hash{
@@ -592,6 +602,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -600,7 +611,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				"A": {{0x01}},
 			}),
 			isScheduled{nil, nil, nil},
-			doWait{time: txArriveTimeout / 2, step: false},
+			doWait{time: testTxArrivalWait / 2, step: false},
 			isWaiting(map[string][]common.Hash{
 				"A": {{0x01}},
 			}),
@@ -611,7 +622,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				"A": {{0x01}, {0x02}},
 			}),
 			isScheduled{nil, nil, nil},
-			doWait{time: txArriveTimeout / 2, step: true},
+			doWait{time: testTxArrivalWait / 2, step: true},
 			isWaiting(map[string][]common.Hash{
 				"A": {{0x02}},
 			}),
@@ -624,7 +635,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				},
 			},
 
-			doWait{time: txArriveTimeout / 2, step: true},
+			doWait{time: testTxArrivalWait / 2, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -649,6 +660,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -659,7 +671,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -681,7 +693,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 			},
 			// Ensure that followup announcements don't get scheduled
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[1]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isScheduled{
 				tracking: map[string][]common.Hash{
 					"A": {testTxsHashes[1]},
@@ -714,13 +726,14 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "B", hashes: []common.Hash{{0x02}}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 
 			isWaiting(nil),
 			isScheduled{
@@ -733,7 +746,7 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 					"B": {{0x02}},
 				},
 			},
-			doWait{time: txFetchTimeout - txArriveTimeout, step: true},
+			doWait{time: txFetchTimeout - testTxArrivalWait, step: true},
 			isScheduled{
 				tracking: map[string][]common.Hash{
 					"B": {{0x02}},
@@ -745,7 +758,7 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 					"A": {},
 				},
 			},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isScheduled{
 				tracking: nil,
 				fetching: nil,
@@ -773,13 +786,14 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Announce all the transactions, wait a bit and ensure only a small
 			// percentage gets requested
 			doTxNotify{peer: "A", hashes: hashes},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -811,13 +825,14 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Announce half of the transaction and wait for them to be scheduled
 			doTxNotify{peer: "A", hashes: hashesA[:maxTxAnnounces/2]},
 			doTxNotify{peer: "B", hashes: hashesB[:maxTxAnnounces/2-1]},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 
 			// Announce the second half and keep them in the wait list
 			doTxNotify{peer: "A", hashes: hashesA[maxTxAnnounces/2 : maxTxAnnounces]},
@@ -878,12 +893,13 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Deliver a transaction through the fetcher, but reject as underpriced
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0], testTxsHashes[1]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0], testTxs[1]}, direct: true},
 			isScheduled{nil, nil, nil},
 
@@ -921,7 +937,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 		steps = append(steps, isWaiting(map[string][]common.Hash{
 			"A": hashes[i*maxTxRetrievals : (i+1)*maxTxRetrievals],
 		}))
-		steps = append(steps, doWait{time: txArriveTimeout, step: true})
+		steps = append(steps, doWait{time: testTxArrivalWait, step: true})
 		steps = append(steps, isScheduled{
 			tracking: map[string][]common.Hash{
 				"A": hashes[i*maxTxRetrievals : (i+1)*maxTxRetrievals],
@@ -947,12 +963,13 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: append(steps, []interface{}{
 			// The preparation of the test has already been done in `steps`, add the last check
 			doTxNotify{peer: "A", hashes: []common.Hash{hashes[maxTxUnderpricedSetSize]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{txs[maxTxUnderpricedSetSize]}, direct: true},
 			isUnderpriced(maxTxUnderpricedSetSize),
 		}...),
@@ -969,6 +986,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -981,9 +999,9 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 
 			// Set up a few hashes into various stages
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[1]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[2]}},
 
 			isWaiting(map[string][]common.Hash{
@@ -1022,14 +1040,15 @@ func TestTransactionFetcherDrop(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Set up a few hashes into various stages
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x02}}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x03}}},
 
 			isWaiting(map[string][]common.Hash{
@@ -1050,7 +1069,7 @@ func TestTransactionFetcherDrop(t *testing.T) {
 
 			// Push the node into a dangling (timeout) state
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			isWaiting(nil),
 			isScheduled{
 				tracking: map[string][]common.Hash{
@@ -1088,12 +1107,13 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Set up a few hashes into various stages
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxNotify{peer: "B", hashes: []common.Hash{{0x01}}},
 
 			isWaiting(nil),
@@ -1133,12 +1153,13 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Get a transaction into fetching mode and make it dangling with a broadcast
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}},
 
 			// Notify the dangling transaction once more and crash via a timeout
@@ -1160,17 +1181,18 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Get a transaction into fetching mode and make it dangling with a broadcast
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}},
 
 			// Notify the dangling transaction once more, re-fetch, and crash via a drop and timeout
 			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doDrop("A"),
 			doWait{time: txFetchTimeout, step: true},
 		},
@@ -1189,6 +1211,7 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
@@ -1199,7 +1222,7 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 
 			// Notify the dangling transaction once more, partially deliver, clash&crash with a timeout
 			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[1]}, direct: true},
 			doWait{time: txFetchTimeout, step: true},
@@ -1225,17 +1248,18 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
+				testTxArrivalWait,
 			)
 		},
 		steps: []interface{}{
 			// Get a transaction into fetching mode and make it dangling with a broadcast
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}},
 
 			// Notify the dangling transaction once more, re-fetch, and crash via an in-flight disconnect
 			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}},
-			doWait{time: txArriveTimeout, step: true},
+			doWait{time: testTxArrivalWait, step: true},
 			doFunc(func() {
 				proceed <- struct{}{} // Allow peer A to return the failure
 			}),

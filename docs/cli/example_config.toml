@@ -29,15 +29,16 @@ devfakeauthor = false           # Run miner without validator set authorization 
   debug = true       # Prepends log messages with call-site location (file and line number)  -  {requires some effort}
 
 [p2p]
-  maxpeers = 50       # Maximum number of network peers (network disabled if set to 0)
-  maxpendpeers = 50   # Maximum number of pending connection attempts
-  bind = "0.0.0.0"    # Network binding address
-  port = 30303        # Network listening port
-  nodiscover = false  # Disables the peer discovery mechanism (manual peer addition)
-  nat = "any"         # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
+  maxpeers = 50           # Maximum number of network peers (network disabled if set to 0)
+  maxpendpeers = 50       # Maximum number of pending connection attempts
+  bind = "0.0.0.0"        # Network binding address
+  port = 30303            # Network listening port
+  nodiscover = false      # Disables the peer discovery mechanism (manual peer addition)
+  nat = "any"             # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
   netrestrict = ""    # Restricts network communication to the given IP networks (CIDR masks)
   nodekey = ""        # P2P node key file
   nodekeyhex = ""     # P2P node key as hex
+  txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap

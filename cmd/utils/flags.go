@@ -754,6 +754,13 @@ var (
 		Usage: "Gas price below which gpo will ignore transactions",
 		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
+	// flag to set the transaction fetcher's txArrivalWait value, which is the maximum waiting
+	// period the fetcher will wait to receive an announced tx before explicitly requesting it
+	TxArrivalWaitFlag = cli.DurationFlag{
+		Name:  "txarrivalwait",
+		Usage: "Maximum duration to wait for a transaction before requesting it (defaults to 500ms)",
+		Value: node.DefaultConfig.P2P.TxArrivalWait,
+	}
 
 	// Metrics flags
 	MetricsEnabledFlag = cli.BoolFlag{
@@ -1287,6 +1294,10 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NoDial = true
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false
+	}
+
+	if ctx.GlobalIsSet(TxArrivalWaitFlag.Name) {
+		cfg.TxArrivalWait = TxArrivalWaitFlag.Value
 	}
 }
 

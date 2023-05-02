@@ -216,6 +216,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
 
+- ```txarrivalwait```: Maximum duration to wait before requesting an announced transaction (default: 500ms)
+
 ### Sealer Options
 
 - ```mine```: Enable mining (default: false)
