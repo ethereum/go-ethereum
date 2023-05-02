@@ -138,7 +138,7 @@ type Storage struct {
 `Storage.go` contains all the bindings required to interact with `Storage.sol` from a Go application.
 
 
-Here's a complete Go program that demonstrates how to interact with the Storage smart contract. [here](https://gist.github.com/joohhnnn/f137bfc2a8a9288543ebef04c17f025a).
+Here's a complete Go program that demonstrates how to interact with the Storage smart contract. 
 
 This example demonstrates how to use the `Storage.sol` to interact with the Ethereum smart contract named Storage.
 
@@ -173,8 +173,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Set up call and transaction options
-	privateKey, err := crypto.HexToECDSA("0xYourPrivateKeyHere")
+	// Read private key from environment variable
+	// 'export ETH_PRIVATE_KEY=your_private_key_here' set private key by linux/mac
+	// 'set ETH_PRIVATE_KEY=your_private_key_here' set private key by windows
+	// You can use other methods similar to a keyfile to store your private key
+	// but you must always pay attention to the security of your private key.
+	privateKeyEnv := os.Getenv("ETH_PRIVATE_KEY")
+	if privateKeyEnv == "" {
+		log.Fatal("ETH_PRIVATE_KEY environment variable not set")
+	}
+	privateKey, err := crypto.HexToECDSA(privateKeyEnv)
 	if err != nil {
 		log.Fatal(err)
 	}
