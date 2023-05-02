@@ -141,6 +141,7 @@ type Storage struct {
 Here's a complete Go program that demonstrates how to interact with the Storage smart contract. 
 
 This example demonstrates how to use the `Storage.sol` to interact with the Ethereum smart contract named Storage.
+we use environment variables to store the private key.
 
 ```go
 package main
