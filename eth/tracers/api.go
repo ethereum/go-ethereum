@@ -100,34 +100,10 @@ func NewAPI(backend Backend) *API {
 	return &API{backend: backend}
 }
 
-type chainContext struct {
-	api *API
-	ctx context.Context
-}
-
-func (context *chainContext) Engine() consensus.Engine {
-	return context.api.backend.Engine()
-}
-
-func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
-	header, err := context.api.backend.HeaderByNumber(context.ctx, rpc.BlockNumber(number))
-	if err != nil {
-		return nil
-	}
-	if header.Hash() == hash {
-		return header
-	}
-	header, err = context.api.backend.HeaderByHash(context.ctx, hash)
-	if err != nil {
-		return nil
-	}
-	return header
-}
-
 // chainContext constructs the context reader which is used by the evm for reading
 // the necessary chain context.
 func (api *API) chainContext(ctx context.Context) core.ChainContext {
-	return &chainContext{api: api, ctx: ctx}
+	return ethapi.NewChainContext(ctx, api.backend)
 }
 
 // blockByNumber is the wrapper of the chain access function offered by the backend.

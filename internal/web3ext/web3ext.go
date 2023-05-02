@@ -608,8 +608,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'call',
 			call: 'eth_call',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null],
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null],
 		}),
 	],
 	properties: [
