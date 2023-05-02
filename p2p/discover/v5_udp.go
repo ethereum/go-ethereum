@@ -460,7 +460,7 @@ func containsUint(x uint, xs []uint) bool {
 // callToNode sends the given call and sets up a handler for response packets (of message
 // type responseType). Responses are dispatched to the call's response channel.
 func (t *UDPv5) callToNode(n *enode.Node, responseType byte, req v5wire.Packet) *callV5 {
-	addr := &net.UDPAddr{IP: n.IP(), Port: int(n.UDP())}
+	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 	c := &callV5{id: n.ID(), addr: addr, node: n}
 	t.initCall(c, responseType, req)
 	return c
