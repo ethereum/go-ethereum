@@ -204,7 +204,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 			codeResults = make([]trie.CodeSyncResult, len(codeElements))
 		)
 		for i, element := range codeElements {
-			data, err := srcDb.ContractCode(common.Hash{}, element.code)
+			data, err := srcDb.ContractCode(common.Address{}, element.code)
 			if err != nil {
 				t.Fatalf("failed to retrieve contract bytecode for hash %x", element.code)
 			}
@@ -312,7 +312,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 		if len(codeElements) > 0 {
 			codeResults := make([]trie.CodeSyncResult, len(codeElements)/2+1)
 			for i, element := range codeElements[:len(codeResults)] {
-				data, err := srcDb.ContractCode(common.Hash{}, element.code)
+				data, err := srcDb.ContractCode(common.Address{}, element.code)
 				if err != nil {
 					t.Fatalf("failed to retrieve contract bytecode for %x", element.code)
 				}
@@ -399,7 +399,7 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
-				data, err := srcDb.ContractCode(common.Hash{}, hash)
+				data, err := srcDb.ContractCode(common.Address{}, hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
@@ -481,7 +481,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			for hash := range codeQueue {
 				delete(codeQueue, hash)
 
-				data, err := srcDb.ContractCode(common.Hash{}, hash)
+				data, err := srcDb.ContractCode(common.Address{}, hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
@@ -588,7 +588,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
-				data, err := srcDb.ContractCode(common.Hash{}, hash)
+				data, err := srcDb.ContractCode(common.Address{}, hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
