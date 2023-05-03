@@ -186,7 +186,6 @@ func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
 // Withdrawal represents a withdrawal of value from the beacon chain
 // by a validator. For details see EIP-4895.
 type Withdrawal struct {
-	block     *Block
 	index     uint64
 	validator uint64
 	address   common.Address
@@ -207,10 +206,6 @@ func (w *Withdrawal) Address(ctx context.Context) common.Address {
 
 func (w *Withdrawal) Amount(ctx context.Context) hexutil.Uint64 {
 	return hexutil.Uint64(w.amount)
-}
-
-func (w *Withdrawal) Block(ctx context.Context) *Block {
-	return w.block
 }
 
 // Transaction represents an Ethereum transaction.
@@ -1024,7 +1019,6 @@ func (b *Block) Withdrawals(ctx context.Context) (*[]*Withdrawal, error) {
 			validator: w.Validator,
 			address:   w.Address,
 			amount:    w.Amount,
-			block:     b,
 		})
 	}
 	return &ret, nil

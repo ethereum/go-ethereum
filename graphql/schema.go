@@ -87,8 +87,6 @@ const schema string = `
         address: Address!
         # Amount is the withdrawal value in Gwei.
         amount: Long!
-        # Block is the block this withdrawal was included in.
-        block: Block!
     }
 
     # Transaction is an Ethereum transaction.
