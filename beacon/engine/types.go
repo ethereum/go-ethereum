@@ -192,6 +192,12 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+	// Check that number of blobs are valid
+	for _, tx := range txs {
+		if tx.Type() == types.BlobTxType && len(tx.DataHashes()) == 0 {
+			return nil, fmt.Errorf("zero blobs within a blob transaction")
+		}
+	}
 	header := &types.Header{
 		ParentHash:      params.ParentHash,
 		UncleHash:       types.EmptyUncleHash,
