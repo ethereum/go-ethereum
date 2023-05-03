@@ -278,6 +278,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 				txHash, _ := GetCurrentTxFromContext(interruptCtx)
 				interruptedTxCache, _ := GetCache(interruptCtx)
 
+				if interruptedTxCache == nil {
+					break
+				}
+
 				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
 				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
 				if found {
@@ -437,6 +441,11 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 			case <-interruptCtx.Done():
 				txHash, _ := GetCurrentTxFromContext(interruptCtx)
 				interruptedTxCache, _ := GetCache(interruptCtx)
+
+				if interruptedTxCache == nil {
+					break
+				}
+
 				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
 				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
 				log.Info("FOUND", "found", found, "txHash", txHash)
