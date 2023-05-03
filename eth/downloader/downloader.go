@@ -53,11 +53,9 @@ var (
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
-	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during snap sync
-	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
-	fsHeaderForceVerify    = 24              // Number of headers to verify before and after the pivot to accept it
-	fsHeaderContCheck      = 3 * time.Second // Time interval to check for header continuations during state download
-	fsMinFullBlocks        = 64              // Number of blocks to retrieve fully even in snap sync
+	fsHeaderSafetyNet = 2048            // Number of headers to discard in case a chain violation is detected
+	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
+	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in snap sync
 )
 
 var (
@@ -175,7 +173,7 @@ type LightChain interface {
 	GetTd(common.Hash, uint64) *big.Int
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
-	InsertHeaderChain([]*types.Header, int) (int, error)
+	InsertHeaderChain([]*types.Header) (int, error)
 
 	// SetHead rewinds the local chain to a new head.
 	SetHead(uint64) error
@@ -1381,19 +1379,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 
 				// In case of header only syncing, validate the chunk immediately
 				if mode == SnapSync || mode == LightSync {
-					// If we're importing pure headers, verify based on their recentness
-					var pivot uint64
-
-					d.pivotLock.RLock()
-					if d.pivotHeader != nil {
-						pivot = d.pivotHeader.Number.Uint64()
-					}
-					d.pivotLock.RUnlock()
-
-					frequency := fsHeaderCheckFrequency
-					if chunkHeaders[len(chunkHeaders)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
-						frequency = 1
-					}
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
@@ -1426,11 +1411,11 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						}
 					}
 					if len(chunkHeaders) > 0 {
-						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders, frequency); err != nil {
+						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders); err != nil {
 							rollbackErr = err
 
 							// If some headers were inserted, track them as uncertain
-							if (mode == SnapSync || frequency > 1) && n > 0 && rollback == 0 {
+							if mode == SnapSync && n > 0 && rollback == 0 {
 								rollback = chunkHeaders[0].Number.Uint64()
 							}
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)

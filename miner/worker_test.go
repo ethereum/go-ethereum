@@ -208,10 +208,6 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	return w, backend
 }
 
-func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
-}
-
 func TestGenerateBlockAndImportClique(t *testing.T) {
 	testGenerateBlockAndImport(t, true)
 }

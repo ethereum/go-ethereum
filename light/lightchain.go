@@ -70,9 +70,8 @@ type LightChain struct {
 	wg      sync.WaitGroup
 
 	// Atomic boolean switches:
-	stopped          atomic.Bool // whether LightChain is stopped or running
-	procInterrupt    atomic.Bool // interrupts chain insert
-	disableCheckFreq atomic.Bool // disables header verification
+	stopped       atomic.Bool // whether LightChain is stopped or running
+	procInterrupt atomic.Bool // interrupts chain insert
 }
 
 // NewLightChain returns a fully initialised light chain using information
@@ -345,7 +344,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 func (lc *LightChain) InsertHeader(header *types.Header) error {
 	// Verify the header first before obtaining the lock
 	headers := []*types.Header{header}
-	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
+	if _, err := lc.hc.ValidateHeaderChain(headers); err != nil {
 		return err
 	}
 	// Make sure only one thread manipulates the chain at once
@@ -381,23 +380,15 @@ func (lc *LightChain) SetCanonical(header *types.Header) error {
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
-//
-// The verify parameter can be used to fine tune whether nonce verification
-// should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verify nonces, as well as
-// because nonces can be verified sparsely, not needing to check each.
-//
+
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (lc *LightChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
-	if lc.disableCheckFreq.Load() {
-		checkFreq = 0
-	}
 	start := time.Now()
-	if i, err := lc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := lc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 
@@ -537,14 +528,4 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
-}
-
-// DisableCheckFreq disables header validation. This is used for ultralight mode.
-func (lc *LightChain) DisableCheckFreq() {
-	lc.disableCheckFreq.Store(true)
-}
-
-// EnableCheckFreq enables header validation.
-func (lc *LightChain) EnableCheckFreq() {
-	lc.disableCheckFreq.Store(false)
 }
