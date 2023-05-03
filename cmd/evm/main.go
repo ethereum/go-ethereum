@@ -179,7 +179,6 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.InputWithdrawalsFlag,
 		t8ntool.InputTxsRlpFlag,
 		t8ntool.SealCliqueFlag,
-		t8ntool.SealEthashModeFlag,
 		t8ntool.VerbosityFlag,
 	},
 }

@@ -125,11 +125,6 @@ var (
 		Name:  "seal.clique",
 		Usage: "Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.",
 	}
-	SealEthashModeFlag = &cli.StringFlag{
-		Name:  "seal.ethash.mode",
-		Usage: "Defines the type and amount of PoW verification an ethash engine makes.",
-		Value: "normal",
-	}
 	RewardFlag = &cli.Int64Flag{
 		Name:  "state.reward",
 		Usage: "Mining reward. Set to -1 to disable",
