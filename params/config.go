@@ -255,8 +255,9 @@ var (
 	}
 
 	// ScrollAlphaChainConfig contains the chain parameters to run a node on the Scroll Alpha test network.
-	ScrollFeeVaultAddress = common.HexToAddress("0x5300000000000000000000000000000000000005")
-	ScrollMaxTxPerBlock   = 44
+	ScrollFeeVaultAddress           = common.HexToAddress("0x5300000000000000000000000000000000000005")
+	ScrollMaxTxPerBlock             = 44
+	ScrollMaxTxPayloadBytesPerBlock = 120 * 1024
 
 	ScrollAlphaChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(534353),
@@ -279,11 +280,12 @@ var (
 			Epoch:  30000,
 		},
 		Scroll: ScrollConfig{
-			UseZktrie:       true,
-			MaxTxPerBlock:   &ScrollMaxTxPerBlock,
-			FeeVaultAddress: &ScrollFeeVaultAddress,
-			EnableEIP2718:   false,
-			EnableEIP1559:   false,
+			UseZktrie:                 true,
+			MaxTxPerBlock:             &ScrollMaxTxPerBlock,
+			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
+			FeeVaultAddress:           &ScrollFeeVaultAddress,
+			EnableEIP2718:             false,
+			EnableEIP1559:             false,
 		},
 	}
 
@@ -431,6 +433,9 @@ type ScrollConfig struct {
 	// Maximum number of transactions per block [optional]
 	MaxTxPerBlock *int `json:"maxTxPerBlock,omitempty"`
 
+	// Maximum tx payload size of blocks that we produce [optional]
+	MaxTxPayloadBytesPerBlock *int `json:"maxTxPayloadBytesPerBlock,omitempty"`
+
 	// Transaction fee vault address [optional]
 	FeeVaultAddress *common.Address `json:"feeVaultAddress,omitempty"`
 
@@ -466,6 +471,11 @@ func (s ScrollConfig) String() string {
 // IsValidTxCount returns whether the given block's transaction count is below the limit.
 func (s ScrollConfig) IsValidTxCount(count int) bool {
 	return s.MaxTxPerBlock == nil || count <= *s.MaxTxPerBlock
+}
+
+// IsValidBlockSize returns whether the given block's transaction payload size is below the limit.
+func (s ScrollConfig) IsValidBlockSize(size common.StorageSize) bool {
+	return s.MaxTxPayloadBytesPerBlock == nil || size <= common.StorageSize(*s.MaxTxPayloadBytesPerBlock)
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
