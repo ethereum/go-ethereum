@@ -88,6 +88,7 @@ type ExecutionTask struct {
 	// next k elements in dependencies -> transaction indexes on which transaction i is dependent on
 	dependencies []int
 	coinbase     common.Address
+	blockContext vm.BlockContext
 }
 
 func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (err error) {
@@ -96,9 +97,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	task.statedb.SetMVHashmap(mvh)
 	task.statedb.SetIncarnation(incarnation)
 
-	blockContext := NewEVMBlockContext(task.header, task.blockChain, nil)
-
-	evm := vm.NewEVM(blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
+	evm := vm.NewEVM(task.blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(task.msg)
@@ -125,8 +124,8 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 
 		reads := task.statedb.MVReadMap()
 
-		if _, ok := reads[blockstm.NewSubpathKey(blockContext.Coinbase, state.BalancePath)]; ok {
-			log.Info("Coinbase is in MVReadMap", "address", blockContext.Coinbase)
+		if _, ok := reads[blockstm.NewSubpathKey(task.blockContext.Coinbase, state.BalancePath)]; ok {
+			log.Info("Coinbase is in MVReadMap", "address", task.blockContext.Coinbase)
 
 			task.shouldRerunWithoutFeeDelay = true
 		}
@@ -293,6 +292,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		metadata = true
 	}
 
+	blockContext := NewEVMBlockContext(header, p.bc, nil)
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
@@ -328,6 +329,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				allLogs:           &allLogs,
 				dependencies:      deps[i],
 				coinbase:          coinbase,
+				blockContext:      blockContext,
 			}
 
 			tasks = append(tasks, task)
@@ -352,6 +354,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				allLogs:           &allLogs,
 				dependencies:      nil,
 				coinbase:          coinbase,
+				blockContext:      blockContext,
 			}
 
 			tasks = append(tasks, task)
