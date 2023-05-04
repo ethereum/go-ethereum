@@ -1,16 +1,11 @@
 on:
   push:
-    branches:
+    branches: # we keep this to avoid triggering `push` & `pull_request` every time we update a PR
       - main
       - staging
       - develop
       - alpha
   pull_request:
-    branches:
-      - main
-      - staging
-      - develop
-      - alpha
 name: CI
 jobs:
   build:
