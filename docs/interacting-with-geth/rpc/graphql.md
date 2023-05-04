@@ -48,7 +48,7 @@ For example, the code snippet below shows how to obtain the latest block number 
 
 ```sh
 ❯ curl -X POST http://localhost:8545/graphql -H "Content-Type: application/json" --data '{ "query": "query { block { number } }" }'
-{"data":{"block":{"number":6004069}}}
+{"data":{"block":{"number":"0x5b9d65"}}}
 ```
 
 Alternatively store the JSON-ified query in a file (let's call it `block-num.query`) and do:
@@ -78,3 +78,27 @@ request('http://localhost:8545/graphql', query, { number: '6004067' })
     console.log(err);
   });
 ```
+
+## Accessing state
+
+The schema allows for querying parts of state, i.e. accounts and their storage slots. E.g. it is possible to get the balance of the sender of a tx via:
+
+```graphql
+transaction(hash: "0xdad") {
+    from {
+        balance
+    }
+}
+```
+
+It is important to note however that the balance returned here is **not** the balance at the given transaction, rather it is the latest balance of the sender account, i.e. at the head of the chain. It is possible to query the state of this account at a particular block N via:
+
+```graphql
+transaction(hash: "0xdad") {
+    from(block: 6004067) {
+        balance
+    }
+}
+```
+
+As you can see this effect takes in a block number parameter which instructs geth to return the state of this account from an older block. The node needs to have the state for that block persisted, otherwise this query will result in an error. To see how Geth persists state please see this [page](/docs/developers/evm-tracing#state-availability).
