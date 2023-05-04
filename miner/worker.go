@@ -654,7 +654,8 @@ func (w *worker) mainLoop(ctx context.Context) {
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
-				interruptCh, stopFn := getInterruptTimer(ctx, w.current, w.chain.CurrentBlock())
+				var interruptCh chan struct{}
+
 				w.commitTransactions(w.current, txset, nil, interruptCh)
 
 				// Only update the snapshot if any new transactions were added
@@ -662,8 +663,6 @@ func (w *worker) mainLoop(ctx context.Context) {
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-
-				stopFn()
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
