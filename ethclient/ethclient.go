@@ -582,19 +582,16 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 }
 
 func toBlockNumArg(number *big.Int) string {
-	if number == nil {
+	if number == nil || number.Cmp(big.NewInt(int64(rpc.LatestBlockNumber))) == 0 {
 		return "latest"
 	}
-	pending := big.NewInt(-1)
-	if number.Cmp(pending) == 0 {
+	if number.Cmp(big.NewInt(int64(rpc.PendingBlockNumber))) == 0 {
 		return "pending"
 	}
-	finalized := big.NewInt(int64(rpc.FinalizedBlockNumber))
-	if number.Cmp(finalized) == 0 {
+	if number.Cmp(big.NewInt(int64(rpc.FinalizedBlockNumber))) == 0 {
 		return "finalized"
 	}
-	safe := big.NewInt(int64(rpc.SafeBlockNumber))
-	if number.Cmp(safe) == 0 {
+	if number.Cmp(big.NewInt(int64(rpc.SafeBlockNumber))) == 0 {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
