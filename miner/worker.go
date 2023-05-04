@@ -674,30 +674,14 @@ func (w *worker) mainLoop(ctx context.Context) {
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
-				// nolint : contextcheck
-				var interruptCtx = context.Background()
-
-				stopFn := func() {}
-
-				defer func() {
-					stopFn()
-				}()
-
-				if w.interruptCommitFlag {
-					interruptCtx, stopFn = getInterruptTimer(ctx, w.current, w.chain.CurrentBlock())
-					// nolint : staticcheck
-					interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
-				}
-
-				w.commitTransactions(w.current, txset, nil, interruptCtx)
+				//nolint:contextcheck
+				w.commitTransactions(w.current, txset, nil, context.Background())
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-
-				stopFn()
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
