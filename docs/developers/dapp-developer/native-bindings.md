@@ -220,7 +220,7 @@ const key = `<<json object from keystore>>`
 
 func main() {
 	// Create an IPC based RPC connection to a remote node and an authorized transactor
-	conn, err := rpc.NewIPCClient("/home/go-ethereum/goerli/geth.ipc")
+	conn, err := ethclient.Dial("/home/go-ethereum/goerli/geth.ipc")
 	if err != nil {
 		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
 	}
