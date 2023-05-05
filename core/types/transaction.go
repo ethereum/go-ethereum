@@ -726,3 +726,5 @@ func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }
 func (m Message) Data() []byte              { return m.data }
 func (m Message) CheckNonce() bool          { return m.checkNonce }
+
+func (m *Message) SetNonce(nonce uint64) { m.nonce = nonce }
