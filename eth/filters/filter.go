@@ -107,29 +107,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return f.blockLogs(ctx, header)
 	}
 
-	// Else fetch blcok-range logs
-	logChan, errChan, err := f.rangeLogsAsync(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var logs []*types.Log
-LOOP:
-	for {
-		select {
-		case log := <-logChan:
-			logs = append(logs, log)
-		case ierr := <-errChan:
-			err = ierr
-			break LOOP
-		}
-	}
-	return logs, err
-}
-
-// rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
-// it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error, error) {
 	var (
 		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
 		endPending   = f.end == rpc.PendingBlockNumber.Int64()
@@ -137,7 +114,12 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 
 	// special case for pending logs
 	if beginPending && !endPending {
-		return nil, nil, errors.New("invalid block range")
+		return nil, errors.New("invalid block range")
+	}
+
+	// Short-cut if all we care about is pending logs
+	if beginPending && endPending {
+		return f.pendingLogs(), nil
 	}
 
 	resolveSpecial := func(number int64) (int64, error) {
@@ -169,12 +151,32 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 	var err error
 	// range query need to resolve the special begin/end block number
 	if f.begin, err = resolveSpecial(f.begin); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if f.end, err = resolveSpecial(f.end); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
+	// Else fetch blcok-range logs
+	logChan, errChan := f.rangeLogsAsync(ctx, endPending)
+
+	var logs []*types.Log
+LOOP:
+	for {
+		select {
+		case log := <-logChan:
+			logs = append(logs, log)
+		case ierr := <-errChan:
+			err = ierr
+			break LOOP
+		}
+	}
+	return logs, err
+}
+
+// rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
+// it creates and returns two channels: one for delivering log data, and one for reporting errors.
+func (f *Filter) rangeLogsAsync(ctx context.Context, includePending bool) (chan *types.Log, chan error) {
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)
@@ -186,18 +188,11 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 			close(logChan)
 		}()
 
-		// Short-cut if all we care about is pending logs
-		if beginPending && endPending {
-			for _, log := range f.pendingLogs() {
-				logChan <- log
-			}
-			return
-		}
-
 		// Gather all indexed logs, and finish with non indexed ones
 		var (
 			end            = uint64(f.end)
 			size, sections = f.sys.backend.BloomStatus()
+			err            error
 		)
 		if indexed := sections * size; indexed > uint64(f.begin) {
 			if indexed > end {
@@ -217,7 +212,7 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 			return
 		}
 
-		if endPending {
+		if includePending {
 			for _, log := range f.pendingLogs() {
 				logChan <- log
 			}
@@ -225,7 +220,7 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 		errChan <- nil
 	}()
 
-	return logChan, errChan, nil
+	return logChan, errChan
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
