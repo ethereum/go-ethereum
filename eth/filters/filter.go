@@ -95,7 +95,20 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
-	logChan, errChan, err := f.logsAsync(ctx)
+	// If we're doing singleton block filtering, execute and return
+	if f.block != nil {
+		header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
+		if err != nil {
+			return nil, err
+		}
+		if header == nil {
+			return nil, errors.New("unknown block")
+		}
+		return f.blockLogs(ctx, header)
+	}
+
+	// Else fetch blcok-range logs
+	logChan, errChan, err := f.rangeLogsAsync(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +127,19 @@ LOOP:
 	return logs, err
 }
 
-// logsAsync retrieves logs that match the filter criteria asynchronously,
+// rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error, error) {
+func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error, error) {
+	var (
+		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
+		endPending   = f.end == rpc.PendingBlockNumber.Int64()
+	)
+
+	// special case for pending logs
+	if beginPending && !endPending {
+		return nil, nil, errors.New("invalid block range")
+	}
+
 	resolveSpecial := func(number int64) (int64, error) {
 		var hdr *types.Header
 		switch number {
@@ -143,27 +166,15 @@ func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error, er
 		return hdr.Number.Int64(), nil
 	}
 
-	var (
-		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
-		endPending   = f.end == rpc.PendingBlockNumber.Int64()
-		err          error
-	)
-
+	var err error
 	// range query need to resolve the special begin/end block number
-	if f.block == nil {
-		// special case for pending logs
-		if beginPending && !endPending {
-			return nil, nil, errors.New("invalid block range")
-		}
-
-		// resolve the special
-		if f.begin, err = resolveSpecial(f.begin); err != nil {
-			return nil, nil, err
-		}
-		if f.end, err = resolveSpecial(f.end); err != nil {
-			return nil, nil, err
-		}
+	if f.begin, err = resolveSpecial(f.begin); err != nil {
+		return nil, nil, err
 	}
+	if f.end, err = resolveSpecial(f.end); err != nil {
+		return nil, nil, err
+	}
+
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)
@@ -174,28 +185,6 @@ func (f *Filter) logsAsync(ctx context.Context) (chan *types.Log, chan error, er
 			close(errChan)
 			close(logChan)
 		}()
-
-		// If we're doing singleton block filtering, execute and return
-		if f.block != nil {
-			header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if header == nil {
-				errChan <- errors.New("unknown block")
-				return
-			}
-			logs, err := f.blockLogs(ctx, header)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			for _, log := range logs {
-				logChan <- log
-			}
-			return
-		}
 
 		// Short-cut if all we care about is pending logs
 		if beginPending && endPending {
