@@ -973,7 +973,7 @@ var BLOCK_DELTA = 1
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// this should allow us to append to the file
-	f, err := os.OpenFile("/data/one", os.O_WRONLY|os.O_APPEND, 0777)
+	f, err := os.OpenFile("data/one", os.O_WRONLY|os.O_APPEND, 0777)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1119,7 +1119,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		fmt.Println("Global Updates: ", globalUpdates)
 		fmt.Println("Global Deletes: ", globalDeletes)
 		totalSize := globalUpdates + globalDeletes
-		_, err := f.WriteString(fmt.Sprintf("%d\n", totalSize))
+		_, err := f.WriteString(fmt.Sprintf("Total Size: %d\n", totalSize))
 		if err != nil {
 			return common.Hash{}, err
 		}

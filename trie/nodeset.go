@@ -226,8 +226,8 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 func (set *MergedNodeSet) Size() (int, int) {
 	var updates = 0
 	var deleted = 0
-	for _, set := range set.sets {
-		numUpdated, numDeleted := set.Size()
+	for _, other_set := range set.sets {
+		numUpdated, numDeleted := other_set.Size()
 		updates += numUpdated
 		deleted += numDeleted
 	}
