@@ -158,7 +158,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	// Else fetch blcok-range logs
-	logChan, errChan := f.rangeLogsAsync(ctx, endPending)
+	logChan, errChan := f.rangeLogsAsync(ctx)
 
 	var logs []*types.Log
 LOOP:
@@ -171,12 +171,18 @@ LOOP:
 			break LOOP
 		}
 	}
+
+	// Append the pending ones
+	if endPending {
+		pendingLogs := f.pendingLogs()
+		logs = append(logs, pendingLogs...)
+	}
 	return logs, err
 }
 
 // rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) rangeLogsAsync(ctx context.Context, includePending bool) (chan *types.Log, chan error) {
+func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error) {
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)
@@ -212,11 +218,6 @@ func (f *Filter) rangeLogsAsync(ctx context.Context, includePending bool) (chan 
 			return
 		}
 
-		if includePending {
-			for _, log := range f.pendingLogs() {
-				logChan <- log
-			}
-		}
 		errChan <- nil
 	}()
 
