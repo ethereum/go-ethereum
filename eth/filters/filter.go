@@ -173,7 +173,7 @@ LOOP:
 	}
 
 	// Append the pending ones
-	if endPending {
+	if endPending && err == nil {
 		pendingLogs := f.pendingLogs()
 		logs = append(logs, pendingLogs...)
 	}
