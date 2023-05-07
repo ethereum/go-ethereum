@@ -467,6 +467,15 @@ func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (acco
 	return ks.importKey(key, passphrase)
 }
 
+// ImportRawKey loads the given raw key and stores it into the key directory, encrypting it with the passphrase.
+func (ks *KeyStore) ImportRawKey(keyfile, passphrase string) (accounts.Account, error) {
+	priv, err := crypto.LoadECDSA(keyfile)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+	return ks.ImportECDSA(priv, passphrase)
+}
+
 func (ks *KeyStore) importKey(key *Key, passphrase string) (accounts.Account, error) {
 	a := accounts.Account{Address: key.Address, URL: accounts.URL{Scheme: KeyStoreScheme, Path: ks.storage.JoinPath(keyFileName(key.Address))}}
 	if err := ks.storage.StoreKey(a.URL.Path, key, passphrase); err != nil {
