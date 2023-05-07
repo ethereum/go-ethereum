@@ -31,7 +31,7 @@ type HeadUpdater struct {
 	chain          *light.CommitteeChain
 	lock           sync.Mutex
 	nextSyncPeriod uint64
-	queuedHeads    map[*request.Server][]types.SignedHead
+	queuedHeads    map[*request.Server][]types.SignedHeader
 }
 
 func NewHeadUpdater(headValidator *light.HeadValidator, chain *light.CommitteeChain) *HeadUpdater {
@@ -39,7 +39,7 @@ func NewHeadUpdater(headValidator *light.HeadValidator, chain *light.CommitteeCh
 		headValidator:  headValidator,
 		chain:          chain,
 		nextSyncPeriod: math.MaxUint64,
-		queuedHeads:    make(map[*request.Server][]types.SignedHead),
+		queuedHeads:    make(map[*request.Server][]types.SignedHeader),
 	}
 	return s
 }
@@ -49,7 +49,7 @@ func (s *HeadUpdater) SetupModuleTriggers(trigger func(id string, subscribe bool
 	trigger("newUpdate", true)
 }
 
-func (s *HeadUpdater) NewSignedHead(server *request.Server, signedHead types.SignedHead) {
+func (s *HeadUpdater) NewSignedHead(server *request.Server, signedHead types.SignedHeader) {
 	nextPeriod, ok := s.chain.NextSyncPeriod()
 	if !ok || signedHead.Header.SyncPeriod() > nextPeriod {
 		s.lock.Lock()

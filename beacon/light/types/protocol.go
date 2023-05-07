@@ -26,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const MaxUpdateScoresLength = 128 // max number of advertised update scores of most recent periods
-
 // LightClientUpdate is a proof of the next sync committee root based on a header
 // signed by the sync committee of the given period. Optionally the update can
 // prove quasi-finality by the signed header referring to a previous, finalized
@@ -37,9 +35,7 @@ const MaxUpdateScoresLength = 128 // max number of advertised update scores of m
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientupdate
 type LightClientUpdate struct {
-	Header                  Header
-	SyncAggregate           SyncAggregate
-	SignatureSlot           uint64
+	SignedHeader
 	NextSyncCommitteeRoot   common.Hash
 	NextSyncCommitteeBranch merkle.Values
 	FinalizedHeader         Header
@@ -83,7 +79,7 @@ func (u *CommitteeUpdate) MarshalJSON() ([]byte, error) {
 			Header:                  JsonBeaconHeader{Beacon: u.Update.Header},
 			NextSyncCommittee:       u.NextSyncCommittee,
 			NextSyncCommitteeBranch: u.Update.NextSyncCommitteeBranch,
-			FinalizedHeader:         JsonBeaconHeader{Beacon: u.Update.FinalizedHeader}, //TODO should we encode it when not present?
+			FinalizedHeader:         JsonBeaconHeader{Beacon: u.Update.FinalizedHeader},
 			FinalityBranch:          u.Update.FinalityBranch,
 			SyncAggregate:           u.Update.SyncAggregate,
 			SignatureSlot:           common.Decimal(u.Update.SignatureSlot),
@@ -100,9 +96,11 @@ func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 	u.Version = dec.Version
 	u.NextSyncCommittee = dec.Data.NextSyncCommittee
 	u.Update = &LightClientUpdate{
-		Header:                  dec.Data.Header.Beacon,
-		SyncAggregate:           dec.Data.SyncAggregate,
-		SignatureSlot:           uint64(dec.Data.SignatureSlot),
+		SignedHeader: SignedHeader{
+			Header:        dec.Data.Header.Beacon,
+			SyncAggregate: dec.Data.SyncAggregate,
+			SignatureSlot: uint64(dec.Data.SignatureSlot),
+		},
 		NextSyncCommitteeRoot:   u.NextSyncCommittee.Root(),
 		NextSyncCommitteeBranch: dec.Data.NextSyncCommitteeBranch,
 		FinalizedHeader:         dec.Data.FinalizedHeader.Beacon,
@@ -195,20 +193,6 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 type PeriodRange struct {
 	First, AfterLast uint64
 }
-
-/*func (a PeriodRange) Shared(b PeriodRange) PeriodRange {
-	if b.First > a.First {
-		a.First = b.First
-	}
-	if b.AfterLast < a.AfterLast {
-		a.AfterLast = b.AfterLast
-	}
-	return a
-}
-
-func (a PeriodRange) IsValid() bool {
-	return a.AfterLast >= a.First
-}*/
 
 func (a PeriodRange) IsEmpty() bool {
 	return a.AfterLast == a.First

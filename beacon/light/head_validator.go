@@ -38,10 +38,10 @@ func NewHeadValidator(committeeChain *CommitteeChain) *HeadValidator {
 type headSub struct {
 	minSignerCount int
 	nextSlot       uint64
-	callbacks      []func(types.SignedHead)
+	callbacks      []func(types.SignedHeader)
 }
 
-func (h *HeadValidator) Subscribe(minSignerCount int, callback func(types.SignedHead)) {
+func (h *HeadValidator) Subscribe(minSignerCount int, callback func(types.SignedHeader)) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
@@ -60,15 +60,15 @@ func (h *HeadValidator) Subscribe(minSignerCount int, callback func(types.Signed
 	copy(h.subs[insertAt+1:], h.subs[insertAt:len(h.subs)-1])
 	h.subs[insertAt] = &headSub{
 		minSignerCount: minSignerCount,
-		callbacks:      []func(types.SignedHead){callback},
+		callbacks:      []func(types.SignedHeader){callback},
 	}
 }
 
-func (h *HeadValidator) Add(head types.SignedHead) error {
+func (h *HeadValidator) Add(head types.SignedHeader) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	sigOk, age := h.committeeChain.VerifySignedHead(head)
+	sigOk, age := h.committeeChain.VerifySignedHeader(head)
 	if age < 0 {
 		log.Warn("Future signed head received", "age", age)
 	}
@@ -79,7 +79,7 @@ func (h *HeadValidator) Add(head types.SignedHead) error {
 		return errors.New("invalid header signature")
 	}
 
-	signerCount := head.SignerCount()
+	signerCount := head.SyncAggregate.SignerCount()
 	for _, sub := range h.subs {
 		if sub.minSignerCount > signerCount {
 			break

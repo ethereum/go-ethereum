@@ -28,13 +28,13 @@ import (
 
 type testRequestServer struct {
 	newHead       func(uint64, common.Hash)
-	newSignedHead func(types.SignedHead)
+	newSignedHead func(types.SignedHeader)
 	clock         *mclock.Simulated
 	delayUntil    mclock.AbsTime
 	failed        bool
 }
 
-func (s *testRequestServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHead)) {
+func (s *testRequestServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHeader)) {
 	s.newHead, s.newSignedHead = newHead, newSignedHead
 }
 
@@ -89,7 +89,7 @@ func newSchedulerTest(t *testing.T, clock *mclock.Simulated, serverCount, trigge
 	st := &schedulerTest{
 		t:         t,
 		clock:     clock,
-		scheduler: NewScheduler(NewHeadTracker(func(*Server, types.SignedHead) {}), clock),
+		scheduler: NewScheduler(NewHeadTracker(func(*Server, types.SignedHeader) {}), clock),
 		modules:   make([]*testModule, len(moduleTriggers)),
 		triggers:  make([]*ModuleTrigger, triggerCount),
 		processCh: make(chan testProcess),
@@ -219,7 +219,7 @@ func (r *testRequest) returned() {
 
 func TestServerTrigger(t *testing.T) {
 	st := newSchedulerTest(t, &mclock.Simulated{}, 3, 2, [][]int{{0}, {}})
-	st.scheduler.testTimerCh = make(chan bool)
+	st.scheduler.testTimerResults = []bool{}
 	req := &testRequest{}
 	req.reqLock.Trigger = st.triggers[0]
 
@@ -251,9 +251,13 @@ func TestServerTrigger(t *testing.T) {
 	}
 
 	expectTimerFinished := func(exp bool) {
-		if processed := <-st.scheduler.testTimerCh; processed != exp {
-			t.Fatalf("Invalid simulated timer result (got processed == %v, expected %v)", processed, exp)
+		if len(st.scheduler.testTimerResults) == 0 {
+			t.Fatalf("No timer results found (expected %v)", exp)
 		}
+		if st.scheduler.testTimerResults[0] != exp {
+			t.Fatalf("Invalid simulated timer result (got finished == %v, expected %v)", st.scheduler.testTimerResults[0], exp)
+		}
+		st.scheduler.testTimerResults = st.scheduler.testTimerResults[1:]
 	}
 
 	st.servers[2].delayUntil = mclock.AbsTime(time.Second * 5)

@@ -108,7 +108,7 @@ func blsync(ctx *cli.Context) error {
 	committeeChain.SetGenesisData(chainConfig.GenesisData)
 	headUpdater := sync.NewHeadUpdater(headValidator, committeeChain)
 	headTracker := request.NewHeadTracker(headUpdater.NewSignedHead)
-	headValidator.Subscribe(threshold, func(signedHead types.SignedHead) {
+	headValidator.Subscribe(threshold, func(signedHead types.SignedHeader) {
 		headTracker.SetValidatedHead(signedHead.Header)
 	})
 

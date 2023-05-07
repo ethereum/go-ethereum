@@ -39,7 +39,7 @@ func NewSyncServer(api *BeaconLightApi) *SyncServer {
 	return &SyncServer{api: api}
 }
 
-func (s *SyncServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(signedHead types.SignedHead)) {
+func (s *SyncServer) SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(signedHead types.SignedHeader)) {
 	s.unsubscribe = s.api.StartHeadListener(newHead, newSignedHead, func(err error) {
 		log.Warn("Head event stream error", "err", err)
 	})

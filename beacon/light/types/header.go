@@ -108,53 +108,13 @@ func PeriodOfSlot(slot uint64) uint64 {
 	return slot >> params.Log2SyncPeriodLength
 }
 
-// HeaderWithoutState stores beacon header fields except the state root which can
-// be reconstructed from a partial beacon state proof stored alongside the header
-type HeaderWithoutState struct {
-	Slot                 uint64
-	ProposerIndex        uint64
-	ParentRoot, BodyRoot common.Hash
-}
-
-// Hash calculates the block root of the header
-func (bh *HeaderWithoutState) Hash(stateRoot common.Hash) common.Hash {
-	return bh.Proof(stateRoot).RootHash()
-}
-
-// Proof returns a MultiProof of the header
-func (bh *HeaderWithoutState) Proof(stateRoot common.Hash) merkle.MultiProof {
-	var values [8]merkle.Value // values corresponding to indices 8 to 15 of the beacon header tree
-	binary.LittleEndian.PutUint64(values[params.BhiSlot-8][:8], bh.Slot)
-	binary.LittleEndian.PutUint64(values[params.BhiProposerIndex-8][:8], bh.ProposerIndex)
-	values[params.BhiParentRoot-8] = merkle.Value(bh.ParentRoot)
-	values[params.BhiStateRoot-8] = merkle.Value(stateRoot)
-	values[params.BhiBodyRoot-8] = merkle.Value(bh.BodyRoot)
-	return merkle.MultiProof{Format: headerFormat, Values: values[:]}
-}
-
-// FullHeader reconstructs a full Header from a HeaderWithoutState and a state root
-func (bh *HeaderWithoutState) FullHeader(stateRoot common.Hash) Header {
-	return Header{
-		Slot:          bh.Slot,
-		ProposerIndex: bh.ProposerIndex,
-		ParentRoot:    bh.ParentRoot,
-		StateRoot:     stateRoot,
-		BodyRoot:      bh.BodyRoot,
-	}
-}
-
-// SignedHead represents a beacon header signed by a sync committee
+// SignedHeader represents a beacon header signed by a sync committee
 //
 // Note: this structure is created from either an optimistic update or an instant update:
 //  https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 //  https://github.com/zsfelfoldi/beacon-APIs/blob/instant_update/apis/beacon/light_client/instant_update.yaml
-type SignedHead struct {
+type SignedHeader struct {
 	Header        Header        // signed beacon header
 	SyncAggregate SyncAggregate // sync committee signature aggregate
 	SignatureSlot uint64        // slot in which the signature has been created (newer than Header.Slot, determines the signing sync committee)
-}
-
-// SignerCount returns the number of individual signers in the signature aggregate
-func (s *SignedHead) SignerCount() int {
-	return s.SyncAggregate.SignerCount()
 }

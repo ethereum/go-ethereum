@@ -86,7 +86,7 @@ type Scheduler struct {
 
 	triggerCh          chan struct{} // restarts waiting sync loop
 	testWaitCh         chan struct{} // accepts sends when sync loop is waiting
-	testTimerCh        chan bool     // sends true when simulated timer is processed; false when stopped
+	testTimerResults   []bool        // true is appended when simulated timer is processed; false when stopped
 	triggerLock        sync.Mutex
 	waiting, triggered bool
 	trModules          map[Module]struct{}

@@ -287,21 +287,21 @@ func (c *committeeChainTest) insertUpdate(tc *testCommitteeChain, period uint64,
 	}
 }
 
-func (c *committeeChainTest) verifySignedHead(tc *testCommitteeChain, period float64, expOk bool) {
+func (c *committeeChainTest) verifySignedHeader(tc *testCommitteeChain, period float64, expOk bool) {
 	signedHead := tc.makeTestSignedHead(types.Header{Slot: uint64(period * float64(params.SyncPeriodLength))}, 400)
-	if ok, _ := c.chain.VerifySignedHead(signedHead); ok != expOk {
-		c.t.Errorf("Incorrect output from VerifySignedHead at period %f (expected %v, got %v)", period, expOk, ok)
+	if ok, _ := c.chain.VerifySignedHeader(signedHead); ok != expOk {
+		c.t.Errorf("Incorrect output from VerifySignedHeader at period %f (expected %v, got %v)", period, expOk, ok)
 	}
 }
 
 func (c *committeeChainTest) verifyRange(tc *testCommitteeChain, begin, end uint64) {
 	if begin > 0 {
-		c.verifySignedHead(tc, float64(begin)-0.5, false)
+		c.verifySignedHeader(tc, float64(begin)-0.5, false)
 	}
 	for period := begin; period <= end; period++ {
-		c.verifySignedHead(tc, float64(period)+0.5, true)
+		c.verifySignedHeader(tc, float64(period)+0.5, true)
 	}
-	c.verifySignedHead(tc, float64(end)+1.5, false)
+	c.verifySignedHeader(tc, float64(end)+1.5, false)
 }
 
 func newTestGenesis() GenesisData {
@@ -378,9 +378,9 @@ type testCommitteeChain struct {
 	genesisData GenesisData
 }
 
-func (tc *testCommitteeChain) makeTestSignedHead(header types.Header, signerCount int) types.SignedHead {
+func (tc *testCommitteeChain) makeTestSignedHead(header types.Header, signerCount int) types.SignedHeader {
 	bitmask := makeBitmask(signerCount)
-	return types.SignedHead{
+	return types.SignedHeader{
 		Header: header,
 		SyncAggregate: types.SyncAggregate{
 			BitMask:   bitmask,

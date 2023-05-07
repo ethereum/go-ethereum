@@ -33,7 +33,7 @@ import (
 // the trusted engine API while head BLS signatures are validated later as they
 // appear, in order to be passed on to other clients.
 type HeadTracker struct {
-	newSignedHead func(server *Server, signedHead types.SignedHead)
+	newSignedHead func(server *Server, signedHead types.SignedHeader)
 
 	validatedLock        sync.RWMutex
 	validatedHead        types.Header
@@ -54,7 +54,7 @@ type serverHeadInfo struct {
 
 // NewHeadTracker creates a new HeadTracker. The newSignedHead head callback is
 // called whenever a signed head is received from any of the connected servers.
-func NewHeadTracker(newSignedHead func(server *Server, signedHead types.SignedHead)) *HeadTracker {
+func NewHeadTracker(newSignedHead func(server *Server, signedHead types.SignedHeader)) *HeadTracker {
 	return &HeadTracker{
 		serverHeads:   make(map[*Server]common.Hash),
 		headInfo:      make(map[common.Hash]serverHeadInfo),
@@ -101,7 +101,7 @@ func (s *HeadTracker) registerServer(server *Server) {
 		server.setHead(slot, blockRoot)
 		s.setServerHead(server, blockRoot)
 		server.scheduler.triggerServer(server)
-	}, func(signedHead types.SignedHead) {
+	}, func(signedHead types.SignedHeader) {
 		s.newSignedHead(server, signedHead)
 	})
 }

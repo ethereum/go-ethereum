@@ -29,7 +29,7 @@ import (
 // RequestServer is a general server interface that can be extended by modules
 // with specific request types.
 type RequestServer interface {
-	SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHead))
+	SubscribeHeads(newHead func(uint64, common.Hash), newSignedHead func(types.SignedHeader))
 	UnsubscribeHeads()
 	DelayUntil() mclock.AbsTime // no requests should be sent before this
 	Fail(string)                // report server failure
@@ -49,10 +49,10 @@ type Server struct {
 	moduleData map[Module]*interface{}
 
 	lock         sync.Mutex
-	sent         map[uint64]chan struct{} // closed when returned; nil when timed out
+	timeouts     map[uint64]mclock.Timer // stopped when request has returned; nil when timed out
 	timeoutCount int
 	delayUntil   mclock.AbsTime
-	delayTimer   mclock.ChanTimer // if non-nil then expires at delayUntil
+	delayTimer   mclock.Timer // if non-nil then expires at delayUntil
 	needTrigger  bool
 	lastReqId    uint64
 	stopCh       chan struct{}
@@ -64,7 +64,7 @@ func (s *Scheduler) newServer(server RequestServer) *Server {
 		RequestServer: server,
 		scheduler:     s,
 		moduleData:    make(map[Module]*interface{}),
-		sent:          make(map[uint64]chan struct{}),
+		timeouts:      make(map[uint64]mclock.Timer),
 		stopCh:        make(chan struct{}),
 	}
 }
@@ -113,48 +113,31 @@ func (s *Server) isDelayed() bool {
 	if delayUntil == s.delayUntil {
 		return s.delayTimer != nil
 	}
-	s.delayUntil = delayUntil
 	if s.delayTimer != nil {
-		if s.delayTimer.Stop() {
-			if s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- false // simulated timer stopped
-			}
-		} else {
-			s.delayTimer = nil
-		}
+		// Note: is stopping the timer is unsuccessful then the resulting AfterFunc
+		// call will just do nothing
+		s.stopTimer(s.delayTimer)
+		s.delayTimer = nil
 	}
+	s.delayUntil = delayUntil
 	delay := time.Duration(delayUntil - s.scheduler.clock.Now())
 	if delay <= 0 {
-		s.delayTimer = nil
 		return false
 	}
-	if s.delayTimer == nil {
-		s.delayTimer = s.scheduler.clock.NewTimer(delay)
-	} else {
-		s.delayTimer.Reset(delay)
-	}
-	timer := s.delayTimer
-	go func() {
-		select {
-		case <-timer.C():
-			s.lock.Lock()
-			if s.delayTimer == timer {
-				s.delayTimer = nil
-				if s.needTrigger && s.timeoutCount == 0 {
-					s.needTrigger = false
-					s.scheduler.triggerServer(s)
-				}
-			}
-			s.lock.Unlock()
-			if s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- true // simulated timer processed
-			}
-		case <-s.stopCh:
-			if timer.Stop() && s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- false // simulated timer stopped
+	s.delayTimer = s.scheduler.clock.AfterFunc(delay, func() {
+		if s.scheduler.testTimerResults != nil {
+			s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, true) // simulated timer finished
+		}
+		s.lock.Lock()
+		if s.delayTimer != nil && s.delayUntil == delayUntil { // do nothing if there is a new timer now
+			s.delayTimer = nil
+			if s.needTrigger && s.timeoutCount == 0 {
+				s.needTrigger = false
+				s.scheduler.triggerServer(s)
 			}
 		}
-	}()
+		s.lock.Unlock()
+	})
 	return true
 }
 
@@ -166,35 +149,27 @@ func (s *Server) sendRequest(timeoutTrigger *ModuleTrigger) uint64 {
 
 	s.lastReqId++
 	reqId := s.lastReqId
-	returnCh := make(chan struct{})
-	s.sent[reqId] = returnCh
-	timer := s.scheduler.clock.NewTimer(softRequestTimeout)
-	go func() {
-		select {
-		case <-timer.C():
-			s.lock.Lock()
-			if _, ok := s.sent[reqId]; ok {
-				s.sent[reqId] = nil
-				s.timeoutCount++
-			}
-			s.lock.Unlock()
+	s.timeouts[reqId] = s.scheduler.clock.AfterFunc(softRequestTimeout, func() {
+		if s.scheduler.testTimerResults != nil {
+			s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, true) // simulated timer finished
+		}
+		s.lock.Lock()
+		if s.timeouts[reqId] != nil {
+			s.timeouts[reqId] = nil
+			s.timeoutCount++
 			if timeoutTrigger != nil {
 				timeoutTrigger.Trigger()
 			}
-			if s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- true // simulated timer processed
-			}
-		case <-returnCh:
-			if timer.Stop() && s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- false // simulated timer stopped
-			}
-		case <-s.stopCh:
-			if timer.Stop() && s.scheduler.testTimerCh != nil {
-				s.scheduler.testTimerCh <- false // simulated timer stopped
-			}
 		}
-	}()
+		s.lock.Unlock()
+	})
 	return reqId
+}
+
+func (s *Server) stopTimer(timer mclock.Timer) {
+	if timer.Stop() && s.scheduler.testTimerResults != nil {
+		s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, false) // simulated timer stopped
+	}
 }
 
 // hasTimedOut returns true if the given request has timed out.
@@ -202,8 +177,8 @@ func (s *Server) hasTimedOut(reqId uint64) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	ch, ok := s.sent[reqId]
-	return ok && ch == nil
+	timer, ok := s.timeouts[reqId]
+	return ok && timer == nil
 }
 
 // returned stops the timeout timer and removes the entry associated with the
@@ -213,9 +188,9 @@ func (s *Server) returned(reqId uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if ch, ok := s.sent[reqId]; ok {
-		if ch != nil {
-			close(ch)
+	if timer, ok := s.timeouts[reqId]; ok {
+		if timer != nil {
+			s.stopTimer(timer)
 		} else {
 			s.timeoutCount--
 			if s.needTrigger && s.timeoutCount == 0 && !s.isDelayed() {
@@ -223,11 +198,18 @@ func (s *Server) returned(reqId uint64) {
 				s.scheduler.triggerServer(s)
 			}
 		}
-		delete(s.sent, reqId)
+		delete(s.timeouts, reqId)
 	}
 }
 
 // stop stops all goroutines associated with the server.
 func (s *Server) stop() {
-	close(s.stopCh)
+	for _, timer := range s.timeouts {
+		if timer != nil {
+			s.stopTimer(timer)
+		}
+	}
+	if s.delayTimer != nil {
+		s.stopTimer(s.delayTimer)
+	}
 }

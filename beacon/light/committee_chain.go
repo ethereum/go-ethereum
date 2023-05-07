@@ -421,22 +421,22 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) syncCommittee {
 	return nil
 }
 
-// VerifySignedHead returns true if the given signed head has a valid signature
+// VerifySignedHeader returns true if the given signed head has a valid signature
 // according to the local committee chain. The caller should ensure that the
 // committees advertised by the same source where the signed head came from are
 // synced before verifying the signature.
 // The age of the header is also returned (the time elapsed since the beginning
 // of the given slot, according to the local system clock). If enforceTime is
 // true then negative age (future) headers are rejected.
-func (s *CommitteeChain) VerifySignedHead(head types.SignedHead) (bool, time.Duration) {
+func (s *CommitteeChain) VerifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return s.verifySignedHead(head)
+	return s.verifySignedHeader(head)
 }
 
 // (rlock required)
-func (s *CommitteeChain) verifySignedHead(head types.SignedHead) (bool, time.Duration) {
+func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
 	var (
 		slotTime = int64(time.Second) * int64(s.genesisData.GenesisTime+head.Header.Slot*12)
 		age      = time.Duration(s.unixNano() - slotTime)
@@ -460,7 +460,7 @@ func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
 	// verification. Though in reality SignatureSlot is always bigger than update.Header.Slot,
 	// setting them as equal here enforces the rule that they have to be in the same sync
 	// period in order for the light client update proof to be meaningful.
-	ok, age := s.verifySignedHead(types.SignedHead{Header: update.Header, SyncAggregate: update.SyncAggregate, SignatureSlot: update.Header.Slot})
+	ok, age := s.verifySignedHeader(update.SignedHeader)
 	if age < 0 {
 		log.Warn("Future committee update received", "age", age)
 	}

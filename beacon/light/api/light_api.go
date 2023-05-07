@@ -131,15 +131,15 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
-func (api *BeaconLightApi) GetOptimisticHeadUpdate() (types.SignedHead, error) {
+func (api *BeaconLightApi) GetOptimisticHeadUpdate() (types.SignedHeader, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
 	if err != nil {
-		return types.SignedHead{}, err
+		return types.SignedHeader{}, err
 	}
 	return decodeOptimisticHeadUpdate(resp)
 }
 
-func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHead, error) {
+func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
 	var data struct {
 		Data struct {
 			Header        types.JsonBeaconHeader `json:"attested_header"`
@@ -148,22 +148,22 @@ func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHead, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
-		return types.SignedHead{}, err
+		return types.SignedHeader{}, err
 	}
 	if data.Data.Header.Beacon.StateRoot == (common.Hash{}) {
 		// workaround for different event encoding format in Lodestar
 		if err := json.Unmarshal(enc, &data.Data); err != nil {
-			return types.SignedHead{}, err
+			return types.SignedHeader{}, err
 		}
 	}
 
 	if len(data.Data.Aggregate.BitMask) != params.SyncCommitteeBitmaskSize {
-		return types.SignedHead{}, errors.New("invalid sync_committee_bits length")
+		return types.SignedHeader{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BlsSignatureSize {
-		return types.SignedHead{}, errors.New("invalid sync_committee_signature length")
+		return types.SignedHeader{}, errors.New("invalid sync_committee_signature length")
 	}
-	return types.SignedHead{
+	return types.SignedHeader{
 		Header:        data.Data.Header.Beacon,
 		SyncAggregate: data.Data.Aggregate,
 		SignatureSlot: uint64(data.Data.SignatureSlot),
@@ -309,7 +309,7 @@ func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
 // head updates and calls the specified callback functions when they are received.
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
-func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHead), errFn func(err error)) func() {
+func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHeader), errFn func(err error)) func() {
 	closeCh := make(chan struct{})   // initiate closing the stream
 	closedCh := make(chan struct{})  // stream closed (or failed to create)
 	stoppedCh := make(chan struct{}) // sync loop stopped

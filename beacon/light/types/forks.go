@@ -32,6 +32,8 @@ import (
 	"github.com/minio/sha256-simd"
 )
 
+const syncCommitteeDomain = 7
+
 // Fork describes a single beacon chain fork and also stores the calculated
 // signature domain used after this fork.
 type Fork struct {
@@ -79,7 +81,7 @@ func computeDomain(forkVersion []byte, genesisValidatorsRoot common.Hash) merkle
 	hasher.Write(forkVersion32[:])
 	hasher.Write(genesisValidatorsRoot[:])
 	hasher.Sum(forkDataRoot[:0])
-	domain[0] = 7
+	domain[0] = syncCommitteeDomain
 	copy(domain[4:], forkDataRoot[:28])
 	return domain
 }

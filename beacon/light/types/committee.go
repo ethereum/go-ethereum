@@ -30,6 +30,7 @@ import (
 
 const SerializedCommitteeSize = (params.SyncCommitteeSize + 1) * params.BlsPubkeySize
 
+// SerializedCommittee is the serialized version of a sync committee
 type SerializedCommittee [SerializedCommitteeSize]byte
 
 // jsonSyncCommittee is the JSON representation of a sync committee
@@ -137,6 +138,8 @@ type SyncCommittee struct {
 	aggregate *bls.Pubkey
 }
 
+// VerifySignature returns true if the given sync aggregate is a valid signature
+// or the given hash
 func (sc *SyncCommittee) VerifySignature(signingRoot common.Hash, aggregate *SyncAggregate) bool {
 	var (
 		sig         bls.Signature
@@ -195,6 +198,7 @@ func (s *SyncAggregate) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+// SignerCount returns the number of signers in the aggregate signature
 func (s *SyncAggregate) SignerCount() int {
 	var count int
 	for _, v := range s.BitMask {
