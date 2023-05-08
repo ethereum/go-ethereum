@@ -297,7 +297,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	if err := RegisterAPIsToServer(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.httpConfig = config
@@ -328,7 +328,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	if err := RegisterAPIsToServer(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.wsConfig = config
@@ -613,9 +613,9 @@ func (is *ipcServer) stop() error {
 	return err
 }
 
-// RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
+// RegisterAPIsToServer checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
+func RegisterAPIsToServer(apis []rpc.API, modules []string, srv *rpc.Server) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
