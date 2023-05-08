@@ -293,7 +293,8 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		}
 		s.originStorage[key] = value
 
-		var v []byte
+		// rlp-encoded value to be used by the snapshot
+		var snapshotVal []byte
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
@@ -303,7 +304,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		} else {
 			trimmedVal := common.TrimLeftZeroes(value[:])
 			// Encoding []byte cannot fail, ok to ignore the error.
-			v, _ = rlp.EncodeToBytes(trimmedVal)
+			snapshotVal, _ = rlp.EncodeToBytes(trimmedVal)
 			if err := tr.UpdateStorage(s.address, key[:], trimmedVal); err != nil {
 				s.db.setError(err)
 				return nil, err
@@ -319,7 +320,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			}
-			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if it's deleted
+			storage[crypto.HashData(hasher, key[:])] = snapshotVal // will be nil if it's deleted
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
