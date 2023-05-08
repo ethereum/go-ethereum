@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -79,15 +80,15 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):  &ecrecover{},
+	common.BytesToAddress([]byte{2}):  &sha256hash{},
+	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):  &dataCopy{},
+	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):  &blake2F{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -102,6 +103,12 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
+}
+
+// PrecompiledContractsEcverify contains the precompiled Ethereum
+// contract specified in EIP-N. This is exported for testing purposes.
+var PrecompiledContractsEcverify = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{19}): &ecverify{},
 }
 
 var (
@@ -1106,4 +1113,34 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// ECVERIFY (secp256r1 signature verification)
+// implemented as a native contract
+type ecverify struct{}
+
+// RequiredGas returns the gas required to execute the precompiled contract
+func (c *ecverify) RequiredGas(input []byte) uint64 {
+	return params.EcverifyGas
+}
+
+// Run executes the precompiled contract, returning the output and the used gas
+func (c *ecverify) Run(input []byte) ([]byte, error) {
+	// Required input length is 160 bytes
+	const ecverifyInputLength = 160
+
+	// "input" is (hash, r, s, x, y), each 32 bytes
+	input = common.RightPadBytes(input, ecverifyInputLength)
+
+	// Extract the hash, r, s, x, y from the input
+	hash := input[0:32]
+	r, s := new(big.Int).SetBytes(input[32:64]), new(big.Int).SetBytes(input[64:96])
+	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
+
+	// Verify the secp256r1 signature
+	if result, err := secp256r1.Verify(hash, r, s, x, y); err != nil {
+		return nil, err
+	} else {
+		return result, nil
+	}
 }
