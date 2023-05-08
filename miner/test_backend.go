@@ -358,16 +358,14 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
-				interruptCh, stopFn := getInterruptTimer(ctx, w.current, w.chain.CurrentBlock())
-				w.commitTransactionsWithDelay(w.current, txset, nil, interruptCh, delay)
+				//nolint:contextcheck
+				w.commitTransactions(w.current, txset, nil, context.Background())
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-
-				stopFn()
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
@@ -393,7 +391,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 }
 
 // nolint:gocognit
-func (w *worker) commitTransactionsWithDelay(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32, interruptCh chan struct{}, delay uint) bool {
+func (w *worker) commitTransactionsWithDelay(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32, interruptCtx context.Context, delay uint) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -420,11 +418,15 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *types.Transa
 mainloop:
 	for {
 		// case of interrupting by timeout
-		select {
-		case <-interruptCh:
-			commitInterruptCounter.Inc(1)
-			break mainloop
-		default:
+		if interruptCtx != nil {
+			// case of interrupting by timeout
+			select {
+			case <-interruptCtx.Done():
+				commitInterruptCounter.Inc(1)
+				log.Warn("Tx Level Interrupt")
+				break mainloop
+			default:
+			}
 		}
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -581,7 +583,8 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 		return
 	}
 
-	var interruptCh chan struct{}
+	//nolint:contextcheck
+	var interruptCtx = context.Background()
 
 	stopFn := func() {}
 	defer func() {
@@ -589,7 +592,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	}()
 
 	if !noempty {
-		interruptCh, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
 	}
 
 	ctx, span := tracing.StartSpan(ctx, "commitWork")
@@ -610,7 +613,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	}
 
 	// Fill pending transactions from the txpool
-	w.fillTransactionsWithDelay(ctx, interrupt, work, interruptCh, delay)
+	w.fillTransactionsWithDelay(ctx, interrupt, work, interruptCtx, delay)
 
 	err = w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
 	if err != nil {
@@ -627,7 +630,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 }
 
 // nolint:gocognit
-func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32, env *environment, interruptCh chan struct{}, delay uint) {
+func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32, env *environment, interruptCtx context.Context, delay uint) {
 	ctx, span := tracing.StartSpan(ctx, "fillTransactions")
 	defer tracing.EndSpan(span)
 
@@ -751,7 +754,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		})
 
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCh, delay)
+			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx, delay)
 		})
 
 		if committed {
@@ -774,7 +777,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		})
 
 		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCh, delay)
+			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx, delay)
 		})
 
 		if committed {

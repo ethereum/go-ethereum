@@ -43,21 +43,18 @@ import (
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, false, false)
 }
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, true, false)
 }
 
+// nolint : paralleltest
 func TestGenerateBlockAndImportBor(t *testing.T) {
-	t.Parallel()
-
 	testGenerateBlockAndImport(t, false, true)
 }
 
@@ -627,18 +624,18 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
+// nolint:paralleltest
 func TestCommitInterruptExperimentBor(t *testing.T) {
-	t.Parallel()
 	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
 	testCommitInterruptExperimentBor(t, 200, 5)
 
+	time.Sleep(3 * time.Second)
 	// with 1 sec block time and 100 millisec tx delay we should get 10 txs per block
 	testCommitInterruptExperimentBor(t, 100, 10)
 }
 
+// nolint:thelper
 func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int) {
-	t.Helper()
-
 	var (
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
@@ -725,11 +722,6 @@ func BenchmarkBorMining(b *testing.B) {
 
 	chain, _ := core.NewBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// fulfill tx pool
 	const (
