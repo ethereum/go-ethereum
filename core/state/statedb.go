@@ -350,56 +350,13 @@ func (s *StateDB) GetRootHash() common.Hash {
 	return s.trie.Hash()
 }
 
-// StorageTrieProof is not in Db interface and used explictily for reading proof in storage trie (not the dirty value)
-// For zktrie it also provide required data for predict the deletion, else it just fallback to GetStorageProof
-func (s *StateDB) GetStorageTrieProof(a common.Address, key common.Hash) ([][]byte, []byte, error) {
-
-	// try the trie in stateObject first, else we would create one
-	stateObject := s.getStateObject(a)
-	if stateObject == nil {
-		return nil, nil, errors.New("storage trie for requested address does not exist")
-	}
-
-	trieS := stateObject.trie
-	var err error
-	if trieS == nil {
-		// use a new, temporary trie
-		trieS, err = s.db.OpenStorageTrie(stateObject.addrHash, stateObject.data.Root)
-		if err != nil {
-			return nil, nil, fmt.Errorf("can't create storage trie on root %s: %v ", stateObject.data.Root, err)
-		}
-	}
-
-	var proof proofList
-	var sibling []byte
-	if s.IsZktrie() {
-		zkTrie := trieS.(*trie.ZkTrie)
-		if zkTrie == nil {
-			panic("unexpected trie type for zktrie")
-		}
-		key_s, _ := zkt.ToSecureKeyBytes(key.Bytes())
-		sibling, err = zkTrie.ProveWithDeletion(key_s.Bytes(), 0, &proof)
-	} else {
-		err = trieS.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	}
-	return proof, sibling, err
-}
-
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
-	var proof proofList
 	trie := s.StorageTrie(a)
 	if trie == nil {
-		return proof, errors.New("storage trie for requested address does not exist")
+		return nil, errors.New("storage trie for requested address does not exist")
 	}
-	var err error
-	if s.IsZktrie() {
-		key_s, _ := zkt.ToSecureKeyBytes(key.Bytes())
-		err = trie.Prove(key_s.Bytes(), 0, &proof)
-	} else {
-		err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	}
-	return proof, err
+	return s.GetSecureTrieProof(trie, key)
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.

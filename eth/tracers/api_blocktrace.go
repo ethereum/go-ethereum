@@ -1,6 +1,7 @@
 package tracers
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -42,6 +43,8 @@ type traceEnv struct {
 	// this lock is used to protect StorageTrace's read and write mutual exclusion.
 	sMu sync.Mutex
 	*types.StorageTrace
+	// zktrie tracer is used for zktrie storage to build additional deletion proof
+	zkTrieTracer     map[string]state.ZktrieProofTracer
 	executionResults []*types.ExecutionResult
 }
 
@@ -119,6 +122,7 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 			Proofs:        make(map[string][]hexutil.Bytes),
 			StorageProofs: make(map[string]map[string][]hexutil.Bytes),
 		},
+		zkTrieTracer:     make(map[string]state.ZktrieProofTracer),
 		executionResults: make([]*types.ExecutionResult, block.Transactions().Len()),
 	}
 
@@ -188,6 +192,18 @@ func (api *API) getBlockTrace(block *types.Block, env *traceEnv) (*types.BlockTr
 	}
 	close(jobs)
 	pend.Wait()
+
+	// after all tx has been traced, collect "deletion proof" for zktrie
+	for _, tracer := range env.zkTrieTracer {
+		delProofs, err := tracer.GetDeletionProofs()
+		if err != nil {
+			log.Error("deletion proof failure", "error", err)
+		} else {
+			for _, proof := range delProofs {
+				env.DeletionProofs = append(env.DeletionProofs, proof)
+			}
+		}
+	}
 
 	// If execution failed in between, abort
 	select {
@@ -299,22 +315,47 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 
 	proofStorages := tracer.UpdatedStorages()
 	for addr, keys := range proofStorages {
-		for key := range keys {
+		env.sMu.Lock()
+		trie, err := state.GetStorageTrieForProof(addr)
+		if err != nil {
+			// but we still continue to next address
+			log.Error("Storage trie not available", "error", err, "address", addr)
+			env.sMu.Unlock()
+			continue
+		}
+		zktrieTracer := state.NewProofTracer(trie)
+		env.sMu.Unlock()
+
+		for key, values := range keys {
 			addrStr := addr.String()
 			keyStr := key.String()
+			isDelete := bytes.Equal(values.Bytes(), common.Hash{}.Bytes())
 
 			env.sMu.Lock()
 			m, existed := env.StorageProofs[addrStr]
 			if !existed {
 				m = make(map[string][]hexutil.Bytes)
 				env.StorageProofs[addrStr] = m
+				if zktrieTracer.Available() {
+					env.zkTrieTracer[addrStr] = zktrieTracer
+				}
 			} else if _, existed := m[keyStr]; existed {
+				// still need to touch tracer for deletion
+				if isDelete && zktrieTracer.Available() {
+					env.zkTrieTracer[addrStr].MarkDeletion(key)
+				}
 				env.sMu.Unlock()
 				continue
 			}
 			env.sMu.Unlock()
 
-			proof, sibling, err := state.GetStorageTrieProof(addr, key)
+			var proof [][]byte
+			var err error
+			if zktrieTracer.Available() {
+				proof, err = state.GetSecureTrieProof(zktrieTracer, key)
+			} else {
+				proof, err = state.GetSecureTrieProof(trie, key)
+			}
 			if err != nil {
 				log.Error("Storage proof not available", "error", err, "address", addrStr, "key", keyStr)
 				// but we still mark the proofs map with nil array
@@ -325,8 +366,11 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 			}
 			env.sMu.Lock()
 			m[keyStr] = wrappedProof
-			if sibling != nil {
-				env.DeletionProofs = append(env.DeletionProofs, sibling)
+			if zktrieTracer.Available() {
+				if isDelete {
+					zktrieTracer.MarkDeletion(key)
+				}
+				env.zkTrieTracer[addrStr].Merge(zktrieTracer)
 			}
 			env.sMu.Unlock()
 		}
