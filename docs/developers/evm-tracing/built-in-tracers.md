@@ -204,9 +204,17 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 | code    | string            | hex-encoded bytecode          |
 | storage | map[string]string | storage slots of the contract |
 
-To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the APi call.
+In `diff` mode the result object will contain a `pre` and a `post` object:
 
-Example:
+1. Any read-only access is omitted completely from the result. This mode is only concerned with state modifications.
+2. In `pre` you will find the state of an account before the tx started, and in post its state after tx execution finished.
+3. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
+4. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
+5. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
+
+To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the API call.
+
+Example of `prestate` mode:
 
 ```js
 debug.traceCall(
