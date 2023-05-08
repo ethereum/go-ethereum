@@ -157,9 +157,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return nil, err
 	}
 
-	// Else fetch blcok-range logs
 	logChan, errChan := f.rangeLogsAsync(ctx)
-
 	var logs []*types.Log
 LOOP:
 	for {

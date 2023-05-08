@@ -112,6 +112,7 @@ func TestFilters(t *testing.T) {
 		hash2 = common.BytesToHash([]byte("topic2"))
 		hash3 = common.BytesToHash([]byte("topic3"))
 		hash4 = common.BytesToHash([]byte("topic4"))
+		hash5 = common.BytesToHash([]byte("topic5"))
 
 		gspec = &core.Genesis{
 			Config:  params.TestChainConfig,
@@ -121,7 +122,7 @@ func TestFilters(t *testing.T) {
 	)
 	defer db.Close()
 
-	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
+	sdb, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, false, 0)
@@ -180,7 +181,21 @@ func TestFilters(t *testing.T) {
 	// Set block 998 as Finalized (-3)
 	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
 
-	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	// Generate pending block
+	pchain, preceipts := core.GenerateChain(gspec.Config, chain[len(chain)-1], ethash.NewFaker(), sdb, 1, func(i int, gen *core.BlockGen) {
+		receipt := types.NewReceipt(nil, false, 0)
+		receipt.Logs = []*types.Log{
+			{
+				Address: addr,
+				Topics:  []common.Hash{hash5},
+			},
+		}
+		gen.AddUncheckedReceipt(receipt)
+		gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
+	})
+	sys.backend.(*testBackend).setPendingBlockAndReceipts(pchain[0], preceipts[0])
+
+	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
@@ -189,44 +204,61 @@ func TestFilters(t *testing.T) {
 	for i, tc := range []struct {
 		f          *Filter
 		wantHashes []common.Hash
+		err        string
 	}{
 		{
-			sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
-			[]common.Hash{hash3},
+			f:          sys.NewBlockFilter(chain[2].Hash(), []common.Address{addr}, nil),
+			wantHashes: []common.Hash{hash2},
+		},
+		{
+			f:          sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
+			wantHashes: []common.Hash{hash3},
 		}, {
-			sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash3}}),
-			[]common.Hash{hash3},
+			f:          sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash3}}),
+			wantHashes: []common.Hash{hash3},
 		}, {
-			sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
-			[]common.Hash{hash1, hash2},
+			f:          sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
+			wantHashes: []common.Hash{hash1, hash2},
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
-			nil,
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
-			nil,
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
 		}, {
-			sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
-			nil,
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash4},
+			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), wantHashes: []common.Hash{hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), []common.Hash{hash3, hash4},
+			f: sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), wantHashes: []common.Hash{hash3, hash4},
 		}, {
-			sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), []common.Hash{hash3},
+			f: sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), wantHashes: []common.Hash{hash3},
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), nil,
+			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
 		}, {
-			sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), nil,
+			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			err: "safe header not found",
 		}, {
-			sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil), nil,
+			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil),
+			err: "safe header not found",
 		}, {
-			sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil), nil,
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil),
+			err: "safe header not found",
 		}, {
-			sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil), nil,
+			f:          sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			wantHashes: []common.Hash{hash5},
+		}, {
+			f:          sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			wantHashes: []common.Hash{hash4, hash5},
+		}, {
+			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			err: "invalid block range",
 		},
 	} {
-		logs, _ := tc.f.Logs(context.Background())
+		logs, err := tc.f.Logs(context.Background())
+		if err == nil && tc.err != "" {
+			t.Fatalf("test %d, expected error %q, got nil", i, tc.err)
+		} else if err != nil && err.Error() != tc.err {
+			t.Fatalf("test %d, expected error %q, got %q", i, tc.err, err.Error())
+		}
 		var haveHashes []common.Hash
 		for _, l := range logs {
 			haveHashes = append(haveHashes, l.Topics[0])
