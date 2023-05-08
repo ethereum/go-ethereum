@@ -2,8 +2,10 @@ package blocknative
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -11,16 +13,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-func init() {
-	tracers.DefaultDirectory.Register("txnOpCodeTracer", NewTxnOpCodeTracer, false)
-}
 
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
@@ -38,7 +35,7 @@ type txnOpCodeTracer struct {
 
 // NewTxnOpCodeTracer returns a new txnOpCodeTracer tracer with the given
 // options applied.
-func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func NewTxnOpCodeTracer(cfg json.RawMessage) (Tracer, error) {
 	// First callframe contains tx context info and is populated on start and end.
 	var t txnOpCodeTracer = txnOpCodeTracer{callStack: make([]CallFrame, 1)}
 
@@ -52,9 +49,9 @@ func NewTxnOpCodeTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trac
 	// If we need deeper nested structures initialized, check and do so now
 	if t.opts.NetBalChanges {
 		t.trace.NetBalChanges = NetBalChanges{
-			Pre:        make(state),
-			Post:       make(state),
-			Difference: make(difference),
+			Pre:      make(state),
+			Post:     make(state),
+			Balances: make(balances),
 		}
 	}
 
@@ -87,6 +84,7 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 
 	// If we want NetBalChanges, start by tracking the top level addresses
 	if t.opts.NetBalChanges {
+		// getTokenSymbol(t.env, to)
 		t.lookupAccount(from)
 		t.lookupAccount(to)
 		t.lookupAccount(env.Context.Coinbase)
@@ -158,6 +156,86 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 		}
 	}
 
+	//todo alex: move the eth differences work here, to be all contained
+	//todo alex: maybe separate out the logic here
+
+	if t.opts.NetBalChanges {
+		// We iterate through the logs for known events
+		for _, log := range t.env.StateDB.Logs() {
+
+			if len(log.Topics) == 0 {
+				continue
+			}
+
+			eventSignature := log.Topics[0].Hex()
+
+			// Todo alex: delete logs
+			fmt.Println("FOUND LOG: log.Address: ", log.Address)
+			fmt.Println("eventSignature: ", eventSignature)
+
+			// 20: from to value
+			// 721: from to tokenid
+
+			//0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef is transfer
+
+			switch eventSignature {
+			case transferEventHex:
+				var transfer struct {
+					From     common.Address
+					To       common.Address
+					Value    *big.Int
+					Contract common.Address
+				}
+				transfer.From = common.HexToAddress(log.Topics[1].Hex())
+				transfer.To = common.HexToAddress(log.Topics[2].Hex())
+				transfer.Value = new(big.Int).SetBytes(log.Data)
+				transfer.Contract = log.Address
+
+				if err != nil {
+					fmt.Println("Error decoding Transfer event:", err)
+					continue
+				}
+				fmt.Println("Transfer event:", transfer)
+
+				// Make token change object
+				tokenchange := &Tokenchanges{
+					From:     common.HexToAddress(log.Topics[1].Hex()),
+					To:       common.HexToAddress(log.Topics[2].Hex()),
+					Asset:    new(big.Int).SetBytes(log.Data),
+					Contract: log.Address,
+				}
+
+				t.trace.NetBalChanges.Tokens = append(t.trace.NetBalChanges.Tokens, *tokenchange)
+
+				// --
+
+				// client, err := ethclient.Dial("http://localhost:8545")
+				// if err != nil {
+				// 	fmt.Println("Failed to connect to the Ethereum client: %v", err)
+				// }
+
+				// diff := &valueChanges{}
+
+				// tokenTransferTo := ERC20{
+				// 	Contract: log.Address,
+				// 	Amount:   transfer.Value,
+				// }
+				// tokenTransferFrom := ERC20{
+				// 	Contract: log.Address,
+				// 	Amount:   new(big.Int).Mul(transfer.Value, new(big.Int).SetInt64(-1)),
+				// }
+
+				// from := t.trace.NetBalChanges.Difference[transfer.From].ERC20
+				// to := t.trace.NetBalChanges.Difference[transfer.To].ERC20
+
+				// t.trace.NetBalChanges.Difference[transfer.From].ERC20 = append(from, tokenTransferFrom)
+				// t.trace.NetBalChanges.Difference[transfer.To].ERC20 = append(to, tokenTransferTo)
+			default:
+				// We pass over this event!
+			}
+		}
+	}
+
 	// This is the final output of a call
 	if err != nil {
 		t.callStack[0].Error = err.Error()
@@ -177,6 +255,130 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	}
 }
 
+func callConstantFunction(addr common.Address, abi abi.ABI, method string, args []interface{}, ctx context.Context, evm *vm.EVM) ([]interface{}, error) {
+
+	// data, err := abi.Pack(method, args...)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	fmt.Println("here... a1")
+
+	contract := bind.NewBoundContract(addr, abi, nil, nil, nil)
+	// contract := bind.NewBoundContract(addr, abi, evm, nil, nil)
+
+	fmt.Println("here... a2")
+
+	opts := bind.CallOpts{
+		Pending:     false,
+		From:        common.Address{},
+		Context:     ctx,
+		BlockNumber: nil,
+	}
+	var result []interface{}
+	err := contract.Call(&opts, &result, method)
+
+	fmt.Println("here... a3, ", err)
+
+	if err != nil {
+		fmt.Println("err: ", err)
+		fmt.Println("result: ", result)
+
+		return nil, err
+	}
+
+	fmt.Println("here... a4")
+
+	return result, nil
+}
+func symbol(ctx context.Context, evm *vm.EVM, addr common.Address) (string, error) {
+	contract := evm.StateDB.GetCode(addr)
+	if len(contract) == 0 {
+		return "", errors.New("empty contract")
+	}
+
+	fmt.Println("here... 1")
+
+	// abi, err := abi.JSON(strings.NewReader(erc20ABI))
+	abi, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"}]`))
+
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("here... 2")
+
+	symbolOutput, err := callConstantFunction(addr, abi, "symbol", nil, ctx, evm)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println("here... 3")
+
+	if len(symbolOutput) == 0 {
+		return "", errors.New("empty symbol output")
+	}
+
+	fmt.Println("here... 4")
+
+	symbol, ok := symbolOutput[0].(string)
+	if !ok {
+		return "", errors.New("symbol not a string")
+	}
+
+	fmt.Println("here... 5")
+
+	return symbol, nil
+}
+
+func getTokenSymbol(evm *vm.EVM, contractAddr common.Address, output []byte) (string, error) {
+	// erc20Abi, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"}]`))
+
+	// code := evm.StateDB.GetCode(contractAddr)
+
+	// symbolHash := crypto.Keccak256Hash([]byte("symbol()"))
+
+	// symbolBytes := evm.StateDB.GetState(contractAddr, common.Hash{3})
+	nameLocation := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	symbolHash := evm.StateDB.GetCommittedState(contractAddr, common.HexToHash(nameLocation))
+
+	bytes, _ := hex.DecodeString(symbolHash.Hex()[2:])
+	symbol := string(bytes)
+
+	fmt.Println("contractAddr: ", contractAddr, ", symbol: ", symbol)
+
+	fmt.Println("Testing a new abi method... ")
+
+	abi, err := abi.JSON(strings.NewReader(`[{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"}]`))
+	if err != nil {
+		fmt.Println("Error... ", err)
+		return "", nil
+	}
+	fmt.Println("here... ")
+
+	function := abi.Methods["symbol"]
+	fmt.Println("here... 2")
+
+	functionID := function.ID //[149 216 155 65]
+
+	fmt.Println("here... 3, ", output)
+
+	fmt.Println("string(output[:4]): ", string(output[:4]), "string(functionID[:4]: ", string(functionID[:4]))
+	fmt.Println("here... 4")
+
+	if string(output[:4]) == string(functionID[:4]) {
+		result, err := function.Outputs.Unpack(output[4:])
+		if err != nil {
+			fmt.Println("Error... ", err)
+			return "", nil
+		}
+		symbol = result[0].(string)
+		fmt.Println("Abi method symbol: ", symbol)
+	}
+
+	return "", nil
+
+}
+
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	defer func() {
@@ -192,6 +394,7 @@ func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 		stackLen := len(stackData)
 		caller := scope.Contract.Address()
 		switch {
+		// Todo alex: decide if these storage looks need to be hidden behind an extra storage slot option
 		case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 			slot := common.Hash(stackData[stackLen-1].Bytes32())
 			t.lookupStorage(caller, slot)
@@ -306,7 +509,8 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 					modified = true
 					if newVal != (common.Hash{}) {
 						postAccount.Storage[key] = newVal
-						fmt.Println("CaptureTxEnd | Found a modified slot!: ", addr, "key: ", key, "newVal: ", newVal)
+						// fmt.Println("CaptureTxEnd | Found a modified slot!: ", addr, "key: ", key, "newVal: ", newVal)
+						// todo alex: could put the double checker for transfers here after event is done
 					}
 				}
 			}
@@ -318,44 +522,28 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 				delete(t.trace.NetBalChanges.Pre, addr)
 			}
 		}
-		// b, _ := json.MarshalIndent(t.trace.NetBalChanges.Pre, "", "    ")
-		// fmt.Println("These are our cleaned pre slots: ", string(b))
-		// c, _ := json.MarshalIndent(t.trace.NetBalChanges.Post, "", "    ")
-		// fmt.Println("These are our post slots: ", string(c))
 
 		for addr, state := range t.trace.NetBalChanges.Post {
 			// Add the balance and storage separately, as one may not be changed but another is.
 			preState, preExists := t.trace.NetBalChanges.Pre[addr]
 
 			// First check for storage slot updates, we must determine if these are values changes now
-			if len(state.Storage) != 0 {
-				fmt.Println("Found storage slot to decode: ", state.Storage)
+			// if len(state.Storage) != 0 {
+			// 	fmt.Println("Found storage slot to decode: ", state.Storage)
 
-				// If there is a storage slot updated, check if this is a erc20 token
-				// TODO ALEX: everything below is still in the works, finding best way to do this still.
-				nameLocation := "0x0000000000000000000000000000000000000000000000000000000000000000"
-				symbolHash := t.env.StateDB.GetState(addr, common.HexToHash(nameLocation))
-				bytes, _ := hex.DecodeString(symbolHash.Hex()[2:])
-				symbol := string(bytes)
+			// 	Hardcoded for test example
+			// nameLocation := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 
-				fmt.Println("addr: ", addr, ", symbol: ", symbol)
+			// 	Erc20 SHOULD use this for location!
+			// symbolLocation := crypto.Keccak256Hash([]byte("symbol"))
 
-				addr1 := "0xf527a5ee2155fad99a5bbb23c9e52b0a11b99dd4"
-				addrLower := strings.ToLower(addr1[2:])
-				keyHex := fmt.Sprintf("%064s%064s", addrLower, "")
+			// symbolHash := t.env.StateDB.GetState(addr, nameLocation)
+			// fmt.Println(symbolHash)
+			// bytes, _ := hex.DecodeString(symbolHash.Hex()[2:])
+			// symbol := string(bytes)
 
-				fmt.Println("keyHex: ", keyHex)
-
-				keyBytes, _ := hex.DecodeString(keyHex)
-
-				hashed := crypto.Keccak256(keyBytes)
-				slot := "0x" + hex.EncodeToString(hashed[:])
-
-				fmt.Println("slot: ", slot)
-
-				// Attempt to decode the amount found at the storage slot found
-				// Iterate through all address location storage slots to see if these match up
-			}
+			// fmt.Println("test capturetxend: addr: ", addr, ", symbol: ", symbol)
+			// }
 
 			// If the post bal exists, add it to the diff
 			var weiAmount *big.Int
@@ -365,11 +553,11 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 				etherAmount = weiToEther(weiAmount)
 			}
 
-			diff := &valueChanges{
+			diff := &valueChange{
 				Eth:      etherAmount,
 				EthInWei: weiAmount,
 			}
-			t.trace.NetBalChanges.Difference[addr] = diff
+			t.trace.NetBalChanges.Balances[addr] = diff
 		}
 	}
 }

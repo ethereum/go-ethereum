@@ -83,6 +83,7 @@ type UDPv5 struct {
 	callCh        chan *callV5
 	callDoneCh    chan *callV5
 	respTimeoutCh chan *callTimeout
+	unhandled     chan<- ReadPacket
 
 	// state of dispatch
 	codec            codecV5
@@ -156,6 +157,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
+		unhandled:     cfg.Unhandled,
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
@@ -657,6 +659,14 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
+		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
+			// The packet seems unrelated to discv5, send it to the next protocol.
+			// t.log.Trace("Unhandled discv5 packet", "id", fromID, "addr", addr, "err", err)
+			up := ReadPacket{Data: make([]byte, len(rawpacket)), Addr: fromAddr}
+			copy(up.Data, rawpacket)
+			t.unhandled <- up
+			return nil
+		}
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
 		return err
 	}

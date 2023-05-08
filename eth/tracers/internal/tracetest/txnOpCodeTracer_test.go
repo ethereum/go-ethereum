@@ -47,11 +47,16 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 		// TODO ALEX: remove this flag for only my test to run
 		// if !strings.HasSuffix(file.Name(), "balance_changes_eth.json") {
 		// if !strings.HasSuffix(file.Name(), "balance_changes_erc20_deposit.json") {
-		if !strings.HasSuffix(file.Name(), "balance_changes_erc20_transfer.json") {
+		// if !strings.HasSuffix(file.Name(), "balance_changes_erc20_transfer.json") {
+		if !strings.HasSuffix(file.Name(), "simple2.json") {
 
 			continue
 		}
-		fmt.Println("Testing only balance_changes_erc20.json...")
+		// fmt.Println("Testing only 1 case by hardcoded logic!")
+
+		if strings.HasSuffix(file.Name(), "multi_contracts.json") {
+			continue
+		}
 
 		file := file
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
@@ -103,7 +108,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
 			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
-			msg, err := tx.AsMessage(signer, nil)
+			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
@@ -124,9 +129,9 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				// Below are prints to show differences if we fail, can always just check against the specific test json files too!
 				x, _ := json.MarshalIndent(ret, "  ", "  ")
 				// y, _ := json.MarshalIndent(test.Result, "", "")
-				fmt.Println("Trace response:")
+				fmt.Println("Trace return: ")
 				fmt.Println(string(x))
-				// fmt.Println("Expected response:")
+				// fmt.Println("test.Result")
 				// fmt.Println(string(y))
 				t.Fatal("traces mismatch")
 				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)

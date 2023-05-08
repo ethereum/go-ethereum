@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/blocknative"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
@@ -206,7 +205,6 @@ var app = flags.NewApp("the go-ethereum command line interface")
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
-	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
