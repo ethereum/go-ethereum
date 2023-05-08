@@ -223,8 +223,6 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
 	if len(args) != len(abiArgs) {
-		fmt.Println("len(args): ", len(args), "len(abiArgs): ", len(abiArgs))
-		fmt.Println("args: ", args)
 		return nil, fmt.Errorf("argument count mismatch: got %d for %d", len(args), len(abiArgs))
 	}
 	// variable input is the output appended at the end of packed
