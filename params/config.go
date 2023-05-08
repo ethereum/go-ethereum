@@ -296,11 +296,12 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
 		ScrollConfig{
-			UseZktrie:       false,
-			FeeVaultAddress: nil,
-			EnableEIP2718:   true,
-			EnableEIP1559:   true,
-			MaxTxPerBlock:   nil,
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
 		}}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -310,30 +311,33 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000},
 		ScrollConfig{
-			UseZktrie:       false,
-			FeeVaultAddress: nil,
-			EnableEIP2718:   true,
-			EnableEIP1559:   true,
-			MaxTxPerBlock:   nil,
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
 		}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
 		ScrollConfig{
-			UseZktrie:       false,
-			FeeVaultAddress: &common.Address{123},
-			EnableEIP2718:   true,
-			EnableEIP1559:   true,
-			MaxTxPerBlock:   nil,
+			UseZktrie:                 false,
+			FeeVaultAddress:           &common.Address{123},
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
 		}}
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
 	TestNoL1feeChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
 		ScrollConfig{
-			UseZktrie:       false,
-			FeeVaultAddress: nil,
-			EnableEIP2718:   true,
-			EnableEIP1559:   true,
-			MaxTxPerBlock:   nil,
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
 		}}
 )
 
@@ -459,13 +463,18 @@ func (s ScrollConfig) ZktrieEnabled() bool {
 }
 
 func (s ScrollConfig) String() string {
-	if s.MaxTxPerBlock == nil {
-		return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: <nil>, feeVaultAddress: %v, enableEIP2718:%v, enableEIP1559:%v}",
-			s.UseZktrie, s.FeeVaultAddress, s.EnableEIP2718, s.EnableEIP1559)
+	maxTxPerBlock := "<nil>"
+	if s.MaxTxPerBlock != nil {
+		maxTxPerBlock = fmt.Sprintf("%v", *s.MaxTxPerBlock)
 	}
 
-	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, feeVaultAddress: %v, enableEIP2718:%v, enableEIP1559:%v}",
-		s.UseZktrie, *s.MaxTxPerBlock, s.FeeVaultAddress, s.EnableEIP2718, s.EnableEIP1559)
+	maxTxPayloadBytesPerBlock := "<nil>"
+	if s.MaxTxPayloadBytesPerBlock != nil {
+		maxTxPayloadBytesPerBlock = fmt.Sprintf("%v", *s.MaxTxPayloadBytesPerBlock)
+	}
+
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, enableEIP2718:%v, enableEIP1559:%v}",
+		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.EnableEIP2718, s.EnableEIP1559)
 }
 
 // IsValidTxCount returns whether the given block's transaction count is below the limit.
