@@ -101,7 +101,7 @@ var (
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
-	// Path-based trie node scheme.
+	// Path-based storage scheme of merkle patricia trie.
 	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
 	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
 
@@ -269,7 +269,7 @@ func IsAccountTrieNode(key []byte) (bool, []byte) {
 	}
 	// The remaining key should only consist a hex node path
 	// whose length is in the range 0 to 64 (64 is excluded
-	// since leaves are always embedded in parent).
+	// since leaves are always wrapped with shortNode).
 	if len(key) >= len(trieNodeAccountPrefix)+common.HashLength*2 {
 		return false, nil
 	}
