@@ -62,24 +62,43 @@
         "netBalChanges": true
       },
     "result": {
+      "type": "CALL",
       "from": "0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb",
-      "gas": "0x1f36d",
-      "gasUsed": "0xc6a5",
       "to": "0xf4eced2f682ce333f96f2d8966c613ded8fc95dd",
-      "input": "0xa9059cbb000000000000000000000000dbf03b407c01e7cd3cbea99509d93f8dddc8c6fb0000000000000000000000000000000000000000000000000000000000989680",
-      "logs": [
-        {
-          "address": "0xf4eced2f682ce333f96f2d8966c613ded8fc95dd",
-          "topics": [
-            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-            "0x000000000000000000000000d1220a0cf47c7b9be7a2e6ba89f429762e7b9adb",
-            "0x000000000000000000000000dbf03b407c01e7cd3cbea99509d93f8dddc8c6fb"
-          ],
-          "data": "0x0000000000000000000000000000000000000000000000000000000000989680"
-        }
-      ],
       "value": "0x0",
-      "type": "CALL"
+      "gas": "0x1f36d",
+      "gasUsed": "0x6ccd",
+      "input": "0xa9059cbb000000000000000000000000dbf03b407c01e7cd3cbea99509d93f8dddc8c6fb0000000000000000000000000000000000000000000000000000000000989680",
+      "output": "0x",
+      "blockContext": {
+        "number": 765825,
+        "stateRoot": "0x1f1f6c87fe91d6d6024316d28d51481cf05cd68345dc26425a175786ab77a14f",
+        "baseFee": 16711680,
+        "time": 1451389488,
+        "coinbase": "0xe2fe6b13287f28e193333fdfe7fedf2f6df6124a",
+        "gasLimit": 3141592
+      },
+      "netBalChanges": {
+        "balances": {
+          "0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb": {
+            "eth": "-0.00254265",
+            "ethinwei": -2542650000000000
+          },
+          "0xe2fe6b13287f28e193333fdfe7fedf2f6df6124a": {
+            "eth": "0.00254265",
+            "ethinwei": 2542650000000000
+          },
+          "0xf4eced2f682ce333f96f2d8966c613ded8fc95dd": {}
+        },
+        "tokenchanges": [
+          {
+            "from": "0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb",
+            "to": "0xdbf03b407c01e7cd3cbea99509d93f8dddc8c6fb",
+            "asset": 10000000,
+            "contractAddress": "0xf4eced2f682ce333f96f2d8966c613ded8fc95dd"
+          }
+        ]
+      }
     }
   }
   

@@ -16,9 +16,8 @@ type Tracer interface {
 
 // TracerOpts configure the tracer to save or ignore various aspects of a transaction execution.
 type TracerOpts struct {
-	Logs             bool `json:"logs"`
-	NetBalChanges    bool `json:"netBalChanges"`
-	StorageSlotCheck bool `json:"storageSlotCheck` // todo alex: write this in
+	Logs          bool `json:"logs"`
+	NetBalChanges bool `json:"netBalChanges"`
 }
 
 // Trace contains all the accumulated details of a transaction execution.
@@ -72,7 +71,7 @@ type NetBalChanges struct {
 	Pre        state          `json:"-"` //`json:"pre"`
 	Post       state          `json:"-"` //`json:"post"`
 	Balances   balances       `json:"balances,omitempty"`
-	Tokens     []Tokenchanges `json:tokenchanges,omitempty`
+	Tokens     []Tokenchanges `json:"tokenchanges,omitempty"`
 }
 
 type state = map[common.Address]*account
@@ -86,7 +85,7 @@ type account struct {
 type balances = map[common.Address]*valueChange
 
 type valueChange struct {
-	Eth      *big.Float `json:"eth,omitempty"` // TODO ALEX: this term ETH may need to be generalised
+	Eth      *big.Float `json:"eth,omitempty"`
 	EthInWei *big.Int   `json:"ethinwei,omitempty"`
 }
 

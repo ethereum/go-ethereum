@@ -44,20 +44,6 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 			continue
 		}
 
-		// TODO ALEX: remove this flag for only my test to run
-		// if !strings.HasSuffix(file.Name(), "balance_changes_eth.json") {
-		// if !strings.HasSuffix(file.Name(), "balance_changes_erc20_deposit.json") {
-		// if !strings.HasSuffix(file.Name(), "balance_changes_erc20_transfer.json") {
-		if !strings.HasSuffix(file.Name(), "simple2.json") {
-
-			continue
-		}
-		// fmt.Println("Testing only 1 case by hardcoded logic!")
-
-		if strings.HasSuffix(file.Name(), "multi_contracts.json") {
-			continue
-		}
-
 		file := file
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -133,7 +119,7 @@ func testTxnOpCodeTracer(tracerName string, dirPath string, t *testing.T) {
 				fmt.Println(string(x))
 				// fmt.Println("test.Result")
 				// fmt.Println(string(y))
-				t.Fatal("traces mismatch")
+				t.Fatalf("trace mismatch")
 				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
