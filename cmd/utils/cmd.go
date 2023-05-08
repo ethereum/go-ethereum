@@ -179,7 +179,6 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	blocks := make(types.Blocks, importBatchSize)
 	n := 0
 	for batch := 0; ; batch++ {
-		var firstblockindex int
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
@@ -197,9 +196,6 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 				i--
 				continue
 			}
-			if i == 0 {
-				firstblockindex = int(b.NumberU64())
-			}
 			blocks[i] = &b
 			n++
 		}
@@ -216,10 +212,13 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			continue
 		}
 		if failindex, err := chain.InsertChain(missing); err != nil {
-			if failindex < 0 {
-				failindex = 0
+			var failnumber uint64
+			if failindex > 0 && failindex < len(missing) {
+				failnumber = missing[failindex].NumberU64()
+			} else {
+				failnumber = missing[0].NumberU64()
 			}
-			return fmt.Errorf("invalid block %d: %v", failindex+firstblockindex, err)
+			return fmt.Errorf("invalid block %d: %v", failnumber, err)
 		}
 	}
 	return nil
