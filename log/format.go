@@ -169,7 +169,7 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 		k, ok := ctx[i].(string)
 		v := formatLogfmtValue(ctx[i+1], term)
 		if !ok {
-			k, v = errorKey, formatLogfmtValue(k, term)
+			k, v = errorKey, fmt.Sprintf("%+T is not a string key", ctx[i])
 		} else {
 			k = escapeString(k)
 		}
@@ -230,7 +230,7 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 				ctx[i] = k
 				ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
 			} else {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key,", r.Ctx[i])
+				props[errorKey] = fmt.Sprintf("%+T is not a string key,", r.Ctx[i])
 			}
 		}
 		props[r.KeyNames.Ctx] = ctx
@@ -270,9 +270,10 @@ func JSONFormatEx(pretty, lineSeparated bool) Format {
 		for i := 0; i < len(r.Ctx); i += 2 {
 			k, ok := r.Ctx[i].(string)
 			if !ok {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
+				props[errorKey] = fmt.Sprintf("%+T is not a string key", r.Ctx[i])
+			} else {
+				props[k] = formatJSONValue(r.Ctx[i+1])
 			}
-			props[k] = formatJSONValue(r.Ctx[i+1])
 		}
 
 		b, err := jsonMarshal(props)
