@@ -144,7 +144,7 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	srv.chtIndexer.Start(e.BlockChain())
 
 	node.RegisterProtocols(srv.Protocols())
-	node.RegisterAPIs(srv.APIs())
+	node.RegisterAPIsToNode(srv.APIs())
 	node.RegisterLifecycle(srv)
 	return srv, nil
 }

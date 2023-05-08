@@ -33,7 +33,7 @@ import (
 // Register adds catalyst APIs to the light client.
 func Register(stack *node.Node, backend *les.LightEthereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
-	stack.RegisterAPIs([]rpc.API{
+	stack.RegisterAPIsToNode([]rpc.API{
 		{
 			Namespace:     "engine",
 			Service:       NewConsensusAPI(backend),

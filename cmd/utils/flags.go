@@ -1884,7 +1884,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
-		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
+		stack.RegisterAPIsToNode(tracers.APIs(backend.ApiBackend))
 		if err := lescatalyst.Register(stack, backend); err != nil {
 			Fatalf("Failed to register the Engine API service: %v", err)
 		}
@@ -1903,7 +1903,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	if err := ethcatalyst.Register(stack, backend); err != nil {
 		Fatalf("Failed to register the Engine API service: %v", err)
 	}
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+	stack.RegisterAPIsToNode(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 
@@ -1928,7 +1928,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
-	stack.RegisterAPIs([]rpc.API{{
+	stack.RegisterAPIsToNode([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
 	}})

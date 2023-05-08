@@ -192,7 +192,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.netRPCService = ethapi.NewNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(leth.APIs())
+	stack.RegisterAPIsToNode(leth.APIs())
 	stack.RegisterProtocols(leth.Protocols())
 	stack.RegisterLifecycle(leth)
 

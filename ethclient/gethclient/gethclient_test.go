@@ -61,7 +61,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
-	n.RegisterAPIs([]rpc.API{{
+	n.RegisterAPIsToNode([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, false),
 	}})

@@ -69,7 +69,7 @@ func NewFullService(stack *Node) (*FullService, error) {
 	fs := new(FullService)
 
 	stack.RegisterProtocols(fs.Protocols())
-	stack.RegisterAPIs(fs.APIs())
+	stack.RegisterAPIsToNode(fs.APIs())
 	stack.RegisterLifecycle(fs)
 	return fs, nil
 }

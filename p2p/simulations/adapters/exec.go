@@ -501,7 +501,7 @@ func startExecNodeStack() (*node.Node, error) {
 	}
 
 	// Add the snapshot API.
-	stack.RegisterAPIs([]rpc.API{{
+	stack.RegisterAPIsToNode([]rpc.API{{
 		Namespace: "simulation",
 		Service:   SnapshotAPI{services},
 	}})
