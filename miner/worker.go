@@ -121,7 +121,7 @@ func (env *environment) copy() *environment {
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
-	cpy.uncles = make(map[common.Hash]*types.Header)
+	cpy.uncles = make(map[common.Hash]*types.Header, len(env.uncles))
 	for hash, uncle := range env.uncles {
 		cpy.uncles[hash] = uncle
 	}
@@ -628,7 +628,7 @@ func (w *worker) mainLoop() {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
-				txs := make(map[common.Address]types.Transactions)
+				txs := make(map[common.Address]types.Transactions, len(ev.Txs))
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
