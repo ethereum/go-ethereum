@@ -130,7 +130,6 @@ type Message struct {
 	Nonce            uint64
 	Value            *big.Int
 	GasLimit         uint64
-	DataGasLimit     uint64
 	GasPrice         *big.Int
 	GasFeeCap        *big.Int
 	GasTipCap        *big.Int
