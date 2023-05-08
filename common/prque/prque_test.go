@@ -32,7 +32,7 @@ func TestPrque(t *testing.T) {
 			}
 		}
 		// Create a map the values to the priorities for easier verification
-		dict := make(map[int]int)
+		dict := make(map[int]int, size)
 		for i := 0; i < size; i++ {
 			dict[prio[i]] = data[i]
 		}
@@ -72,7 +72,7 @@ func TestReset(t *testing.T) {
 			}
 		}
 		// Create a map the values to the priorities for easier verification
-		dict := make(map[int]int)
+		dict := make(map[int]int, size)
 		for i := 0; i < size; i++ {
 			dict[prio[i]] = data[i]
 		}
