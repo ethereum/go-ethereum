@@ -17,6 +17,7 @@
 package ethash
 
 import (
+	crand "crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"math/big"
@@ -90,20 +91,19 @@ func TestCalcDifficulty(t *testing.T) {
 
 func randSlice(min, max uint32) []byte {
 	var b = make([]byte, 4)
-	rand.Read(b)
+	crand.Read(b)
 	a := binary.LittleEndian.Uint32(b)
 	size := min + a%(max-min)
 	out := make([]byte, size)
-	rand.Read(out)
+	crand.Read(out)
 	return out
 }
 
 func TestDifficultyCalculators(t *testing.T) {
-	rand.Seed(2)
 	for i := 0; i < 5000; i++ {
 		// 1 to 300 seconds diff
 		var timeDelta = uint64(1 + rand.Uint32()%3000)
-		diffBig := big.NewInt(0).SetBytes(randSlice(2, 10))
+		diffBig := new(big.Int).SetBytes(randSlice(2, 10))
 		if diffBig.Cmp(params.MinimumDifficulty) < 0 {
 			diffBig.Set(params.MinimumDifficulty)
 		}
@@ -121,8 +121,8 @@ func TestDifficultyCalculators(t *testing.T) {
 			bigFn  func(time uint64, parent *types.Header) *big.Int
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
-			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
-			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
+			{FrontierDifficultyCalculator, CalcDifficultyFrontierU256},
+			{HomesteadDifficultyCalculator, CalcDifficultyHomesteadU256},
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
 		} {
 			time := header.Time + timeDelta

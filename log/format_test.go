@@ -1,10 +1,14 @@
 package log
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
+	"strings"
 	"testing"
+
+	"github.com/holiman/uint256"
 )
 
 func TestPrettyInt64(t *testing.T) {
@@ -78,6 +82,24 @@ func TestPrettyBigInt(t *testing.T) {
 	}
 }
 
+func TestPrettyUint256(t *testing.T) {
+	tests := []struct {
+		int string
+		s   string
+	}{
+		{"111222333444555678999", "111,222,333,444,555,678,999"},
+		{"11122233344455567899900", "11,122,233,344,455,567,899,900"},
+	}
+
+	for _, tt := range tests {
+		v := new(uint256.Int)
+		v.SetFromDecimal(tt.int)
+		if have := formatLogfmtUint256(v); have != tt.s {
+			t.Errorf("invalid output %s, want %s", have, tt.s)
+		}
+	}
+}
+
 var sink string
 
 func BenchmarkPrettyInt64Logfmt(b *testing.B) {
@@ -91,5 +113,49 @@ func BenchmarkPrettyUint64Logfmt(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		sink = FormatLogfmtUint64(rand.Uint64())
+	}
+}
+
+func TestSanitation(t *testing.T) {
+	msg := "\u001b[1G\u001b[K\u001b[1A"
+	msg2 := "\u001b  \u0000"
+	msg3 := "NiceMessage"
+	msg4 := "Space Message"
+	msg5 := "Enter\nMessage"
+
+	for i, tt := range []struct {
+		msg  string
+		want string
+	}{
+		{
+			msg:  msg,
+			want: fmt.Sprintf("] %q                   %q=%q\n", msg, msg, msg),
+		},
+		{
+			msg:  msg2,
+			want: fmt.Sprintf("] %q                             %q=%q\n", msg2, msg2, msg2),
+		},
+		{
+			msg:  msg3,
+			want: fmt.Sprintf("] %s                              %s=%s\n", msg3, msg3, msg3),
+		},
+		{
+			msg:  msg4,
+			want: fmt.Sprintf("] %s                            %q=%q\n", msg4, msg4, msg4),
+		},
+		{
+			msg:  msg5,
+			want: fmt.Sprintf("] %s                            %q=%q\n", msg5, msg5, msg5),
+		},
+	} {
+		var (
+			logger = New()
+			out    = new(strings.Builder)
+		)
+		logger.SetHandler(LvlFilterHandler(LvlInfo, StreamHandler(out, TerminalFormat(false))))
+		logger.Info(tt.msg, tt.msg, tt.msg)
+		if have := out.String()[24:]; tt.want != have {
+			t.Fatalf("test %d: want / have: \n%v\n%v", i, tt.want, have)
+		}
 	}
 }

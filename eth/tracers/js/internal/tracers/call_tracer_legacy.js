@@ -204,7 +204,6 @@
 			gasUsed: '0x' + bigInt(ctx.gasUsed).toString(16),
 			input:   toHex(ctx.input),
 			output:  toHex(ctx.output),
-			time:    ctx.time,
 		};
 		if (this.callstack[0].calls !== undefined) {
 			result.calls = this.callstack[0].calls;
@@ -234,7 +233,6 @@
 			input:   call.input,
 			output:  call.output,
 			error:   call.error,
-			time:    call.time,
 			calls:   call.calls,
 		}
 		for (var key in sorted) {

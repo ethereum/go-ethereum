@@ -68,7 +68,7 @@ var (
 	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
 
 	// the bloom offsets are runtime constants which determines which part of the
-	// the account/storage hash the hasher functions looks at, to determine the
+	// account/storage hash the hasher functions looks at, to determine the
 	// bloom key for an account/slot. This is randomized at init(), so that the
 	// global population of nodes do not all display the exact same behaviour with
 	// regards to bloom content
@@ -103,7 +103,7 @@ type diffLayer struct {
 	memory uint64     // Approximate guess as to how much memory we use
 
 	root  common.Hash // Root hash to which this snapshot diff belongs to
-	stale uint32      // Signals that the layer became stale (state progressed)
+	stale atomic.Bool // Signals that the layer became stale (state progressed)
 
 	// destructSet is a very special helper marker. If an account is marked as
 	// deleted, then it's recorded in this set. However it's allowed that an account
@@ -258,13 +258,16 @@ func (dl *diffLayer) Root() common.Hash {
 
 // Parent returns the subsequent layer of a diff layer.
 func (dl *diffLayer) Parent() snapshot {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
 	return dl.parent
 }
 
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diffLayer) Stale() bool {
-	return atomic.LoadUint32(&dl.stale) != 0
+	return dl.stale.Load()
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -446,7 +449,7 @@ func (dl *diffLayer) flatten() snapshot {
 
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
-	if atomic.SwapUint32(&parent.stale, 1) != 0 {
+	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
 	// Overwrite all the updated accounts blindly, merge the sorted list
@@ -470,7 +473,6 @@ func (dl *diffLayer) flatten() snapshot {
 		for storageHash, data := range storage {
 			comboData[storageHash] = data
 		}
-		parent.storageData[accountHash] = comboData
 	}
 	// Return the combo parent
 	return &diffLayer{

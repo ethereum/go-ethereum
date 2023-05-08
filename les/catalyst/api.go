@@ -21,8 +21,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -34,10 +35,9 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "engine",
-			Version:   "1.0",
-			Service:   NewConsensusAPI(backend),
-			Public:    true,
+			Namespace:     "engine",
+			Service:       NewConsensusAPI(backend),
+			Authenticated: true,
 		},
 	})
 	return nil
@@ -51,57 +51,62 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
-		panic("Catalyst started without valid total difficulty")
+		log.Warn("Catalyst started without valid total difficulty")
 	}
 	return &ConsensusAPI{les: les}
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:
-// If the method is called with an empty head block:
-// 		we return success, which can be used to check if the catalyst mode is enabled
-// If the total difficulty was not reached:
-// 		we return INVALID
-// If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
-// We try to set our blockchain to the headBlock
-// If there are payloadAttributes:
-//      we return an error since block creation is not supported in les mode
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+//
+// We try to set our blockchain to the headBlock.
+//
+// If the method is called with an empty head block: we return success, which can be used
+// to check if the catalyst mode is enabled.
+//
+// If the total difficulty was not reached: we return INVALID.
+//
+// If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
+// if not we start a sync.
+//
+// If there are payloadAttributes: we return an error since block creation is not
+// supported in les mode.
+func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+		log.Warn("Forkchoice requested update to zero hash")
+		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
 	if err := api.checkTerminalTotalDifficulty(heads.HeadBlockHash); err != nil {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.HeadBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return engine.STATUS_SYNCING, nil
 		}
-		return beacon.INVALID, err
+		return engine.STATUS_INVALID, err
 	}
 	// If the finalized block is set, check if it is in our blockchain
 	if heads.FinalizedBlockHash != (common.Hash{}) {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.FinalizedBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return engine.STATUS_SYNCING, nil
 		}
 	}
 	// SetHead
-	if err := api.setHead(heads.HeadBlockHash); err != nil {
-		return beacon.INVALID, err
+	if err := api.setCanonical(heads.HeadBlockHash); err != nil {
+		return engine.STATUS_INVALID, err
 	}
 	if payloadAttributes != nil {
-		return beacon.INVALID, errors.New("not supported")
+		return engine.STATUS_INVALID, errors.New("not supported")
 	}
-	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+	return api.validForkChoiceResponse(), nil
 }
 
 // GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
-func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
-	return nil, &beacon.GenericServerError
+func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.ExecutableData, error) {
+	return nil, engine.GenericServerError.With(errors.New("not supported in light client mode"))
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
-	block, err := beacon.ExecutableDataToBlock(params)
+func (api *ConsensusAPI) ExecutePayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	block, err := engine.ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
 	}
@@ -113,7 +118,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 			}
 		*/
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
-		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: common.Hash{}}, nil
+		return engine.PayloadStatusV1{Status: engine.SYNCING, LatestValidHash: nil}, nil
 	}
 	parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 	if parent == nil {
@@ -130,12 +135,21 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if merger := api.les.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
-	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+	hash := block.Hash()
+	return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
+}
+
+func (api *ConsensusAPI) validForkChoiceResponse() engine.ForkChoiceResponse {
+	currentHash := api.les.BlockChain().CurrentHeader().Hash()
+	return engine.ForkChoiceResponse{
+		PayloadStatus: engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &currentHash},
+	}
 }
 
 // invalid returns a response "INVALID" with the latest valid hash set to the current head.
-func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
+func (api *ConsensusAPI) invalid() engine.PayloadStatusV1 {
+	currentHash := api.les.BlockChain().CurrentHeader().Hash()
+	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &currentHash}
 }
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
@@ -146,17 +160,17 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// make sure the parent has enough terminal total difficulty
 	header := api.les.BlockChain().GetHeaderByHash(head)
 	if header == nil {
-		return &beacon.GenericServerError
+		return errors.New("unknown header")
 	}
 	td := api.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 	if td != nil && td.Cmp(api.les.BlockChain().Config().TerminalTotalDifficulty) < 0 {
-		return &beacon.InvalidTB
+		return errors.New("invalid ttd")
 	}
 	return nil
 }
 
-// setHead is called to perform a force choice.
-func (api *ConsensusAPI) setHead(newHead common.Hash) error {
+// setCanonical is called to perform a force choice.
+func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 	log.Info("Setting head", "head", newHead)
 
 	headHeader := api.les.BlockChain().CurrentHeader()
@@ -165,9 +179,9 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	}
 	newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 	if newHeadHeader == nil {
-		return &beacon.GenericServerError
+		return errors.New("unknown header")
 	}
-	if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
+	if err := api.les.BlockChain().SetCanonical(newHeadHeader); err != nil {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
@@ -175,4 +189,32 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 		merger.FinalizePoS()
 	}
 	return nil
+}
+
+// ExchangeTransitionConfigurationV1 checks the given configuration against
+// the configuration of the node.
+func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.TransitionConfigurationV1) (*engine.TransitionConfigurationV1, error) {
+	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
+	if config.TerminalTotalDifficulty == nil {
+		return nil, errors.New("invalid terminal total difficulty")
+	}
+
+	ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
+	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
+		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
+		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
+	}
+
+	if config.TerminalBlockHash != (common.Hash{}) {
+		if hash := api.les.BlockChain().GetCanonicalHash(uint64(config.TerminalBlockNumber)); hash == config.TerminalBlockHash {
+			return &engine.TransitionConfigurationV1{
+				TerminalTotalDifficulty: (*hexutil.Big)(ttd),
+				TerminalBlockHash:       config.TerminalBlockHash,
+				TerminalBlockNumber:     config.TerminalBlockNumber,
+			}, nil
+		}
+		return nil, fmt.Errorf("invalid terminal block hash")
+	}
+
+	return &engine.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }

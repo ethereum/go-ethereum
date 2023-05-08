@@ -17,7 +17,7 @@
 package bls12381
 
 // swuMapG1 is implementation of Simplified Shallue-van de Woestijne-Ulas Method
-// follows the implmentation at draft-irtf-cfrg-hash-to-curve-06.
+// follows the implementation at draft-irtf-cfrg-hash-to-curve-06.
 func swuMapG1(u *fe) (*fe, *fe) {
 	var params = swuParamsForG1
 	var tv [4]*fe

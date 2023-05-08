@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func BenchmarkGuage(b *testing.B) {
+func BenchmarkGauge(b *testing.B) {
 	g := NewGauge()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

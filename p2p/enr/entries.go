@@ -17,6 +17,7 @@
 package enr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -60,7 +61,7 @@ type TCP uint16
 
 func (v TCP) ENRKey() string { return "tcp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// TCP6 is the "tcp6" key, which holds the IPv6-specific tcp6 port of the node.
 type TCP6 uint16
 
 func (v TCP6) ENRKey() string { return "tcp6" }
@@ -70,7 +71,7 @@ type UDP uint16
 
 func (v UDP) ENRKey() string { return "udp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// UDP6 is the "udp6" key, which holds the IPv6-specific UDP port of the node.
 type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
@@ -180,9 +181,16 @@ func (err *KeyError) Error() string {
 	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
 }
 
+func (err *KeyError) Unwrap() error {
+	return err.Err
+}
+
 // IsNotFound reports whether the given error means that a key/value pair is
 // missing from a record.
 func IsNotFound(err error) bool {
-	kerr, ok := err.(*KeyError)
-	return ok && kerr.Err == errNotFound
+	var ke *KeyError
+	if errors.As(err, &ke) {
+		return ke.Err == errNotFound
+	}
+	return false
 }

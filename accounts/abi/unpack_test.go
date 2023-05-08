@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -201,6 +202,23 @@ var unpackTests = []unpackTest{
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
+	{
+		def:  `[{"type":"bool"}]`,
+		enc:  "",
+		want: false,
+		err:  "abi: attempting to unmarshall an empty string while arguments are expected",
+	},
+	{
+		def:  `[{"type":"bytes32","indexed":true},{"type":"uint256","indexed":false}]`,
+		enc:  "",
+		want: false,
+		err:  "abi: attempting to unmarshall an empty string while arguments are expected",
+	},
+	{
+		def:  `[{"type":"bool","indexed":true},{"type":"uint64","indexed":true}]`,
+		enc:  "",
+		want: false,
+	},
 }
 
 // TestLocalUnpackTests runs test specially designed only for unpacking.
@@ -336,6 +354,11 @@ func TestMethodMultiReturn(t *testing.T) {
 		"",
 		"Can unpack into a slice",
 	}, {
+		&[]interface{}{&bigint, ""},
+		&[]interface{}{&expected.Int, expected.String},
+		"",
+		"Can unpack into a slice without indirection",
+	}, {
 		&[2]interface{}{&bigint, new(string)},
 		&[2]interface{}{&expected.Int, &expected.String},
 		"",
@@ -407,7 +430,7 @@ func TestMultiReturnWithStringArray(t *testing.T) {
 	}
 	buff := new(bytes.Buffer)
 	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000005c1b78ea0000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000001a055690d9db80000000000000000000000000000ab1257528b3782fb40d7ed5f72e624b744dffb2f00000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000008457468657265756d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001048656c6c6f2c20457468657265756d2100000000000000000000000000000000"))
-	temp, _ := big.NewInt(0).SetString("30000000000000000000", 10)
+	temp, _ := new(big.Int).SetString("30000000000000000000", 10)
 	ret1, ret1Exp := new([3]*big.Int), [3]*big.Int{big.NewInt(1545304298), big.NewInt(6), temp}
 	ret2, ret2Exp := new(common.Address), common.HexToAddress("ab1257528b3782fb40d7ed5f72e624b744dffb2f")
 	ret3, ret3Exp := new([2]string), [2]string{"Ethereum", "Hello, Ethereum!"}
@@ -918,6 +941,167 @@ func TestOOMMaliciousInput(t *testing.T) {
 		_, err = abi.Methods["method"].Outputs.UnpackValues(encb)
 		if err == nil {
 			t.Fatalf("Expected error on malicious input, test %d", i)
+		}
+	}
+}
+
+func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
+	var encodeABI Arguments
+	uint256Ty, err := NewType("uint256", "", nil)
+	if err != nil {
+		panic(err)
+	}
+	encodeABI = Arguments{
+		{Type: uint256Ty},
+	}
+
+	maxU64, ok := new(big.Int).SetString(strconv.FormatUint(math.MaxUint64, 10), 10)
+	if !ok {
+		panic("bug")
+	}
+	maxU64Plus1 := new(big.Int).Add(maxU64, big.NewInt(1))
+	cases := []struct {
+		decodeType  string
+		inputValue  *big.Int
+		err         error
+		expectValue interface{}
+	}{
+		{
+			decodeType: "uint8",
+			inputValue: big.NewInt(math.MaxUint8 + 1),
+			err:        errBadUint8,
+		},
+		{
+			decodeType:  "uint8",
+			inputValue:  big.NewInt(math.MaxUint8),
+			err:         nil,
+			expectValue: uint8(math.MaxUint8),
+		},
+		{
+			decodeType: "uint16",
+			inputValue: big.NewInt(math.MaxUint16 + 1),
+			err:        errBadUint16,
+		},
+		{
+			decodeType:  "uint16",
+			inputValue:  big.NewInt(math.MaxUint16),
+			err:         nil,
+			expectValue: uint16(math.MaxUint16),
+		},
+		{
+			decodeType: "uint32",
+			inputValue: big.NewInt(math.MaxUint32 + 1),
+			err:        errBadUint32,
+		},
+		{
+			decodeType:  "uint32",
+			inputValue:  big.NewInt(math.MaxUint32),
+			err:         nil,
+			expectValue: uint32(math.MaxUint32),
+		},
+		{
+			decodeType: "uint64",
+			inputValue: maxU64Plus1,
+			err:        errBadUint64,
+		},
+		{
+			decodeType:  "uint64",
+			inputValue:  maxU64,
+			err:         nil,
+			expectValue: uint64(math.MaxUint64),
+		},
+		{
+			decodeType:  "uint256",
+			inputValue:  maxU64Plus1,
+			err:         nil,
+			expectValue: maxU64Plus1,
+		},
+		{
+			decodeType: "int8",
+			inputValue: big.NewInt(math.MaxInt8 + 1),
+			err:        errBadInt8,
+		},
+		{
+			decodeType: "int8",
+			inputValue: big.NewInt(math.MinInt8 - 1),
+			err:        errBadInt8,
+		},
+		{
+			decodeType:  "int8",
+			inputValue:  big.NewInt(math.MaxInt8),
+			err:         nil,
+			expectValue: int8(math.MaxInt8),
+		},
+		{
+			decodeType: "int16",
+			inputValue: big.NewInt(math.MaxInt16 + 1),
+			err:        errBadInt16,
+		},
+		{
+			decodeType: "int16",
+			inputValue: big.NewInt(math.MinInt16 - 1),
+			err:        errBadInt16,
+		},
+		{
+			decodeType:  "int16",
+			inputValue:  big.NewInt(math.MaxInt16),
+			err:         nil,
+			expectValue: int16(math.MaxInt16),
+		},
+		{
+			decodeType: "int32",
+			inputValue: big.NewInt(math.MaxInt32 + 1),
+			err:        errBadInt32,
+		},
+		{
+			decodeType: "int32",
+			inputValue: big.NewInt(math.MinInt32 - 1),
+			err:        errBadInt32,
+		},
+		{
+			decodeType:  "int32",
+			inputValue:  big.NewInt(math.MaxInt32),
+			err:         nil,
+			expectValue: int32(math.MaxInt32),
+		},
+		{
+			decodeType: "int64",
+			inputValue: new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)),
+			err:        errBadInt64,
+		},
+		{
+			decodeType: "int64",
+			inputValue: new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
+			err:        errBadInt64,
+		},
+		{
+			decodeType:  "int64",
+			inputValue:  big.NewInt(math.MaxInt64),
+			err:         nil,
+			expectValue: int64(math.MaxInt64),
+		},
+	}
+	for i, testCase := range cases {
+		packed, err := encodeABI.Pack(testCase.inputValue)
+		if err != nil {
+			panic(err)
+		}
+		ty, err := NewType(testCase.decodeType, "", nil)
+		if err != nil {
+			panic(err)
+		}
+		decodeABI := Arguments{
+			{Type: ty},
+		}
+		decoded, err := decodeABI.Unpack(packed)
+		if err != testCase.err {
+			t.Fatalf("Expected error %v, actual error %v. case %d", testCase.err, err, i)
+		}
+		if err != nil {
+			continue
+		}
+		if !reflect.DeepEqual(decoded[0], testCase.expectValue) {
+			t.Fatalf("Expected value %v, actual value %v", testCase.expectValue, decoded[0])
 		}
 	}
 }

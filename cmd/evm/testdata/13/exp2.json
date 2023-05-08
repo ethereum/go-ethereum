@@ -16,6 +16,7 @@
         "transactionHash": "0xa98a24882ea90916c6a86da650fbc6b14238e46f0af04a131ce92be897507476",
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0x84d0",
+        "effectiveGasPrice": null,
         "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "transactionIndex": "0x0"
       },
@@ -29,11 +30,13 @@
         "transactionHash": "0x36bad80acce7040c45fd32764b5c2b2d2e6f778669fb41791f73f546d56e739a",
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0x84d0",
+        "effectiveGasPrice": null,
         "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "transactionIndex": "0x1"
       }
     ],
     "currentDifficulty": "0x20000",
-    "gasUsed": "0x109a0"
+    "gasUsed": "0x109a0",
+    "currentBaseFee": "0x36b"
   }
 }

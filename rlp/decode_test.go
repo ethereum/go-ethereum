@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 func TestStreamKind(t *testing.T) {
@@ -286,6 +287,47 @@ func TestStreamRaw(t *testing.T) {
 	}
 }
 
+func TestStreamReadBytes(t *testing.T) {
+	tests := []struct {
+		input string
+		size  int
+		err   string
+	}{
+		// kind List
+		{input: "C0", size: 1, err: "rlp: expected String or Byte"},
+		// kind Byte
+		{input: "04", size: 0, err: "input value has wrong size 1, want 0"},
+		{input: "04", size: 1},
+		{input: "04", size: 2, err: "input value has wrong size 1, want 2"},
+		// kind String
+		{input: "820102", size: 0, err: "input value has wrong size 2, want 0"},
+		{input: "820102", size: 1, err: "input value has wrong size 2, want 1"},
+		{input: "820102", size: 2},
+		{input: "820102", size: 3, err: "input value has wrong size 2, want 3"},
+	}
+
+	for _, test := range tests {
+		test := test
+		name := fmt.Sprintf("input_%s/size_%d", test.input, test.size)
+		t.Run(name, func(t *testing.T) {
+			s := NewStream(bytes.NewReader(unhex(test.input)), 0)
+			b := make([]byte, test.size)
+			err := s.ReadBytes(b)
+			if test.err == "" {
+				if err != nil {
+					t.Errorf("unexpected error %q", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if err.Error() != test.err {
+					t.Errorf("wrong error %q", err)
+				}
+			}
+		})
+	}
+}
+
 func TestDecodeErrors(t *testing.T) {
 	r := bytes.NewReader(nil)
 
@@ -398,6 +440,16 @@ type optionalPtrField struct {
 	B *[3]byte `rlp:"optional"`
 }
 
+type nonOptionalPtrField struct {
+	A uint
+	B *[3]byte
+}
+
+type multipleOptionalFields struct {
+	A *[3]byte `rlp:"optional"`
+	B *[3]byte `rlp:"optional"`
+}
+
 type optionalPtrFieldNil struct {
 	A uint
 	B *[3]byte `rlp:"optional,nil"`
@@ -411,10 +463,14 @@ type ignoredField struct {
 
 var (
 	veryBigInt = new(big.Int).Add(
-		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
+		new(big.Int).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
 		big.NewInt(0xFFFF),
 	)
 	veryVeryBigInt = new(big.Int).Exp(veryBigInt, big.NewInt(8), nil)
+)
+
+var (
+	veryBigInt256, _ = uint256.FromBig(veryBigInt)
 )
 
 var decodeTests = []decodeTest{
@@ -490,10 +546,26 @@ var decodeTests = []decodeTest{
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
 	{input: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001", ptr: new(*big.Int), value: veryVeryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
+
+	// big int errors
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 	{input: "00", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
 	{input: "820001", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
 	{input: "8105", ptr: new(*big.Int), error: "rlp: non-canonical size information for *big.Int"},
+
+	// uint256
+	{input: "80", ptr: new(*uint256.Int), value: uint256.NewInt(0)},
+	{input: "01", ptr: new(*uint256.Int), value: uint256.NewInt(1)},
+	{input: "88FFFFFFFFFFFFFFFF", ptr: new(*uint256.Int), value: uint256.NewInt(math.MaxUint64)},
+	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*uint256.Int), value: veryBigInt256},
+	{input: "10", ptr: new(uint256.Int), value: *uint256.NewInt(16)}, // non-pointer also works
+
+	// uint256 errors
+	{input: "C0", ptr: new(*uint256.Int), error: "rlp: expected input string or byte for *uint256.Int"},
+	{input: "00", ptr: new(*uint256.Int), error: "rlp: non-canonical integer (leading zero bytes) for *uint256.Int"},
+	{input: "820001", ptr: new(*uint256.Int), error: "rlp: non-canonical integer (leading zero bytes) for *uint256.Int"},
+	{input: "8105", ptr: new(*uint256.Int), error: "rlp: non-canonical size information for *uint256.Int"},
+	{input: "A1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00", ptr: new(*uint256.Int), error: "rlp: value too large for uint256"},
 
 	// structs
 	{
@@ -702,6 +774,30 @@ var decodeTests = []decodeTest{
 		input: "C50183010203",
 		ptr:   new(optionalPtrField),
 		value: optionalPtrField{A: 1, B: &[3]byte{1, 2, 3}},
+	},
+	{
+		// all optional fields nil
+		input: "C0",
+		ptr:   new(multipleOptionalFields),
+		value: multipleOptionalFields{A: nil, B: nil},
+	},
+	{
+		// all optional fields set
+		input: "C88301020383010203",
+		ptr:   new(multipleOptionalFields),
+		value: multipleOptionalFields{A: &[3]byte{1, 2, 3}, B: &[3]byte{1, 2, 3}},
+	},
+	{
+		// nil optional field appears before a non-nil one
+		input: "C58083010203",
+		ptr:   new(multipleOptionalFields),
+		error: "rlp: input string too short for [3]uint8, decoding into (rlp.multipleOptionalFields).A",
+	},
+	{
+		// decode a nil ptr into a ptr that is not nil or not optional
+		input: "C20180",
+		ptr:   new(nonOptionalPtrField),
+		error: "rlp: input string too short for [3]uint8, decoding into (rlp.nonOptionalPtrField).B",
 	},
 	{
 		input: "C101",
@@ -990,7 +1086,7 @@ func TestInvalidOptionalField(t *testing.T) {
 		v   interface{}
 		err string
 	}{
-		{v: new(invalid1), err: `rlp: struct field rlp.invalid1.B needs "optional" tag`},
+		{v: new(invalid1), err: `rlp: invalid struct tag "" for rlp.invalid1.B (must be optional because preceding field "A" is optional)`},
 		{v: new(invalid2), err: `rlp: invalid struct tag "optional" for rlp.invalid2.T (also has "tail" tag)`},
 		{v: new(invalid3), err: `rlp: invalid struct tag "tail" for rlp.invalid3.T (also has "optional" tag)`},
 	}
@@ -1002,7 +1098,6 @@ func TestInvalidOptionalField(t *testing.T) {
 			t.Errorf("wrong error for %T: %v", test.v, err.Error())
 		}
 	}
-
 }
 
 func ExampleDecode() {
@@ -1149,6 +1244,27 @@ func BenchmarkDecodeBigInts(b *testing.B) {
 	}
 }
 
+func BenchmarkDecodeU256Ints(b *testing.B) {
+	ints := make([]*uint256.Int, 200)
+	for i := range ints {
+		ints[i], _ = uint256.FromBig(math.BigPow(2, int64(i)))
+	}
+	enc, err := EncodeToBytes(ints)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(enc)))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var out []*uint256.Int
+	for i := 0; i < b.N; i++ {
+		if err := DecodeBytes(enc, &out); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func encodeTestSlice(n uint) []byte {
 	s := make([]uint, n)
 	for i := uint(0); i < n; i++ {
@@ -1162,7 +1278,7 @@ func encodeTestSlice(n uint) []byte {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, " ", "", -1))
+	b, err := hex.DecodeString(strings.ReplaceAll(str, " ", ""))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}

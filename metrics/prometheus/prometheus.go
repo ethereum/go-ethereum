@@ -36,7 +36,7 @@ func Handler(reg metrics.Registry) http.Handler {
 		})
 		sort.Strings(names)
 
-		// Aggregate all the metris into a Prometheus collector
+		// Aggregate all the metrics into a Prometheus collector
 		c := newCollector()
 
 		for _, name := range names {
@@ -45,6 +45,8 @@ func Handler(reg metrics.Registry) http.Handler {
 			switch m := i.(type) {
 			case metrics.Counter:
 				c.addCounter(name, m.Snapshot())
+			case metrics.CounterFloat64:
+				c.addCounterFloat64(name, m.Snapshot())
 			case metrics.Gauge:
 				c.addGauge(name, m.Snapshot())
 			case metrics.GaugeFloat64:

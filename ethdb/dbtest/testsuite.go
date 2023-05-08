@@ -18,6 +18,7 @@ package dbtest
 
 import (
 	"bytes"
+	"crypto/rand"
 	"reflect"
 	"sort"
 	"testing"
@@ -313,6 +314,163 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 	})
 
+	t.Run("Snapshot", func(t *testing.T) {
+		db := New()
+		defer db.Close()
+
+		initial := map[string]string{
+			"k1": "v1", "k2": "v2", "k3": "", "k4": "",
+		}
+		for k, v := range initial {
+			db.Put([]byte(k), []byte(v))
+		}
+		snapshot, err := db.NewSnapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range initial {
+			got, err := snapshot.Get([]byte(k))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, []byte(v)) {
+				t.Fatalf("Unexpected value want: %v, got %v", v, got)
+			}
+		}
+
+		// Flush more modifications into the database, ensure the snapshot
+		// isn't affected.
+		var (
+			update = map[string]string{"k1": "v1-b", "k3": "v3-b"}
+			insert = map[string]string{"k5": "v5-b"}
+			delete = map[string]string{"k2": ""}
+		)
+		for k, v := range update {
+			db.Put([]byte(k), []byte(v))
+		}
+		for k, v := range insert {
+			db.Put([]byte(k), []byte(v))
+		}
+		for k := range delete {
+			db.Delete([]byte(k))
+		}
+		for k, v := range initial {
+			got, err := snapshot.Get([]byte(k))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, []byte(v)) {
+				t.Fatalf("Unexpected value want: %v, got %v", v, got)
+			}
+		}
+		for k := range insert {
+			got, err := snapshot.Get([]byte(k))
+			if err == nil || len(got) != 0 {
+				t.Fatal("Unexpected value")
+			}
+		}
+		for k := range delete {
+			got, err := snapshot.Get([]byte(k))
+			if err != nil || len(got) == 0 {
+				t.Fatal("Unexpected deletion")
+			}
+		}
+	})
+}
+
+// BenchDatabaseSuite runs a suite of benchmarks against a KeyValueStore database
+// implementation.
+func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
+	var (
+		keys, vals   = makeDataset(1_000_000, 32, 32, false)
+		sKeys, sVals = makeDataset(1_000_000, 32, 32, true)
+	)
+	// Run benchmarks sequentially
+	b.Run("Write", func(b *testing.B) {
+		benchWrite := func(b *testing.B, keys, vals [][]byte) {
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			db := New()
+			defer db.Close()
+
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+		}
+		b.Run("WriteSorted", func(b *testing.B) {
+			benchWrite(b, sKeys, sVals)
+		})
+		b.Run("WriteRandom", func(b *testing.B) {
+			benchWrite(b, keys, vals)
+		})
+	})
+	b.Run("Read", func(b *testing.B) {
+		benchRead := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < len(keys); i++ {
+				db.Get(keys[i])
+			}
+		}
+		b.Run("ReadSorted", func(b *testing.B) {
+			benchRead(b, sKeys, sVals)
+		})
+		b.Run("ReadRandom", func(b *testing.B) {
+			benchRead(b, keys, vals)
+		})
+	})
+	b.Run("Iteration", func(b *testing.B) {
+		benchIteration := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			it := db.NewIterator(nil, nil)
+			for it.Next() {
+			}
+			it.Release()
+		}
+		b.Run("IterationSorted", func(b *testing.B) {
+			benchIteration(b, sKeys, sVals)
+		})
+		b.Run("IterationRandom", func(b *testing.B) {
+			benchIteration(b, keys, vals)
+		})
+	})
+	b.Run("BatchWrite", func(b *testing.B) {
+		benchBatchWrite := func(b *testing.B, keys, vals [][]byte) {
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			db := New()
+			defer db.Close()
+
+			batch := db.NewBatch()
+			for i := 0; i < len(keys); i++ {
+				batch.Put(keys[i], vals[i])
+			}
+			batch.Write()
+		}
+		b.Run("BenchWriteSorted", func(b *testing.B) {
+			benchBatchWrite(b, sKeys, sVals)
+		})
+		b.Run("BenchWriteRandom", func(b *testing.B) {
+			benchBatchWrite(b, keys, vals)
+		})
+	})
 }
 
 func iterateKeys(it ethdb.Iterator) []string {
@@ -323,4 +481,26 @@ func iterateKeys(it ethdb.Iterator) []string {
 	sort.Strings(keys)
 	it.Release()
 	return keys
+}
+
+// randomHash generates a random blob of data and returns it as a hash.
+func randBytes(len int) []byte {
+	buf := make([]byte, len)
+	if n, err := rand.Read(buf); n != len || err != nil {
+		panic(err)
+	}
+	return buf
+}
+
+func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
+	var keys [][]byte
+	var vals [][]byte
+	for i := 0; i < size; i += 1 {
+		keys = append(keys, randBytes(ksize))
+		vals = append(vals, randBytes(vsize))
+	}
+	if order {
+		sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+	}
+	return keys, vals
 }

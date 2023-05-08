@@ -47,7 +47,7 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	if len(data) != 0 {
 		return data
 	}
-	data, _ = db.Get(hash[:])
+	data, _ = db.Get(hash.Bytes())
 	return data
 }
 
@@ -57,6 +57,18 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(codeKey(hash))
 	return data
+}
+
+// HasCode checks if the contract code corresponding to the
+// provided code hash is present in the db.
+func HasCode(db ethdb.KeyValueReader, hash common.Hash) bool {
+	// Try with the prefixed code scheme first, if not then try with legacy
+	// scheme.
+	if ok := HasCodeWithPrefix(db, hash); ok {
+		return true
+	}
+	ok, _ := db.Has(hash.Bytes())
+	return ok
 }
 
 // HasCodeWithPrefix checks if the contract code corresponding to the
@@ -78,31 +90,5 @@ func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(codeKey(hash)); err != nil {
 		log.Crit("Failed to delete contract code", "err", err)
-	}
-}
-
-// ReadTrieNode retrieves the trie node of the provided hash.
-func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(hash.Bytes())
-	return data
-}
-
-// HasTrieNode checks if the trie node with the provided hash is present in db.
-func HasTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
-	ok, _ := db.Has(hash.Bytes())
-	return ok
-}
-
-// WriteTrieNode writes the provided trie node database.
-func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
-	if err := db.Put(hash.Bytes(), node); err != nil {
-		log.Crit("Failed to store trie node", "err", err)
-	}
-}
-
-// DeleteTrieNode deletes the specified trie node from the database.
-func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(hash.Bytes()); err != nil {
-		log.Crit("Failed to delete trie node", "err", err)
 	}
 }

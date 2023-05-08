@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -115,12 +115,10 @@ func TestEth66EmptyMessages(t *testing.T) {
 			t.Errorf("test %d, type %T, have\n\t%x\nwant\n\t%x", i, msg, have, want)
 		}
 	}
-
 }
 
 // TestEth66Messages tests the encoding of all redefined eth66 messages
 func TestEth66Messages(t *testing.T) {
-
 	// Some basic structs used during testing
 	var (
 		header       *types.Header

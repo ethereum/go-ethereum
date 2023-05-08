@@ -52,6 +52,7 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
+	r.Set(enr.UDP(30303))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
@@ -134,8 +135,8 @@ func newPingRecorder() *pingRecorder {
 	}
 }
 
-// setRecord updates a node record. Future calls to ping and
-// requestENR will return this record.
+// updateRecord updates a node record. Future calls to ping and
+// RequestENR will return this record.
 func (t *pingRecorder) updateRecord(n *enode.Node) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -162,7 +163,7 @@ func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
 	return seq, nil
 }
 
-// requestENR simulates an ENR request.
+// RequestENR simulates an ENR request.
 func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
