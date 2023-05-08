@@ -82,7 +82,7 @@ func TestBuildPayload(t *testing.T) {
 }
 
 func TestPayloadId(t *testing.T) {
-	ids := make(map[string]int, 7)
+	ids := make(map[string]int)
 	for i, tt := range []*BuildPayloadArgs{
 		&BuildPayloadArgs{
 			Parent:       common.Hash{1},
