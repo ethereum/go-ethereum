@@ -288,8 +288,8 @@ func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir s
 	// Assemble the supported backends
 	if len(conf.ExternalSigner) > 0 {
 		log.Info("Using external signer", "url", conf.ExternalSigner)
-		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
-			am.AddBackend(extapi)
+		if extBackend, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
+			am.AddBackend(extBackend)
 			return nil
 		} else {
 			return fmt.Errorf("error connecting to external signer: %v", err)
