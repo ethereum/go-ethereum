@@ -143,15 +143,16 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	}
 	f.mu.Unlock()
 
-	// Set the sent value on all channels.
-	for i := firstSubSendCase; i < len(f.sendCases); i++ {
-		f.sendCases[i].Send = rvalue
-	}
-
 	// Send until all channels except removeSub have been chosen. 'cases' tracks a prefix
 	// of sendCases. When a send succeeds, the corresponding case moves to the end of
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
+
+	// Set the sent value on all channels.
+	for i := firstSubSendCase; i < len(cases); i++ {
+		cases[i].Send = rvalue
+	}
+
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
@@ -181,10 +182,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		}
 	}
 
-	// Forget about the sent value and hand off the send lock.
-	for i := firstSubSendCase; i < len(f.sendCases); i++ {
-		f.sendCases[i].Send = reflect.Value{}
-	}
+	// Hand off the send lock.
 	f.sendLock <- struct{}{}
 	return nsent
 }
