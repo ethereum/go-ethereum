@@ -96,7 +96,7 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
-	tr, _ := New(TrieID(common.Hash{}), db)
+	tr, _ := New(TrieID(types.EmptyRootHash), db)
 	return tr
 }
 

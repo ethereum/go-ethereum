@@ -547,9 +547,14 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 }
 
 // Update inserts the dirty nodes in provided nodeset into database and link the
-// account trie with multiple storage tries if necessary. Note `root` and `parent`
-// are not used in hashdb.
+// account trie with multiple storage tries if necessary.
 func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+	// Ensure the parent state is present before accepting state changes.
+	if parent != types.EmptyRootHash {
+		if blob, _ := db.Node(parent); len(blob) == 0 {
+			return errors.New("parent state is not present")
+		}
+	}
 	db.lock.Lock()
 	defer db.lock.Unlock()
 

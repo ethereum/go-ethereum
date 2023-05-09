@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
@@ -144,7 +144,7 @@ func runRandTest(rt randTest) error {
 	var (
 		triedb = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		tr     = trie.NewEmpty(triedb)
-		origin common.Hash
+		origin = types.EmptyRootHash
 		values = make(map[string]string) // tracks content of the trie
 	)
 	for i, step := range rt {
