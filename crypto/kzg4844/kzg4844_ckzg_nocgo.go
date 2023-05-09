@@ -14,12 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build nacl || js || !cgo || gofuzz
+//go:build !ckzg || nacl || js || !cgo || gofuzz
 
 package kzg4844
 
+import "sync"
+
 // ckzgAvailable signals whether the library was compiled into Geth.
 const ckzgAvailable = false
+
+// ckzgIniter ensures that we initialize the KZG library once before using it.
+var ckzgIniter sync.Once
+
+// ckzgInit initializes the KZG library with the provided trusted setup.
+func ckzgInit() {
+	panic("unsupported platform")
+}
 
 // ckzgBlobToCommitment creates a small commitment out of a data blob.
 func ckzgBlobToCommitment(blob Blob) (Commitment, error) {
