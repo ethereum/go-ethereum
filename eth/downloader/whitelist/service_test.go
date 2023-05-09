@@ -64,14 +64,14 @@ func TestIsValidPeer(t *testing.T) {
 	}
 
 	// case2: false fetchHeadersByNumber function provided, should consider the chain as invalid
-	// and throw `ErrNoRemoteCheckoint` error
+	// and throw `ErrNoRemoteCheckpoint` error
 	res, err = s.IsValidPeer(nil, falseFetchHeadersByNumber)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	if !errors.Is(err, ErrNoRemoteCheckoint) {
-		t.Fatalf("expected error ErrNoRemoteCheckoint, got %v", err)
+	if !errors.Is(err, ErrNoRemoteCheckpoint) {
+		t.Fatalf("expected error ErrNoRemoteCheckpoint, got %v", err)
 	}
 
 	require.Equal(t, res, false, "expected chain to be invalid")

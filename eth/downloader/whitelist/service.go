@@ -31,7 +31,7 @@ func NewService(maxCapacity uint) *Service {
 var (
 	ErrCheckpointMismatch = errors.New("checkpoint mismatch")
 	ErrLongFutureChain    = errors.New("received future chain of unacceptable length")
-	ErrNoRemoteCheckoint  = errors.New("remote peer doesn't have a checkoint")
+	ErrNoRemoteCheckpoint = errors.New("remote peer doesn't have a checkpoint")
 )
 
 // IsValidPeer checks if the chain we're about to receive from a peer is valid or not
@@ -55,11 +55,11 @@ func (w *Service) IsValidPeer(remoteHeader *types.Header, fetchHeadersByNumber f
 	// todo: we can extract this as an interface and mock as well or just test IsValidChain in isolation from downloader passing fake fetchHeadersByNumber functions
 	headers, hashes, err := fetchHeadersByNumber(lastCheckpointBlockNum, 1, 0, false)
 	if err != nil {
-		return false, fmt.Errorf("%w: last checkpoint %d, err %v", ErrNoRemoteCheckoint, lastCheckpointBlockNum, err)
+		return false, fmt.Errorf("%w: last checkpoint %d, err %v", ErrNoRemoteCheckpoint, lastCheckpointBlockNum, err)
 	}
 
 	if len(headers) == 0 {
-		return false, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckoint, lastCheckpointBlockNum)
+		return false, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckpoint, lastCheckpointBlockNum)
 	}
 
 	reqBlockNum := headers[0].Number.Uint64()
