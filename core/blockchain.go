@@ -982,8 +982,8 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	// Flush the collected preimages to disk
-	if err := bc.stateCache.TrieDB().CommitPreimages(); err != nil {
-		log.Error("Failed to commit trie preimages", "err", err)
+	if err := bc.stateCache.TrieDB().Close(); err != nil {
+		log.Error("Failed to close trie db", "err", err)
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
 	// cache warmup when node restarts.
