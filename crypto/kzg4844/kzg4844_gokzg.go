@@ -39,9 +39,6 @@ func gokzgInit() {
 	if err = json.Unmarshal(config, params); err != nil {
 		panic(err)
 	}
-	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
-		panic(err)
-	}
 	context, err = gokzg4844.NewContext4096(params)
 	if err != nil {
 		panic(err)
