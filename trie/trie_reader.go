@@ -32,9 +32,9 @@ type Reader interface {
 
 // NodeReader wraps all the necessary functions for accessing trie node.
 type NodeReader interface {
-	// GetReader returns a reader for accessing all trie nodes with provided
+	// Reader returns a reader for accessing all trie nodes with provided
 	// state root. Nil is returned in case the state is not available.
-	GetReader(root common.Hash) Reader
+	Reader(root common.Hash) Reader
 }
 
 // trieReader is a wrapper of the underlying node reader. It's not safe
@@ -47,7 +47,7 @@ type trieReader struct {
 
 // newTrieReader initializes the trie reader with the given node reader.
 func newTrieReader(stateRoot, owner common.Hash, db NodeReader) (*trieReader, error) {
-	reader := db.GetReader(stateRoot)
+	reader := db.Reader(stateRoot)
 	if reader == nil {
 		return nil, fmt.Errorf("state not found #%x", stateRoot)
 	}

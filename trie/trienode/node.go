@@ -16,7 +16,13 @@
 
 package trienode
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
 // unique hash identifier. It is general enough that can be used to represent
@@ -64,4 +70,128 @@ func NewWithPrev(hash common.Hash, blob []byte, prev []byte) *WithPrev {
 		Node: New(hash, blob),
 		Prev: prev,
 	}
+}
+
+// leaf represents a trie leaf node
+type leaf struct {
+	Blob   []byte      // raw blob of leaf
+	Parent common.Hash // the hash of parent node
+}
+
+// NodeSet contains a set of nodes collected during the commit operation.
+// Each node is keyed by path. It's not thread-safe to use.
+type NodeSet struct {
+	Owner   common.Hash
+	Leaves  []*leaf
+	Nodes   map[string]*WithPrev
+	updates int // the count of updated and inserted nodes
+	deletes int // the count of deleted nodes
+}
+
+// NewNodeSet initializes a node set. The owner is zero for the account trie and
+// the owning account address hash for storage tries.
+func NewNodeSet(owner common.Hash) *NodeSet {
+	return &NodeSet{
+		Owner: owner,
+		Nodes: make(map[string]*WithPrev),
+	}
+}
+
+// ForEachWithOrder iterates the nodes with the order from bottom to top,
+// right to left, nodes with the longest path will be iterated first.
+func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
+	var paths sort.StringSlice
+	for path := range set.Nodes {
+		paths = append(paths, path)
+	}
+	// Bottom-up, longest path first
+	sort.Sort(sort.Reverse(paths))
+	for _, path := range paths {
+		callback(path, set.Nodes[path].Unwrap())
+	}
+}
+
+// AddNode adds the provided node into set.
+func (set *NodeSet) AddNode(path []byte, n *WithPrev) {
+	if n.IsDeleted() {
+		set.deletes += 1
+	} else {
+		set.updates += 1
+	}
+	set.Nodes[string(path)] = n
+}
+
+// AddLeaf adds the provided leaf node into set. TODO(rjl493456442) how can
+// we get rid of it?
+func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
+	set.Leaves = append(set.Leaves, &leaf{Blob: blob, Parent: parent})
+}
+
+// Size returns the number of dirty nodes in set.
+func (set *NodeSet) Size() (int, int) {
+	return set.updates, set.deletes
+}
+
+// Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
+// we get rid of it?
+func (set *NodeSet) Hashes() []common.Hash {
+	var ret []common.Hash
+	for _, node := range set.Nodes {
+		ret = append(ret, node.Hash)
+	}
+	return ret
+}
+
+// Summary returns a string-representation of the NodeSet.
+func (set *NodeSet) Summary() string {
+	var out = new(strings.Builder)
+	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)
+	if set.Nodes != nil {
+		for path, n := range set.Nodes {
+			// Deletion
+			if n.IsDeleted() {
+				fmt.Fprintf(out, "  [-]: %x prev: %x\n", path, n.Prev)
+				continue
+			}
+			// Insertion
+			if len(n.Prev) == 0 {
+				fmt.Fprintf(out, "  [+]: %x -> %v\n", path, n.Hash)
+				continue
+			}
+			// Update
+			fmt.Fprintf(out, "  [*]: %x -> %v prev: %x\n", path, n.Hash, n.Prev)
+		}
+	}
+	for _, n := range set.Leaves {
+		fmt.Fprintf(out, "[leaf]: %v\n", n)
+	}
+	return out.String()
+}
+
+// MergedNodeSet represents a merged node set for a group of tries.
+type MergedNodeSet struct {
+	Sets map[common.Hash]*NodeSet
+}
+
+// NewMergedNodeSet initializes an empty merged set.
+func NewMergedNodeSet() *MergedNodeSet {
+	return &MergedNodeSet{Sets: make(map[common.Hash]*NodeSet)}
+}
+
+// NewWithNodeSet constructs a merged nodeset with the provided single set.
+func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
+	merged := NewMergedNodeSet()
+	merged.Merge(set)
+	return merged
+}
+
+// Merge merges the provided dirty nodes of a trie into the set. The assumption
+// is held that no duplicated set belonging to the same trie will be merged twice.
+func (set *MergedNodeSet) Merge(other *NodeSet) error {
+	_, present := set.Sets[other.Owner]
+	if present {
+		return fmt.Errorf("duplicate trie for owner %#x", other.Owner)
+	}
+	set.Sets[other.Owner] = other
+	return nil
 }

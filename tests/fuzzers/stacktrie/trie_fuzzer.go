@@ -27,9 +27,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -184,7 +186,7 @@ func (f *fuzzer) fuzz() int {
 	// Flush trie -> database
 	rootA, nodes := trieA.Commit(false)
 	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
+		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false)

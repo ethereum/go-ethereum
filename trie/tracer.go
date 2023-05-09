@@ -115,7 +115,7 @@ func (t *tracer) copy() *tracer {
 }
 
 // markDeletions puts all tracked deletions into the provided nodeset.
-func (t *tracer) markDeletions(set *NodeSet) {
+func (t *tracer) markDeletions(set *trienode.NodeSet) {
 	for path := range t.deletes {
 		// It's possible a few deleted nodes were embedded
 		// in their parent before, the deletions can be no
@@ -124,6 +124,6 @@ func (t *tracer) markDeletions(set *NodeSet) {
 		if !ok {
 			continue
 		}
-		set.addNode([]byte(path), trienode.NewWithPrev(common.Hash{}, nil, prev))
+		set.AddNode([]byte(path), trienode.NewWithPrev(common.Hash{}, nil, prev))
 	}
 }
