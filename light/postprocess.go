@@ -179,7 +179,7 @@ func (c *ChtIndexerBackend) fetchMissingNodes(ctx context.Context, section uint6
 
 // Reset implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
@@ -404,7 +404,7 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 
 // Reset implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
