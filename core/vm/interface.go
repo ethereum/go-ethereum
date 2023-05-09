@@ -48,9 +48,6 @@ type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
 
-	GetBalanceLittleEndian(address common.Address) []byte
-	GetNonceLittleEndian(address common.Address) []byte
-
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
 
