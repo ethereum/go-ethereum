@@ -603,7 +603,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue))
 			for path, element := range nodeQueue {
 				owner, inner := trie.ResolvePath([]byte(element.path))
-				data, err := srcDb.TrieDB().GetReader(srcRoot).Node(owner, inner, element.hash)
+				data, err := srcDb.TrieDB().Reader(srcRoot).Node(owner, inner, element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}

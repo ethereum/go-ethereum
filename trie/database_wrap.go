@@ -39,14 +39,8 @@ type Config struct {
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
-	// Update performs a state transition by committing dirty nodes contained
-	// in the given set in order to update state from the specified parent to
-	// the specified root.
-	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
-
-	// Commit writes all relevant trie nodes belonging to the specified state
-	// to disk. Report specifies whether logs will be displayed in info level.
-	Commit(root common.Hash, report bool) error
+	// Scheme returns the identifier of used storage scheme.
+	Scheme() string
 
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
@@ -56,18 +50,24 @@ type backend interface {
 	// persistent database layer.
 	Size() common.StorageSize
 
-	// Scheme returns the identifier of used storage scheme.
-	Scheme() string
+	// Update performs a state transition by committing dirty nodes contained
+	// in the given set in order to update state from the specified parent to
+	// the specified root.
+	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
+
+	// Commit writes all relevant trie nodes belonging to the specified state
+	// to disk. Report specifies whether logs will be displayed in info level.
+	Commit(root common.Hash, report bool) error
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
-// types of node backend implementations as an entrypoint. It's responsible for all
-// interactions relevant with trie nodes and the node preimages.
+// types of node backend as an entrypoint. It's responsible for all interactions
+// relevant with trie nodes and node preimages.
 type Database struct {
-	config    *Config          // Configuration for trie database.
+	config    *Config          // Configuration for trie database
 	diskdb    ethdb.Database   // Persistent database to store the snapshot
 	cleans    *fastcache.Cache // Megabytes permitted using for read caches
 	preimages *preimageStore   // The store for caching preimages
@@ -112,16 +112,16 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 	return db
 }
 
-// GetReader returns a reader for accessing all trie nodes with provided
-// state root. Nil is returned in case the state is not available.
-func (db *Database) GetReader(blockRoot common.Hash) Reader {
-	return db.backend.(*hashdb.Database).GetReader(blockRoot)
+// Reader returns a reader for accessing all trie nodes with provided state root.
+// Nil is returned in case the state is not available.
+func (db *Database) Reader(blockRoot common.Hash) Reader {
+	return db.backend.(*hashdb.Database).Reader(blockRoot)
 }
 
-// Update performs a state transition by committing dirty nodes contained
-// in the given set in order to update state from the specified parent to
-// the specified root. The held pre-images accumulated up to this point
-// will be flushed in case the size exceeds the threshold.
+// Update performs a state transition by committing dirty nodes contained in the
+// given set in order to update state from the specified parent to the specified
+// root. The held pre-images accumulated up to this point will be flushed in case
+// the size exceeds the threshold.
 func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
 	if db.preimages != nil {
 		db.preimages.commit(false)

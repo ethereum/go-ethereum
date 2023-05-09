@@ -57,7 +57,7 @@ func makeTestTrie(scheme string) (ethdb.Database, *Database, *StateTrie, map[str
 		}
 	}
 	root, nodes := trie.Commit(false)
-	if err := triedb.Update(root, common.Hash{}, trienode.NewWithNodeSet(nodes)); err != nil {
+	if err := triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	if err := triedb.Commit(root, false); err != nil {
@@ -164,7 +164,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
 		if !bypath {
 			for i, element := range elements {
 				owner, inner := ResolvePath([]byte(element.path))
-				data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+				data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
 				}
@@ -235,7 +235,7 @@ func testIterativeDelayedSync(t *testing.T, scheme string) {
 		results := make([]NodeSyncResult, len(elements)/2+1)
 		for i, element := range elements[:len(results)] {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -300,7 +300,7 @@ func testIterativeRandomSync(t *testing.T, count int, scheme string) {
 		results := make([]NodeSyncResult, 0, len(queue))
 		for path, element := range queue {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -363,7 +363,7 @@ func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 		results := make([]NodeSyncResult, 0, len(queue)/2+1)
 		for path, element := range queue {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -432,7 +432,7 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -506,7 +506,7 @@ func testIncompleteSync(t *testing.T, scheme string) {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -590,7 +590,7 @@ func testSyncOrdering(t *testing.T, scheme string) {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -653,7 +653,7 @@ func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.GetReader(root).Node(owner, inner, element.hash)
+			data, err := srcDb.Reader(root).Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
 			}

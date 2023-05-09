@@ -546,8 +546,9 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	return rawdb.HasLegacyTrieNode(db.diskdb, genesisRoot)
 }
 
-// Update inserts the dirty nodes in provided nodeset into database and
-// link the account trie with multiple storage tries if necessary.
+// Update inserts the dirty nodes in provided nodeset into database and link the
+// account trie with multiple storage tries if necessary. Note `root` and `parent`
+// are not used in hashdb.
 func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -614,8 +615,8 @@ func (db *Database) Scheme() string {
 	return rawdb.HashScheme
 }
 
-// GetReader retrieves a node reader belonging to the given state root.
-func (db *Database) GetReader(root common.Hash) *reader {
+// Reader retrieves a node reader belonging to the given state root.
+func (db *Database) Reader(root common.Hash) *reader {
 	return &reader{db: db}
 }
 
