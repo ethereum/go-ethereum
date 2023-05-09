@@ -209,7 +209,7 @@ func doInstall(cmdline []string) {
 	}
 	// Disable CLI markdown doc generation in release builds and enable linking
 	// the CKZG library since we can make it portable here.
-	buildTags := []string{"urfave_cli_no_docs", "ckgz"}
+	buildTags := []string{"urfave_cli_no_docs", "ckzg"}
 
 	// Configure the build.
 	env := build.Env()
