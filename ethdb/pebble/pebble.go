@@ -70,7 +70,7 @@ type Database struct {
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
 
-	quitLock sync.Mutex      // Mutex protecting the quit channel access
+	quitLock sync.RWMutex    // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
 	log log.Logger // Contextual logger tracking the database path
@@ -238,6 +238,11 @@ func (d *Database) Close() error {
 
 // Has retrieves if a key is present in the key-value store.
 func (d *Database) Has(key []byte) (bool, error) {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.quitChan == nil {
+		return false, pebble.ErrClosed
+	}
 	_, closer, err := d.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return false, nil
@@ -250,6 +255,11 @@ func (d *Database) Has(key []byte) (bool, error) {
 
 // Get retrieves the given key if it's present in the key-value store.
 func (d *Database) Get(key []byte) ([]byte, error) {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.quitChan == nil {
+		return nil, pebble.ErrClosed
+	}
 	dat, closer, err := d.db.Get(key)
 	if err != nil {
 		return nil, err
