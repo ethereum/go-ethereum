@@ -75,7 +75,7 @@ func checkNodes(t *testing.T, nodes []*Node, wantLen int) {
 		t.Errorf("slice has %d nodes, want %d", len(nodes), wantLen)
 		return
 	}
-	seen := make(map[ID]bool)
+	seen := make(map[ID]bool, len(nodes))
 	for i, e := range nodes {
 		if e == nil {
 			t.Errorf("nil node at index %d", i)
@@ -231,7 +231,7 @@ func testMixerClose(t *testing.T) {
 }
 
 func idPrefixDistribution(nodes []*Node) map[uint32]int {
-	d := make(map[uint32]int)
+	d := make(map[uint32]int, len(nodes))
 	for _, node := range nodes {
 		id := node.ID()
 		d[binary.BigEndian.Uint32(id[:4])]++
