@@ -75,7 +75,7 @@ type Config struct {
 	// is created by New and destroyed when the node is stopped.
 	KeyStoreDir string `toml:",omitempty"`
 
-	// ExternalSigner specifies an external URI for a clef-type signer
+	// ExternalSigner specifies an external URI for a clef-type signer.
 	ExternalSigner string `toml:",omitempty"`
 
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
@@ -92,7 +92,7 @@ type Config struct {
 	// USB enables hardware wallet monitoring and connectivity.
 	USB bool `toml:",omitempty"`
 
-	// SmartCardDaemonPath is the path to the smartcard daemon's socket
+	// SmartCardDaemonPath is the path to the smartcard daemon's socket.
 	SmartCardDaemonPath string `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
@@ -396,7 +396,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	return key
 }
 
-// CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
+// checkLegacyFiles inspects the datadir for signs of legacy static-nodes
 // and trusted-nodes files. If they exist it raises an error.
 func (c *Config) checkLegacyFiles() {
 	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
