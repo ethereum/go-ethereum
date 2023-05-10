@@ -55,8 +55,8 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(state, addrHash, root common.Hash) (state.Trie, error) {
-	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
+func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
+	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
@@ -208,7 +208,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		if t.trie == nil {
 			var id *trie.ID
 			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccKey), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
@@ -240,7 +240,7 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 		it.do(func() error {
 			var id *trie.ID
 			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccKey), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}

@@ -142,7 +142,7 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
-			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
 			if err != nil {
 				return nil, err
 			}

@@ -113,7 +113,7 @@ func (it *nodeIterator) step() error {
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}
-	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, common.BytesToHash(it.stateIt.LeafKey()), account.Root)
+	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, common.Address{} /* FIXIT */, account.Root)
 	if err != nil {
 		return err
 	}
