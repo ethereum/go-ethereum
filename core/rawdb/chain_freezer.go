@@ -204,7 +204,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if frozen > 0 {
 			tip := frozen
 			for len(dangling) > 0 {
-				drop := make(map[common.Hash]struct{})
+				drop := make(map[common.Hash]struct{}, len(dangling))
 				for _, hash := range dangling {
 					log.Debug("Dangling parent from Freezer", "number", tip-1, "hash", hash)
 					drop[hash] = struct{}{}
