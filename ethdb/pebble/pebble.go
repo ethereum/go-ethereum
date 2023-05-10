@@ -274,11 +274,21 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 
 // Put inserts the given value into the key-value store.
 func (d *Database) Put(key []byte, value []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
 	return d.db.Set(key, value, pebble.NoSync)
 }
 
 // Delete removes the key from the key-value store.
 func (d *Database) Delete(key []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
 	return d.db.Delete(key, nil)
 }
 
@@ -286,7 +296,8 @@ func (d *Database) Delete(key []byte) error {
 // database until a final write is called.
 func (d *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		b: d.db.NewBatch(),
+		b:  d.db.NewBatch(),
+		db: d,
 	}
 }
 
@@ -493,6 +504,7 @@ func (d *Database) meter(refresh time.Duration) {
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
 	b    *pebble.Batch
+	db   *Database
 	size int
 }
 
@@ -517,6 +529,11 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
+	b.db.quitLock.RLock()
+	defer b.db.quitLock.RUnlock()
+	if b.db.closed {
+		return pebble.ErrClosed
+	}
 	return b.b.Commit(pebble.NoSync)
 }
 
