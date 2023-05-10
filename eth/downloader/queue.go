@@ -259,7 +259,7 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 		panic("skeleton assembly already in progress")
 	}
 	// Schedule all the header retrieval tasks for the skeleton assembly
-	q.headerTaskPool = make(map[uint64]*types.Header)
+	q.headerTaskPool = make(map[uint64]*types.Header, len(skeleton))
 	q.headerTaskQueue = prque.New[int64, uint64](nil)
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
 	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)

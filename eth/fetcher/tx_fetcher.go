@@ -589,7 +589,7 @@ func (f *TxFetcher) loop() {
 
 				// Anything not delivered should be re-scheduled (with or without
 				// this peer, depending on the response cutoff)
-				delivered := make(map[common.Hash]struct{})
+				delivered := make(map[common.Hash]struct{}, len(delivery.hashes))
 				for _, hash := range delivery.hashes {
 					delivered[hash] = struct{}{}
 				}
@@ -769,7 +769,7 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 	// Gather the set of peers we want to retrieve from (default to all)
 	actives := whitelist
 	if actives == nil {
-		actives = make(map[string]struct{})
+		actives = make(map[string]struct{}, len(f.announces))
 		for peer := range f.announces {
 			actives[peer] = struct{}{}
 		}

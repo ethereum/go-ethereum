@@ -401,7 +401,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	peeringSub := s.peers.SubscribeEvents(peering)
 	defer peeringSub.Unsubscribe()
 
-	s.idles = make(map[string]*peerConnection)
+	s.idles = make(map[string]*peerConnection, len(s.peers.AllPeers()))
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
