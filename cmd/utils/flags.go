@@ -457,7 +457,7 @@ var (
 	}
 	CryptoKZGFlag = &cli.StringFlag{
 		Name:     "crypto.kzg",
-		Usage:    "KZG library implementation to use (recommended = gokzg or ckzg)",
+		Usage:    "KZG library implementation to use; gokzg (recommended) or ckzg",
 		Value:    "gokzg",
 		Category: flags.PerfCategory,
 	}
