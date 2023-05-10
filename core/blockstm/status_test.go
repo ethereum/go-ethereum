@@ -39,8 +39,6 @@ func TestStatusBasics(t *testing.T) {
 
 	s.markComplete(x)
 	require.False(t, s.checkInProgress(4))
-	// PSP - is this correct? {s.maxAllComplete() -> 2}
-	// s -> {[5 6 7 8 9] [3] [0 1 2 4] map[] map[]}
 	require.Equal(t, 2, s.maxAllComplete(), "zero should still be min complete")
 
 	exp := []int{1, 2}
