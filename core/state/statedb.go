@@ -24,6 +24,7 @@ import (
 	"sort"
 	"time"
 	"os"
+	"encoding/csv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -973,10 +974,17 @@ var BLOCK_DELTA = 1
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// this should allow us to append to the file
-	f, err := os.OpenFile("data/one", os.O_WRONLY|os.O_APPEND, 0777)
+	// f, err := os.OpenFile("data/one", os.O_WRONLY|os.O_APPEND, 0777)
+	// if err != nil {
+	// 	return common.Hash{}, err
+	// }
+	f, err := os.OpenFile("data/csv-data.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return common.Hash{}, err
+		panic(err)
 	}
+	defer f.Close()
+
+	var writer *csv.Writer
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1118,11 +1126,20 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// print stuff
 		fmt.Println("Global Updates: ", globalUpdates)
 		fmt.Println("Global Deletes: ", globalDeletes)
+		
 		totalSize := globalUpdates + globalDeletes
-		_, err := f.WriteString(fmt.Sprintf("Total Size: %d\n", totalSize))
-		if err != nil {
-			return common.Hash{}, err
+		// _, err := f.WriteString(fmt.Sprintf("%d\n", totalSize))
+		// if err != nil {
+		// 	return common.Hash{}, err
+		// }
+		if writer == nil {
+			writer = csv.NewWriter(f)
 		}
+		err = writer.Write([]string{fmt.Sprintf("%d", totalSize)})
+		if err != nil {
+			panic(err)
+		}
+		writer.Flush()
 		globalNodes = trie.NewMergedNodeSet()
 	}
 	return root, nil
