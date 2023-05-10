@@ -175,7 +175,7 @@ func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 }
 
 func hasDuplicates(slice []*node) bool {
-	seen := make(map[enode.ID]bool)
+	seen := make(map[enode.ID]bool, len(slice))
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))
