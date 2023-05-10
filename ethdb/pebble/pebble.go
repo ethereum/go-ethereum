@@ -72,6 +72,7 @@ type Database struct {
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
+	closed   bool            // keep track of whether we're Closed
 
 	log log.Logger // Contextual logger tracking the database path
 
@@ -221,18 +222,19 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 func (d *Database) Close() error {
 	d.quitLock.Lock()
 	defer d.quitLock.Unlock()
-
 	// Allow double closing, simplifies things
-	if d.quitChan == nil {
+	if d.closed {
 		return nil
 	}
-	errc := make(chan error)
-	d.quitChan <- errc
-	if err := <-errc; err != nil {
-		d.log.Error("Metrics collection failed", "err", err)
+	d.closed = true
+	if d.quitChan != nil {
+		errc := make(chan error)
+		d.quitChan <- errc
+		if err := <-errc; err != nil {
+			d.log.Error("Metrics collection failed", "err", err)
+		}
+		d.quitChan = nil
 	}
-	d.quitChan = nil
-
 	return d.db.Close()
 }
 
@@ -240,7 +242,7 @@ func (d *Database) Close() error {
 func (d *Database) Has(key []byte) (bool, error) {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
-	if d.quitChan == nil {
+	if d.closed {
 		return false, pebble.ErrClosed
 	}
 	_, closer, err := d.db.Get(key)
@@ -257,7 +259,7 @@ func (d *Database) Has(key []byte) (bool, error) {
 func (d *Database) Get(key []byte) ([]byte, error) {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
-	if d.quitChan == nil {
+	if d.closed {
 		return nil, pebble.ErrClosed
 	}
 	dat, closer, err := d.db.Get(key)
