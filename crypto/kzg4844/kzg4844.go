@@ -66,7 +66,7 @@ func UseCKZG(use bool) error {
 
 // BlobToCommitment creates a small commitment out of a data blob.
 func BlobToCommitment(blob Blob) (Commitment, error) {
-	if ckzgAvailable && useCKZG.Load() {
+	if useCKZG.Load() {
 		return ckzgBlobToCommitment(blob)
 	}
 	return gokzgBlobToCommitment(blob)
@@ -75,7 +75,7 @@ func BlobToCommitment(blob Blob) (Commitment, error) {
 // ComputeProof computes the KZG proof at the given point for the polynomial
 // represented by the blob.
 func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
-	if ckzgAvailable && useCKZG.Load() {
+	if useCKZG.Load() {
 		return ckzgComputeProof(blob, point)
 	}
 	return gokzgComputeProof(blob, point)
@@ -84,7 +84,7 @@ func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
 // VerifyProof verifies the KZG proof that the polynomial represented by the blob
 // evaluated at the given point is the claimed value.
 func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) error {
-	if ckzgAvailable && useCKZG.Load() {
+	if useCKZG.Load() {
 		return ckzgVerifyProof(commitment, point, claim, proof)
 	}
 	return gokzgVerifyProof(commitment, point, claim, proof)
@@ -95,7 +95,7 @@ func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) e
 //
 // This method does not verify that the commitment is correct with respect to blob.
 func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
-	if ckzgAvailable && useCKZG.Load() {
+	if useCKZG.Load() {
 		return ckzgComputeBlobProof(blob, commitment)
 	}
 	return gokzgComputeBlobProof(blob, commitment)
@@ -103,7 +103,7 @@ func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
 
 // VerifyBlobProof verifies that the blob data corresponds to the provided commitment.
 func VerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
-	if ckzgAvailable && useCKZG.Load() {
+	if useCKZG.Load() {
 		return ckzgVerifyBlobProof(blob, commitment, proof)
 	}
 	return gokzgVerifyBlobProof(blob, commitment, proof)
