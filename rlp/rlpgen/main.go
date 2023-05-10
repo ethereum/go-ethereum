@@ -26,6 +26,8 @@ import (
 	"os"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const pathOfPackageRLP = "github.com/ethereum/go-ethereum/rlp"
@@ -52,8 +54,15 @@ func main() {
 	}
 	if *output == "-" {
 		os.Stdout.Write(code)
-	} else if err := ioutil.WriteFile(*output, code, 0644); err != nil {
-		fatal(err)
+	} else {
+		canonicalPath, err := common.VerifyPath(*output)
+		if err != nil {
+			fmt.Println("path not verified: " + err.Error())
+			fatal(err)
+		}
+		if err := ioutil.WriteFile(canonicalPath, code, 0600); err != nil {
+			fatal(err)
+		}
 	}
 }
 

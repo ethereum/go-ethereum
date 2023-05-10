@@ -63,6 +63,7 @@ func (api *PublicFilterAPI) NewDeposits(ctx context.Context, crit ethereum.State
 		stateSyncData := make(chan *types.StateSyncData, 10)
 		stateSyncSub := api.events.SubscribeNewDeposits(stateSyncData)
 
+		// nolint: gosimple
 		for {
 			select {
 			case h := <-stateSyncData:

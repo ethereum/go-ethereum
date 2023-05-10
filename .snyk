@@ -1,0 +1,41 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+# ignores vulnerabilities until expiry date; change duration by modifying expiry date
+ignore:
+  'snyk:lic:golang:github.com:karalabe:usb:LGPL-3.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:06:37.028Z
+  'snyk:lic:golang:github.com:mitchellh:cli:MPL-2.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:07:42.661Z
+  'snyk:lic:golang:github.com:hashicorp:hcl:v2:MPL-2.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:08.112Z
+  'snyk:lic:golang:github.com:hashicorp:go-multierror:MPL-2.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:14.673Z
+  'snyk:lic:golang:github.com:hashicorp:go-bexpr:MPL-2.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:21.843Z
+  'snyk:lic:golang:github.com:hashicorp:errwrap:MPL-2.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:28.257Z
+  'snyk:lic:golang:github.com:ethereum:go-ethereum:LGPL-3.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:35.273Z
+  'snyk:lic:golang:github.com:maticnetwork:polyproto:GPL-3.0':
+    - '*':
+        reason: 'As open source org, we have no issues with licenses'
+        created: 2022-11-11T08:09:41.635Z
+  'SNYK-GOLANG-GOLANGORGXNETHTTP2-3160322':
+    - '*':
+        reason: 'grpc working on a release to fix the issue'
+        created: 2022-12-12T06:50:00.000Z
+patch: {}

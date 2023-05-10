@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	VersionMajor = 0      // Major version component of the current release
-	VersionMinor = 3      // Minor version component of the current release
-	VersionPatch = 8      // Patch version component of the current release
-	VersionMeta  = "beta" // Version metadata to append to the version string
+	GitCommit    = ""
+	VersionMajor = 0        // Major version component of the current release
+	VersionMinor = 3        // Minor version component of the current release
+	VersionPatch = 9        // Patch version component of the current release
+	VersionMeta  = "stable" // Version metadata to append to the version string
 )
 
 // Version holds the textual version string.
@@ -39,6 +40,16 @@ var VersionWithMeta = func() string {
 		v += "-" + VersionMeta
 	}
 	return v
+}()
+
+// VersionWithCommitDetails holds the textual version string including the metadata and Git Details.
+var VersionWithMetaCommitDetails = func() string {
+	v := Version
+	if VersionMeta != "" {
+		v += "-" + VersionMeta
+	}
+	v_git := fmt.Sprintf("Version : %s\nGitCommit : %s\n", v, GitCommit)
+	return v_git
 }()
 
 // ArchiveVersion holds the textual version string used for Geth archives.

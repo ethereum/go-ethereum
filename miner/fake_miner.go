@@ -152,7 +152,7 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 		chainConfig.Bor = params.BorUnittestChainConfig.Bor
 	}
 
-	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
 }
 
 type mockBackend struct {
@@ -212,7 +212,7 @@ var (
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
 	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000000000000000)
+	testBankFunds   = big.NewInt(9000000000000000000)
 
 	testUserKey, _  = crypto.GenerateKey()
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)

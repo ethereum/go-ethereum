@@ -1,11 +1,15 @@
 defaultStake: 10000
 defaultFee: 2000
-borChainId: "15001"
+borChainId: 15001
 heimdallChainId: heimdall-15001
-contractsBranch: jc/v0.3.1-backport
-sprintSize: 64
-blockNumber: '0'
-blockTime: '2'
+contractsBranch: mardizzone/node-16
+genesisContractsBranch: master
+sprintSize:
+  - '64'
+blockNumber:
+  - '0'
+blockTime:
+  - '2'
 numOfValidators: 3
 numOfNonValidators: 0
 ethURL: http://ganache:9545
@@ -13,3 +17,6 @@ ethHostUser: ubuntu
 devnetType: docker
 borDockerBuildContext: "../../bor"
 heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#develop"
+sprintSizeBlockNumber:
+  - '0'
+numOfArchiveNodes: 0
