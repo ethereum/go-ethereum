@@ -19,16 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ExecutionService_DoBlock_FullMethodName   = "/execution.v1.ExecutionService/DoBlock"
-	ExecutionService_InitState_FullMethodName = "/execution.v1.ExecutionService/InitState"
+	ExecutionService_InitState_FullMethodName     = "/execution.v1.ExecutionService/InitState"
+	ExecutionService_DoBlock_FullMethodName       = "/execution.v1.ExecutionService/DoBlock"
+	ExecutionService_FinalizeBlock_FullMethodName = "/execution.v1.ExecutionService/FinalizeBlock"
 )
 
 // ExecutionServiceClient is the client API for ExecutionService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ExecutionServiceClient interface {
-	DoBlock(ctx context.Context, in *DoBlockRequest, opts ...grpc.CallOption) (*DoBlockResponse, error)
 	InitState(ctx context.Context, in *InitStateRequest, opts ...grpc.CallOption) (*InitStateResponse, error)
+	DoBlock(ctx context.Context, in *DoBlockRequest, opts ...grpc.CallOption) (*DoBlockResponse, error)
+	FinalizeBlock(ctx context.Context, in *FinalizeBlockRequest, opts ...grpc.CallOption) (*FinalizeBlockResponse, error)
 }
 
 type executionServiceClient struct {
@@ -37,15 +39,6 @@ type executionServiceClient struct {
 
 func NewExecutionServiceClient(cc grpc.ClientConnInterface) ExecutionServiceClient {
 	return &executionServiceClient{cc}
-}
-
-func (c *executionServiceClient) DoBlock(ctx context.Context, in *DoBlockRequest, opts ...grpc.CallOption) (*DoBlockResponse, error) {
-	out := new(DoBlockResponse)
-	err := c.cc.Invoke(ctx, ExecutionService_DoBlock_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *executionServiceClient) InitState(ctx context.Context, in *InitStateRequest, opts ...grpc.CallOption) (*InitStateResponse, error) {
@@ -57,12 +50,31 @@ func (c *executionServiceClient) InitState(ctx context.Context, in *InitStateReq
 	return out, nil
 }
 
+func (c *executionServiceClient) DoBlock(ctx context.Context, in *DoBlockRequest, opts ...grpc.CallOption) (*DoBlockResponse, error) {
+	out := new(DoBlockResponse)
+	err := c.cc.Invoke(ctx, ExecutionService_DoBlock_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *executionServiceClient) FinalizeBlock(ctx context.Context, in *FinalizeBlockRequest, opts ...grpc.CallOption) (*FinalizeBlockResponse, error) {
+	out := new(FinalizeBlockResponse)
+	err := c.cc.Invoke(ctx, ExecutionService_FinalizeBlock_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExecutionServiceServer is the server API for ExecutionService service.
 // All implementations must embed UnimplementedExecutionServiceServer
 // for forward compatibility
 type ExecutionServiceServer interface {
-	DoBlock(context.Context, *DoBlockRequest) (*DoBlockResponse, error)
 	InitState(context.Context, *InitStateRequest) (*InitStateResponse, error)
+	DoBlock(context.Context, *DoBlockRequest) (*DoBlockResponse, error)
+	FinalizeBlock(context.Context, *FinalizeBlockRequest) (*FinalizeBlockResponse, error)
 	mustEmbedUnimplementedExecutionServiceServer()
 }
 
@@ -70,11 +82,14 @@ type ExecutionServiceServer interface {
 type UnimplementedExecutionServiceServer struct {
 }
 
+func (UnimplementedExecutionServiceServer) InitState(context.Context, *InitStateRequest) (*InitStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitState not implemented")
+}
 func (UnimplementedExecutionServiceServer) DoBlock(context.Context, *DoBlockRequest) (*DoBlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DoBlock not implemented")
 }
-func (UnimplementedExecutionServiceServer) InitState(context.Context, *InitStateRequest) (*InitStateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InitState not implemented")
+func (UnimplementedExecutionServiceServer) FinalizeBlock(context.Context, *FinalizeBlockRequest) (*FinalizeBlockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FinalizeBlock not implemented")
 }
 func (UnimplementedExecutionServiceServer) mustEmbedUnimplementedExecutionServiceServer() {}
 
@@ -87,24 +102,6 @@ type UnsafeExecutionServiceServer interface {
 
 func RegisterExecutionServiceServer(s grpc.ServiceRegistrar, srv ExecutionServiceServer) {
 	s.RegisterService(&ExecutionService_ServiceDesc, srv)
-}
-
-func _ExecutionService_DoBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DoBlockRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ExecutionServiceServer).DoBlock(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ExecutionService_DoBlock_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ExecutionServiceServer).DoBlock(ctx, req.(*DoBlockRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _ExecutionService_InitState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -125,6 +122,42 @@ func _ExecutionService_InitState_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExecutionService_DoBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DoBlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExecutionServiceServer).DoBlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExecutionService_DoBlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExecutionServiceServer).DoBlock(ctx, req.(*DoBlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ExecutionService_FinalizeBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinalizeBlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExecutionServiceServer).FinalizeBlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExecutionService_FinalizeBlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExecutionServiceServer).FinalizeBlock(ctx, req.(*FinalizeBlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExecutionService_ServiceDesc is the grpc.ServiceDesc for ExecutionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -133,12 +166,16 @@ var ExecutionService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ExecutionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "InitState",
+			Handler:    _ExecutionService_InitState_Handler,
+		},
+		{
 			MethodName: "DoBlock",
 			Handler:    _ExecutionService_DoBlock_Handler,
 		},
 		{
-			MethodName: "InitState",
-			Handler:    _ExecutionService_InitState_Handler,
+			MethodName: "FinalizeBlock",
+			Handler:    _ExecutionService_FinalizeBlock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

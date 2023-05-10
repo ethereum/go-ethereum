@@ -97,10 +97,11 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 		s.eth.TxPool().RemoveTx(tx.Hash())
 	}
 
+	finalizedBlock := s.bc.CurrentFinalBlock()
 	newForkChoice := &engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
 		SafeBlockHash:      block.Hash(),
-		FinalizedBlockHash: block.Hash(),
+		FinalizedBlockHash: finalizedBlock.Hash(),
 	}
 	fcEndResp, err := s.consensus.ForkchoiceUpdatedV1(*newForkChoice, nil)
 	if err != nil {
@@ -112,6 +113,16 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 		BlockHash: fcEndResp.PayloadStatus.LatestValidHash.Bytes(),
 	}
 	return res, nil
+}
+
+func (s *ExecutionServiceServer) FinalizeBlock(ctx context.Context, req *executionv1.FinalizeBlockRequest) (*executionv1.FinalizeBlockResponse, error) {
+	header := s.bc.GetHeaderByHash(common.BytesToHash(req.BlockHash))
+	if header == nil {
+		return nil, fmt.Errorf("failed to get header for block hash 0x%x", req.BlockHash)
+	}
+
+	s.bc.SetFinalized(header)
+	return &executionv1.FinalizeBlockResponse{}, nil
 }
 
 func (s *ExecutionServiceServer) InitState(ctx context.Context, req *executionv1.InitStateRequest) (*executionv1.InitStateResponse, error) {
