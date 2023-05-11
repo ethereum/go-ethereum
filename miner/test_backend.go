@@ -203,7 +203,7 @@ func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *t
 	return tx
 }
 
-// newRandomTxWithGas creates a new transactionto deploy a storage smart contract.
+// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
 func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
 	var tx *types.Transaction
 

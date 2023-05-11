@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Running govulncheck
-        uses: Templum/govulncheck-action@v0.0.8
+        uses: Templum/govulncheck-action@v0.10.1
         continue-on-error: true
         env:
           DEBUG: "true"

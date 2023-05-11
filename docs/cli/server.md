@@ -209,7 +209,7 @@ The ```bor server``` command runs the Bor client.
 - ```netrestrict```: Restricts network communication to the given IP networks (CIDR masks)
 
 - ```nodekey```:  P2P node key file
-
+- 
 - ```nodekeyhex```: P2P node key as hex
 
 - ```nodiscover```: Disables the peer discovery mechanism (manual peer addition) (default: false)
