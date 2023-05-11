@@ -556,11 +556,14 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 		var allDeps map[int]map[int]bool
 
+		var deps DAG
+
 		if pe.profile {
 			allDeps = GetDep(*pe.lastTxIO)
+			deps = BuildDAG(*pe.lastTxIO)
 		}
 
-		return ParallelExecutionResult{pe.lastTxIO, &pe.stats, nil, allDeps}, err
+		return ParallelExecutionResult{pe.lastTxIO, &pe.stats, &deps, allDeps}, err
 	}
 
 	// Send the next immediate pending transaction to be executed

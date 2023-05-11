@@ -178,7 +178,7 @@ func (task *ExecutionTask) Settle() {
 
 	coinbaseBalance := task.finalStateDB.GetBalance(task.coinbase)
 
-	task.finalStateDB.ApplyMVWriteSet(task.statedb.MVWriteList())
+	task.finalStateDB.ApplyMVWriteSet(task.statedb.MVFullWriteList())
 
 	for _, l := range task.statedb.GetLogs(task.tx.Hash(), task.blockHash) {
 		task.finalStateDB.AddLog(l)
@@ -290,11 +290,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	if block.Header().TxDependency != nil {
 		metadata = true
-
-		if !VerifyDeps(deps) {
-			metadata = false
-			deps = GetDeps([][]uint64{})
-		}
 	}
 
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
@@ -369,9 +364,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	backupStateDB := statedb.Copy()
 
 	profile := false
-	result, err := blockstm.ExecuteParallel(tasks, false, metadata, interruptCtx)
+	result, err := blockstm.ExecuteParallel(tasks, profile, metadata, interruptCtx)
 
-	if err == nil && profile {
+	if err == nil && profile && result.Deps != nil {
 		_, weight := result.Deps.LongestPath(*result.Stats)
 
 		serialWeight := uint64(0)
@@ -381,10 +376,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		}
 
 		parallelizabilityTimer.Update(time.Duration(serialWeight * 100 / weight))
-
-		log.Info("Parallelizability", "Average (%)", parallelizabilityTimer.Mean())
-
-		log.Info("Parallelizability", "Histogram (%)", parallelizabilityTimer.Percentiles([]float64{0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999, 0.9999}))
 	}
 
 	for _, task := range tasks {
@@ -435,21 +426,4 @@ func GetDeps(txDependency [][]uint64) map[int][]int {
 	}
 
 	return deps
-}
-
-// returns true if dependencies are correct
-func VerifyDeps(deps map[int][]int) bool {
-	// number of transactions in the block
-	n := len(deps)
-
-	// Handle out-of-range and circular dependency problem
-	for tx, val := range deps {
-		for depTx := range val {
-			if depTx >= n || depTx < tx {
-				return false
-			}
-		}
-	}
-
-	return true
 }

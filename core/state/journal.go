@@ -144,7 +144,7 @@ type (
 func (ch createObjectChange) revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
 	delete(s.stateObjectsDirty, *ch.account)
-	MVWrite(s, blockstm.NewAddressKey(*ch.account))
+	RevertWrite(s, blockstm.NewAddressKey(*ch.account))
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
@@ -153,7 +153,7 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
-	MVWrite(s, blockstm.NewAddressKey(ch.prev.address))
+	RevertWrite(s, blockstm.NewAddressKey(ch.prev.address))
 	if !ch.prevdestruct && s.snap != nil {
 		delete(s.snapDestructs, ch.prev.addrHash)
 	}
@@ -168,8 +168,8 @@ func (ch suicideChange) revert(s *StateDB) {
 	if obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
-		MVWrite(s, blockstm.NewSubpathKey(*ch.account, SuicidePath))
-		MVWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
+		RevertWrite(s, blockstm.NewSubpathKey(*ch.account, SuicidePath))
+		RevertWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 	}
 }
 
@@ -188,7 +188,7 @@ func (ch touchChange) dirtied() *common.Address {
 
 func (ch balanceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setBalance(ch.prev)
-	MVWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
+	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 }
 
 func (ch balanceChange) dirtied() *common.Address {
@@ -197,7 +197,7 @@ func (ch balanceChange) dirtied() *common.Address {
 
 func (ch nonceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
-	MVWrite(s, blockstm.NewSubpathKey(*ch.account, NoncePath))
+	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, NoncePath))
 }
 
 func (ch nonceChange) dirtied() *common.Address {
@@ -206,7 +206,7 @@ func (ch nonceChange) dirtied() *common.Address {
 
 func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
-	MVWrite(s, blockstm.NewSubpathKey(*ch.account, CodePath))
+	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, CodePath))
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -215,7 +215,7 @@ func (ch codeChange) dirtied() *common.Address {
 
 func (ch storageChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
-	MVWrite(s, blockstm.NewStateKey(*ch.account, ch.key))
+	RevertWrite(s, blockstm.NewStateKey(*ch.account, ch.key))
 }
 
 func (ch storageChange) dirtied() *common.Address {
