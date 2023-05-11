@@ -36,7 +36,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
-	for it := NewNodeIterator(state); it.Next(); {
+	for it := newNodeIterator(state); it.Next(); {
 		if it.Hash != (common.Hash{}) {
 			hashes[it.Hash] = struct{}{}
 		}
