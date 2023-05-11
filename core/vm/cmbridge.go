@@ -1,14 +1,15 @@
 package vm
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"fmt"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	//cmBridgeContractAddress is 0xDb327e55CA2C68b23f83a0fbe29b592702e1d4d7
-	cmBridgeContractAddress = common.BytesToAddress(crypto.Keccak256([]byte("cm_bridge"))[12:])
+	//cmBridgeContractAddress is 0x0000000000000000000000000000000000000100
+	cmBridgeContractAddress = common.BytesToAddress([]byte{0x01, 0x00})
 )
 
 type CallToWasmByPrecompile func(ctx OKContext, caller, to common.Address, value *big.Int, input []byte, remainGas uint64) ([]byte, uint64, error)
@@ -40,7 +41,10 @@ func (c *cmBridge) Run(in []byte) ([]byte, error) {
 	panic("cmBridge not support <Run> of implement")
 }
 
-func (c *cmBridge) CustomRun(in []byte, remainGas uint64) ([]byte, uint64, error) {
+func (c *cmBridge) CustomRun(in []byte, remainGas uint64, callType string) ([]byte, uint64, error) {
+	if callType != CALL.String() {
+		return nil, 0, fmt.Errorf("cmBridge not support the type of call:%s, only support CALL", callType)
+	}
 	// cmBridge can not got coin, when can cmBridgeContract may be send coin to cmBridgeContractAddress, so we must send coin back to caller.
 	if c.value.Sign() != 0 && !c.EvmContext.CanTransfer(c.context.GetEVMStateDB(), cmBridgeContractAddress, c.value) {
 		return nil, 0, ErrCMBirdgeInsufficientBalance
