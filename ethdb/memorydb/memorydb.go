@@ -342,7 +342,7 @@ func newSnapshot(db *Database) *snapshot {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	copied := make(map[string][]byte)
+	copied := make(map[string][]byte, len(db.db))
 	for key, val := range db.db {
 		copied[key] = common.CopyBytes(val)
 	}
