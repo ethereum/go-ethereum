@@ -1150,8 +1150,8 @@ func (p *Pending) Call(ctx context.Context, args struct {
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (hexutil.Uint64, error) {
-	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	return ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, pendingBlockNr, p.r.backend.RPCGasCap())
+	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	return ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, p.r.backend.RPCGasCap())
 }
 
 // Resolver is the top-level object in the GraphQL hierarchy.
