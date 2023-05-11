@@ -347,8 +347,11 @@ func deserializeVerkleProof(vp *verkle.VerkleProof, rootC *verkle.Point, statedi
 	}
 
 	pe, _, _, err := tree.GetProofItems(proof.Keys)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("could not get proof items from tree rebuilt from proof: %w", err)
+	}
 
-	return proof, pe.Cis, pe.Zis, pe.Yis, err
+	return proof, pe.Cis, pe.Zis, pe.Yis, nil
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which
