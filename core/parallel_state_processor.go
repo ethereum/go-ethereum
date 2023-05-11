@@ -290,6 +290,11 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	if block.Header().TxDependency != nil {
 		metadata = true
+
+		if !VerifyDeps(deps) {
+			metadata = false
+			deps = GetDeps([][]uint64{})
+		}
 	}
 
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
@@ -430,4 +435,21 @@ func GetDeps(txDependency [][]uint64) map[int][]int {
 	}
 
 	return deps
+}
+
+// returns true if dependencies are correct
+func VerifyDeps(deps map[int][]int) bool {
+	// number of transactions in the block
+	n := len(deps)
+
+	// Handle out-of-range and circular dependency problem
+	for tx, val := range deps {
+		for depTx := range val {
+			if depTx >= n || depTx < tx {
+				return false
+			}
+		}
+	}
+
+	return true
 }
