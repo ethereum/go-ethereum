@@ -43,7 +43,7 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := rawdb.NewMemoryDatabase()
 	sdb := NewDatabase(db)
-	state, _ := New(common.Hash{}, sdb, nil)
+	state, _ := New(types.EmptyRootHash, sdb, nil)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount

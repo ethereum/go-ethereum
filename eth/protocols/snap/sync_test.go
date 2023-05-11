@@ -1589,7 +1589,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 // not-yet-committed trie and the sorted entries. The seeds can be used to ensure
 // that tries are unique.
 func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Database) (common.Hash, *trienode.NodeSet, entrySlice) {
-	trie, _ := trie.New(trie.StorageTrieID(common.Hash{}, owner, common.Hash{}), db)
+	trie, _ := trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 	var entries entrySlice
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
@@ -1615,7 +1615,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 	var (
 		entries    entrySlice
 		boundaries []common.Hash
-		trie, _    = trie.New(trie.StorageTrieID(common.Hash{}, owner, common.Hash{}), db)
+		trie, _    = trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 	)
 	// Initialize boundaries
 	var next common.Hash

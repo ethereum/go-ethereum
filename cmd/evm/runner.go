@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -146,7 +147,7 @@ func runCmd(ctx *cli.Context) error {
 		chainConfig = gen.Config
 	} else {
 		sdb := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: preimages})
-		statedb, _ = state.New(common.Hash{}, sdb, nil)
+		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.String(SenderFlag.Name) != "" {
