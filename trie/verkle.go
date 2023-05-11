@@ -136,8 +136,6 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
 		err = root.InsertStem(stem, values, flusher)
-	case *verkle.StatelessNode:
-		err = root.InsertAtStem(stem, values, flusher, true)
 	}
 	if err != nil {
 		return fmt.Errorf("TryUpdateAccount (%x) error: %v", key, err)
@@ -154,8 +152,6 @@ func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) error {
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
 		return root.InsertStem(key, values, resolver)
-	case *verkle.StatelessNode:
-		return root.InsertAtStem(key, values, resolver, true)
 	default:
 		panic("invalid root type")
 	}
@@ -192,8 +188,8 @@ func (t *VerkleTrie) TryDeleteAccount(key []byte) error {
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
 		err = root.InsertStem(stem, values, resolver)
-	case *verkle.StatelessNode:
-		err = root.InsertAtStem(stem, values, resolver, true)
+	default:
+		panic("invalid tree type")
 	}
 	if err != nil {
 		return fmt.Errorf("TryDeleteAccount (%x) error: %v", key, err)
@@ -350,9 +346,9 @@ func deserializeVerkleProof(vp *verkle.VerkleProof, rootC *verkle.Point, statedi
 		}
 	}
 
-	pe, _, _ := tree.GetProofItems(proof.Keys)
+	pe, _, _, err := tree.GetProofItems(proof.Keys)
 
-	return proof, pe.Cis, pe.Zis, pe.Yis, nil
+	return proof, pe.Cis, pe.Zis, pe.Yis, err
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which
