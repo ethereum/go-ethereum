@@ -121,7 +121,6 @@ type dialScheduler struct {
 	historyTimer *mclock.Alarm
 
 	// for logStats
-	lastStatsLog     mclock.AbsTime
 	doneSinceLastLog int
 }
 
@@ -174,7 +173,6 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 		addPeerCh:    make(chan *conn),
 		remPeerCh:    make(chan *conn),
 	}
-	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.wg.Add(3)
 	go d.readNodes(it)
@@ -330,27 +328,25 @@ func (d *dialScheduler) readNodes(it enode.Iterator) {
 // peers are connected because users should only see it while their client is starting up
 // or comes back online.
 func (d *dialScheduler) logStats() {
-	now := d.clock.Now()
-	if d.lastStatsLog.Add(dialStatsLogInterval) > now {
-		return
-	}
 	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
 		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
 	}
 	d.doneSinceLastLog = 0
-	d.lastStatsLog = now
 }
 
 // logloop logs statistics in separate goroutine
 func (d *dialScheduler) logloop() {
 	defer d.wg.Done()
 
+	timer := time.NewTimer(dialStatsLogInterval)
+
 	for {
 		select {
 		case <-d.ctx.Done():
 			return
-		default:
+		case <-timer.C:
 			d.logStats()
+			timer = time.NewTimer(dialStatsLogInterval)
 		}
 	}
 }
