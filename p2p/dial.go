@@ -176,9 +176,10 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
-	d.wg.Add(2)
+	d.wg.Add(3)
 	go d.readNodes(it)
 	go d.loop(it)
+	go d.logloop()
 	return d
 }
 
@@ -237,7 +238,6 @@ loop:
 			nodesCh = nil
 		}
 		d.rearmHistoryTimer()
-		d.logStats()
 
 		select {
 		case node := <-nodesCh:
@@ -339,6 +339,20 @@ func (d *dialScheduler) logStats() {
 	}
 	d.doneSinceLastLog = 0
 	d.lastStatsLog = now
+}
+
+// logloop logs statistics in separate goroutine
+func (d *dialScheduler) logloop() {
+	defer d.wg.Done()
+
+	for {
+		select {
+		case <-d.ctx.Done():
+			return
+		default:
+			d.logStats()
+		}
+	}
 }
 
 // rearmHistoryTimer configures d.historyTimer to fire when the
