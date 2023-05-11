@@ -17,9 +17,7 @@
 package types
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -29,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/go-yaml/yaml"
 	"github.com/minio/sha256-simd"
 )
 
@@ -111,52 +110,36 @@ func (f Forks) Len() int           { return len(f) }
 func (f Forks) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f Forks) Less(i, j int) bool { return f[i].Epoch < f[j].Epoch }
 
-// fieldValue checks if the given fork parameter field is present in the given line
-// and if it is then returns the field value and the name of the fork it belongs to.
-func fieldValue(line, field string) (name, value string, ok bool) {
-	if pos := strings.Index(line, field); pos >= 0 {
-		cutFrom := strings.Index(line, "#") // cut in-line comments
-		if cutFrom < 0 {
-			cutFrom = len(line)
-		}
-		return line[:pos], strings.TrimSpace(line[pos+len(field) : cutFrom]), true
-	}
-	return "", "", false
-}
-
 // LoadForks parses the beacon chain configuration file (config.yaml) and extracts
 // the list of forks
 func LoadForks(fileName string) (Forks, error) {
-	file, err := os.Open(fileName)
+	file, err := os.ReadFile(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("Error opening beacon chain config file: %v", err)
+		return nil, fmt.Errorf("Error reading beacon chain config file: %v", err)
 	}
-	defer file.Close()
+	config := make(map[string]string)
+	if err := yaml.Unmarshal(file, &config); err != nil {
+		return nil, fmt.Errorf("Error parsing beacon chain config YAML file: %v", err)
+	}
+
 	var (
 		forks        Forks
 		forkVersions = make(map[string][]byte)
 		forkEpochs   = make(map[string]uint64)
-		reader       = bufio.NewReader(file)
 	)
 	forkEpochs["GENESIS"] = 0
 
-	for {
-		l, _, err := reader.ReadLine()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("Error reading beacon chain config file: %v", err)
-		}
-		line := string(l)
-		if name, value, ok := fieldValue(line, "_FORK_VERSION:"); ok {
+	for key, value := range config {
+		if strings.HasSuffix(key, "_FORK_VERSION") {
+			name := key[:len(key)-len("_FORK_VERSION")]
 			if v, err := hexutil.Decode(value); err == nil {
 				forkVersions[name] = v
 			} else {
 				return nil, fmt.Errorf("Error decoding hex fork id \"%s\" in beacon chain config file: %v", value, err)
 			}
 		}
-		if name, value, ok := fieldValue(line, "_FORK_EPOCH:"); ok {
+		if strings.HasSuffix(key, "_FORK_EPOCH") {
+			name := key[:len(key)-len("_FORK_EPOCH")]
 			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
 				forkEpochs[name] = v
 			} else {
