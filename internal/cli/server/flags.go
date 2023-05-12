@@ -904,6 +904,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Developer.Period,
 		Default: c.cliConfig.Developer.Period,
 	})
+
+	// parallelevm
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "parallelevm.enable",
+		Usage:   "Enable Block STM",
+		Value:   &c.cliConfig.ParallelEVM.Enable,
+		Default: c.cliConfig.ParallelEVM.Enable,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "parallelevm.procs",
+		Usage:   "Number of speculative processes (cores) in Block STM",
+		Value:   &c.cliConfig.ParallelEVM.SpeculativeProcesses,
+		Default: c.cliConfig.ParallelEVM.SpeculativeProcesses,
+	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "dev.gaslimit",
 		Usage:   "Initial block gas limit",

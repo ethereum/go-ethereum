@@ -208,7 +208,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	var (
 		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
+			EnablePreimageRecording:      config.EnablePreimageRecording,
+			ParallelEnable:               config.ParallelEVM.Enable,
+			ParallelSpeculativeProcesses: config.ParallelEVM.SpeculativeProcesses,
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
@@ -226,7 +228,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	checker := whitelist.NewService(10)
 
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
+	// check if Parallel EVM is enabled
+	// if enabled, use parallel state processor
+	if config.ParallelEVM.Enable {
+		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
+	} else {
+		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
+	}
+
 	if err != nil {
 		return nil, err
 	}

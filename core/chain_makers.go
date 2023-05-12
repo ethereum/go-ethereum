@@ -335,6 +335,19 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	return blocks
 }
 
+// makeBlockChain creates a deterministic chain of blocks rooted at parent with fake invalid transactions.
+func makeFakeNonEmptyBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int, numTx int) []*types.Block {
+	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
+		addr := common.Address{0: byte(seed), 19: byte(i)}
+		b.SetCoinbase(addr)
+		for j := 0; j < numTx; j++ {
+			b.txs = append(b.txs, types.NewTransaction(0, addr, big.NewInt(1000), params.TxGas, nil, nil))
+		}
+	})
+
+	return blocks
+}
+
 type fakeChainReader struct {
 	config        *params.ChainConfig
 	stateSyncData []*types.StateSyncData

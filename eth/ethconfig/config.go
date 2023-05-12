@@ -238,6 +238,9 @@ type Config struct {
 	// Bor logs flag
 	BorLogs bool
 
+	// Parallel EVM (Block-STM) related config
+	ParallelEVM core.ParallelEVMConfig `toml:",omitempty"`
+
 	// Arrow Glacier block override (TODO: remove after the fork)
 	OverrideArrowGlacier *big.Int `toml:",omitempty"`
 

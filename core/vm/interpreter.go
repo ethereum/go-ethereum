@@ -56,6 +56,10 @@ type Config struct {
 	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
 
 	ExtraEips []int // Additional EIPS that are to be enabled
+
+	// parallel EVM configs
+	ParallelEnable               bool
+	ParallelSpeculativeProcesses int
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -274,6 +278,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 				txHash, _ := GetCurrentTxFromContext(interruptCtx)
 				interruptedTxCache, _ := GetCache(interruptCtx)
 
+				if interruptedTxCache == nil {
+					break
+				}
+
 				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
 				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
 				if found {
@@ -433,6 +441,11 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 			case <-interruptCtx.Done():
 				txHash, _ := GetCurrentTxFromContext(interruptCtx)
 				interruptedTxCache, _ := GetCache(interruptCtx)
+
+				if interruptedTxCache == nil {
+					break
+				}
+
 				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
 				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
 				log.Info("FOUND", "found", found, "txHash", txHash)

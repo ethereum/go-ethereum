@@ -311,6 +311,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		Bor: &BorConfig{
+			ParallelUniverseBlock: big.NewInt(5),
 			Period: map[string]uint64{
 				"0": 1,
 			},
@@ -349,8 +350,9 @@ var (
 		BerlinBlock:         big.NewInt(13996000),
 		LondonBlock:         big.NewInt(22640000),
 		Bor: &BorConfig{
-			JaipurBlock: big.NewInt(22770000),
-			DelhiBlock:  big.NewInt(29638656),
+			JaipurBlock:           big.NewInt(22770000),
+			DelhiBlock:            big.NewInt(29638656),
+			ParallelUniverseBlock: big.NewInt(0),
 			Period: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
@@ -403,8 +405,9 @@ var (
 		BerlinBlock:         big.NewInt(14750000),
 		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
-			JaipurBlock: big.NewInt(23850000),
-			DelhiBlock:  big.NewInt(38189056),
+			JaipurBlock:           big.NewInt(23850000),
+			ParallelUniverseBlock: big.NewInt(0),
+			DelhiBlock:            big.NewInt(38189056),
 			Period: map[string]uint64{
 				"0": 2,
 			},
@@ -583,9 +586,10 @@ type BorConfig struct {
 	StateReceiverContract    string                 `json:"stateReceiverContract"`    // State receiver contract
 	OverrideStateSyncRecords map[string]int         `json:"overrideStateSyncRecords"` // override state records count
 	BlockAlloc               map[string]interface{} `json:"blockAlloc"`
-	BurntContract            map[string]string      `json:"burntContract"` // governance contract where the token will be sent to and burnt in london fork
-	JaipurBlock              *big.Int               `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
-	DelhiBlock               *big.Int               `json:"delhiBlock"`    // Delhi switch block (nil = no fork, 0 = already on delhi)
+	BurntContract            map[string]string      `json:"burntContract"`         // governance contract where the token will be sent to and burnt in london fork
+	JaipurBlock              *big.Int               `json:"jaipurBlock"`           // Jaipur switch block (nil = no fork, 0 = already on jaipur)
+	DelhiBlock               *big.Int               `json:"delhiBlock"`            // Delhi switch block (nil = no fork, 0 = already on delhi)
+	ParallelUniverseBlock    *big.Int               `json:"parallelUniverseBlock"` // TODO: update all occurrence, change name and finalize number (hardfork for block-stm related changes)
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -615,6 +619,15 @@ func (c *BorConfig) IsJaipur(number *big.Int) bool {
 
 func (c *BorConfig) IsDelhi(number *big.Int) bool {
 	return isForked(c.DelhiBlock, number)
+}
+
+// TODO: modify this function once the block number is finalized
+func (c *BorConfig) IsParallelUniverse(number *big.Int) bool {
+	if c.ParallelUniverseBlock == big.NewInt(0) {
+		return false
+	}
+
+	return isForked(c.ParallelUniverseBlock, number)
 }
 
 func (c *BorConfig) IsSprintStart(number uint64) bool {
