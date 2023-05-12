@@ -18,8 +18,8 @@ package filters
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -277,23 +277,23 @@ func TestFilters(t *testing.T) {
 	}
 
 	for i, tc := range []struct {
-		f          *Filter
-		wantHashes []common.Hash
-		err        string
+		f    *Filter
+		want string
+		err  string
 	}{
 		{
-			f:          sys.NewBlockFilter(chain[2].Hash(), []common.Address{contract}, nil),
-			wantHashes: []common.Hash{hash2},
+			f:    sys.NewBlockFilter(chain[2].Hash(), []common.Address{contract}, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332"],"data":"0x","blockNumber":"0x3","transactionHash":"0x233e6a1b0715a700cef51bf4014b4a424ea3e2bd5a444a341bfc971e700d090d","transactionIndex":"0x0","blockHash":"0x8534d82e05b9f7da31e056ec2416c2e35d79c1bada1e9df99dea80a3d6bfaaeb","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:          sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}),
-			wantHashes: []common.Hash{hash3},
+			f:    sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x3f3f143916f57e0d4081b4de395b7f861e03322bc0ebbf5d5f9238ede754f366","transactionIndex":"0x0","blockHash":"0x3fd3e9f6064f2128f95b5443a5b9f29f9d90c0bbf8efa46e17bd8081680c4241","logIndex":"0x0","removed":false}]`,
 		}, {
-			f:          sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash3}}),
-			wantHashes: []common.Hash{hash3},
+			f:    sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash3}}),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x3f3f143916f57e0d4081b4de395b7f861e03322bc0ebbf5d5f9238ede754f366","transactionIndex":"0x0","blockHash":"0x3fd3e9f6064f2128f95b5443a5b9f29f9d90c0bbf8efa46e17bd8081680c4241","logIndex":"0x0","removed":false}]`,
 		}, {
-			f:          sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
-			wantHashes: []common.Hash{hash1, hash2},
+			f:    sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0xfc2aae62df9aa3da8e1bf37a540145b14b34fe5a0848460ef7b80be2b37a8430","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332"],"data":"0x","blockNumber":"0x3","transactionHash":"0x233e6a1b0715a700cef51bf4014b4a424ea3e2bd5a444a341bfc971e700d090d","transactionIndex":"0x0","blockHash":"0x8534d82e05b9f7da31e056ec2416c2e35d79c1bada1e9df99dea80a3d6bfaaeb","logIndex":"0x0","removed":false}]`,
 		}, {
 			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
 		}, {
@@ -301,11 +301,14 @@ func TestFilters(t *testing.T) {
 		}, {
 			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
 		}, {
-			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), wantHashes: []common.Hash{hash4},
+			f:    sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x1058ecf1c5da9a8eae907e97ac772e562de583dbac280840b1b35d71c9954eb4","transactionIndex":"0x0","blockHash":"0xbca1cc04078a0c594243b1dae659575b2422fceeff523f0d754654289d2afbb3","logIndex":"0x0","removed":false}]`,
 		}, {
-			f: sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil), wantHashes: []common.Hash{hash3, hash4},
+			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x3f3f143916f57e0d4081b4de395b7f861e03322bc0ebbf5d5f9238ede754f366","transactionIndex":"0x0","blockHash":"0x3fd3e9f6064f2128f95b5443a5b9f29f9d90c0bbf8efa46e17bd8081680c4241","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x1058ecf1c5da9a8eae907e97ac772e562de583dbac280840b1b35d71c9954eb4","transactionIndex":"0x0","blockHash":"0xbca1cc04078a0c594243b1dae659575b2422fceeff523f0d754654289d2afbb3","logIndex":"0x0","removed":false}]`,
 		}, {
-			f: sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil), wantHashes: []common.Hash{hash3},
+			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x3f3f143916f57e0d4081b4de395b7f861e03322bc0ebbf5d5f9238ede754f366","transactionIndex":"0x0","blockHash":"0x3fd3e9f6064f2128f95b5443a5b9f29f9d90c0bbf8efa46e17bd8081680c4241","logIndex":"0x0","removed":false}]`,
 		}, {
 			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
 		}, {
@@ -318,11 +321,11 @@ func TestFilters(t *testing.T) {
 			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil),
 			err: "safe header not found",
 		}, {
-			f:          sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
-			wantHashes: []common.Hash{hash5},
+			f:    sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696335"],"data":"0x","blockNumber":"0x3e9","transactionHash":"0x39c3b25137e8778d35f443593b3187751d0780cc887dd4bfe775a2d7ebe5491e","transactionIndex":"0x0","blockHash":"0x018655ebb21c0e229a297eb0bf16abc1c5aaf23ec2b6a402a483ce982889f7e9","logIndex":"0x0","removed":false}]`,
 		}, {
-			f:          sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
-			wantHashes: []common.Hash{hash4, hash5},
+			f:    sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x1058ecf1c5da9a8eae907e97ac772e562de583dbac280840b1b35d71c9954eb4","transactionIndex":"0x0","blockHash":"0xbca1cc04078a0c594243b1dae659575b2422fceeff523f0d754654289d2afbb3","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696335"],"data":"0x","blockNumber":"0x3e9","transactionHash":"0x39c3b25137e8778d35f443593b3187751d0780cc887dd4bfe775a2d7ebe5491e","transactionIndex":"0x0","blockHash":"0x018655ebb21c0e229a297eb0bf16abc1c5aaf23ec2b6a402a483ce982889f7e9","logIndex":"0x0","removed":false}]`,
 		}, {
 			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
 			err: "invalid block range",
@@ -334,18 +337,15 @@ func TestFilters(t *testing.T) {
 		} else if err != nil && err.Error() != tc.err {
 			t.Fatalf("test %d, expected error %q, got %q", i, tc.err, err.Error())
 		}
-		var haveHashes []common.Hash
-		for _, l := range logs {
-			haveHashes = append(haveHashes, l.Topics[0])
-		}
-		if have, want := len(haveHashes), len(tc.wantHashes); have != want {
-			t.Fatalf("test %d, have %d logs, want %d", i, have, want)
-		}
-		if len(haveHashes) == 0 {
+		if tc.want == "" && len(logs) == 0 {
 			continue
 		}
-		if !reflect.DeepEqual(tc.wantHashes, haveHashes) {
-			t.Fatalf("test %d, have %v want %v", i, haveHashes, tc.wantHashes)
+		have, err := json.Marshal(logs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(have) != tc.want {
+			t.Fatalf("test %d, have:\n%s\nwant:\n%s", i, have, tc.want)
 		}
 	}
 }
