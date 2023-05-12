@@ -20,16 +20,20 @@ import (
 	"context"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -103,10 +107,53 @@ func BenchmarkFilters(b *testing.B) {
 
 func TestFilters(t *testing.T) {
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(t.TempDir(), 0, 0, "", false)
-		_, sys  = newTestFilterSystem(t, db, Config{})
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(t, db, Config{})
+		// Sender account
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
+		signer  = types.NewLondonSigner(big.NewInt(1))
+		// Logging contract
+		contract  = common.Address{0xfe}
+		contract2 = common.Address{0xff}
+		abiStr    = `[{"inputs":[],"name":"log0","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"t1","type":"uint256"}],"name":"log1","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"t1","type":"uint256"},{"internalType":"uint256","name":"t2","type":"uint256"}],"name":"log2","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"t1","type":"uint256"},{"internalType":"uint256","name":"t2","type":"uint256"},{"internalType":"uint256","name":"t3","type":"uint256"}],"name":"log3","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"t1","type":"uint256"},{"internalType":"uint256","name":"t2","type":"uint256"},{"internalType":"uint256","name":"t3","type":"uint256"},{"internalType":"uint256","name":"t4","type":"uint256"}],"name":"log4","outputs":[],"stateMutability":"nonpayable","type":"function"}]`
+		/*
+			// SPDX-License-Identifier: GPL-3.0
+			pragma solidity >=0.7.0 <0.9.0;
+
+			contract Logger {
+			    function log0() external {
+			        assembly {
+			            log0(0, 0)
+			        }
+			    }
+
+			    function log1(uint t1) external {
+			        assembly {
+			            log1(0, 0, t1)
+			        }
+			    }
+
+			    function log2(uint t1, uint t2) external {
+			        assembly {
+			            log2(0, 0, t1, t2)
+			        }
+			    }
+
+			    function log3(uint t1, uint t2, uint t3) external {
+			        assembly {
+			            log3(0, 0, t1, t2, t3)
+			        }
+			    }
+
+			    function log4(uint t1, uint t2, uint t3, uint t4) external {
+			        assembly {
+			            log4(0, 0, t1, t2, t3, t4)
+			        }
+			    }
+			}
+		*/
+		bytecode = common.FromHex("608060405234801561001057600080fd5b50600436106100575760003560e01c80630aa731851461005c5780632a4c08961461006657806378b9a1f314610082578063c670f8641461009e578063c683d6a3146100ba575b600080fd5b6100646100d6565b005b610080600480360381019061007b9190610143565b6100dc565b005b61009c60048036038101906100979190610196565b6100e8565b005b6100b860048036038101906100b391906101d6565b6100f2565b005b6100d460048036038101906100cf9190610203565b6100fa565b005b600080a0565b808284600080a3505050565b8082600080a25050565b80600080a150565b80828486600080a450505050565b600080fd5b6000819050919050565b6101208161010d565b811461012b57600080fd5b50565b60008135905061013d81610117565b92915050565b60008060006060848603121561015c5761015b610108565b5b600061016a8682870161012e565b935050602061017b8682870161012e565b925050604061018c8682870161012e565b9150509250925092565b600080604083850312156101ad576101ac610108565b5b60006101bb8582860161012e565b92505060206101cc8582860161012e565b9150509250929050565b6000602082840312156101ec576101eb610108565b5b60006101fa8482850161012e565b91505092915050565b6000806000806080858703121561021d5761021c610108565b5b600061022b8782880161012e565b945050602061023c8782880161012e565b935050604061024d8782880161012e565b925050606061025e8782880161012e565b9150509295919450925056fea264697066735822122073a4b156f487e59970dc1ef449cc0d51467268f676033a17188edafcee861f9864736f6c63430008110033")
 
 		hash1 = common.BytesToHash([]byte("topic1"))
 		hash2 = common.BytesToHash([]byte("topic2"))
@@ -115,87 +162,115 @@ func TestFilters(t *testing.T) {
 		hash5 = common.BytesToHash([]byte("topic5"))
 
 		gspec = &core.Genesis{
-			Config:  params.TestChainConfig,
-			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				addr:      {Balance: big.NewInt(0).Mul(big.NewInt(100), big.NewInt(params.Ether))},
+				contract:  {Balance: big.NewInt(0), Code: bytecode},
+				contract2: {Balance: big.NewInt(0), Code: bytecode},
+			},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	defer db.Close()
 
-	sdb, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
+	contractABI, err := abi.JSON(strings.NewReader(abiStr))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hack: GenerateChainWithGenesis creates a new db.
+	// Commit the genesis manually and use GenerateChain.
+	_, err = gspec.Commit(db, trie.NewDatabase(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash1},
-				},
+			data, err := contractABI.Pack("log1", hash1.Big())
+			if err != nil {
+				t.Fatal(err)
 			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, gen.BaseFee(), nil))
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    0,
+				GasPrice: gen.BaseFee(),
+				Gas:      30000,
+				To:       &contract,
+				Data:     data,
+			}), signer, key1)
+			gen.AddTx(tx)
 		case 2:
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash2},
-				},
+			data, err := contractABI.Pack("log1", hash2.Big())
+			if err != nil {
+				t.Fatal(err)
 			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, gen.BaseFee(), nil))
-
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    1,
+				GasPrice: gen.BaseFee(),
+				Gas:      30000,
+				To:       &contract,
+				Data:     data,
+			}), signer, key1)
+			gen.AddTx(tx)
 		case 998:
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash3},
-				},
+			data, err := contractABI.Pack("log1", hash3.Big())
+			if err != nil {
+				t.Fatal(err)
 			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(998, common.HexToAddress("0x998"), big.NewInt(998), 998, gen.BaseFee(), nil))
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    2,
+				GasPrice: gen.BaseFee(),
+				Gas:      30000,
+				To:       &contract,
+				Data:     data,
+			}), signer, key1)
+			gen.AddTx(tx)
 		case 999:
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash4},
-				},
+			data, err := contractABI.Pack("log1", hash4.Big())
+			if err != nil {
+				t.Fatal(err)
 			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    3,
+				GasPrice: gen.BaseFee(),
+				Gas:      30000,
+				To:       &contract,
+				Data:     data,
+			}), signer, key1)
+			gen.AddTx(tx)
 		}
 	})
-	// The test txs are not properly signed, can't simply create a chain
-	// and then import blocks. TODO(rjl493456442) try to get rid of the
-	// manual database writes.
-	gspec.MustCommit(db)
-	for i, block := range chain {
-		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+	var l uint64
+	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = bc.InsertChain(chain)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Set block 998 as Finalized (-3)
-	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
+	bc.SetFinalized(chain[998].Header())
 
 	// Generate pending block
-	pchain, preceipts := core.GenerateChain(gspec.Config, chain[len(chain)-1], ethash.NewFaker(), sdb, 1, func(i int, gen *core.BlockGen) {
-		receipt := types.NewReceipt(nil, false, 0)
-		receipt.Logs = []*types.Log{
-			{
-				Address: addr,
-				Topics:  []common.Hash{hash5},
-			},
+	pchain, preceipts := core.GenerateChain(gspec.Config, chain[len(chain)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+		data, err := contractABI.Pack("log1", hash5.Big())
+		if err != nil {
+			t.Fatal(err)
 		}
-		gen.AddUncheckedReceipt(receipt)
-		gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    4,
+			GasPrice: gen.BaseFee(),
+			Gas:      30000,
+			To:       &contract,
+			Data:     data,
+		}), signer, key1)
+		gen.AddTx(tx)
 	})
-	sys.backend.(*testBackend).setPendingBlockAndReceipts(pchain[0], preceipts[0])
+	sys.backend.(*testBackend).pendingBlock = pchain[0]
+	sys.backend.(*testBackend).pendingReceipts = preceipts[0]
 
-	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	filter := sys.NewRangeFilter(0, -1, []common.Address{contract}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
@@ -207,14 +282,14 @@ func TestFilters(t *testing.T) {
 		err        string
 	}{
 		{
-			f:          sys.NewBlockFilter(chain[2].Hash(), []common.Address{addr}, nil),
+			f:          sys.NewBlockFilter(chain[2].Hash(), []common.Address{contract}, nil),
 			wantHashes: []common.Hash{hash2},
 		},
 		{
-			f:          sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
+			f:          sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}),
 			wantHashes: []common.Hash{hash3},
 		}, {
-			f:          sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, [][]common.Hash{{hash3}}),
+			f:          sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash3}}),
 			wantHashes: []common.Hash{hash3},
 		}, {
 			f:          sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
