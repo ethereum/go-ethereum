@@ -70,7 +70,7 @@ func TestAccountRange(t *testing.T) {
 	var (
 		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
 		state, _ = state.New(types.EmptyRootHash, statedb, nil)
-		addrs    = [AccountRangeMaxResults * 2]common.Address{}
+		addrs    = [maxAccountRangeResults * 2]common.Address{}
 		m        = map[common.Address]bool{}
 	)
 
@@ -92,10 +92,10 @@ func TestAccountRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
+	accountRangeTest(t, &trie, state, common.Hash{}, maxAccountRangeResults/2, maxAccountRangeResults/2)
 	// test pagination
-	firstResult := accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
-	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
+	firstResult := accountRangeTest(t, &trie, state, common.Hash{}, maxAccountRangeResults, maxAccountRangeResults)
+	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), maxAccountRangeResults, maxAccountRangeResults)
 
 	hList := make(resultHash, 0)
 	for addr1 := range firstResult.Accounts {
@@ -112,8 +112,8 @@ func TestAccountRange(t *testing.T) {
 	// Test to see if it's possible to recover from the middle of the previous
 	// set and get an even split between the first and second sets.
 	sort.Sort(hList)
-	middleH := hList[AccountRangeMaxResults/2]
-	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
+	middleH := hList[maxAccountRangeResults/2]
+	middleResult := accountRangeTest(t, &trie, state, middleH, maxAccountRangeResults, maxAccountRangeResults)
 	missing, infirst, insecond := 0, 0, 0
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
@@ -127,11 +127,11 @@ func TestAccountRange(t *testing.T) {
 	if missing != 0 {
 		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", missing)
 	}
-	if infirst != AccountRangeMaxResults/2 {
-		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, AccountRangeMaxResults/2)
+	if infirst != maxAccountRangeResults/2 {
+		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, maxAccountRangeResults/2)
 	}
-	if insecond != AccountRangeMaxResults/2 {
-		t.Fatalf("Imbalance in the number of second-test results: %d != %d", insecond, AccountRangeMaxResults/2)
+	if insecond != maxAccountRangeResults/2 {
+		t.Fatalf("Imbalance in the number of second-test results: %d != %d", insecond, maxAccountRangeResults/2)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestEmptyAccountRange(t *testing.T) {
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: true,
-		Max:               uint64(AccountRangeMaxResults),
+		Max:               uint64(maxAccountRangeResults),
 	})
 	if bytes.Equal(results.Next, (common.Hash{}).Bytes()) {
 		t.Fatalf("Empty results should not return a second page")
