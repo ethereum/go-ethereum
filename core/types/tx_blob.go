@@ -31,7 +31,7 @@ type BlobTx struct {
 	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
 	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
 	Gas        uint64
-	To         *common.Address // `rlp:"nil"` // nil means contract creation
+	To         *common.Address `rlp:"nil"` // nil means contract creation
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
