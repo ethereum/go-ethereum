@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -354,4 +355,17 @@ func TestFilters(t *testing.T) {
 			t.Fatalf("test %d, have:\n%s\nwant:\n%s", i, have, tc.want)
 		}
 	}
+
+	t.Run("timeout", func(t *testing.T) {
+		f := sys.NewRangeFilter(0, -1, nil, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Microsecond)
+		defer cancel()
+		_, err := f.Logs(ctx)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if err != context.DeadlineExceeded {
+			t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+		}
+	})
 }
