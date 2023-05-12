@@ -47,8 +47,8 @@ func ckzgInit() {
 	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
 		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1)*(len(params.SetupG1[0])-2)/2)
-	for i, g1 := range params.SetupG1 {
+	g1s := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
+	for i, g1 := range params.SetupG1Lagrange {
 		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
 	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
