@@ -61,6 +61,9 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+
+	// EndVerkleTransition signals that the verkle transition is complete.
+	EndVerkleTransition()
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -136,20 +139,12 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	if config != nil && config.UseVerkle {
-		return &VerkleDB{
-			db:            trie.NewDatabaseWithConfig(db, config),
-			diskdb:        db,
-			codeSizeCache: csc,
-			codeCache:     fastcache.New(codeCacheSize),
-			addrToPoint:   utils.NewPointCache(),
-		}
-	}
 	return &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		disk:          db,
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
+		addrToPoint:   utils.NewPointCache(),
 	}
 }
 
@@ -158,10 +153,35 @@ type cachingDB struct {
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
+
+	// Verkle specific fields
+	ended       bool              // mark when the conversion started/ended
+	addrToPoint *utils.PointCache // cache for address to point conversion
+}
+
+// EndVerkleTransition marks the end of the verkle trie transition
+func (db *cachingDB) EndVerkleTransition() {
+	db.ended = true
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if db.ended {
+		if root == (common.Hash{}) || root == emptyRoot {
+			return trie.NewVerkleTrie(verkle.New(), db.db, db.addrToPoint), nil
+		}
+		payload, err := db.disk.Get(root[:])
+		if err != nil {
+			return nil, err
+		}
+
+		r, err := verkle.ParseNode(payload, 0, root[:])
+		if err != nil {
+			panic(err)
+		}
+		return trie.NewVerkleTrie(r, db.db, db.addrToPoint), err
+	}
+
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.db)
 	if err != nil {
 		return nil, err
@@ -171,6 +191,9 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
+	if db.ended {
+		panic("not yet implemented")
+	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.db)
 	if err != nil {
 		return nil, err
@@ -183,6 +206,8 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
 		return t.Copy()
+	case *trie.VerkleTrie:
+		return t.Copy(db.db)
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
@@ -237,89 +262,6 @@ func (db *cachingDB) TrieDB() *trie.Database {
 	return db.db
 }
 
-// VerkleDB implements state.Database for a verkle tree
-type VerkleDB struct {
-	db            *trie.Database
-	diskdb        ethdb.KeyValueStore
-	codeSizeCache *lru.Cache
-	codeCache     *fastcache.Cache
-
-	// Caches all the points that correspond to an address,
-	// so they are not recalculated.
-	addrToPoint *utils.PointCache
-}
-
-func (db *VerkleDB) GetTreeKeyHeader(addr []byte) *verkle.Point {
+func (db *cachingDB) GetTreeKeyHeader(addr []byte) *verkle.Point {
 	return db.addrToPoint.GetTreeKeyHeader(addr)
-}
-
-// OpenTrie opens the main account trie.
-func (db *VerkleDB) OpenTrie(root common.Hash) (Trie, error) {
-	if root == (common.Hash{}) || root == emptyRoot {
-		return trie.NewVerkleTrie(verkle.New(), db.db, db.addrToPoint), nil
-	}
-	payload, err := db.DiskDB().Get(root[:])
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := verkle.ParseNode(payload, 0, root[:])
-	if err != nil {
-		panic(err)
-	}
-	return trie.NewVerkleTrie(r, db.db, db.addrToPoint), err
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (db *VerkleDB) OpenStorageTrie(stateRoot, addrHash, root common.Hash) (Trie, error) {
-	// alternatively, return accTrie
-	panic("should not be called")
-}
-
-// CopyTrie returns an independent copy of the given trie.
-func (db *VerkleDB) CopyTrie(tr Trie) Trie {
-	t, ok := tr.(*trie.VerkleTrie)
-	if ok {
-		return t.Copy(db.db)
-	}
-
-	panic("invalid tree type != VerkleTrie")
-}
-
-// ContractCode retrieves a particular contract's code.
-func (db *VerkleDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
-		return code, nil
-	}
-	code := rawdb.ReadCode(db.DiskDB(), codeHash)
-	if len(code) > 0 {
-		db.codeCache.Set(codeHash.Bytes(), code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
-// ContractCodeSize retrieves a particular contracts code's size.
-func (db *VerkleDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
-	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
-		return len(code), nil
-	}
-	code := rawdb.ReadCode(db.DiskDB(), codeHash)
-	if len(code) > 0 {
-		db.codeCache.Set(codeHash.Bytes(), code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return len(code), nil
-	}
-	return 0, nil
-}
-
-// DiskDB retrieves the low level trie database used for data storage.
-func (db *VerkleDB) DiskDB() ethdb.KeyValueStore {
-	return db.diskdb
-}
-
-// TrieDB retrieves the low level trie database used for data storage.
-func (db *VerkleDB) TrieDB() *trie.Database {
-	return db.db
 }

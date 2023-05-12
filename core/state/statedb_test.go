@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -964,7 +963,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 func TestCodeChunkOverflow(t *testing.T) {
 	// Create an empty state database
 	db := rawdb.NewMemoryDatabase()
-	state, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{UseVerkle: true}), nil)
+	state, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil)
 
 	// Update it with some accounts
 	addr := common.BytesToAddress([]byte{1})

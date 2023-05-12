@@ -118,12 +118,13 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 // deriveHash computes the state root according to the genesis specification.
 func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig) (common.Hash, error) {
 	var trieCfg *trie.Config
-	if cfg != nil {
-		trieCfg = &trie.Config{UseVerkle: cfg.IsCancun(big.NewInt(int64(0)))}
-	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), trieCfg)
+	// TODO remove the nil config check once we have rebased, it should never be nil
+	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0))) {
+		db.EndVerkleTransition()
+	}
 	statedb, err := state.New(common.Hash{}, db, nil)
 	if err != nil {
 		return common.Hash{}, err
@@ -144,10 +145,12 @@ func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig) (common.Hash, error)
 // Also, the genesis state specification will be flushed as well.
 func (ga *GenesisAlloc) flush(db ethdb.Database, cfg *params.ChainConfig) error {
 	trieCfg := &trie.Config{Preimages: true}
-	if cfg != nil {
-		trieCfg.UseVerkle = cfg.IsCancun(big.NewInt(int64(0)))
+	triedb := state.NewDatabaseWithConfig(db, trieCfg)
+	// TODO same here, see deriveHash
+	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0))) {
+		triedb.EndVerkleTransition()
 	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
+	statedb, err := state.New(common.Hash{}, triedb, nil)
 	if err != nil {
 		return err
 	}
@@ -338,21 +341,13 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if storedcfg == nil {
 			panic("this should never be reached: if genesis is nil, the config is already present or 'geth init' is being called which created it (in the code above, which means genesis != nil)")
 		}
-
-		if storedcfg.CancunBlock != nil {
-			if storedcfg.CancunBlock.Cmp(big.NewInt(0)) != 0 {
-				panic("cancun block must be 0")
-			}
-
-			trieCfg = &trie.Config{UseVerkle: storedcfg.IsCancun(big.NewInt(header.Number.Int64()))}
-		}
-	} else {
-		trieCfg = &trie.Config{
-			UseVerkle: genesis.Config.IsCancun(big.NewInt(0)),
-		}
 	}
 
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, trieCfg), nil); err != nil {
+	triedb := state.NewDatabaseWithConfig(db, trieCfg)
+	if genesis != nil && genesis.Config != nil && genesis.Config.IsCancun(big.NewInt(0)) {
+		triedb.EndVerkleTransition()
+	}
+	if _, err := state.New(header.Root, triedb, nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}

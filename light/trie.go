@@ -99,6 +99,10 @@ func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
 	panic("not implemented")
 }
 
+func (db *odrDatabase) EndVerkleTransition() {
+	panic("not implemented")
+}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
