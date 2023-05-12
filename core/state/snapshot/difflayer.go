@@ -295,6 +295,7 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	// Check staleness before reaching further.
 	if dl.Stale() {
+		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
@@ -367,6 +368,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	dl.lock.RLock()
 	// Check staleness before reaching further.
 	if dl.Stale() {
+		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
 	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
