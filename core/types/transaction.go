@@ -198,7 +198,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		return &inner, err
 	case BlobTxType:
 		var inner BlobTx
-		err := rlp.DecodeBytes(b[1:], &inner) // TODO(karalabe): This needs to be ssz
+		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -417,11 +417,7 @@ func (tx *Transaction) Size() uint64 {
 		return size.(uint64)
 	}
 	c := writeCounter(0)
-	if tx.Type() == BlobTxType {
-		rlp.Encode(&c, &tx.inner) // TODO(karalabe): Replace with SSZ encoding
-	} else {
-		rlp.Encode(&c, &tx.inner)
-	}
+	rlp.Encode(&c, &tx.inner)
 
 	size := uint64(c)
 	if tx.Type() != LegacyTxType {
