@@ -283,7 +283,7 @@ func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	panic("implement me")
 }
 func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int { panic("implement me") }
-func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) (*vm.EVM, func() error, error) {
+func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) (*vm.EVM, func() error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
@@ -293,7 +293,7 @@ func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 	if blockContext != nil {
 		context = *blockContext
 	}
-	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig), vmError, nil
+	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig), vmError
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")
