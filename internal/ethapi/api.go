@@ -1457,7 +1457,7 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*rpc.RPCReceipt, error) {
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null
@@ -1480,38 +1480,37 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	// Derive the sender.
 	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
 	from, _ := types.Sender(signer, tx)
-
-	fields := map[string]interface{}{
-		"blockHash":         blockHash,
-		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from,
-		"to":                tx.To(),
-		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
-		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
-		"contractAddress":   nil,
-		"logs":              receipt.Logs,
-		"logsBloom":         receipt.Bloom,
-		"type":              hexutil.Uint(tx.Type()),
-		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	response := &rpc.RPCReceipt{
+		BlockHash:         blockHash,
+		BlockNumber:       hexutil.Uint64(blockNumber),
+		TxHash:            hash,
+		TxIndex:           hexutil.Uint64(index),
+		From:              from,
+		To:                tx.To(),
+		GasUsed:           hexutil.Uint64(receipt.GasUsed),
+		CumulativeGasUsed: hexutil.Uint64(receipt.CumulativeGasUsed),
+		ContractAddress:   nil,
+		Logs:              receipt.Logs,
+		LogsBloom:         receipt.Bloom,
+		Type:              hexutil.Uint(tx.Type()),
+		EffectiveGasPrice: (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
-		fields["root"] = hexutil.Bytes(receipt.PostState)
+		response.Root = hexutil.Bytes(receipt.PostState)
 	} else {
-		fields["status"] = hexutil.Uint(receipt.Status)
+		response.Status = hexutil.Uint(receipt.Status)
 	}
 	if receipt.Logs == nil {
-		fields["logs"] = []*types.Log{}
+		response.Logs = []*types.Log{}
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
+		response.ContractAddress = &receipt.ContractAddress
 	}
-	return fields, nil
+	return response, nil
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.

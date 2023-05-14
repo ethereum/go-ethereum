@@ -248,7 +248,7 @@ func BlockNumberOrHashWithHash(hash common.Hash, canonical bool) BlockNumberOrHa
 	}
 }
 
-// RPCBlock represents a block with header that will serialize to the RPC representation of a block
+// RPCBlock represents a serializable block of RPC response
 type RPCBlock struct {
 	Number          *hexutil.Big      `json:"number,omitempty"`
 	Hash            *common.Hash      `json:"hash,omitempty"`
@@ -357,7 +357,7 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, config *pa
 	return nil
 }
 
-// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
+// RPCTransaction represents a serializable transaction of RPC response
 type RPCTransaction struct {
 	BlockHash        *common.Hash      `json:"blockHash"`
 	BlockNumber      *hexutil.Big      `json:"blockNumber"`
@@ -465,4 +465,23 @@ func NewRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.By
 	}
 	blob, _ := txs[index].MarshalBinary()
 	return blob
+}
+
+// RPCReceipt represents a serializable transaction receipt of RPC response
+type RPCReceipt struct {
+	BlockHash         common.Hash     `json:"blockHash"`
+	BlockNumber       hexutil.Uint64  `json:"blockNumber"`
+	TxHash            common.Hash     `json:"transactionHash"`
+	TxIndex           hexutil.Uint64  `json:"transactionIndex"`
+	From              common.Address  `json:"from"`
+	To                *common.Address `json:"to"`
+	GasUsed           hexutil.Uint64  `json:"gasUsed"`
+	CumulativeGasUsed hexutil.Uint64  `json:"cumulativeGasUsed"`
+	ContractAddress   *common.Address `json:"contractAddress"`
+	Logs              []*types.Log    `json:"logs"`
+	LogsBloom         types.Bloom     `json:"logsBloom"`
+	Type              hexutil.Uint    `json:"type"`
+	EffectiveGasPrice *hexutil.Big    `json:"effectiveGasPrice"`
+	Root              hexutil.Bytes   `json:"root,omitempty"`
+	Status            hexutil.Uint    `json:"status,omitempty"`
 }
