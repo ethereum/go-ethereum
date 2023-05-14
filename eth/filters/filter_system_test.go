@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -316,7 +315,7 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 			types.NewTransaction(4, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
 		}
 
-		txs []*ethapi.RPCTransaction
+		txs []*rpc.RPCTransaction
 	)
 
 	fullTx := true
@@ -332,7 +331,7 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 			t.Fatalf("Unable to retrieve logs: %v", err)
 		}
 
-		tx := results.([]*ethapi.RPCTransaction)
+		tx := results.([]*rpc.RPCTransaction)
 		txs = append(txs, tx...)
 		if len(txs) >= len(transactions) {
 			break

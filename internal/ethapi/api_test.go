@@ -71,7 +71,7 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 		}
 
 		//  rpcTransaction
-		rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, nil, config)
+		rpcTx := rpc.NewRPCTransaction(tx, common.Hash{}, 0, 0, 0, nil, config)
 		if data, err := json.Marshal(rpcTx); err != nil {
 			t.Fatalf("test %d: marshalling failed; %v", i, err)
 		} else if err = tx2.UnmarshalJSON(data); err != nil {
@@ -549,7 +549,7 @@ func TestCall(t *testing.T) {
 			overrides: StateOverride{
 				randomAccounts[2].addr: OverrideAccount{
 					Code:      hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
-					StateDiff: &map[common.Hash]common.Hash{common.Hash{}: common.BigToHash(big.NewInt(123))},
+					StateDiff: &map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
 				},
 			},
 			want: "0x000000000000000000000000000000000000000000000000000000000000007b",

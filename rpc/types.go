@@ -20,12 +20,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // API describes the set of methods offered over the RPC interface
@@ -242,4 +246,223 @@ func BlockNumberOrHashWithHash(hash common.Hash, canonical bool) BlockNumberOrHa
 		BlockHash:        &hash,
 		RequireCanonical: canonical,
 	}
+}
+
+// RPCBlock represents a block with header that will serialize to the RPC representation of a block
+type RPCBlock struct {
+	Number          *hexutil.Big      `json:"number,omitempty"`
+	Hash            *common.Hash      `json:"hash,omitempty"`
+	ParentHash      common.Hash       `json:"parentHash"`
+	Nonce           *types.BlockNonce `json:"nonce,omitempty"`
+	MixDigest       common.Hash       `json:"mixHash"`
+	UncleHash       common.Hash       `json:"sha3Uncles"`
+	Bloom           types.Bloom       `json:"logsBloom"`
+	Root            common.Hash       `json:"stateRoot"`
+	Coinbase        *common.Address   `json:"miner,omitempty"`
+	Difficulty      *hexutil.Big      `json:"difficulty"`
+	Extra           hexutil.Bytes     `json:"extraData"`
+	Size            hexutil.Uint64    `json:"size,omitempty"`
+	GasLimit        hexutil.Uint64    `json:"gasLimit"`
+	GasUsed         hexutil.Uint64    `json:"gasUsed"`
+	Time            hexutil.Uint64    `json:"timestamp"`
+	TxHash          common.Hash       `json:"transactionsRoot"`
+	ReceiptHash     common.Hash       `json:"receiptsRoot"`
+	BaseFee         *hexutil.Big      `json:"baseFeePerGas,omitempty"`
+	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot,omitempty"`
+	Transactions    []json.RawMessage `json:"transactions,omitempty"`
+	TotalDifficulty *hexutil.Big      `json:"totalDifficulty,omitempty"`
+	Uncles          []common.Hash     `json:"uncles,omitempty"`
+	Withdrawals     types.Withdrawals `json:"withdrawls,omitempty"`
+}
+
+// RPCMarshalHeader converts the given header to the RPC output .
+func RPCMarshalHeader(head *types.Header) *RPCBlock {
+	headHash := head.Hash()
+	block := &RPCBlock{
+		Number:      (*hexutil.Big)(head.Number),
+		Hash:        &headHash,
+		ParentHash:  head.ParentHash,
+		Nonce:       &head.Nonce,
+		MixDigest:   head.MixDigest,
+		UncleHash:   head.UncleHash,
+		Bloom:       head.Bloom,
+		Root:        head.Root,
+		Coinbase:    &head.Coinbase,
+		Difficulty:  (*hexutil.Big)(head.Difficulty),
+		Extra:       hexutil.Bytes(head.Extra),
+		Size:        hexutil.Uint64(head.Size()),
+		GasLimit:    hexutil.Uint64(head.GasLimit),
+		GasUsed:     hexutil.Uint64(head.GasUsed),
+		Time:        hexutil.Uint64(head.Time),
+		TxHash:      head.TxHash,
+		ReceiptHash: head.ReceiptHash,
+	}
+
+	if head.BaseFee != nil {
+		block.BaseFee = (*hexutil.Big)(head.BaseFee)
+	}
+
+	if head.WithdrawalsHash != nil {
+		block.WithdrawalsHash = head.WithdrawalsHash
+	}
+
+	return block
+}
+
+// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
+// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
+// transaction hashes.
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) (*RPCBlock, error) {
+	fields := RPCMarshalHeader(block.Header())
+	fields.Size = hexutil.Uint64(block.Size())
+
+	if inclTx {
+		formatTx := func(tx *types.Transaction) (json.RawMessage, error) {
+			return tx.Hash().Bytes(), nil
+		}
+		if fullTx {
+			formatTx = func(tx *types.Transaction) (json.RawMessage, error) {
+				return json.Marshal(newRPCTransactionFromBlockHash(block, tx.Hash(), config))
+			}
+		}
+		txs := block.Transactions()
+		transactions := make([]json.RawMessage, len(txs))
+		var err error
+		for i, tx := range txs {
+			if transactions[i], err = formatTx(tx); err != nil {
+				return nil, err
+			}
+		}
+		fields.Transactions = transactions
+	}
+	uncles := block.Uncles()
+	uncleHashes := make([]common.Hash, len(uncles))
+	for i, uncle := range uncles {
+		uncleHashes[i] = uncle.Hash()
+	}
+	fields.Uncles = uncleHashes
+	if block.Header().WithdrawalsHash != nil {
+		fields.Withdrawals = block.Withdrawals()
+	}
+	return fields, nil
+}
+
+// newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
+func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, config *params.ChainConfig) *RPCTransaction {
+	for idx, tx := range b.Transactions() {
+		if tx.Hash() == hash {
+			return NewRPCTransactionFromBlockIndex(b, uint64(idx), config)
+		}
+	}
+	return nil
+}
+
+// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
+type RPCTransaction struct {
+	BlockHash        *common.Hash      `json:"blockHash"`
+	BlockNumber      *hexutil.Big      `json:"blockNumber"`
+	From             common.Address    `json:"from"`
+	Gas              hexutil.Uint64    `json:"gas"`
+	GasPrice         *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash             common.Hash       `json:"hash"`
+	Input            hexutil.Bytes     `json:"input"`
+	Nonce            hexutil.Uint64    `json:"nonce"`
+	To               *common.Address   `json:"to"`
+	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
+	Value            *hexutil.Big      `json:"value"`
+	Type             hexutil.Uint64    `json:"type"`
+	Accesses         *types.AccessList `json:"accessList,omitempty"`
+	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
+	V                *hexutil.Big      `json:"v"`
+	R                *hexutil.Big      `json:"r"`
+	S                *hexutil.Big      `json:"s"`
+}
+
+// NewRPCTransaction returns a transaction that will serialize to the RPC
+// representation, with the given location metadata set (if available).
+func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
+	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
+	from, _ := types.Sender(signer, tx)
+	v, r, s := tx.RawSignatureValues()
+	result := &RPCTransaction{
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+	}
+	if blockHash != (common.Hash{}) {
+		result.BlockHash = &blockHash
+		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		result.TransactionIndex = (*hexutil.Uint64)(&index)
+	}
+	switch tx.Type() {
+	case types.LegacyTxType:
+		// if a legacy transaction has an EIP-155 chain id, include it explicitly
+		if id := tx.ChainId(); id.Sign() != 0 {
+			result.ChainID = (*hexutil.Big)(id)
+		}
+	case types.AccessListTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+	}
+	return result
+}
+
+// NewRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
+func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
+	var (
+		baseFee     *big.Int
+		blockNumber = uint64(0)
+		blockTime   = uint64(0)
+	)
+	if current != nil {
+		baseFee = misc.CalcBaseFee(config, current)
+		blockNumber = current.Number.Uint64()
+		blockTime = current.Time
+	}
+	return NewRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config)
+}
+
+// NewRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
+func NewRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig) *RPCTransaction {
+	txs := b.Transactions()
+	if index >= uint64(len(txs)) {
+		return nil
+	}
+	return NewRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config)
+}
+
+// NewRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
+func NewRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.Bytes {
+	txs := b.Transactions()
+	if index >= uint64(len(txs)) {
+		return nil
+	}
+	blob, _ := txs[index].MarshalBinary()
+	return blob
 }
