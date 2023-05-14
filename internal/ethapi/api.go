@@ -1222,6 +1222,29 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
+// RPCBlock represents a block with header that will serialize to the RPC representation of a block
+type RPCBlock struct {
+	Hash            common.Hash      `json:"hash"`
+	ParentHash      common.Hash      `json:"parentHash"`
+	UncleHash       common.Hash      `json:"sha3Uncles"`
+	Coinbase        common.Address   `json:"miner"`
+	Root            common.Hash      `json:"stateRoot"`
+	TxHash          common.Hash      `json:"transactionsRoot"`
+	ReceiptHash     common.Hash      `json:"receiptsRoot"`
+	Bloom           types.Bloom      `json:"logsBloom"`
+	Difficulty      *big.Int         `json:"difficulty"`
+	Number          *hexutil.Big     `json:"number"`
+	GasLimit        uint64           `json:"gasLimit"`
+	GasUsed         uint64           `json:"gasUsed"`
+	Time            uint64           `json:"timestamp"`
+	Extra           []byte           `json:"extraData"`
+	MixDigest       common.Hash      `json:"mixHash"`
+	Nonce           types.BlockNonce `json:"nonce"`
+	BaseFee         *big.Int         `json:"baseFeePerGas,omitempty"`
+	WithdrawalsHash *common.Hash     `json:"withdrawalsRoot,omitempty"`
+	Size            uint64           `json:"size,omitempty"`
+}
+
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
