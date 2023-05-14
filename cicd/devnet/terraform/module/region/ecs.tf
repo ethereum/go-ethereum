@@ -1,5 +1,5 @@
 data template_file devnet_container_definition {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   template = "${file("${path.module}/container-definition.tpl")}"
 
   vars = {
@@ -8,19 +8,20 @@ data template_file devnet_container_definition {
     node_name = "${each.key}"
     private_keys = "${each.value.pk}"
     cloudwatch_group = "tf-${each.key}"
-    log_level = "${lookup(each.value, "logLevel", "${local.logLevel}")}"
+    cloudwatch_region = "${var.region}"
+    log_level = "${lookup(each.value, "logLevel", "${var.logLevel}")}"
   }
 }
 
 resource "aws_ecs_task_definition" "devnet_task_definition_group" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   
   family = "devnet-${each.key}"
   requires_compatibilities = ["FARGATE"]
   network_mode = "awsvpc"
   container_definitions = data.template_file.devnet_container_definition[each.key].rendered
-  execution_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
-  task_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
+  execution_role_arn = var.devnet_xdc_ecs_tasks_execution_role_arn
+  task_role_arn = var.devnet_xdc_ecs_tasks_execution_role_arn
   
   # New nodes will consume a lot more CPU usage than existing nodes. 
   # This is due to sync is resource heavy. Recommending set to below if doing sync:
@@ -29,7 +30,7 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   # cpu = 256
   # memory = 2048
   cpu = 512
-  memory = 4096
+  memory = 3072
   volume {
     name = "efs"
 
@@ -50,7 +51,7 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
 }
 
 data "aws_ecs_task_definition" "devnet_ecs_task_definition" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   task_definition = aws_ecs_task_definition.devnet_task_definition_group[each.key].family
 }
 
@@ -62,7 +63,7 @@ resource "aws_ecs_cluster" "devnet_ecs_cluster" {
 }
 
 resource "aws_ecs_service" "devnet_ecs_service" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   name                 = "ecs-service-${each.key}"
   cluster              = aws_ecs_cluster.devnet_ecs_cluster.id
   task_definition      = "${aws_ecs_task_definition.devnet_task_definition_group[each.key].family}:${max(aws_ecs_task_definition.devnet_task_definition_group[each.key].revision, data.aws_ecs_task_definition.devnet_ecs_task_definition[each.key].revision)}"
@@ -70,6 +71,8 @@ resource "aws_ecs_service" "devnet_ecs_service" {
   scheduling_strategy  = "REPLICA"
   desired_count        = 1
   force_new_deployment = true
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent = 100
 
   network_configuration {
     subnets          = [aws_subnet.devnet_subnet.id]

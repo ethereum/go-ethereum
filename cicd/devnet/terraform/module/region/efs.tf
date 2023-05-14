@@ -24,7 +24,7 @@ resource "aws_security_group" "devnet_efs_security_group" {
 }
 
 resource "aws_efs_file_system" "devnet_efs" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   creation_token = "efs-${each.key}"
   performance_mode = "generalPurpose"
   throughput_mode = "bursting"
@@ -38,14 +38,14 @@ resource "aws_efs_file_system" "devnet_efs" {
  }
 
 resource "aws_efs_mount_target" "devnet_efs_efs_mount_target" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   file_system_id = aws_efs_file_system.devnet_efs[each.key].id
   subnet_id      = aws_subnet.devnet_subnet.id
   security_groups = [aws_security_group.devnet_efs_security_group.id]
 }
 
 resource "aws_efs_access_point" "devnet_efs_access_point" {
-  for_each = local.devnetNodeKyes
+  for_each = var.devnetNodeKeys
   file_system_id = aws_efs_file_system.devnet_efs[each.key].id
   root_directory {
     path = "/${each.key}/database"

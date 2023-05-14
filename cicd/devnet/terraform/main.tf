@@ -9,114 +9,58 @@ terraform {
   required_version = ">= 1.2.0"
 }
 
+# Default
 provider "aws" {
   region  = "us-east-1"
 }
 
-resource "aws_vpc" "devnet_vpc" {
-  cidr_block = "10.0.0.0/16"
-  instance_tenancy = "default"
-  enable_dns_hostnames = true
-  
-  tags = {
-    Name = "TfDevnetVpc"
+provider "aws" {
+  alias = "us-east-2"
+  region  = "us-east-2"
+}
+
+module "us-east-2" {
+  source = "./module/region"
+  region = "us-east-2"
+  devnetNodeKeys = local.devnetNodeKeys["us-east-2"]
+  logLevel = local.logLevel
+  devnet_xdc_ecs_tasks_execution_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
+
+  providers = {
+    aws = aws.us-east-2
   }
 }
 
-resource "aws_subnet" "devnet_subnet" {
-  vpc_id = aws_vpc.devnet_vpc.id
-  cidr_block = "10.0.0.0/20"
-  map_public_ip_on_launch = true
-  availability_zone = "us-east-1a"
-  
-  tags = {
-    Name = "TfDevnetVpcSubnet"
+provider "aws" {
+  alias = "eu-west-1"
+  region  = "eu-west-1"
+}
+
+module "eu-west-1" {
+  source = "./module/region"
+  region = "eu-west-1"
+  devnetNodeKeys = local.devnetNodeKeys["eu-west-1"]
+  logLevel = local.logLevel
+  devnet_xdc_ecs_tasks_execution_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
+
+  providers = {
+    aws = aws.eu-west-1
   }
 }
 
-resource "aws_internet_gateway" "devnet_gatewat" {
-  vpc_id = aws_vpc.devnet_vpc.id
-
-  tags = {
-    Name = "TfDevnetGateway"
-  }
+provider "aws" {
+  alias = "ap-southeast-2"
+  region  = "ap-southeast-2"
 }
 
-resource "aws_route_table" "devnet_route_table" {
-  vpc_id = aws_vpc.devnet_vpc.id
+module "ap-southeast-2" {
+  source = "./module/region"
+  region = "ap-southeast-2"
+  devnetNodeKeys = local.devnetNodeKeys["ap-southeast-2"]
+  logLevel = local.logLevel
+  devnet_xdc_ecs_tasks_execution_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.devnet_gatewat.id
-  }
-
-  tags = {
-    Name = "TfDevnetVpcRoutingTable"
-  }
-}
-
-resource "aws_route_table_association" "devnet_route_table_association" {
-  subnet_id      = aws_subnet.devnet_subnet.id
-  route_table_id = aws_route_table.devnet_route_table.id
-}
-
-resource "aws_default_security_group" "devnet_xdcnode_security_group" {
-  vpc_id = aws_vpc.devnet_vpc.id
-
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = -1
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = {
-    Name = "TfDevnetNode"
-  }
-}
-
-# IAM policies
-data "aws_iam_policy_document" "xdc_ecs_tasks_execution_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-}
-
-# Create the role
-resource "aws_iam_role" "devnet_xdc_ecs_tasks_execution_role" {
-  name               = "devnet-xdc-ecs-task-execution-role"
-  assume_role_policy = "${data.aws_iam_policy_document.xdc_ecs_tasks_execution_role.json}"
-}
-
-# Attached the AWS managed policies to the new role
-resource "aws_iam_role_policy_attachment" "devnet_xdc_ecs_tasks_execution_role" {
-  for_each = toset([
-    "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess", 
-    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
-    "arn:aws:iam::aws:policy/AmazonElasticFileSystemsUtils"
-  ])
-  role       = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.name
-  policy_arn = each.value
-}
-
-# Logs
-resource "aws_cloudwatch_log_group" "devnet_cloud_watch_group" {
-  for_each = local.devnetNodeKyes
-
-  name = "tf-${each.key}"
-  retention_in_days = 14 # Logs are only kept for 14 days
-  tags = {
-    Name = "TfDevnetCloudWatchGroup${each.key}"
+  providers = {
+    aws = aws.ap-southeast-2
   }
 }
