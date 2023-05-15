@@ -1263,18 +1263,18 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
-		formatTx := func(tx *types.Transaction, idx int) interface{} {
+		formatTx := func(idx int, tx *types.Transaction) interface{} {
 			return tx.Hash()
 		}
 		if fullTx {
-			formatTx = func(tx *types.Transaction, idx int) interface{} {
+			formatTx = func(idx int, tx *types.Transaction) interface{} {
 				return newRPCTransactionFromBlockIndex(block, uint64(idx), config)
 			}
 		}
 		txs := block.Transactions()
 		transactions := make([]interface{}, len(txs))
 		for i, tx := range txs {
-			transactions[i] = formatTx(tx, i)
+			transactions[i] = formatTx(i, tx)
 		}
 		fields["transactions"] = transactions
 	}
