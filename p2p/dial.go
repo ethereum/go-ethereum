@@ -121,7 +121,6 @@ type dialScheduler struct {
 	historyTimer *mclock.Alarm
 
 	// for logStats
-	lastStatsLog     mclock.AbsTime
 	doneSinceLastLog int
 }
 
@@ -174,7 +173,6 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 		addPeerCh:    make(chan *conn),
 		remPeerCh:    make(chan *conn),
 	}
-	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.wg.Add(2)
 	go d.readNodes(it)
@@ -225,6 +223,7 @@ func (d *dialScheduler) loop(it enode.Iterator) {
 	var (
 		nodesCh chan *enode.Node
 	)
+	logStatTicker := time.NewTicker(dialStatsLogInterval)
 
 loop:
 	for {
@@ -237,7 +236,6 @@ loop:
 			nodesCh = nil
 		}
 		d.rearmHistoryTimer()
-		d.logStats()
 
 		select {
 		case node := <-nodesCh:
@@ -300,6 +298,9 @@ loop:
 		case <-d.historyTimer.C():
 			d.expireHistory()
 
+		case <-logStatTicker.C:
+			d.logStats()
+
 		case <-d.ctx.Done():
 			it.Close()
 			break loop
@@ -307,6 +308,7 @@ loop:
 	}
 
 	d.historyTimer.Stop()
+	logStatTicker.Stop()
 	for range d.dialing {
 		<-d.doneCh
 	}
@@ -330,15 +332,10 @@ func (d *dialScheduler) readNodes(it enode.Iterator) {
 // peers are connected because users should only see it while their client is starting up
 // or comes back online.
 func (d *dialScheduler) logStats() {
-	now := d.clock.Now()
-	if d.lastStatsLog.Add(dialStatsLogInterval) > now {
-		return
-	}
 	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
 		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
 	}
 	d.doneSinceLastLog = 0
-	d.lastStatsLog = now
 }
 
 // rearmHistoryTimer configures d.historyTimer to fire when the
