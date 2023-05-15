@@ -7,7 +7,7 @@ accounts/abi                    @gballet @MariusVanDerWijden
 cmd/clef                        @holiman
 cmd/puppeth                     @karalabe
 consensus                       @karalabe
-core/                           @karalabe @holiman @rjl493456442
+core/                           @karalabe @rjl493456442
 eth/                            @karalabe @holiman @rjl493456442
 eth/catalyst/                   @gballet
 eth/tracers/                    @s1na
