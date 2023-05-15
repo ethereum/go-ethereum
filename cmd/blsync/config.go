@@ -52,6 +52,11 @@ var (
 				Name:    "BELLATRIX",
 				Version: []byte{2, 0, 0, 0},
 			},
+			types.Fork{
+				Epoch:   194048,
+				Name:    "CAPELLA",
+				Version: []byte{3, 0, 0, 0},
+			},
 		},
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
