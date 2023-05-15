@@ -17,6 +17,9 @@
 package api
 
 import (
+	"math"
+	"time"
+
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -26,12 +29,17 @@ import (
 )
 
 const (
-	maxHeadLength = 4
+	maxHeadLength   = 4
+	minFailureDelay = time.Millisecond * 100
+	maxFailureDelay = time.Minute
 )
 
 type SyncServer struct {
 	api         *BeaconLightApi
 	unsubscribe func()
+
+	failureDelayUntil mclock.AbsTime
+	failureDelay      float64
 }
 
 func NewSyncServer(api *BeaconLightApi) *SyncServer {
@@ -52,10 +60,22 @@ func (s *SyncServer) UnsubscribeHeads() {
 	}
 }
 
-func (s *SyncServer) DelayUntil() mclock.AbsTime { return 0 } //TODO
+func (s *SyncServer) DelayUntil() mclock.AbsTime {
+	return s.failureDelayUntil
+}
 
 func (s *SyncServer) Fail(desc string) {
+	s.failureDelay *= 2
+	now := mclock.Now()
+	if now > s.failureDelayUntil {
+		s.failureDelay *= math.Pow(2, -float64(now-s.failureDelayUntil)/float64(maxFailureDelay))
+	}
+	if s.failureDelay < float64(minFailureDelay) {
+		s.failureDelay = float64(minFailureDelay)
+	}
+	s.failureDelayUntil = now + mclock.AbsTime(s.failureDelay)
 	log.Warn("API endpoint failure", "URL", s.api.url, "error", desc)
+
 }
 
 func (s *SyncServer) RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData)) {
