@@ -76,7 +76,7 @@ func blsync(ctx *cli.Context) error {
 		customHeader = make(map[string]string)
 	)
 
-	for _, s := range utils.SplitAndTrim(ctx.String(utils.BeaconApiHeaderFlag.Name)) {
+	for _, s := range ctx.StringSlice(utils.BeaconApiHeaderFlag.Name) {
 		kv := strings.Split(s, ":")
 		if len(kv) != 2 {
 			utils.Fatalf("Invalid custom API header entry: %s", s)

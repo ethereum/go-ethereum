@@ -155,6 +155,7 @@ func (s *Server) sendRequest(timeoutTrigger *ModuleTrigger) uint64 {
 		}
 		s.lock.Lock()
 		if s.timeouts[reqId] != nil {
+			// do not delete entry yet; nil means timed out request
 			s.timeouts[reqId] = nil
 			s.timeoutCount++
 			if timeoutTrigger != nil {

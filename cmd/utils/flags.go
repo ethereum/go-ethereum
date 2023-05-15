@@ -280,9 +280,9 @@ var (
 		Usage:    "Beacon node (CL) light client API URL (currently only supports LodeStar)",
 		Category: flags.BeaconCategory,
 	}
-	BeaconApiHeaderFlag = &cli.StringFlag{
+	BeaconApiHeaderFlag = &cli.StringSliceFlag{
 		Name:     "beacon.api.header",
-		Usage:    "Remote beacon node API custom HTTP header fields (\"key:value,key:value\")",
+		Usage:    "Pass custom HTTP header fields to the emote beacon node API in \"key:value\" format. This flag can be given multiple times.",
 		Category: flags.BeaconCategory,
 	}
 	BeaconThresholdFlag = &cli.IntFlag{
