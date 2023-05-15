@@ -86,7 +86,7 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	enc, err := t.trie.Get(t.hashKey(key))
-	if err != nil {
+	if err != nil || len(enc) == 0 {
 		return nil, err
 	}
 	_, content, _, err := rlp.Split(enc)

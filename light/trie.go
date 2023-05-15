@@ -112,7 +112,7 @@ func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 		enc, err = t.trie.Get(key)
 		return err
 	})
-	if err != nil {
+	if err != nil || len(enc) == 0 {
 		return nil, err
 	}
 	_, content, _, err := rlp.Split(enc)
