@@ -1,7 +1,6 @@
 package blocknative
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -43,6 +42,10 @@ func NewTxnOpCodeTracer(cfg json.RawMessage) (Tracer, error) {
 
 	// If we need deeper nested structures initialized, check and do so now
 	if t.opts.NetBalChanges {
+		// First check the given arguments are legal
+		if err := t.checkNBCArgs(); err != nil {
+			return nil, err
+		}
 		t.trace.NetBalChanges = NetBalChanges{
 			Pre:      make(state),
 			Post:     make(state),
@@ -79,25 +82,7 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 
 	// If we want NetBalChanges, start by tracking the top level addresses
 	if t.opts.NetBalChanges {
-		// getTokenSymbol(t.env, to)
-		t.lookupAccount(from)
-		t.lookupAccount(to)
-		t.lookupAccount(env.Context.Coinbase)
-
-		// Update the to address
-		// The recipient balance includes the value transferred.
-		toBal := new(big.Int).Sub(t.trace.NetBalChanges.Pre[to].Balance, value)
-		t.trace.NetBalChanges.Pre[to].Balance = toBal
-
-		// Collect the gas usage
-		// We need to re-add them to get the pre-tx balance.
-		gasPrice := env.TxContext.GasPrice
-		consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.trace.NetBalChanges.InitialGas))
-
-		// Update the from address
-		fromBal := new(big.Int).Set(t.trace.NetBalChanges.Pre[from].Balance)
-		fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
-		t.trace.NetBalChanges.Pre[from].Balance = fromBal
+		t.captureStartNBC(from, to, gas, value)
 	}
 
 	// Blocks only contain `Random` post-merge, but we still have pre-merge tests.
@@ -130,6 +115,11 @@ func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 		// TODO: Here we can note creation of contracts for potential future tracing
 		t.callStack[0].Type = "CREATE"
 	}
+
+	// If we want to create NBC from decoded transactions, do the top level one here
+	if t.opts.NetBalChanges && t.opts.NBCMethod == "internalTransactions" {
+		t.processNBCFromTxn(from, to, input)
+	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -151,46 +141,9 @@ func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 		}
 	}
 
-	if t.opts.NetBalChanges {
-		// We iterate through the logs for known events
-		for _, log := range t.env.StateDB.Logs() {
-
-			if len(log.Topics) == 0 {
-				continue
-			}
-
-			eventSignature := log.Topics[0].Hex()
-
-			switch eventSignature {
-			case transferEventHex:
-				var transfer struct {
-					From     common.Address
-					To       common.Address
-					Value    *big.Int
-					Contract common.Address
-				}
-				transfer.From = common.HexToAddress(log.Topics[1].Hex())
-				transfer.To = common.HexToAddress(log.Topics[2].Hex())
-				transfer.Value = new(big.Int).SetBytes(log.Data)
-				transfer.Contract = log.Address
-
-				if err != nil {
-					continue
-				}
-
-				// Make token change object
-				tokenchange := &Tokenchanges{
-					From:     common.HexToAddress(log.Topics[1].Hex()),
-					To:       common.HexToAddress(log.Topics[2].Hex()),
-					Asset:    new(big.Int).SetBytes(log.Data),
-					Contract: log.Address,
-				}
-
-				t.trace.NetBalChanges.Tokens = append(t.trace.NetBalChanges.Tokens, *tokenchange)
-			default:
-				// We pass over this event hex signature!
-			}
-		}
+	// If we want to collect our net balance changes of tokens via the events, do so now!
+	if t.opts.NetBalChanges && t.opts.NBCMethod == "events" {
+		t.captureEventNBC(err)
 	}
 
 	// This is the final output of a call
@@ -221,23 +174,8 @@ func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 		}
 	}()
 	// Keep a list of accounts which have had transfer opcodes, or storage slots updated.
-	// Currently we go off events, but we may want this as spoofing reduction efforts later.
 	if t.opts.NetBalChanges {
-		stack := scope.Stack
-		stackData := stack.Data()
-		stackLen := len(stackData)
-		caller := scope.Contract.Address()
-		switch {
-		case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
-			slot := common.Hash(stackData[stackLen-1].Bytes32())
-			t.lookupStorage(caller, slot)
-		case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE):
-			addr := common.Address(stackData[stackLen-1].Bytes20())
-			t.lookupAccount(addr)
-		case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
-			addr := common.Address(stackData[stackLen-2].Bytes20())
-			t.lookupAccount(addr)
-		}
+		t.captureStateNBC(op, scope)
 	}
 }
 
@@ -264,6 +202,11 @@ func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 		Value: bigToHex(value),
 	}
 	t.callStack = append(t.callStack, call)
+
+	// If we want to create NBC from decoded transactions, do so here!
+	if t.opts.NetBalChanges && t.opts.NBCMethod == "internalTransactions" {
+		t.processNBCFromTxn(from, to, input)
+	}
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't execute any code.
@@ -305,70 +248,9 @@ func (t *txnOpCodeTracer) SetStateRoot(root common.Hash) {
 }
 
 func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
-	// If we want NetBalChanges,
+	// Do any further net balance changes processing required
 	if t.opts.NetBalChanges {
-		for addr, state := range t.trace.NetBalChanges.Pre {
-			// Keep track if we end up finding an altered address
-			modified := false
-
-			// Keep track of potential Eth balance changes, and storage changes
-			// Later in a final post-processing step we will decode these for user known formats
-			postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
-			newBalance := t.env.StateDB.GetBalance(addr)
-			newCode := t.env.StateDB.GetCode(addr)
-
-			if newBalance.Cmp(t.trace.NetBalChanges.Pre[addr].Balance) != 0 {
-				modified = true
-				postAccount.Balance = newBalance
-			}
-			if !bytes.Equal(newCode, t.trace.NetBalChanges.Pre[addr].Code) {
-				modified = true
-				postAccount.Code = newCode
-			}
-
-			for key, val := range state.Storage {
-				// don't include the empty slot
-				if val == (common.Hash{}) {
-					delete(t.trace.NetBalChanges.Pre[addr].Storage, key)
-				}
-				newVal := t.env.StateDB.GetState(addr, key)
-				if val == newVal {
-					// Omit unchanged slots
-					delete(t.trace.NetBalChanges.Pre[addr].Storage, key)
-				} else {
-					modified = true
-					if newVal != (common.Hash{}) {
-						postAccount.Storage[key] = newVal
-					}
-				}
-			}
-
-			if modified {
-				t.trace.NetBalChanges.Post[addr] = postAccount
-			} else {
-				// if state is not modified, then no need to include into the pre state
-				delete(t.trace.NetBalChanges.Pre, addr)
-			}
-		}
-
-		for addr, state := range t.trace.NetBalChanges.Post {
-			// Add the balance and storage separately, as one may not be changed but another is.
-			preState, preExists := t.trace.NetBalChanges.Pre[addr]
-
-			// If the post bal exists, add it to the diff
-			var weiAmount *big.Int
-			var etherAmount *big.Float
-			if preExists && preState != nil && state.Balance != nil {
-				weiAmount = new(big.Int).Sub(state.Balance, preState.Balance)
-				etherAmount = weiToEther(weiAmount)
-			}
-
-			diff := &valueChange{
-				Eth:      etherAmount,
-				EthInWei: weiAmount,
-			}
-			t.trace.NetBalChanges.Balances[addr] = diff
-		}
+		t.collateNBC()
 	}
 }
 
@@ -376,28 +258,4 @@ func (t *txnOpCodeTracer) CaptureTxEnd(restGas uint64) {
 func (t *txnOpCodeTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
-}
-
-// LookupAccount fetches details of an account and adds it to the prestate
-// if it doesn't exist there.
-func (t *txnOpCodeTracer) lookupAccount(addr common.Address) {
-	if _, ok := t.trace.NetBalChanges.Pre[addr]; ok {
-		return
-	}
-
-	t.trace.NetBalChanges.Pre[addr] = &account{
-		Balance: t.env.StateDB.GetBalance(addr),
-		Code:    t.env.StateDB.GetCode(addr),
-		Storage: make(map[common.Hash]common.Hash),
-	}
-}
-
-// LookupStorage fetches the requested storage slot and adds
-// it to the prestate of the given contract. It assumes `lookupAccount`
-// has been performed on the contract before.
-func (t *txnOpCodeTracer) lookupStorage(addr common.Address, key common.Hash) {
-	if _, ok := t.trace.NetBalChanges.Pre[addr].Storage[key]; ok {
-		return
-	}
-	t.trace.NetBalChanges.Pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
 }

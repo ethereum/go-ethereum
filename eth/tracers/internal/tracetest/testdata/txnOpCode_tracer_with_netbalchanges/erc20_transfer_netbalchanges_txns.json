@@ -59,7 +59,8 @@
     },
     "input": "0xf8aa22850ba43b740083024d4594f4eced2f682ce333f96f2d8966c613ded8fc95dd80b844a9059cbb000000000000000000000000dbf03b407c01e7cd3cbea99509d93f8dddc8c6fb00000000000000000000000000000000000000000000000000000000009896801ca067da548a2e0f381a957b9b51f086073375d6bfc7312cbc9540b3647ccab7db11a042c6e5b34bc7ba821e9c25b166fa13d82ad4b0d044d16174d5587d4f04ecfcd1",
     "tracerConfig": {
-        "netBalChanges": true
+        "netBalChanges": true,
+        "nbcMethod": "internalTransactions"
       },
     "result": {
       "type": "CALL",
@@ -87,8 +88,7 @@
           "0xe2fe6b13287f28e193333fdfe7fedf2f6df6124a": {
             "eth": "0.00254265",
             "ethinwei": 2542650000000000
-          },
-          "0xf4eced2f682ce333f96f2d8966c613ded8fc95dd": {}
+          }
         },
         "tokenchanges": [
           {

@@ -296,7 +296,8 @@
   "input": "0xf869448505d21dba00833567e09403e3d4561a8f8e975fdcd798d32857a20cf25e7e8084be9a65551ba0d4dd5fff30e83fbe630bb0fd67eeefe9e3aad0c3ee870a2b6e80fc40191bc7d4a074f93b546bfad60f3cae8e4aafef835237095d6618334154a24df4b4d49d9359",
   "tracerConfig": {
     "logs": true,
-    "netBalChanges": true
+    "netBalChanges": true,
+    "nbcMethod": "internalTransactions"
   },
   "result": {
         "type": "CALL",
@@ -2263,13 +2264,10 @@
         ],
         "netBalChanges": {
           "balances": {
-            "0x03e3d4561a8f8e975fdcd798d32857a20cf25e7e": {},
-            "0x304a554a310c7e546dfe434669c62820b7d83490": {},
             "0x6e715ab4f598eacf0016b9b35ef33e4141844ccc": {
               "eth": "-2e-18",
               "ethinwei": -2
             },
-            "0x7498bb5749c9801f1f7e490baf5f966dbfe4e97b": {},
             "0xad3ecf23c0c8983b07163708be6d763b5f056193": {
               "eth": "2e-18",
               "ethinwei": 2
