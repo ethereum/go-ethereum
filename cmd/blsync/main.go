@@ -118,7 +118,7 @@ func blsync(ctx *cli.Context) error {
 	// start
 	scheduler.Start()
 	// register server(s)
-	for _, url := range utils.SplitAndTrim(ctx.String(utils.BeaconApiFlag.Name)) {
+	for _, url := range ctx.StringSlice(utils.BeaconApiFlag.Name) {
 		beaconApi := api.NewBeaconLightApi(url, customHeader)
 		scheduler.RegisterServer(api.NewSyncServer(beaconApi))
 	}

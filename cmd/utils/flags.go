@@ -275,9 +275,9 @@ var (
 		Category: flags.EthCategory,
 	}
 	// Beacon client light sync settings
-	BeaconApiFlag = &cli.StringFlag{
+	BeaconApiFlag = &cli.StringSliceFlag{
 		Name:     "beacon.api",
-		Usage:    "Beacon node (CL) light client API URL (currently only supports LodeStar)",
+		Usage:    "Beacon node (CL) light client API URL. This flag can be given multiple times.",
 		Category: flags.BeaconCategory,
 	}
 	BeaconApiHeaderFlag = &cli.StringSliceFlag{
