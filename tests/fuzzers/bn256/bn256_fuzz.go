@@ -151,12 +151,12 @@ func FuzzPair(data []byte) int {
 	}
 
 	// Pair the two points and ensure they result in the same output
-	clPair := cloudflare.Pair(pc, tc).Marshal() // e_cloudflare(P, Q)
+	clPair := cloudflare.Pair(pc, tc).Marshal()
 	gPair := google.Pair(pg, tg).Marshal()
 	if !bytes.Equal(clPair, gPair) {
 		panic("pairing mismatch: cloudflare/google")
 	}
-	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts}) // e_gnark(-P, Q)
+	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
 	if err != nil {
 		panic(fmt.Sprintf("gnark/bn254 encountered error: %v", err))
 	}
