@@ -294,6 +294,10 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 	}
 }
 
+func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedCommittee {
+	return s.committees.get(period)
+}
+
 func (s *CommitteeChain) AddCommittee(period uint64, committee *types.SerializedCommittee) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -313,6 +317,10 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 		s.syncCommitteeCache.Remove(period)
 	}
 	return nil
+}
+
+func (s *CommitteeChain) GetUpdate(period uint64) *types.LightClientUpdate {
+	return s.updates.get(period)
 }
 
 func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedCommittee) error {
@@ -534,6 +542,7 @@ func (cs *canonicalStore[T]) add(batch ethdb.Batch, period uint64, value T) {
 	if err != nil {
 		log.Error("Error writing into canonical store value database", "error", err)
 	}
+	cs.cache.Add(period, value)
 	cs.Expand(period)
 }
 
@@ -548,6 +557,7 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 	deleted = types.PeriodRange{First: fromPeriod, AfterLast: cs.AfterLast}
 	for period := fromPeriod; period < cs.AfterLast; period++ {
 		batch.Delete(cs.getDbKey(period))
+		cs.cache.Remove(period)
 	}
 	if fromPeriod > cs.First {
 		cs.AfterLast = fromPeriod
@@ -558,6 +568,9 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 }
 
 func (cs *canonicalStore[T]) get(period uint64) T {
+	if value, ok := cs.cache.Get(period); ok {
+		return value
+	}
 	var value T
 	if enc, err := cs.db.Get(cs.getDbKey(period)); err == nil {
 		if v, err := cs.decode(enc); err == nil {

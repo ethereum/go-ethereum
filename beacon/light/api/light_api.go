@@ -293,7 +293,15 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		// first actual event arrives; therefore we create the subscription in
 		// a separate goroutine while letting the main goroutine sync up to the
 		// current head
-		stream, err := eventsource.Subscribe(api.url+"/eth/v1/events?topics=head&topics=light_client_optimistic_update", "")
+		req, err := http.NewRequest("GET", api.url+"/eth/v1/events?topics=head&topics=light_client_optimistic_update", nil)
+		if err != nil {
+			errFn(fmt.Errorf("Error creating event subscription request: %v", err))
+			return
+		}
+		for k, v := range api.customHeaders {
+			req.Header.Set(k, v)
+		}
+		stream, err := eventsource.SubscribeWithRequest("", req)
 		if err != nil {
 			errFn(fmt.Errorf("Error creating event subscription: %v", err))
 			close(streamCh)
