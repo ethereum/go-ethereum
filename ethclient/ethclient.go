@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -328,6 +329,19 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	sub, err := ec.c.EthSubscribe(ctx, ch, "newHeads")
+	if err != nil {
+		// Defensively prefer returning nil interface explicitly on error-path, instead
+		// of letting default golang behavior wrap it with non-nil interface that stores
+		// nil concrete type value.
+		return nil, err
+	}
+	return sub, nil
+}
+
+// SubscribeChainReorg subscribes to notifications about the chain reorg events
+// on the given channel.
+func (ec *Client) SubscribeChainReorg(ctx context.Context, ch chan<- core.ChainSideEvent) (ethereum.Subscription, error) {
+	sub, err := ec.c.EthSubscribe(ctx, ch, "chainReorgs")
 	if err != nil {
 		// Defensively prefer returning nil interface explicitly on error-path, instead
 		// of letting default golang behavior wrap it with non-nil interface that stores
