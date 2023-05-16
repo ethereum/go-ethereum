@@ -97,6 +97,8 @@ func (m *Merger) FinalizePoS() {
 	log.Info("Entered PoS stage")
 }
 
+// WriteGenesisTransitionStatusToDB sets the proof-of-stake transition status in the db if PoS is configured to
+// be activated at the genesis block
 func WriteGenesisTransitionStatusToDB(db ethdb.Database, config *params.ChainConfig, genesisHash common.Hash) error {
 	if config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Cmp(big.NewInt(0)) == 0 {
 		if !config.TerminalTotalDifficultyPassed {
