@@ -20,7 +20,6 @@ require (
 	github.com/docker/docker v1.6.2
 	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
-	github.com/edsrzf/mmap-go v1.0.0
 	github.com/ethereum/c-kzg-4844 v0.2.0
 	github.com/fatih/color v1.7.0
 	github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c
