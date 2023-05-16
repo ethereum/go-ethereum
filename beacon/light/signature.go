@@ -19,7 +19,7 @@ package light
 import (
 	"math/rand"
 
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 )

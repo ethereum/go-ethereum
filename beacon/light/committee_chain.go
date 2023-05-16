@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -42,25 +42,10 @@ var (
 )
 
 var (
-	genesisDataKey   = []byte("genesis")    // RLP(GenesisData)
 	bestUpdateKey    = []byte("update-")    // bigEndian64(syncPeriod) -> RLP(types.LightClientUpdate)  (nextCommittee only referenced by root hash)
 	fixedRootKey     = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	syncCommitteeKey = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 )
-
-// ChainConfig contains built-in chain configuration presets for certain networks
-type ChainConfig struct {
-	GenesisData
-	Forks      types.Forks
-	Checkpoint common.Hash
-}
-
-// GenesisData is required for signature verification and is set by the
-// CommitteeChain.Init function.
-type GenesisData struct {
-	GenesisTime           uint64      // unix time (in seconds) of slot 0
-	GenesisValidatorsRoot common.Hash // root hash of the genesis validator set, used for signature domain calculation
-}
 
 // CommitteeChain maintains a chain of sync committee updates and a small
 // set of best known signed heads. It is used in all client configurations
@@ -83,17 +68,14 @@ type CommitteeChain struct {
 	syncCommitteeCache *lru.Cache[uint64, syncCommittee] // cache deserialized committees
 	unixNano           func() int64
 
-	forks              types.Forks
+	config             types.ChainConfig
 	signerThreshold    int
 	minimumUpdateScore types.UpdateScore
 	enforceTime        bool
-
-	genesisData GenesisData
-	genesisInit bool // genesis data initialized (signature check possible)
 }
 
 // NewCommitteeChain creates a new CommitteeChain
-func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
+func NewCommitteeChain(db ethdb.KeyValueStore, config types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
 		fixedRoots: newCanonicalStore[common.Hash](db, fixedRootKey, func(root common.Hash) ([]byte, error) {
 			return root[:], nil
@@ -129,7 +111,7 @@ func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshol
 		sigVerifier:        sigVerifier,
 		clock:              clock,
 		unixNano:           unixNano,
-		forks:              forks,
+		config:             config,
 		signerThreshold:    signerThreshold,
 		enforceTime:        enforceTime,
 		minimumUpdateScore: types.UpdateScore{
@@ -137,21 +119,9 @@ func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshol
 			SubPeriodIndex: params.SyncPeriodLength / 16,
 		},
 	}
-	if enc, err := s.db.Get(genesisDataKey); err == nil {
-		var genesisData GenesisData
-		if err := rlp.DecodeBytes(enc, &genesisData); err == nil {
-			s.setGenesisData(genesisData)
-			log.Trace("Beacon chain genesis data loaded")
-		} else {
-			log.Error("Error decoding genesis data", "error", err)
-		}
-	}
 
 	// check validity constraints
 	if !s.updates.IsEmpty() {
-		if !s.genesisInit {
-			log.Crit("Inconsistent database error: updates present but genesis data is not initialized")
-		}
 		if s.fixedRoots.IsEmpty() || s.updates.First < s.fixedRoots.First ||
 			s.updates.First >= s.fixedRoots.AfterLast {
 			log.Crit("Inconsistent database error: first update is not in the fixed roots range")
@@ -201,38 +171,6 @@ func (s *CommitteeChain) Reset() {
 	if err := batch.Write(); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 	}
-}
-
-// InitConfig initializes the tracker with the given GenesisData and starts the update
-// syncing process.
-// Note that Init may be called either at startup or later if it has to be
-// fetched from the network based on a checkpoint hash.
-func (s *CommitteeChain) SetGenesisData(genesisData GenesisData) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if s.genesisInit {
-		if s.genesisData != genesisData {
-			log.Crit("Beacon chain genesis data already initialized with different values")
-		}
-		return
-	}
-	s.setGenesisData(genesisData)
-	if enc, err := rlp.EncodeToBytes(&genesisData); err == nil {
-		if err := s.db.Put(genesisDataKey, enc); err != nil {
-			log.Error("Error storing genesis data", "error", err)
-		}
-	} else {
-		log.Error("Error encoding genesis data", "error", err)
-	}
-	log.Trace("Beacon chain genesis data stored and initialized")
-}
-
-// (lock required)
-func (s *CommitteeChain) setGenesisData(genesisData GenesisData) {
-	s.genesisData = genesisData
-	s.forks.ComputeDomains(genesisData.GenesisValidatorsRoot)
-	s.genesisInit = true
 }
 
 func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
@@ -327,9 +265,6 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if !s.genesisInit {
-		return ErrNotInitialized
-	}
 	period := update.Header.SyncPeriod()
 	if !s.updates.CanExpand(period) || !s.committees.Includes(period) {
 		return ErrInvalidPeriod
@@ -382,7 +317,7 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	if !s.genesisInit || s.committees.IsEmpty() {
+	if s.committees.IsEmpty() {
 		return 0, false
 	}
 	if !s.updates.IsEmpty() {
@@ -446,7 +381,7 @@ func (s *CommitteeChain) VerifySignedHeader(head types.SignedHeader) (bool, time
 // (rlock required)
 func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
 	var (
-		slotTime = int64(time.Second) * int64(s.genesisData.GenesisTime+head.Header.Slot*12)
+		slotTime = int64(time.Second) * int64(s.config.GenesisTime+head.Header.Slot*12)
 		age      = time.Duration(s.unixNano() - slotTime)
 	)
 	if s.enforceTime && age < 0 {
@@ -456,7 +391,10 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 	if committee == nil {
 		return false, age
 	}
-	return s.sigVerifier.verifySignature(committee, s.forks.SigningRoot(head.Header), &head.Signature), age
+	if signingRoot, err := s.config.Forks.SigningRoot(head.Header); err == nil {
+		return s.sigVerifier.verifySignature(committee, signingRoot, &head.Signature), age
+	}
+	return false, age
 }
 
 // verifyUpdate checks whether the header signature is correct and the update

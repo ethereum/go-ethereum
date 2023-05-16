@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/light/types"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -35,30 +35,30 @@ var (
 	testGenesis2 = newTestGenesis()
 
 	tfBase = newTestForks(testGenesis, types.Forks{
-		types.Fork{Epoch: 0, Version: []byte{0}},
+		&types.Fork{Epoch: 0, Version: []byte{0}},
 	})
 	tfAlternative = newTestForks(testGenesis, types.Forks{
-		types.Fork{Epoch: 0, Version: []byte{0}},
-		types.Fork{Epoch: 0x700, Version: []byte{1}},
+		&types.Fork{Epoch: 0, Version: []byte{0}},
+		&types.Fork{Epoch: 0x700, Version: []byte{1}},
 	})
 	tfAnotherGenesis = newTestForks(testGenesis2, types.Forks{
-		types.Fork{Epoch: 0, Version: []byte{0}},
+		&types.Fork{Epoch: 0, Version: []byte{0}},
 	})
 
-	tcBase                      = newTestCommitteeChain(nil, testGenesis, tfBase, true, 0, 10, 400, 400)
-	tcBaseWithInvalidUpdates    = newTestCommitteeChain(tcBase, testGenesis, tfBase, false, 5, 10, 400, 200) // signer count too low
-	tcBaseWithBetterUpdates     = newTestCommitteeChain(tcBase, testGenesis, tfBase, false, 5, 10, 400, 440)
-	tcReorgWithWorseUpdates     = newTestCommitteeChain(tcBase, testGenesis, tfBase, true, 5, 10, 20, 400)
-	tcReorgWithWorseUpdates2    = newTestCommitteeChain(tcBase, testGenesis, tfBase, true, 5, 10, 400, 380)
-	tcReorgWithBetterUpdates    = newTestCommitteeChain(tcBase, testGenesis, tfBase, true, 5, 10, 400, 420)
-	tcReorgWithFinalizedUpdates = newTestCommitteeChain(tcBase, testGenesis, tfBase, true, 5, 10, finalizedTestUpdate, 400)
-	tcFork                      = newTestCommitteeChain(tcBase, testGenesis, tfAlternative, true, 7, 10, 400, 400)
-	tcAnotherGenesis            = newTestCommitteeChain(nil, testGenesis2, tfAnotherGenesis, true, 0, 10, 400, 400)
+	tcBase                      = newTestCommitteeChain(nil, tfBase, true, 0, 10, 400, 400)
+	tcBaseWithInvalidUpdates    = newTestCommitteeChain(tcBase, tfBase, false, 5, 10, 400, 200) // signer count too low
+	tcBaseWithBetterUpdates     = newTestCommitteeChain(tcBase, tfBase, false, 5, 10, 400, 440)
+	tcReorgWithWorseUpdates     = newTestCommitteeChain(tcBase, tfBase, true, 5, 10, 20, 400)
+	tcReorgWithWorseUpdates2    = newTestCommitteeChain(tcBase, tfBase, true, 5, 10, 400, 380)
+	tcReorgWithBetterUpdates    = newTestCommitteeChain(tcBase, tfBase, true, 5, 10, 400, 420)
+	tcReorgWithFinalizedUpdates = newTestCommitteeChain(tcBase, tfBase, true, 5, 10, finalizedTestUpdate, 400)
+	tcFork                      = newTestCommitteeChain(tcBase, tfAlternative, true, 7, 10, 400, 400)
+	tcAnotherGenesis            = newTestCommitteeChain(nil, tfAnotherGenesis, true, 0, 10, 400, 400)
 )
 
 func TestCommitteeChainFixedRoots(t *testing.T) {
 	for _, reload := range []bool{false, true} {
-		c := newCommitteeChainTest(t, testGenesis, tfBase, 300, true)
+		c := newCommitteeChainTest(t, tfBase, 300, true)
 		c.setClockPeriod(7)
 		c.addFixedRoot(tcBase, 4, nil)
 		c.addFixedRoot(tcBase, 5, nil)
@@ -85,7 +85,7 @@ func TestCommitteeChainFixedRoots(t *testing.T) {
 func TestCommitteeChainCheckpointSync(t *testing.T) {
 	for _, enforceTime := range []bool{false, true} {
 		for _, reload := range []bool{false, true} {
-			c := newCommitteeChainTest(t, testGenesis, tfBase, 300, enforceTime)
+			c := newCommitteeChainTest(t, tfBase, 300, enforceTime)
 			if enforceTime {
 				c.setClockPeriod(6)
 			}
@@ -134,7 +134,7 @@ func TestCommitteeChainCheckpointSync(t *testing.T) {
 func TestCommitteeChainReorg(t *testing.T) {
 	for _, reload := range []bool{false, true} {
 		for _, addBetterUpdates := range []bool{false, true} {
-			c := newCommitteeChainTest(t, testGenesis, tfBase, 300, true)
+			c := newCommitteeChainTest(t, tfBase, 300, true)
 			c.setClockPeriod(11)
 			c.addFixedRoot(tcBase, 3, nil)
 			c.addFixedRoot(tcBase, 4, nil)
@@ -193,7 +193,7 @@ func TestCommitteeChainReorg(t *testing.T) {
 }
 
 func TestCommitteeChainFork(t *testing.T) {
-	c := newCommitteeChainTest(t, testGenesis, tfAlternative, 300, true)
+	c := newCommitteeChainTest(t, tfAlternative, 300, true)
 	c.setClockPeriod(11)
 	// trying to sync a chain on an alternative fork with the base chain data
 	c.addFixedRoot(tcBase, 0, nil)
@@ -213,7 +213,7 @@ func TestCommitteeChainFork(t *testing.T) {
 	}
 	c.verifyRange(tcFork, 0, 10)
 	// reload the chain while switching to the base fork
-	c.forks = tfBase
+	c.config = tfBase
 	c.reloadChain()
 	// updates 7..9 should be rolled back now
 	c.verifyRange(tcFork, 0, 6) // again, period 7 only verifies on the right fork
@@ -229,31 +229,27 @@ type committeeChainTest struct {
 	t               *testing.T
 	db              *memorydb.Database
 	clock           *mclock.Simulated
-	genesis         GenesisData
-	forks           types.Forks
+	config          types.ChainConfig
 	signerThreshold int
 	enforceTime     bool
 	chain           *CommitteeChain
 }
 
-func newCommitteeChainTest(t *testing.T, genesis GenesisData, forks types.Forks, signerThreshold int, enforceTime bool) *committeeChainTest {
+func newCommitteeChainTest(t *testing.T, config types.ChainConfig, signerThreshold int, enforceTime bool) *committeeChainTest {
 	c := &committeeChainTest{
 		t:               t,
 		db:              memorydb.New(),
 		clock:           &mclock.Simulated{},
-		genesis:         genesis,
-		forks:           forks,
+		config:          config,
 		signerThreshold: signerThreshold,
 		enforceTime:     enforceTime,
 	}
-	c.chain = NewCommitteeChain(c.db, forks, signerThreshold, enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
-	c.chain.SetGenesisData(genesis)
+	c.chain = NewCommitteeChain(c.db, config, signerThreshold, enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
 	return c
 }
 
 func (c *committeeChainTest) reloadChain() {
-	c.chain = NewCommitteeChain(c.db, c.forks, c.signerThreshold, c.enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
-	c.chain.SetGenesisData(c.genesis)
+	c.chain = NewCommitteeChain(c.db, c.config, c.signerThreshold, c.enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
 }
 
 func (c *committeeChainTest) setClockPeriod(period float64) {
@@ -304,21 +300,22 @@ func (c *committeeChainTest) verifyRange(tc *testCommitteeChain, begin, end uint
 	c.verifySignedHeader(tc, float64(end)+1.5, false)
 }
 
-func newTestGenesis() GenesisData {
-	var genesisData GenesisData
-	rand.Read(genesisData.GenesisValidatorsRoot[:])
-	return genesisData
+func newTestGenesis() types.ChainConfig {
+	var config types.ChainConfig
+	rand.Read(config.GenesisValidatorsRoot[:])
+	return config
 }
 
-func newTestForks(genesisData GenesisData, forks types.Forks) types.Forks {
-	forks.ComputeDomains(genesisData.GenesisValidatorsRoot)
-	return forks
+func newTestForks(config types.ChainConfig, forks types.Forks) types.ChainConfig {
+	for _, fork := range forks {
+		config.AddFork(fork.Name, fork.Epoch, fork.Version)
+	}
+	return config
 }
 
-func newTestCommitteeChain(parent *testCommitteeChain, genesisData GenesisData, forks types.Forks, newCommittees bool, begin, end int, subPeriodIndex uint64, signerCount int) *testCommitteeChain {
+func newTestCommitteeChain(parent *testCommitteeChain, config types.ChainConfig, newCommittees bool, begin, end int, subPeriodIndex uint64, signerCount int) *testCommitteeChain {
 	tc := &testCommitteeChain{
-		genesisData: genesisData,
-		forks:       forks,
+		config: config,
 	}
 	if parent != nil {
 		tc.periods = make([]testPeriod, len(parent.periods))
@@ -373,18 +370,18 @@ type testPeriod struct {
 }
 
 type testCommitteeChain struct {
-	periods     []testPeriod
-	forks       types.Forks
-	genesisData GenesisData
+	periods []testPeriod
+	config  types.ChainConfig
 }
 
 func (tc *testCommitteeChain) makeTestSignedHead(header types.Header, signerCount int) types.SignedHeader {
 	bitmask := makeBitmask(signerCount)
+	signingRoot, _ := tc.config.Forks.SigningRoot(header)
 	return types.SignedHeader{
 		Header: header,
 		Signature: types.SyncAggregate{
 			Signers:   bitmask,
-			Signature: makeDummySignature(tc.periods[types.SyncPeriod(header.Slot+1)].committee, tc.forks.SigningRoot(header), bitmask),
+			Signature: makeDummySignature(tc.periods[types.SyncPeriod(header.Slot+1)].committee, signingRoot, bitmask),
 		},
 		SignatureSlot: header.Slot + 1,
 	}

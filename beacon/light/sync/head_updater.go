@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 )
 
 type HeadUpdater struct {

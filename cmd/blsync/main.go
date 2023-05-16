@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -88,11 +88,10 @@ func blsync(ctx *cli.Context) error {
 	var (
 		db              = memorydb.New()
 		threshold       = ctx.Int(utils.BeaconThresholdFlag.Name)
-		committeeChain  = light.NewCommitteeChain(db, chainConfig.Forks, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name), light.BLSVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
+		committeeChain  = light.NewCommitteeChain(db, *chainConfig.ChainConfig, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name), light.BLSVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 		checkpointStore = light.NewCheckpointStore(db, committeeChain)
 		headValidator   = light.NewHeadValidator(committeeChain)
 	)
-	committeeChain.SetGenesisData(chainConfig.GenesisData)
 	headUpdater := sync.NewHeadUpdater(headValidator, committeeChain)
 	headTracker := request.NewHeadTracker(headUpdater.NewSignedHead)
 	headValidator.Subscribe(threshold, func(signedHead types.SignedHeader) {

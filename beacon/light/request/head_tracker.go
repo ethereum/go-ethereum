@@ -19,7 +19,7 @@ package request
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 

@@ -119,19 +119,36 @@ func (f Forks) Len() int           { return len(f) }
 func (f Forks) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f Forks) Less(i, j int) bool { return f[i].Epoch < f[j].Epoch }
 
+// ChainConfig contains the beacon chain configuration
+type ChainConfig struct {
+	GenesisTime           uint64      // unix time (in seconds) of slot 0
+	GenesisValidatorsRoot common.Hash // root hash of the genesis validator set, used for signature domain calculation
+	Forks                 Forks
+}
+
+func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
+	fork := &Fork{
+		Name:    name,
+		Epoch:   epoch,
+		Version: version,
+	}
+	fork.computeDomain(c.GenesisValidatorsRoot)
+	c.Forks = append(c.Forks, fork)
+	return c
+}
+
 // LoadForks parses the beacon chain configuration file (config.yaml) and extracts
 // the list of forks.
-func LoadForks(path string) (Forks, error) {
+func (c *ChainConfig) LoadForks(path string) error {
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read beacon chain config file: %v", err)
+		return fmt.Errorf("failed to read beacon chain config file: %v", err)
 	}
 	config := make(map[string]string)
 	if err := yaml.Unmarshal(file, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse beacon chain config file: %v", err)
+		return fmt.Errorf("failed to parse beacon chain config file: %v", err)
 	}
 	var (
-		forks    Forks
 		versions = make(map[string][]byte)
 		epochs   = make(map[string]uint64)
 	)
@@ -143,7 +160,7 @@ func LoadForks(path string) (Forks, error) {
 			if v, err := hexutil.Decode(value); err == nil {
 				versions[name] = v
 			} else {
-				return nil, fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", value, err)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
@@ -151,21 +168,21 @@ func LoadForks(path string) (Forks, error) {
 			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
 				epochs[name] = v
 			} else {
-				return nil, fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", value, err)
 			}
 		}
 	}
 	for name, epoch := range epochs {
 		if version, ok := versions[name]; ok {
 			delete(versions, name)
-			forks = append(forks, &Fork{Epoch: epoch, Name: name, Version: version})
+			c.AddFork(name, epoch, version)
 		} else {
-			return nil, fmt.Errorf("fork id missing for %q in beacon chain config file", name)
+			return fmt.Errorf("fork id missing for %q in beacon chain config file", name)
 		}
 	}
 	for name := range versions {
-		return nil, fmt.Errorf("epoch number missing for fork %q in beacon chain config file", name)
+		return fmt.Errorf("epoch number missing for fork %q in beacon chain config file", name)
 	}
-	sort.Sort(forks)
-	return forks, nil
+	sort.Sort(c.Forks)
+	return nil
 }

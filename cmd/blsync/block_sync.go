@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	lsync "github.com/ethereum/go-ethereum/beacon/light/sync"
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	ctypes "github.com/ethereum/go-ethereum/core/types"

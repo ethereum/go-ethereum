@@ -19,8 +19,7 @@ package main
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/beacon/light"
-	"github.com/ethereum/go-ethereum/beacon/light/types"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -30,63 +29,38 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// lightClientConfig contains beacon light client configuration
+type lightClientConfig struct {
+	*types.ChainConfig
+	Checkpoint common.Hash
+}
+
 var (
-	MainnetConfig = light.ChainConfig{
-		GenesisData: light.GenesisData{
+	MainnetConfig = lightClientConfig{
+		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"),
 			GenesisTime:           1606824023,
-		},
-		Forks: types.Forks{
-			types.Fork{
-				Epoch:   0,
-				Name:    "GENESIS",
-				Version: []byte{0, 0, 0, 0},
-			},
-			types.Fork{
-				Epoch:   74240,
-				Name:    "ALTAIR",
-				Version: []byte{1, 0, 0, 0},
-			},
-			types.Fork{
-				Epoch:   144896,
-				Name:    "BELLATRIX",
-				Version: []byte{2, 0, 0, 0},
-			},
-			types.Fork{
-				Epoch:   194048,
-				Name:    "CAPELLA",
-				Version: []byte{3, 0, 0, 0},
-			},
-		},
+		}).
+			AddFork("GENESIS", 0, []byte{0, 0, 0, 0}).
+			AddFork("ALTAIR", 74240, []byte{1, 0, 0, 0}).
+			AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
+			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}),
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
 
-	SepoliaConfig = light.ChainConfig{
+	SepoliaConfig = MainnetConfig
+	GoerliConfig  = MainnetConfig
+
+	/*SepoliaConfig = light.ChainConfig{
 		GenesisData: light.GenesisData{
 			GenesisValidatorsRoot: common.HexToHash("0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
 			GenesisTime:           1655733600,
 		},
 		Forks: types.Forks{
-			types.Fork{
-				Epoch:   0,
-				Name:    "GENESIS",
-				Version: []byte{144, 0, 0, 105},
-			},
-			types.Fork{
-				Epoch:   50,
-				Name:    "ALTAIR",
-				Version: []byte{144, 0, 0, 112},
-			},
-			types.Fork{
-				Epoch:   100,
-				Name:    "BELLATRIX",
-				Version: []byte{144, 0, 0, 113},
-			},
-			types.Fork{
-				Epoch:   56832,
-				Name:    "CAPELLA",
-				Version: []byte{144, 0, 0, 114},
-			},
+			types.AddFork("GENESIS", 0, []byte{144, 0, 0, 105}),
+			types.AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}),
+			types.AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}),
+			types.AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}),
 		},
 		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
 	}
@@ -97,30 +71,19 @@ var (
 			GenesisTime:           1614588812,
 		},
 		Forks: types.Forks{
-			types.Fork{
-				Epoch:   0,
-				Name:    "GENESIS",
-				Version: []byte{0, 0, 16, 32},
-			},
-			types.Fork{
-				Epoch:   36660,
-				Name:    "ALTAIR",
-				Version: []byte{1, 0, 16, 32},
-			},
-			types.Fork{
-				Epoch:   112260,
-				Name:    "BELLATRIX",
-				Version: []byte{2, 0, 16, 32},
-			},
+			types.AddFork("GENESIS", 0, []byte{0, 0, 16, 32}),
+			types.AddFork("ALTAIR", 36660, []byte{1, 0, 16, 32}),
+			types.AddFork("BELLATRIX", 112260, []byte{2, 0, 16, 32}),
+			types.AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}),
 		},
 		Checkpoint: common.HexToHash("0x53a0f4f0a378e2c4ae0a9ee97407eb69d0d737d8d8cd0a5fb1093f42f7b81c49"),
-	}
+	}*/
 )
 
-func makeChainConfig(ctx *cli.Context) light.ChainConfig {
+func makeChainConfig(ctx *cli.Context) lightClientConfig {
 	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag)
 	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name) || ctx.IsSet(utils.BeaconGenesisRootFlag.Name) || ctx.IsSet(utils.BeaconGenesisTimeFlag.Name)
-	var config light.ChainConfig
+	var config lightClientConfig
 	switch {
 	case ctx.Bool(utils.MainnetFlag.Name):
 		config = MainnetConfig
@@ -136,13 +99,6 @@ func makeChainConfig(ctx *cli.Context) light.ChainConfig {
 	if customConfig && config.Forks != nil {
 		utils.Fatalf("Cannot use custom beacon chain config flags in combination with pre-defined network config")
 	}
-	if ctx.IsSet(utils.BeaconConfigFlag.Name) {
-		forks, err := types.LoadForks(ctx.String(utils.BeaconConfigFlag.Name))
-		if err != nil {
-			utils.Fatalf("Could not load beacon chain config file", "file name", ctx.String(utils.BeaconConfigFlag.Name), "error", err)
-		}
-		config.Forks = forks
-	}
 	if ctx.IsSet(utils.BeaconGenesisRootFlag.Name) {
 		if c, err := hexutil.Decode(ctx.String(utils.BeaconGenesisRootFlag.Name)); err == nil && len(c) <= 32 {
 			copy(config.GenesisValidatorsRoot[:len(c)], c)
@@ -152,6 +108,11 @@ func makeChainConfig(ctx *cli.Context) light.ChainConfig {
 	}
 	if ctx.IsSet(utils.BeaconGenesisTimeFlag.Name) {
 		config.GenesisTime = ctx.Uint64(utils.BeaconGenesisTimeFlag.Name)
+	}
+	if ctx.IsSet(utils.BeaconConfigFlag.Name) {
+		if err := config.ChainConfig.LoadForks(ctx.String(utils.BeaconConfigFlag.Name)); err != nil {
+			utils.Fatalf("Could not load beacon chain config file", "file name", ctx.String(utils.BeaconConfigFlag.Name), "error", err)
+		}
 	}
 	if ctx.IsSet(utils.BeaconCheckpointFlag.Name) {
 		if c, err := hexutil.Decode(ctx.String(utils.BeaconCheckpointFlag.Name)); err == nil && len(c) <= 32 {
