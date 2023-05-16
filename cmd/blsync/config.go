@@ -48,36 +48,29 @@ var (
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
 
-	SepoliaConfig = MainnetConfig
-	GoerliConfig  = MainnetConfig
-
-	/*SepoliaConfig = light.ChainConfig{
-		GenesisData: light.GenesisData{
+	SepoliaConfig = lightClientConfig{
+		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
 			GenesisTime:           1655733600,
-		},
-		Forks: types.Forks{
-			types.AddFork("GENESIS", 0, []byte{144, 0, 0, 105}),
-			types.AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}),
-			types.AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}),
-			types.AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}),
-		},
+		}).
+			AddFork("GENESIS", 0, []byte{144, 0, 0, 105}).
+			AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}).
+			AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
+			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}),
 		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
 	}
 
-	GoerliConfig = light.ChainConfig{
-		GenesisData: light.GenesisData{
+	GoerliConfig = lightClientConfig{
+		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"),
 			GenesisTime:           1614588812,
-		},
-		Forks: types.Forks{
-			types.AddFork("GENESIS", 0, []byte{0, 0, 16, 32}),
-			types.AddFork("ALTAIR", 36660, []byte{1, 0, 16, 32}),
-			types.AddFork("BELLATRIX", 112260, []byte{2, 0, 16, 32}),
-			types.AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}),
-		},
+		}).
+			AddFork("GENESIS", 0, []byte{0, 0, 16, 32}).
+			AddFork("ALTAIR", 36660, []byte{1, 0, 16, 32}).
+			AddFork("BELLATRIX", 112260, []byte{2, 0, 16, 32}).
+			AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}),
 		Checkpoint: common.HexToHash("0x53a0f4f0a378e2c4ae0a9ee97407eb69d0d737d8d8cd0a5fb1093f42f7b81c49"),
-	}*/
+	}
 )
 
 func makeChainConfig(ctx *cli.Context) lightClientConfig {
