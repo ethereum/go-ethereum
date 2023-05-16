@@ -10,7 +10,7 @@ import (
 
 func TestAdaptorShouldShareDbWithV1Engine(t *testing.T) {
 	database := rawdb.NewMemoryDatabase()
-	config := params.TestXDPoSMockChainConfig.XDPoS
+	config := params.TestXDPoSMockChainConfig
 	engine := New(config, database)
 
 	assert := assert.New(t)

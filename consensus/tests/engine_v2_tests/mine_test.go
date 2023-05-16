@@ -222,3 +222,63 @@ func TestPrepareHappyPath(t *testing.T) {
 	assert.Equal(t, types.Round(4), decodedExtraField.Round)
 	assert.Equal(t, types.Round(0), decodedExtraField.QuorumCert.ProposedBlockInfo.Round)
 }
+
+// test if we have 128 candidates, then snapshot will store all of them, and when preparing (and verifying) candidates is truncated to MaxMasternodes
+func TestUpdateMultipleMasterNodes(t *testing.T) {
+	config := params.TestXDPoSMockChainConfig
+	blockchain, _, currentBlock, signer, signFn := PrepareXDCTestBlockChainWith128Candidates(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	x := adaptor.EngineV2
+	// Insert block 1350
+	t.Logf("Inserting block with propose at 1350...")
+	blockCoinbaseA := "0xaaa0000000000000000000000000000000001350"
+	//Get from block validator error message
+	merkleRoot := "b345a8560bd51926803dd17677c9f0751193914a851a4ec13063d6bf50220b53"
+	parentBlock := CreateBlock(blockchain, config, currentBlock, 1350, 450, blockCoinbaseA, signer, signFn, nil, nil, merkleRoot)
+	err := blockchain.InsertBlock(parentBlock)
+	assert.Nil(t, err)
+	// 1350 is a gap block, need to update the snapshot
+	err = blockchain.UpdateM1()
+	assert.Nil(t, err)
+	// but we wait until 1800 to test the snapshot
+
+	t.Logf("Inserting block from 1351 to 1800...")
+	for i := 1351; i <= 1800; i++ {
+		blockCoinbase := fmt.Sprintf("0xaaa000000000000000000000000000000000%4d", i)
+		block := CreateBlock(blockchain, config, parentBlock, i, int64(i-900), blockCoinbase, signer, signFn, nil, nil, merkleRoot)
+		err = blockchain.InsertBlock(block)
+		assert.Nil(t, err)
+		if i < 1800 {
+			parentBlock = block
+		}
+		if i == 1800 {
+			snap, err := x.GetSnapshot(blockchain, block.Header())
+
+			assert.Nil(t, err)
+			assert.Equal(t, 1350, int(snap.Number))
+			assert.Equal(t, 128, len(snap.NextEpochMasterNodes)) // 128 is all masternode candidates, not limited by MaxMasternodes
+		}
+	}
+
+	tstamp := time.Now().Unix()
+
+	header1800 := &types.Header{
+		ParentHash: parentBlock.Hash(),
+		Number:     big.NewInt(int64(1800)),
+		GasLimit:   params.TargetGasLimit,
+		Time:       big.NewInt(tstamp),
+		Coinbase:   voterAddr,
+	}
+
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(900), false)
+	blockInfo := &types.BlockInfo{Hash: parentBlock.Hash(), Round: types.Round(900 - 1), Number: parentBlock.Number()}
+	signature := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	signatures := []types.Signature{signature}
+	quorumCert := &types.QuorumCert{ProposedBlockInfo: blockInfo, Signatures: signatures, GapNumber: 1350}
+	adaptor.EngineV2.ProcessQCFaker(blockchain, quorumCert)
+	adaptor.EngineV2.AuthorizeFaker(voterAddr)
+	err = adaptor.Prepare(blockchain, header1800)
+	assert.Nil(t, err)
+	assert.Equal(t, common.MaxMasternodesV2, len(header1800.Validators)/common.AddressLength) // although 128 masternode candidates, we can only pick MaxMasternodes
+	assert.Equal(t, 0, len(header1800.Penalties)/common.AddressLength)
+}

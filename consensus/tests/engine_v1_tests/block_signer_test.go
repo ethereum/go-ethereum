@@ -154,6 +154,7 @@ func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed while trying to get signers")
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	// Now, we voted acc 1 to be in the signerList, which will kick out acc3 because it has less funds
 	if signers[acc3Addr.Hex()] == true {
 		debugMessage(backend, signers, t)
@@ -195,6 +196,7 @@ func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc1Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 1 should sit in the signer list")
@@ -244,6 +246,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc1Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 1 should sit in the signer list")
@@ -279,6 +282,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	// Should not run the `updateM1` for forked chain, hence account3 still exit
 	if signers[acc3Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
@@ -312,6 +316,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 2 should sit in the signer list")
@@ -325,6 +330,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 2 should sit in the signer list")
@@ -338,6 +344,7 @@ func TestCallUpdateM1WhenForkedBlockBackToMainChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("acc2Addr should sit in the signer list")
@@ -404,6 +411,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc1Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 1 should sit in the signer list")
@@ -445,6 +453,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	// Should not run the `updateM1` for forked chain, hence account3 still exit
 	if signers[acc3Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
@@ -473,6 +482,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 2 should sit in the signer list")
@@ -482,6 +492,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 2 should sit in the signer list")
@@ -491,6 +502,7 @@ func TestStatesShouldBeUpdatedWhenForkedBlockBecameMainChainAtGapBlock(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc2Addr.Hex()] != true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("acc2Addr should sit in the signer list")
@@ -564,6 +576,7 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 	if signers[acc1Addr.Hex()] == true {
 		debugMessage(backend, signers, t)
 		t.Fatalf("account 1 should NOT sit in the signer list")
@@ -623,6 +636,7 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, common.MaxMasternodes, len(signers))
 
 	// Should run the `updateM1` for forked chain, but it should not be affected by the voted block 451A which is not on the mainchain anymore
 	if signers[acc3Addr.Hex()] != true {
@@ -630,63 +644,3 @@ func TestVoteShouldNotBeAffectedByFork(t *testing.T) {
 		t.Fatalf("account 3 should sit in the signer list as previos block result")
 	}
 }
-
-/*
-  V2 Consensus
-*/
-/*
-// Pending for creating cross version blocks
-func TestV2UpdateSignerListIfVotedBeforeGap(t *testing.T) {
-	config := params.TestXDPoSMockChainConfig
-	blockchain, backend, parentBlock, signer, signFn := PrepareXDCTestBlockChain(t, int(config.XDPoS.Epoch)+GAP-2, config)
-	// Insert first Block 1349
-	t.Logf("Inserting block with propose at 1349...")
-	blockCoinbaseA := "0xaaa0000000000000000000000000000000001349"
-	tx, err := voteTX(37117, 0, acc1Addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	//Get from block validator error message
-	merkleRoot := "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	header := &types.Header{
-		Root:       common.HexToHash(merkleRoot),
-		Number:     big.NewInt(int64(1349)),
-		ParentHash: parentBlock.Hash(),
-		Coinbase:   common.HexToAddress(blockCoinbaseA),
-	}
-	block1349, err := insertBlockTxs(blockchain, header, []*types.Transaction{tx}, signer, signFn, blockchain.Config())
-	if err != nil {
-		t.Fatal(err)
-	}
-	parentBlock = block1349
-
-	// Now, let's mine another block to trigger the GAP block signerList update
-	block1350CoinbaseAddress := "0xaaa0000000000000000000000000000000001350"
-	merkleRoot = "46234e9cd7e85a267f7f0435b15256a794a2f6d65cc98cdbd21dcd10a01d9772"
-	header = &types.Header{
-		Root:       common.HexToHash(merkleRoot),
-		Number:     big.NewInt(int64(1350)),
-		ParentHash: parentBlock.Hash(),
-		Coinbase:   common.HexToAddress(block1350CoinbaseAddress),
-	}
-	block1350, err := insertBlock(blockchain, header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	signers, err := GetSnapshotSigner(blockchain, block1350.Header())
-	if err != nil {
-		t.Fatalf("Failed while trying to get signers")
-	}
-	// Now, we voted acc 1 to be in the signerList, which will kick out acc3 because it has less funds
-	if signers[acc3Addr.Hex()] == true {
-		debugMessage(backend, signers, t)
-		t.Fatalf("account 3 should NOT sit in the signer list")
-	}
-	if signers[acc1Addr.Hex()] != true {
-		debugMessage(backend, signers, t)
-		t.Fatalf("account 1 should sit in the signer list")
-	}
-}
-*/

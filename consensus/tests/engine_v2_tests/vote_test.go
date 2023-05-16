@@ -339,7 +339,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	// Create a new block but don't inject it into the chain yet
 	blockNum := 906
 	blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
-	block := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 6, blockCoinBase, signer, signFn, nil, nil)
+	block := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 6, blockCoinBase, signer, signFn, nil, nil, "")
 
 	blockInfo := &types.BlockInfo{
 		Hash:   block.Header().Hash(),

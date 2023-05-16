@@ -1248,7 +1248,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	var engine consensus.Engine
 	if config.XDPoS != nil {
-		engine = XDPoS.New(config.XDPoS, chainDb)
+		engine = XDPoS.New(config, chainDb)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {

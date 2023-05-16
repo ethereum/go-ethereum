@@ -78,8 +78,9 @@ func (x *XDPoS) SubscribeForensicsEvent(ch chan<- types.ForensicsEvent) event.Su
 
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
+func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 	log.Info("[New] initialise consensus engines")
+	config := chainConfig.XDPoS
 	// Set any missing consensus parameters to their defaults
 	if config.Epoch == 0 {
 		config.Epoch = utils.EpochLength
@@ -108,8 +109,8 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		WaitPeriodCh: waitPeriodCh,
 
 		signingTxsCache: signingTxsCache,
-		EngineV1:        engine_v1.New(config, db),
-		EngineV2:        engine_v2.New(config, db, waitPeriodCh),
+		EngineV1:        engine_v1.New(chainConfig, db),
+		EngineV2:        engine_v2.New(chainConfig, db, waitPeriodCh),
 	}
 }
 
@@ -138,8 +139,8 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		GetLendingService: func() utils.LendingService { return nil },
 
 		signingTxsCache: signingTxsCache,
-		EngineV1:        engine_v1.NewFaker(db, conf),
-		EngineV2:        engine_v2.New(conf, db, waitPeriodCh),
+		EngineV1:        engine_v1.NewFaker(db, chainConfig),
+		EngineV2:        engine_v2.New(chainConfig, db, waitPeriodCh),
 	}
 	return fakeEngine
 }

@@ -24,6 +24,8 @@ import (
 )
 
 type XDPoS_v2 struct {
+	chainConfig *params.ChainConfig // Chain & network configuration
+
 	config       *params.XDPoSConfig // Consensus engine configuration parameters
 	db           ethdb.Database      // Database to store and retrieve snapshot checkpoints
 	isInitilised bool                // status of v2 variables
@@ -64,7 +66,8 @@ type XDPoS_v2 struct {
 	votePoolCollectionTime time.Time
 }
 
-func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
+func New(chainConfig *params.ChainConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
+	config := chainConfig.XDPoS
 	// Setup timeoutTimer
 	duration := time.Duration(config.V2.CurrentConfig.TimeoutPeriod) * time.Second
 	timeoutTimer := countdown.NewCountDown(duration)
@@ -77,6 +80,8 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 	timeoutPool := utils.NewPool()
 	votePool := utils.NewPool()
 	engine := &XDPoS_v2{
+		chainConfig: chainConfig,
+
 		config:       config,
 		db:           db,
 		isInitilised: false,
@@ -988,7 +993,11 @@ func (x *XDPoS_v2) GetPenalties(chain consensus.ChainReader, header *types.Heade
 	return epochSwitchInfo.Penalties
 }
 
+// Calculate masternodes for a block number and parent hash. In V2, truncating candidates[:MaxMasternodes] is done in this function.
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
+	// using new max masterndoes
+	maxMasternodes := common.MaxMasternodesV2
+
 	snap, err := x.getSnapshot(chain, blockNum.Uint64(), false)
 	if err != nil {
 		log.Error("[calcMasternodes] Adaptor v2 getSnapshot has error", "err", err)
@@ -998,11 +1007,17 @@ func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.In
 
 	if blockNum.Uint64() == x.config.V2.SwitchBlock.Uint64()+1 {
 		log.Info("[calcMasternodes] examing first v2 block")
+		if len(candidates) > maxMasternodes {
+			candidates = candidates[:maxMasternodes]
+		}
 		return candidates, []common.Address{}, nil
 	}
 
 	if x.HookPenalty == nil {
 		log.Info("[calcMasternodes] no hook penalty defined")
+		if len(candidates) > maxMasternodes {
+			candidates = candidates[:maxMasternodes]
+		}
 		return candidates, []common.Address{}, nil
 	}
 
@@ -1012,6 +1027,18 @@ func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.In
 		return nil, nil, err
 	}
 	masternodes := common.RemoveItemFromArray(candidates, penalties)
+	if len(masternodes) > maxMasternodes {
+		masternodes = masternodes[:maxMasternodes]
+	}
+	if len(masternodes) < x.config.V2.CurrentConfig.CertThreshold {
+		log.Warn("[calcMasternodes] Current epoch masternodes less than threshold", "number", blockNum, "masternodes", len(masternodes), "threshold", x.config.V2.CurrentConfig.CertThreshold)
+		for i, a := range masternodes {
+			log.Warn("final masternode", "i", i, "addr", a)
+		}
+		for i, a := range penalties {
+			log.Warn("penalty", "i", i, "addr", a)
+		}
+	}
 	return masternodes, penalties, nil
 
 }

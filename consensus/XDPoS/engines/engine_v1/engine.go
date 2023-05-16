@@ -38,6 +38,8 @@ const (
 // XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS_v1 struct {
+	chainConfig *params.ChainConfig // Chain & network configuration
+
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
@@ -79,7 +81,8 @@ func (x *XDPoS_v1) SigHash(header *types.Header) (hash common.Hash) {
 
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
+func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS_v1 {
+	config := chainConfig.XDPoS
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {
@@ -91,6 +94,8 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS_v1 {
 	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	return &XDPoS_v1{
+		chainConfig: chainConfig,
+
 		config: &conf,
 		db:     db,
 
@@ -778,7 +783,20 @@ func (x *XDPoS_v1) Prepare(chain consensus.ChainReader, header *types.Header) er
 	return nil
 }
 
+// Update masternodes into snapshot. In V1, truncating ms[:MaxMasternodes] is done in this function.
 func (x *XDPoS_v1) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []utils.Masternode) error {
+	var maxMasternodes int
+	// check if block number is increase ms checkpoint
+	if x.chainConfig.IsTIPIncreaseMasternodes(header.Number) || (x.config.V2.SwitchBlock != nil && header.Number.Cmp(x.config.V2.SwitchBlock) == 1) {
+		// using new masterndoes
+		maxMasternodes = common.MaxMasternodesV2
+	} else {
+		// using old masterndoes
+		maxMasternodes = common.MaxMasternodes
+	}
+	if len(ms) > maxMasternodes {
+		ms = ms[:maxMasternodes]
+	}
 	number := header.Number.Uint64()
 	log.Trace("take snapshot", "number", number, "hash", header.Hash())
 	// get snapshot
@@ -1007,10 +1025,10 @@ func (x *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpoin
 	return signers, nil
 }
 
-func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v1 {
+func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS_v1 {
 	var fakeEngine *XDPoS_v1
 	// Set any missing consensus parameters to their defaults
-	conf := config
+	conf := chainConfig.XDPoS
 
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(utils.InmemorySnapshots)
@@ -1018,6 +1036,8 @@ func NewFaker(db ethdb.Database, config *params.XDPoSConfig) *XDPoS_v1 {
 	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	fakeEngine = &XDPoS_v1{
+		chainConfig: chainConfig,
+
 		config:              conf,
 		db:                  db,
 		recents:             recents,

@@ -338,7 +338,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If delegated-proof-of-stake is requested, set it up
 	if chainConfig.XDPoS != nil {
-		return XDPoS.New(chainConfig.XDPoS, db)
+		return XDPoS.New(chainConfig, db)
 	}
 
 	// Otherwise assume proof-of-work

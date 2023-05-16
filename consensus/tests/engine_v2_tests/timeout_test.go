@@ -109,7 +109,7 @@ func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
 	// Create another block to trigger update parameters
 	blockNum := 1800
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 900, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 900, blockCoinBase, signer, signFn, nil, nil, "")
 	currentBlockHeader := currentBlock.Header()
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)

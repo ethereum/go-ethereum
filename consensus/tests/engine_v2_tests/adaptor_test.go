@@ -180,7 +180,7 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 
 	// block 901 is the first v2 block, and is treated as epoch switch block
 	err := blockchain.InsertBlock(currentBlock)
@@ -190,7 +190,7 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 	masternodes1ByNumber := adaptor.GetMasternodesByNumber(blockchain, currentBlock.NumberU64())
 	assert.True(t, reflect.DeepEqual(masternodes1, masternodes1ByNumber), "at block number", blockNum)
 	for blockNum = 902; blockNum < 915; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil, "")
 		err = blockchain.InsertBlock(currentBlock)
 		assert.Nil(t, err)
 		masternodes2 := adaptor.GetMasternodes(blockchain, currentBlock.Header())
@@ -213,7 +213,7 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	// V2
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 	err = blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
 	currentCheckpointNumber, epochNum, err = adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
@@ -222,7 +222,7 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	assert.Equal(t, uint64(1), epochNum)
 
 	for blockNum = 902; blockNum < 915; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil, "")
 
 		err = blockchain.InsertBlock(currentBlock)
 		assert.Nil(t, err)
@@ -248,13 +248,13 @@ func TestGetParentBlock(t *testing.T) {
 	// V2
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	block901 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block900, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	block901 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block900, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 	err = blockchain.InsertBlock(block901)
 	assert.Nil(t, err)
 
 	// let's inject another one, but the highestedQC has not been updated, so it shall still point to 900
 	blockNum = 902
-	block902 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block901, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	block902 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, block901, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 	err = blockchain.InsertBlock(block902)
 	assert.Nil(t, err)
 	block = adaptor.FindParentBlockToAssign(blockchain, block902)

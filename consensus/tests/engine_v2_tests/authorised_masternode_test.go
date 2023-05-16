@@ -17,7 +17,7 @@ func TestIsAuthorisedMNForConsensusV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 902
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 2, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 2, blockCoinBase, signer, signFn, nil, nil, "")
 	err := blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
 	// As long as the address is in the master node list, they are all valid
@@ -38,7 +38,7 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 901
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 	currentBlockHeader := currentBlock.Header()
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)
@@ -64,7 +64,7 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 
 	// We continue to grow the chain which will increase the round number
 	blockNum = 902
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil, "")
 	err = blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
 	time.Sleep(time.Duration(minePeriod) * time.Second)
@@ -89,7 +89,7 @@ func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	blockNum := 910 // 910 is new config switch block
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 10, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 10, blockCoinBase, signer, signFn, nil, nil, "")
 	currentBlockHeader := currentBlock.Header()
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)

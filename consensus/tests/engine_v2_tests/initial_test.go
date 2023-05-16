@@ -59,7 +59,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 
 	blockCoinBase := "0x111000000000000000000000000000000123"
 	for blockNum := 901; blockNum <= 910; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil, "")
 		err := blockchain.InsertBlock(currentBlock)
 		assert.Nil(t, err)
 	}
