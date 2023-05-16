@@ -757,7 +757,7 @@ func DefaultConfig() *Config {
 			// CPUProfile:       "",
 		},
 		ParallelEVM: &ParallelEVMConfig{
-			Enable:               false,
+			Enable:               true,
 			SpeculativeProcesses: 8,
 		},
 	}
