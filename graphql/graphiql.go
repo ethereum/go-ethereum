@@ -58,5 +58,5 @@ func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(graphiql)
 }
 
-//go:embed graphql.html
+//go:embed graphiql.html
 var graphiql []byte
