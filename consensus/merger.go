@@ -17,12 +17,16 @@
 package consensus
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -91,6 +95,22 @@ func (m *Merger) FinalizePoS() {
 	}
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Entered PoS stage")
+}
+
+func WriteGenesisTransitionStatusToDB(db ethdb.Database, config *params.ChainConfig, genesisHash common.Hash) error {
+	if config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Cmp(big.NewInt(0)) == 0 {
+		if !config.TerminalTotalDifficultyPassed {
+			return errors.New("can't configure chain configuration with ttd=0 and ttdpassed=false")
+		}
+		status := transitionStatus{LeftPoW: true, EnteredPoS: true}
+		blob, err := rlp.EncodeToBytes(status)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
+		}
+		rawdb.WriteTransitionStatus(db, blob)
+		rawdb.WriteFinalizedBlockHash(db, genesisHash)
+	}
+	return nil
 }
 
 // TDDReached reports whether the chain has left the PoW stage.
