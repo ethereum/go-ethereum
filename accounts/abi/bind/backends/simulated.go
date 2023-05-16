@@ -904,6 +904,10 @@ func (fb *filterBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Su
 	return fb.bc.SubscribeChainEvent(ch)
 }
 
+func (fb *filterBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+	return fb.bc.SubscribeChainSideEvent(ch)
+}
+
 func (fb *filterBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return fb.bc.SubscribeRemovedLogsEvent(ch)
 }
