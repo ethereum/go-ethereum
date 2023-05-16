@@ -18,11 +18,9 @@ package merkle
 
 import (
 	"math/bits"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/minio/sha256-simd"
 )
 
 func TestSingleProof(t *testing.T) {
