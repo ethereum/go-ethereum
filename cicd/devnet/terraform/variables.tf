@@ -15,18 +15,18 @@ locals {
     regions = [
       {
         "name": "us-east-2", // Ohio
-        "start": local.envs["us-east-2_start"],
-        "end": local.envs["us-east-2_end"],
+        "start": local.envs["us_east_2_start"],
+        "end": local.envs["us_east_2_end"],
       },
       {
         "name": "eu-west-1", // Ireland
-        "start": local.envs["eu-west-1_start"],
-        "end": local.envs["eu-west-1_end"],
+        "start": local.envs["eu_west_1_start"],
+        "end": local.envs["eu_west_1_end"],
       },
       {
         "name": "ap-southeast-2", // Sydney
-        "start": local.envs["ap-southeast-2_start"],
-        "end": local.envs["ap-southeast-2_end"],
+        "start": local.envs["ap_southeast_2_start"],
+        "end": local.envs["ap_southeast_2_end"],
       }
    ]
 
