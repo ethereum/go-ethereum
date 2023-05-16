@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -232,6 +233,36 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		for {
 			select {
 			case h := <-headers:
+				notifier.Notify(rpcSub.ID, h)
+			case <-rpcSub.Err():
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// ChainReorgs send a notification each time a chain reorg is happened on the chain.
+func (api *FilterAPI) ChainReorgs(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		reorgs := make(chan *core.ChainSideEvent)
+		headersSub := api.events.SubscribeChainReorgs(reorgs)
+
+		for {
+			select {
+			case h := <-reorgs:
 				notifier.Notify(rpcSub.ID, h)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()

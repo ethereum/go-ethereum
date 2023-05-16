@@ -69,6 +69,7 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
+	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
@@ -162,6 +163,8 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+	// ReorgsSubscription queries hashes for blocks that are imported
+	ReorgsSubscription
 	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -186,6 +189,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
+	reorgs    chan *core.ChainSideEvent
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -204,6 +208,7 @@ type EventSystem struct {
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
 	chainSub       event.Subscription // Subscription for new chain event
+	reorgSub       event.Subscription // Subscription for new reorg event
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -213,6 +218,7 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
+	reorgCh       chan core.ChainSideEvent   // Channel to receive new reorg event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -233,6 +239,7 @@ func NewEventSystem(sys *FilterSystem, lightMode bool) *EventSystem {
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
+		reorgCh:       make(chan core.ChainSideEvent, chainEvChanSize),
 	}
 
 	// Subscribe events
@@ -240,10 +247,11 @@ func NewEventSystem(sys *FilterSystem, lightMode bool) *EventSystem {
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
+	m.reorgSub = m.backend.SubscribeChainSideEvent(m.reorgCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.reorgSub == nil || m.pendingLogsSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -279,6 +287,7 @@ func (sub *Subscription) Unsubscribe() {
 			case <-sub.f.logs:
 			case <-sub.f.txs:
 			case <-sub.f.headers:
+			case <-sub.f.reorgs:
 			}
 		}
 
@@ -346,6 +355,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
+		reorgs:    make(chan *core.ChainSideEvent),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -363,6 +373,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
+		reorgs:    make(chan *core.ChainSideEvent),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -380,6 +391,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
+		reorgs:    make(chan *core.ChainSideEvent),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -396,6 +408,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		logs:      make(chan []*types.Log),
 		txs:       make(chan []*types.Transaction),
 		headers:   headers,
+		reorgs:    make(chan *core.ChainSideEvent),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -412,6 +425,24 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 		logs:      make(chan []*types.Log),
 		txs:       txs,
 		headers:   make(chan *types.Header),
+		reorgs:    make(chan *core.ChainSideEvent),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeNewHeads creates a subscription that writes the header of a block that is
+// imported in the chain.
+func (es *EventSystem) SubscribeChainReorgs(reorgs chan *core.ChainSideEvent) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       ReorgsSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		txs:       make(chan []*types.Transaction),
+		headers:   make(chan *types.Header),
+		reorgs:    reorgs,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -477,6 +508,12 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 				}
 			}
 		})
+	}
+}
+
+func (es *EventSystem) handleReorgEvent(filters filterIndex, ev core.ChainSideEvent) {
+	for _, f := range filters[ReorgsSubscription] {
+		f.reorgs <- &ev
 	}
 }
 
@@ -559,6 +596,7 @@ func (es *EventSystem) eventLoop() {
 		es.rmLogsSub.Unsubscribe()
 		es.pendingLogsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
+		es.reorgSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
@@ -578,6 +616,8 @@ func (es *EventSystem) eventLoop() {
 			es.handlePendingLogs(index, ev)
 		case ev := <-es.chainCh:
 			es.handleChainEvent(index, ev)
+		case ev := <-es.reorgCh:
+			es.handleReorgEvent(index, ev)
 
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
@@ -607,6 +647,8 @@ func (es *EventSystem) eventLoop() {
 		case <-es.rmLogsSub.Err():
 			return
 		case <-es.chainSub.Err():
+			return
+		case <-es.reorgSub.Err():
 			return
 		}
 	}
