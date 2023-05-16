@@ -11,7 +11,7 @@ Example:
 
 ```sh
 // create subscription
-{"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
+{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
 ```
 
 returns
@@ -27,7 +27,7 @@ to cancel the subscription:
 
 ```sh
 // cancel subscription
-{"id": 1, "method": "eth_unsubscribe", "params": ["0xcd0c3e8af590364c09d0fa6a1210faf5"]}
+{"id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0xcd0c3e8af590364c09d0fa6a1210faf5"]}
 {"jsonrpc":"2.0","id":1,"result":true}
 ```
 
@@ -50,7 +50,7 @@ Subscriptions are created with a regular RPC call with `eth_subscribe` as method
 ### Example
 
 ```sh
-{"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
+{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
 {"id": 1, "jsonrpc": "2.0", "result": "0x9cef478923ff08bf67fde6c64013158d"}
 ```
 
@@ -65,7 +65,7 @@ Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as me
 ### Example
 
 ```json
-{"id": 1, "method": "eth_unsubscribe", "params": ["0x9cef478923ff08bf67fde6c64013158d"]}
+{"id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x9cef478923ff08bf67fde6c64013158d"]}
 {"jsonrpc":"2.0","id":1,"result":true}
 ```
 
@@ -80,7 +80,7 @@ In case of a chain reorganization the subscription will emit the last header in 
 #### Example
 
 ```json
-{ "id": 1, "method": "eth_subscribe", "params": ["newHeads"] }
+{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
 ```
 
 returns
@@ -130,6 +130,7 @@ In case of a chain reorganization previous sent logs that are on the old chain w
 ```json
 {
   "id": 1,
+  "jsonrpc": "2.0",
   "method": "eth_subscribe",
   "params": [
     "logs",
@@ -162,7 +163,7 @@ none
 #### Example
 
 ```json
-{ "id": 1, "method": "eth_subscribe", "params": ["newPendingTransactions"] }
+{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newPendingTransactions"]}
 ```
 
 returns
@@ -190,7 +191,7 @@ none
 #### Example
 
 ```json
-{"id": 1, "method": "eth_subscribe", "params": ["syncing"]}
+{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"]}
 
 {"jsonrpc":"2.0","id":2,"result":"0xe2ffeb2703bcf602d42922385829ce96"}
 {"subscription":"0xe2ffeb2703bcf602d42922385829ce96","result":{"syncing":true,"status":{"startingBlock":674427,"currentBlock":67400,"highestBlock":674432,"pulledStates":0,"knownStates":0}}}}

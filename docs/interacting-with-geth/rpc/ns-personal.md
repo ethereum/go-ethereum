@@ -100,7 +100,7 @@ eth.sendTransaction(tx);
 Example call (terminal)
 
 ```sh
-curl --data '{"id":1,"jsonrpc":"2.0", "method":"eth_sendTransaction","params":[{"from": "0xE70CAD05D0D54Ae3C9Fe5442f901E0433f9bd14B", "to":"0x4FDc03d09Ffca5Bba3138149E29D85C8A9E2Ac42", "gas":"21000","gasPrice":"20000000000", "nonce":"94"}]}' -H "Content-Type: application/json" -X POST localhost:8545
+curl --data '{"id":1, "jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xE70CAD05D0D54Ae3C9Fe5442f901E0433f9bd14B", "to":"0x4FDc03d09Ffca5Bba3138149E29D85C8A9E2Ac42", "gas":"21000","gasPrice":"20000000000", "nonce":"94"}]}' -H "Content-Type: application/json" -X POST localhost:8545
 ```
 
 ### personal_sign
