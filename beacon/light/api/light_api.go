@@ -42,11 +42,16 @@ var (
 	ErrInternal = errors.New("500 Internal Server Error")
 )
 
+// fetcher is an interface useful for debug-harnessing the http api.
+type fetcher interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // BeaconLightApi requests light client information from a beacon node REST API.
 // Note: all required API endpoints are currently only implemented by Lodestar.
 type BeaconLightApi struct {
 	url           string
-	client        *http.Client
+	client        fetcher
 	customHeaders map[string]string
 }
 
@@ -94,7 +99,7 @@ func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error
 // equals update.NextSyncCommitteeRoot).
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
-//TODO handle valid partial results
+// TODO handle valid partial results
 func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedCommittee, error) {
 	resp, err := api.httpGetf("/eth/v1/beacon/light_client/updates?start_period=%d&count=%d", firstPeriod, count)
 	if err != nil {
@@ -230,7 +235,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 	}
 	header := data.Data.Header.Beacon
 	if header.Hash() != checkpointHash {
-		return nil, errors.New("invalid checkpoint block header")
+		return nil, fmt.Errorf("invalid checkpoint block header, have %v want %v", header.Hash(), checkpointHash)
 	}
 	checkpoint := &light.CheckpointData{
 		Header:          header,
