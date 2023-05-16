@@ -966,10 +966,13 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // keeps track of the nodes in each account that get modified. If a node is modified twice, it is updated, not re-added
 var globalNodes = trie.NewMergedNodeSet()
+var globalSize = 0
 // number of commits/blocks
 var counter = 0
 // number of blocks after which we reset
-var BLOCK_DELTA = 1
+var BLOCK_DELTA = 10
+
+var flag = true;
 // file writer
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
@@ -977,6 +980,19 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// f, err := os.OpenFile("data/one", os.O_WRONLY|os.O_APPEND, 0777)
 	// if err != nil {
 	// 	return common.Hash{}, err
+	// }
+	// if flag == true {
+	// 	f2, err2 := os.OpenFile("data/csv-data.csv", os.O_WRONLY|os.O_CREATE, 0644)
+	// 	defer f2.Close()
+	// 	if err2 != nil {
+	// 		panic(err2)
+	// 	}
+	// 	writer2 := csv.NewWriter(f2)
+	// 	err2 = writer2.Write([]string{"State Diffs"})
+	// 	if err2 != nil {
+	// 		panic(err2)
+	// 	}
+	// 	flag = false
 	// }
 	f, err := os.OpenFile("data/csv-data.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -1113,21 +1129,25 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	// this may always throw an error...
 	// because the same globalNodes being used across same tries, how do we update for each individual trie??
-	if err := globalNodes.Combine(nodes); err != nil {
+	err, size := globalNodes.Combine(nodes)
+	
+	if err != nil {
 		return common.Hash{}, err
 	}
+
+	globalSize += size;
 	counter = counter + 1
 	if counter == BLOCK_DELTA {
 		counter = 0;
 		// TODO: write the globalNodes to a csv file
 		
 		// get the size
-		globalUpdates, globalDeletes := globalNodes.Size()
+		// globalUpdates, globalDeletes := globalNodes.Size()
+
 		// print stuff
-		fmt.Println("Global Updates: ", globalUpdates)
-		fmt.Println("Global Deletes: ", globalDeletes)
 		
-		totalSize := globalUpdates + globalDeletes
+		// totalSize := globalUpdates + globalDeletes
+		totalSize := globalNodes.TotalSize();
 		// _, err := f.WriteString(fmt.Sprintf("%d\n", totalSize))
 		// if err != nil {
 		// 	return common.Hash{}, err
@@ -1135,12 +1155,20 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if writer == nil {
 			writer = csv.NewWriter(f)
 		}
+		if flag == true {
+			flag = false
+			err2 := writer.Write([]string{"State Diffs"})
+			if err2 != nil {
+				panic(err)
+			}
+		}
 		err = writer.Write([]string{fmt.Sprintf("%d", totalSize)})
 		if err != nil {
 			panic(err)
 		}
 		writer.Flush()
 		globalNodes = trie.NewMergedNodeSet()
+		globalSize = 0
 	}
 	return root, nil
 }

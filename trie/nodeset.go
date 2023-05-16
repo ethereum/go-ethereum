@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -102,6 +103,11 @@ type NodeSet struct {
 	updates int                    // the count of updated and inserted nodes
 	deletes int                    // the count of deleted nodes
 
+	// my new thing
+	totalSize int
+	touched map[string]bool
+	sizes map[string]int
+
 	// The list of accessed nodes, which records the original node value.
 	// The origin value is expected to be nil for newly inserted node
 	// and is expected to be non-nil for other types(updated, deleted).
@@ -116,6 +122,8 @@ func NewNodeSet(owner common.Hash, accessList map[string][]byte) *NodeSet {
 		owner:      owner,
 		nodes:      make(map[string]*memoryNode),
 		accessList: accessList,
+		touched: make(map[string]bool),
+		sizes: make(map[string]int),
 	}
 }
 
@@ -137,12 +145,31 @@ func (set *NodeSet) forEachWithOrder(callback func(path string, n *memoryNode)) 
 func (set *NodeSet) markUpdated(path []byte, node *memoryNode) {
 	set.nodes[string(path)] = node
 	set.updates += 1
+	if set.touched[string(path)] == false {
+		set.totalSize += int(unsafe.Sizeof(node))
+		set.touched[string(path)] = true
+		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+	} else {
+		// updating the totalSize to be the most recent
+		set.totalSize -= set.sizes[string(path)]
+		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+	}
 }
 
 // markDeleted marks the node as deleted.
 func (set *NodeSet) markDeleted(path []byte) {
 	set.nodes[string(path)] = &memoryNode{}
 	set.deletes += 1
+	if set.touched[string(path)] == false {
+		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+		set.touched[string(path)] = true
+		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+	} else {
+		set.totalSize -= set.sizes[string(path)]
+		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+	}
 }
 
 // addLeaf collects the provided leaf node into set.
@@ -153,6 +180,12 @@ func (set *NodeSet) addLeaf(node *leaf) {
 // Size returns the number of dirty nodes in set.
 func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
+}
+
+func (set *NodeSet) TotalSize() (int) {
+	set.touched = make(map[string]bool)
+	set.sizes = make(map[string]int)
+	return set.totalSize;
 }
 
 // Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
@@ -235,6 +268,16 @@ func (set *MergedNodeSet) Size() (int, int) {
 	return updates, deleted
 }
 
+func (set *MergedNodeSet) TotalSize() (int) {
+	var totalSize = 0
+	for _, other_set := range set.sets {
+		sizeToAdd := other_set.TotalSize()
+		totalSize += sizeToAdd
+	}
+
+	return totalSize
+}
+
 // idea: any state that is touched will have to be submitted back onto chain
 // could we optimize by only submitting nodes that have a different state than original? would need to store a copy of the original state 
 // and then iterate through all dirty nodes and compare.....
@@ -242,20 +285,23 @@ func (set *MergedNodeSet) Size() (int, int) {
 
 // ALSO: Super inefficient. O(n) time for each operation vs O(1)
 // IDK how else you would merge two sets.
-func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet) error {
+func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet) (error, int) {
+	var size = 0
 	for _, other := range otherMerged.sets {
 		_, present := set.sets[other.owner]
 		if present == false {
 			set.sets[other.owner] = other
-			return nil
-		}
-		for path, node := range other.nodes {
-			if exists := set.sets[other.owner].nodes[path]; exists == nil {
-				set.sets[other.owner].nodes[path] = node
+			size += int(unsafe.Sizeof(other))
+		} else {
+			for path, node := range other.nodes {
+				if exists := set.sets[other.owner].nodes[path]; exists == nil {
+					set.sets[other.owner].nodes[path] = node
+					size += int(unsafe.Sizeof(node))
+				}
 			}
 		}
 	}
-	return nil
+	return nil, size
 }
 
 /*
