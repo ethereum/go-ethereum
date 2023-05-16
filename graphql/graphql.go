@@ -197,11 +197,11 @@ type Transaction struct {
 
 // resolve returns the internal transaction object, fetching it if needed.
 // It also returns the block the tx belongs to, unless it is a pending tx.
-func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block, error) {
+func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.tx != nil {
-		return t.tx, t.block, nil
+		return t.tx, t.block
 	}
 	// Try to return an already finalized transaction
 	tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
@@ -214,11 +214,11 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block, 
 			hash:         blockHash,
 		}
 		t.index = index
-		return t.tx, t.block, nil
+		return t.tx, t.block
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	t.tx = t.r.backend.GetPoolTransaction(t.hash)
-	return t.tx, nil, nil
+	return t.tx, nil
 }
 
 func (t *Transaction) Hash(ctx context.Context) common.Hash {
