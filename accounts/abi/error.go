@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -38,7 +37,7 @@ type Error struct {
 
 	// ID returns the canonical representation of the error's signature used by the
 	// abi definition to identify event names and types.
-	ID common.Hash
+	ID []byte
 }
 
 func NewError(name string, inputs Arguments) Error {
@@ -67,7 +66,7 @@ func NewError(name string, inputs Arguments) Error {
 
 	str := fmt.Sprintf("error %v(%v)", name, strings.Join(names, ", "))
 	sig := fmt.Sprintf("%v(%v)", name, strings.Join(types, ","))
-	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
+	id := crypto.Keccak256([]byte(sig))[:4]
 
 	return Error{
 		Name:   name,
@@ -78,7 +77,7 @@ func NewError(name string, inputs Arguments) Error {
 	}
 }
 
-func (e *Error) String() string {
+func (e Error) String() string {
 	return e.str
 }
 

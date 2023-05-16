@@ -1057,6 +1057,42 @@ func TestABI_EventById(t *testing.T) {
 	}
 }
 
+func TestABI_ErrorById(t *testing.T) {
+	abi, err := JSON(strings.NewReader(`[
+		{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"MyError1","type":"error"},
+		{"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"x","type":"tuple"},{"internalType":"address","name":"y","type":"address"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"z","type":"tuple"}],"name":"MyError2","type":"error"},
+		{"inputs":[{"internalType":"uint256[]","name":"x","type":"uint256[]"}],"name":"MyError3","type":"error"}
+	]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range abi.Errors {
+		a := fmt.Sprintf("%v", &m)
+		m2, err := abi.ErrorById(m.ID)
+		if err != nil {
+			t.Fatalf("Failed to look up ABI error: %v", err)
+		}
+		b := fmt.Sprintf("%v", m2)
+		if a != b {
+			t.Errorf("Error %v (id %x) not 'findable' by id in ABI", name, m.ID)
+		}
+	}
+	// test unsuccessful lookups
+	if _, err = abi.ErrorById(crypto.Keccak256()); err == nil {
+		t.Error("Expected error: no error with this id")
+	}
+	// Also test empty
+	if _, err := abi.ErrorById([]byte{0x00}); err == nil {
+		t.Errorf("Expected error, too short to decode data")
+	}
+	if _, err := abi.ErrorById([]byte{}); err == nil {
+		t.Errorf("Expected error, too short to decode data")
+	}
+	if _, err := abi.ErrorById(nil); err == nil {
+		t.Errorf("Expected error, nil is short to decode data")
+	}
+}
+
 // TestDoubleDuplicateMethodNames checks that if transfer0 already exists, there won't be a name
 // conflict and that the second transfer method will be renamed transfer1.
 func TestDoubleDuplicateMethodNames(t *testing.T) {
