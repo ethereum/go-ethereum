@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -257,7 +256,7 @@ func (api *FilterAPI) ChainReorgs(ctx context.Context) (*rpc.Subscription, error
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		reorgs := make(chan *core.ChainSideEvent)
+		reorgs := make(chan *types.Header)
 		headersSub := api.events.SubscribeChainReorgs(reorgs)
 
 		for {

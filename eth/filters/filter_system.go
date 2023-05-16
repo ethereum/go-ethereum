@@ -189,7 +189,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
-	reorgs    chan *core.ChainSideEvent
+	reorgs    chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -355,7 +355,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
-		reorgs:    make(chan *core.ChainSideEvent),
+		reorgs:    make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -373,7 +373,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
-		reorgs:    make(chan *core.ChainSideEvent),
+		reorgs:    make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -391,7 +391,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
-		reorgs:    make(chan *core.ChainSideEvent),
+		reorgs:    make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -408,7 +408,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		logs:      make(chan []*types.Log),
 		txs:       make(chan []*types.Transaction),
 		headers:   headers,
-		reorgs:    make(chan *core.ChainSideEvent),
+		reorgs:    make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -425,7 +425,7 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 		logs:      make(chan []*types.Log),
 		txs:       txs,
 		headers:   make(chan *types.Header),
-		reorgs:    make(chan *core.ChainSideEvent),
+		reorgs:    make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -434,7 +434,7 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 
 // SubscribeNewHeads creates a subscription that writes the header of a block that is
 // imported in the chain.
-func (es *EventSystem) SubscribeChainReorgs(reorgs chan *core.ChainSideEvent) *Subscription {
+func (es *EventSystem) SubscribeChainReorgs(reorgs chan *types.Header) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       ReorgsSubscription,
@@ -513,7 +513,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 func (es *EventSystem) handleReorgEvent(filters filterIndex, ev core.ChainSideEvent) {
 	for _, f := range filters[ReorgsSubscription] {
-		f.reorgs <- &ev
+		f.reorgs <- ev.Block.Header()
 	}
 }
 
