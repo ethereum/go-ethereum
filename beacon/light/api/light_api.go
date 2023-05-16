@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
 	"net/http"
 	"time"
 
@@ -100,7 +99,7 @@ func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
 // TODO handle valid partial results
-func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedCommittee, error) {
+func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error) {
 	resp, err := api.httpGetf("/eth/v1/beacon/light_client/updates?start_period=%d&count=%d", firstPeriod, count)
 	if err != nil {
 		return nil, nil, err
@@ -114,7 +113,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 		return nil, nil, errors.New("invalid number of committee updates")
 	}
 	updates := make([]*types.LightClientUpdate, int(count))
-	committees := make([]*types.SerializedCommittee, int(count))
+	committees := make([]*types.SerializedSyncCommittee, int(count))
 	for i, d := range data {
 		if d.Update.Header.SyncPeriod() != firstPeriod+uint64(i) {
 			return nil, nil, errors.New("wrong committee update header period")
@@ -162,15 +161,15 @@ func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
 		}
 	}
 
-	if len(data.Data.Aggregate.BitMask) != params.SyncCommitteeBitmaskSize {
+	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
 		return types.SignedHeader{}, errors.New("invalid sync_committee_bits length")
 	}
-	if len(data.Data.Aggregate.Signature) != params.BlsSignatureSize {
+	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
 		return types.SignedHeader{}, errors.New("invalid sync_committee_signature length")
 	}
 	return types.SignedHeader{
 		Header:        data.Data.Header.Beacon,
-		SyncAggregate: data.Data.Aggregate,
+		Signature:     data.Data.Aggregate,
 		SignatureSlot: uint64(data.Data.SignatureSlot),
 	}, nil
 }
@@ -223,9 +222,9 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
 	type bootstrapData struct {
 		Data struct {
-			Header          types.JsonBeaconHeader     `json:"header"`
-			Committee       *types.SerializedCommittee `json:"current_sync_committee"`
-			CommitteeBranch merkle.Values              `json:"current_sync_committee_branch"`
+			Header          types.JsonBeaconHeader         `json:"header"`
+			Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
+			CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`
 		} `json:"data"`
 	}
 

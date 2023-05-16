@@ -47,7 +47,7 @@ type LightClientUpdate struct {
 type CommitteeUpdate struct {
 	Version           string
 	Update            *LightClientUpdate
-	NextSyncCommittee *SerializedCommittee
+	NextSyncCommittee *SerializedSyncCommittee
 }
 
 // See data structure definition here:
@@ -58,13 +58,13 @@ type committeeUpdateJson struct {
 }
 
 type committeeUpdateData struct {
-	Header                  JsonBeaconHeader     `json:"attested_header"`
-	NextSyncCommittee       *SerializedCommittee `json:"next_sync_committee"`
-	NextSyncCommitteeBranch merkle.Values        `json:"next_sync_committee_branch"`
-	FinalizedHeader         JsonBeaconHeader     `json:"finalized_header"`
-	FinalityBranch          merkle.Values        `json:"finality_branch"`
-	SyncAggregate           SyncAggregate        `json:"sync_aggregate"`
-	SignatureSlot           common.Decimal       `json:"signature_slot"`
+	Header                  JsonBeaconHeader         `json:"attested_header"`
+	NextSyncCommittee       *SerializedSyncCommittee `json:"next_sync_committee"`
+	NextSyncCommitteeBranch merkle.Values            `json:"next_sync_committee_branch"`
+	FinalizedHeader         JsonBeaconHeader         `json:"finalized_header"`
+	FinalityBranch          merkle.Values            `json:"finality_branch"`
+	SyncAggregate           SyncAggregate            `json:"sync_aggregate"`
+	SignatureSlot           common.Decimal           `json:"signature_slot"`
 }
 
 type JsonBeaconHeader struct {
@@ -81,7 +81,7 @@ func (u *CommitteeUpdate) MarshalJSON() ([]byte, error) {
 			NextSyncCommitteeBranch: u.Update.NextSyncCommitteeBranch,
 			FinalizedHeader:         JsonBeaconHeader{Beacon: u.Update.FinalizedHeader},
 			FinalityBranch:          u.Update.FinalityBranch,
-			SyncAggregate:           u.Update.SyncAggregate,
+			SyncAggregate:           u.Update.Signature,
 			SignatureSlot:           common.Decimal(u.Update.SignatureSlot),
 		},
 	})
@@ -98,7 +98,7 @@ func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 	u.Update = &LightClientUpdate{
 		SignedHeader: SignedHeader{
 			Header:        dec.Data.Header.Beacon,
-			SyncAggregate: dec.Data.SyncAggregate,
+			Signature:     dec.Data.SyncAggregate,
 			SignatureSlot: uint64(dec.Data.SignatureSlot),
 		},
 		NextSyncCommitteeRoot:   u.NextSyncCommittee.Root(),
@@ -112,7 +112,7 @@ func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 // Validate verifies the validity of the update
 func (update *LightClientUpdate) Validate() error {
 	period := update.Header.SyncPeriod()
-	if PeriodOfSlot(update.SignatureSlot) != period {
+	if SyncPeriod(update.SignatureSlot) != period {
 		return errors.New("signature slot and signed header are from different periods")
 	}
 	if update.hasFinalizedHeader() {
@@ -144,7 +144,7 @@ func (l *LightClientUpdate) Score() UpdateScore {
 	if l.scoreCalculated {
 		return l.score
 	}
-	l.score.SignerCount = uint32(l.SyncAggregate.SignerCount())
+	l.score.SignerCount = uint32(l.Signature.SignerCount())
 	l.score.SubPeriodIndex = uint32(l.Header.Slot & 0x1fff)
 	l.score.FinalizedHeader = l.hasFinalizedHeader()
 	l.scoreCalculated = true
@@ -157,13 +157,13 @@ func (l *LightClientUpdate) Score() UpdateScore {
 // UpdateScores have a tightly packed binary encoding format for efficient p2p
 // protocol transmission. Each UpdateScore is encoded in 3 bytes.
 // When interpreted as a 24 bit little indian unsigned integer:
-//  - the lowest 10 bits contain the number of signers in the header signature aggregate
-//  - the next 13 bits contain the "sub-period index" which is he signed header's
-//    slot modulo params.SyncPeriodLength (which is correlated with the risk of the chain being
-//    re-orged before the previous period boundary in case of non-finalized updates)
-//  - the highest bit is set when the update is finalized (meaning that the finality
-//    header referenced by the signed header is in the same period as the signed
-//    header, making reorgs before the period boundary impossible
+//   - the lowest 10 bits contain the number of signers in the header signature aggregate
+//   - the next 13 bits contain the "sub-period index" which is he signed header's
+//     slot modulo params.SyncPeriodLength (which is correlated with the risk of the chain being
+//     re-orged before the previous period boundary in case of non-finalized updates)
+//   - the highest bit is set when the update is finalized (meaning that the finality
+//     header referenced by the signed header is in the same period as the signed
+//     header, making reorgs before the period boundary impossible
 type UpdateScore struct {
 	SignerCount     uint32 // number of signers in the header signature aggregate
 	SubPeriodIndex  uint32 // signed header's slot modulo params.SyncPeriodLength

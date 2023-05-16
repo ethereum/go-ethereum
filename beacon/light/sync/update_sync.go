@@ -117,7 +117,7 @@ func (r checkpointRequest) SendTo(server *request.Server, moduleData *interface{
 
 type updateServer interface {
 	request.RequestServer
-	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee, error))
+	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error))
 }
 
 type ForwardUpdateSync struct {
@@ -172,7 +172,7 @@ func (r updateRequest) CanSendTo(server *request.Server, moduleData *interface{}
 	if _, ok := server.RequestServer.(updateServer); ok {
 		firstUpdate, _ := (*moduleData).(uint64)
 		headSlot, _ := server.LatestHead()
-		afterLastUpdate := types.PeriodOfSlot(headSlot)
+		afterLastUpdate := types.SyncPeriod(headSlot)
 		if r.first >= firstUpdate && r.first < afterLastUpdate {
 			return true, afterLastUpdate
 		}
@@ -183,7 +183,7 @@ func (r updateRequest) CanSendTo(server *request.Server, moduleData *interface{}
 func (r updateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	us := server.RequestServer.(updateServer)
 	headSlot, _ := server.LatestHead()
-	afterLastUpdate := types.PeriodOfSlot(headSlot)
+	afterLastUpdate := types.SyncPeriod(headSlot)
 	if afterLastUpdate <= r.first {
 		return
 	}
@@ -192,7 +192,7 @@ func (r updateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 		count = maxUpdateRequest
 	}
 	reqId := r.reqLock.Send(server)
-	us.RequestUpdates(r.first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedCommittee, err error) {
+	us.RequestUpdates(r.first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedSyncCommittee, err error) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 

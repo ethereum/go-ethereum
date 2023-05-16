@@ -17,6 +17,7 @@
 package types
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"sort"
@@ -26,84 +27,92 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/go-yaml/yaml"
-	"github.com/minio/sha256-simd"
 )
 
+// syncCommitteeDomain specifies the signatures specific use to avoid clashes
+// across signing different data structures.
 const syncCommitteeDomain = 7
 
 // Fork describes a single beacon chain fork and also stores the calculated
 // signature domain used after this fork.
 type Fork struct {
-	Epoch uint64 // epoch when given fork version is activated
-	Name  string // name of the fork in the chain config (config.yaml) file
-	// See fork version definition here:
-	//  https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#custom-types
-	Version []byte       // fork version
-	domain  merkle.Value // calculated by computeDomain, based on fork version and genesis validators root
-}
+	// Name of the fork in the chain config (config.yaml) file{
+	Name string
 
-// Forks is the list of all beacon chain forks in the chain configuration.
-type Forks []Fork
+	// Epoch when given fork version is activated
+	Epoch uint64
 
-// Fork returns the fork belonging to the given epoch
-func (bf Forks) Fork(epoch uint64) (Fork, bool) {
-	for i := len(bf) - 1; i >= 0; i-- {
-		if epoch >= bf[i].Epoch {
-			return bf[i], true
-		}
-	}
-	return Fork{}, false
-}
+	// Fork version, see https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#custom-types
+	Version []byte
 
-// domain returns the signature domain for the given epoch (assumes that domains
-// have already been calculated).
-func (bf Forks) domain(epoch uint64) merkle.Value {
-	fork, ok := bf.Fork(epoch)
-	if !ok {
-		log.Error("Fork domain unknown", "epoch", epoch)
-	}
-	return fork.domain
+	// calculated by computeDomain, based on fork version and genesis validators root
+	domain merkle.Value
 }
 
 // computeDomain returns the signature domain based on the given fork version
-// and genesis validator set root
-func computeDomain(forkVersion []byte, genesisValidatorsRoot common.Hash) merkle.Value {
+// and genesis validator set root.
+func (f *Fork) computeDomain(genesisValidatorsRoot common.Hash) {
 	var (
 		hasher        = sha256.New()
 		forkVersion32 merkle.Value
 		forkDataRoot  merkle.Value
-		domain        merkle.Value
 	)
-	copy(forkVersion32[:len(forkVersion)], forkVersion)
+	copy(forkVersion32[:], f.Version)
 	hasher.Write(forkVersion32[:])
 	hasher.Write(genesisValidatorsRoot[:])
 	hasher.Sum(forkDataRoot[:0])
-	domain[0] = syncCommitteeDomain
-	copy(domain[4:], forkDataRoot[:28])
-	return domain
+
+	f.domain[0] = syncCommitteeDomain
+	copy(f.domain[4:], forkDataRoot[:28])
 }
 
-// computeDomains calculates and stores signature domains for each fork in the list.
-func (bf Forks) ComputeDomains(genesisValidatorsRoot common.Hash) {
-	for i := range bf {
-		bf[i].domain = computeDomain(bf[i].Version, genesisValidatorsRoot)
+// Forks is the list of all beacon chain forks in the chain configuration.
+type Forks []*Fork
+
+// Fork returns the fork belonging to the given epoch
+func (f Forks) Fork(epoch uint64) *Fork {
+	for i := len(f) - 1; i >= 0; i-- {
+		if epoch >= f[i].Epoch {
+			return f[i]
+		}
+	}
+	return nil
+}
+
+// domain returns the signature domain for the given epoch (assumes that domains
+// have already been calculated).
+func (f Forks) domain(epoch uint64) (merkle.Value, error) {
+	fork := f.Fork(epoch)
+	if fork == nil {
+		return merkle.Value{}, fmt.Errorf("unknown fork for epoch %d", epoch)
+	}
+	return fork.domain, nil
+}
+
+// ComputeDomains calculates and stores signature domains for each fork in the list.
+func (f Forks) ComputeDomains(genesisValidatorsRoot common.Hash) {
+	for _, fork := range f {
+		fork.computeDomain(genesisValidatorsRoot)
 	}
 }
 
-// signingRoot calculates the signing root of the given header.
-func (bf Forks) SigningRoot(header Header) common.Hash {
+// SigningRoot calculates the signing root of the given header.
+func (f Forks) SigningRoot(header Header) (common.Hash, error) {
+	domain, err := f.domain(header.Epoch())
+	if err != nil {
+		return common.Hash{}, err
+	}
 	var (
 		signingRoot common.Hash
 		headerHash  = header.Hash()
 		hasher      = sha256.New()
-		domain      = bf.domain(header.Epoch())
 	)
 	hasher.Write(headerHash[:])
 	hasher.Write(domain[:])
 	hasher.Sum(signingRoot[:0])
-	return signingRoot
+
+	return signingRoot, nil
 }
 
 func (f Forks) Len() int           { return len(f) }
@@ -111,54 +120,51 @@ func (f Forks) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f Forks) Less(i, j int) bool { return f[i].Epoch < f[j].Epoch }
 
 // LoadForks parses the beacon chain configuration file (config.yaml) and extracts
-// the list of forks
-func LoadForks(fileName string) (Forks, error) {
-	file, err := os.ReadFile(fileName)
+// the list of forks.
+func LoadForks(path string) (Forks, error) {
+	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading beacon chain config file: %v", err)
+		return nil, fmt.Errorf("failed to read beacon chain config file: %v", err)
 	}
 	config := make(map[string]string)
 	if err := yaml.Unmarshal(file, &config); err != nil {
-		return nil, fmt.Errorf("Error parsing beacon chain config YAML file: %v", err)
+		return nil, fmt.Errorf("failed to parse beacon chain config file: %v", err)
 	}
-
 	var (
-		forks        Forks
-		forkVersions = make(map[string][]byte)
-		forkEpochs   = make(map[string]uint64)
+		forks    Forks
+		versions = make(map[string][]byte)
+		epochs   = make(map[string]uint64)
 	)
-	forkEpochs["GENESIS"] = 0
+	epochs["GENESIS"] = 0
 
 	for key, value := range config {
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
 			if v, err := hexutil.Decode(value); err == nil {
-				forkVersions[name] = v
+				versions[name] = v
 			} else {
-				return nil, fmt.Errorf("Error decoding hex fork id \"%s\" in beacon chain config file: %v", value, err)
+				return nil, fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", value, err)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
 			name := key[:len(key)-len("_FORK_EPOCH")]
 			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
-				forkEpochs[name] = v
+				epochs[name] = v
 			} else {
-				return nil, fmt.Errorf("Error parsing epoch number \"%s\" in beacon chain config file: %v", value, err)
+				return nil, fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", value, err)
 			}
 		}
 	}
-
-	for name, epoch := range forkEpochs {
-		if version, ok := forkVersions[name]; ok {
-			delete(forkVersions, name)
-			forks = append(forks, Fork{Epoch: epoch, Name: name, Version: version})
+	for name, epoch := range epochs {
+		if version, ok := versions[name]; ok {
+			delete(versions, name)
+			forks = append(forks, &Fork{Epoch: epoch, Name: name, Version: version})
 		} else {
-			return nil, fmt.Errorf("Fork id missing for \"%s\" in beacon chain config file", name)
+			return nil, fmt.Errorf("fork id missing for %q in beacon chain config file", name)
 		}
 	}
-
-	for name := range forkVersions {
-		return nil, fmt.Errorf("Epoch number missing for fork \"%s\" in beacon chain config file", name)
+	for name := range versions {
+		return nil, fmt.Errorf("epoch number missing for fork %q in beacon chain config file", name)
 	}
 	sort.Sort(forks)
 	return forks, nil

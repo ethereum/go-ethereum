@@ -18,7 +18,6 @@ package types
 
 import (
 	"encoding/binary"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
@@ -26,64 +25,53 @@ import (
 	"github.com/minio/sha256-simd"
 )
 
-// Header defines a beacon header
+//go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+
+const (
+	headerIndexSlot          = 8
+	headerIndexProposerIndex = 9
+	headerIndexParentRoot    = 10
+	headerIndexStateRoot     = 11
+	headerIndexBodyRoot      = 12
+)
+
+// Header defines a beacon header.
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beaconblockheader
 type Header struct {
-	Slot          uint64
-	ProposerIndex uint64
-	ParentRoot    common.Hash
-	StateRoot     common.Hash
-	BodyRoot      common.Hash
+	// Monotonically increasing slot number for the beacon block (may be gapped)
+	Slot uint64 `gencodec:"required" json:"slot"`
+
+	// Index into the validator table who created the beacon block
+	ProposerIndex uint64 `gencodec:"required" json:"proposer_index"`
+
+	// SSZ hash of the parent beacon header
+	ParentRoot common.Hash `gencodec:"required" json:"parent_root"`
+
+	// SSZ hash of the beacon state (https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#beacon-state)
+	StateRoot common.Hash `gencodec:"required" json:"state_root"`
+
+	// SSZ hash of the beacon block body (https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#beaconblockbody)
+	BodyRoot common.Hash `gencodec:"required" json:"body_root"`
 }
 
-// Header defines a beacon header and supports JSON encoding according to the
-// standard beacon API format
+// headerMarshaling is a field type overrides for gencodec.
+type headerMarshaling struct {
+	Slot          common.Decimal
+	ProposerIndex common.Decimal
+}
+
+// Hash calculates the block root of the header.
 //
-// See data structure definition here:
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beaconblockheader
-type jsonHeader struct {
-	Slot          common.Decimal `json:"slot"`
-	ProposerIndex common.Decimal `json:"proposer_index"`
-	ParentRoot    common.Hash    `json:"parent_root"`
-	StateRoot     common.Hash    `json:"state_root"`
-	BodyRoot      common.Hash    `json:"body_root"`
-}
-
-// MarshalJSON marshals as JSON.
-func (bh *Header) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&jsonHeader{
-		Slot:          common.Decimal(bh.Slot),
-		ProposerIndex: common.Decimal(bh.ProposerIndex),
-		ParentRoot:    bh.ParentRoot,
-		StateRoot:     bh.StateRoot,
-		BodyRoot:      bh.BodyRoot,
-	})
-}
-
-// UnmarshalJSON unmarshals from JSON.
-func (bh *Header) UnmarshalJSON(input []byte) error {
-	var dec jsonHeader
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	bh.Slot = uint64(dec.Slot)
-	bh.ProposerIndex = uint64(dec.ProposerIndex)
-	bh.ParentRoot = dec.ParentRoot
-	bh.StateRoot = dec.StateRoot
-	bh.BodyRoot = dec.BodyRoot
-	return nil
-}
-
-// Hash calculates the block root of the header
-func (bh *Header) Hash() common.Hash {
+// TODO(zsfelfoldi): Remove this when an SSZ encoder lands.
+func (h *Header) Hash() common.Hash {
 	var values [16]merkle.Value // values corresponding to indices 8 to 15 of the beacon header tree
-	binary.LittleEndian.PutUint64(values[params.BhiSlot][:8], bh.Slot)
-	binary.LittleEndian.PutUint64(values[params.BhiProposerIndex][:8], bh.ProposerIndex)
-	values[params.BhiParentRoot] = merkle.Value(bh.ParentRoot)
-	values[params.BhiStateRoot] = merkle.Value(bh.StateRoot)
-	values[params.BhiBodyRoot] = merkle.Value(bh.BodyRoot)
+	binary.LittleEndian.PutUint64(values[headerIndexSlot][:8], h.Slot)
+	binary.LittleEndian.PutUint64(values[headerIndexProposerIndex][:8], h.ProposerIndex)
+	values[headerIndexParentRoot] = merkle.Value(h.ParentRoot)
+	values[headerIndexStateRoot] = merkle.Value(h.StateRoot)
+	values[headerIndexBodyRoot] = merkle.Value(h.BodyRoot)
 	hasher := sha256.New()
 	for i := 7; i > 0; i-- {
 		hasher.Reset()
@@ -94,33 +82,39 @@ func (bh *Header) Hash() common.Hash {
 	return common.Hash(values[1])
 }
 
-// Epoch returns the epoch the header belongs to
-func (bh *Header) Epoch() uint64 {
-	return bh.Slot >> params.Log2EpochLength
+// Epoch returns the epoch the header belongs to.
+func (h *Header) Epoch() uint64 {
+	return h.Slot / params.EpochLength
 }
 
-// SyncPeriod returns the sync period the header belongs to
-func (bh *Header) SyncPeriod() uint64 {
-	return bh.Slot >> params.Log2SyncPeriodLength
+// SyncPeriod returns the sync period the header belongs to.
+func (h *Header) SyncPeriod() uint64 {
+	return SyncPeriod(h.Slot)
 }
 
-// PeriodStart returns the first slot of the given period
-func PeriodStart(period uint64) uint64 {
-	return period << params.Log2SyncPeriodLength
+// SyncPeriodStart returns the first slot of the given period.
+func SyncPeriodStart(period uint64) uint64 {
+	return period * params.SyncPeriodLength
 }
 
-// PeriodOfSlot returns the sync period that the given slot belongs to
-func PeriodOfSlot(slot uint64) uint64 {
-	return slot >> params.Log2SyncPeriodLength
+// SyncPeriod returns the sync period that the given slot belongs to.
+func SyncPeriod(slot uint64) uint64 {
+	return slot / params.SyncPeriodLength
 }
 
-// SignedHeader represents a beacon header signed by a sync committee
+// SignedHeader represents a beacon header signed by a sync committee.
 //
-// Note: this structure is created from either an optimistic update or an instant update:
-//  https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
-//  https://github.com/zsfelfoldi/beacon-APIs/blob/instant_update/apis/beacon/light_client/instant_update.yaml
+// This structure is created from either an optimistic update or an instant update:
+//   - https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
+//   - https://github.com/zsfelfoldi/beacon-APIs/blob/instant_update/apis/beacon/light_client/instant_update.yaml
 type SignedHeader struct {
-	Header        Header        // signed beacon header
-	SyncAggregate SyncAggregate // sync committee signature aggregate
-	SignatureSlot uint64        // slot in which the signature has been created (newer than Header.Slot, determines the signing sync committee)
+	// Beacon header being signed
+	Header Header
+
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
 }

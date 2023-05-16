@@ -79,7 +79,7 @@ func (h *HeadValidator) Add(head types.SignedHeader) error {
 		return errors.New("invalid header signature")
 	}
 
-	signerCount := head.SyncAggregate.SignerCount()
+	signerCount := head.Signature.SignerCount()
 	for _, sub := range h.subs {
 		if sub.minSignerCount > signerCount {
 			break

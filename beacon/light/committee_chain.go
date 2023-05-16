@@ -78,7 +78,7 @@ type CommitteeChain struct {
 	sigVerifier        committeeSigVerifier
 	clock              mclock.Clock
 	updates            *canonicalStore[*types.LightClientUpdate]
-	committees         *canonicalStore[*types.SerializedCommittee]
+	committees         *canonicalStore[*types.SerializedSyncCommittee]
 	fixedRoots         *canonicalStore[common.Hash]
 	syncCommitteeCache *lru.Cache[uint64, syncCommittee] // cache deserialized committees
 	unixNano           func() int64
@@ -105,11 +105,11 @@ func NewCommitteeChain(db ethdb.KeyValueStore, forks types.Forks, signerThreshol
 			}
 			return
 		}),
-		committees: newCanonicalStore[*types.SerializedCommittee](db, syncCommitteeKey, func(committee *types.SerializedCommittee) ([]byte, error) {
+		committees: newCanonicalStore[*types.SerializedSyncCommittee](db, syncCommitteeKey, func(committee *types.SerializedSyncCommittee) ([]byte, error) {
 			return committee[:], nil
-		}, func(enc []byte) (*types.SerializedCommittee, error) {
-			if len(enc) == types.SerializedCommitteeSize {
-				committee := new(types.SerializedCommittee)
+		}, func(enc []byte) (*types.SerializedSyncCommittee, error) {
+			if len(enc) == types.SerializedSyncCommitteeSize {
+				committee := new(types.SerializedSyncCommittee)
 				copy(committee[:], enc)
 				return committee, nil
 			}
@@ -294,11 +294,11 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 	}
 }
 
-func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedCommittee {
+func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedSyncCommittee {
 	return s.committees.get(period)
 }
 
-func (s *CommitteeChain) AddCommittee(period uint64, committee *types.SerializedCommittee) error {
+func (s *CommitteeChain) AddCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -323,7 +323,7 @@ func (s *CommitteeChain) GetUpdate(period uint64) *types.LightClientUpdate {
 	return s.updates.get(period)
 }
 
-func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedCommittee) error {
+func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -452,11 +452,11 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 	if s.enforceTime && age < 0 {
 		return false, age
 	}
-	committee := s.getSyncCommittee(types.PeriodOfSlot(head.SignatureSlot))
+	committee := s.getSyncCommittee(types.SyncPeriod(head.SignatureSlot))
 	if committee == nil {
 		return false, age
 	}
-	return s.sigVerifier.verifySignature(committee, s.forks.SigningRoot(head.Header), &head.SyncAggregate), age
+	return s.sigVerifier.verifySignature(committee, s.forks.SigningRoot(head.Header), &head.Signature), age
 }
 
 // verifyUpdate checks whether the header signature is correct and the update

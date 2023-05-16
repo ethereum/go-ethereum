@@ -30,7 +30,7 @@ type syncCommittee interface{}
 // committeeSigVerifier verifies sync committee signatures (either proper BLS
 // signatures or fake signatures used for testing)
 type committeeSigVerifier interface {
-	deserializeSyncCommittee(s *types.SerializedCommittee) (syncCommittee, error)
+	deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error)
 	verifySignature(committee syncCommittee, signedRoot common.Hash, aggregate *types.SyncAggregate) bool
 }
 
@@ -38,7 +38,7 @@ type committeeSigVerifier interface {
 type BLSVerifier struct{}
 
 // deserializeSyncCommittee implements committeeSigVerifier
-func (BLSVerifier) deserializeSyncCommittee(s *types.SerializedCommittee) (syncCommittee, error) {
+func (BLSVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
 	return s.Deserialize()
 }
 
@@ -53,7 +53,7 @@ type dummySyncCommittee [32]byte
 type dummyVerifier struct{}
 
 // deserializeSyncCommittee implements committeeSigVerifier
-func (dummyVerifier) deserializeSyncCommittee(s *types.SerializedCommittee) (syncCommittee, error) {
+func (dummyVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
 	var sc dummySyncCommittee
 	copy(sc[:], s[:32])
 	return sc, nil
@@ -61,7 +61,7 @@ func (dummyVerifier) deserializeSyncCommittee(s *types.SerializedCommittee) (syn
 
 // verifySignature implements committeeSigVerifier
 func (dummyVerifier) verifySignature(committee syncCommittee, signingRoot common.Hash, aggregate *types.SyncAggregate) bool {
-	return aggregate.Signature == makeDummySignature(committee.(dummySyncCommittee), signingRoot, aggregate.BitMask)
+	return aggregate.Signature == makeDummySignature(committee.(dummySyncCommittee), signingRoot, aggregate.Signers)
 }
 
 func randomDummySyncCommittee() dummySyncCommittee {
@@ -70,13 +70,13 @@ func randomDummySyncCommittee() dummySyncCommittee {
 	return sc
 }
 
-func serializeDummySyncCommittee(sc dummySyncCommittee) *types.SerializedCommittee {
-	s := new(types.SerializedCommittee)
+func serializeDummySyncCommittee(sc dummySyncCommittee) *types.SerializedSyncCommittee {
+	s := new(types.SerializedSyncCommittee)
 	copy(s[:32], sc[:])
 	return s
 }
 
-func makeDummySignature(committee dummySyncCommittee, signingRoot common.Hash, bitmask [params.SyncCommitteeBitmaskSize]byte) (sig [params.BlsSignatureSize]byte) {
+func makeDummySignature(committee dummySyncCommittee, signingRoot common.Hash, bitmask [params.SyncCommitteeBitmaskSize]byte) (sig [params.BLSSignatureSize]byte) {
 	for i, b := range committee[:] {
 		sig[i] = b ^ signingRoot[i]
 	}

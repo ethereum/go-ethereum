@@ -17,13 +17,6 @@
 package params
 
 const (
-	// beacon header fields
-	BhiSlot          = 8
-	BhiProposerIndex = 9
-	BhiParentRoot    = 10
-	BhiStateRoot     = 11
-	BhiBodyRoot      = 12
-
 	// beacon state fields
 	BsiGenesisTime       = 32
 	BsiGenesisValidators = 33

@@ -31,7 +31,7 @@ var checkpointKey = []byte("checkpoint-") // block root -> RLP(CheckpointData)
 type CheckpointData struct {
 	Header          types.Header
 	CommitteeRoot   common.Hash
-	Committee       *types.SerializedCommittee `rlp:"-"`
+	Committee       *types.SerializedSyncCommittee `rlp:"-"`
 	CommitteeBranch merkle.Values
 }
 

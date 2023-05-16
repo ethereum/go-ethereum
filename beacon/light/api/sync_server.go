@@ -82,7 +82,7 @@ func (s *SyncServer) RequestBootstrap(checkpointHash common.Hash, response func(
 	go response(s.api.GetCheckpointData(checkpointHash))
 }
 
-func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee, error)) {
+func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error)) {
 	go response(s.api.GetBestUpdatesAndCommittees(first, count))
 }
 
