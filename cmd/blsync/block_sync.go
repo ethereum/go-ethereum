@@ -41,7 +41,7 @@ const reverseSyncHeaders = 128
 
 type beaconBlockServer interface {
 	request.RequestServer
-	RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock))
+	RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock, error))
 }
 
 type beaconBlockSync struct {
@@ -137,12 +137,12 @@ func (r blockRequest) CanSendTo(server *request.Server, moduleData *interface{})
 
 func (r blockRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server, r.blockRoot)
-	server.RequestServer.(beaconBlockServer).RequestBeaconBlock(r.blockRoot, func(block *capella.BeaconBlock) {
+	server.RequestServer.(beaconBlockServer).RequestBeaconBlock(r.blockRoot, func(block *capella.BeaconBlock, err error) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 
 		r.reqLock.Returned(server, reqId, r.blockRoot)
-		if block == nil {
+		if block == nil || err != nil {
 			server.Fail("error retrieving beacon block")
 			return
 		}

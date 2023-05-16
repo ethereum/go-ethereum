@@ -233,6 +233,9 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 	if err := json.Unmarshal(resp, &data); err != nil {
 		return nil, err
 	}
+	if data.Data.Committee == nil {
+		return nil, errors.New("sync committee is missing")
+	}
 	header := data.Data.Header.Beacon
 	if header.Hash() != checkpointHash {
 		return nil, fmt.Errorf("invalid checkpoint block header, have %v want %v", header.Hash(), checkpointHash)

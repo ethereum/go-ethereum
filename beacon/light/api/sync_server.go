@@ -78,32 +78,14 @@ func (s *SyncServer) Fail(desc string) {
 
 }
 
-func (s *SyncServer) RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData)) {
-	go func() {
-		if checkpoint, err := s.api.GetCheckpointData(checkpointHash); err == nil {
-			response(checkpoint)
-		} else {
-			response(nil)
-		}
-	}()
+func (s *SyncServer) RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData, error)) {
+	go response(s.api.GetCheckpointData(checkpointHash))
 }
 
-func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee)) {
-	go func() {
-		if updates, committees, err := s.api.GetBestUpdatesAndCommittees(first, count); err == nil {
-			response(updates, committees)
-		} else {
-			response(nil, nil)
-		}
-	}()
+func (s *SyncServer) RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee, error)) {
+	go response(s.api.GetBestUpdatesAndCommittees(first, count))
 }
 
-func (s *SyncServer) RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock)) {
-	go func() {
-		if block, err := s.api.GetBeaconBlock(blockRoot); err == nil {
-			response(block)
-		} else {
-			response(nil)
-		}
-	}()
+func (s *SyncServer) RequestBeaconBlock(blockRoot common.Hash, response func(*capella.BeaconBlock, error)) {
+	go response(s.api.GetBeaconBlock(blockRoot))
 }

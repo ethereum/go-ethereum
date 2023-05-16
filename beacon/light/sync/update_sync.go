@@ -30,7 +30,7 @@ const maxUpdateRequest = 8
 
 type checkpointInitServer interface {
 	request.RequestServer
-	RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData))
+	RequestBootstrap(checkpointHash common.Hash, response func(*light.CheckpointData, error))
 }
 
 type CheckpointInit struct {
@@ -98,12 +98,12 @@ func (r checkpointRequest) CanSendTo(server *request.Server, moduleData *interfa
 
 func (r checkpointRequest) SendTo(server *request.Server, moduleData *interface{}) {
 	reqId := r.reqLock.Send(server)
-	server.RequestServer.(checkpointInitServer).RequestBootstrap(r.checkpointHash, func(checkpoint *light.CheckpointData) {
+	server.RequestServer.(checkpointInitServer).RequestBootstrap(r.checkpointHash, func(checkpoint *light.CheckpointData, err error) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 
 		r.reqLock.Returned(server, reqId)
-		if checkpoint == nil || !checkpoint.Validate() {
+		if err != nil || checkpoint == nil || !checkpoint.Validate() {
 			(*moduleData) = struct{}{}
 			server.Fail("error retrieving checkpoint data")
 			return
@@ -117,7 +117,7 @@ func (r checkpointRequest) SendTo(server *request.Server, moduleData *interface{
 
 type updateServer interface {
 	request.RequestServer
-	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee))
+	RequestUpdates(first, count uint64, response func([]*types.LightClientUpdate, []*types.SerializedCommittee, error))
 }
 
 type ForwardUpdateSync struct {
@@ -192,11 +192,15 @@ func (r updateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 		count = maxUpdateRequest
 	}
 	reqId := r.reqLock.Send(server)
-	us.RequestUpdates(r.first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedCommittee) {
+	us.RequestUpdates(r.first, count, func(updates []*types.LightClientUpdate, committees []*types.SerializedCommittee, err error) {
 		r.lock.Lock()
 		defer r.lock.Unlock()
 
 		r.reqLock.Returned(server, reqId)
+		if err != nil {
+			server.Fail("no updates received")
+			return
+		}
 		if len(updates) != int(count) || len(committees) != int(count) {
 			server.Fail("wrong number of updates received")
 			return
