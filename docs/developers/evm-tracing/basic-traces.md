@@ -54,7 +54,7 @@ debug.traceTransaction('0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa7122
 The same call can also be invoked from outside the node too via HTTP RPC (e.g. using Curl). In this case, the HTTP endpoint must be enabled in Geth using the `--http` command and the `debug` API namespace must be exposed using `--http.api=debug`.
 
 ```sh
-$ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f"]}' localhost:8545
+$ curl -H "Content-Type: application/json" -d '{"id": 1, "jsonrpc": "2.0", "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f"]}' localhost:8545
 ```
 
 To follow along with this tutorial, transaction hashes can be found from a local Geth node (e.g. by attaching a [Javascript console](/docs/interacting-with-geth/javascript-console) and running `eth.getBlock('latest')` then passing a transaction hash from the returned block to `debug.traceTransaction()`) or from a block explorer (for [Mainnet](https://etherscan.io/) or a [testnet](https://goerli.etherscan.io/)).
@@ -84,7 +84,7 @@ The above operation was run on the (now-deprecated) Rinkeby network (with a node
 Alternatively, disabling _EVM Stack_, _EVM Memory_, _Storage_ and _Return data_ (as demonstrated in the Curl request below) results in the following, much shorter, [trace dump](https://gist.github.com/karalabe/d74a7cb33a70f2af75e7824fc772c5b4).
 
 ```sh
-$ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableStorage": true}]}' localhost:8545
+$ curl -H "Content-Type: application/json" -d '{"id": 1, "jsonrpc": "2.0", "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableStorage": true}]}' localhost:8545
 ```
 
 ### Limits of basic traces {#list-of-basic-traces}
