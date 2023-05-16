@@ -972,14 +972,20 @@ func (x *XDPoS_v2) GetMasternodesFromEpochSwitchHeader(epochSwitchHeader *types.
 func (x *XDPoS_v2) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
 	if err != nil {
-		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
+		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error", "err", err)
 		return []common.Address{}
 	}
 	return epochSwitchInfo.Masternodes
 }
 
-func (x *XDPoS_v2) CalcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
-	return x.calcMasternodes(chain, blockNum, parentHash)
+// Given header, get master node from the epoch switch block of that epoch
+func (x *XDPoS_v2) GetPenalties(chain consensus.ChainReader, header *types.Header) []common.Address {
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
+	if err != nil {
+		log.Error("[GetMasternodes] Adaptor v2 getEpochSwitchInfo has error", "err", err)
+		return []common.Address{}
+	}
+	return epochSwitchInfo.Penalties
 }
 
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {

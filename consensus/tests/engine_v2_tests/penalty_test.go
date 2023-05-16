@@ -136,3 +136,18 @@ func TestHookPenaltyV2LessThen150Blocks(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(penalty))
 }
+
+func TestGetPenalties(t *testing.T) {
+	config := params.TestXDPoSMockChainConfig
+	blockchain, _, _, _, _ := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, int(config.XDPoS.Epoch)*3, config)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+
+	header2699 := blockchain.GetHeaderByNumber(2699)
+	header1801 := blockchain.GetHeaderByNumber(1801)
+
+	penalty2699 := adaptor.EngineV2.GetPenalties(blockchain, header2699)
+	penalty1801 := adaptor.EngineV2.GetPenalties(blockchain, header1801)
+
+	assert.Equal(t, 1, len(penalty2699))
+	assert.Equal(t, 1, len(penalty1801))
+}

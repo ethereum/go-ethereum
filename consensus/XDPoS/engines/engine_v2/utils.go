@@ -138,6 +138,7 @@ func (x *XDPoS_v2) getExtraFields(header *types.Header) (*types.QuorumCert, type
 	var decodedExtraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
 	if err != nil {
+		log.Error("[getExtraFields] error on decode extra fields", "err", err, "extra", header.Extra)
 		return nil, types.Round(0), masternodes, err
 	}
 	return decodedExtraField.QuorumCert, decodedExtraField.Round, masternodes, nil

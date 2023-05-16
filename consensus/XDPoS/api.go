@@ -60,11 +60,13 @@ type SignerTypes struct {
 }
 
 type MasternodesStatus struct {
+	Number         uint64
+	Round          types.Round
 	MasternodesLen int
 	Masternodes    []common.Address
-
-	PenaltyLen int
-	Penalty    []common.Address
+	PenaltyLen     int
+	Penalty        []common.Address
+	Error          error
 }
 
 type MessageStatus map[string]map[string]SignerTypes
@@ -130,13 +132,22 @@ func (api *API) GetMasternodesByNumber(number *rpc.BlockNumber) MasternodesStatu
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
-	masternodes, penalties, err := api.XDPoS.EngineV2.CalcMasternodes(api.chain, header.Number, header.ParentHash)
+
+	round, err := api.XDPoS.EngineV2.GetRoundNumber(header)
 	if err != nil {
-		return MasternodesStatus{}
+		return MasternodesStatus{
+			Error: err,
+		}
 	}
+
+	masterNodes := api.XDPoS.EngineV2.GetMasternodes(api.chain, header)
+	penalties := api.XDPoS.EngineV2.GetPenalties(api.chain, header)
+
 	info := MasternodesStatus{
-		MasternodesLen: len(masternodes),
-		Masternodes:    masternodes,
+		Number:         header.Number.Uint64(),
+		Round:          round,
+		MasternodesLen: len(masterNodes),
+		Masternodes:    masterNodes,
 		PenaltyLen:     len(penalties),
 		Penalty:        penalties,
 	}

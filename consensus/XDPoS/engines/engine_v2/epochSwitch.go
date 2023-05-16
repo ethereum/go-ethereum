@@ -53,9 +53,12 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		log.Debug("[getEpochSwitchInfo] header is epoch switch", "hash", hash.Hex(), "number", h.Number.Uint64())
 		quorumCert, round, masternodes, err := x.getExtraFields(h)
 		if err != nil {
+			log.Error("[getEpochSwitchInfo] get extra field", "err", err, "number", h.Number.Uint64())
 			return nil, err
 		}
+		penalties := common.ExtractAddressFromBytes(h.Penalties)
 		epochSwitchInfo := &types.EpochSwitchInfo{
+			Penalties:   penalties,
 			Masternodes: masternodes,
 			EpochSwitchBlockInfo: &types.BlockInfo{
 				Hash:   hash,
