@@ -582,19 +582,18 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 }
 
 func toBlockNumArg(number *big.Int) string {
-	if number == nil || number.Cmp(big.NewInt(int64(rpc.LatestBlockNumber))) == 0 {
+	if number == nil {
 		return "latest"
 	}
-	if number.Cmp(big.NewInt(int64(rpc.PendingBlockNumber))) == 0 {
-		return "pending"
+	if number.Sign() >= 0 {
+		return hexutil.EncodeBig(number)
 	}
-	if number.Cmp(big.NewInt(int64(rpc.FinalizedBlockNumber))) == 0 {
-		return "finalized"
+	// It's negative.
+	if number.IsInt64() {
+		return rpc.BlockNumber(number.Int64()).String()
 	}
-	if number.Cmp(big.NewInt(int64(rpc.SafeBlockNumber))) == 0 {
-		return "safe"
-	}
-	return hexutil.EncodeBig(number)
+	// It's negative and large, which is invalid.
+	return fmt.Sprintf("<invalid %d>", number)
 }
 
 func toCallArg(msg ethereum.CallMsg) interface{} {
