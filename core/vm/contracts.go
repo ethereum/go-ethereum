@@ -80,15 +80,15 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):  &ecrecover{},
-	common.BytesToAddress([]byte{2}):  &sha256hash{},
-	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -105,10 +105,10 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-// PrecompiledContractsEcverify contains the precompiled Ethereum
+// PrecompiledContractsP256Verify contains the precompiled Ethereum
 // contract specified in EIP-N. This is exported for testing purposes.
-var PrecompiledContractsEcverify = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{19}): &ecverify{},
+var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{19}): &p256Verify{},
 }
 
 var (
@@ -1115,22 +1115,22 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	return g.EncodePoint(r), nil
 }
 
-// ECVERIFY (secp256r1 signature verification)
+// P256VERIFY (secp256r1 signature verification)
 // implemented as a native contract
-type ecverify struct{}
+type p256Verify struct{}
 
 // RequiredGas returns the gas required to execute the precompiled contract
-func (c *ecverify) RequiredGas(input []byte) uint64 {
-	return params.EcverifyGas
+func (c *p256Verify) RequiredGas(input []byte) uint64 {
+	return params.P256VerifyGas
 }
 
 // Run executes the precompiled contract, returning the output and the used gas
-func (c *ecverify) Run(input []byte) ([]byte, error) {
+func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	// Required input length is 160 bytes
-	const ecverifyInputLength = 160
+	const p256VerifyInputLength = 160
 
 	// "input" is (hash, r, s, x, y), each 32 bytes
-	input = common.RightPadBytes(input, ecverifyInputLength)
+	input = common.RightPadBytes(input, p256VerifyInputLength)
 
 	// Extract the hash, r, s, x, y from the input
 	hash := input[0:32]

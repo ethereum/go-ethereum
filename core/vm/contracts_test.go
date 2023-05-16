@@ -65,7 +65,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}):   &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}):   &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
-	common.BytesToAddress([]byte{19}):   &ecverify{},
+	common.BytesToAddress([]byte{19}):   &p256Verify{},
 }
 
 // EIP-152 test vectors
@@ -413,14 +413,14 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 	benchmarkPrecompiled("0f", testcase, b)
 }
 
-// Benchmarks the sample inputs from the ECVERIFY precompile.
-func BenchmarkPrecompiledEcverify(bench *testing.B) {
+// Benchmarks the sample inputs from the P256VERIFY precompile.
+func BenchmarkPrecompiledP256Verify(bench *testing.B) {
 	t := precompiledTest{
 		Input:    "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b98243744ca2b25ce52b927841120de9d5e5a454acabea2ebacaa1f76850934cb0c7c818200fa5e4b4607eeea9593071a6097b132d77c10661c441b5a66eb36856e1251c078c2c1367932e25bf657f6b2e378a26a27e238196295e1c59e2225d372fe603c229d85ea9eb0b090274c59a0600becd11d0df3f91fe44677977119c4ff03",
 		Expected: "0000000000000000000000000000000000000000000000000000000000000001",
-		Name:     "ecverify",
+		Name:     "p256Verify",
 	}
 	benchmarkPrecompiled("13", t, bench)
 }
 
-func TestPrecompiledEcverify(t *testing.T) { testJson("ecverify", "13", t) }
+func TestPrecompiledP256Verify(t *testing.T) { testJson("p256Verify", "13", t) }
