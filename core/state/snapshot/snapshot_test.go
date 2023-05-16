@@ -187,7 +187,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Un-commenting this triggers the bloom set to be deterministic. The values below
 	// were used to trigger the flaw described in https://github.com/ethereum/go-ethereum/issues/27254.
-	//bloomDestructHasherOffset, bloomAccountHasherOffset, bloomStorageHasherOffset = 14, 24, 5
+	// bloomDestructHasherOffset, bloomAccountHasherOffset, bloomStorageHasherOffset = 14, 24, 5
 
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
