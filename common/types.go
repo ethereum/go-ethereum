@@ -429,3 +429,16 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
 }
+
+// AddressEIP55 is an alias of Address with a customized json marshaller
+type AddressEIP55 Address
+
+// String returns the hex representation of the address in the manner of EIP55.
+func (addr AddressEIP55) String() string {
+	return Address(addr).Hex()
+}
+
+// MarshalJSON marshals the address in the manner of EIP55.
+func (addr AddressEIP55) MarshalJSON() ([]byte, error) {
+	return json.Marshal(addr.String())
+}
