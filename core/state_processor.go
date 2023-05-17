@@ -71,6 +71,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	if p.config.IsCancun(blockNumber, block.Time()) {
+		if header.BeaconRoot == nil {
+			return nil, nil, 0, errors.New("expected beacon root post-cancun")
+		}
+		misc.ApplyBeaconRoot(header, statedb)
+	} else if header.BeaconRoot != nil {
+		return nil, nil, 0, errors.New("beacon root set pre-cancun")
+	}
+
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)

@@ -16,7 +16,11 @@
 
 package params
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 const (
 	GasLimitBoundDivisor uint64 = 1024               // The bound divisor of the gas limit, used in update calculations.
@@ -160,6 +164,9 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
+	HistoricalRootsModulus  uint64 = 98304 // Limits how many historical roots are stored by EIP-4788
+	BeaconRootPrecompileGas uint64 = 4200  // Price for retrieving a beacon root from the beacon root precompile
+
 	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
 	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
 	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
@@ -179,4 +186,6 @@ var (
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+
+	BeaconRootsStorageAddress common.Address = common.BytesToAddress([]byte{0xb}) // Address where historical beacon roots are stored as per EIP-4788
 )
