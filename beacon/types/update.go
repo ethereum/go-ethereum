@@ -38,7 +38,7 @@ type LightClientUpdate struct {
 	NextSyncCommitteeRoot   common.Hash   // Sync committee of the next period advertised in the current one
 	NextSyncCommitteeBranch merkle.Values // Proof for the next period's sync committee
 
-	FinalizedHeader *Header       // Optional header to announce a point of finality
+	FinalizedHeader *Header       `rlp:"nil"` // Optional header to announce a point of finality
 	FinalityBranch  merkle.Values // Proof for the announced finality
 
 	score *UpdateScore // Weight of the update to compare between competing ones
