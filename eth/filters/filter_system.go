@@ -163,7 +163,7 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
-	// ReorgsSubscription queries hashes for blocks that are imported
+	// ReorgsSubscription queries hashes for blocks that are reorged
 	ReorgsSubscription
 	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
