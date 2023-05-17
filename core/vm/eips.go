@@ -218,6 +218,17 @@ func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	return nil, nil
 }
 
+// enable4788 applies EIP-4788 (BEACONROOT opcode)
+func enable4788(jt *JumpTable) {
+	// New opcode
+	jt[BEACONROOT] = &operation{
+		execute:     opBeaconRoot,
+		constantGas: GasExtStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
 // enable3855 applies EIP-3855 (PUSH0 opcode)
 func enable3855(jt *JumpTable) {
 	// New opcode

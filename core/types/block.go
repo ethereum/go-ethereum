@@ -90,6 +90,9 @@ type Header struct {
 
 	// DataGasUsed was added by EIP-4844 and is ignored in legacy headers.
 	DataGasUsed *uint64 `json:"dataGasUsed" rlp:"optional"`
+
+	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
+	BeaconRoot *common.Hash `json:"beaconRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
