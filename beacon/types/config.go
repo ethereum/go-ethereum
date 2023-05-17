@@ -126,6 +126,9 @@ type ChainConfig struct {
 	Forks                 Forks
 }
 
+// AddFork adds a new item to the list of forks.
+// Note: the list of forks has to be ordered by epoch so they either have to be
+// added in order or sorted afterwards.
 func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
 	fork := &Fork{
 		Name:    name,
