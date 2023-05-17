@@ -98,8 +98,8 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadTrieHistory retrieves the trie history with the given id. Calculate
 // the real position of trie history in freezer by minus one since the first
 // history object is started from one(zero for empty state).
-func ReadTrieHistory(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(trieHistoryTable, id-1)
+func ReadTrieHistory(db ethdb.AncientReaderOp, stateID uint64) []byte {
+	blob, err := db.Ancient(trieHistoryTable, stateID-1)
 	if err != nil {
 		return nil
 	}
@@ -109,65 +109,65 @@ func ReadTrieHistory(db ethdb.AncientReaderOp, id uint64) []byte {
 // WriteTrieHistory writes the provided trie history to database. Calculate the
 // real position of trie history in freezer by minus one since the first history
 // object is started from one(zero is not existent corresponds to empty state).
-func WriteTrieHistory(db ethdb.AncientWriter, id uint64, blob []byte) {
+func WriteTrieHistory(db ethdb.AncientWriter, stateID uint64, blob []byte) {
 	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		op.AppendRaw(trieHistoryTable, id-1, blob)
+		op.AppendRaw(trieHistoryTable, stateID-1, blob)
 		return nil
 	})
 }
 
-// ReadStateLookup retrieves the state id with the provided state root.
-func ReadStateLookup(db ethdb.KeyValueReader, root common.Hash) (uint64, bool) {
-	data, err := db.Get(stateLookupKey(root))
+// ReadStateID retrieves the state id with the provided state root.
+func ReadStateID(db ethdb.KeyValueReader, root common.Hash) (uint64, bool) {
+	data, err := db.Get(stateIDKey(root))
 	if err != nil || len(data) == 0 {
 		return 0, false
 	}
 	return binary.BigEndian.Uint64(data), true
 }
 
-// WriteStateLookup writes the provided state lookup to database.
-func WriteStateLookup(db ethdb.KeyValueWriter, root common.Hash, id uint64) {
+// WriteStateID writes the provided state lookup to database.
+func WriteStateID(db ethdb.KeyValueWriter, root common.Hash, id uint64) {
 	var buff [8]byte
 	binary.BigEndian.PutUint64(buff[:], id)
-	if err := db.Put(stateLookupKey(root), buff[:]); err != nil {
-		log.Crit("Failed to store state lookup", "err", err)
+	if err := db.Put(stateIDKey(root), buff[:]); err != nil {
+		log.Crit("Failed to store state ID", "err", err)
 	}
 }
 
-// DeleteStateLookup deletes the specified state lookup from the database.
-func DeleteStateLookup(db ethdb.KeyValueWriter, root common.Hash) {
-	if err := db.Delete(stateLookupKey(root)); err != nil {
-		log.Crit("Failed to delete state lookup", "err", err)
+// DeleteStateID deletes the specified state lookup from the database.
+func DeleteStateID(db ethdb.KeyValueWriter, root common.Hash) {
+	if err := db.Delete(stateIDKey(root)); err != nil {
+		log.Crit("Failed to delete state ID", "err", err)
 	}
 }
 
-// ReadHeadState retrieves the id of the disk state from the database.
-func ReadHeadState(db ethdb.KeyValueReader) uint64 {
-	data, _ := db.Get(headStateKey)
+// ReadPersistentStateID retrieves the id of the disk state from the database.
+func ReadPersistentStateID(db ethdb.KeyValueReader) uint64 {
+	data, _ := db.Get(persistentStateIDKey)
 	if len(data) != 8 {
 		return 0
 	}
 	return binary.BigEndian.Uint64(data)
 }
 
-// WriteHeadState stores the id of the disk state into database.
-func WriteHeadState(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(headStateKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store the head state id", "err", err)
+// WritePersistentStateID stores the id of the disk state into database.
+func WritePersistentStateID(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(persistentStateIDKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store the persistent state ID", "err", err)
 	}
 }
 
 // ReadTrieJournal retrieves the serialized in-memory trie node diff layers saved at
 // the last shutdown. The blob is expected to be max a few 10s of megabytes.
 func ReadTrieJournal(db ethdb.KeyValueReader) []byte {
-	data, _ := db.Get(triesJournalKey)
+	data, _ := db.Get(trieJournalKey)
 	return data
 }
 
 // WriteTrieJournal stores the serialized in-memory trie node diff layers to save at
 // shutdown. The blob is expected to be max a few 10s of megabytes.
 func WriteTrieJournal(db ethdb.KeyValueWriter, journal []byte) {
-	if err := db.Put(triesJournalKey, journal); err != nil {
+	if err := db.Put(trieJournalKey, journal); err != nil {
 		log.Crit("Failed to store tries journal", "err", err)
 	}
 }
@@ -175,7 +175,7 @@ func WriteTrieJournal(db ethdb.KeyValueWriter, journal []byte) {
 // DeleteTrieJournal deletes the serialized in-memory trie node diff layers saved at
 // the last shutdown
 func DeleteTrieJournal(db ethdb.KeyValueWriter) {
-	if err := db.Delete(triesJournalKey); err != nil {
+	if err := db.Delete(trieJournalKey); err != nil {
 		log.Crit("Failed to remove tries journal", "err", err)
 	}
 }

@@ -29,9 +29,9 @@ import (
 
 // Prng is a pseudo random number generator seeded by strong randomness.
 // The randomness is printed on startup in order to make failures reproducible.
-var prng = initRnd()
+var prng = initRand()
 
-func initRnd() *mrand.Rand {
+func initRand() *mrand.Rand {
 	var seed [8]byte
 	crand.Read(seed[:])
 	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))

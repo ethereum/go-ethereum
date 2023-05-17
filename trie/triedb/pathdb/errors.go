@@ -42,16 +42,16 @@ var (
 	errStateUnrecoverable = errors.New("state is unrecoverable")
 )
 
-// UnexpectedNodeErr is returned if the requested node with specified path is
+// UnexpectedNodeError is returned if the requested node with specified path is
 // not hash matched.
-type UnexpectedNodeErr struct {
-	typ   string
-	want  common.Hash
-	has   common.Hash
-	owner common.Hash
-	path  []byte
+type UnexpectedNodeError struct {
+	typ      string
+	expected common.Hash
+	hash     common.Hash
+	owner    common.Hash
+	path     []byte
 }
 
-func (err *UnexpectedNodeErr) Error() string {
-	return fmt.Sprintf("%s: unexpected node %x!=%x(%x %v)", err.typ, err.want, err.has, err.owner, err.path)
+func (err *UnexpectedNodeError) Error() string {
+	return fmt.Sprintf("%s: unexpected node %x!=%x(%x %v)", err.typ, err.expected, err.hash, err.owner, err.path)
 }

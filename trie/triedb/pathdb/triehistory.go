@@ -30,19 +30,19 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Trie history records the state changes involved in executing a corresponding
-// block. The state can be reverted to the previous status by applying the
-// associated trie history. Trie history is the guarantee that system can perform
-// state rollback, mostly for purposes of deep reorg.
+// Trie history records the state changes involved in executing a block. The state can be
+// reverted to the previous state by applying the associated trie history object (reverse
+// diff). Trie history objects are kept to guarantee that the system can perform state
+// rollbacks in case of a deep reorg.
 //
-// Each state transition will generate a corresponding trie history (Note that
-// not every block has a state change, e.g. in the clique network or post-merge
-// where no block reward rules existent). Each trie history will have a
-// monotonically increasing number act as its unique identifier.
+// Each state transition will generate a trie history object. Note that not every block
+// has a corresponding state/history object. If a block performs no state changes
+// whatsoever, no state is created for it. Each state/history will have a sequentially
+// increasing number acting as its unique identifier.
 //
-// The trie history will be written to disk (ancient store) when the corresponding
-// diff layer is merged into the disk layer. At the same time, system can prune
-// the oldest histories according to config.
+// The trie history are written to disk (ancient store) when the corresponding diff layer
+// is merged into the disk layer. At the same time, system can prune the oldest histories
+// according to config.
 //
 //                                                        Disk State
 //                                                            ^
@@ -55,9 +55,11 @@ import (
 //                     | History 1 |----> | ...  |---->| History n |
 //                     +-----------+      +------+     +-----------+
 //
-// How does state rollback work? For example, if system wants to roll back its
-// state to the state n, it needs to ensure all histories from n+1 until current
-// disk layer are all existent, then apply the histories in order.
+// # Rollback
+//
+// If the system wants to roll back to a previous state n, it needs to ensure all history
+// objects from n+1 up to the current disk layer are existent. The history objects are
+// applied to the state in reverse order, starting from the current disk layer.
 
 // trieHistoryVersion is the initial version of trie history structure.
 const trieHistoryVersion = uint8(0)
@@ -139,7 +141,7 @@ func (h *trieHistory) apply(batch ethdb.Batch) error {
 				if h.Parent == root {
 					continue
 				}
-				return fmt.Errorf("currupted history: expect %x got %x", h.Parent, root)
+				return fmt.Errorf("corrupted history: expect %x got %x", h.Parent, root)
 			}
 		}
 	}

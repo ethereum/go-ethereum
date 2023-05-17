@@ -126,12 +126,12 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
 	if nHash != hash {
-		return nil, &UnexpectedNodeErr{
-			typ:   "disk",
-			want:  hash,
-			has:   nHash,
-			owner: owner,
-			path:  path,
+		return nil, &UnexpectedNodeError{
+			typ:      "disk",
+			expected: hash,
+			hash:     nHash,
+			owner:    owner,
+			path:     path,
 		}
 	}
 	if dl.db.cleans != nil && len(nBlob) > 0 {
@@ -197,9 +197,9 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// in the same chain blocks which are not adjacent have the same
 	// root.
 	if dl.id == 0 {
-		rawdb.WriteStateLookup(dl.db.diskdb, dl.root, 0)
+		rawdb.WriteStateID(dl.db.diskdb, dl.root, 0)
 	}
-	rawdb.WriteStateLookup(dl.db.diskdb, bottom.Root(), bottom.ID())
+	rawdb.WriteStateID(dl.db.diskdb, bottom.Root(), bottom.ID())
 
 	// Drop the previous value to reduce memory usage.
 	slim := make(map[common.Hash]map[string]*trienode.Node)
@@ -249,7 +249,7 @@ func (dl *diskLayer) revert(h *trieHistory) (*diskLayer, error) {
 		if err := h.apply(batch); err != nil {
 			return nil, err
 		}
-		rawdb.WriteHeadState(batch, dl.id-1)
+		rawdb.WritePersistentStateID(batch, dl.id-1)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write states", "err", err)
 		}

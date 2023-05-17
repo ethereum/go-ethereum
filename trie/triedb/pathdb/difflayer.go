@@ -128,12 +128,12 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 			// If the trie node is not hash matched, or marked as removed,
 			// bubble up an error here. It shouldn't happen at all.
 			if n.Hash != hash {
-				return nil, &UnexpectedNodeErr{
-					typ:   "diff",
-					want:  hash,
-					has:   n.Hash,
-					owner: owner,
-					path:  path,
+				return nil, &UnexpectedNodeError{
+					typ:      "diff",
+					expected: hash,
+					hash:     n.Hash,
+					owner:    owner,
+					path:     path,
 				}
 			}
 			dirtyHitMeter.Mark(1)

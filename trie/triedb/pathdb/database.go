@@ -299,7 +299,7 @@ func (db *Database) Reset(root common.Hash) error {
 	// Drop the stale state journal in persistent database
 	// and revert the head state indicator back to zero.
 	rawdb.DeleteTrieJournal(batch)
-	rawdb.WriteHeadState(batch, 0)
+	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
 	}
@@ -356,7 +356,7 @@ func (db *Database) Recover(root common.Hash) error {
 		if err != nil {
 			return err
 		}
-		rawdb.DeleteStateLookup(batch, h.Root)
+		rawdb.DeleteStateID(batch, h.Root)
 
 		if dl.Root() == root {
 			break
@@ -380,7 +380,7 @@ func (db *Database) Recover(root common.Hash) error {
 func (db *Database) Recoverable(root common.Hash) bool {
 	// Ensure the requested state is a known state.
 	root = types.TrieRootHash(root)
-	id, exist := rawdb.ReadStateLookup(db.diskdb, root)
+	id, exist := rawdb.ReadStateID(db.diskdb, root)
 	if !exist {
 		return false
 	}

@@ -80,12 +80,12 @@ func (cache *diskcache) node(owner common.Hash, path []byte, hash common.Hash) (
 		return nil, nil
 	}
 	if n.Hash != hash {
-		return nil, &UnexpectedNodeErr{
-			typ:   "cache",
-			want:  hash,
-			has:   n.Hash,
-			owner: owner,
-			path:  path,
+		return nil, &UnexpectedNodeError{
+			typ:      "cache",
+			expected: hash,
+			hash:     n.Hash,
+			owner:    owner,
+			path:     path,
 		}
 	}
 	return n, nil
@@ -214,7 +214,7 @@ func (cache *diskcache) mayFlush(db ethdb.KeyValueStore, clean *fastcache.Cache,
 		return nil
 	}
 	// Ensure the given target state id is aligned with the internal counter.
-	head := rawdb.ReadHeadState(db)
+	head := rawdb.ReadPersistentStateID(db)
 	if head+cache.layers != id {
 		return errors.New("invalid state id")
 	}
@@ -242,7 +242,7 @@ func (cache *diskcache) mayFlush(db ethdb.KeyValueStore, clean *fastcache.Cache,
 			}
 		}
 	}
-	rawdb.WriteHeadState(batch, id)
+	rawdb.WritePersistentStateID(batch, id)
 	if err := batch.Write(); err != nil {
 		return err
 	}

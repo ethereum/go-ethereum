@@ -246,7 +246,7 @@ func TestDatabaseBatchRollback(t *testing.T) {
 		t.Fatalf("Unexpected trie histories")
 	}
 	for i := 0; i < len(env.roots); i++ {
-		_, exist := rawdb.ReadStateLookup(env.db.diskdb, env.hashes[i])
+		_, exist := rawdb.ReadStateID(env.db.diskdb, env.hashes[i])
 		if exist {
 			t.Fatalf("Unexpected lookup")
 		}
