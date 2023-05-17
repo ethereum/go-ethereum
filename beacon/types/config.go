@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/go-yaml/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 // syncCommitteeDomain specifies the signatures specific use to avoid clashes
@@ -121,7 +121,7 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 
 	c.Forks = append(c.Forks, fork)
 	sort.Sort(c.Forks)
-	
+
 	return c
 }
 
