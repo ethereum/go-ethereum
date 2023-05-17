@@ -185,6 +185,14 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if t.config.IncludePrecompiles {
 		return
 	}
+
+	// When OnlyTopCall is provided, the call tracer CaptureExit does
+	// not push the child's callframe to parent's callframe so we don't
+	// need to remove the call to precompile.
+	if len(t.tracer.callstack[len(t.tracer.callstack)-1].Calls) == 0 {
+		return
+	}
+
 	var (
 		// call has been nested in parent
 		parent = t.tracer.callstack[len(t.tracer.callstack)-1]
