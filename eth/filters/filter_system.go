@@ -432,8 +432,8 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 	return es.subscribe(sub)
 }
 
-// SubscribeNewHeads creates a subscription that writes the header of a block that is
-// imported in the chain.
+// SubscribeChainReorgs creates a subscription that writes the header of a block that was
+// reorged in the chain.
 func (es *EventSystem) SubscribeChainReorgs(reorgs chan *types.Header) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
