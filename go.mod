@@ -19,10 +19,9 @@ require (
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/docker/docker v1.6.2
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
-	github.com/edsrzf/mmap-go v1.0.0
 	github.com/ethereum/c-kzg-4844 v0.2.0
 	github.com/fatih/color v1.7.0
-	github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c
+	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
