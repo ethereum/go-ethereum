@@ -17,9 +17,11 @@
 package light
 
 import (
-	"github.com/ethereum/go-ethereum/beacon/types"
+	"errors"
+
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -35,12 +37,11 @@ type CheckpointData struct {
 	CommitteeBranch merkle.Values
 }
 
-func (c *CheckpointData) Validate() bool {
+func (c *CheckpointData) Validate() error {
 	if c.CommitteeRoot != c.Committee.Root() {
-		return false
+		return errors.New("wrong committee root")
 	}
-	expStateRoot, ok := merkle.VerifySingleProof(c.CommitteeBranch, params.BsiSyncCommittee, merkle.Value(c.CommitteeRoot))
-	return ok && expStateRoot == c.Header.StateRoot
+	return merkle.VerifyProof(c.Header.StateRoot, params.StateIndexSyncCommittee, c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
 }
 
 // expected to be validated already

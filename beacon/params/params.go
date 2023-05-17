@@ -17,17 +17,28 @@
 package params
 
 const (
-	// beacon state fields
-	BsiGenesisTime       = 32
-	BsiGenesisValidators = 33
-	BsiForkVersion       = 141
-	BsiLatestHeader      = 36
-	BsiBlockRoots        = 37
-	BsiStateRoots        = 38
-	BsiHistoricRoots     = 39
-	BsiFinalBlock        = 105
-	BsiSyncCommittee     = 54
-	BsiNextSyncCommittee = 55
-	BsiExecPayload       = 56
-	BsiExecHead          = 908
+	EpochLength      = 32
+	SyncPeriodLength = 8192
+
+	BLSSignatureSize = 96
+	BLSPubkeySize    = 48
+
+	SyncCommitteeSize          = 512
+	SyncCommitteeBitmaskSize   = SyncCommitteeSize / 8
+	SyncCommitteeSupermajority = (SyncCommitteeSize*2 + 2) / 3
+)
+
+const (
+	StateIndexGenesisTime       = 32
+	StateIndexGenesisValidators = 33
+	StateIndexForkVersion       = 141
+	StateIndexLatestHeader      = 36
+	StateIndexBlockRoots        = 37
+	StateIndexStateRoots        = 38
+	StateIndexHistoricRoots     = 39
+	StateIndexFinalBlock        = 105
+	StateIndexSyncCommittee     = 54
+	StateIndexNextSyncCommittee = 55
+	StateIndexExecPayload       = 56
+	StateIndexExecHead          = 908
 )

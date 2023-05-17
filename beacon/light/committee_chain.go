@@ -265,7 +265,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	period := update.Header.SyncPeriod()
+	period := update.AttestedHeader.Header.SyncPeriod()
 	if !s.updates.CanExpand(period) || !s.committees.Includes(period) {
 		return ErrInvalidPeriod
 	}
@@ -406,7 +406,7 @@ func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
 	// verification. Though in reality SignatureSlot is always bigger than update.Header.Slot,
 	// setting them as equal here enforces the rule that they have to be in the same sync
 	// period in order for the light client update proof to be meaningful.
-	ok, age := s.verifySignedHeader(update.SignedHeader)
+	ok, age := s.verifySignedHeader(update.AttestedHeader)
 	if age < 0 {
 		log.Warn("Future committee update received", "age", age)
 	}
@@ -414,7 +414,7 @@ func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
 }
 
 type canonicalStore[T any] struct {
-	types.PeriodRange
+	Range
 	db        ethdb.KeyValueStore
 	keyPrefix []byte
 	cache     *lru.Cache[uint64, T]
@@ -485,14 +485,14 @@ func (cs *canonicalStore[T]) add(batch ethdb.Batch, period uint64, value T) {
 }
 
 // should only be used in batch mode
-func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted types.PeriodRange) {
+func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
 	if fromPeriod >= cs.AfterLast {
 		return
 	}
 	if fromPeriod < cs.First {
 		fromPeriod = cs.First
 	}
-	deleted = types.PeriodRange{First: fromPeriod, AfterLast: cs.AfterLast}
+	deleted = Range{First: fromPeriod, AfterLast: cs.AfterLast}
 	for period := fromPeriod; period < cs.AfterLast; period++ {
 		batch.Delete(cs.getDbKey(period))
 		cs.cache.Remove(period)
@@ -500,7 +500,7 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 	if fromPeriod > cs.First {
 		cs.AfterLast = fromPeriod
 	} else {
-		cs.PeriodRange = types.PeriodRange{}
+		cs.Range = Range{}
 	}
 	return
 }

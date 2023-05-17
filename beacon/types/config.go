@@ -70,31 +70,15 @@ func (f *Fork) computeDomain(genesisValidatorsRoot common.Hash) {
 // Forks is the list of all beacon chain forks in the chain configuration.
 type Forks []*Fork
 
-// Fork returns the fork belonging to the given epoch
-func (f Forks) Fork(epoch uint64) *Fork {
-	for i := len(f) - 1; i >= 0; i-- {
-		if epoch >= f[i].Epoch {
-			return f[i]
-		}
-	}
-	return nil
-}
-
 // domain returns the signature domain for the given epoch (assumes that domains
 // have already been calculated).
 func (f Forks) domain(epoch uint64) (merkle.Value, error) {
-	fork := f.Fork(epoch)
-	if fork == nil {
-		return merkle.Value{}, fmt.Errorf("unknown fork for epoch %d", epoch)
+	for i := len(f) - 1; i >= 0; i-- {
+		if epoch >= f[i].Epoch {
+			return f[i].domain, nil
+		}
 	}
-	return fork.domain, nil
-}
-
-// ComputeDomains calculates and stores signature domains for each fork in the list.
-func (f Forks) ComputeDomains(genesisValidatorsRoot common.Hash) {
-	for _, fork := range f {
-		fork.computeDomain(genesisValidatorsRoot)
-	}
+	return merkle.Value{}, fmt.Errorf("unknown fork for epoch %d", epoch)
 }
 
 // SigningRoot calculates the signing root of the given header.
@@ -119,16 +103,14 @@ func (f Forks) Len() int           { return len(f) }
 func (f Forks) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f Forks) Less(i, j int) bool { return f[i].Epoch < f[j].Epoch }
 
-// ChainConfig contains the beacon chain configuration
+// ChainConfig contains the beacon chain configuration.
 type ChainConfig struct {
-	GenesisTime           uint64      // unix time (in seconds) of slot 0
-	GenesisValidatorsRoot common.Hash // root hash of the genesis validator set, used for signature domain calculation
+	GenesisTime           uint64      // Unix timestamp of slot 0
+	GenesisValidatorsRoot common.Hash // Root hash of the genesis validator set, used for signature domain calculation
 	Forks                 Forks
 }
 
 // AddFork adds a new item to the list of forks.
-// Note: the list of forks has to be ordered by epoch so they either have to be
-// added in order or sorted afterwards.
 func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
 	fork := &Fork{
 		Name:    name,
@@ -136,7 +118,10 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 		Version: version,
 	}
 	fork.computeDomain(c.GenesisValidatorsRoot)
+
 	c.Forks = append(c.Forks, fork)
+	sort.Sort(c.Forks)
+	
 	return c
 }
 

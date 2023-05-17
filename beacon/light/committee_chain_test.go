@@ -393,14 +393,14 @@ func (tc *testCommitteeChain) makeTestUpdate(period, subPeriodIndex uint64, sign
 	var update types.LightClientUpdate
 	update.NextSyncCommitteeRoot = tc.periods[period+1].committeeRoot
 	if subPeriodIndex == finalizedTestUpdate {
-		update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+100, params.BsiNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
-		update.Header, update.FinalityBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+200, params.BsiFinalBlock, merkle.Value(update.FinalizedHeader.Hash()))
+		update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
+		update.AttestedHeader.Header, update.FinalityBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock, merkle.Value(update.FinalizedHeader.Hash()))
 	} else {
-		update.Header, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+subPeriodIndex, params.BsiNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
+		update.AttestedHeader.Header, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+subPeriodIndex, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
 	}
-	signedHead := tc.makeTestSignedHead(update.Header, signerCount)
-	update.Signature = signedHead.Signature
-	update.SignatureSlot = update.Header.Slot
+	signedHead := tc.makeTestSignedHead(update.AttestedHeader.Header, signerCount)
+	update.AttestedHeader.Signature = signedHead.Signature
+	update.AttestedHeader.SignatureSlot = update.AttestedHeader.Header.Slot
 	return update
 }
 

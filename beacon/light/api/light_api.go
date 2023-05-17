@@ -26,9 +26,9 @@ import (
 
 	"github.com/donovanhide/eventsource"
 	"github.com/ethereum/go-ethereum/beacon/light"
-	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
@@ -40,6 +40,57 @@ var (
 	ErrNotFound = errors.New("404 Not Found")
 	ErrInternal = errors.New("500 Internal Server Error")
 )
+
+type CommitteeUpdate struct {
+	Version           string
+	Update            types.LightClientUpdate
+	NextSyncCommittee types.SerializedSyncCommittee
+}
+
+// See data structure definition here:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientupdate
+type committeeUpdateJson struct {
+	Version string              `json:"version"`
+	Data    committeeUpdateData `json:"data"`
+}
+
+type committeeUpdateData struct {
+	Header                  jsonBeaconHeader              `json:"attested_header"`
+	NextSyncCommittee       types.SerializedSyncCommittee `json:"next_sync_committee"`
+	NextSyncCommitteeBranch merkle.Values                 `json:"next_sync_committee_branch"`
+	FinalizedHeader         *jsonBeaconHeader             `json:"finalized_header,omitempty"`
+	FinalityBranch          merkle.Values                 `json:"finality_branch,omitempty"`
+	SyncAggregate           types.SyncAggregate           `json:"sync_aggregate"`
+	SignatureSlot           common.Decimal                `json:"signature_slot"`
+}
+
+type jsonBeaconHeader struct {
+	Beacon types.Header `json:"beacon"`
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
+	var dec committeeUpdateJson
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	u.Version = dec.Version
+	u.NextSyncCommittee = dec.Data.NextSyncCommittee
+	u.Update = types.LightClientUpdate{
+		AttestedHeader: types.SignedHeader{
+			Header:        dec.Data.Header.Beacon,
+			Signature:     dec.Data.SyncAggregate,
+			SignatureSlot: uint64(dec.Data.SignatureSlot),
+		},
+		NextSyncCommitteeRoot:   u.NextSyncCommittee.Root(),
+		NextSyncCommitteeBranch: dec.Data.NextSyncCommitteeBranch,
+		FinalityBranch:          dec.Data.FinalityBranch,
+	}
+	if dec.Data.FinalizedHeader != nil {
+		u.Update.FinalizedHeader = &dec.Data.FinalizedHeader.Beacon
+	}
+	return nil
+}
 
 // fetcher is an interface useful for debug-harnessing the http api.
 type fetcher interface {
@@ -105,7 +156,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 		return nil, nil, err
 	}
 
-	var data []types.CommitteeUpdate
+	var data []CommitteeUpdate
 	if err := json.Unmarshal(resp, &data); err != nil {
 		return nil, nil, err
 	}
@@ -115,7 +166,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 	updates := make([]*types.LightClientUpdate, int(count))
 	committees := make([]*types.SerializedSyncCommittee, int(count))
 	for i, d := range data {
-		if d.Update.Header.SyncPeriod() != firstPeriod+uint64(i) {
+		if d.Update.AttestedHeader.Header.SyncPeriod() != firstPeriod+uint64(i) {
 			return nil, nil, errors.New("wrong committee update header period")
 		}
 		if err := d.Update.Validate(); err != nil {
@@ -146,9 +197,9 @@ func (api *BeaconLightApi) GetOptimisticHeadUpdate() (types.SignedHeader, error)
 func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
 	var data struct {
 		Data struct {
-			Header        types.JsonBeaconHeader `json:"attested_header"`
-			Aggregate     types.SyncAggregate    `json:"sync_aggregate"`
-			SignatureSlot common.Decimal         `json:"signature_slot"`
+			Header        jsonBeaconHeader    `json:"attested_header"`
+			Aggregate     types.SyncAggregate `json:"sync_aggregate"`
+			SignatureSlot common.Decimal      `json:"signature_slot"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
@@ -222,7 +273,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
 	type bootstrapData struct {
 		Data struct {
-			Header          types.JsonBeaconHeader         `json:"header"`
+			Header          jsonBeaconHeader               `json:"header"`
 			Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
 			CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`
 		} `json:"data"`
@@ -245,8 +296,8 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*light
 		CommitteeRoot:   data.Data.Committee.Root(),
 		Committee:       data.Data.Committee,
 	}
-	if !checkpoint.Validate() {
-		return nil, errors.New("invalid sync committee Merkle proof")
+	if err := checkpoint.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid sync committee Merkle proof: %w", err)
 	}
 	return checkpoint, nil
 }

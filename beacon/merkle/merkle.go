@@ -14,21 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package merkle implements proof verifications in binary merkle trees.
 package merkle
 
 import (
+	"crypto/sha256"
+	"errors"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/minio/sha256-simd"
 )
 
-// Value represents either a 32 byte value or hash node in a binary merkle tree/partial proof
-type (
-	Value  [32]byte
-	Values []Value
-)
+// Value represents either a 32 byte value or hash node in a binary merkle tree/partial proof.
+type Value [32]byte
+
+type Values []Value
 
 var ValueT = reflect.TypeOf(Value{})
 
@@ -37,27 +38,29 @@ func (m *Value) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(ValueT, input, m[:])
 }
 
-// VerifySingleProof verifies a Merkle proof branch for a single value in a
+// VerifyProof verifies a Merkle proof branch for a single value in a
 // binary Merkle tree (index is a generalized tree index).
-func VerifySingleProof(proof Values, index uint64, value Value) (common.Hash, bool) {
+func VerifyProof(root common.Hash, index uint64, branch Values, value Value) error {
 	hasher := sha256.New()
-	for _, proofHash := range proof {
+	for _, sibling := range branch {
 		hasher.Reset()
 		if index&1 == 0 {
 			hasher.Write(value[:])
-			hasher.Write(proofHash[:])
+			hasher.Write(sibling[:])
 		} else {
-			hasher.Write(proofHash[:])
+			hasher.Write(sibling[:])
 			hasher.Write(value[:])
 		}
 		hasher.Sum(value[:0])
-		index /= 2
-		if index == 0 {
-			return common.Hash{}, false
+		if index >>= 1; index == 0 {
+			return errors.New("branch has extra items")
 		}
 	}
 	if index != 1 {
-		return common.Hash{}, false
+		return errors.New("branch is missing items")
 	}
-	return common.Hash(value), true
+	if common.Hash(value) != root {
+		return errors.New("root mismatch")
+	}
+	return nil
 }
