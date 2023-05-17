@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 	"unsafe"
+	"os"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -142,33 +144,54 @@ func (set *NodeSet) forEachWithOrder(callback func(path string, n *memoryNode)) 
 }
 
 // markUpdated marks the node as dirty(newly-inserted or updated).
+// a lot of the updating in this function is no longer necessary,
+// since we only need to keep track of the touched nodes now.
+// keeping just in case we need to revert
 func (set *NodeSet) markUpdated(path []byte, node *memoryNode) {
 	set.nodes[string(path)] = node
 	set.updates += 1
+	
 	if set.touched[string(path)] == false {
-		set.totalSize += int(unsafe.Sizeof(node))
+		f, err := os.OpenFile("data/nodes.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		jsonData, err := json.Marshal(node.hash)
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			f.WriteString(string(jsonData) + "\n")
+		}
+
+		set.totalSize += int(unsafe.Sizeof(*node))
 		set.touched[string(path)] = true
-		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+		set.sizes[string(path)] = int(unsafe.Sizeof(*node))
 	} else {
 		// updating the totalSize to be the most recent
 		set.totalSize -= set.sizes[string(path)]
-		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
-		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+		set.sizes[string(path)] = int(unsafe.Sizeof(*node))
+		set.totalSize += int(unsafe.Sizeof(node))
 	}
 }
 
 // markDeleted marks the node as deleted.
 func (set *NodeSet) markDeleted(path []byte) {
+	// this is the node that was deleted
+	// node := set.nodes[string(path)]
 	set.nodes[string(path)] = &memoryNode{}
 	set.deletes += 1
+
 	if set.touched[string(path)] == false {
-		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+		// these are just empty nodes
+		set.totalSize += int(unsafe.Sizeof(memoryNode{}))
 		set.touched[string(path)] = true
-		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
+		set.sizes[string(path)] = int(unsafe.Sizeof(memoryNode{}))
 	} else {
 		set.totalSize -= set.sizes[string(path)]
-		set.sizes[string(path)] = int(unsafe.Sizeof(&memoryNode{}))
-		set.totalSize += int(unsafe.Sizeof(&memoryNode{}))
+		set.sizes[string(path)] = int(unsafe.Sizeof(memoryNode{}))
+		set.totalSize += int(unsafe.Sizeof(memoryNode{}))
 	}
 }
 
@@ -182,10 +205,13 @@ func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
 }
 
+// also my function
 func (set *NodeSet) TotalSize() (int) {
 	set.touched = make(map[string]bool)
 	set.sizes = make(map[string]int)
-	return set.totalSize;
+	ans := set.totalSize
+	set.totalSize = 0
+	return ans;
 }
 
 // Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
@@ -271,6 +297,9 @@ func (set *MergedNodeSet) Size() (int, int) {
 func (set *MergedNodeSet) TotalSize() (int) {
 	var totalSize = 0
 	for _, other_set := range set.sets {
+		// totalSize changes each time (will get erased)
+		// will only record the size of the most recent block
+		// we need something global
 		sizeToAdd := other_set.TotalSize()
 		totalSize += sizeToAdd
 	}
@@ -285,7 +314,37 @@ func (set *MergedNodeSet) TotalSize() (int) {
 
 // ALSO: Super inefficient. O(n) time for each operation vs O(1)
 // IDK how else you would merge two sets.
-func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet) (error, int) {
+
+// we need to iterate through all the touched nodes in each nodeSet for this block. 
+
+
+// Adds the size of newly dirty nodes to our totalSize
+
+func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet, nodeSizes map[string]int, cumSize int) (error, int) {
+	// var size = 0
+	for _, other := range otherMerged.sets {
+		// checking each nodeSet in otherMerged.sets
+		// lets iterate through each touched node. this will get slow!!
+		for path, _ := range other.touched {
+			value, exists := nodeSizes[path]
+			if exists {
+				cumSize -= value
+				currNode := other.nodes[path]
+				cumSize += int(unsafe.Sizeof(*currNode))
+				nodeSizes[path] = int(unsafe.Sizeof(*currNode))
+			} else {
+				currNode := other.nodes[path]
+				cumSize += int(unsafe.Sizeof(*currNode))
+				nodeSizes[path] = int(unsafe.Sizeof(*currNode))
+			}
+		}
+	}
+	return nil, cumSize
+}
+
+// counts the number of distinct nodes. not used, only for testing
+
+func (set *MergedNodeSet) countNodes(otherMerged *MergedNodeSet, nodeSizes map[string]int, cumSize int) (error, int) {
 	var size = 0
 	for _, other := range otherMerged.sets {
 		_, present := set.sets[other.owner]
@@ -303,6 +362,7 @@ func (set *MergedNodeSet) Combine(otherMerged *MergedNodeSet) (error, int) {
 	}
 	return nil, size
 }
+
 
 /*
 func (set *MergedNodeSet) CombineWithOptimization(other *nodeSet, copy *nodeSet) {
