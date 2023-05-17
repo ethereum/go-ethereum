@@ -1078,18 +1078,8 @@ func TestABI_ErrorById(t *testing.T) {
 		}
 	}
 	// test unsuccessful lookups
-	if _, err = abi.ErrorById(crypto.Keccak256()); err == nil {
+	if _, err = abi.ErrorById([4]byte{}); err == nil {
 		t.Error("Expected error: no error with this id")
-	}
-	// Also test empty
-	if _, err := abi.ErrorById([]byte{0x00}); err == nil {
-		t.Errorf("Expected error, too short to decode data")
-	}
-	if _, err := abi.ErrorById([]byte{}); err == nil {
-		t.Errorf("Expected error, too short to decode data")
-	}
-	if _, err := abi.ErrorById(nil); err == nil {
-		t.Errorf("Expected error, nil is short to decode data")
 	}
 }
 

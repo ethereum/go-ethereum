@@ -224,12 +224,9 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 
 // ErrorById looks up an error by the 4-byte id,
 // returns nil if none found.
-func (abi *ABI) ErrorById(sigdata []byte) (*Error, error) {
-	if len(sigdata) < 4 {
-		return nil, fmt.Errorf("data too short (%d bytes) for abi error lookup", len(sigdata))
-	}
+func (abi *ABI) ErrorById(sigdata [4]byte) (*Error, error) {
 	for _, errABI := range abi.Errors {
-		if bytes.Equal(errABI.ID, sigdata[:4]) {
+		if errABI.ID == sigdata {
 			return &errABI, nil
 		}
 	}
