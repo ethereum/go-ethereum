@@ -175,7 +175,8 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 		if d.NextSyncCommittee.Root() != d.Update.NextSyncCommitteeRoot {
 			return nil, nil, errors.New("wrong sync committee root")
 		}
-		updates[i], committees[i] = d.Update, d.NextSyncCommittee
+		updates[i], committees[i] = new(types.LightClientUpdate), new(types.SerializedSyncCommittee)
+		*updates[i], *committees[i] = d.Update, d.NextSyncCommittee
 	}
 	return updates, committees, nil
 }

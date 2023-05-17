@@ -393,7 +393,8 @@ func (tc *testCommitteeChain) makeTestUpdate(period, subPeriodIndex uint64, sign
 	var update types.LightClientUpdate
 	update.NextSyncCommitteeRoot = tc.periods[period+1].committeeRoot
 	if subPeriodIndex == finalizedTestUpdate {
-		update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
+		update.FinalizedHeader = new(types.Header)
+		*update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
 		update.AttestedHeader.Header, update.FinalityBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock, merkle.Value(update.FinalizedHeader.Hash()))
 	} else {
 		update.AttestedHeader.Header, update.NextSyncCommitteeBranch = makeTestHeaderWithSingleProof(types.SyncPeriodStart(period)+subPeriodIndex, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))

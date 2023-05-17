@@ -103,7 +103,7 @@ func (r checkpointRequest) SendTo(server *request.Server, moduleData *interface{
 		defer r.lock.Unlock()
 
 		r.reqLock.Returned(server, reqId)
-		if err != nil || checkpoint == nil || !checkpoint.Validate() {
+		if err != nil || checkpoint == nil || checkpoint.Validate() != nil {
 			(*moduleData) = struct{}{}
 			server.Fail("error retrieving checkpoint data")
 			return
@@ -206,7 +206,7 @@ func (r updateRequest) SendTo(server *request.Server, moduleData *interface{}) {
 			return
 		}
 		for i, update := range updates {
-			if update.Header.SyncPeriod() != r.first+uint64(i) {
+			if update.AttestedHeader.Header.SyncPeriod() != r.first+uint64(i) {
 				server.Fail("update with wrong sync period received")
 				return
 			}
