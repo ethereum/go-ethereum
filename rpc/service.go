@@ -216,9 +216,6 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 
 // Does t satisfy the error interface?
 func isErrorType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
 	return t.Implements(errorType)
 }
 
