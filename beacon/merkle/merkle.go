@@ -26,16 +26,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// Value represents either a 32 byte value or hash node in a binary merkle tree/partial proof.
+// Value represents either a 32 byte leaf value or hash node in a binary merkle tree/partial proof.
 type Value [32]byte
 
+// Values represent a series of merkle tree leaves/nodes.
 type Values []Value
 
-var ValueT = reflect.TypeOf(Value{})
+var valueT = reflect.TypeOf(Value{})
 
 // UnmarshalJSON parses a merkle value in hex syntax.
 func (m *Value) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(ValueT, input, m[:])
+	return hexutil.UnmarshalFixedJSON(valueT, input, m[:])
 }
 
 // VerifyProof verifies a Merkle proof branch for a single value in a

@@ -18,12 +18,12 @@
 package types
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/minio/sha256-simd"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
