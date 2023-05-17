@@ -54,23 +54,26 @@ func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
 		return
 	}
-	if r.URL.Path == "/graphql/ui/graphiql.min.css" {
+	switch r.URL.Path {
+	case "/graphql/ui/graphiql.min.css":
 		w.Header().Set("Content-Type", "text/css")
 		w.Write(graphiql.Assets["graphiql.min.css"])
 		return
-	} else if r.URL.Path == "/graphql/ui/graphiql.min.js" {
+	case "/graphql/ui/graphiql.min.js":
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(graphiql.Assets["graphiql.min.js"])
 		return
-	} else if r.URL.Path == "/graphql/ui/react.production.min.js" {
+	case "/graphql/ui/react.production.min.js":
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(graphiql.Assets["react.production.min.js"])
 		return
-	} else if r.URL.Path == "/graphql/ui/react-dom.production.min.js" {
+	case "/graphql/ui/react-dom.production.min.js":
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(graphiql.Assets["react-dom.production.min.js"])
 		return
+	default:
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(graphiql.Assets["index.html"])
+		return
 	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write(graphiql.Assets["index.html"])
 }
