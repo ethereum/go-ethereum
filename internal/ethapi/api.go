@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -859,6 +860,30 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	}
 	res := state.GetState(address, key)
 	return res[:], state.Error()
+}
+
+// GetStorageMap returns the entire storage from the state at the given address and
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// numbers are also allowed.
+func (s *BlockChainAPI) GetStorageMap(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Hash]string, error) {
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	tr, err2 := state.StorageTrie(address)
+	if err2 != nil {
+		return nil, err
+	}
+	iter := trie.NewIterator(tr.NodeIterator(nil))
+	storage := make(map[common.Hash]string)
+	for iter.Next() {
+		_, content, _, err := rlp.Split(iter.Value)
+		if err != nil {
+			continue
+		}
+		storage[common.BytesToHash(tr.GetKey(iter.Key))] = common.Bytes2Hex(content)
+	}
+	return storage, state.Error()
 }
 
 // OverrideAccount indicates the overriding fields of account during the execution
