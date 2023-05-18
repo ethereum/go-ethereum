@@ -212,6 +212,7 @@ func (p *Peer) dispatcher() {
 			}
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
+			requestTracker.Fulfil(p.id, p.version, req.code, cancelOp.id)
 			cancelOp.fail <- nil
 
 		case resOp := <-p.resDispatch:
