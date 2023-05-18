@@ -208,8 +208,8 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 			}
 		}
 
-		err = f.unindexedLogs(ctx, end, logChan)
-		if err != nil {
+		
+		if err := f.unindexedLogs(ctx, end, logChan); err != nil {
 			errChan <- err
 			return
 		}
