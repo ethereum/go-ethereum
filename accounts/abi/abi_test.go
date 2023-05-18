@@ -1057,7 +1057,7 @@ func TestABI_EventById(t *testing.T) {
 	}
 }
 
-func TestABI_ErrorById(t *testing.T) {
+func TestABI_ErrorByID(t *testing.T) {
 	abi, err := JSON(strings.NewReader(`[
 		{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"MyError1","type":"error"},
 		{"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"x","type":"tuple"},{"internalType":"address","name":"y","type":"address"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"z","type":"tuple"}],"name":"MyError2","type":"error"},
@@ -1068,17 +1068,18 @@ func TestABI_ErrorById(t *testing.T) {
 	}
 	for name, m := range abi.Errors {
 		a := fmt.Sprintf("%v", &m)
-		m2, err := abi.ErrorById(m.ID)
+		id := *(*[4]byte)(m.ID[:4])
+		m2, err := abi.ErrorByID(id)
 		if err != nil {
 			t.Fatalf("Failed to look up ABI error: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Error %v (id %x) not 'findable' by id in ABI", name, m.ID)
+			t.Errorf("Error %v (id %x) not 'findable' by id in ABI", name, id)
 		}
 	}
 	// test unsuccessful lookups
-	if _, err = abi.ErrorById([4]byte{}); err == nil {
+	if _, err = abi.ErrorByID([4]byte{}); err == nil {
 		t.Error("Expected error: no error with this id")
 	}
 }
