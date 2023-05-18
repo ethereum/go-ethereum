@@ -159,23 +159,23 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 
 	logChan, errChan := f.rangeLogsAsync(ctx)
 	var logs []*types.Log
-LOOP:
 	for {
 		select {
 		case log := <-logChan:
 			logs = append(logs, log)
-		case ierr := <-errChan:
-			err = ierr
-			break LOOP
+		case err := <-errChan:
+			if err != nil {
+				// if an error occurs during extraction, we do return the extracted data
+				return logs, err
+			}
+			// Append the pending ones
+			if endPending {
+				pendingLogs := f.pendingLogs()
+				logs = append(logs, pendingLogs...)
+			}
+			return logs, nil
 		}
 	}
-
-	// Append the pending ones
-	if endPending && err == nil {
-		pendingLogs := f.pendingLogs()
-		logs = append(logs, pendingLogs...)
-	}
-	return logs, err
 }
 
 // rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
