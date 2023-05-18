@@ -200,11 +200,9 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 		)
 		if indexed := sections * size; indexed > uint64(f.begin) {
 			if indexed > end {
-				err = f.indexedLogs(ctx, end, logChan)
-			} else {
-				err = f.indexedLogs(ctx, indexed-1, logChan)
+			        indexed = end+1
 			}
-			if err != nil {
+			if err = f.indexedLogs(ctx, indexed-1, logChan); err != nil {
 				errChan <- err
 				return
 			}
