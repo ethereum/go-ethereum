@@ -26,18 +26,18 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// diskLayer is a low level persistent snapshot built on top of a key-value store.
+// diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	root  common.Hash  // Immutable, root hash of the base snapshot
+	root  common.Hash  // Immutable, root hash of the base layer
 	id    uint64       // Immutable, corresponding state id
 	db    *Database    // Path-based trie database
-	dirty *diskcache   // Dirty node cache to aggregate writes.
+	dirty *nodebuffer  // Dirty node cache to aggregate writes.
 	stale bool         // Signals that the layer became stale (state progressed)
 	lock  sync.RWMutex // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, dirty *diskcache) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, dirty *nodebuffer) *diskLayer {
 	return &diskLayer{
 		root:  root,
 		id:    id,
@@ -52,7 +52,7 @@ func (dl *diskLayer) Root() common.Hash {
 }
 
 // Parent always returns nil as there's no layer below the disk.
-func (dl *diskLayer) Parent() snapshot {
+func (dl *diskLayer) Parent() layer {
 	return nil
 }
 
@@ -179,9 +179,9 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	// Construct and store the trie history firstly. If crash happens
+	// Construct and store the trie history first. If crash happens
 	// after storing the trie history but without flushing the
-	// corresponding states(journal), the stored trie history will be
+	// corresponding statehashes(journal), the stored trie history will be
 	// truncated in the next restart.
 	if dl.db.freezer != nil {
 		err := storeTrieHistory(dl.db.freezer, bottom, dl.db.config.StateLimit)
@@ -213,7 +213,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	ndl := newDiskLayer(bottom.root, bottom.id, dl.db, dl.dirty.commit(slim))
 
 	// Persist the content in disk layer if there are too many nodes cached.
-	err := ndl.dirty.mayFlush(ndl.db.diskdb, ndl.db.cleans, ndl.id, force)
+	err := ndl.dirty.flush(ndl.db.diskdb, ndl.db.cleans, ndl.id, force)
 	if err != nil {
 		return nil, err
 	}

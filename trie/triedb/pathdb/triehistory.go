@@ -214,11 +214,8 @@ func storeTrieHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer, limit uin
 // the given parameters. If the passed database is a non-freezer database,
 // nothing to do here.
 func truncateFromHead(freezer *rawdb.ResettableFreezer, nhead uint64) (int, error) {
-	ohead, err := freezer.Ancients()
+	ohead, err := freezer.TruncateHead(nhead)
 	if err != nil {
-		return 0, err
-	}
-	if err := freezer.TruncateHead(nhead); err != nil {
 		return 0, err
 	}
 	return int(ohead - nhead), nil
@@ -227,12 +224,10 @@ func truncateFromHead(freezer *rawdb.ResettableFreezer, nhead uint64) (int, erro
 // truncateFromTail removes the extra trie histories from the tail with
 // the given parameters. If the passed database is a non-freezer database,
 // nothing to do here.
+// It returns the number of items removed from the tail.
 func truncateFromTail(freezer *rawdb.ResettableFreezer, ntail uint64) (int, error) {
-	otail, err := freezer.Tail()
+	otail, err := freezer.TruncateTail(ntail)
 	if err != nil {
-		return 0, err
-	}
-	if err := freezer.TruncateTail(ntail); err != nil {
 		return 0, err
 	}
 	return int(ntail - otail), nil

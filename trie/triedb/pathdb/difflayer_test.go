@@ -29,7 +29,7 @@ import (
 func emptyLayer() *diskLayer {
 	return &diskLayer{
 		db:    New(rawdb.NewMemoryDatabase(), nil, nil),
-		dirty: newDiskcache(defaultCacheSize, nil, 0),
+		dirty: newNodeBuffer(defaultCacheSize, nil, 0),
 	}
 }
 
@@ -61,7 +61,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		nblob []byte
 	)
 	// First, we set up 128 diff layers, with 3K items each
-	fill := func(parent snapshot, index int) *diffLayer {
+	fill := func(parent layer, index int) *diffLayer {
 		nodes := make(map[common.Hash]map[string]*trienode.WithPrev)
 		nodes[common.Hash{}] = make(map[string]*trienode.WithPrev)
 		for i := 0; i < 3000; i++ {
@@ -78,7 +78,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, nodes)
 	}
-	var layer snapshot
+	var layer layer
 	layer = emptyLayer()
 	for i := 0; i < total; i++ {
 		layer = fill(layer, i)
@@ -107,7 +107,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 // BenchmarkPersist-8   	      10	 111252975 ns/op
 func BenchmarkPersist(b *testing.B) {
 	// First, we set up 128 diff layers, with 3K items each
-	fill := func(parent snapshot) *diffLayer {
+	fill := func(parent layer) *diffLayer {
 		nodes := make(map[common.Hash]map[string]*trienode.WithPrev)
 		nodes[common.Hash{}] = make(map[string]*trienode.WithPrev)
 		for i := 0; i < 3000; i++ {
@@ -121,7 +121,7 @@ func BenchmarkPersist(b *testing.B) {
 	}
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		var layer snapshot
+		var layer layer
 		layer = emptyLayer()
 		for i := 1; i < 128; i++ {
 			layer = fill(layer)
@@ -142,7 +142,7 @@ func BenchmarkPersist(b *testing.B) {
 // BenchmarkJournal-8   	      10	 110969279 ns/op
 func BenchmarkJournal(b *testing.B) {
 	// First, we set up 128 diff layers, with 3K items each
-	fill := func(parent snapshot) *diffLayer {
+	fill := func(parent layer) *diffLayer {
 		nodes := make(map[common.Hash]map[string]*trienode.WithPrev)
 		nodes[common.Hash{}] = make(map[string]*trienode.WithPrev)
 		for i := 0; i < 3000; i++ {
@@ -154,7 +154,7 @@ func BenchmarkJournal(b *testing.B) {
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, nodes)
 	}
-	var layer snapshot
+	var layer layer
 	layer = emptyLayer()
 	for i := 0; i < 128; i++ {
 		layer = fill(layer)

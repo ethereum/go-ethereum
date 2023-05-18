@@ -28,10 +28,10 @@ var (
 	// and mutation is requested.
 	errSnapshotReadOnly = errors.New("read only")
 
-	// errSnapshotStale is returned from data accessors if the underlying snapshot
+	// errSnapshotStale is returned from data accessors if the underlying layer
 	// layer had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
-	errSnapshotStale = errors.New("snapshot stale")
+	errSnapshotStale = errors.New("layer stale")
 
 	// errUnexpectedTrieHistory is returned if an unmatched trie history is applied
 	// to the database for state rollback.

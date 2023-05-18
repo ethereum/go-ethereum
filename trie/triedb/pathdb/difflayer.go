@@ -32,19 +32,19 @@ import (
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
-	root   common.Hash                                   // Root hash to which this snapshot diff belongs to
+	root   common.Hash                                   // Root hash to which this layer diff belongs to
 	id     uint64                                        // Corresponding state id
 	nodes  map[common.Hash]map[string]*trienode.WithPrev // Cached trie nodes indexed by owner and path
 	memory uint64                                        // Approximate guess as to how much memory we use
 
-	parent snapshot     // Parent snapshot modified by this one, never nil, **can be changed**
-	stale  bool         // Signals that the layer became stale (state progressed)
-	lock   sync.RWMutex // Lock used to protect parent and stale fields.
+	parent layer // Parent layer modified by this one, never nil, **can be changed**
+	// TODO(gary) remove the staleness from memory-layers.
+	stale bool         // Signals that the layer became stale (state progressed)
+	lock  sync.RWMutex // Lock used to protect parent and stale fields.
 }
 
-// newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
-// level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, root common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.WithPrev) *diffLayer {
+// newDiffLayer creates a new diff on top of an existing layer.
+func newDiffLayer(parent layer, root common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.WithPrev) *diffLayer {
 	var (
 		size  int64
 		count int
@@ -80,7 +80,7 @@ func (dl *diffLayer) ID() uint64 {
 }
 
 // Parent returns the subsequent layer of a diff layer.
-func (dl *diffLayer) Parent() snapshot {
+func (dl *diffLayer) Parent() layer {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -89,6 +89,7 @@ func (dl *diffLayer) Parent() snapshot {
 
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
+// TODO remove
 func (dl *diffLayer) Stale() bool {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -97,6 +98,7 @@ func (dl *diffLayer) Stale() bool {
 }
 
 // MarkStale sets the stale flag as true.
+// TODO remove
 func (dl *diffLayer) MarkStale() {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -191,17 +193,13 @@ func (dl *diffLayer) Update(blockRoot common.Hash, id uint64, nodes map[common.H
 }
 
 // persist stores the diff layer and all its parent diff layers to disk.
-// The order should be strictly from bottom to top.
-//
-// Note this function can destruct the ancestor layers(mark them as stale)
-// of the given diff layer, please ensure prevent state access operation
-// to this layer through any **descendant layer**.
-func (dl *diffLayer) persist(force bool) (snapshot, error) {
-	parent, ok := dl.Parent().(*diffLayer)
-	if ok {
+func (dl *diffLayer) persist(force bool) (layer, error) {
+	if parent, ok := dl.Parent().(*diffLayer); !ok {
 		// Hold the lock to prevent any read operation until the new
 		// parent is linked correctly.
 		dl.lock.Lock()
+		// The merging of difflayers starts at the bottom-most layer, therefore
+		// we recurse down here, flattening on the way up (diffToDisk).
 		result, err := parent.persist(force)
 		if err != nil {
 			dl.lock.Unlock()
@@ -215,7 +213,7 @@ func (dl *diffLayer) persist(force bool) (snapshot, error) {
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
-func diffToDisk(bottom *diffLayer, force bool) (snapshot, error) {
+func diffToDisk(bottom *diffLayer, force bool) (layer, error) {
 	disk, ok := bottom.Parent().(*diskLayer)
 	if !ok {
 		panic(fmt.Sprintf("unknown layer type: %T", bottom.Parent()))

@@ -17,7 +17,6 @@
 package pathdb
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -38,19 +37,21 @@ var (
 	defaultCacheSize = 128 * 1024 * 1024
 )
 
-// diskcache is a collection of dirty trie nodes to aggregate the disk
-// write. It can act as an additional cache to avoid hitting disk too much.
-// diskcache is not thread-safe, callers must manage concurrency issues
+// nodebuffer is a collection of modified trie nodes to aggregate the disk
+// write.
+// The content of the nodebuffer must be checked before the disk data (since
+// it basically is not-yet-written data).
+// nodebuffer is not thread-safe, callers must manage concurrency issues
 // by themselves.
-type diskcache struct {
+type nodebuffer struct {
 	layers uint64                                    // The number of diff layers aggregated inside
 	size   uint64                                    // The size of aggregated writes
 	limit  uint64                                    // The maximum memory allowance in bytes for cache
 	nodes  map[common.Hash]map[string]*trienode.Node // The dirty node set, mapped by owner and path
 }
 
-// newDiskcache initializes the dirty node cache with the given information.
-func newDiskcache(limit int, nodes map[common.Hash]map[string]*trienode.Node, layers uint64) *diskcache {
+// newNodeBuffer initializes the dirty node cache with the given information.
+func newNodeBuffer(limit int, nodes map[common.Hash]map[string]*trienode.Node, layers uint64) *nodebuffer {
 	// Don't panic for lazy callers.
 	if nodes == nil {
 		nodes = make(map[common.Hash]map[string]*trienode.Node)
@@ -61,7 +62,7 @@ func newDiskcache(limit int, nodes map[common.Hash]map[string]*trienode.Node, la
 			size += uint64(len(n.Blob) + len(path))
 		}
 	}
-	return &diskcache{
+	return &nodebuffer{
 		layers: layers,
 		nodes:  nodes,
 		size:   size,
@@ -70,8 +71,8 @@ func newDiskcache(limit int, nodes map[common.Hash]map[string]*trienode.Node, la
 }
 
 // node retrieves the trie node with given node info.
-func (cache *diskcache) node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error) {
-	subset, ok := cache.nodes[owner]
+func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error) {
+	subset, ok := b.nodes[owner]
 	if !ok {
 		return nil, nil
 	}
@@ -92,8 +93,10 @@ func (cache *diskcache) node(owner common.Hash, path []byte, hash common.Hash) (
 }
 
 // nodeByPath retrieves the trie node with given node info.
-func (cache *diskcache) nodeByPath(owner common.Hash, path []byte) ([]byte, bool) {
-	subset, ok := cache.nodes[owner]
+// It returns the blob and whether the path was present in the nodebuffer or not.
+// If the second return-param is true then the caller should look no further.
+func (b *nodebuffer) nodeByPath(owner common.Hash, path []byte) ([]byte, bool) {
+	subset, ok := b.nodes[owner]
 	if !ok {
 		return nil, false
 	}
@@ -107,54 +110,56 @@ func (cache *diskcache) nodeByPath(owner common.Hash, path []byte) ([]byte, bool
 	return n.Blob, true
 }
 
-// commit merges the dirty node belonging to the bottom-most diff layer
-// into the disk cache.
-func (cache *diskcache) commit(nodes map[common.Hash]map[string]*trienode.Node) *diskcache {
+// commit merges the dirty nodes into the nodebuffer b.
+// (The nodes typically belongs to the bottom-most difflayer)
+// This operation takes ownership of the nodes map, and the caller must no longer
+// use it.
+func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *nodebuffer {
 	var (
-		delta          int64
+		delta          int64 // size
 		overwrites     int64
 		overwriteSizes int64
 	)
 	for owner, subset := range nodes {
-		current, exist := cache.nodes[owner]
+		current, exist := b.nodes[owner]
 		if !exist {
-			cache.nodes[owner] = subset
+			b.nodes[owner] = subset
 			for path, n := range subset {
 				delta += int64(len(n.Blob) + len(path))
 			}
-		} else {
-			for path, n := range subset {
-				if orig, exist := current[path]; !exist {
-					delta += int64(len(n.Blob) + len(path))
-				} else {
-					delta += int64(len(n.Blob) - len(orig.Blob))
-					overwrites += 1
-					overwriteSizes += int64(len(orig.Blob) + len(path))
-				}
-				cache.nodes[owner][path] = n
+			continue
+		}
+		for path, n := range subset {
+			if orig, exist := current[path]; !exist {
+				delta += int64(len(n.Blob) + len(path))
+			} else {
+				delta += int64(len(n.Blob) - len(orig.Blob))
+				overwrites += 1
+				overwriteSizes += int64(len(orig.Blob) + len(path))
 			}
+			b.nodes[owner][path] = n
 		}
 	}
-	cache.updateSize(delta)
-	cache.layers += 1
+	b.updateSize(delta)
+	b.layers += 1
 	gcNodesMeter.Mark(overwrites)
 	gcSizeMeter.Mark(overwriteSizes)
-	return cache
+	return b
 }
 
 // revert applies the reverse diff to the disk cache.
-func (cache *diskcache) revert(h *trieHistory) error {
-	if cache.layers == 0 {
+func (b *nodebuffer) revert(h *trieHistory) error {
+	if b.layers == 0 {
 		return errStateUnrecoverable
 	}
-	cache.layers -= 1
-	if cache.layers == 0 {
-		cache.reset()
+	b.layers -= 1
+	if b.layers == 0 {
+		b.reset()
 		return nil
 	}
 	var delta int64
 	for _, entry := range h.Tries {
-		subset, ok := cache.nodes[entry.Owner]
+		subset, ok := b.nodes[entry.Owner]
 		if !ok {
 			panic(fmt.Sprintf("non-existent node (%x)", entry.Owner))
 		}
@@ -172,57 +177,57 @@ func (cache *diskcache) revert(h *trieHistory) error {
 			}
 		}
 	}
-	cache.updateSize(delta)
+	b.updateSize(delta)
 	return nil
 }
 
 // updateSize updates the total cache size by the given delta.
-func (cache *diskcache) updateSize(delta int64) {
-	size := int64(cache.size) + delta
+func (b *nodebuffer) updateSize(delta int64) {
+	size := int64(b.size) + delta
 	if size >= 0 {
-		cache.size = uint64(size)
+		b.size = uint64(size)
 		return
 	}
-	s := cache.size
-	cache.size = 0
+	s := b.size
+	b.size = 0
 	log.Error("Invalid cache size", "prev", common.StorageSize(s), "delta", common.StorageSize(delta))
 }
 
 // reset cleans up the disk cache.
-func (cache *diskcache) reset() {
-	cache.layers = 0
-	cache.size = 0
-	cache.nodes = make(map[common.Hash]map[string]*trienode.Node)
+func (b *nodebuffer) reset() {
+	b.layers = 0
+	b.size = 0
+	b.nodes = make(map[common.Hash]map[string]*trienode.Node)
 }
 
-// empty returns an indicator if diskcache contains any state transition inside.
-func (cache *diskcache) empty() bool {
-	return cache.layers == 0
+// empty returns an indicator if nodebuffer contains any state transition inside.
+func (b *nodebuffer) empty() bool {
+	return b.layers == 0
 }
 
-// setSize sets the cache size to the provided limit. Schedule flush operation
+// setSize sets the cache size to the provided limit, and invokes a flush operation
 // if the current memory usage exceeds the new limit.
-func (cache *diskcache) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
-	cache.limit = uint64(size)
-	return cache.mayFlush(db, clean, id, false)
+func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
+	b.limit = uint64(size)
+	return b.flush(db, clean, id, false)
 }
 
-// mayFlush persists the in-memory dirty trie node into the disk if the predefined
+// flush persists the in-memory dirty trie node into the disk if the predefined
 // memory threshold is reached. Note, all data must be written to disk atomically.
-func (cache *diskcache) mayFlush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
-	if cache.size <= cache.limit && !force {
+func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
+	if b.size <= b.limit && !force {
 		return nil
 	}
 	// Ensure the given target state id is aligned with the internal counter.
 	head := rawdb.ReadPersistentStateID(db)
-	if head+cache.layers != id {
-		return errors.New("invalid state id")
+	if head+b.layers != id {
+		return fmt.Errorf("disk has invalid state id %d, want %d", id, head+b.layers)
 	}
 	var (
 		start = time.Now()
-		batch = db.NewBatchWithSize(int(cache.size))
+		batch = db.NewBatchWithSize(int(b.size))
 	)
-	for owner, subset := range cache.nodes {
+	for owner, subset := range b.nodes {
 		for path, n := range subset {
 			if n.IsDeleted() {
 				if owner == (common.Hash{}) {
@@ -247,14 +252,14 @@ func (cache *diskcache) mayFlush(db ethdb.KeyValueStore, clean *fastcache.Cache,
 		return err
 	}
 	commitSizeMeter.Mark(int64(batch.ValueSize()))
-	commitNodesMeter.Mark(int64(len(cache.nodes)))
+	commitNodesMeter.Mark(int64(len(b.nodes)))
 	commitTimeTimer.UpdateSince(start)
 
 	log.Debug("Persisted uncommitted nodes",
-		"nodes", len(cache.nodes),
+		"nodes", len(b.nodes),
 		"size", common.StorageSize(batch.ValueSize()),
 		"elapsed", common.PrettyDuration(time.Since(start)),
 	)
-	cache.reset()
+	b.reset()
 	return nil
 }

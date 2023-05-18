@@ -37,9 +37,9 @@ import (
 // maxDiffLayers is the maximum diff layers allowed in the layer tree.
 const maxDiffLayers = 128
 
-// snapshot is the interface implemented by all state layers which includes some
+// layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
-type snapshot interface {
+type layer interface {
 	// nodeByPath retrieves the trie node with the provided trie identifier and
 	// node path regardless what's the node hash. No error will be returned if
 	// the node is not found.
@@ -53,24 +53,24 @@ type snapshot interface {
 	// for a while to make initial version easier.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 
-	// Root returns the root hash for which this snapshot was made.
+	// Root returns the root hash for which this layer was made.
 	Root() common.Hash
 
-	// Parent returns the subsequent layer of a snapshot, or nil if the base was
+	// Parent returns the subsequent layer of a layer, or nil if the base was
 	// reached.
 	//
 	// Note, the method is an internal helper to avoid type switching between the
 	// disk and diff layers. There is no locking involved.
-	Parent() snapshot
+	Parent() layer
 
-	// Update creates a new layer on top of the existing snapshot diff tree with
+	// Update creates a new layer on top of the existing layer diff tree with
 	// the given dirty trie node set. The deleted trie nodes are also included.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
 	Update(blockRoot common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.WithPrev) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
-	// This is meant to be used during shutdown to persist the snapshot without
+	// This is meant to be used during shutdown to persist the layer without
 	// flattening everything down (bad for reorgs).
 	Journal(buffer *bytes.Buffer) error
 
@@ -89,7 +89,7 @@ type Config struct {
 	ReadOnly   bool   // Flag whether the database is opened in read only mode.
 }
 
-// Defaults contains default settings for use on the Ethereum main net.
+// Defaults contains default settings for use on the Ethereum mainnet.
 var Defaults = &Config{
 	StateLimit: params.FullImmutabilityThreshold,
 	DirtySize:  defaultCacheSize,
@@ -97,13 +97,13 @@ var Defaults = &Config{
 
 // Database is a multiple-layered structure for maintaining in-memory trie
 // nodes. It consists of one persistent base layer backed by a key-value store,
-// on top of which arbitrarily many in-memory diff layers are topped. The memory
+// on top of which arbitrarily many in-memory diff layers are stacked. The memory
 // diffs can form a tree with branching, but the disk layer is singleton and
 // common to all. If a reorg goes deeper than the disk layer, a batch of reverse
-// diffs can be applied to rollback. The deepest reorg can be handled depends on
+// diffs can be applied to rollback. The deepest reorg that can be handled depends on
 // the amount of trie histories tracked in the disk.
 //
-// At most one readable and writable snap database can be opened at the same time
+// At most one readable and writable database can be opened at the same time
 // in the whole system which ensures that only one database writer can operate
 // disk state. Unexpected open operations can cause the system to panic.
 type Database struct {
@@ -120,7 +120,7 @@ type Database struct {
 	lock      sync.RWMutex             // Lock to prevent mutations from happening at the same time
 }
 
-// New attempts to load an already existing snapshot from a persistent key-value
+// New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
 func New(diskdb ethdb.Database, cleans *fastcache.Cache, config *Config) *Database {
@@ -165,8 +165,8 @@ func New(diskdb ethdb.Database, cleans *fastcache.Cache, config *Config) *Databa
 	return db
 }
 
-// Reader retrieves a snapshot belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (snapshot, error) {
+// Reader retrieves a layer belonging to the given state root.
+func (db *Database) Reader(root common.Hash) (layer, error) {
 	l := db.tree.get(root)
 	if l == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
@@ -174,7 +174,7 @@ func (db *Database) Reader(root common.Hash) (snapshot, error) {
 	return l, nil
 }
 
-// Update adds a new snapshot into the tree, if that can be linked to an existing
+// Update adds a new layer into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all). Apart
 // from that this function will flatten the extra diff layers at bottom into disk
 // to only keep 128 diff layers in memory.
@@ -198,7 +198,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, nodes *trie
 	return db.tree.cap(root, maxDiffLayers)
 }
 
-// Commit traverses downwards the snapshot tree from a specified layer with the
+// Commit traverses downwards the layer tree from a specified layer with the
 // provided state root and all the layers below are flattened downwards. It can
 // be used alone and mostly for test purposes.
 func (db *Database) Commit(root common.Hash, report bool) error {
@@ -214,14 +214,14 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
-// This is meant to be used during shutdown to persist the snapshot without
+// This is meant to be used during shutdown to persist the layer without
 // flattening everything down (bad for reorgs). And this function will mark the
 // database as read-only to prevent all following mutation to disk.
 func (db *Database) Journal(root common.Hash) error {
-	// Retrieve the head snapshot to journal from var snap snapshot
+	// Retrieve the head layer to journal from var snap layer
 	snap := db.tree.get(root)
 	if snap == nil {
-		return fmt.Errorf("triedb snapshot [%#x] missing", root)
+		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
 	// Run the journaling
 	db.lock.Lock()
@@ -286,7 +286,7 @@ func (db *Database) Reset(root common.Hash) error {
 		}
 	}
 	// Iterate over all layers and mark them as stale
-	db.tree.forEach(func(layer snapshot) {
+	db.tree.forEach(func(layer layer) {
 		switch layer := layer.(type) {
 		case *diskLayer:
 			layer.MarkStale()
@@ -309,7 +309,7 @@ func (db *Database) Reset(root common.Hash) error {
 			return err
 		}
 	}
-	db.tree = newLayerTree(newDiskLayer(root, 0, db, newDiskcache(db.dirtySize, nil, 0)))
+	db.tree = newLayerTree(newDiskLayer(root, 0, db, newNodeBuffer(db.dirtySize, nil, 0)))
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
@@ -319,12 +319,11 @@ func (db *Database) Reset(root common.Hash) error {
 // canonical state and the corresponding trie histories are existent.
 func (db *Database) Recover(root common.Hash) error {
 	root = types.TrieRootHash(root)
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
 	}
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
 	// Short circuit if rollback operation is not supported.
 	if db.readOnly || db.freezer == nil {
 		return errors.New("state revert is non-supported")
@@ -336,7 +335,7 @@ func (db *Database) Recover(root common.Hash) error {
 		batch = db.diskdb.NewBatch()
 		start = time.Now()
 	)
-	db.tree.forEach(func(layer snapshot) {
+	db.tree.forEach(func(layer layer) {
 		switch layer := layer.(type) {
 		case *diskLayer:
 			dl = layer
@@ -347,7 +346,7 @@ func (db *Database) Recover(root common.Hash) error {
 		}
 	})
 	// Apply the trie histories upon the current disk layer in order.
-	for {
+	for dl.Root() != root {
 		h, err := loadTrieHistory(db.freezer, dl.id)
 		if err != nil {
 			return err
@@ -357,10 +356,6 @@ func (db *Database) Recover(root common.Hash) error {
 			return err
 		}
 		rawdb.DeleteStateID(batch, h.Root)
-
-		if dl.Root() == root {
-			break
-		}
 	}
 	rawdb.DeleteTrieJournal(batch)
 	if err := batch.Write(); err != nil {
@@ -420,7 +415,7 @@ func (db *Database) Close() error {
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
 func (db *Database) Size() (size common.StorageSize) {
-	db.tree.forEach(func(layer snapshot) {
+	db.tree.forEach(func(layer layer) {
 		if diff, ok := layer.(*diffLayer); ok {
 			size += common.StorageSize(diff.memory)
 		}
@@ -435,7 +430,7 @@ func (db *Database) Size() (size common.StorageSize) {
 // initialized in path-based scheme.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	var inited bool
-	db.tree.forEach(func(layer snapshot) {
+	db.tree.forEach(func(layer layer) {
 		if layer.Root() != types.EmptyRootHash {
 			inited = true
 		}

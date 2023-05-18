@@ -55,8 +55,8 @@ type journalNodes struct {
 	Nodes []journalNode
 }
 
-// loadJournal tries to parse the snapshot journal from the disk.
-func (db *Database) loadJournal(diskRoot common.Hash) (snapshot, error) {
+// loadJournal tries to parse the layer journal from the disk.
+func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	journal := rawdb.ReadTrieJournal(db.diskdb)
 	if len(journal) == 0 {
 		return nil, errMissJournal
@@ -72,7 +72,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (snapshot, error) {
 		return nil, fmt.Errorf("%w want %d got %d", errUnexpectedVersion, journalVersion, version)
 	}
 	// Secondly, resolve the disk layer root, ensure it's continuous
-	// with disk layer. Note now we can ensure it's the snapshot journal
+	// with disk layer. Note now we can ensure it's the layer journal
 	// correct version, so we expect everything can be resolved properly.
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
@@ -88,17 +88,17 @@ func (db *Database) loadJournal(diskRoot common.Hash) (snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Load all the snapshot diffs from the journal
+	// Load all the layer diffs from the journal
 	snapshot, err := db.loadDiffLayer(base, r)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("Loaded snapshot journal", "diskroot", diskRoot, "diffhead", snapshot.Root())
+	log.Debug("Loaded layer journal", "diskroot", diskRoot, "diffhead", snapshot.Root())
 	return snapshot, nil
 }
 
-// loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func (db *Database) loadSnapshot() snapshot {
+// loadSnapshot loads a pre-existing state layer backed by a key-value store.
+func (db *Database) loadSnapshot() layer {
 	// Retrieve the root node of in-disk state.
 	_, root := rawdb.ReadAccountTrieNode(db.diskdb, nil)
 	root = types.TrieRootHash(root)
@@ -115,12 +115,12 @@ func (db *Database) loadSnapshot() snapshot {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Construct the entire layer tree with the single in-disk state.
-	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, newDiskcache(db.dirtySize, nil, 0))
+	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, newNodeBuffer(db.dirtySize, nil, 0))
 }
 
-// loadDiskLayer reads the binary blob from the snapshot journal, reconstructing a new
+// loadDiskLayer reads the binary blob from the layer journal, reconstructing a new
 // disk layer on it.
-func (db *Database) loadDiskLayer(r *rlp.Stream) (snapshot, error) {
+func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	// Resolve disk layer root
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
@@ -153,13 +153,13 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (snapshot, error) {
 		return nil, fmt.Errorf("invalid state id, stored %d resolved %d", stored, id)
 	}
 	// Calculate the internal state transitions by id difference.
-	base := newDiskLayer(root, id, db, newDiskcache(db.dirtySize, nodes, id-stored))
+	base := newDiskLayer(root, id, db, newNodeBuffer(db.dirtySize, nodes, id-stored))
 	return base, nil
 }
 
-// loadDiffLayer reads the next sections of a snapshot journal, reconstructing a new
+// loadDiffLayer reads the next sections of a layer journal, reconstructing a new
 // diff and verifying that it can be linked to the requested parent.
-func (db *Database) loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
+func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	// Read the next diff journal entry
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
@@ -188,7 +188,7 @@ func (db *Database) loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, err
 	return db.loadDiffLayer(newDiffLayer(parent, root, parent.ID()+1, nodes), r)
 }
 
-// Journal terminates any in-progress snapshot generation, also implicitly pushing
+// Journal terminates any in-progress layer generation, also implicitly pushing
 // the progress into the database.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) error {
 	// Ensure the layer didn't get stale
@@ -224,7 +224,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) error {
 }
 
 // Journal writes the memory layer contents into a buffer to be stored in the
-// database as the snapshot journal.
+// database as the layer journal.
 func (dl *diffLayer) Journal(buffer *bytes.Buffer) error {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
