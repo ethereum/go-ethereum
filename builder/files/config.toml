@@ -172,7 +172,7 @@ syncmode = "full"
   # gaslimit = 11500000
 
 # [parallelevm]
-  # enable = false
+  # enable = true
   # procs = 8
 
 # [pprof]
