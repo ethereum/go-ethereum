@@ -200,7 +200,7 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 		)
 		if indexed := sections * size; indexed > uint64(f.begin) {
 			if indexed > end {
-			        indexed = end+1
+				indexed = end + 1
 			}
 			if err = f.indexedLogs(ctx, indexed-1, logChan); err != nil {
 				errChan <- err
@@ -208,7 +208,6 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 			}
 		}
 
-		
 		if err := f.unindexedLogs(ctx, end, logChan); err != nil {
 			errChan <- err
 			return
@@ -283,9 +282,10 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *ty
 		}
 		for _, log := range found {
 			select {
-				case logChan <- log:
-				case <- ctx.Done():
-			        	return ctx.Err()
+			case logChan <- log:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 	return nil
