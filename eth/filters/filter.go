@@ -282,7 +282,10 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *ty
 			return err
 		}
 		for _, log := range found {
-			logChan <- log
+			select {
+				case logChan <- log:
+				case <- ctx.Done():
+			        	return ctx.Err()
 		}
 	}
 	return nil
