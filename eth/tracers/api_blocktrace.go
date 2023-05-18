@@ -290,6 +290,8 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 
 	// merge required proof data
 	proofAccounts := tracer.UpdatedAccounts()
+	proofAccounts[vmenv.FeeRecipient()] = struct{}{}
+	proofAccounts[rcfg.L1GasPriceOracleAddress] = struct{}{}
 	for addr := range proofAccounts {
 		addrStr := addr.String()
 
@@ -314,6 +316,12 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 	}
 
 	proofStorages := tracer.UpdatedStorages()
+	proofStorages[rcfg.L1GasPriceOracleAddress] = vm.Storage(
+		map[common.Hash]common.Hash{
+			rcfg.L1BaseFeeSlot: {}, // notice we do not need the right value here
+			rcfg.OverheadSlot:  {},
+			rcfg.ScalarSlot:    {},
+		})
 	for addr, keys := range proofStorages {
 		env.sMu.Lock()
 		trie, err := state.GetStorageTrieForProof(addr)
@@ -402,6 +410,35 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 	txs := make([]*types.TransactionData, block.Transactions().Len())
 	for i, tx := range block.Transactions() {
 		txs[i] = types.NewTransactionData(tx, block.NumberU64(), api.backend.ChainConfig())
+	}
+
+	if _, existed := env.Proofs[rcfg.L2MessageQueueAddress.String()]; !existed {
+		if proof, err := statedb.GetProof(rcfg.L2MessageQueueAddress); err != nil {
+			log.Error("Proof for L2MessageQueueAddress not available", "error", err)
+		} else {
+			wrappedProof := make([]hexutil.Bytes, len(proof))
+			for i, bt := range proof {
+				wrappedProof[i] = bt
+			}
+			env.Proofs[rcfg.L2MessageQueueAddress.String()] = wrappedProof
+		}
+	}
+
+	if _, existed := env.StorageProofs[rcfg.L2MessageQueueAddress.String()]; !existed {
+		env.StorageProofs[rcfg.L2MessageQueueAddress.String()] = make(map[string][]hexutil.Bytes)
+	}
+	if _, existed := env.StorageProofs[rcfg.L2MessageQueueAddress.String()][rcfg.WithdrawTrieRootSlot.String()]; !existed {
+		if trie, err := statedb.GetStorageTrieForProof(rcfg.L2MessageQueueAddress); err != nil {
+			log.Error("Storage proof for WithdrawTrieRootSlot not available", "error", err)
+		} else if proof, _ := statedb.GetSecureTrieProof(trie, rcfg.WithdrawTrieRootSlot); err != nil {
+			log.Error("Get storage proof for WithdrawTrieRootSlot failed", "error", err)
+		} else {
+			wrappedProof := make([]hexutil.Bytes, len(proof))
+			for i, bt := range proof {
+				wrappedProof[i] = bt
+			}
+			env.StorageProofs[rcfg.L2MessageQueueAddress.String()][rcfg.WithdrawTrieRootSlot.String()] = wrappedProof
+		}
 	}
 
 	blockTrace := &types.BlockTrace{
