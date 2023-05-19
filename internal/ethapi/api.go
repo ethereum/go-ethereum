@@ -1269,7 +1269,7 @@ type RPCBlock struct {
 	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot,omitempty"`
 	Transactions    []interface{}     `json:"transactions,omitempty"`
 	TotalDifficulty *hexutil.Big      `json:"totalDifficulty,omitempty"`
-	Uncles          []common.Hash     `json:"uncles,omitempty"`
+	Uncles          *[]common.Hash    `json:"uncles,omitempty"`
 	Withdrawals     types.Withdrawals `json:"withdrawls,omitempty"`
 }
 
@@ -1334,7 +1334,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	for i, uncle := range uncles {
 		uncleHashes[i] = uncle.Hash()
 	}
-	fields.Uncles = uncleHashes
+	fields.Uncles = &uncleHashes
 	if block.Header().WithdrawalsHash != nil {
 		fields.Withdrawals = block.Withdrawals()
 	}
