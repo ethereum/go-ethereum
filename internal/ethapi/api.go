@@ -788,8 +788,8 @@ func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) *
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (*RPCBlock, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
-		if err == nil && number == rpc.PendingBlockNumber {
+		response := s.rpcMarshalBlock(ctx, block, true, fullTx)
+		if number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			response.Hash = nil
 			response.Nonce = nil
@@ -805,7 +805,7 @@ func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNu
 func (s *BlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (*RPCBlock, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
 	if block != nil {
-		return s.rpcMarshalBlock(ctx, block, true, fullTx)
+		return s.rpcMarshalBlock(ctx, block, true, fullTx), nil
 	}
 	return nil, err
 }
@@ -820,7 +820,7 @@ func (s *BlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, block
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcMarshalBlock(ctx, block, false, false)
+		return s.rpcMarshalBlock(ctx, block, false, false), nil
 	}
 	return nil, err
 }
@@ -835,7 +835,7 @@ func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, blockHa
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcMarshalBlock(ctx, block, false, false)
+		return s.rpcMarshalBlock(ctx, block, false, false), nil
 	}
 	return nil, err
 }
@@ -1351,12 +1351,12 @@ func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Head
 
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
-func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (*RPCBlock, error) {
+func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) *RPCBlock {
 	fields := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
 	if inclTx {
 		fields.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
-	return fields, nil
+	return fields
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
