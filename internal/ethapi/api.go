@@ -650,7 +650,7 @@ type AccountResult struct {
 }
 
 type StorageResult struct {
-	Key   string       `json:"key"`
+	Key   *hexutil.Big `json:"key"`
 	Value *hexutil.Big `json:"value"`
 	Proof []string     `json:"proof"`
 }
@@ -680,6 +680,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	// create the proof for the storageKeys
 	for i, hexKey := range storageKeys {
 		key, err := decodeHash(hexKey)
+		keyInt := (*hexutil.Big) (new(big.Int).SetBytes(key[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -688,9 +689,9 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{hexKey, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
+			storageProof[i] = StorageResult{keyInt, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
 		} else {
-			storageProof[i] = StorageResult{hexKey, &hexutil.Big{}, []string{}}
+			storageProof[i] = StorageResult{keyInt, &hexutil.Big{}, []string{}}
 		}
 	}
 
