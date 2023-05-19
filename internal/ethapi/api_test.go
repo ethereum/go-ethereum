@@ -752,14 +752,13 @@ func TestRPCMarshalBlock(t *testing.T) {
 
 	for i, tc := range testSuite {
 		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig)
-		out, err := json.Marshal(resp)
+		have, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
 			continue
 		}
-		if have := string(out); have != tc.want {
-			t.Errorf("test %d: want: %s have: %s", i, tc.want, have)
-		}
+
+		require.JSONEq(t, tc.want, string(have))
 	}
 }
 
@@ -977,7 +976,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 
 	for i, tt := range testSuite {
 		var (
-			result map[string]interface{}
+			result *RPCBlock
 			err    error
 		)
 		if tt.blockHash != nil {
