@@ -23,11 +23,12 @@
 package graphql
 
 import (
-	"bytes"
-	"fmt"
+	"encoding/json"
 	"net/http"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/graphql/internal/graphiql"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // GraphiQL is an in-browser IDE for exploring GraphiQL APIs.
@@ -36,44 +37,53 @@ import (
 // For more information, see https://github.com/graphql/graphiql.
 type GraphiQL struct{}
 
-func respond(w http.ResponseWriter, body []byte, code int) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+func respOk(w http.ResponseWriter, body []byte, ctype string) {
+	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(code)
-	_, _ = w.Write(body)
+	w.Write(body)
 }
 
-func errorJSON(msg string) []byte {
-	buf := bytes.Buffer{}
-	fmt.Fprintf(&buf, `{"error": "%s"}`, msg)
-	return buf.Bytes()
+func respErr(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	errMsg, _ := json.Marshal(struct {
+		Error string
+	}{Error: msg})
+	w.Write(errMsg)
+
 }
 
 func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
+		respErr(w, "only GET allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	switch r.URL.Path {
 	case "/graphql/ui/graphiql.min.css":
-		w.Header().Set("Content-Type", "text/css")
-		w.Write(graphiql.Assets["graphiql.min.css"])
-		return
-	case "/graphql/ui/graphiql.min.js":
-		w.Header().Set("Content-Type", "application/javascript")
-		w.Write(graphiql.Assets["graphiql.min.js"])
-		return
-	case "/graphql/ui/react.production.min.js":
-		w.Header().Set("Content-Type", "application/javascript")
-		w.Write(graphiql.Assets["react.production.min.js"])
-		return
-	case "/graphql/ui/react-dom.production.min.js":
-		w.Header().Set("Content-Type", "application/javascript")
-		w.Write(graphiql.Assets["react-dom.production.min.js"])
-		return
+		data, err := graphiql.Assets.ReadFile(filepath.Base(r.URL.Path))
+		if err != nil {
+			log.Warn("Error loading graphiql asset", "err", err)
+			respErr(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		respOk(w, data, "text/css")
+	case "/graphql/ui/graphiql.min.js",
+		"/graphql/ui/react.production.min.js",
+		"/graphql/ui/react-dom.production.min.js":
+		data, err := graphiql.Assets.ReadFile(filepath.Base(r.URL.Path))
+		if err != nil {
+			log.Warn("Error loading graphiql asset", "err", err)
+			respErr(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		respOk(w, data, "application/javascript; charset=utf-8")
 	default:
-		w.Header().Set("Content-Type", "text/html")
-		w.Write(graphiql.Assets["index.html"])
-		return
+		data, err := graphiql.Assets.ReadFile("index.html")
+		if err != nil {
+			log.Warn("Error loading graphiql asset", "err", err)
+			respErr(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		respOk(w, data, "text/html")
 	}
 }
