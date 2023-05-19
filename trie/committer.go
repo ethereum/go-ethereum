@@ -131,22 +131,15 @@ func (c *committer) store(path []byte, n node) node {
 		// The node is embedded in its parent, in other words, this node
 		// will not be stored in the database independently, mark it as
 		// deleted only if the node was existent in database before.
-		prev, ok := c.tracer.accessList[string(path)]
+		_, ok := c.tracer.accessList[string(path)]
 		if ok {
-			c.nodes.AddNode(path, trienode.NewWithPrev(common.Hash{}, nil, prev))
+			c.nodes.AddNode(path, trienode.NewDeleted())
 		}
 		return n
 	}
 	// Collect the dirty node to nodeset for return.
-	var (
-		nhash = common.BytesToHash(hash)
-		node  = trienode.NewWithPrev(
-			nhash,
-			nodeToBytes(n),
-			c.tracer.accessList[string(path)],
-		)
-	)
-	c.nodes.AddNode(path, node)
+	nhash := common.BytesToHash(hash)
+	c.nodes.AddNode(path, trienode.New(nhash, nodeToBytes(n)))
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key

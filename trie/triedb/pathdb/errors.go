@@ -33,12 +33,12 @@ var (
 	// to not maintain the layer's original state.
 	errSnapshotStale = errors.New("layer stale")
 
-	// errUnexpectedTrieHistory is returned if an unmatched trie history is applied
+	// errUnexpectedHistory is returned if an unmatched state history is applied
 	// to the database for state rollback.
-	errUnexpectedTrieHistory = errors.New("unexpected trie history")
+	errUnexpectedHistory = errors.New("unexpected state history")
 
 	// errStateUnrecoverable is returned if state is required to be reverted to
-	// a destination without associated trie history available.
+	// a destination without associated state history available.
 	errStateUnrecoverable = errors.New("state is unrecoverable")
 )
 

@@ -19,7 +19,6 @@ package testutil
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"fmt"
 	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,7 +34,6 @@ func initRand() *mrand.Rand {
 	var seed [8]byte
 	crand.Read(seed[:])
 	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
-	fmt.Printf("Seed: %x\n", seed)
 	return rnd
 }
 
@@ -51,14 +49,13 @@ func RandomHash() common.Hash {
 	return common.BytesToHash(RandBytes(common.HashLength))
 }
 
+// RandomAddress generates a random blob of data and returns it as an address.
+func RandomAddress() common.Address {
+	return common.BytesToAddress(RandBytes(common.AddressLength))
+}
+
 // RandomNode generates a random node.
 func RandomNode() *trienode.Node {
 	val := RandBytes(100)
 	return trienode.New(crypto.Keccak256Hash(val), val)
-}
-
-// RandomNodeWithPrev generates a random node with original value attached.
-func RandomNodeWithPrev(prev []byte) *trienode.WithPrev {
-	val := RandBytes(100)
-	return trienode.NewWithPrev(crypto.Keccak256Hash(val), val, prev)
 }

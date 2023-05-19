@@ -19,30 +19,28 @@ package pathdb
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
-	cleanHitMeter   = metrics.NewRegisteredMeter("trie/triedb/clean/hit", nil)
-	cleanMissMeter  = metrics.NewRegisteredMeter("trie/triedb/clean/miss", nil)
-	cleanReadMeter  = metrics.NewRegisteredMeter("trie/triedb/clean/read", nil)
-	cleanWriteMeter = metrics.NewRegisteredMeter("trie/triedb/clean/write", nil)
+	cleanHitMeter   = metrics.NewRegisteredMeter("triedb/clean/hit", nil)
+	cleanMissMeter  = metrics.NewRegisteredMeter("triedb/clean/miss", nil)
+	cleanReadMeter  = metrics.NewRegisteredMeter("triedb/clean/read", nil)
+	cleanWriteMeter = metrics.NewRegisteredMeter("triedb/clean/write", nil)
 
-	dirtyHitMeter         = metrics.NewRegisteredMeter("trie/triedb/dirty/hit", nil)
-	dirtyMissMeter        = metrics.NewRegisteredMeter("trie/triedb/dirty/miss", nil)
-	dirtyReadMeter        = metrics.NewRegisteredMeter("trie/triedb/dirty/read", nil)
-	dirtyWriteMeter       = metrics.NewRegisteredMeter("trie/triedb/dirty/write", nil)
-	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("trie/triedb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+	dirtyHitMeter         = metrics.NewRegisteredMeter("triedb/dirty/hit", nil)
+	dirtyMissMeter        = metrics.NewRegisteredMeter("triedb/dirty/miss", nil)
+	dirtyReadMeter        = metrics.NewRegisteredMeter("triedb/dirty/read", nil)
+	dirtyWriteMeter       = metrics.NewRegisteredMeter("triedb/dirty/write", nil)
+	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("triedb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	commitTimeTimer  = metrics.NewRegisteredTimer("trie/triedb/commit/time", nil)
-	commitNodesMeter = metrics.NewRegisteredMeter("trie/triedb/commit/nodes", nil)
-	commitSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/commit/size", nil)
+	commitTimeTimer  = metrics.NewRegisteredTimer("triedb/commit/time", nil)
+	commitNodesMeter = metrics.NewRegisteredMeter("triedb/commit/nodes", nil)
+	commitSizeMeter  = metrics.NewRegisteredMeter("triedb/commit/size", nil)
 
-	gcNodesMeter = metrics.NewRegisteredMeter("trie/triedb/gc/nodes", nil)
-	gcSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/gc/size", nil)
+	gcNodesMeter = metrics.NewRegisteredMeter("triedb/gc/nodes", nil)
+	gcSizeMeter  = metrics.NewRegisteredMeter("triedb/gc/size", nil)
 
-	diffLayerSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/diff/size", nil)
-	diffLayerNodesMeter = metrics.NewRegisteredMeter("trie/triedb/diff/nodes", nil)
+	diffLayerSizeMeter  = metrics.NewRegisteredMeter("triedb/diff/size", nil)
+	diffLayerNodesMeter = metrics.NewRegisteredMeter("triedb/diff/nodes", nil)
 
-	trieHistoryTimeMeter = metrics.NewRegisteredTimer("trie/triedb/triehistory/time", nil)
-	trieHistorySizeMeter = metrics.NewRegisteredMeter("trie/triedb/triehistory/size", nil)
-
-	hitAccessListMeter = metrics.NewRegisteredMeter("trie/triedb/triehistory/prev/accessList", nil)
-	hitDatabaseMeter   = metrics.NewRegisteredMeter("trie/triedb/triehistory/prev/database", nil)
+	historyBuildTimeMeter = metrics.NewRegisteredTimer("triedb/history/time", nil)
+	historyDataSizeMeter  = metrics.NewRegisteredMeter("triedb/history/size/data", nil)
+	historyIndexSizeMeter = metrics.NewRegisteredMeter("triedb/history/size/index", nil)
 )

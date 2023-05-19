@@ -24,38 +24,49 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // layerTree is a group of state layers identified by the state root.
 // This structure defines a few basic operations for manipulating
 // state layers linked with each other in a tree structure. It's
 // thread-safe to use. However, callers need to ensure the thread-safety
-// of the layer layer operated by themselves.
+// of the referenced layer by themselves.
 type layerTree struct {
 	lock   sync.RWMutex
 	layers map[common.Hash]layer
 }
 
-// newLayerTree initializes the layerTree by the given head layer.
-// All the ancestors will be iterated out and linked in the tree.
+// newLayerTree constructs the layerTree with the given head layer.
 func newLayerTree(head layer) *layerTree {
-	var layers = make(map[common.Hash]layer)
-	for head != nil {
-		layers[head.Root()] = head
-		head = head.Parent()
-	}
-	return &layerTree{layers: layers}
+	tree := new(layerTree)
+	tree.reset(head)
+	return tree
 }
 
-// get retrieves a layer belonging to the given block root.
-func (tree *layerTree) get(blockRoot common.Hash) layer {
+// reset initializes the layerTree by the given head layer.
+// All the ancestors will be iterated out and linked in the tree.
+func (tree *layerTree) reset(head layer) {
+	tree.lock.Lock()
+	defer tree.lock.Unlock()
+
+	var layers = make(map[common.Hash]layer)
+	for head != nil {
+		layers[head.root()] = head
+		head = head.parent()
+	}
+	tree.layers = layers
+}
+
+// get retrieves a layer belonging to the given state root.
+func (tree *layerTree) get(stateRoot common.Hash) layer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	return tree.layers[types.TrieRootHash(blockRoot)]
+	return tree.layers[types.TrieRootHash(stateRoot)]
 }
 
-// forEach iterates the stored layer layers inside and applies the
+// forEach iterates the stored layers inside and applies the
 // given callback on them.
 func (tree *layerTree) forEach(onLayer func(layer)) {
 	tree.lock.RLock()
@@ -74,9 +85,8 @@ func (tree *layerTree) len() int {
 	return len(tree.layers)
 }
 
-// add inserts a new layer into the tree if it can be linked to an existing
-// old parent. It is disallowed to insert a disk layer (the origin of all).
-func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, sets *trienode.MergedNodeSet) error {
+// add inserts a new layer into the tree if it can be linked to an existing old parent.
+func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -91,14 +101,10 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, sets *trien
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
 	}
-	nodes, err := fixset(sets, parent)
-	if err != nil {
-		return err
-	}
-	l := parent.Update(root, parent.ID()+1, nodes)
+	l := parent.update(root, parent.stateID()+1, nodes.Flatten(), states)
 
 	tree.lock.Lock()
-	tree.layers[l.root] = l
+	tree.layers[l.rootHash] = l
 	tree.lock.Unlock()
 	return nil
 }
@@ -111,11 +117,11 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, sets *trien
 func (tree *layerTree) cap(root common.Hash, layers int) error {
 	// Retrieve the head layer to cap from
 	root = types.TrieRootHash(root)
-	snap := tree.get(root)
-	if snap == nil {
+	l := tree.get(root)
+	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
-	diff, ok := snap.(*diffLayer)
+	diff, ok := l.(*diffLayer)
 	if !ok {
 		return fmt.Errorf("triedb layer [%#x] is disk layer", root)
 	}
@@ -129,13 +135,13 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			return err
 		}
 		// Replace the entire layer tree with the flat base
-		tree.layers = map[common.Hash]layer{base.Root(): base}
+		tree.layers = map[common.Hash]layer{base.root(): base}
 		return nil
 	}
 	// Dive until we run out of layers or reach the persistent database
 	for i := 0; i < layers-1; i++ {
 		// If we still have diff layers below, continue down
-		if parent, ok := diff.Parent().(*diffLayer); ok {
+		if parent, ok := diff.parent().(*diffLayer); ok {
 			diff = parent
 		} else {
 			// Diff stack too shallow, return without modifications
@@ -144,7 +150,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
-	switch parent := diff.Parent().(type) {
+	switch parent := diff.parent().(type) {
 	case *diskLayer:
 		return nil
 
@@ -158,8 +164,8 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			diff.lock.Unlock()
 			return err
 		}
-		tree.layers[base.Root()] = base
-		diff.parent = base
+		tree.layers[base.root()] = base
+		diff.parentLayer = base
 
 		diff.lock.Unlock()
 
@@ -170,7 +176,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	children := make(map[common.Hash][]common.Hash)
 	for root, layer := range tree.layers {
 		if dl, ok := layer.(*diffLayer); ok {
-			parent := dl.Parent().Root()
+			parent := dl.parent().root()
 			children[parent] = append(children[parent], root)
 		}
 	}
@@ -182,8 +188,8 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		}
 		delete(children, root)
 	}
-	for root, l := range tree.layers {
-		if l.Stale() {
+	for root, layer := range tree.layers {
+		if dl, ok := layer.(*diskLayer); ok && dl.isStale() {
 			remove(root)
 		}
 	}
@@ -192,56 +198,21 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 
 // bottom returns the bottom-most layer in this tree. The returned
 // layer can be diskLayer or nil if something corrupted.
-func (tree *layerTree) bottom() layer {
+func (tree *layerTree) bottom() *diskLayer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
 	if len(tree.layers) == 0 {
 		return nil // Shouldn't happen, empty tree
 	}
-	// pick a random one
+	// pick a random one as the entry point
 	var current layer
 	for _, layer := range tree.layers {
 		current = layer
 		break
 	}
-	for current.Parent() != nil {
-		current = current.Parent()
+	for current.parent() != nil {
+		current = current.parent()
 	}
-	return current
-}
-
-// fixset iterates the provided nodeset and tries to retrieve the original value
-// of nodes from parent layer in case the original value is not recorded.
-func fixset(sets *trienode.MergedNodeSet, parent layer) (map[common.Hash]map[string]*trienode.WithPrev, error) {
-	var (
-		hits  int
-		miss  int
-		nodes = make(map[common.Hash]map[string]*trienode.WithPrev)
-	)
-	for owner, set := range sets.Sets {
-		nodes[owner] = set.Nodes
-		for path, n := range nodes[owner] {
-			if len(n.Prev) != 0 {
-				hits += 1
-				continue
-			}
-			miss += 1
-			// If the original value is not recorded, try to retrieve
-			// it from database directly. It can happen that the node
-			// is newly created which is considered not existent in
-			// database previously. But since we left the storage tries
-			// of destructed account in the database, it's possible
-			// that there are some dangling nodes have the exact same
-			// node path which should be treated as the origin value.
-			prev, err := parent.nodeByPath(owner, []byte(path))
-			if err != nil {
-				return nil, err
-			}
-			nodes[owner][path] = trienode.NewWithPrev(n.Hash, n.Blob, prev)
-		}
-	}
-	hitAccessListMeter.Mark(int64(hits))
-	hitDatabaseMeter.Mark(int64(miss))
-	return nodes, nil
+	return current.(*diskLayer)
 }

@@ -55,7 +55,10 @@ type backend interface {
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to
 	// the specified root.
-	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
+	//
+	// The passed in maps(nodes, states) will be retained to avoid copying
+	// everything. Therefore, these maps must not be changed afterwards.
+	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
@@ -126,6 +129,9 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
+//
+// The passed in maps(nodes, states) will be retained to avoid copying everything.
+// Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if db.config != nil && db.config.OnCommit != nil {
 		db.config.OnCommit(states)
@@ -133,7 +139,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	return db.backend.Update(root, parent, nodes)
+	return db.backend.Update(root, parent, nodes, states)
 }
 
 // Commit iterates over all the children of a particular node, writes them out
