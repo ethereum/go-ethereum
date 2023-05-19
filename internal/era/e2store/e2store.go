@@ -17,12 +17,15 @@
 package e2store
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 )
 
-// e2store header size.
-var headerSize = 8
+const (
+	headerSize     = 8
+	valueSizeLimit = 1024 * 1024 * 50
+)
 
 // Entry is a variable-length-data record in an e2store.
 type Entry struct {
@@ -48,21 +51,9 @@ func NewWriter(w io.Writer) *Writer {
 // data (2 bytes). The remaining bytes store b.
 func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 	buf := make([]byte, headerSize+len(b))
-
-	// type
-	buf[0] = byte(typ)
-	buf[1] = byte(typ >> 8)
-
-	// length
-	l := len(b)
-	buf[2] = byte(l)
-	buf[3] = byte(l >> 8)
-	buf[4] = byte(l >> 16)
-	buf[5] = byte(l >> 24)
-
-	// value
+	binary.LittleEndian.PutUint16(buf, typ)
+	binary.LittleEndian.PutUint32(buf[2:], uint32(len(b)))
 	copy(buf[8:], b)
-
 	return w.w.Write(buf)
 }
 
@@ -70,77 +61,126 @@ func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md
 type Reader struct {
-	r io.Reader
+	r      io.ReaderAt
+	offset int64
 }
 
 // NewReader returns a new Reader that reads from r.
-func NewReader(r io.Reader) *Reader {
-	return &Reader{r}
+func NewReader(r io.ReaderAt) *Reader {
+	return &Reader{r, 0}
 }
 
 // Read reads one Entry from r.
-// If the entry is malformed, it returns io.UnexpectedEOF. If there are no
-// entries left to be read, Read returns io.EOF.
 func (r *Reader) Read() (*Entry, error) {
-	b := make([]byte, headerSize)
-	if _, err := io.ReadFull(r.r, b); err != nil {
+	var e Entry
+	n, err := r.ReadAt(&e, r.offset)
+	if err != nil {
 		return nil, err
 	}
+	r.offset += int64(n)
+	return &e, nil
+}
 
-	typ := uint16(b[0])
-	typ += uint16(b[1]) << 8
+// ReadAt reads one Entry from r at the specified offset.
+func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
+	typ, length, err := r.ReadMetadataAt(off)
+	if err != nil {
+		return 0, err
+	}
+	entry.Type = typ
 
-	length := uint64(b[2])
-	length += uint64(b[3]) << 8
-	length += uint64(b[4]) << 16
-	length += uint64(b[5]) << 24
-
-	// Check reserved bytes of header.
-	if b[6] != 0 || b[7] != 0 {
-		return nil, fmt.Errorf("reserved bytes are non-zero")
+	// Check length bounds.
+	if length > valueSizeLimit {
+		return headerSize, fmt.Errorf("item larger than item size limit %d: have %d", valueSizeLimit, length)
+	}
+	if length == 0 {
+		return headerSize, nil
 	}
 
+	// Read value.
 	val := make([]byte, length)
-	if _, err := io.ReadFull(r.r, val); err != nil {
+	if n, err := r.r.ReadAt(val, off+headerSize); err != nil {
+		n += headerSize
 		// An entry with a non-zero length should not return EOF when
 		// reading the value.
 		if err == io.EOF {
-			return nil, io.ErrUnexpectedEOF
+			return n, io.ErrUnexpectedEOF
 		}
-		return nil, err
+		return n, err
+	}
+	entry.Value = val
+	return int(headerSize + length), nil
+}
+
+// ReadMetadataAt reads the header metadata at the given offset.
+func (r *Reader) ReadMetadataAt(off int64) (typ uint16, length uint32, err error) {
+	b := make([]byte, headerSize)
+	if n, err := r.r.ReadAt(b, off); err != nil {
+		if err == io.EOF && n > 0 {
+			return 0, 0, io.ErrUnexpectedEOF
+		}
+		return 0, 0, err
+	}
+	typ = binary.LittleEndian.Uint16(b)
+	length = binary.LittleEndian.Uint32(b[2:])
+
+	// Check reserved bytes of header.
+	if b[6] != 0 || b[7] != 0 {
+		return 0, 0, fmt.Errorf("reserved bytes are non-zero")
 	}
 
-	return &Entry{
-		Type:  typ,
-		Value: val,
-	}, nil
+	return typ, length, nil
 }
 
 // Find returns the first entry with the matching type.
-func (r *Reader) Find(typ uint16) (*Entry, error) {
+func (r *Reader) Find(want uint16) (*Entry, error) {
+	var (
+		off    int64
+		typ    uint16
+		length uint32
+		err    error
+	)
 	for {
-		entry, err := r.Read()
+		typ, length, err = r.ReadMetadataAt(off)
 		if err == io.EOF {
 			return nil, io.EOF
 		} else if err != nil {
 			return nil, err
 		}
-		if entry.Type == typ {
-			return entry, nil
+		if typ == want {
+			var e Entry
+			if _, err := r.ReadAt(&e, off); err != nil {
+				return nil, err
+			}
+			return &e, nil
 		}
+		off += int64(headerSize + length)
 	}
 }
 
 // FindAll returns all entries with the matching type.
-func (r *Reader) FindAll(typ uint16) ([]*Entry, error) {
-	all := make([]*Entry, 0)
+func (r *Reader) FindAll(want uint16) ([]*Entry, error) {
+	var (
+		off     int64
+		typ     uint16
+		length  uint32
+		entries []*Entry
+		err     error
+	)
 	for {
-		entry, err := r.Find(typ)
+		typ, length, err = r.ReadMetadataAt(off)
 		if err == io.EOF {
-			return all, io.EOF
+			return entries, nil
 		} else if err != nil {
-			return all, err
+			return entries, err
 		}
-		all = append(all, entry)
+		if typ == want {
+			e := new(Entry)
+			if _, err := r.ReadAt(e, off); err != nil {
+				return entries, err
+			}
+			entries = append(entries, e)
+		}
+		off += int64(headerSize + length)
 	}
 }
