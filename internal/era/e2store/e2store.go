@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	headerSize     = 8
+	HeaderSize     = 8
 	valueSizeLimit = 1024 * 1024 * 50
 )
 
@@ -50,7 +50,7 @@ func NewWriter(w io.Writer) *Writer {
 // record store the type (2 bytes), the length (4 bytes), and some reserved
 // data (2 bytes). The remaining bytes store b.
 func (w *Writer) Write(typ uint16, b []byte) (int, error) {
-	buf := make([]byte, headerSize+len(b))
+	buf := make([]byte, HeaderSize+len(b))
 	binary.LittleEndian.PutUint16(buf, typ)
 	binary.LittleEndian.PutUint32(buf[2:], uint32(len(b)))
 	copy(buf[8:], b)
@@ -91,16 +91,16 @@ func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
 
 	// Check length bounds.
 	if length > valueSizeLimit {
-		return headerSize, fmt.Errorf("item larger than item size limit %d: have %d", valueSizeLimit, length)
+		return HeaderSize, fmt.Errorf("item larger than item size limit %d: have %d", valueSizeLimit, length)
 	}
 	if length == 0 {
-		return headerSize, nil
+		return HeaderSize, nil
 	}
 
 	// Read value.
 	val := make([]byte, length)
-	if n, err := r.r.ReadAt(val, off+headerSize); err != nil {
-		n += headerSize
+	if n, err := r.r.ReadAt(val, off+HeaderSize); err != nil {
+		n += HeaderSize
 		// An entry with a non-zero length should not return EOF when
 		// reading the value.
 		if err == io.EOF {
@@ -109,12 +109,12 @@ func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
 		return n, err
 	}
 	entry.Value = val
-	return int(headerSize + length), nil
+	return int(HeaderSize + length), nil
 }
 
 // ReadMetadataAt reads the header metadata at the given offset.
 func (r *Reader) ReadMetadataAt(off int64) (typ uint16, length uint32, err error) {
-	b := make([]byte, headerSize)
+	b := make([]byte, HeaderSize)
 	if n, err := r.r.ReadAt(b, off); err != nil {
 		if err == io.EOF && n > 0 {
 			return 0, 0, io.ErrUnexpectedEOF
@@ -154,7 +154,7 @@ func (r *Reader) Find(want uint16) (*Entry, error) {
 			}
 			return &e, nil
 		}
-		off += int64(headerSize + length)
+		off += int64(HeaderSize + length)
 	}
 }
 
@@ -181,6 +181,6 @@ func (r *Reader) FindAll(want uint16) ([]*Entry, error) {
 			}
 			entries = append(entries, e)
 		}
-		off += int64(headerSize + length)
+		off += int64(HeaderSize + length)
 	}
 }
