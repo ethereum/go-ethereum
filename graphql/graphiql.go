@@ -50,7 +50,6 @@ func respErr(w http.ResponseWriter, msg string, code int) {
 		Error string
 	}{Error: msg})
 	w.Write(errMsg)
-
 }
 
 func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
