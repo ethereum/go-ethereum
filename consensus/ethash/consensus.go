@@ -262,10 +262,10 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	if chain.Config().IsShanghai(header.Time) {
+	if chain.Config().IsShanghai(header.Number, header.Time) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
-	if chain.Config().IsCancun(header.Time) {
+	if chain.Config().IsCancun(header.Number, header.Time) {
 		return fmt.Errorf("ethash does not support cancun fork")
 	}
 	// Add some fake checks for tests
