@@ -269,9 +269,6 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *type
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
 	for ; f.begin <= int64(end); f.begin++ {
-		if f.begin%10 == 0 && ctx.Err() != nil {
-			return ctx.Err()
-		}
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
 			return err
