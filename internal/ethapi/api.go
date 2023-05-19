@@ -655,8 +655,31 @@ type StorageResult struct {
 	Proof []string     `json:"proof"`
 }
 
+// this code duplicated from "core/state/statedb.go"
+type proofList [][]byte
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, value)
+	return nil
+}
+
+func (n *proofList) Delete(key []byte) error {
+	panic("not supported")
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	// Greedily deserialize all keys. This prevents state access on invalid
+	// input
+	keys := make([]common.Hash, len(storageKeys))
+	for i, hexKey := range storageKeys {
+		key, err := decodeHash(hexKey)
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = key
+	}
+
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -678,19 +701,16 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	}
 
 	// create the proof for the storageKeys
-	for i, hexKey := range storageKeys {
-		key, err := decodeHash(hexKey)
-		if err != nil {
-			return nil, err
-		}
+	for i, key := range keys {
 		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, key)
-			if storageError != nil {
-				return nil, storageError
+			var proof proofList
+			err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+			if err != nil {
+				return nil, err
 			}
-			storageProof[i] = StorageResult{hexKey, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
+			storageProof[i] = StorageResult{storageKeys[i], (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
 		} else {
-			storageProof[i] = StorageResult{hexKey, &hexutil.Big{}, []string{}}
+			storageProof[i] = StorageResult{storageKeys[i], &hexutil.Big{}, []string{}}
 		}
 	}
 
