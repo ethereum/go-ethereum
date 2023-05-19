@@ -121,6 +121,19 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
+var PrecompiledContracts4788 = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):  &ecrecover{},
+	common.BytesToAddress([]byte{2}):  &sha256hash{},
+	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):  &dataCopy{},
+	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{20}): &beaconRoot{},
+}
+
 var (
 	PrecompiledAddressesCancun    []common.Address
 	PrecompiledAddressesBerlin    []common.Address
@@ -1134,4 +1147,22 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h[0] = blobCommitmentVersionKZG
 
 	return h
+}
+
+// BeaconRoot is a stateful precompile that returns a beacon root.
+type beaconRoot struct{}
+
+func (c *beaconRoot) RequiredGas(input []byte) uint64 {
+	return 20 // TODO (MariusVanDerWijden) change
+}
+
+func (c *beaconRoot) Run(stateDB StateDB, input []byte) ([]byte, error) {
+	if len(input) != common.HashLength {
+		return nil, errors.New("invalid input length")
+	}
+	var root common.Hash
+	copy(root[:], input)
+	historicalStorageAddress := common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffd")
+	val := stateDB.GetState(historicalStorageAddress, root)
+	return val[:], nil
 }
