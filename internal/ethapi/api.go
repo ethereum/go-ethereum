@@ -680,7 +680,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	// create the proof for the storageKeys
 	for i, hexKey := range storageKeys {
 		key, err := decodeHash(hexKey)
-		keyInt := (*hexutil.Big) (new(big.Int).SetBytes(key[:]))
+		keyInt := (*hexutil.Big)(new(big.Int).SetBytes(key[:]))
 		if err != nil {
 			return nil, err
 		}
