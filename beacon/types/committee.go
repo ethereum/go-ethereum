@@ -164,44 +164,21 @@ func (sc *SyncCommittee) VerifySignature(signingRoot common.Hash, signature *Syn
 	return bls.FastAggregateVerify(keys, signingRoot[:], &sig)
 }
 
+//go:generate go run github.com/fjl/gencodec -type SyncAggregate -field-override syncAggregateMarshaling -out gen_syncaggregate_json.go
+
 // SyncAggregate represents an aggregated BLS signature with Signers referring
 // to a subset of the corresponding sync committee.
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/beacon-chain.md#syncaggregate
 type SyncAggregate struct {
-	Signers   [params.SyncCommitteeBitmaskSize]byte
-	Signature [params.BLSSignatureSize]byte
+	Signers   [params.SyncCommitteeBitmaskSize]byte `gencodec:"required" json:"sync_committee_bits"`
+	Signature [params.BLSSignatureSize]byte         `gencodec:"required" json:"sync_committee_signature"`
 }
 
-type jsonSyncAggregate struct {
-	Signers   hexutil.Bytes `json:"sync_committee_bits"`
-	Signature hexutil.Bytes `json:"sync_committee_signature"`
-}
-
-// MarshalJSON implements json.Marshaler.
-func (s *SyncAggregate) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&jsonSyncAggregate{
-		Signers:   s.Signers[:],
-		Signature: s.Signature[:],
-	})
-}
-
-// UnmarshalJSON implements json.Marshaler.
-func (s *SyncAggregate) UnmarshalJSON(input []byte) error {
-	var sc jsonSyncAggregate
-	if err := json.Unmarshal(input, &sc); err != nil {
-		return err
-	}
-	if len(sc.Signers) != params.SyncCommitteeBitmaskSize {
-		return fmt.Errorf("invalid signature bitmask size %d", len(sc.Signers))
-	}
-	if len(sc.Signature) != params.BLSSignatureSize {
-		return fmt.Errorf("invalid signature size %d", len(sc.Signature))
-	}
-	copy(s.Signers[:], sc.Signers)
-	copy(s.Signature[:], sc.Signature)
-	return nil
+type syncAggregateMarshaling struct {
+	Signers   hexutil.Bytes
+	Signature hexutil.Bytes
 }
 
 // SignerCount returns the number of signers in the aggregate signature.
