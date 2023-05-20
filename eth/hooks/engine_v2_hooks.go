@@ -55,7 +55,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			if isEpochSwitch {
 				break
 			}
-			miner := parentHeader.Coinbase // we can directly use coinbase, since it's verified (Verification is a TODO)
+			miner := parentHeader.Coinbase // we can directly use coinbase, since it's verified
 			_, exist := statMiners[miner]
 			if exist {
 				statMiners[miner]++
