@@ -403,3 +403,9 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	api.eth.blockchain.SetTrieFlushInterval(t)
 	return nil
 }
+
+// GetTrieFlushInterval gets the current value of in-memroy tries flush interval
+func (api *DebugAPI) GetTrieFlushInterval() string {
+	interval := api.eth.blockchain.GetTrieFlushInterval()
+	return interval.String()
+}
