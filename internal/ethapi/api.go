@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,15 @@ import (
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
 	b Backend
+}
+
+type BundleAPI struct {
+	b     Backend
+	chain *core.BlockChain
+}
+
+func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
+	return &BundleAPI{b, chain}
 }
 
 // NewEthereumAPI creates a new Ethereum protocol API.
@@ -1045,6 +1055,158 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	return result, nil
 }
 
+// func DoCallBundle(ctx context.Context, b Backend, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) ([]map[string]interface{}, error) {
+// 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+// 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+// 	if state == nil || err != nil {
+// 		return nil, err
+// 	}
+// 	if err := overrides.Apply(state); err != nil {
+// 		return nil, err
+// 	}
+// 	// Setup context so it may be cancelled the call has completed
+// 	// or, in case of unmetered gas, setup a context with a timeout.
+// 	var cancel context.CancelFunc
+// 	if timeout > 0 {
+// 		ctx, cancel = context.WithTimeout(ctx, timeout)
+// 	} else {
+// 		ctx, cancel = context.WithCancel(ctx)
+// 	}
+// 	// Make sure the context is cancelled when the call has completed
+// 	// this makes sure resources are cleaned up.
+// 	defer cancel()
+
+// 	// Get a new instance of the EVM.
+// 	results := []map[string]interface{}{}
+
+// 	// tx will be the first of the bundle
+// 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+// 	if blockOverrides != nil {
+// 		blockOverrides.Apply(&blockCtx)
+// 	}
+
+// 	gp := new(core.GasPool).AddGas(math.MaxUint64)
+// 	for i, tx := range args.Transactions {
+// 		msg, err := tx.ToMessage(globalGasCap, header.BaseFee)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		result, err := core.ApplyTransaction(s.b.ChainConfig(), )
+// 		// print result
+// 		fmt.Println(result)
+// 		jsonResult := map[string]interface{}{
+// 			"gasUsed": result.UsedGas,
+// 		}
+// 		fmt.Println(i)
+// 		if result.Err != nil {
+// 			fmt.Println("error 1")
+// 			jsonResult["error"] = result.Err.Error()
+// 			revert := result.Revert()
+// 			if len(revert) > 0 {
+// 				jsonResult["revert"] = string(revert)
+// 			}
+// 		} else {
+// 			fmt.Println("error 2")
+// 			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+// 			hex.Encode(dst, result.Return())
+// 			jsonResult["value"] = "0x" + string(dst)
+// 		}
+// 		results = append(results, jsonResult)
+// 	}
+// 	return results, nil
+// }
+
+func DoCall2(ctx context.Context, b Backend, args TransactionArgs2, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	args1 := TransactionArgs{
+		From:                 args.From,
+		To:                   args.To,
+		Gas:                  args.Gas,
+		GasPrice:             args.GasPrice,
+		MaxFeePerGas:         args.MaxFeePerGas,
+		MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+		Value:                args.Value,
+		Nonce:                args.Nonce,
+		Data:                 args.Data,
+		Input:                args.Input,
+		AccessList:           args.AccessList,
+		ChainID:              args.ChainID,
+	}
+
+	args2 := TransactionArgs{
+		From:                 args.From1,
+		To:                   args.To1,
+		Gas:                  args.Gas1,
+		GasPrice:             args.GasPrice1,
+		MaxFeePerGas:         args.MaxFeePerGas1,
+		MaxPriorityFeePerGas: args.MaxPriorityFeePerGas1,
+		Value:                args.Value1,
+		Nonce:                args.Nonce1,
+		Data:                 args.Data1,
+		Input:                args.Input1,
+		AccessList:           args.AccessList1,
+		ChainID:              args.ChainID1,
+	}
+
+	// Get a new instance of the EVM.
+	msg1, err := args1.ToMessage(globalGasCap, header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+	msg2, err := args2.ToMessage(globalGasCap, header.BaseFee)
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if blockOverrides != nil {
+		blockOverrides.Apply(&blockCtx)
+	}
+	evm, vmError := b.GetEVM(ctx, msg1, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
+
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	go func() {
+		<-ctx.Done()
+		evm.Cancel()
+	}()
+
+	// Execute the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+	core.ApplyMessage(evm, msg1, gp)
+	result, err := core.ApplyMessage(evm, msg2, gp)
+	if err := vmError(); err != nil {
+		return nil, err
+	}
+
+	// If the timer caused an abort, return an appropriate error message
+	if evm.Cancelled() {
+		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+	}
+	if err != nil {
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg1.GasLimit)
+	}
+	return result, nil
+}
+
 func newRevertError(result *core.ExecutionResult) *revertError {
 	reason, errUnpack := abi.UnpackRevert(result.Revert())
 	err := errors.New("execution reverted")
@@ -1091,6 +1253,160 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
+}
+
+func (s *BlockChainAPI) BatchCall(ctx context.Context, args TransactionArgs2, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
+	result, err := DoCall2(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	if err != nil {
+		return nil, err
+	}
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(result.Revert()) > 0 {
+		return nil, newRevertError(result)
+	}
+	return result.Return(), result.Err
+}
+
+// func (s *BundleAPI) BundleCall(ctx context.Context, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) ([]map[string]interface{}, error) {
+// 	result, _ := DoCallBundle(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+
+// 	return result, nil
+// }
+
+func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
+	if len(args.Transactions) == 0 {
+		return nil, errors.New("bundle missing txs")
+	}
+	if args.BlockNumber == 0 {
+		return nil, errors.New("bundle missing blockNumber")
+	}
+
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	fmt.Println("state", args.StateBlockNumberOrHash)
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	blockNumber := big.NewInt(int64(args.BlockNumber))
+	fmt.Println("blockNumber", blockNumber)
+	timestamp := parent.Time + 1
+	if args.Timestamp != nil {
+		timestamp = *args.Timestamp
+	}
+	coinbase := parent.Coinbase
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
+	}
+	difficulty := parent.Difficulty
+	if args.Difficulty != nil {
+		difficulty = args.Difficulty
+	}
+	gasLimit := parent.GasLimit
+	if args.GasLimit != nil {
+		gasLimit = *args.GasLimit
+	}
+	var baseFee *big.Int
+	if args.BaseFee != nil {
+		baseFee = args.BaseFee
+	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumber.Int64())) {
+		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
+	}
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     blockNumber,
+		GasLimit:   gasLimit,
+		Time:       timestamp,
+		Difficulty: difficulty,
+		Coinbase:   coinbase,
+		BaseFee:    baseFee,
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	vmconfig := vm.Config{}
+
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+	coinbaseBalanceBefore := state.GetBalance(coinbase)
+
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
+	uint64MaxValue := uint64(math.MaxUint64)
+	for i, tx := range args.Transactions {
+		fmt.Println("tx", tx)
+		msg, err := tx.ToMessage(uint64MaxValue, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
+		randomHash := common.HexToHash("0x" + strconv.Itoa(i))
+		state.SetTxContext(randomHash, i)
+
+		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+
+		txHash := randomHash.String()
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+		to := "0x"
+
+		jsonResult := map[string]interface{}{
+			"txHash":    txHash,
+			"gasUsed":   receipt.GasUsed,
+			"toAddress": to,
+		}
+		totalGasUsed += receipt.GasUsed
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
+		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
+		jsonResult["gasPrice"] = new(big.Int).Div(coinbaseDiffTx, big.NewInt(int64(receipt.GasUsed))).String()
+		jsonResult["gasUsed"] = receipt.GasUsed
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
+	ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["gasFees"] = gasFees.String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
+	ret["totalGasUsed"] = totalGasUsed
+	ret["stateBlockNumber"] = parent.Number.Int64()
+
+	return ret, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {

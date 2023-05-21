@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -158,4 +159,56 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
+}
+
+func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM, tracer TracerResult) (*types.Receipt, *ExecutionResult, interface{}, error) {
+	// Create a new context to be used in the EVM environment.
+	txContext := NewEVMTxContext(msg)
+	evm.Reset(txContext, statedb)
+
+	// Apply the transaction to the current state (included in the env).
+	result, err := ApplyMessage(evm, msg, gp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	traceResult, err := tracer.GetResult()
+	// Update the state with pending changes.
+	var root []byte
+	if config.IsByzantium(header.Number) {
+		// statedb.GetRefund()
+
+	} else {
+		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+	}
+	*usedGas += result.UsedGas
+
+	// Create a new receipt for the transaction, storing the intermediate root and gas used
+	// by the tx.
+	receipt := &types.Receipt{Type: 0, PostState: root, CumulativeGasUsed: *usedGas}
+	if result.Failed() {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
+	// receipt.TxHash = tx.Hash()
+	receipt.GasUsed = result.UsedGas
+
+	// Set the receipt logs and create the bloom filter.
+	receipt.BlockHash = header.Hash()
+	receipt.BlockNumber = header.Number
+	receipt.TransactionIndex = uint(statedb.TxIndex())
+	return receipt, result, traceResult, err
+}
+
+func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg *Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	receipt, result, _, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, nil)
+	return receipt, result, err
+}
+
+type TracerResult interface {
+	GetResult() (json.RawMessage, error)
 }
