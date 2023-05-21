@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -230,7 +231,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
 		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
 	}
-	if proof.Key != testSlot.String() {
+	if proof.Key != hexutil.EncodeBig(testSlot.Big()) {
 		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
 	}
 }
