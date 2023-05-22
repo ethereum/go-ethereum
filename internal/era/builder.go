@@ -130,38 +130,17 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 	b.hashes = append(b.hashes, hash)
 	b.tds = append(b.tds, td)
 
-	// Small helper to take care snappy encoding and writing e2store entry.
-	snappyWrite := func(typ uint16, in []byte) error {
-		var (
-			buf = b.buf
-			s   = b.snappy
-		)
-		buf.Reset()
-		s.Reset(buf)
-		if _, err := b.snappy.Write(in); err != nil {
-			return fmt.Errorf("error snappy encoding: %w", err)
-		}
-		if err := s.Flush(); err != nil {
-			return fmt.Errorf("error flushing snappy encoding: %w", err)
-		}
-		n, err := b.w.Write(typ, b.buf.Bytes())
-		b.written += n
-		if err != nil {
-			return fmt.Errorf("error writing e2store entry: %w", err)
-		}
-		return nil
+	// Write block data.
+	if err := b.snappyWrite(TypeCompressedHeader, header); err != nil {
+		return err
+	}
+	if err := b.snappyWrite(TypeCompressedBody, body); err != nil {
+		return err
+	}
+	if err := b.snappyWrite(TypeCompressedReceipts, receipts); err != nil {
+		return err
 	}
 
-	// Write block data.
-	if err := snappyWrite(TypeCompressedHeader, header); err != nil {
-		return err
-	}
-	if err := snappyWrite(TypeCompressedBody, body); err != nil {
-		return err
-	}
-	if err := snappyWrite(TypeCompressedReceipts, receipts); err != nil {
-		return err
-	}
 	// Also write total difficulty, but don't snappy encode.
 	btd := bigToBytes32(td)
 	n, err := b.w.Write(TypeTotalDifficulty, btd[:])
@@ -218,6 +197,28 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	}
 
 	return root, nil
+}
+
+// snappyWrite is a small helper to take care snappy encoding and writing an e2store entry.
+func (b *Builder) snappyWrite(typ uint16, in []byte) error {
+	var (
+		buf = b.buf
+		s   = b.snappy
+	)
+	buf.Reset()
+	s.Reset(buf)
+	if _, err := b.snappy.Write(in); err != nil {
+		return fmt.Errorf("error snappy encoding: %w", err)
+	}
+	if err := s.Flush(); err != nil {
+		return fmt.Errorf("error flushing snappy encoding: %w", err)
+	}
+	n, err := b.w.Write(typ, b.buf.Bytes())
+	b.written += n
+	if err != nil {
+		return fmt.Errorf("error writing e2store entry: %w", err)
+	}
+	return nil
 }
 
 // writeVersion writes a version entry to e2store.
