@@ -28,6 +28,7 @@ type ProofTracer struct {
 	*ZkTrie
 	deletionTracer map[zkt.Hash]struct{}
 	rawPaths       map[string][]*zktrie.Node
+	emptyTermPaths map[string][]*zktrie.Node
 }
 
 // NewProofTracer create a proof tracer object
@@ -37,6 +38,7 @@ func (t *ZkTrie) NewProofTracer() *ProofTracer {
 		// always consider 0 is "deleted"
 		deletionTracer: map[zkt.Hash]struct{}{zkt.HashZero: {}},
 		rawPaths:       make(map[string][]*zktrie.Node),
+		emptyTermPaths: make(map[string][]*zktrie.Node),
 	}
 }
 
@@ -112,9 +114,13 @@ func (t *ProofTracer) GetDeletionProofs() ([][]byte, error) {
 
 // MarkDeletion mark a key has been involved into deletion
 func (t *ProofTracer) MarkDeletion(key []byte) {
-	if path, existed := t.rawPaths[string(key)]; existed {
+	if path, existed := t.emptyTermPaths[string(key)]; existed {
+		// copy empty node terminated path for final scanning
+		t.rawPaths[string(key)] = path
+	} else if path, existed = t.rawPaths[string(key)]; existed {
 		// sanity check
 		leafNode := path[len(path)-1]
+
 		if leafNode.Type != zktrie.NodeTypeLeaf {
 			panic("all path recorded in proofTrace should be ended with leafNode")
 		}
@@ -143,6 +149,11 @@ func (t *ProofTracer) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWr
 				}
 			} else if n.Type == zktrie.NodeTypeParent {
 				mptPath = append(mptPath, n)
+			} else if n.Type == zktrie.NodeTypeEmpty {
+				// empty node is considered as "unhit" but it should be also being added
+				// into a temporary slot for possibly being marked as deletion later
+				mptPath = append(mptPath, n)
+				t.emptyTermPaths[string(key)] = mptPath
 			}
 
 			return proofDb.Put(nodeHash[:], n.Value())

@@ -244,11 +244,12 @@ func TestProofWithDeletion(t *testing.T) {
 	// notice the sibling of key `k*32`` is just the leaf of key `m*32`
 	assert.Equal(t, siblings[0][l-33:l-1], nd)
 
-	// no effect
+	// Marking a key that is currently not hit (but terminated by an empty node)
+	// also causes it to be added to the deletion proof
 	proofTracer.MarkDeletion(s_key2.Bytes())
 	siblings, err = proofTracer.GetDeletionProofs()
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(siblings))
+	assert.Equal(t, 2, len(siblings))
 
 	key3 := bytes.Repeat([]byte("x"), 32)
 	err = mt.UpdateWord(
