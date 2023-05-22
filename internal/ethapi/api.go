@@ -1376,6 +1376,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			"txHash":  txHash,
 			"gasUsed": receipt.GasUsed,
 			"logs":    logs,
+			"status":  receipt.Status,
 		}
 		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {
