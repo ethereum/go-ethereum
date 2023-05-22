@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -233,6 +234,23 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	}
 	if proof.Key != hexutil.EncodeBig(testSlot.Big()) {
 		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
+	}
+	{
+		// Tests with non-canon input
+		if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x0deadbeef"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := new(big.Int).SetString(testSlot.String(), 0)
+		if have, want := result.StorageProof[0].Key, fmt.Sprintf("%#x", p); want != have {
+			t.Fatalf("invalid storage proof key, want: %v, have: %v", want, have)
+		}
+		if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x000deadbeef"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		p, _ = new(big.Int).SetString(testSlot.String(), 0)
+		if have, want := result.StorageProof[0].Key, fmt.Sprintf("%#x", p); want != have {
+			t.Fatalf("invalid storage proof key, want: %v, have: %v", want, have)
+		}
 	}
 }
 
