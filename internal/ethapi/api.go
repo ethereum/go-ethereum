@@ -1351,9 +1351,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
 	for i, tx := range args.Transactions {
-		fmt.Println("tx", tx)
 		msg, err := tx.ToMessage(0, header.BaseFee)
-		fmt.Println("msg", msg)
 		if err != nil {
 			return nil, err
 		}
@@ -1361,7 +1359,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		randomHash := common.HexToHash("0x" + strconv.Itoa(i))
 		state.SetTxContext(randomHash, i)
 
-		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
+		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig, randomHash)
 		if err != nil {
 			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
 		}
@@ -1370,16 +1368,14 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		if err != nil {
 			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
 		}
-		to := "0x"
 		logs := receipt.Logs
 		if logs == nil {
 			logs = []*types.Log{}
 		}
 		jsonResult := map[string]interface{}{
-			"txHash":    txHash,
-			"gasUsed":   receipt.GasUsed,
-			"toAddress": to,
-			"logs":      logs,
+			"txHash":  txHash,
+			"gasUsed": receipt.GasUsed,
+			"logs":    logs,
 		}
 		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {

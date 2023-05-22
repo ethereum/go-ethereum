@@ -161,7 +161,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
-func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *ExecutionResult, error) {
+func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM, txHash common.Hash) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -197,14 +197,15 @@ func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc Cha
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+	receipt.Logs = statedb.GetLogs(txHash, header.Number.Uint64(), header.Hash())
 	return receipt, result, err
 }
 
-func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg *Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
+func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg *Message, usedGas *uint64, cfg vm.Config, txHash common.Hash) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	receipt, result, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv)
+	receipt, result, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, txHash)
 	return receipt, result, err
 }
 
