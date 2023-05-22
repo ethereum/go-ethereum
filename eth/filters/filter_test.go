@@ -358,7 +358,7 @@ func TestFilters(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		f := sys.NewRangeFilter(0, -1, nil, nil)
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Microsecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Microsecond)
 		defer cancel()
 		_, err := f.Logs(ctx)
 		if err == nil {
