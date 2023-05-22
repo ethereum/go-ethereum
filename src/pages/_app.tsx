@@ -1,7 +1,7 @@
 import { ChakraProvider, localStorageManager } from '@chakra-ui/react';
 import { AppProps } from 'next/app';
 import { useEffect } from 'react';
-import { init } from '@socialgouv/matomo-next';
+import { init, push } from '@socialgouv/matomo-next';
 
 import { Layout } from '../components/layouts';
 
@@ -17,6 +17,11 @@ export default function App({ Component, pageProps }: AppProps) {
       url: process.env.NEXT_PUBLIC_MATOMO_URL!,
       siteId: process.env.NEXT_PUBLIC_MATOMO_SITE_ID!
     });
+    push([
+      'addTracker',
+      process.env.NEXT_PUBLIC_MATOMO_SECONDARY_URL!,
+      process.env.NEXT_PUBLIC_MATOMO_SECONDARY_SITE_ID!
+    ]);
   }, []);
 
   return (
