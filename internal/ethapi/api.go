@@ -1340,7 +1340,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	defer cancel()
 
 	vmconfig := vm.Config{}
-
+	vmconfig.NoBaseFee = true
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
