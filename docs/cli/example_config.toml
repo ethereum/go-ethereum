@@ -130,7 +130,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   metrics = false                            # Enable metrics collection and reporting
   expensive = false                          # Enable expensive metrics collection and reporting
   prometheus-addr = "127.0.0.1:7071"         # Address for Prometheus Server
-  opencollector-endpoint = "127.0.0.1:4317"  # OpenCollector Endpoint (host:port)
+  opencollector-endpoint = ""  # OpenCollector Endpoint (host:port)
   [telemetry.influx]
     influxdb = false    # Enable metrics export/push to an external InfluxDB database (v1)
     endpoint = ""       # InfluxDB API endpoint to report metrics to
