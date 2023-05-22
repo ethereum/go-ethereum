@@ -64,7 +64,7 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 
 ### Checkpoint sync {#checkpoint-sync}
 
-Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or [public APIs/web apps](https://eth-clients.github.io/checkpoint-sync-endpoints/). Checkpoint sync is very fast - a consensus cleint should be able to sync in a few minutes using this method.
+Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or [public APIs/web apps](https://eth-clients.github.io/checkpoint-sync-endpoints/). Checkpoint sync is very fast - a consensus client should be able to sync in a few minutes using this method.
 
 For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/fundamentals/logs) page.
 
