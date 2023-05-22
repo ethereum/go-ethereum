@@ -1138,9 +1138,5 @@ func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
 
 	// Verify the secp256r1 signature
-	if result, err := secp256r1.Verify(hash, r, s, x, y); err != nil {
-		return nil, err
-	} else {
-		return result, nil
-	}
+	return secp256r1.Verify(hash, r, s, x, y)
 }
