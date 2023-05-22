@@ -73,6 +73,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   gaslimit = 30000000      # Target gas ceiling for mined blocks
   gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
   recommit = "2m5s"        # The time interval for miner to re-create mining work
+  commitinterrupt = true   # Interrupt the current mining work when time is exceeded and create partial blocks
 
 [jsonrpc]
   ipcdisable = false                               # Disable the IPC-RPC server

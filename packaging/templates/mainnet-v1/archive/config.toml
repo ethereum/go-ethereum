@@ -66,6 +66,7 @@ gcmode = "archive"
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
+    # commitinterrupt = true
 
 [jsonrpc]
     ipcpath = "/var/lib/bor/bor.ipc"

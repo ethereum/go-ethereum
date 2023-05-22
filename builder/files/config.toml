@@ -71,6 +71,7 @@ syncmode = "full"
   # etherbase = "VALIDATOR ADDRESS"
   # extradata = ""
   # recommit = "2m5s"
+  # commitinterrupt = true
 
 
 # [jsonrpc]
