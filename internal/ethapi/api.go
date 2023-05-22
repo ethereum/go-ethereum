@@ -1350,10 +1350,10 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
-	uint64MaxValue := uint64(math.MaxUint64)
 	for i, tx := range args.Transactions {
 		fmt.Println("tx", tx)
-		msg, err := tx.ToMessage(uint64MaxValue, header.BaseFee)
+		msg, err := tx.ToMessage(0, header.BaseFee)
+		fmt.Println("msg", msg)
 		if err != nil {
 			return nil, err
 		}
