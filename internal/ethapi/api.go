@@ -1371,11 +1371,15 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
 		}
 		to := "0x"
-
+		logs := receipt.Logs
+		if logs == nil {
+			logs = []*types.Log{}
+		}
 		jsonResult := map[string]interface{}{
 			"txHash":    txHash,
 			"gasUsed":   receipt.GasUsed,
 			"toAddress": to,
+			"logs":      logs,
 		}
 		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {
