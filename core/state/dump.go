@@ -110,9 +110,7 @@ func (d iterativeDump) OnAccount(addr common.Address, account DumpAccount) {
 		SecureKey: account.SecureKey,
 		Address:   nil,
 	}
-	if addr != (common.Address{}) {
-		dumpAccount.Address = &addr
-	}
+	dumpAccount.Address = &addr
 	d.Encode(dumpAccount)
 }
 
