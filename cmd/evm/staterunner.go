@@ -62,23 +62,13 @@ func stateTestCmd(ctx *cli.Context) error {
 		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
 		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
 	}
-	var (
-		tracer   vm.EVMLogger
-		debugger *logger.StructLogger
-	)
+	var cfg vm.Config
 	switch {
 	case ctx.Bool(MachineFlag.Name):
-		tracer = logger.NewJSONLogger(config, os.Stderr)
+		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
-		debugger = logger.NewStructLogger(config)
-		tracer = debugger
-
-	default:
-		debugger = logger.NewStructLogger(config)
-	}
-	cfg := vm.Config{
-		Tracer: tracer,
+		cfg.Tracer = logger.NewStructLogger(config)
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
