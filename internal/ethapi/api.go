@@ -1379,6 +1379,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 			"status":  receipt.Status,
 		}
 		totalGasUsed += receipt.GasUsed
+		fmt.Println("result", result)
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
 			revert := result.Revert()
