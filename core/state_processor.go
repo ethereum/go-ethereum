@@ -161,7 +161,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
-func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM, tracer TracerResult) (*types.Receipt, *ExecutionResult, interface{}, error) {
+func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msgTx *Message, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -169,10 +169,9 @@ func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc Cha
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	traceResult, err := tracer.GetResult()
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -198,14 +197,14 @@ func applyTransactionWithResult(msg *Message, config *params.ChainConfig, bc Cha
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, result, traceResult, err
+	return receipt, result, err
 }
 
 func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg *Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	receipt, result, _, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, nil)
+	receipt, result, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv)
 	return receipt, result, err
 }
 
