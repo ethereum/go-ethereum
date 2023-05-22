@@ -35,5 +35,5 @@ func Verify(hash []byte, r, s, x, y *big.Int) ([]byte, error) {
 
 // Check the malleability issue
 func checkMalleability(s *big.Int) bool {
-	return s.Cmp(secp256k1halfN) <= 0
+	return s.Cmp(secp256k1halfN) > 0
 }
