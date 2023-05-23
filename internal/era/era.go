@@ -171,11 +171,11 @@ func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
 
 func skipN(r *Reader, off int64, n int) (int64, error) {
 	for i := 0; i < n; i++ {
-		_, length, err := r.e.ReadMetadataAt(off) // header
+		length, err := r.e.LengthAt(off)
 		if err != nil {
 			return off, err
 		}
-		off += e2store.HeaderSize + int64(length)
+		off += length
 	}
 	return off, nil
 }
