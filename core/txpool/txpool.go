@@ -507,6 +507,7 @@ func (pool *TxPool) stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+	// "txList.Flatten" mutates the list thus we need write lock
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -524,6 +525,8 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
 func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+	// "txList.Flatten" mutates the list but only use read lock...
+	// why???
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
@@ -546,6 +549,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
 func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
+	// "txList.Flatten" mutates the list thus we need write lock
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
