@@ -525,10 +525,9 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
 func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	// "txList.Flatten" mutates the list but only use read lock...
-	// why???
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+	// "txList.Flatten" mutates the list thus we need write lock
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 
 	var pending types.Transactions
 	if list, ok := pool.pending[addr]; ok {
