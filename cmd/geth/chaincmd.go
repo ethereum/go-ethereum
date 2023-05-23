@@ -136,7 +136,10 @@ be gzipped.`,
 			utils.DatabaseFlags,
 			utils.NetworkFlags,
 		),
-		Description: "",
+		Description: `
+The import-history command will import blocks and their corresponding receipts
+from Era archives.
+`,
 	}
 	exportHistoryCommand = &cli.Command{
 		Action:    exportHistory,
