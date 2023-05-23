@@ -204,8 +204,9 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 }
 
 type testBackend struct {
-	db    ethdb.Database
-	chain *core.BlockChain
+	db      ethdb.Database
+	chain   *core.BlockChain
+	pending *types.Block
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -235,6 +236,15 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	return backend
 }
 
+func (b *testBackend) setPendingBlock() *types.Block {
+	header := b.CurrentHeader()
+	number := header.Number
+	number.Add(number, big.NewInt(1))
+	block := types.NewBlock(&types.Header{Number: number}, nil, nil, nil, newHasher())
+	b.pending = block
+	return block
+}
+
 func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
@@ -254,6 +264,9 @@ func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 	if number == rpc.LatestBlockNumber {
 		return b.chain.CurrentBlock(), nil
 	}
+	if number == rpc.PendingBlockNumber && b.pending != nil {
+		return b.pending.Header(), nil
+	}
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 func (b testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
@@ -262,12 +275,15 @@ func (b testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types
 func (b testBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	panic("implement me")
 }
-func (b testBackend) CurrentHeader() *types.Header { panic("implement me") }
-func (b testBackend) CurrentBlock() *types.Header  { panic("implement me") }
+func (b testBackend) CurrentHeader() *types.Header { return b.chain.CurrentBlock() }
+func (b testBackend) CurrentBlock() *types.Header  { return b.chain.CurrentBlock() }
 func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber {
 		head := b.chain.CurrentBlock()
 		return b.chain.GetBlock(head.Hash(), head.Number.Uint64()), nil
+	}
+	if number == rpc.PendingBlockNumber {
+		return b.pending, nil
 	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
