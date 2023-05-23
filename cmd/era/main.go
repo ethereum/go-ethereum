@@ -220,34 +220,41 @@ func verify(ctx *cli.Context) error {
 
 	// Verify each epoch matches the expected root.
 	for i, want := range roots {
-		name := entries[i]
-		f, err := os.Open(path.Join(dir, name))
+		// Wrap in function so defers don't stack.
+		err := func() error {
+			name := entries[i]
+			f, err := os.Open(path.Join(dir, name))
+			if err != nil {
+				return fmt.Errorf("error opening era1 file %s: %w", name, err)
+			}
+			defer f.Close()
+
+			r, err := era.NewReader(f)
+			if err != nil {
+				return fmt.Errorf("unable to make era reader: %w", err)
+			}
+
+			// Read accumulator and check against expected.
+			if got, err := r.Accumulator(); err != nil {
+				return fmt.Errorf("error retrieving accumulator for %s: %w", name, err)
+			} else if got != want {
+				return fmt.Errorf("invalid root %s: got %s, want %s", name, got, want)
+			}
+
+			// Recompute accumulator.
+			if err := checkAccumulator(r); err != nil {
+				return fmt.Errorf("error verify era1 file %s: %w", name, err)
+			}
+
+			// Give the user some feedback that something is happening.
+			if time.Since(reported) >= 8*time.Second {
+				fmt.Printf("Verifying Era1 files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
+				reported = time.Now()
+			}
+			return nil
+		}()
 		if err != nil {
-			return fmt.Errorf("error opening era1 file %s: %w", name, err)
-		}
-		defer f.Close()
-
-		r, err := era.NewReader(f)
-		if err != nil {
-			return fmt.Errorf("unable to make era reader: %w", err)
-		}
-
-		// Read accumulator and check against expected.
-		if got, err := r.Accumulator(); err != nil {
-			return fmt.Errorf("error retrieving accumulator for %s: %w", name, err)
-		} else if got != want {
-			return fmt.Errorf("invalid root %s: got %s, want %s", name, got, want)
-		}
-
-		// Recompute accumulator.
-		if err := checkAccumulator(r); err != nil {
-			return fmt.Errorf("error verify era1 file %s: %w", name, err)
-		}
-
-		// Give the user some feedback that something is happening.
-		if time.Since(reported) >= 8*time.Second {
-			fmt.Printf("Verifying Era1 files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
+			return err
 		}
 	}
 
