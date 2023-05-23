@@ -30,6 +30,9 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 	if len(hashes) != len(tds) {
 		return common.Hash{}, fmt.Errorf("must have equal number hashes as td values")
 	}
+	if len(hashes) > MaxEra1Size {
+		return common.Hash{}, fmt.Errorf("too many records: have %d, max %d", len(hashes), MaxEra1Size)
+	}
 	hh := ssz.NewHasher()
 	for i := range hashes {
 		rec := headerRecord{hashes[i], tds[i]}
