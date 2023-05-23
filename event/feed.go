@@ -121,13 +121,12 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	rvalue := reflect.ValueOf(value)
 
 	f.once.Do(func() { f.init(rvalue.Type()) })
-	<-f.sendLock
-
 	if f.etype != rvalue.Type() {
-		f.sendLock <- struct{}{}
 		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
 	}
 
+	<-f.sendLock
+	
 	// Add new cases from the inbox after taking the send lock.
 	f.mu.Lock()
 	f.sendCases = append(f.sendCases, f.inbox...)
