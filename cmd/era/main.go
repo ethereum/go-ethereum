@@ -111,22 +111,20 @@ func block(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
-
 	f, err := open(ctx, num/uint64(ctx.Int(eraSizeFlag.Name)))
 	if err != nil {
 		return fmt.Errorf("error opening era: %w", err)
 	}
+	defer f.Close()
 	r, err := era.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("error making era reader: %w", err)
 	}
-
 	// Read block with number.
 	block, err := r.ReadBlock(num)
 	if err != nil {
 		return fmt.Errorf("error reading era: %w", err)
 	}
-
 	// Convert block to JSON and print.
 	val, err := ethapi.RPCMarshalBlock(block, ctx.Bool(txsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
 	if err != nil {
@@ -150,6 +148,7 @@ func info(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	r, err := era.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("error creating era reader: %w", err)
