@@ -56,7 +56,8 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 
 	// from, to block number
 	var test1 FilterCriteria
-	vector := fmt.Sprintf(`{"fromBlock":"%#x","toBlock":"%#x"}`, fromBlock, toBlock)
+	vector := fmt.Sprintf(`{"fromBlock":"%v","toBlock":"%v"}`, fromBlock, toBlock)
+	t.Logf("vector: %s", vector)
 	if err := json.Unmarshal([]byte(vector), &test1); err != nil {
 		t.Fatal(err)
 	}
