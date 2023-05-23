@@ -19,6 +19,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"errors"
@@ -263,7 +264,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		imported = 0
 		forker   = core.NewForkChoice(chain, nil)
 		h        = sha256.New()
-		buf      []byte
+		buf      = bytes.NewBuffer(nil)
 	)
 	for i, filename := range entries {
 		err := func() error {
@@ -277,11 +278,11 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("unable to recalculate checksum: %w", err)
 			}
-			if have, want := common.BytesToHash(h.Sum(buf)).Hex(), checksums[i]; have != want {
+			if have, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; have != want {
 				return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
 			}
 			h.Reset()
-			buf = buf[:0]
+			buf.Reset()
 
 			// Import all block data from Era1.
 			r, err := era.NewReader(f)
@@ -413,7 +414,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		start     = time.Now()
 		reported  = time.Now()
 		h         = sha256.New()
-		buf       []byte
+		buf       = bytes.NewBuffer(nil)
 		checksums []string
 	)
 	for i := first; i <= last; i += step {
@@ -460,9 +461,9 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 			if _, err := io.Copy(h, f); err != nil {
 				return fmt.Errorf("unable to calculate checksum: %w", err)
 			}
-			checksums = append(checksums, common.BytesToHash(h.Sum(buf)).Hex())
+			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
 			h.Reset()
-			buf = buf[:0]
+			buf.Reset()
 			return nil
 		}()
 		if err != nil {
