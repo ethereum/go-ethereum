@@ -335,7 +335,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 func (f *Filter) pendingLogs() []*types.Log {
 	block, receipts := f.sys.backend.PendingBlockAndReceipts()
 	if block == nil {
-		return nil, errors.New("pending state not available")
+		return nil
 	}
 	if bloomFilter(block.Bloom(), f.addresses, f.topics) {
 		var unfiltered []*types.Log
