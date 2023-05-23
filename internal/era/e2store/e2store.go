@@ -112,8 +112,8 @@ func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
 	return int(headerSize + length), nil
 }
 
-// Reads the header at off and returns the total length of the entry, including
-// header.
+// LengthAt reads the header at off and returns the total length of the entry,
+// including header.
 func (r *Reader) LengthAt(off int64) (int64, error) {
 	_, length, err := r.ReadMetadataAt(off)
 	if err != nil {
