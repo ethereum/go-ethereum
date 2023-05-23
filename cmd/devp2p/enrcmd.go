@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -48,7 +49,7 @@ func enrdump(ctx *cli.Context) error {
 	var source string
 	if file := ctx.String(fileFlag.Name); file != "" {
 		if ctx.NArg() != 0 {
-			return fmt.Errorf("can't dump record from command-line argument in -file mode")
+			return errors.New("can't dump record from command-line argument in -file mode")
 		}
 		var b []byte
 		var err error
@@ -64,7 +65,7 @@ func enrdump(ctx *cli.Context) error {
 	} else if ctx.NArg() == 1 {
 		source = ctx.Args().First()
 	} else {
-		return fmt.Errorf("need record as argument")
+		return errors.New("need record as argument")
 	}
 
 	r, err := parseRecord(source)

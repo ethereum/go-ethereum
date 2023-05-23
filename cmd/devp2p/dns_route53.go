@@ -81,7 +81,7 @@ func newRoute53Client(ctx *cli.Context) *route53Client {
 	akey := ctx.String(route53AccessKeyFlag.Name)
 	asec := ctx.String(route53AccessSecretFlag.Name)
 	if akey == "" || asec == "" {
-		exit(fmt.Errorf("need Route53 Access Key ID and secret to proceed"))
+		exit(errors.New("need Route53 Access Key ID and secret to proceed"))
 	}
 	creds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(akey, asec, ""))
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(creds))

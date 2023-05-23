@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -177,7 +178,7 @@ func discv4Resolve(ctx *cli.Context) error {
 
 func discv4ResolveJSON(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 	nodesFile := ctx.Args().Get(0)
 	inputSet := make(nodeSet)
@@ -207,7 +208,7 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 
 func discv4Crawl(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 	nodesFile := ctx.Args().First()
 	var inputSet nodeSet
