@@ -99,6 +99,40 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	}
 }
 
+
+// NewFullPendingTransactionFilter creates a filter that fetches full pending transactions
+// as transactions enter the pending state.
+func (api *FilterAPI) NewFullPendingTransactionFilter() rpc.ID {
+	var (
+		pendingTxs   = make(chan []*types.Transaction)
+		pendingTxSub = api.events.SubscribePendingTxs(pendingTxs)
+	)
+
+	api.filtersMu.Lock()
+	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, fullTx: true, deadline: time.NewTimer(api.timeout), txs: make([]*types.Transaction, 0), s: pendingTxSub}
+	api.filtersMu.Unlock()
+
+	go func() {
+		for {
+			select {
+			case pTx := <-pendingTxs:
+				api.filtersMu.Lock()
+				if f, found := api.filters[pendingTxSub.ID]; found {
+					f.txs = append(f.txs, pTx...)
+				}
+				api.filtersMu.Unlock()
+			case <-pendingTxSub.Err():
+				api.filtersMu.Lock()
+				delete(api.filters, pendingTxSub.ID)
+				api.filtersMu.Unlock()
+				return
+			}
+		}
+	}()
+
+	return pendingTxSub.ID
+}
+
 // NewPendingTransactionFilter creates a filter that fetches pending transactions
 // as transactions enter the pending state.
 //
@@ -158,12 +192,8 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				latest := api.sys.backend.CurrentHeader()
 				for _, tx := range txs {
-					if fullTx != nil && *fullTx {
-						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
-						notifier.Notify(rpcSub.ID, rpcTx)
-					} else {
-						notifier.Notify(rpcSub.ID, tx.Hash())
-					}
+					rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
+					notifier.Notify(rpcSub.ID, rpcTx)
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()

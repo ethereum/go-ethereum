@@ -1694,6 +1694,63 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	return fields, nil
 }
 
+func (s *TransactionAPI) GetTransactionReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	blockHash := block.Hash()
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
+
+	transactionReceipts := make([]map[string]interface{}, len(receipts))
+	for index, receipt := range receipts {
+		tx := block.Transactions()[index]
+		from, _ := types.Sender(signer, tx)
+
+		fields := map[string]interface{}{
+			"blockHash":         blockHash,
+			"blockNumber":       hexutil.Uint64(header.Number.Uint64()),
+			"transactionHash":   tx.Hash(),
+			"transactionIndex":  hexutil.Uint64(index),
+			"from":              from,
+			"to":                tx.To(),
+			"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+			"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+			"contractAddress":   nil,
+			"logs":              receipt.Logs,
+			"logsBloom":         receipt.Bloom,
+			"type":              hexutil.Uint(tx.Type()),
+			"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+		}
+
+		if len(receipt.PostState) > 0 {
+			fields["root"] = hexutil.Bytes(receipt.PostState)
+		} else {
+			fields["status"] = hexutil.Uint(receipt.Status)
+		}
+
+		if receipt.Logs == nil {
+			fields["logs"] = []*types.Log{}
+		}
+
+		if receipt.ContractAddress != (common.Address{}) {
+			fields["contractAddress"] = receipt.ContractAddress
+		}
+
+		transactionReceipts[index] = fields
+	}
+
+	return transactionReceipts, nil
+}
+
 // sign is a helper function that signs a transaction with the private key of the given address.
 func (s *TransactionAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 	// Look up the wallet containing the requested signer
