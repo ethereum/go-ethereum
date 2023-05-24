@@ -325,6 +325,16 @@ func (b *Block) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
+// PayloadSize returns the sum of all transactions in a block.
+func (b *Block) PayloadSize() common.StorageSize {
+	// add up all txs sizes
+	var totalSize common.StorageSize
+	for _, tx := range b.transactions {
+		totalSize += tx.Size()
+	}
+	return totalSize
+}
+
 // SanityCheck can be used to prevent that unbounded fields are
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
