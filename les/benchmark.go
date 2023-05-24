@@ -19,7 +19,7 @@ package les
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -59,7 +59,7 @@ func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	b.offset = 0
 	b.randMax = h.blockchain.CurrentHeader().Number.Int64() + 1 - d
 	if b.randMax < 0 {
-		return fmt.Errorf("chain is too short")
+		return errors.New("chain is too short")
 	}
 	if b.reverse {
 		b.offset = d
@@ -137,7 +137,7 @@ func (b *benchmarkHelperTrie) init(h *serverHandler, count int) error {
 		b.headNum = b.sectionCount*params.CHTFrequency - 1
 	}
 	if b.sectionCount == 0 {
-		return fmt.Errorf("no processed sections available")
+		return errors.New("no processed sections available")
 	}
 	return nil
 }
@@ -338,7 +338,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	case <-h.closeCh:
 		clientPipe.Close()
 		serverPipe.Close()
-		return fmt.Errorf("Benchmark cancelled")
+		return errors.New("Benchmark cancelled")
 	}
 
 	setup.totalTime += time.Duration(mclock.Now() - start)
