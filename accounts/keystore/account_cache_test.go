@@ -74,7 +74,7 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 			select {
 			case <-ks.changes:
 			default:
-				return fmt.Errorf("wasn't notified of new accounts")
+				return errors.New("wasn't notified of new accounts")
 			}
 			return nil
 		}
