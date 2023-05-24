@@ -893,6 +893,6 @@ func getGenesis(genesisFlag string, goerliFlag bool, rinkebyFlag bool, sepoliaFl
 	case sepoliaFlag:
 		return core.DefaultSepoliaGenesisBlock(), nil
 	default:
-		return nil, fmt.Errorf("no genesis flag provided")
+		return nil, errors.New("no genesis flag provided")
 	}
 }
