@@ -95,7 +95,7 @@ func (v *BlockValidator) ValidateBody(parent *types.Header, block *types.Block) 
 			blobs += len(tx.BlobHashes())
 		}
 		if blobs > params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob {
-			fmt.Errorf("exceeded block capacity (permitted %d, included %d)", params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob, blobs)
+			return fmt.Errorf("exceeded block capacity (permitted %d, included %d)", params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob, blobs)
 		}
 		if parent == nil {
 			if parent = v.bc.GetHeader(block.ParentHash(), block.NumberU64()-1); parent == nil {
