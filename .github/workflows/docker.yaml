@@ -3,7 +3,7 @@ name: Docker
 on:
   push:
     tags:
-      - scroll-v**
+      - '*'
 
 jobs:
   build-and-push:

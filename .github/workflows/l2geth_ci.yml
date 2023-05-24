@@ -6,9 +6,15 @@ on:
       - develop
       - alpha
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
 name: CI
 jobs:
   build:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - name: Install Go
@@ -21,6 +27,7 @@ jobs:
       run: |
         make geth
   check:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - name: Install Go
@@ -34,6 +41,7 @@ jobs:
         rm -rf $HOME/.cache/golangci-lint
         make lint
   goimports-lint:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - name: Install Go
@@ -53,6 +61,7 @@ jobs:
           exit 1
         fi
   test:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - name: Install Go
