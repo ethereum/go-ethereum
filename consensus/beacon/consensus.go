@@ -275,7 +275,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	if cancun {
 		if err := misc.VerifyEIP4844Header(parent, header); err != nil {
-			return nil
+			return err
 		}
 	}
 	return nil
