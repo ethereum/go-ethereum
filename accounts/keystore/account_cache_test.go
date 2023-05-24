@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
