@@ -1322,7 +1322,7 @@ func (s *BlockChainAPI) BatchCall(ctx context.Context, args TransactionArgs2, bl
 	return result.Return(), result.Err
 }
 
-func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
+func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrides *StateOverride) (map[string]interface{}, error) {
 	if len(args.Transactions) == 0 {
 		return nil, errors.New("bundle missing txs")
 	}
@@ -1336,6 +1336,10 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
 	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
 	if state == nil || err != nil {
+		return nil, err
+	}
+
+	if err := overrides.Apply(state); err != nil {
 		return nil, err
 	}
 
