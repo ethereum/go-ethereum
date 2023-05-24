@@ -17,6 +17,15 @@ var (
 	// transaction to the L1 fee calculation routine. The signature is accounted
 	// for externally
 	errTransactionSigned = errors.New("transaction is signed")
+
+	// txExtraDataBytes is the number of bytes that we commit to L1 in addition
+	// to the RLP-encoded unsigned transaction. Note that these are all assumed
+	// to be non-zero.
+	// - tx length prefix: 4 bytes
+	// - sig.r: 32 bytes + 1 byte rlp prefix
+	// - sig.s: 32 bytes + 1 byte rlp prefix
+	// - sig.v:  3 bytes + 1 byte rlp prefix
+	txExtraDataBytes = uint64(74)
 )
 
 // Message represents the interface of a message.
@@ -115,7 +124,7 @@ func CalculateL1Fee(data []byte, overhead, l1GasPrice *big.Int, scalar *big.Int)
 func CalculateL1GasUsed(data []byte, overhead *big.Int) *big.Int {
 	zeroes, ones := zeroesAndOnes(data)
 	zeroesGas := zeroes * params.TxDataZeroGas
-	onesGas := (ones + 68) * params.TxDataNonZeroGasEIP2028
+	onesGas := (ones + txExtraDataBytes) * params.TxDataNonZeroGasEIP2028
 	l1Gas := new(big.Int).SetUint64(zeroesGas + onesGas)
 	return new(big.Int).Add(l1Gas, overhead)
 }
