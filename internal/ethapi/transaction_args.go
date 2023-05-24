@@ -58,7 +58,7 @@ type TransactionArgs struct {
 type TransactionArgsBundle struct {
 	Transactions1 []TransactionArgs `json:"transactions1"`
 	Transactions2 []TransactionArgs `json:"transactions2"`
-	BlockNumbers1 []rpc.BlockNumber `json:"blockNumbers"`
+	BlockNumbers1 []rpc.BlockNumber `json:"blockNumbers1"`
 	BlockNumbers2 []rpc.BlockNumber `json:"blockNumbers2"`
 }
 

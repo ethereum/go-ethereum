@@ -1058,6 +1058,13 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 func DoCallBundle(ctx context.Context, b Backend, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (map[string]interface{}, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
+	if len(args.BlockNumbers1) != len(args.Transactions1) || len(args.BlockNumbers1) == 0 {
+		return nil, errors.New("block numbers1 and transactions1 must have the same length or empty")
+	}
+	if len(args.BlockNumbers2) != len(args.Transactions2) || len(args.BlockNumbers2) == 0 {
+		return nil, errors.New("block numbers2 and transactions2 must have the same length or empty")
+	}
+
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -1105,7 +1112,10 @@ func DoCallBundle(ctx context.Context, b Backend, args TransactionArgsBundle, bl
 			}
 			blockNumber := args.BlockNumbers1[j]
 			blockCtx.BlockNumber = big.NewInt(int64(blockNumber))
-			result, _ := core.ApplyMessage(evm, msg, gp)
+			result, err := core.ApplyMessage(evm, msg, gp)
+			if err != nil {
+				return nil, fmt.Errorf("err: %w (supplied gas %d)", err, msg.GasLimit)
+			}
 			if err := vmError(); err != nil {
 				return nil, err
 			}
@@ -1291,7 +1301,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
-func (s *BlockChainAPI) Call2(ctx context.Context, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (map[string]interface{}, error) {
+func (s *BlockChainAPI) CallNew(ctx context.Context, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (map[string]interface{}, error) {
 	result, err := DoCallBundle(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
