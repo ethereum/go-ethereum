@@ -171,18 +171,18 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 	// If any clique value overwrites an explicit header value, fail
 	// to avoid silently building a block with unexpected values.
 	if i.Header.Extra != nil {
-		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique will overwrite provided extra data"))
+		return nil, NewError(ErrorConfig, errors.New("sealing with clique will overwrite provided extra data"))
 	}
 	header := block.Header()
 	if i.Clique.Voted != nil {
 		if i.Header.Coinbase != nil {
-			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided coinbase"))
+			return nil, NewError(ErrorConfig, errors.New("sealing with clique and voting will overwrite provided coinbase"))
 		}
 		header.Coinbase = *i.Clique.Voted
 	}
 	if i.Clique.Authorize != nil {
 		if i.Header.Nonce != nil {
-			return nil, NewError(ErrorConfig, fmt.Errorf("sealing with clique and voting will overwrite provided nonce"))
+			return nil, NewError(ErrorConfig, errors.New("sealing with clique and voting will overwrite provided nonce"))
 		}
 		if *i.Clique.Authorize {
 			header.Nonce = [8]byte{}
