@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // resultStore implements a structure for maintaining fetchResults, tracking their
@@ -76,17 +74,17 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 //	throttled - if true, the store is at capacity, this particular header is not prio now
 //	item      - the result to store data into
 //	err       - any error that occurred
-func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
+func (r *resultStore) AddFetch(task *fetchTask, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	var index int
-	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
+	item, index, stale, throttled, err = r.getFetchResult(task.header.Number.Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}
 	if item == nil {
-		item = newFetchResult(header, fastSync)
+		item = newFetchResult(task.header, fastSync)
 		r.items[index] = item
 	}
 	return stale, throttled, item, err

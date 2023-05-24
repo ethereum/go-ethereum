@@ -787,10 +787,10 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Instrument the downloader to signal body requests
 	var bodiesHave, receiptsHave atomic.Int32
-	tester.downloader.bodyFetchHook = func(headers []*types.Header) {
+	tester.downloader.bodyFetchHook = func(headers []*fetchTask) {
 		bodiesHave.Add(int32(len(headers)))
 	}
-	tester.downloader.receiptFetchHook = func(headers []*types.Header) {
+	tester.downloader.receiptFetchHook = func(headers []*fetchTask) {
 		receiptsHave.Add(int32(len(headers)))
 	}
 	// Synchronise with the peer and make sure all blocks were retrieved

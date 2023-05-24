@@ -110,7 +110,7 @@ func TestBasics(t *testing.T) {
 	for i, header := range headers {
 		hashes[i] = header.Hash()
 	}
-	q.Schedule(headers, hashes, 1)
+	q.Schedule(testGenesis.Header(), headers, hashes)
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
@@ -131,10 +131,10 @@ func TestBasics(t *testing.T) {
 			t.Fatal("should throttle")
 		}
 		// But we should still get the first things to fetch
-		if got, exp := len(fetchReq.Headers), 5; got != exp {
+		if got, exp := len(fetchReq.Tasks), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Tasks[0].header.Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
@@ -154,7 +154,7 @@ func TestBasics(t *testing.T) {
 		}
 		// And not get any fetches at all, since it was throttled to begin with
 		if fetchReq != nil {
-			t.Fatalf("should have no fetches, got %d", len(fetchReq.Headers))
+			t.Fatalf("should have no fetches, got %d", len(fetchReq.Tasks))
 		}
 	}
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
@@ -173,10 +173,10 @@ func TestBasics(t *testing.T) {
 			t.Fatal("should throttle")
 		}
 		// But we should still get the first things to fetch
-		if got, exp := len(fetchReq.Headers), 5; got != exp {
+		if got, exp := len(fetchReq.Tasks), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Tasks[0].header.Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
@@ -204,7 +204,7 @@ func TestEmptyBlocks(t *testing.T) {
 	for i, header := range headers {
 		hashes[i] = header.Hash()
 	}
-	q.Schedule(headers, hashes, 1)
+	q.Schedule(testGenesis.Header(), headers, hashes)
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
@@ -289,9 +289,14 @@ func XTestDelivery(t *testing.T) {
 				hashes[i] = header.Hash()
 			}
 			l := len(headers)
+
+			var parent = testGenesis.Header()
+			if c > 1 {
+				parent = world.headers(c - 1)[0]
+			}
 			//fmt.Printf("scheduling %d headers, first %d last %d\n",
 			//	l, headers[0].Number.Uint64(), headers[len(headers)-1].Number.Uint64())
-			q.Schedule(headers, hashes, uint64(c))
+			q.Schedule(parent, headers, hashes)
 			c += l
 		}
 	}()
@@ -322,9 +327,9 @@ func XTestDelivery(t *testing.T) {
 					txset     [][]*types.Transaction
 					uncleset  [][]*types.Header
 				)
-				numToSkip := rand.Intn(len(f.Headers))
-				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txset = append(txset, world.getTransactions(hdr.Number.Uint64()))
+				numToSkip := rand.Intn(len(f.Tasks))
+				for _, task := range f.Tasks[0 : len(f.Tasks)-numToSkip] {
+					txset = append(txset, world.getTransactions(task.header.Number.Uint64()))
 					uncleset = append(uncleset, emptyList)
 				}
 				var (
@@ -357,8 +362,8 @@ func XTestDelivery(t *testing.T) {
 			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
 				var rcs [][]*types.Receipt
-				for _, hdr := range f.Headers {
-					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
+				for _, task := range f.Tasks {
+					rcs = append(rcs, world.getReceipts(task.header.Number.Uint64()))
 				}
 				hasher := trie.NewStackTrie(nil)
 				hashes := make([]common.Hash, len(rcs))

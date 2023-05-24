@@ -150,7 +150,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		// Try and process the block
 		err := blockchain.engine.VerifyHeader(blockchain, block.Header())
 		if err == nil {
-			err = blockchain.validator.ValidateBody(block)
+			err = blockchain.validator.ValidateBody(nil, block)
 		}
 		if err != nil {
 			if err == ErrKnownBlock {

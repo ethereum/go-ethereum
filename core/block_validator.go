@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -50,12 +51,16 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
-func (v *BlockValidator) ValidateBody(block *types.Block) error {
+//
+// Note, the parent's presence necessity was introduced in Cancun where the
+// blob excess data gas field is the current block depends on the value in
+// the parent block but needs the transaction list too to validate. If the
+// parent is nil but needed, the validator will attept to load it from disk.
+func (v *BlockValidator) ValidateBody(parent *types.Header, block *types.Block) error {
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
-
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.
 	header := block.Header()
@@ -78,10 +83,29 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return fmt.Errorf("withdrawals root hash mismatch (header value %x, calculated %x)", *header.WithdrawalsHash, hash)
 		}
 	} else if block.Withdrawals() != nil {
-		// Withdrawals are not allowed prior to shanghai fork
+		// Withdrawals are not allowed prior to Shanghai fork
 		return errors.New("withdrawals present in block body")
 	}
-
+	// Blob transactions may be present after the Cancun fork, validate against
+	// the excessDataGas field. Note, the presence of the field itself must have
+	// already been validated when verifying the header, we only check its value.
+	if header.ExcessDataGas != nil {
+		var blobs int
+		for _, tx := range block.Transactions() {
+			blobs += len(tx.BlobHashes())
+		}
+		if blobs > params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob {
+			fmt.Errorf("exceeded block capacity (permitted %d, included %d)", params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob, blobs)
+		}
+		if parent == nil {
+			if parent = v.bc.GetHeader(block.ParentHash(), block.NumberU64()-1); parent == nil {
+				return consensus.ErrUnknownAncestor
+			}
+		}
+		if excessDataGas := misc.CalcExcessDataGas(parent.ExcessDataGas, blobs); header.ExcessDataGas.Cmp(excessDataGas) != 0 {
+			return fmt.Errorf("excess data gas mismatch (header value %v, calculated %v)", header.ExcessDataGas, excessDataGas)
+		}
+	}
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor

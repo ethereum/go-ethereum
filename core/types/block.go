@@ -152,10 +152,10 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions, no uncles and no withdrawals.
 func (h *Header) EmptyBody() bool {
-	if h.WithdrawalsHash == nil {
-		return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
+	if h.WithdrawalsHash != nil {
+		return h.TxHash == EmptyTxsHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
 	}
-	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
+	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
@@ -351,6 +351,13 @@ func (b *Block) BaseFee() *big.Int {
 
 func (b *Block) Withdrawals() Withdrawals {
 	return b.withdrawals
+}
+
+func (b *Block) ExcessDataGas() *big.Int {
+	if b.header.ExcessDataGas == nil {
+		return nil
+	}
+	return new(big.Int).Set(b.header.ExcessDataGas)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }

@@ -28,8 +28,9 @@ import (
 // is only responsible for validating block contents, as the header validation is
 // done by the specific consensus engines.
 type Validator interface {
-	// ValidateBody validates the given block's content.
-	ValidateBody(block *types.Block) error
+	// ValidateBody validates the given block's content. If the parent is nil,
+	// but it is required, the validator should look it up on chain.
+	ValidateBody(parent *types.Header, block *types.Block) error
 
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.

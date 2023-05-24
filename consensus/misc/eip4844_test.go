@@ -24,6 +24,44 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+func TestCalcExcessDataGas(t *testing.T) {
+	var tests = []struct {
+		parent int64
+		blobs  int
+		want   int64
+	}{
+		// The excess data gas should not increase from zero if the used blob
+		// slots are below - or equal - to the target.
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob, 0},
+
+		// If the target data gas is exceeded, the excessDataGas should increase
+		// by however much it was overshot
+		{0, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 1, params.BlobTxDataGasPerBlob},
+		{1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 1, params.BlobTxDataGasPerBlob + 1},
+		{1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 2, 2*params.BlobTxDataGasPerBlob + 1},
+
+		// The excess data gas should decrease by however much the target was
+		// under-shot, capped at zero.
+		{params.BlobTxTargetDataGasPerBlock, params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob, params.BlobTxTargetDataGasPerBlock},
+		{params.BlobTxTargetDataGasPerBlock, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 1, params.BlobTxDataGasPerBlob},
+		{params.BlobTxTargetDataGasPerBlock, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 2, 0},
+		{params.BlobTxDataGasPerBlob - 1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 1, 0},
+	}
+	for _, tt := range tests {
+		result := CalcExcessDataGas(big.NewInt(tt.parent), tt.blobs)
+		if result.Int64() != tt.want {
+			t.Errorf("excess data gas mismatch: have %v, want %v", result, tt.want)
+		}
+	}
+	// Test nil value for parent
+	result := CalcExcessDataGas(nil, (params.BlobTxTargetDataGasPerBlock/params.BlobTxDataGasPerBlob)+1)
+	if result.Int64() != params.BlobTxDataGasPerBlob {
+		t.Errorf("nil parent excess data gas mismatch: have %v, want %v", result, params.BlobTxDataGasPerBlob)
+	}
+}
+
 func TestCalcBlobFee(t *testing.T) {
 	tests := []struct {
 		excessDataGas int64
