@@ -56,12 +56,15 @@ type TransactionArgs struct {
 }
 
 type TransactionArgsBundle struct {
-	Transactions []TransactionArgs `json:"transactions"`
+	Transactions1 []TransactionArgs `json:"transactions1"`
+	Transactions2 []TransactionArgs `json:"transactions2"`
+	BlockNumbers1 []rpc.BlockNumber `json:"blockNumbers"`
+	BlockNumbers2 []rpc.BlockNumber `json:"blockNumbers2"`
 }
 
 type CallBundleArgs struct {
 	Transactions           []TransactionArgs     `json:"transactions"`
-	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
+	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
 	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 	Coinbase               *string               `json:"coinbase"`
 	Timestamp              *uint64               `json:"timestamp"`
