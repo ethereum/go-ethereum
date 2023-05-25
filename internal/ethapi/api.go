@@ -1327,6 +1327,10 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 		return nil, errors.New("bundle missing txs")
 	}
 
+	if len(args.BlockNumbers) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and block numbers mismatch")
+	}
+
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	timeoutMilliSeconds := int64(5000)
@@ -1456,6 +1460,159 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 	ret["totalGasUsed"] = totalGasUsed
 	ret["stateBlockNumber"] = parent.Number.Int64()
 
+	return ret, nil
+}
+
+func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args CallBundleArgs, overrides *StateOverride) (map[string]interface{}, error) {
+	if len(args.Transactions) == 0 {
+		return nil, errors.New("bundle missing txs")
+	}
+
+	if len(args.BlockNumbers) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and block numbers mismatch")
+	}
+
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	state, parent, err := b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
+
+	timestamp := parent.Time + 1
+	if args.Timestamp != nil {
+		timestamp = *args.Timestamp
+	}
+	coinbase := parent.Coinbase
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
+	}
+	difficulty := parent.Difficulty
+	if args.Difficulty != nil {
+		difficulty = args.Difficulty
+	}
+	gasLimit := parent.GasLimit
+	if args.GasLimit != nil {
+		gasLimit = *args.GasLimit
+	}
+	var baseFee *big.Int
+	if args.BaseFee != nil {
+		baseFee = args.BaseFee
+	} else if b.ChainConfig().IsLondon(big.NewInt(args.BlockNumbers[0].Int64())) {
+		baseFee = misc.CalcBaseFee(b.ChainConfig(), parent)
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	vmconfig := vm.Config{}
+	vmconfig.NoBaseFee = true
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+	coinbaseBalanceBefore := state.GetBalance(coinbase)
+
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
+	for i, tx := range args.Transactions {
+		header := &types.Header{
+			ParentHash: parent.Hash(),
+			Number:     big.NewInt(int64(args.BlockNumbers[i])),
+			GasLimit:   gasLimit,
+			Time:       timestamp,
+			Difficulty: difficulty,
+			Coinbase:   coinbase,
+			BaseFee:    baseFee,
+		}
+		msg, err := tx.ToMessage(0, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
+		randomHash := common.HexToHash("0x" + strconv.Itoa(i))
+		state.SetTxContext(randomHash, i)
+
+		receipt, result, err := core.ApplyTransactionWithResult(b.ChainConfig(), chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig, randomHash)
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+
+		txHash := randomHash.String()
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+		logs := receipt.Logs
+		if logs == nil {
+			logs = []*types.Log{}
+		}
+		jsonResult := map[string]interface{}{
+			"txHash":  txHash,
+			"gasUsed": receipt.GasUsed,
+			"logs":    logs,
+			"status":  receipt.Status,
+		}
+		totalGasUsed += receipt.GasUsed
+		fmt.Println("result", result)
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
+		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
+		jsonResult["gasPrice"] = new(big.Int).Div(coinbaseDiffTx, big.NewInt(int64(receipt.GasUsed))).String()
+		jsonResult["gasUsed"] = receipt.GasUsed
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
+	ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["gasFees"] = gasFees.String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
+	ret["totalGasUsed"] = totalGasUsed
+	ret["stateBlockNumber"] = parent.Number.Int64()
+
+	return ret, nil
+}
+
+func (s *BundleAPI) CallBundleArray(ctx context.Context, args []CallBundleArgs, overrides *StateOverride) ([]map[string]interface{}, error) {
+	ret := []map[string]interface{}{}
+	for _, arg := range args {
+		result, err := doCallBundle(ctx, s.b, s.chain, arg, overrides)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, result)
+	}
 	return ret, nil
 }
 
