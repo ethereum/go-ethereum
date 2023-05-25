@@ -86,6 +86,10 @@ func (mt *zkTrieImplTestWrapper) TryGet(key []byte) ([]byte, error) {
 	return mt.ZkTrieImpl.TryGet(zkt.NewHashFromBytes(key))
 }
 
+func (mt *zkTrieImplTestWrapper) TryDelete(key []byte) error {
+	return mt.ZkTrieImpl.TryDelete(zkt.NewHashFromBytes(key))
+}
+
 // TryUpdateAccount will abstract the write of an account to the trie
 func (mt *zkTrieImplTestWrapper) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	value, flag := acc.MarshalFields()
@@ -269,6 +273,20 @@ func TestMerkleTree_UpdateAccount(t *testing.T) {
 	assert.Equal(t, acc2.CodeSize, acc.CodeSize)
 
 	bt, err = mt.TryGet(common.HexToAddress("0x8dE13967F19410A7991D63c2c0179feBFDA0c261").Bytes())
+	assert.Nil(t, err)
+	assert.Nil(t, bt)
+
+	err = mt.TryDelete(common.HexToHash("0x05fDbDfaE180345C6Cff5316c286727CF1a43327").Bytes())
+	assert.Nil(t, err)
+
+	bt, err = mt.TryGet(common.HexToAddress("0x05fDbDfaE180345C6Cff5316c286727CF1a43327").Bytes())
+	assert.Nil(t, err)
+	assert.Nil(t, bt)
+
+	err = mt.TryDelete(common.HexToAddress("0x4cb1aB63aF5D8931Ce09673EbD8ae2ce16fD6571").Bytes())
+	assert.Nil(t, err)
+
+	bt, err = mt.TryGet(common.HexToAddress("0x4cb1aB63aF5D8931Ce09673EbD8ae2ce16fD6571").Bytes())
 	assert.Nil(t, err)
 	assert.Nil(t, bt)
 }
