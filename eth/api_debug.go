@@ -49,7 +49,7 @@ func NewDebugAPI(eth *Ethereum) *DebugAPI {
 func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	opts := &state.DumpConfig{
 		OnlyWithAddresses: true,
-		Max:               maxAccountRangeResults, // Sanity limit over RPC
+		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
 	if blockNr == rpc.PendingBlockNumber {
 		// If we're dumping the pending state, we need to request
@@ -127,8 +127,8 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 	return results, nil
 }
 
-// maxAccountRangeResults is the maximum number of results to be returned per call
-const maxAccountRangeResults = 256
+// AccountRangeMaxResults is the maximum number of results to be returned per call
+const AccountRangeMaxResults = 256
 
 // AccountRange enumerates all accounts in the given block and start point in paging request
 func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
@@ -184,8 +184,8 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		Start:             start,
 		Max:               uint64(maxResults),
 	}
-	if maxResults > maxAccountRangeResults || maxResults <= 0 {
-		opts.Max = maxAccountRangeResults
+	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
+		opts.Max = AccountRangeMaxResults
 	}
 	return stateDb.IteratorDump(opts), nil
 }
@@ -349,7 +349,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		if num.Int64() < 0 {
 			block := api.eth.blockchain.CurrentBlock()
 			if block == nil {
-				return 0, fmt.Errorf("current block missing")
+				return 0, errors.New("current block missing")
 			}
 			return block.Number.Uint64(), nil
 		}
@@ -369,7 +369,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		return 0, err
 	}
 	if start == end {
-		return 0, fmt.Errorf("from and to needs to be different")
+		return 0, errors.New("from and to needs to be different")
 	}
 	if start > end {
 		delta = -1
