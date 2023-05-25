@@ -323,7 +323,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.Address{}, errors.New("etherbase must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined
