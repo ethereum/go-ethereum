@@ -41,6 +41,8 @@ type Point [32]byte
 // Claim is a claimed evaluation value in a specific point.
 type Claim [32]byte
 
+var PrecompileReturnValue [64]byte
+
 // useCKZG controls whether the cryptography should use the Go or C backend.
 var useCKZG atomic.Bool
 
@@ -61,6 +63,8 @@ func UseCKZG(use bool) error {
 	} else {
 		gokzgIniter.Do(gokzgInit)
 	}
+	// Compute the precompile return value using go-kzg
+	PrecompileReturnValue = goComputePrecompileReturnValue()
 	return nil
 }
 
