@@ -309,7 +309,7 @@ func (q *queue) Schedule(parent *types.Header, headers []*types.Header, hashes [
 		// Make sure chain order is honoured and preserved throughout
 		hash := hashes[i]
 		if header.Number == nil || header.Number.Uint64() != parent.Number.Uint64()+1 {
-			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash, "expected", parent.Number)
+			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash, "expected", parent.Number.Uint64()+1)
 			break
 		}
 		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash {
