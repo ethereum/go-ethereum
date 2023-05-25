@@ -371,7 +371,7 @@ func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) *Account {
 }
 
 func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) *Account {
-	tx, _:= t.resolve(ctx)
+	tx, _ := t.resolve(ctx)
 	if tx == nil {
 		return nil
 	}
@@ -515,7 +515,7 @@ func (t *Transaction) AccessList(ctx context.Context) *[]*AccessTuple {
 }
 
 func (t *Transaction) R(ctx context.Context) hexutil.Big {
-	tx, _:= t.resolve(ctx)
+	tx, _ := t.resolve(ctx)
 	if tx == nil {
 		return hexutil.Big{}
 	}
