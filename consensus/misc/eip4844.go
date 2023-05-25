@@ -73,9 +73,9 @@ func CalcExcessDataGas(parentExcessDataGas *big.Int, blobs int) *big.Int {
 
 	targetGas := big.NewInt(params.BlobTxTargetDataGasPerBlock)
 	if excessDataGas.Cmp(targetGas) < 0 {
-		return new(big.Int)
+		return excessDataGas.SetUint64(0)
 	}
-	return new(big.Int).Sub(excessDataGas, targetGas)
+	return excessDataGas.Sub(excessDataGas, targetGas)
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess data gas field.
