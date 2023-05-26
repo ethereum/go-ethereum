@@ -1068,7 +1068,14 @@ func (c *CallResult) Status() hexutil.Uint64 {
 func (b *Block) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
-	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap())
+	if b.numberOrHash == nil {
+		return nil, errors.New("block number or block hash not found")
+	}
+	state, header, err := b.r.backend.StateAndHeaderByNumberOrHash(ctx, *b.numberOrHash)
+	if err != nil {
+		return nil, err
+	}
+	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, state, header, nil, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -1131,7 +1138,11 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, err := ethapi.DoCall(ctx, p.r.backend, args.Data, pendingBlockNr, nil, nil, p.r.backend.RPCEVMTimeout(), p.r.backend.RPCGasCap())
+	state, header, err := p.r.backend.StateAndHeaderByNumberOrHash(ctx, pendingBlockNr)
+	if err != nil {
+		return nil, err
+	}
+	result, err := ethapi.DoCall(ctx, p.r.backend, args.Data, state, header, nil, nil, p.r.backend.RPCEVMTimeout(), p.r.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
