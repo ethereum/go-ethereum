@@ -403,7 +403,7 @@ var (
 				return nil, fmt.Errorf("failed to get abi of registry metadata:%w", err)
 			}
 
-			params, err := _abi.Methods["{{.Original.Name}}"].Inputs.Unpack(calldata[4:])
+			out, err := _abi.Methods["{{.Original.Name}}"].Inputs.Unpack(calldata[4:])
 			if err != nil {
 				return nil, fmt.Errorf("failed to unpack {{.Original.Name}} params data: %w", err)
 			}		
@@ -411,18 +411,16 @@ var (
 			var paramsResult = new({{.Normalized.Name}}Params)
 			value := reflect.ValueOf(paramsResult).Elem()
 
-			if value.NumField() != len(params) {
+			if value.NumField() != len(out) {
 				return nil, fmt.Errorf("failed to match calldata with param field number")
 			}
 		
-			for i := range params {
-				if !value.Field(i).CanSet() {
-					return nil, fmt.Errorf("failed to set param value in field %v, value %v", value.Field(i), params[i])
-				}
-				value.Field(i).Set(reflect.ValueOf(params[i]))
-			}
-			
-			return paramsResult, nil 
+			{{range $i, $t := .Normalized.Inputs}}
+			out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+
+			return &{{.Normalized.Name}}Params{
+				{{range $i, $_ := .Normalized.Inputs}} Param_{{.Name}} : out{{$i}},{{end}} 
+			}, nil 
 		}
 
 		{{end}}
