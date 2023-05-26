@@ -554,7 +554,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		if num.Int64() < 0 {
 			block := api.eth.blockchain.CurrentBlock()
 			if block == nil {
-				return 0, fmt.Errorf("current block missing")
+				return 0, errors.New("current block missing")
 			}
 			return block.Number.Uint64(), nil
 		}
@@ -574,7 +574,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		return 0, err
 	}
 	if start == end {
-		return 0, fmt.Errorf("from and to needs to be different")
+		return 0, errors.New("from and to needs to be different")
 	}
 	if start > end {
 		delta = -1
