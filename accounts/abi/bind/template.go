@@ -400,7 +400,7 @@ var (
 
 			_abi, err := {{$metaType}}MetaData.GetAbi()
 			if err != nil {
-				return nil, fmt.Errorf("failed to get abi of registry metadata:%w", err)
+				return nil, fmt.Errorf("failed to get abi of registry metadata: %w", err)
 			}
 
 			out, err := _abi.Methods["{{.Original.Name}}"].Inputs.Unpack(calldata[4:])
