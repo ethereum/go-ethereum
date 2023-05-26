@@ -997,6 +997,10 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err := overrides.Apply(state); err != nil {
 		return nil, err
 	}
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if blockOverrides != nil {
+		blockOverrides.Apply(&blockCtx)
+	}
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1008,17 +1012,16 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
+	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx)
+}
 
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+	msg, err := args.ToMessage(gp.Gas(), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
-	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
-	if blockOverrides != nil {
-		blockOverrides.Apply(&blockCtx)
-	}
-	evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
+	evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, blockContext)
 
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -1028,7 +1031,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}()
 
 	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
@@ -1090,6 +1092,90 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
+}
+
+// CallBatch is a batch of calls to be simulated sequentially.
+type CallBatch struct {
+	BlockOverrides *BlockOverrides
+	StateOverrides *StateOverride
+	Calls          []TransactionArgs
+}
+
+type callResult struct {
+	ReturnValue hexutil.Bytes  `json:"return"`
+	Logs        []*types.Log   `json:"logs"`
+	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	Error       string         `json:"error"`
+}
+
+// Multicall executes series of transactions on top of a base state.
+// The transactions are packed into blocks. For each block, block header
+// fields can be overridden. The state can also be overridden prior to
+// execution of each block.
+//
+// Note, this function doesn't make any changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash) ([][]callResult, error) {
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	// Setup context so it may be cancelled before the calls completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var (
+		cancel  context.CancelFunc
+		timeout = s.b.RPCEVMTimeout()
+	)
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	var (
+		results = make([][]callResult, len(blocks))
+		// Each tx and all the series of txes shouldn't consume more gas than cap
+		globalGasCap = s.b.RPCGasCap()
+		gp           = new(core.GasPool).AddGas(globalGasCap)
+	)
+	for bi, block := range blocks {
+		// State overrides are applied prior to execution of a block
+		if err := block.StateOverrides.Apply(state); err != nil {
+			return nil, err
+		}
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		if block.BlockOverrides != nil {
+			block.BlockOverrides.Apply(&blockContext)
+		}
+		results[bi] = make([]callResult, len(block.Calls))
+		for i, call := range block.Calls {
+			// Hack to get logs from statedb which stores logs by txhash.
+			txhash := common.BigToHash(big.NewInt(int64(i)))
+			state.SetTxContext(txhash, i)
+			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext)
+			if err != nil {
+				return nil, err
+			}
+			// If the result contains a revert reason, try to unpack it.
+			if len(result.Revert()) > 0 {
+				result.Err = newRevertError(result)
+			}
+			logs := state.GetLogs(txhash, blockContext.BlockNumber.Uint64(), common.Hash{})
+			// Clear the garbage txhash that was filled in.
+			for _, l := range logs {
+				l.TxHash = common.Hash{}
+			}
+			callRes := callResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+			if result.Err != nil {
+				callRes.Error = result.Err.Error()
+			}
+			results[bi][i] = callRes
+		}
+	}
+	return results, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {

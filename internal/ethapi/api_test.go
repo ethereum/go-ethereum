@@ -596,6 +596,178 @@ func TestCall(t *testing.T) {
 	}
 }
 
+func TestMulticall(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		accounts  = newAccounts(3)
+		genBlocks = 10
+		signer    = types.HomesteadSigner{}
+		genesis   = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		//    value: 1000 wei
+		//    fee:   0 wei
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	}))
+	var (
+		randomAccounts = newAccounts(3)
+	)
+	type res struct {
+		ReturnValue string `json:"return"`
+		Error       string
+		Logs        string
+		GasUsed     string
+	}
+	var testSuite = []struct {
+		blocks    []CallBatch
+		expectErr error
+		want      [][]res
+	}{
+		// First value transfer OK after state override, second one should succeed
+		// because of first transfer.
+		{
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
+				},
+				Calls: []TransactionArgs{{
+					From:  &randomAccounts[0].addr,
+					To:    &randomAccounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				}, {
+					From:  &randomAccounts[1].addr,
+					To:    &randomAccounts[2].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				}},
+			}},
+			want: [][]res{{
+				res{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+				},
+				res{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+				},
+			},
+			},
+		}, {
+			// Block overrides should work, each call is simulated on a different block number
+			blocks: []CallBatch{{
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(10)),
+				},
+				Calls: []TransactionArgs{
+					{
+						From: &accounts[0].addr,
+						Input: &hexutil.Bytes{
+							0x43,             // NUMBER
+							0x60, 0x00, 0x52, // MSTORE offset 0
+							0x60, 0x20, 0x60, 0x00, 0xf3,
+						},
+					},
+				},
+			}, {
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(11)),
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[1].addr,
+					Input: &hexutil.Bytes{
+						0x43,             // NUMBER
+						0x60, 0x00, 0x52, // MSTORE offset 0
+						0x60, 0x20, 0x60, 0x00, 0xf3,
+					},
+				}},
+			}},
+			want: [][]res{{
+				res{
+					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000a",
+					GasUsed:     "0xe891",
+				},
+			}, {
+				res{
+					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
+					GasUsed:     "0xe891",
+				},
+			}},
+		},
+		// Test on solidity storage example. Set value in one call, read in next.
+		{
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: OverrideAccount{
+						Code: hex2Bytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
+					},
+				},
+				Calls: []TransactionArgs{{
+					// Set value to 5
+					From:  &randomAccounts[0].addr,
+					To:    &randomAccounts[2].addr,
+					Input: hex2Bytes("6057361d0000000000000000000000000000000000000000000000000000000000000005"),
+				}, {
+					// Read value
+					From:  &randomAccounts[0].addr,
+					To:    &randomAccounts[2].addr,
+					Input: hex2Bytes("2e64cec1"),
+				},
+				},
+			}},
+			want: [][]res{{{
+				ReturnValue: "0x",
+				GasUsed:     "0xaacc",
+			}, {
+				ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
+				GasUsed:     "0x5bb7",
+			}}},
+		},
+	}
+
+	for i, tc := range testSuite {
+		result, err := api.Multicall(context.Background(), tc.blocks, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if tc.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
+				continue
+			}
+			if !errors.Is(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		// Turn result into res-struct
+		var have [][]res
+		resBytes, _ := json.Marshal(result)
+		if err := json.Unmarshal(resBytes, &have); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+		if !reflect.DeepEqual(have, tc.want) {
+			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, tc.want)
+		}
+	}
+}
+
 type Account struct {
 	key  *ecdsa.PrivateKey
 	addr common.Address
