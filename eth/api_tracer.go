@@ -471,6 +471,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		}
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, balacne, block.Number())
+		// Set nonce to fix issue #256
+		msg.SetNonce(statedb.GetNonce(*tx.From()))
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
 		vmenv := vm.NewEVM(vmctx, statedb, XDCxState, api.config, vm.Config{})
