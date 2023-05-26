@@ -206,7 +206,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  newUint64(0),
+		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
