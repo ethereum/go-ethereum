@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -183,7 +184,7 @@ func runRandTest(rt randTest) error {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
-				return fmt.Errorf("hash mismatch in opItercheckhash")
+				return errors.New("hash mismatch in opItercheckhash")
 			}
 		case opProve:
 			rt[i].err = tr.Prove(step.key, 0, proofDb{})
