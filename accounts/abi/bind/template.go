@@ -87,9 +87,11 @@ const tmplSourceGo = `
 package {{.Package}}
 
 import (
-	"math/big"
-	"strings"
 	"errors"
+	"fmt"
+	"math/big"
+	"reflect"
+	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -376,6 +378,54 @@ var (
 		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
+	{{end}}
+
+	{{$metaType := .Type}}
+	{{range .Transacts}}
+		{{if ne (len .Normalized.Inputs) 0}}
+
+		// {{.Normalized.Name}}Params is an auto generated read-only Go binding of transcaction calldata params
+		type {{.Normalized.Name}}Params struct {
+			{{range $i, $_ := .Normalized.Inputs}} Param_{{.Name}} {{bindtype .Type $structs}}
+			{{end}}
+		}
+
+		// Parse {{.Normalized.Name}} method from calldata of a transaction
+		// 
+		// Solidity: {{.Original.String}}
+		func Parse{{.Normalized.Name}}(calldata []byte) (*{{.Normalized.Name}}Params, error) {
+			if len(calldata) <= 4 {
+				return nil, fmt.Errorf("invalid calldata input")
+			}
+
+			_abi, err := {{$metaType}}MetaData.GetAbi()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get abi of registry metadata:%w", err)
+			}
+
+			params, err := _abi.Methods["{{.Original.Name}}"].Inputs.Unpack(calldata[4:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to unpack {{.Original.Name}} params data: %w", err)
+			}		
+
+			var paramsResult = new({{.Normalized.Name}}Params)
+			value := reflect.ValueOf(paramsResult).Elem()
+
+			if value.NumField() != len(params) {
+				return nil, fmt.Errorf("failed to match calldata with param field number")
+			}
+		
+			for i := range params {
+				if !value.Field(i).CanSet() {
+					return nil, fmt.Errorf("failed to set param value in field %v, value %v", value.Field(i), params[i])
+				}
+				value.Field(i).Set(reflect.ValueOf(params[i]))
+			}
+			
+			return paramsResult, nil 
+		}
+
+		{{end}}
 	{{end}}
 
 	{{if .Fallback}} 
