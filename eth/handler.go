@@ -625,7 +625,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int
-		if tx.Size() <= txMaxBroadcastSize {
+		if tx.Size() <= txMaxBroadcastSize && tx.Type() != types.BlobTxType {
 			numDirect = int(math.Sqrt(float64(len(peers))))
 		}
 		// Send the tx unconditionally to a subset of our peers

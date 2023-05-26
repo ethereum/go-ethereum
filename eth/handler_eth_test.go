@@ -30,12 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
@@ -71,7 +73,11 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.PooledTransactionsPacket:
-		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
+		var txs []*types.Transaction
+		for _, tx := range *packet {
+			txs = append(txs, tx.Transaction)
+		}
+		h.txBroadcasts.Send(txs)
 		return nil
 
 	default:
@@ -437,6 +443,87 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 		txs[nonce] = tx
+	}
+	source.txpool.Add(txs, false, false)
+
+	// Iterate through all the sinks and ensure they all got the transactions
+	for i := range sinks {
+		for arrived, timeout := 0, false; arrived < len(txs) && !timeout; {
+			select {
+			case event := <-txChs[i]:
+				arrived += len(event.Txs)
+			case <-time.After(2 * time.Second):
+				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
+				timeout = true
+			}
+		}
+	}
+}
+
+func TestBlobTransactionPropagation68(t *testing.T) { testBlobTransactionPropagation(t, eth.ETH68) }
+
+func testBlobTransactionPropagation(t *testing.T, protocol uint) {
+	t.Parallel()
+
+	// Create a source handler to send transactions from and a number of sinks
+	// to receive them. We need multiple sinks since a one-to-one peering would
+	// broadcast all transactions without announcement.
+	source := newTestHandler()
+	source.handler.snapSync.Store(false) // Avoid requiring snap, otherwise some will be dropped below
+	defer source.close()
+
+	sinks := make([]*testHandler, 10)
+	for i := 0; i < len(sinks); i++ {
+		sinks[i] = newTestHandler()
+		defer sinks[i].close()
+
+		sinks[i].handler.acceptTxs.Store(true) // mark synced to accept transactions
+	}
+	// Interconnect all the sink handlers with the source handler
+	for i, sink := range sinks {
+		sink := sink // Closure for gorotuine below
+
+		sourcePipe, sinkPipe := p2p.MsgPipe()
+		defer sourcePipe.Close()
+		defer sinkPipe.Close()
+
+		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i + 1)}, "", nil, sourcePipe), sourcePipe, source.txpool)
+		sinkPeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, sink.txpool)
+		defer sourcePeer.Close()
+		defer sinkPeer.Close()
+
+		go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
+			return eth.Handle((*ethHandler)(source.handler), peer)
+		})
+		go sink.handler.runEthPeer(sinkPeer, func(peer *eth.Peer) error {
+			return eth.Handle((*ethHandler)(sink.handler), peer)
+		})
+	}
+	// Subscribe to all the transaction pools
+	txChs := make([]chan core.NewTxsEvent, len(sinks))
+	for i := 0; i < len(sinks); i++ {
+		txChs[i] = make(chan core.NewTxsEvent, 1024)
+
+		sub := sinks[i].txpool.SubscribeNewTxsEvent(txChs[i])
+		defer sub.Unsubscribe()
+	}
+	// Fill the source pool with transactions and wait for them at the sinks
+	txs := make([]*txpool.Transaction, 1024)
+	for nonce := range txs {
+		tx := types.NewTx(&types.BlobTx{
+			Nonce:      uint64(nonce),
+			To:         common.Address{},
+			GasTipCap:  uint256.NewInt(0),
+			GasFeeCap:  uint256.NewInt(0),
+			Gas:        100000,
+			Value:      uint256.NewInt(0),
+			BlobHashes: make([]common.Hash, 1),
+			ChainID:    uint256.NewInt(0),
+			Data:       nil,
+		})
+		tx, _ = types.SignTx(tx, types.NewCancunSigner(common.Big0), testKey)
+
+		txs[nonce] = &txpool.Transaction{Tx: tx, BlobTxBlobs: make([]kzg4844.Blob, 1), BlobTxCommits: make([]kzg4844.Commitment, 1), BlobTxProofs: make([]kzg4844.Proof, 1)}
 	}
 	source.txpool.Add(txs, false, false)
 

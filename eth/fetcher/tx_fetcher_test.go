@@ -1287,7 +1287,11 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 
 		case doTxEnqueue:
-			if err := fetcher.Enqueue(step.peer, step.txs, step.direct); err != nil {
+			var txs []*types.BlobTxWithBlobs
+			for _, tx := range step.txs {
+				txs = append(txs, types.NewBlobTxWithBlobs(tx, nil, nil, nil))
+			}
+			if err := fetcher.Enqueue(step.peer, txs, step.direct); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done

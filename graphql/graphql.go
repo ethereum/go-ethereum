@@ -1310,8 +1310,7 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 	if err := tx.UnmarshalBinary(args.Data); err != nil {
 		return common.Hash{}, err
 	}
-	hash, err := ethapi.SubmitTransaction(ctx, r.backend, tx)
-	return hash, err
+	return ethapi.SubmitTransaction(ctx, r.backend, tx)
 }
 
 // FilterCriteria encapsulates the arguments to `logs` on the root resolver object.

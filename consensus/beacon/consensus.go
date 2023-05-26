@@ -379,6 +379,14 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			return nil, errors.New("withdrawals set before Shanghai activation")
 		}
 	}
+	if chain.Config().IsCancun(header.Number, header.Time) {
+		var blobs int
+		for _, tx := range txs {
+			blobs += len(tx.BlobHashes())
+		}
+		blobGasUsed := uint64(blobs * params.BlobTxBlobGasPerBlob)
+		header.BlobGasUsed = &blobGasUsed
+	}
 	// Finalize and assemble the block.
 	beacon.Finalize(chain, header, state, txs, uncles, withdrawals)
 

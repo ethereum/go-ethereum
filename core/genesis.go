@@ -496,6 +496,14 @@ func (g *Genesis) ToBlock() *types.Block {
 			}
 		}
 	}
+	if g.Config != nil && g.Config.IsCancun(big.NewInt(int64(g.Number)), g.Timestamp) {
+		if g.ExcessBlobGas == nil {
+			var excessBlobGas uint64
+			head.ExcessBlobGas = &excessBlobGas
+		} else {
+			head.ExcessBlobGas = g.ExcessBlobGas
+		}
+	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
 }
 
