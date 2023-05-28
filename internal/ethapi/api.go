@@ -1623,11 +1623,12 @@ func (s *BundleAPI) CallBundleArray(ctx context.Context, args []CallBundleArgs, 
 	return ret, nil
 }
 
-func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArgs, overrides *StateOverride) (int, error) {
+func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArgs, overrides *StateOverride) (map[string]interface{}, error) {
 	currentPercentage := 50000 // 100000 = 100%
 	lower := 0
 	upper := 100000
 	resultPercentage := 0
+	lastResult := map[string]interface{}{}
 	for {
 		fmt.Println("percentage", currentPercentage)
 		// convert percentage to hex and pad with 0s until 64 chars
@@ -1645,8 +1646,9 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 			StateBlockNumberOrHash: args.StateBlockNumberOrHash,
 		}
 		result, err := doCallBundle(ctx, s.b, s.chain, callBundleArgs, overrides)
+		lastResult = result
 		if err != nil {
-			return currentPercentage, err
+			return lastResult, err
 		}
 		// if results last tx reverted, we found the max wallet
 		fmt.Println("reverted?", result["lastReverted"])
@@ -1665,7 +1667,8 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 		}
 		currentPercentage = int((upper + lower) / 2)
 	}
-	return resultPercentage, nil
+	lastResult["percentage"] = resultPercentage
+	return lastResult, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
