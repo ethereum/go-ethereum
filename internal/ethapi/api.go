@@ -1571,6 +1571,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			"gasUsed": receipt.GasUsed,
 			"logs":    logs,
 			"status":  receipt.Status,
+			"input":   tx.Input,
 		}
 		totalGasUsed += receipt.GasUsed
 		if result.Err != nil {
@@ -1651,7 +1652,6 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 			return lastResult, err
 		}
 		// if results last tx reverted, we found the max wallet
-		fmt.Println("reverted?", result["lastReverted"])
 		if result["lastReverted"] == true && currentPercentage <= 1 {
 			resultPercentage = 0
 			break
