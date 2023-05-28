@@ -1431,7 +1431,6 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 			"status":  receipt.Status,
 		}
 		totalGasUsed += receipt.GasUsed
-		fmt.Println("result", result)
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
 			revert := result.Revert()
@@ -1583,14 +1582,11 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			// if we are last transaction
 			if i == len(args.Transactions)-1 {
 				lastReverted = true
-				fmt.Println("last reverted")
 			}
-			fmt.Println("error", jsonResult["error"])
 		} else {
 			dst := make([]byte, hex.EncodedLen(len(result.Return())))
 			hex.Encode(dst, result.Return())
 			jsonResult["value"] = "0x" + string(dst)
-			fmt.Println("value", jsonResult["value"])
 		}
 		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
 		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
@@ -1647,15 +1643,12 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 			resultPercentage = currentPercentage
 			break
 		}
-		fmt.Println("percentage", currentPercentage)
 		// convert percentage to hex and pad with 0s until 64 chars
 		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
 		originalFirst10Chars := args.MaxWalletTransaction.Data.String()[0:10]
 		m := hexutil.Bytes{}
 		m.UnmarshalText([]byte(originalFirst10Chars + percentageHex))
 
-		fmt.Println("dataOld", args.MaxWalletTransaction.Data)
-		fmt.Println("dataNew", m)
 		args.MaxWalletTransaction.setInput(m)
 		callBundleArgs := CallBundleArgs{
 			Transactions:           append(args.Transactions, args.MaxWalletTransaction),
