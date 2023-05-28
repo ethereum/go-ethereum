@@ -93,6 +93,8 @@ type (
 		account      *common.Address
 		prev         *stateObject
 		prevdestruct bool
+		prevAccount  []byte
+		prevStorage  map[common.Hash][]byte
 	}
 	suicideChange struct {
 		account     *common.Address
@@ -159,6 +161,12 @@ func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
 	if !ch.prevdestruct {
 		delete(s.stateObjectsDestruct, ch.prev.address)
+	}
+	if len(ch.prevAccount) > 0 {
+		s.snapAccounts[ch.prev.addrHash] = ch.prevAccount
+	}
+	if len(ch.prevStorage) > 0 {
+		s.snapStorage[ch.prev.addrHash] = ch.prevStorage
 	}
 }
 
