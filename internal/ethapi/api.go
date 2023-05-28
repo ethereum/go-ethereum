@@ -1582,11 +1582,14 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			// if we are last transaction
 			if i == len(args.Transactions)-1 {
 				lastReverted = true
+				fmt.Println("last reverted")
 			}
+			fmt.Println("error", jsonResult["error"])
 		} else {
 			dst := make([]byte, hex.EncodedLen(len(result.Return())))
 			hex.Encode(dst, result.Return())
 			jsonResult["value"] = "0x" + string(dst)
+			fmt.Println("value", jsonResult["value"])
 		}
 		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
 		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
@@ -1626,6 +1629,7 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 	upper := 100000
 	resultPercentage := 0
 	for {
+		fmt.Println("percentage", currentPercentage)
 		// convert percentage to hex and pad with 0s until 64 chars
 		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
 		data := args.MaxWalletTransaction.data()
@@ -1633,8 +1637,7 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 		// change last 64 chars of data to percentage
 		hexNew := dataHex[:len(dataHex)-64] + percentageHex
 		dataNew := []byte(hexNew)
-		fmt.Println("dataOriginal", dataHex)
-		fmt.Println("dataNew", hexNew)
+
 		args.MaxWalletTransaction.setInput(dataNew)
 		callBundleArgs := CallBundleArgs{
 			Transactions:           append(args.Transactions, args.MaxWalletTransaction),
@@ -1646,6 +1649,7 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 			return currentPercentage, err
 		}
 		// if results last tx reverted, we found the max wallet
+		fmt.Println("reverted?", result["lastReverted"])
 		if result["lastReverted"] == true && currentPercentage <= 1 {
 			resultPercentage = 0
 			break
