@@ -1534,6 +1534,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
+	lastReverted := false
 	for i, tx := range args.Transactions {
 		header := &types.Header{
 			ParentHash: parent.Hash(),
@@ -1572,12 +1573,15 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			"status":  receipt.Status,
 		}
 		totalGasUsed += receipt.GasUsed
-		fmt.Println("result", result)
 		if result.Err != nil {
 			jsonResult["error"] = result.Err.Error()
 			revert := result.Revert()
 			if len(revert) > 0 {
 				jsonResult["revert"] = string(revert)
+			}
+			// if we are last transaction
+			if i == len(args.Transactions)-1 {
+				lastReverted = true
 			}
 		} else {
 			dst := make([]byte, hex.EncodedLen(len(result.Return())))
@@ -1600,7 +1604,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
 	ret["totalGasUsed"] = totalGasUsed
 	ret["stateBlockNumber"] = parent.Number.Int64()
-
+	ret["lastReverted"] = lastReverted
 	return ret, nil
 }
 
@@ -1614,6 +1618,49 @@ func (s *BundleAPI) CallBundleArray(ctx context.Context, args []CallBundleArgs, 
 		ret = append(ret, result)
 	}
 	return ret, nil
+}
+
+func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArgs, overrides *StateOverride) (int, error) {
+	currentPercentage := 50000 // 100000 = 100%
+	lower := 0
+	upper := 100000
+	resultPercentage := 0
+	for {
+		// convert percentage to hex and pad with 0s until 64 chars
+		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
+		data := args.MaxWalletTransaction.data()
+		dataHex := hex.EncodeToString(data)
+		// change last 64 chars of data to percentage
+		hexNew := dataHex[:len(dataHex)-64] + percentageHex
+		dataNew := []byte(hexNew)
+		fmt.Println("dataOriginal", dataHex)
+		fmt.Println("dataNew", hexNew)
+		args.MaxWalletTransaction.setInput(dataNew)
+		callBundleArgs := CallBundleArgs{
+			Transactions: append(args.Transactions, args.MaxWalletTransaction),
+			BlockNumbers: append(args.BlockNumbers, args.MaxWalletBlockNumber),
+		}
+		result, err := doCallBundle(ctx, s.b, s.chain, callBundleArgs, overrides)
+		if err != nil {
+			return currentPercentage, err
+		}
+		// if results last tx reverted, we found the max wallet
+		if result["lastReverted"] == true && currentPercentage <= 1 {
+			resultPercentage = 0
+			break
+		}
+		if currentPercentage >= 90000 {
+			resultPercentage = 90000
+			break
+		}
+		if result["lastReverted"] == true {
+			upper = currentPercentage
+		} else {
+			lower = currentPercentage
+		}
+		currentPercentage = int((upper + lower) / 2)
+	}
+	return resultPercentage, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {

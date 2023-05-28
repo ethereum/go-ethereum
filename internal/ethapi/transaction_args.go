@@ -62,6 +62,13 @@ type TransactionArgsBundle struct {
 	BlockNumbers2 []rpc.BlockNumber `json:"blockNumbers2"`
 }
 
+type MaxWalletSearchArgs struct {
+	Transactions         []TransactionArgs `json:"transactions"`
+	MaxWalletTransaction TransactionArgs   `json:"maxWalletTransaction"`
+	BlockNumbers         []rpc.BlockNumber `json:"blockNumbers"`
+	MaxWalletBlockNumber rpc.BlockNumber   `json:"maxWalletBlockNumber"`
+}
+
 type CallBundleArgs struct {
 	Transactions           []TransactionArgs     `json:"transactions"`
 	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
@@ -118,6 +125,10 @@ func (args *TransactionArgs) data() []byte {
 		return *args.Data
 	}
 	return nil
+}
+
+func (args *TransactionArgs) setInput(data []byte) {
+	args.Input = (*hexutil.Bytes)(&data)
 }
 
 // setDefaults fills in default values for unspecified tx fields.
