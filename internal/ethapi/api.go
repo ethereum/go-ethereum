@@ -1625,12 +1625,28 @@ func (s *BundleAPI) CallBundleArray(ctx context.Context, args []CallBundleArgs, 
 }
 
 func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArgs, overrides *StateOverride) (map[string]interface{}, error) {
+	timeoutMilliSeconds := int64(5000)
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
 	currentPercentage := 50000 // 100000 = 100%
 	lower := 0
 	upper := 100000
 	resultPercentage := 0
 	lastResult := map[string]interface{}{}
+	lastPercentage := 0
 	for {
+		if (lastPercentage == currentPercentage) || (currentPercentage <= 1) {
+			resultPercentage = currentPercentage
+			break
+		}
 		fmt.Println("percentage", currentPercentage)
 		// convert percentage to hex and pad with 0s until 64 chars
 		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
@@ -1665,6 +1681,7 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 		} else {
 			lower = currentPercentage
 		}
+		lastPercentage = currentPercentage
 		currentPercentage = int((upper + lower) / 2)
 	}
 	lastResult["percentage"] = resultPercentage
