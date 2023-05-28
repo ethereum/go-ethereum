@@ -63,10 +63,11 @@ type TransactionArgsBundle struct {
 }
 
 type MaxWalletSearchArgs struct {
-	Transactions         []TransactionArgs `json:"transactions"`
-	MaxWalletTransaction TransactionArgs   `json:"maxWalletTransaction"`
-	BlockNumbers         []rpc.BlockNumber `json:"blockNumbers"`
-	MaxWalletBlockNumber rpc.BlockNumber   `json:"maxWalletBlockNumber"`
+	Transactions           []TransactionArgs     `json:"transactions"`
+	MaxWalletTransaction   TransactionArgs       `json:"maxWalletTransaction"`
+	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
+	MaxWalletBlockNumber   rpc.BlockNumber       `json:"maxWalletBlockNumber"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 }
 
 type CallBundleArgs struct {

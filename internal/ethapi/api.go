@@ -1637,8 +1637,9 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 		fmt.Println("dataNew", hexNew)
 		args.MaxWalletTransaction.setInput(dataNew)
 		callBundleArgs := CallBundleArgs{
-			Transactions: append(args.Transactions, args.MaxWalletTransaction),
-			BlockNumbers: append(args.BlockNumbers, args.MaxWalletBlockNumber),
+			Transactions:           append(args.Transactions, args.MaxWalletTransaction),
+			BlockNumbers:           append(args.BlockNumbers, args.MaxWalletBlockNumber),
+			StateBlockNumberOrHash: args.StateBlockNumberOrHash,
 		}
 		result, err := doCallBundle(ctx, s.b, s.chain, callBundleArgs, overrides)
 		if err != nil {
