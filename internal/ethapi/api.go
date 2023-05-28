@@ -1636,8 +1636,9 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
 		// change last 64 chars of data to percentage
 		hexNew := "0x" + percentageHex
-		dataNew := []byte(hexNew)
-		fmt.Println("dataOriginal", args.MaxWalletTransaction.Data)
+		// convert string to hexutil.Bytes
+		dataNew := hexutil.MustDecode(hexNew)
+		fmt.Println("dataOld", args.MaxWalletTransaction.Data)
 		fmt.Println("dataNew", dataNew)
 		args.MaxWalletTransaction.setInput(dataNew)
 		callBundleArgs := CallBundleArgs{
