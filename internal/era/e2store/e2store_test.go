@@ -51,8 +51,9 @@ func TestEncode(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var (
-				b = NewWriteSeeker()
+				b = bytes.NewBuffer(nil)
 				w = NewWriter(b)
 			)
 			for _, e := range tt.entries {
@@ -60,15 +61,20 @@ func TestEncode(t *testing.T) {
 					t.Fatalf("encoding error: %v", err)
 				}
 			}
-			if want, got := common.Hex2Bytes(tt.want), b.Bytes(); !bytes.Equal(want, got) {
-				t.Fatalf("encoding mismatch (want %s, got %s", common.Bytes2Hex(want), common.Bytes2Hex(got))
+			if want, have := common.FromHex(tt.want), b.Bytes(); !bytes.Equal(want, have) {
+				t.Fatalf("encoding mismatch (want %x, have %x", want, have)
 			}
 			r := NewReader(bytes.NewReader(b.Bytes()))
 			for _, want := range tt.entries {
-				if got, err := r.Read(); err != nil {
+				have, err := r.Read()
+				if err != nil {
 					t.Fatalf("decoding error: %v", err)
-				} else if got.Type != want.Type || !bytes.Equal(got.Value, want.Value) {
-					t.Fatalf("decoded entry does not match (want %v, got %v)", want, got)
+				}
+				if have.Type != want.Type {
+					t.Fatalf("decoded entry does type mismatch (want %v, got %v)", want.Type, have.Type)
+				}
+				if !bytes.Equal(have.Value, want.Value) {
+					t.Fatalf("decoded entry does not match (want %#x, got %#x)", want.Value, have.Value)
 				}
 			}
 		})
@@ -78,12 +84,10 @@ func TestEncode(t *testing.T) {
 func TestDecode(t *testing.T) {
 	for i, tt := range []struct {
 		have string
-		want []Entry
 		err  error
 	}{
 		{ // basic valid decoding
 			have: "ffff000000000000",
-			want: []Entry{{0xffff, nil}},
 		},
 		{ // basic valid decoding
 			have: "ffff000000000001",
@@ -106,59 +110,40 @@ func TestDecode(t *testing.T) {
 			err:  io.ErrUnexpectedEOF,
 		},
 	} {
-		r := NewReader(bytes.NewReader(common.Hex2Bytes(tt.have)))
+		r := NewReader(bytes.NewReader(common.FromHex(tt.have)))
 		if tt.err != nil {
-			if _, err := r.Read(); err != nil && tt.err != nil && err.Error() != tt.err.Error() {
+			_, err := r.Read()
+			if err == nil && tt.err != nil {
+				t.Fatalf("test %d, expected error, got none", i)
+			}
+			if err != nil && tt.err == nil {
+				t.Fatalf("test %d, expected no error, got %v", i, err)
+			}
+			if err != nil && tt.err != nil && err.Error() != tt.err.Error() {
 				t.Fatalf("expected error %v, got %v", tt.err, err)
 			}
 			continue
 		}
-		for _, want := range tt.want {
-			if got, err := r.Read(); err != nil {
-				t.Fatalf("test %d: decoding error: %v", i, err)
-			} else if got.Type != want.Type || !bytes.Equal(got.Value, want.Value) {
-				t.Fatalf("test %d: decoded entry does not match (want %v, got %v)", i, want, got)
-			}
+	}
+}
+
+func FuzzCodec(f *testing.F) {
+	f.Fuzz(func(t *testing.T, input []byte) {
+		r := NewReader(bytes.NewReader(input))
+		entry, err := r.Read()
+		if err != nil {
+			return
 		}
-	}
-}
-
-// WriteSeeker is an in-memory io.Writer and io.Seeker implementation.
-type WriteSeeker struct {
-	pos int64
-	buf []byte
-}
-
-func NewWriteSeeker() *WriteSeeker {
-	return &WriteSeeker{}
-}
-
-func (w *WriteSeeker) Write(p []byte) (n int, err error) {
-	if len(w.buf) != int(w.pos) {
-		return 0, fmt.Errorf("writing after seek not supported")
-	}
-	w.buf = append(w.buf, p...)
-	w.pos += int64(len(p))
-	return len(p), nil
-}
-
-func (w *WriteSeeker) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		w.pos = offset
-	case io.SeekCurrent:
-		w.pos = w.pos + offset
-	case io.SeekEnd:
-		w.pos = int64(len(w.buf)) + offset
-	default:
-		return 0, fmt.Errorf("unknown seek whence %d", whence)
-	}
-	if w.pos < 0 {
-		w.pos = 0
-	}
-	return w.pos, nil
-}
-
-func (w *WriteSeeker) Bytes() []byte {
-	return w.buf
+		var (
+			b = bytes.NewBuffer(nil)
+			w = NewWriter(b)
+		)
+		w.Write(entry.Type, entry.Value)
+		output := b.Bytes()
+		// Only care about the input that was actually consumed
+		input = input[:r.offset]
+		if !bytes.Equal(input, output) {
+			t.Fatalf("decode-encode mismatch, input %#x output %#x", input, output)
+		}
+	})
 }
