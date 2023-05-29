@@ -113,7 +113,6 @@ func NewReader(r ReadAtSeeker) (*Reader, error) {
 	return &Reader{
 		r:        r,
 		e:        e2store.NewReader(r),
-		buf:      [8]byte{},
 		next:     m.start,
 		length:   length,
 		metadata: m,
@@ -148,27 +147,6 @@ func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	return block, receipts, nil
 }
 
-// ReadHeader reads the header number n RLP.
-func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
-	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
-		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
-	}
-	// Read the specified block's offset from the block index.
-	off, err := r.readOffset(n)
-	if err != nil {
-		return nil, fmt.Errorf("error reading block offset: %w", err)
-	}
-	// Read header.
-	var e e2store.Entry
-	if _, err := r.e.ReadAt(&e, off); err != nil {
-		return nil, err
-	}
-	if e.Type != TypeCompressedHeader {
-		return nil, fmt.Errorf("expected header entry, got %x", e.Type)
-	}
-	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
-}
-
 func skipN(r *Reader, off int64, n int) (int64, error) {
 	for i := 0; i < n; i++ {
 		length, err := r.e.LengthAt(off)
@@ -180,8 +158,8 @@ func skipN(r *Reader, off int64, n int) (int64, error) {
 	return off, nil
 }
 
-// ReadBodyRLP reads the block body number n RLP.
-func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
+// readBlob reads an entry of data.
+func (r *Reader) readEntry(n uint64, skip int) (*e2store.Entry, error) {
 	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
 		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
 	}
@@ -190,13 +168,34 @@ func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading block offset: %w", err)
 	}
-	// Skip over header entry to get to body.
-	if off, err = skipN(r, off, 1); err != nil {
+	// Skip to the requested entry.
+	if off, err = skipN(r, off, skip); err != nil {
 		return nil, err
 	}
-	// Read body.
-	var e e2store.Entry
-	if _, err := r.e.ReadAt(&e, off); err != nil {
+	// Read entry.
+	var entry e2store.Entry
+	if _, err := r.e.ReadAt(&entry, off); err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// ReadHeader reads the header number n RLP.
+func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
+	e, err := r.readEntry(n, 0)
+	if err != nil {
+		return nil, err
+	}
+	if e.Type != TypeCompressedHeader {
+		return nil, fmt.Errorf("expected header entry, got %x", e.Type)
+	}
+	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
+}
+
+// ReadBodyRLP reads the block body number n RLP.
+func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
+	e, err := r.readEntry(n, 1)
+	if err != nil {
 		return nil, err
 	}
 	if e.Type != TypeCompressedBody {
@@ -207,21 +206,8 @@ func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
 
 // ReadReceiptsRLP reads the receipts RLP associated with number n.
 func (r *Reader) ReadReceiptsRLP(n uint64) ([]byte, error) {
-	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
-		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
-	}
-	// Read the specified block's offset from the block index.
-	off, err := r.readOffset(n)
+	e, err := r.readEntry(n, 2)
 	if err != nil {
-		return nil, fmt.Errorf("error reading block offset: %w", err)
-	}
-	// Skip over header entry to get to body.
-	if off, err = skipN(r, off, 2); err != nil {
-		return nil, err
-	}
-	// Read receipts.
-	var e e2store.Entry
-	if _, err := r.e.ReadAt(&e, off); err != nil {
 		return nil, err
 	}
 	if e.Type != TypeCompressedReceipts {
@@ -232,25 +218,12 @@ func (r *Reader) ReadReceiptsRLP(n uint64) ([]byte, error) {
 
 // ReadTotalDifficulty reads the total difficulty of block number n.
 func (r *Reader) ReadTotalDifficulty(n uint64) (*big.Int, error) {
-	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
-		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
-	}
-	// Read the specified block's offset from the block index.
-	off, err := r.readOffset(n)
+	e, err := r.readEntry(n, 3)
 	if err != nil {
-		return nil, fmt.Errorf("error reading block offset: %w", err)
-	}
-	// Skip over header entry to get to body.
-	if off, err = skipN(r, off, 3); err != nil {
-		return nil, err
-	}
-	// Read receipts.
-	var e e2store.Entry
-	if _, err := r.e.ReadAt(&e, off); err != nil {
 		return nil, err
 	}
 	if e.Type != TypeTotalDifficulty {
-		return nil, fmt.Errorf("expected receipts entry, got %x", e.Type)
+		return nil, fmt.Errorf("expected TD entry, got %x", e.Type)
 	}
 	return new(big.Int).SetBytes(reverseOrder(e.Value)), nil
 }
