@@ -175,3 +175,89 @@ Example:
   "gasUsed": "0x125f8"
 }
 ```
+
+### eth_getHeaderByNumber
+
+Returns a block header.
+
+#### Parameters
+
+| Field              | Type       | Description                        |
+| :----------------- | :--------- | :--------------------------------- |
+| `blockNumber`      | `Quantity` | Block number                       |
+
+#### Usage
+
+```
+curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_getHeaderByNumber","params":["0x10823a8"],"id":0}'
+```
+
+#### Response
+
+```json
+{
+  baseFeePerGas: "0x6c3f71624",
+  difficulty: "0x0",
+  extraData: "0x496c6c756d696e61746520446d6f63726174697a6520447374726962757465",
+  gasLimit: "0x1c9c380",
+  gasUsed: "0x1312759",
+  hash: "0x4574b6f248bf3295f76ae797454f4ec21c8ef5b53c0f7fee8534b65623d9360a",
+  logsBloom: "0x04a13010898372c9ca19007ccd04eed1f707098f04123de47da9d0b67ce1a60ab8ea324cd8291c36a8ca5a520893d1552711012dba82ad817332008d90ac788047c0fcd2d1200cb82bd1690b32b6d7ab8ab28a86b1f7095a19b59104d062882093746d041b510537a4d0015518c1583de073045981792d0030aa5cd5089a0a700160f74b0b250a9e30ea90596fdf851732815da30d800ace471e2768e09bc0d45e79f97238136523021a4bd52d45a5e184c8c810a9c22afa8670b6bab0eb2636ea1981120a400040829021a3e96cbe0262d8a6ba06006b37249117230968eecc0c16a7ae4090e888673f1101a27159d5cd12a190f5aa85cb524dbc72f5d4ed14",
+  miner: "0xdafea492d9c6733ae3d56b7ed1adb60692c98bc5",
+  mixHash: "0xec33ce424110ddd8f7e7db1cbc1261a63e44dacd158b4e801566cd6d5849295b",
+  nonce: "0x0000000000000000",
+  number: "0x10823a8",
+  parentHash: "0x956846b5012b1df4f4c928b85db2f6456b2faed2c0ca136e89c928a87ceec69c",
+  receiptsRoot: "0x89b73c221ca0d721f8805edbecbf55524b0556dc5111680bac1c4dd02a286457",
+  sha3Uncles: "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+  size: "0x25e",
+  stateRoot: "0xe38ef58ddfbf00b03f7bd431fca306e5fcaecc138f4208501d2588657a65a0f3",
+  timestamp: "0x646a982b",
+  totalDifficulty: "0xc70d815d562d3cfa955",
+  transactionsRoot: "0xe44699ea734cee851a852db4d257617c8369b8a7e68bd54b6de829377234017b",
+  withdrawalsRoot: "0x917f5a8e4d652233a80b0973ff20bde517ed2a6a93defe7e99c5263089453e17"
+}
+```
+
+### eth_getHeaderByHash
+
+Returns a block header.
+
+#### Parameters
+
+| Field              | Type       | Description                        |
+| :----------------- | :--------- | :--------------------------------- |
+| `blockHash`        | `string`   | Block hash                         |
+
+#### Usage
+
+```
+curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_getHeaderByHash","params":["0x4574b6f248bf3295f76ae797454f4ec21c8ef5b53c0f7fee8534b65623d9360a"],"id":0}'
+```
+
+#### Response
+
+```json
+{
+  baseFeePerGas: "0x6c3f71624",
+  difficulty: "0x0",
+  extraData: "0x496c6c756d696e61746520446d6f63726174697a6520447374726962757465",
+  gasLimit: "0x1c9c380",
+  gasUsed: "0x1312759",
+  hash: "0x4574b6f248bf3295f76ae797454f4ec21c8ef5b53c0f7fee8534b65623d9360a",
+  logsBloom: "0x04a13010898372c9ca19007ccd04eed1f707098f04123de47da9d0b67ce1a60ab8ea324cd8291c36a8ca5a520893d1552711012dba82ad817332008d90ac788047c0fcd2d1200cb82bd1690b32b6d7ab8ab28a86b1f7095a19b59104d062882093746d041b510537a4d0015518c1583de073045981792d0030aa5cd5089a0a700160f74b0b250a9e30ea90596fdf851732815da30d800ace471e2768e09bc0d45e79f97238136523021a4bd52d45a5e184c8c810a9c22afa8670b6bab0eb2636ea1981120a400040829021a3e96cbe0262d8a6ba06006b37249117230968eecc0c16a7ae4090e888673f1101a27159d5cd12a190f5aa85cb524dbc72f5d4ed14",
+  miner: "0xdafea492d9c6733ae3d56b7ed1adb60692c98bc5",
+  mixHash: "0xec33ce424110ddd8f7e7db1cbc1261a63e44dacd158b4e801566cd6d5849295b",
+  nonce: "0x0000000000000000",
+  number: "0x10823a8",
+  parentHash: "0x956846b5012b1df4f4c928b85db2f6456b2faed2c0ca136e89c928a87ceec69c",
+  receiptsRoot: "0x89b73c221ca0d721f8805edbecbf55524b0556dc5111680bac1c4dd02a286457",
+  sha3Uncles: "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+  size: "0x25e",
+  stateRoot: "0xe38ef58ddfbf00b03f7bd431fca306e5fcaecc138f4208501d2588657a65a0f3",
+  timestamp: "0x646a982b",
+  totalDifficulty: "0xc70d815d562d3cfa955",
+  transactionsRoot: "0xe44699ea734cee851a852db4d257617c8369b8a7e68bd54b6de829377234017b",
+  withdrawalsRoot: "0x917f5a8e4d652233a80b0973ff20bde517ed2a6a93defe7e99c5263089453e17"
+}
+```
