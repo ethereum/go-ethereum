@@ -77,7 +77,7 @@ func TestEra1Builder(t *testing.T) {
 	}
 	for i := uint64(0); i < uint64(len(chain.headers)); i++ {
 		// Check headers.
-		header, err := r.ReadHeaderRLP(i)
+		header, err := r.readHeaderRLP(i)
 		if err != nil {
 			t.Fatalf("error reading from era1: %v", err)
 		}
@@ -86,7 +86,7 @@ func TestEra1Builder(t *testing.T) {
 		}
 
 		// Check bodies.
-		body, err := r.ReadBodyRLP(i)
+		body, err := r.readBodyRLP(i)
 		if err != nil {
 			t.Fatalf("error reading from era1: %v", err)
 		}
@@ -95,7 +95,7 @@ func TestEra1Builder(t *testing.T) {
 		}
 
 		// Check receipts.
-		receipts, err := r.ReadReceiptsRLP(i)
+		receipts, err := r.readReceiptsRLP(i)
 		if err != nil {
 			t.Fatalf("error reading from era1: %v", err)
 		}
@@ -104,7 +104,7 @@ func TestEra1Builder(t *testing.T) {
 		}
 
 		// Check total difficulty.
-		td, err := r.ReadTotalDifficulty(i)
+		td, err := r.readTotalDifficulty(i)
 		if err != nil {
 			t.Fatalf("error reading from era1: %v", err)
 		}

@@ -147,17 +147,6 @@ func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	return block, receipts, nil
 }
 
-func skipN(r *Reader, off int64, n int) (int64, error) {
-	for i := 0; i < n; i++ {
-		length, err := r.e.LengthAt(off)
-		if err != nil {
-			return off, err
-		}
-		off += length
-	}
-	return off, nil
-}
-
 // readBlob reads an entry of data.
 func (r *Reader) readEntry(n uint64, skip int) (*e2store.Entry, error) {
 	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
@@ -169,8 +158,12 @@ func (r *Reader) readEntry(n uint64, skip int) (*e2store.Entry, error) {
 		return nil, fmt.Errorf("error reading block offset: %w", err)
 	}
 	// Skip to the requested entry.
-	if off, err = skipN(r, off, skip); err != nil {
-		return nil, err
+	for i := 0; i < skip; i++ {
+		if length, err := r.e.LengthAt(off); err != nil {
+			return nil, err
+		} else {
+			off += length
+		}
 	}
 	// Read entry.
 	var entry e2store.Entry
@@ -180,8 +173,8 @@ func (r *Reader) readEntry(n uint64, skip int) (*e2store.Entry, error) {
 	return &entry, nil
 }
 
-// ReadHeader reads the header number n RLP.
-func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
+// readHeaderRLP reads the header number n RLP.
+func (r *Reader) readHeaderRLP(n uint64) ([]byte, error) {
 	e, err := r.readEntry(n, 0)
 	if err != nil {
 		return nil, err
@@ -192,8 +185,8 @@ func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
 	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
 }
 
-// ReadBodyRLP reads the block body number n RLP.
-func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
+// readBodyRLP reads the block body number n RLP.
+func (r *Reader) readBodyRLP(n uint64) ([]byte, error) {
 	e, err := r.readEntry(n, 1)
 	if err != nil {
 		return nil, err
@@ -204,8 +197,8 @@ func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
 	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
 }
 
-// ReadReceiptsRLP reads the receipts RLP associated with number n.
-func (r *Reader) ReadReceiptsRLP(n uint64) ([]byte, error) {
+// readReceiptsRLP reads the receipts RLP associated with number n.
+func (r *Reader) readReceiptsRLP(n uint64) ([]byte, error) {
 	e, err := r.readEntry(n, 2)
 	if err != nil {
 		return nil, err
@@ -216,8 +209,8 @@ func (r *Reader) ReadReceiptsRLP(n uint64) ([]byte, error) {
 	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
 }
 
-// ReadTotalDifficulty reads the total difficulty of block number n.
-func (r *Reader) ReadTotalDifficulty(n uint64) (*big.Int, error) {
+// readTotalDifficulty reads the total difficulty of block number n.
+func (r *Reader) readTotalDifficulty(n uint64) (*big.Int, error) {
 	e, err := r.readEntry(n, 3)
 	if err != nil {
 		return nil, err
@@ -230,7 +223,7 @@ func (r *Reader) ReadTotalDifficulty(n uint64) (*big.Int, error) {
 
 // ReadHeader reads the header number n.
 func (r *Reader) ReadHeader(n uint64) (*types.Header, error) {
-	h, err := r.ReadHeaderRLP(n)
+	h, err := r.readHeaderRLP(n)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +240,7 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := r.ReadBodyRLP(n)
+	b, err := r.readBodyRLP(n)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +259,7 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, e
 		return nil, nil, err
 	}
 	// Read receipts.
-	rr, err := r.ReadReceiptsRLP(n)
+	rr, err := r.readReceiptsRLP(n)
 	if err != nil {
 		return nil, nil, err
 	}
