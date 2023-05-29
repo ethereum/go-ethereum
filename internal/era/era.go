@@ -53,6 +53,7 @@ func Filename(network string, epoch int, root common.Hash) string {
 }
 
 // ReadDir reads all the era1 files in a directory for a given network.
+// Format: <network>-<epoch>-<hexroot>.era1
 func ReadDir(dir, network string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -63,22 +64,21 @@ func ReadDir(dir, network string) ([]string, error) {
 		eras []string
 	)
 	for _, entry := range entries {
-		if path.Ext(entry.Name()) == ".era1" {
-			n := strings.Split(entry.Name(), "-")
-			if len(n) != 3 {
-				// invalid era1 filename, skip
-				continue
-			}
-			if n[0] == network {
-				if epoch, err := strconv.ParseUint(n[1], 10, 64); err != nil {
-					return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
-				} else if epoch != next {
-					return nil, fmt.Errorf("missing epoch %d", next)
-				}
-				next += 1
-				eras = append(eras, entry.Name())
-			}
+		if path.Ext(entry.Name()) != ".era1" {
+			continue
 		}
+		parts := strings.Split(entry.Name(), "-")
+		if len(parts) != 3 || parts[0] != network {
+			// invalid era1 filename, skip
+			continue
+		}
+		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
+			return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
+		} else if epoch != next {
+			return nil, fmt.Errorf("missing epoch %d", next)
+		}
+		next += 1
+		eras = append(eras, entry.Name())
 	}
 	return eras, nil
 }
