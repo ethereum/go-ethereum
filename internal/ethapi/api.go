@@ -1366,17 +1366,17 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	switch tx.Type() {
 	case types.LegacyTxType:
 		// if a legacy transaction has an EIP-155 chain id, include it explicitly
-		if id := tx.ChainId(); id.Sign() != 0 {
+		if id := tx.ChainID(); id.Sign() != 0 {
 			result.ChainID = (*hexutil.Big)(id)
 		}
 	case types.AccessListTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.ChainID = (*hexutil.Big)(tx.ChainID())
 	case types.DynamicFeeTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.ChainID = (*hexutil.Big)(tx.ChainID())
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price

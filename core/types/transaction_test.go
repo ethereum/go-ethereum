@@ -521,7 +521,7 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 	if want, got := orig.Hash(), cpy.Hash(); want != got {
 		return fmt.Errorf("parsed tx differs from original tx, want %v, got %v", want, got)
 	}
-	if want, got := orig.ChainId(), cpy.ChainId(); want.Cmp(got) != 0 {
+	if want, got := orig.ChainID(), cpy.ChainID(); want.Cmp(got) != 0 {
 		return fmt.Errorf("invalid chain id, want %d, got %d", want, got)
 	}
 	if orig.AccessList() != nil {
