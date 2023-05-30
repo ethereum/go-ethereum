@@ -38,6 +38,7 @@ type tmplContract struct {
 	Fallback    *tmplMethod            // Additional special fallback function
 	Receive     *tmplMethod            // Additional special receive function
 	Events      map[string]*tmplEvent  // Contract events accessors
+	Errors      map[string]*tmplError  // Contract errors
 	Libraries   map[string]string      // Same as tmplData, but filtered to only keep what the contract needs
 	Library     bool                   // Indicator whether the contract is a library
 }
@@ -55,6 +56,13 @@ type tmplMethod struct {
 type tmplEvent struct {
 	Original   abi.Event // Original event as parsed by the abi package
 	Normalized abi.Event // Normalized version of the parsed fields
+}
+
+// tmplError is a wrapper around an abi.Error that contains a few preprocessed
+// and cached data fields.
+type tmplError struct {
+	Original   abi.Error // Original error as parsed by the abi package
+	Normalized abi.Error // Normalized version of the parsed fields
 }
 
 // tmplField is a wrapper around a struct field with binding language
@@ -567,5 +575,24 @@ var (
 		}
 
  	{{end}}
+	{{range .Errors}}
+		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
+		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
+			{{capitalise .Name}} {{bindtype .Type $structs}} {{end}}
+			Raw string // Blockchain specific contextual infos
+		}
+
+		// Parse{{.Normalized.Name}} is a error parse operation binding the contract error 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+			event := new({{$contract.Type}}{{.Normalized.Name}})
+			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+				return nil, err
+			}
+			event.Raw = log
+			return event, nil
+		}
+	{{end}}
 {{end}}
 `
