@@ -1,0 +1,53 @@
+# builder image
+
+
+FROM ubuntu:23.04 as builder
+
+ARG ACCESS_TOKEN
+
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update -q -y && apt-get upgrade -q -y
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ca-certificates curl libjemalloc-dev liblz4-dev libsnappy-dev libzstd-dev libudev-dev git
+RUN git config --global url."https://x-access-token:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+
+# golang
+RUN curl -sL -o /tmp/go.tar.gz https://dl.google.com/go/$(curl -sL https://golang.org/VERSION?m=text).linux-amd64.tar.gz && \
+    pushd /usr/local/ && \
+    tar xfz /tmp/go.tar.gz && \
+    cd /usr/local/bin/ && \
+    ln -sf ../go/bin/* . && \
+    popd && \
+    rm /tmp/go.tar.gz
+
+RUN apt autoremove && apt autoclean
+
+WORKDIR /go-ethereum
+
+COPY .git /go-ethereum/.git
+
+COPY . .
+
+
+WORKDIR /go-ethereum
+
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+
+RUN make geth
+
+FROM ubuntu:23.04
+
+RUN apt-get update && apt-get install -y ca-certificates wget libsnappy-dev libjemalloc-dev
+
+
+WORKDIR /app
+
+COPY --from=builder /go-ethereum/build/bin /app
+
+
+EXPOSE 8545 8546 33688 33688/udp
+
+ENTRYPOINT ["/app/geth"]
