@@ -87,12 +87,6 @@ type Header struct {
 
 	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
 	ExcessDataGas *big.Int `json:"excessDataGas" rlp:"optional"`
-
-	/*
-		TODO (MariusVanDerWijden) Add this field once needed
-		// Random was added during the merge and contains the BeaconState randomness
-		Random common.Hash `json:"random" rlp:"optional"`
-	*/
 }
 
 // field type overrides for gencodec
