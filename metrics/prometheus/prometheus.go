@@ -48,6 +48,8 @@ func Handler(reg metrics.Registry, begin time.Time) http.Handler {
 			switch m := i.(type) {
 			case metrics.Counter:
 				c.addCounter(name, m.Snapshot())
+			case metrics.CounterFloat64:
+				c.addCounterFloat64(name, m.Snapshot())
 			case metrics.Gauge:
 				c.addGauge(name, m.Snapshot())
 			case metrics.GaugeFloat64:

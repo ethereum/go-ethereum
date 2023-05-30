@@ -180,7 +180,6 @@ func Transition(ctx *cli.Context) error {
 
 	vmConfig := vm.Config{
 		Tracer: tracer,
-		Debug:  (tracer != nil),
 	}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
@@ -250,9 +249,9 @@ func Transition(ctx *cli.Context) error {
 	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
 		if prestate.Env.BaseFee != nil {
 			// Already set, base fee has precedent over parent base fee.
-		} else if prestate.Env.ParentBaseFee != nil {
+		} else if prestate.Env.ParentBaseFee != nil && prestate.Env.Number != 0 {
 			parent := &types.Header{
-				Number:   new(big.Int).SetUint64(prestate.Env.Number),
+				Number:   new(big.Int).SetUint64(prestate.Env.Number - 1),
 				BaseFee:  prestate.Env.ParentBaseFee,
 				GasUsed:  prestate.Env.ParentGasUsed,
 				GasLimit: prestate.Env.ParentGasLimit,

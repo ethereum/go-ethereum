@@ -38,13 +38,13 @@ func NewCounter() Counter {
 	if !Enabled {
 		return NilCounter{}
 	}
-	return &StandardCounter{0}
+	return &StandardCounter{}
 }
 
 // NewCounterForced constructs a new StandardCounter and returns it no matter if
 // the global switch is enabled or not.
 func NewCounterForced() Counter {
-	return &StandardCounter{0}
+	return &StandardCounter{}
 }
 
 // NewRegisteredCounter constructs and registers a new StandardCounter.
@@ -115,27 +115,27 @@ func (NilCounter) Snapshot() Counter { return NilCounter{} }
 // StandardCounter is the standard implementation of a Counter and uses the
 // sync/atomic package to manage a single int64 value.
 type StandardCounter struct {
-	count int64
+	count atomic.Int64
 }
 
 // Clear sets the counter to zero.
 func (c *StandardCounter) Clear() {
-	atomic.StoreInt64(&c.count, 0)
+	c.count.Store(0)
 }
 
 // Count returns the current count.
 func (c *StandardCounter) Count() int64 {
-	return atomic.LoadInt64(&c.count)
+	return c.count.Load()
 }
 
 // Dec decrements the counter by the given amount.
 func (c *StandardCounter) Dec(i int64) {
-	atomic.AddInt64(&c.count, -i)
+	c.count.Add(-i)
 }
 
 // Inc increments the counter by the given amount.
 func (c *StandardCounter) Inc(i int64) {
-	atomic.AddInt64(&c.count, i)
+	c.count.Add(i)
 }
 
 // Snapshot returns a read-only copy of the counter.

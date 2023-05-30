@@ -364,7 +364,7 @@ func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccou
 	if err != nil {
 		return types.StateAccount{}, err
 	}
-	blob, err := trie.TryGet(hash[:])
+	blob, err := trie.Get(hash[:])
 	if err != nil {
 		return types.StateAccount{}, err
 	}

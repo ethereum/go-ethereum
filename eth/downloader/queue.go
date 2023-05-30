@@ -61,7 +61,7 @@ type fetchRequest struct {
 // fetchResult is a struct collecting partial results from data fetchers until
 // all outstanding pieces complete and the result as a whole can be processed.
 type fetchResult struct {
-	pending int32 // Flag telling what deliveries are outstanding
+	pending atomic.Int32 // Flag telling what deliveries are outstanding
 
 	Header       *types.Header
 	Uncles       []*types.Header
@@ -75,38 +75,38 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 		Header: header,
 	}
 	if !header.EmptyBody() {
-		item.pending |= (1 << bodyType)
+		item.pending.Store(item.pending.Load() | (1 << bodyType))
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
 	if fastSync && !header.EmptyReceipts() {
-		item.pending |= (1 << receiptType)
+		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
 	return item
 }
 
 // SetBodyDone flags the body as finished.
 func (f *fetchResult) SetBodyDone() {
-	if v := atomic.LoadInt32(&f.pending); (v & (1 << bodyType)) != 0 {
-		atomic.AddInt32(&f.pending, -1)
+	if v := f.pending.Load(); (v & (1 << bodyType)) != 0 {
+		f.pending.Add(-1)
 	}
 }
 
 // AllDone checks if item is done.
 func (f *fetchResult) AllDone() bool {
-	return atomic.LoadInt32(&f.pending) == 0
+	return f.pending.Load() == 0
 }
 
 // SetReceiptsDone flags the receipts as finished.
 func (f *fetchResult) SetReceiptsDone() {
-	if v := atomic.LoadInt32(&f.pending); (v & (1 << receiptType)) != 0 {
-		atomic.AddInt32(&f.pending, -2)
+	if v := f.pending.Load(); (v & (1 << receiptType)) != 0 {
+		f.pending.Add(-2)
 	}
 }
 
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
-	v := atomic.LoadInt32(&f.pending)
+	v := f.pending.Load()
 	return v&(1<<kind) == 0
 }
 

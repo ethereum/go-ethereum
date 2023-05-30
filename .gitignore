@@ -50,3 +50,4 @@ profile.cov
 
 # vim swap files
 *.swp
+logs/
