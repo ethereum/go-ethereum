@@ -68,7 +68,7 @@ type backend interface {
 	CurrentHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
-	Stats() (pending int, queued int)
+	Stats() (pending, queued, pendingSlots, pendingQueued int)
 	SyncProgress() ethereum.SyncProgress
 }
 
@@ -741,7 +741,7 @@ type pendStats struct {
 // it to the stats server.
 func (s *Service) reportPending(conn *connWrapper) error {
 	// Retrieve the pending count from the local blockchain
-	pending, _ := s.backend.Stats()
+	pending, _, _, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to ethstats", "count", pending)
 

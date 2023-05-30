@@ -138,7 +138,7 @@ func main() {
 		nonces[index]++
 
 		// Wait if we're too saturated
-		if pend, _ := backend.TxPool().Stats(); pend > 2048 {
+		if pend, _, _, _ := backend.TxPool().Stats(); pend > 2048 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}

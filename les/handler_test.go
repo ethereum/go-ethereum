@@ -652,12 +652,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the inserted block
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 1 {
+		if pending, _, _, _ := server.handler.txpool.Stats(); pending == 1 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 1 {
+	if pending, _, _, _ := server.handler.txpool.Stats(); pending != 1 {
 		t.Fatalf("pending count mismatch: have %d, want 1", pending)
 	}
 	// Discard new block announcement
@@ -677,12 +677,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the reorg
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 3 {
+		if pending, _, _, _ := server.handler.txpool.Stats(); pending == 3 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 3 {
+	if pending, _, _, _ := server.handler.txpool.Stats(); pending != 3 {
 		t.Fatalf("pending count mismatch: have %d, want 3", pending)
 	}
 	// Discard new block announcement

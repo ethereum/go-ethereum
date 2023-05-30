@@ -1481,8 +1481,8 @@ func (p *BlobPool) Nonce(addr common.Address) uint64 {
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
-// number of queued (non-executable) transactions.
-func (p *BlobPool) Stats() (int, int) {
+// number of queued (non-executable) transactions, slots.
+func (p *BlobPool) Stats() (int, int, int, int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -1490,7 +1490,7 @@ func (p *BlobPool) Stats() (int, int) {
 	for _, txs := range p.index {
 		pending += len(txs)
 	}
-	return pending, 0 // No non-executable txs in the blob pool
+	return pending, 0, 0, 0 // No non-executable txs in the blob pool
 }
 
 // Content retrieves the data content of the transaction pool, returning all the

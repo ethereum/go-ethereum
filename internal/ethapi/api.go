@@ -211,10 +211,12 @@ func (s *TxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCT
 
 // Status returns the number of pending and queued transaction in the pool.
 func (s *TxPoolAPI) Status() map[string]hexutil.Uint {
-	pending, queue := s.b.Stats()
+	pending, queue, pendingSlots, queuedSlots := s.b.Stats()
 	return map[string]hexutil.Uint{
-		"pending": hexutil.Uint(pending),
-		"queued":  hexutil.Uint(queue),
+		"pending":       hexutil.Uint(pending),
+		"queued":        hexutil.Uint(queue),
+		"pending slots": hexutil.Uint(pendingSlots),
+		"queued slots":  hexutil.Uint(queuedSlots),
 	}
 }
 

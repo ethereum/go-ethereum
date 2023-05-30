@@ -53,10 +53,11 @@ func (h *nonceHeap) Pop() interface{} {
 // sortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
 type sortedMap struct {
-	items   map[uint64]*types.Transaction // Hash map storing the transaction data
-	index   *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
-	cache   types.Transactions            // Cache of the transactions already sorted
-	cacheMu sync.Mutex                    // Mutex covering the cache
+	items      map[uint64]*types.Transaction // Hash map storing the transaction data
+	index      *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
+	cache      types.Transactions            // Cache of the transactions already sorted
+	cacheMu    sync.Mutex                    // Mutex covering the cache
+	totalslots int                           // Total number of slots of all transactions in the list
 }
 
 // newSortedMap creates a new nonce-sorted transaction map.
@@ -78,7 +79,11 @@ func (m *sortedMap) Put(tx *types.Transaction) {
 	nonce := tx.Nonce()
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
+	} else {
+		m.totalslots -= numSlots(m.items[nonce])
 	}
+
+	m.totalslots += numSlots(tx)
 	m.cacheMu.Lock()
 	m.items[nonce], m.cache = tx, nil
 	m.cacheMu.Unlock()
@@ -94,6 +99,7 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 	for m.index.Len() > 0 && (*m.index)[0] < threshold {
 		nonce := heap.Pop(m.index).(uint64)
 		removed = append(removed, m.items[nonce])
+		m.totalslots -= numSlots(m.items[nonce])
 		delete(m.items, nonce)
 	}
 	// If we had a cached order, shift the front
@@ -139,6 +145,7 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	for nonce, tx := range m.items {
 		if filter(tx) {
 			removed = append(removed, tx)
+			m.totalslots -= numSlots(m.items[nonce])
 			delete(m.items, nonce)
 		}
 	}
@@ -192,6 +199,7 @@ func (m *sortedMap) Remove(nonce uint64) bool {
 			break
 		}
 	}
+	m.totalslots -= numSlots(m.items[nonce])
 	delete(m.items, nonce)
 	m.cacheMu.Lock()
 	m.cache = nil
@@ -216,6 +224,7 @@ func (m *sortedMap) Ready(start uint64) types.Transactions {
 	var ready types.Transactions
 	for next := (*m.index)[0]; m.index.Len() > 0 && (*m.index)[0] == next; next++ {
 		ready = append(ready, m.items[next])
+		m.totalslots -= numSlots(m.items[next])
 		delete(m.items, next)
 		heap.Pop(m.index)
 	}
@@ -450,6 +459,11 @@ func (l *list) Flatten() types.Transactions {
 // transaction with the highest nonce
 func (l *list) LastElement() *types.Transaction {
 	return l.txs.LastElement()
+}
+
+// TotalSlots returns total slots of transaction list.
+func (l *list) TotalSlots() int {
+	return l.txs.totalslots
 }
 
 // subTotalCost subtracts the cost of the given transactions from the

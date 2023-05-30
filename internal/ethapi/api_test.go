@@ -569,7 +569,7 @@ func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	panic("implement me")
 }
-func (b testBackend) Stats() (pending int, queued int) { panic("implement me") }
+func (b testBackend) Stats() (pending, queued, pendingSlots, queuedSlots int) { panic("implement me") }
 func (b testBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	panic("implement me")
 }

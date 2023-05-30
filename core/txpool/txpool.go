@@ -342,16 +342,18 @@ func (p *TxPool) Nonce(addr common.Address) uint64 {
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
-// number of queued (non-executable) transactions.
-func (p *TxPool) Stats() (int, int) {
-	var runnable, blocked int
+// number of queued (non-executable) transactions, slots.
+func (p *TxPool) Stats() (int, int, int, int) {
+	var runnable, blocked, runnableSlots, blockedSlots int
 	for _, subpool := range p.subpools {
-		run, block := subpool.Stats()
+		run, block, runSlots, blockSlots := subpool.Stats()
 
 		runnable += run
 		blocked += block
+		runnableSlots += runSlots
+		blockedSlots += blockSlots
 	}
-	return runnable, blocked
+	return runnable, blocked, runnableSlots, blockedSlots
 }
 
 // Content retrieves the data content of the transaction pool, returning all the

@@ -35,7 +35,7 @@ func pricedValuedTransaction(nonce uint64, value int64, gaslimit uint64, gaspric
 
 func count(t *testing.T, pool *LegacyPool) (pending int, queued int) {
 	t.Helper()
-	pending, queued = pool.stats()
+	pending, queued, _, _ = pool.stats()
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -58,7 +58,7 @@ func fillPool(t testing.TB, pool *LegacyPool) {
 	// Import the batch and verify that limits have been enforced
 	pool.addRemotesSync(executableTxs)
 	pool.addRemotesSync(nonExecutableTxs)
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	slots := pool.all.Slots()
 	// sanity-check that the test prerequisites are ok (pending full)
 	if have, want := pending, slots; have != want {
@@ -87,7 +87,7 @@ func TestTransactionFutureAttack(t *testing.T) {
 	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
 	defer pool.Close()
 	fillPool(t, pool)
-	pending, _ := pool.Stats()
+	pending, _, _, _ := pool.Stats()
 	// Now, future transaction attack starts, let's add a bunch of expensive non-executables, and see if the pending-count drops
 	{
 		key, _ := crypto.GenerateKey()
@@ -102,7 +102,7 @@ func TestTransactionFutureAttack(t *testing.T) {
 			t.Logf("pending: %d queued: %d, all: %d\n", newPending, newQueued, pool.all.Slots())
 		}
 	}
-	newPending, _ := pool.Stats()
+	newPending, _, _, _ := pool.Stats()
 	// Pending should not have been touched
 	if have, want := newPending, pending; have < want {
 		t.Errorf("wrong pending-count, have %d, want %d (GlobalSlots: %d)",
@@ -123,7 +123,7 @@ func TestTransactionFuture1559(t *testing.T) {
 
 	// Create a number of test accounts, fund them and make transactions
 	fillPool(t, pool)
-	pending, _ := pool.Stats()
+	pending, _, _, _ := pool.Stats()
 
 	// Now, future transaction attack starts, let's add a bunch of expensive non-executables, and see if the pending-count drops
 	{
@@ -135,7 +135,7 @@ func TestTransactionFuture1559(t *testing.T) {
 		}
 		pool.addRemotesSync(futureTxs)
 	}
-	newPending, _ := pool.Stats()
+	newPending, _, _, _ := pool.Stats()
 	// Pending should not have been touched
 	if have, want := newPending, pending; have != want {
 		t.Errorf("Wrong pending-count, have %d, want %d (GlobalSlots: %d)",

@@ -107,8 +107,8 @@ type SubPool interface {
 	Nonce(addr common.Address) uint64
 
 	// Stats retrieves the current pool stats, namely the number of pending and the
-	// number of queued (non-executable) transactions.
-	Stats() (int, int)
+	// number of queued (non-executable) transactions, slots.
+	Stats() (pending, queued, pendingSlots, queuedSlots int)
 
 	// Content retrieves the data content of the transaction pool, returning all the
 	// pending as well as queued transactions, grouped by account and sorted by nonce.

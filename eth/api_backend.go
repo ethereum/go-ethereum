@@ -311,7 +311,7 @@ func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 	return b.eth.txPool.Nonce(addr), nil
 }
 
-func (b *EthAPIBackend) Stats() (runnable int, blocked int) {
+func (b *EthAPIBackend) Stats() (pending, queued, pendingSlots, queuedSlots int) {
 	return b.eth.txPool.Stats()
 }
 

@@ -219,8 +219,13 @@ func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 	return b.eth.txPool.GetNonce(ctx, addr)
 }
 
-func (b *LesApiBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats(), 0
+func (b *LesApiBackend) Stats() (pending, queued, pendingSlots, queuedSlots int) {
+	pending = b.eth.txPool.Stats()
+
+	// For simplicity, just return number of pending transactions in pending slots
+	// without calculating the exact number of slots here
+	pendingSlots = pending
+	return pending, 0, pendingSlots, 0
 }
 
 func (b *LesApiBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
