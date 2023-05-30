@@ -154,6 +154,31 @@ func BenchmarkAddressHex(b *testing.B) {
 	}
 }
 
+// Test checks if the customized json marshaller of MixedcaseAddress object
+// is invoked correctly. In golang the struct pointer will inherit the
+// non-pointer receiver methods, the reverse is not true. In the case of
+// MixedcaseAddress, it must define the MarshalJSON method in the object
+// but not the pointer level, so that this customized marshalled can be used
+// for both MixedcaseAddress object and pointer.
+func TestMixedcaseAddressMarshal(t *testing.T) {
+	var (
+		output string
+		input  = "0xae967917c465db8578ca9024c205720b1a3651A9"
+	)
+	addr, err := NewMixedcaseAddressFromString(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, err := json.Marshal(*addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	json.Unmarshal(blob, &output)
+	if output != input {
+		t.Fatal("Failed to marshal/unmarshal MixedcaseAddress object")
+	}
+}
+
 func TestMixedcaseAccount_Address(t *testing.T) {
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
 	// Note: 0X{checksum_addr} is not valid according to spec above
@@ -177,7 +202,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		}
 	}
 
-	//These should throw exceptions:
+	// These should throw exceptions:
 	var r2 []MixedcaseAddress
 	for _, r := range []string{
 		`["0x11111111111111111111122222222222233333"]`,     // Too short

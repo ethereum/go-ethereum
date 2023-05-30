@@ -42,8 +42,8 @@ var (
 type Config struct {
 	Blocks           int
 	Percentile       int
-	MaxHeaderHistory int
-	MaxBlockHistory  int
+	MaxHeaderHistory uint64
+	MaxBlockHistory  uint64
 	Default          *big.Int `toml:",omitempty"`
 	MaxPrice         *big.Int `toml:",omitempty"`
 	IgnorePrice      *big.Int `toml:",omitempty"`
@@ -71,7 +71,7 @@ type Oracle struct {
 	fetchLock   sync.Mutex
 
 	checkBlocks, percentile           int
-	maxHeaderHistory, maxBlockHistory int
+	maxHeaderHistory, maxBlockHistory uint64
 
 	historyCache *lru.Cache[cacheKey, processedFees]
 }

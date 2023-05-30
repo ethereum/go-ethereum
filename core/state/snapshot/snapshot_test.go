@@ -118,7 +118,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x02"), 0); err != nil {
 		t.Fatalf("failed to merge diff layer onto disk: %v", err)
 	}
-	// Since the base layer was modified, ensure that data retrieval on the external reference fail
+	// Since the base layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %#x (err: %v)", acc, err)
 	}

@@ -25,7 +25,7 @@ func NewGauge() Gauge {
 	if !Enabled {
 		return NilGauge{}
 	}
-	return &StandardGauge{0}
+	return &StandardGauge{}
 }
 
 // NewRegisteredGauge constructs and registers a new StandardGauge.
@@ -101,7 +101,7 @@ func (NilGauge) Value() int64 { return 0 }
 // StandardGauge is the standard implementation of a Gauge and uses the
 // sync/atomic package to manage a single int64 value.
 type StandardGauge struct {
-	value int64
+	value atomic.Int64
 }
 
 // Snapshot returns a read-only copy of the gauge.
@@ -111,22 +111,22 @@ func (g *StandardGauge) Snapshot() Gauge {
 
 // Update updates the gauge's value.
 func (g *StandardGauge) Update(v int64) {
-	atomic.StoreInt64(&g.value, v)
+	g.value.Store(v)
 }
 
 // Value returns the gauge's current value.
 func (g *StandardGauge) Value() int64 {
-	return atomic.LoadInt64(&g.value)
+	return g.value.Load()
 }
 
 // Dec decrements the gauge's current value by the given amount.
 func (g *StandardGauge) Dec(i int64) {
-	atomic.AddInt64(&g.value, -i)
+	g.value.Add(-i)
 }
 
 // Inc increments the gauge's current value by the given amount.
 func (g *StandardGauge) Inc(i int64) {
-	atomic.AddInt64(&g.value, i)
+	g.value.Add(i)
 }
 
 // FunctionalGauge returns value from given function

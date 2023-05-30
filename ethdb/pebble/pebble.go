@@ -75,14 +75,14 @@ type Database struct {
 
 	log log.Logger // Contextual logger tracking the database path
 
-	activeComp          int       // Current number of active compactions
-	compStartTime       time.Time // The start time of the earliest currently-active compaction
-	compTime            int64     // Total time spent in compaction in ns
-	level0Comp          uint32    // Total number of level-zero compactions
-	nonLevel0Comp       uint32    // Total number of non level-zero compactions
-	writeDelayStartTime time.Time // The start time of the latest write stall
-	writeDelayCount     int64     // Total number of write stall counts
-	writeDelayTime      int64     // Total time spent in write stalls
+	activeComp          int           // Current number of active compactions
+	compStartTime       time.Time     // The start time of the earliest currently-active compaction
+	compTime            atomic.Int64  // Total time spent in compaction in ns
+	level0Comp          atomic.Uint32 // Total number of level-zero compactions
+	nonLevel0Comp       atomic.Uint32 // Total number of non level-zero compactions
+	writeDelayStartTime time.Time     // The start time of the latest write stall
+	writeDelayCount     atomic.Int64  // Total number of write stall counts
+	writeDelayTime      atomic.Int64  // Total time spent in write stalls
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
@@ -91,16 +91,16 @@ func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	}
 	l0 := info.Input[0]
 	if l0.Level == 0 {
-		atomic.AddUint32(&d.level0Comp, 1)
+		d.level0Comp.Add(1)
 	} else {
-		atomic.AddUint32(&d.nonLevel0Comp, 1)
+		d.nonLevel0Comp.Add(1)
 	}
 	d.activeComp++
 }
 
 func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 	if d.activeComp == 1 {
-		atomic.AddInt64(&d.compTime, int64(time.Since(d.compStartTime)))
+		d.compTime.Add(int64(time.Since(d.compStartTime)))
 	} else if d.activeComp == 0 {
 		panic("should not happen")
 	}
@@ -112,7 +112,7 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 }
 
 func (d *Database) onWriteStallEnd() {
-	atomic.AddInt64(&d.writeDelayTime, int64(time.Since(d.writeDelayStartTime)))
+	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -407,11 +407,11 @@ func (d *Database) meter(refresh time.Duration) {
 			nWrite    int64
 
 			metrics            = d.db.Metrics()
-			compTime           = atomic.LoadInt64(&d.compTime)
-			writeDelayCount    = atomic.LoadInt64(&d.writeDelayCount)
-			writeDelayTime     = atomic.LoadInt64(&d.writeDelayTime)
-			nonLevel0CompCount = int64(atomic.LoadUint32(&d.nonLevel0Comp))
-			level0CompCount    = int64(atomic.LoadUint32(&d.level0Comp))
+			compTime           = d.compTime.Load()
+			writeDelayCount    = d.writeDelayCount.Load()
+			writeDelayTime     = d.writeDelayTime.Load()
+			nonLevel0CompCount = int64(d.nonLevel0Comp.Load())
+			level0CompCount    = int64(d.level0Comp.Load())
 		)
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount

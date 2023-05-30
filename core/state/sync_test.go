@@ -213,14 +213,14 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 		for i, node := range nodeElements {
 			if bypath {
 				if len(node.syncPath) == 1 {
-					data, _, err := srcTrie.TryGetNode(node.syncPath[0])
+					data, _, err := srcTrie.GetNode(node.syncPath[0])
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[0], err)
 					}
 					nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 				} else {
 					var acc types.StateAccount
-					if err := rlp.DecodeBytes(srcTrie.Get(node.syncPath[0]), &acc); err != nil {
+					if err := rlp.DecodeBytes(srcTrie.MustGet(node.syncPath[0]), &acc); err != nil {
 						t.Fatalf("failed to decode account on path %x: %v", node.syncPath[0], err)
 					}
 					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
@@ -228,7 +228,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 					if err != nil {
 						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
 					}
-					data, _, err := stTrie.TryGetNode(node.syncPath[1])
+					data, _, err := stTrie.GetNode(node.syncPath[1])
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[1], err)
 					}

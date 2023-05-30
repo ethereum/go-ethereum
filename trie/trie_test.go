@@ -56,8 +56,8 @@ func TestNull(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	key := make([]byte, 32)
 	value := []byte("test")
-	trie.Update(key, value)
-	if !bytes.Equal(trie.Get(key), value) {
+	trie.MustUpdate(key, value)
+	if !bytes.Equal(trie.MustGet(key), value) {
 		t.Fatal("wrong value")
 	}
 }
@@ -90,27 +90,27 @@ func testMissingNode(t *testing.T, memonly bool) {
 	}
 
 	trie, _ = New(TrieID(root), triedb)
-	_, err := trie.TryGet([]byte("120000"))
+	_, err := trie.Get([]byte("120000"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.TryGet([]byte("120099"))
+	_, err = trie.Get([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.TryGet([]byte("123456"))
+	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryUpdate([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
+	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryDelete([]byte("123456"))
+	err = trie.Delete([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -123,27 +123,27 @@ func testMissingNode(t *testing.T, memonly bool) {
 	}
 
 	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.TryGet([]byte("120000"))
+	_, err = trie.Get([]byte("120000"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.TryGet([]byte("120099"))
+	_, err = trie.Get([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.TryGet([]byte("123456"))
+	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryUpdate([]byte("120099"), []byte("zxcv"))
+	err = trie.Update([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.TryDelete([]byte("123456"))
+	err = trie.Delete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
@@ -311,8 +311,8 @@ func TestReplication(t *testing.T) {
 
 func TestLargeValue(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
-	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
-	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
+	trie.MustUpdate([]byte("key1"), []byte{99, 99, 99, 99})
+	trie.MustUpdate([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
 }
 
@@ -460,13 +460,13 @@ func runRandTest(rt randTest) bool {
 
 		switch step.op {
 		case opUpdate:
-			tr.Update(step.key, step.value)
+			tr.MustUpdate(step.key, step.value)
 			values[string(step.key)] = string(step.value)
 		case opDelete:
-			tr.Delete(step.key)
+			tr.MustDelete(step.key)
 			delete(values, string(step.key))
 		case opGet:
-			v := tr.Get(step.key)
+			v := tr.MustGet(step.key)
 			want := values[string(step.key)]
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
@@ -509,7 +509,7 @@ func runRandTest(rt randTest) bool {
 			checktr := NewEmpty(triedb)
 			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
-				checktr.Update(it.Key, it.Value)
+				checktr.MustUpdate(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
@@ -595,13 +595,13 @@ func benchGet(b *testing.B) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.MustUpdate(k, k)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		trie.Get(k)
+		trie.MustGet(k)
 	}
 	b.StopTimer()
 }
@@ -612,7 +612,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.MustUpdate(k, k)
 	}
 	return trie
 }
@@ -640,11 +640,11 @@ func BenchmarkHash(b *testing.B) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	i := 0
 	for ; i < len(addresses)/2; i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	trie.Hash()
 	for ; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -670,7 +670,7 @@ func benchmarkCommitAfterHash(b *testing.B, collectLeaf bool) {
 	addresses, accounts := makeAccounts(b.N)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	// Insert the accounts into the trie and hash it
 	trie.Hash()
@@ -683,22 +683,22 @@ func TestTinyTrie(t *testing.T) {
 	// Create a realistic account trie to hash
 	_, accounts := makeAccounts(5)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
-	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
+	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
 	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
 	}
-	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
+	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
 	if exp, root := common.HexToHash("ec63b967e98a5720e7f720482151963982890d82c9093c0d486b7eb8883a66b1"), trie.Hash(); exp != root {
 		t.Errorf("2: got %x, exp %x", root, exp)
 	}
-	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
+	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
 	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
 	checktr := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
-		checktr.Update(it.Key, it.Value)
+		checktr.MustUpdate(it.Key, it.Value)
 	}
 	if troot, itroot := trie.Hash(), checktr.Hash(); troot != itroot {
 		t.Fatalf("hash mismatch in opItercheckhash, trie: %x, check: %x", troot, itroot)
@@ -710,7 +710,7 @@ func TestCommitAfterHash(t *testing.T) {
 	addresses, accounts := makeAccounts(1000)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	// Insert the accounts into the trie and hash it
 	trie.Hash()
@@ -820,7 +820,7 @@ func TestCommitSequence(t *testing.T) {
 		trie := NewEmpty(db)
 		// Fill the trie with elements
 		for i := 0; i < tc.count; i++ {
-			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+			trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
@@ -861,7 +861,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			}
 			prng.Read(key)
 			prng.Read(val)
-			trie.Update(key, val)
+			trie.MustUpdate(key, val)
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
@@ -899,8 +899,8 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 				val = make([]byte, 1+prng.Intn(1024))
 			}
 			prng.Read(val)
-			trie.TryUpdate(key, val)
-			stTrie.TryUpdate(key, val)
+			trie.Update(key, val)
+			stTrie.Update(key, val)
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
@@ -948,8 +948,8 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	// Add a single small-element to the trie(s)
 	key := make([]byte, 5)
 	key[0] = 1
-	trie.TryUpdate(key, []byte{0x1})
-	stTrie.TryUpdate(key, []byte{0x1})
+	trie.Update(key, []byte{0x1})
+	stTrie.Update(key, []byte{0x1})
 	// Flush trie -> database
 	root, nodes := trie.Commit(false)
 	// Flush memdb -> disk (sponge)
@@ -1017,7 +1017,7 @@ func benchmarkHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byt
 	b.ReportAllocs()
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	// Insert the accounts into the trie and hash it
 	b.StartTimer()
@@ -1068,7 +1068,7 @@ func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accou
 	b.ReportAllocs()
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	// Insert the accounts into the trie and hash it
 	trie.Hash()
@@ -1121,7 +1121,7 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(triedb)
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	h := trie.Hash()
 	_, nodes := trie.Commit(false)
@@ -1132,15 +1132,15 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 }
 
 func getString(trie *Trie, k string) []byte {
-	return trie.Get([]byte(k))
+	return trie.MustGet([]byte(k))
 }
 
 func updateString(trie *Trie, k, v string) {
-	trie.Update([]byte(k), []byte(v))
+	trie.MustUpdate([]byte(k), []byte(v))
 }
 
 func deleteString(trie *Trie, k string) {
-	trie.Delete([]byte(k))
+	trie.MustDelete([]byte(k))
 }
 
 func TestDecodeNode(t *testing.T) {

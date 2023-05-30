@@ -40,17 +40,17 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 		// Map the same data under multiple keys
 		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
 		content[string(key)] = val
-		trie.Update(key, val)
+		trie.MustUpdate(key, val)
 
 		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
 		content[string(key)] = val
-		trie.Update(key, val)
+		trie.MustUpdate(key, val)
 
 		// Add some other data to inflate the trie
 		for j := byte(3); j < 13; j++ {
 			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
 			content[string(key)] = val
-			trie.Update(key, val)
+			trie.MustUpdate(key, val)
 		}
 	}
 	root, nodes := trie.Commit(false)
@@ -74,7 +74,7 @@ func checkTrieContents(t *testing.T, db *Database, root []byte, content map[stri
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	for key, val := range content {
-		if have := trie.Get([]byte(key)); !bytes.Equal(have, val) {
+		if have := trie.MustGet([]byte(key)); !bytes.Equal(have, val) {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
 		}
 	}
@@ -154,7 +154,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool) {
 			}
 		} else {
 			for i, element := range elements {
-				data, _, err := srcTrie.TryGetNode(element.syncPath[len(element.syncPath)-1])
+				data, _, err := srcTrie.GetNode(element.syncPath[len(element.syncPath)-1])
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for path %x: %v", element.path, err)
 				}
