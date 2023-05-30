@@ -126,7 +126,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	}
 
 	<-f.sendLock
-	
+
 	// Add new cases from the inbox after taking the send lock.
 	f.mu.Lock()
 	f.sendCases = append(f.sendCases, f.inbox...)
