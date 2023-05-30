@@ -1232,6 +1232,93 @@ func TestPendingGlobalLimiting(t *testing.T) {
 	}
 }
 
+// Test if the queued transaction slots per account or by total
+// go beyond the threshold, then transactions are dropped to prevent
+// DOS.
+func TestSlotsLimit(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	pool.config.GlobalQueue = uint64(6)
+	pool.config.AccountQueue = uint64(4)
+
+	// Create a number of test accounts and fund them
+	keys := make([]*ecdsa.PrivateKey, 2)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000000))
+	}
+
+	// Compute maximal data size for transactions (lower bound).
+	//
+	// It is assumed the fields in the transaction (except of the data) are:
+	//   - nonce     <= 32 bytes
+	//   - gasPrice  <= 32 bytes
+	//   - gasLimit  <= 32 bytes
+	//   - recipient == 20 bytes
+	//   - value     <= 32 bytes
+	//   - signature == 65 bytes
+	// All those fields are summed up to at most 213 bytes.
+	baseSize := uint64(213)
+	dataSize := txMaxSize - baseSize
+	maxGas := pool.currentHead.Load().GasLimit
+
+	tx := pricedDataTransaction(1, maxGas, big.NewInt(1), keys[0], baseSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots := pool.Stats()
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+	if queuedSlots != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+
+	// 4-slot transaction makes total number of queued slots per account is
+	// higher than AccountQueue, drop this higher nonce transaction
+	tx = pricedDataTransaction(2, maxGas, big.NewInt(1), keys[0], dataSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+	if queuedSlots != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+
+	// 2-slot transaction is acceptable
+	tx = pricedDataTransaction(2, maxGas, big.NewInt(1), keys[0], dataSize/2)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if queuedSlots != 3 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
+	}
+
+	// 4-slot transaction from account 2 makes global queued slots is higher
+	// than GlobalQueue, the 2-slot nonce 2 is dropped
+	tx = pricedDataTransaction(1, maxGas, big.NewInt(1), keys[1], dataSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if queuedSlots != 5 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 5)
+	}
+}
+
 // Test the limit on transaction size is enforced correctly.
 // This test verifies every transaction having allowed size
 // is added to the pool, and longer transactions are rejected.
