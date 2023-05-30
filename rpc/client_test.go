@@ -523,7 +523,11 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	defer httpsrv.Close()
 
 	srv.RegisterName("nftest", new(notificationTestService))
-	client, _ := Dial(wsURL)
+	client, err := Dial(wsURL)
+	if err != nil {
+		t.Fatal("failed to dial test server:", err)
+	}
+	defer client.Close()
 
 	for i := 0; i < 100; i++ {
 		ch := make(chan int, 100)
