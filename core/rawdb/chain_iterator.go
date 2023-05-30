@@ -50,7 +50,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		if i+count > frozen {
 			count = frozen - i
 		}
-		data, err := db.AncientRange(chainFreezerHashTable, i, count, 32*count)
+		data, err := db.AncientRange(ChainFreezerHashTable, i, count, 32*count)
 		if err != nil {
 			log.Crit("Failed to init database from freezer", "err", err)
 		}
@@ -132,11 +132,12 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		}
 	}
 	// process runs in parallel
-	nThreadsAlive := int32(threads)
+	var nThreadsAlive atomic.Int32
+	nThreadsAlive.Store(int32(threads))
 	process := func() {
 		defer func() {
 			// Last processor closes the result channel
-			if atomic.AddInt32(&nThreadsAlive, -1) == 0 {
+			if nThreadsAlive.Add(-1) == 0 {
 				close(hashesCh)
 			}
 		}()
@@ -191,7 +192,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		// in to be [to-1]. Therefore, setting lastNum to means that the
 		// prqueue gap-evaluation will work correctly
 		lastNum = to
-		queue   = prque.New(nil)
+		queue   = prque.New[int64, *blockTxHashes](nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
@@ -210,7 +211,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 				break
 			}
 			// Next block available, pop it off and index it
-			delivery := queue.PopItem().(*blockTxHashes)
+			delivery := queue.PopItem()
 			lastNum = delivery.number
 			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
 			blocks++
@@ -282,7 +283,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the prqueue gap-evaluation will work correctly
 		nextNum = from
-		queue   = prque.New(nil)
+		queue   = prque.New[int64, *blockTxHashes](nil)
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
@@ -299,7 +300,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			if hook != nil && !hook(nextNum) {
 				break
 			}
-			delivery := queue.PopItem().(*blockTxHashes)
+			delivery := queue.PopItem()
 			nextNum = delivery.number + 1
 			DeleteTxLookupEntries(batch, delivery.hashes)
 			txs += len(delivery.hashes)

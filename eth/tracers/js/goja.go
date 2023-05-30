@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/dop251/goja"
 
@@ -33,10 +32,6 @@ import (
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 )
 
-const (
-	memoryPadLimit = 1024 * 1024
-)
-
 var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
@@ -46,7 +41,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	tracers.RegisterLookup(true, newJsTracer)
+	type ctorFn = func(*tracers.Context, json.RawMessage) (tracers.Tracer, error)
+	lookup := func(code string) ctorFn {
+		return func(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+			return newJsTracer(code, ctx, cfg)
+		}
+	}
+	for name, code := range assetTracers {
+		tracers.DefaultDirectory.Register(name, lookup(code), true)
+	}
+	tracers.DefaultDirectory.RegisterJSEval(newJsTracer)
 }
 
 // bigIntProgram is compiled once and the exported function mostly invoked to convert
@@ -85,7 +89,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
 		return b, nil
 	}
-	return nil, fmt.Errorf("invalid buffer type")
+	return nil, errors.New("invalid buffer type")
 }
 
 // jsTracer is an implementation of the Tracer interface which evaluates
@@ -123,16 +127,14 @@ type jsTracer struct {
 	frameResultValue goja.Value
 }
 
-// newJsTracer instantiates a new JS tracer instance. code is either
-// the name of a built-in JS tracer or a Javascript snippet which
-// evaluates to an expression returning an object with certain methods.
+// newJsTracer instantiates a new JS tracer instance. code is a
+// Javascript snippet which evaluates to an expression returning
+// an object with certain methods:
+//
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
 func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	if c, ok := assetTracers[code]; ok {
-		code = c
-	}
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
@@ -233,7 +235,7 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["from"] = t.vm.ToValue(from.Bytes())
 	t.ctx["to"] = t.vm.ToValue(to.Bytes())
 	t.ctx["input"] = t.vm.ToValue(input)
-	t.ctx["gas"] = t.vm.ToValue(gas)
+	t.ctx["gas"] = t.vm.ToValue(t.gasLimit)
 	t.ctx["gasPrice"] = t.vm.ToValue(env.TxContext.GasPrice)
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
@@ -243,7 +245,7 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["value"] = valueBig
 	t.ctx["block"] = t.vm.ToValue(env.Context.BlockNumber.Uint64())
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
@@ -285,9 +287,8 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Duration, err error) {
+func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.ctx["output"] = t.vm.ToValue(output)
-	t.ctx["time"] = t.vm.ToValue(duration.String())
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
@@ -566,14 +567,10 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end < begin || begin < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
-	mlen := mo.memory.Len()
-	if end-int64(mlen) > memoryPadLimit {
-		return nil, fmt.Errorf("tracer reached limit for padding memory slice: end %d, memorySize %d", end, mlen)
+	slice, err := tracers.GetMemoryCopyPadded(mo.memory, begin, end-begin)
+	if err != nil {
+		return nil, err
 	}
-	slice := make([]byte, end-begin)
-	end = min(end, int64(mo.memory.Len()))
-	ptr := mo.memory.GetPtr(begin, end-begin)
-	copy(slice[:], ptr[:])
 	return slice, nil
 }
 
@@ -953,11 +950,4 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("memory", l.memory.setupObject())
 	o.Set("contract", l.contract.setupObject())
 	return o
-}
-
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
 }

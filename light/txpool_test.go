@@ -36,19 +36,19 @@ type testTxRelay struct {
 	send, discard, mined chan int
 }
 
-func (self *testTxRelay) Send(txs types.Transactions) {
-	self.send <- len(txs)
+func (r *testTxRelay) Send(txs types.Transactions) {
+	r.send <- len(txs)
 }
 
-func (self *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (r *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	m := len(mined)
 	if m != 0 {
-		self.mined <- m
+		r.mined <- m
 	}
 }
 
-func (self *testTxRelay) Discard(hashes []common.Hash) {
-	self.discard <- len(hashes)
+func (r *testTxRelay) Discard(hashes []common.Hash) {
+	r.discard <- len(hashes)
 }
 
 const poolTestTxs = 1000
@@ -103,7 +103,7 @@ func TestTxPool(t *testing.T) {
 		discard: make(chan int, 1),
 		mined:   make(chan int, 1),
 	}
-	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker(), nil)
+	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker())
 	txPermanent = 50
 	pool := NewTxPool(params.TestChainConfig, lightchain, relay)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -122,7 +122,7 @@ func TestTxPool(t *testing.T) {
 			}
 		}
 
-		if _, err := lightchain.InsertHeaderChain([]*types.Header{block.Header()}, 1); err != nil {
+		if _, err := lightchain.InsertHeaderChain([]*types.Header{block.Header()}); err != nil {
 			panic(err)
 		}
 

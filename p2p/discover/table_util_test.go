@@ -52,6 +52,7 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
+	r.Set(enr.UDP(30303))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
@@ -174,7 +175,7 @@ func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 }
 
 func hasDuplicates(slice []*node) bool {
-	seen := make(map[enode.ID]bool)
+	seen := make(map[enode.ID]bool, len(slice))
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))

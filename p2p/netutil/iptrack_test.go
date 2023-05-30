@@ -17,8 +17,8 @@
 package netutil
 
 import (
+	crand "crypto/rand"
 	"fmt"
-	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -123,8 +123,8 @@ func TestIPTrackerForceGC(t *testing.T) {
 	for i := 0; i < 5*max; i++ {
 		e1 := make([]byte, 4)
 		e2 := make([]byte, 4)
-		mrand.Read(e1)
-		mrand.Read(e2)
+		crand.Read(e1)
+		crand.Read(e2)
 		it.AddStatement(string(e1), string(e2))
 		it.AddContact(string(e1))
 		clock.Run(rate)

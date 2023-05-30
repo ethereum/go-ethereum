@@ -17,7 +17,7 @@
 package utils
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"

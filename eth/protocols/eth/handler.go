@@ -127,7 +127,7 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Ropsten=3, Rinkeby=4, Goerli=5)
+	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Rinkeby=4, Goerli=5)
 	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
@@ -137,12 +137,14 @@ type NodeInfo struct {
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
 func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
+	hash := head.Hash()
+
 	return &NodeInfo{
 		Network:    network,
-		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
+		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
-		Head:       head.Hash(),
+		Head:       hash,
 	}
 }
 

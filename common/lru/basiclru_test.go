@@ -17,6 +17,7 @@
 package lru
 
 import (
+	crand "crypto/rand"
 	"fmt"
 	"io"
 	"math/rand"
@@ -181,9 +182,9 @@ func BenchmarkLRU(b *testing.B) {
 	}
 	for i := range keys {
 		b := make([]byte, 32)
-		rand.Read(b)
+		crand.Read(b)
 		keys[i] = string(b)
-		rand.Read(b)
+		crand.Read(b)
 		values[i] = b
 	}
 

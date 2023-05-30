@@ -97,6 +97,16 @@ func isBigInt(typ types.Type) bool {
 	return name.Pkg().Path() == "math/big" && name.Name() == "Int"
 }
 
+// isUint256 checks whether 'typ' is "github.com/holiman/uint256".Int.
+func isUint256(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+	name := named.Obj()
+	return name.Pkg().Path() == "github.com/holiman/uint256" && name.Name() == "Int"
+}
+
 // isByte checks whether the underlying type of 'typ' is uint8.
 func isByte(typ types.Type) bool {
 	basic, ok := resolveUnderlying(typ).(*types.Basic)

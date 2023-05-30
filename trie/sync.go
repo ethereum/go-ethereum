@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -155,24 +156,24 @@ func (batch *syncMemBatch) hasCode(hash common.Hash) bool {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	scheme   NodeScheme                   // Node scheme descriptor used in database.
+	scheme   string                       // Node scheme descriptor used in database.
 	database ethdb.KeyValueReader         // Persistent database to check for existing entries
 	membatch *syncMemBatch                // Memory buffer to avoid frequent database writes
 	nodeReqs map[string]*nodeRequest      // Pending requests pertaining to a trie node path
 	codeReqs map[common.Hash]*codeRequest // Pending requests pertaining to a code hash
-	queue    *prque.Prque                 // Priority queue with the pending requests
+	queue    *prque.Prque[int64, any]     // Priority queue with the pending requests
 	fetches  map[int]int                  // Number of active fetches per trie node depth
 }
 
 // NewSync creates a new trie data download scheduler.
-func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallback, scheme NodeScheme) *Sync {
+func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallback, scheme string) *Sync {
 	ts := &Sync{
 		scheme:   scheme,
 		database: database,
 		membatch: newSyncMemBatch(),
 		nodeReqs: make(map[string]*nodeRequest),
 		codeReqs: make(map[common.Hash]*codeRequest),
-		queue:    prque.New(nil),
+		queue:    prque.New[int64, any](nil), // Ugh, can contain both string and hash, whyyy
 		fetches:  make(map[int]int),
 	}
 	ts.AddSubTrie(root, nil, common.Hash{}, nil, callback)
@@ -184,14 +185,14 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 // hex format and contain all the parent path if it's layered trie node.
 func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
-	if root == emptyRoot {
+	if root == types.EmptyRootHash {
 		return
 	}
 	if s.membatch.hasNode(path) {
 		return
 	}
 	owner, inner := ResolvePath(path)
-	if s.scheme.HasTrieNode(s.database, owner, inner, root) {
+	if rawdb.HasTrieNode(s.database, owner, inner, root, s.scheme) {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -217,7 +218,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 // as is.
 func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, parentPath []byte) {
 	// Short circuit if the entry is empty or already known
-	if hash == emptyState {
+	if hash == types.EmptyCodeHash {
 		return
 	}
 	if s.membatch.hasCode(hash) {
@@ -349,7 +350,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for path, value := range s.membatch.nodes {
 		owner, inner := ResolvePath([]byte(path))
-		s.scheme.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value)
+		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
@@ -474,7 +475,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					chash        = common.BytesToHash(node)
 					owner, inner = ResolvePath(child.path)
 				)
-				if s.scheme.HasTrieNode(s.database, owner, inner, chash) {
+				if rawdb.HasTrieNode(s.database, owner, inner, chash, s.scheme) {
 					return
 				}
 				// Locally unknown node, schedule for retrieval

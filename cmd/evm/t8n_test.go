@@ -230,7 +230,7 @@ func TestT8n(t *testing.T) {
 		{ // Test post-merge transition
 			base: "./testdata/24",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Merged", "",
+				"alloc.json", "txs.json", "env.json", "Merge", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
@@ -238,7 +238,7 @@ func TestT8n(t *testing.T) {
 		{ // Test post-merge transition where input is missing random
 			base: "./testdata/24",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env-missingrandom.json", "Merged", "",
+				"alloc.json", "txs.json", "env-missingrandom.json", "Merge", "",
 			},
 			output:      t8nOutput{alloc: false, result: false},
 			expExitCode: 3,
@@ -246,7 +246,15 @@ func TestT8n(t *testing.T) {
 		{ // Test base fee calculation
 			base: "./testdata/25",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Merged", "",
+				"alloc.json", "txs.json", "env.json", "Merge", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // Test withdrawals transition
+			base: "./testdata/26",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Shanghai", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
@@ -267,7 +275,8 @@ func TestT8n(t *testing.T) {
 		tt.Run("evm-test", args...)
 		// Compare the expected output, if provided
 		if tc.expOut != "" {
-			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
+			file := fmt.Sprintf("%v/%v", tc.base, tc.expOut)
+			want, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
@@ -275,9 +284,9 @@ func TestT8n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Fatalf("test %d, json parsing failed: %v", i, err)
+				t.Fatalf("test %d, file %v: json parsing failed: %v", i, file, err)
 			case !ok:
-				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
+				t.Fatalf("test %d, file %v: output wrong, have \n%v\nwant\n%v\n", i, file, string(have), string(want))
 			}
 		}
 		tt.WaitExit()
@@ -391,13 +400,14 @@ func TestT9n(t *testing.T) {
 }
 
 type b11rInput struct {
-	inEnv       string
-	inOmmersRlp string
-	inTxsRlp    string
-	inClique    string
-	ethash      bool
-	ethashMode  string
-	ethashDir   string
+	inEnv         string
+	inOmmersRlp   string
+	inWithdrawals string
+	inTxsRlp      string
+	inClique      string
+	ethash        bool
+	ethashMode    string
+	ethashDir     string
 }
 
 func (args *b11rInput) get(base string) []string {
@@ -408,6 +418,10 @@ func (args *b11rInput) get(base string) []string {
 	}
 	if opt := args.inOmmersRlp; opt != "" {
 		out = append(out, "--input.ommers")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inWithdrawals; opt != "" {
+		out = append(out, "--input.withdrawals")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.inTxsRlp; opt != "" {
@@ -477,6 +491,16 @@ func TestB11r(t *testing.T) {
 				inEnv:       "header.json",
 				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
+		{ // block with withdrawals
+			base: "./testdata/27",
+			input: b11rInput{
+				inEnv:         "header.json",
+				inOmmersRlp:   "ommers.json",
+				inWithdrawals: "withdrawals.json",
+				inTxsRlp:      "txs.rlp",
 			},
 			expOut: "exp.json",
 		},

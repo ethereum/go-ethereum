@@ -38,7 +38,7 @@ const (
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsMessageSizeLimit = 15 * 1024 * 1024
+	wsMessageSizeLimit = 32 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
@@ -224,6 +224,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 			ReadBufferSize:  wsReadBuffer,
 			WriteBufferSize: wsWriteBuffer,
 			WriteBufferPool: wsBufferPool,
+			Proxy:           http.ProxyFromEnvironment,
 		}
 	}
 
@@ -287,8 +288,12 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header) Serve
 		conn.SetReadDeadline(time.Time{})
 		return nil
 	})
+
+	encode := func(v interface{}, isErrorResponse bool) error {
+		return conn.WriteJSON(v)
+	}
 	wc := &websocketCodec{
-		jsonCodec: NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON).(*jsonCodec),
+		jsonCodec: NewFuncCodec(conn, encode, conn.ReadJSON).(*jsonCodec),
 		conn:      conn,
 		pingReset: make(chan struct{}, 1),
 		info: PeerInfo{
@@ -315,8 +320,8 @@ func (wc *websocketCodec) peerInfo() PeerInfo {
 	return wc.info
 }
 
-func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}) error {
-	err := wc.jsonCodec.writeJSON(ctx, v)
+func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError bool) error {
+	err := wc.jsonCodec.writeJSON(ctx, v, isError)
 	if err == nil {
 		// Notify pingLoop to delay the next idle ping.
 		select {

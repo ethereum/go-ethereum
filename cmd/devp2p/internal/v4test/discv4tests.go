@@ -19,6 +19,7 @@ package v4test
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -119,7 +120,7 @@ func (te *testenv) checkPingPong(pingHash []byte) error {
 // and a PING. The two packets do not have to be in any particular order.
 func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 	if reply == nil {
-		return fmt.Errorf("expected PONG reply, got nil")
+		return errors.New("expected PONG reply, got nil")
 	}
 	if reply.Kind() != v4wire.PongPacket {
 		return fmt.Errorf("expected PONG reply, got %v %v", reply.Name(), reply)
@@ -395,7 +396,7 @@ func FindnodePastExpiration(t *utesting.T) {
 
 // bond performs the endpoint proof with the remote node.
 func bond(t *utesting.T, te *testenv) {
-	te.send(te.l1, &v4wire.Ping{
+	pingHash := te.send(te.l1, &v4wire.Ping{
 		Version:    4,
 		From:       te.localEndpoint(te.l1),
 		To:         te.remoteEndpoint(),
@@ -417,7 +418,9 @@ func bond(t *utesting.T, te *testenv) {
 			})
 			gotPing = true
 		case *v4wire.Pong:
-			// TODO: maybe verify pong data here
+			if err := te.checkPong(req, pingHash); err != nil {
+				t.Fatal(err)
+			}
 			gotPong = true
 		}
 	}

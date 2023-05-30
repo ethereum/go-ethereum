@@ -61,7 +61,9 @@ func TestParseRoot(t *testing.T) {
 }
 
 func TestParseEntry(t *testing.T) {
-	testkey := testKey(signingKeySeed)
+	testENRs := []string{"enr:-HW4QES8QIeXTYlDzbfr1WEzE-XKY4f8gJFJzjJL-9D7TC9lJb4Z3JPRRz1lP4pL_N_QpT6rGQjAU9Apnc-C1iMP36OAgmlkgnY0iXNlY3AyNTZrMaED5IdwfMxdmR8W37HqSFdQLjDkIwBd4Q_MjxgZifgKSdM"}
+	testNodes := parseNodes(testENRs)
+
 	tests := []struct {
 		input string
 		e     entry
@@ -91,7 +93,11 @@ func TestParseEntry(t *testing.T) {
 		// Links
 		{
 			input: "enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
-			e:     &linkEntry{"AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org", "nodes.example.org", &testkey.PublicKey},
+			e: &linkEntry{
+				str:    "AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
+				domain: "nodes.example.org",
+				pubkey: &signingKeyForTesting.PublicKey,
+			},
 		},
 		{
 			input: "enrtree://nodes.example.org",
@@ -107,8 +113,8 @@ func TestParseEntry(t *testing.T) {
 		},
 		// ENRs
 		{
-			input: "enr:-HW4QES8QIeXTYlDzbfr1WEzE-XKY4f8gJFJzjJL-9D7TC9lJb4Z3JPRRz1lP4pL_N_QpT6rGQjAU9Apnc-C1iMP36OAgmlkgnY0iXNlY3AyNTZrMaED5IdwfMxdmR8W37HqSFdQLjDkIwBd4Q_MjxgZifgKSdM",
-			e:     &enrEntry{node: testNode(nodesSeed1)},
+			input: testENRs[0],
+			e:     &enrEntry{node: testNodes[0]},
 		},
 		{
 			input: "enr:-HW4QLZHjM4vZXkbp-5xJoHsKSbE7W39FPC8283X-y8oHcHPTnDDlIlzL5ArvDUlHZVDPgmFASrh7cWgLOLxj4wprRkHgmlkgnY0iXNlY3AyNTZrMaEC3t2jLMhDpCDX5mbSEwDn4L3iUfyXzoO8G28XvjGRkrAg=",
@@ -132,7 +138,8 @@ func TestParseEntry(t *testing.T) {
 }
 
 func TestMakeTree(t *testing.T) {
-	nodes := testNodes(nodesSeed2, 50)
+	keys := testKeys(50)
+	nodes := testNodes(keys)
 	tree, err := MakeTree(2, nodes, nil)
 	if err != nil {
 		t.Fatal(err)

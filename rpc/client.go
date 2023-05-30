@@ -43,7 +43,7 @@ var (
 const (
 	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
-	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	subscribeTimeout   = 10 * time.Second // overall timeout eth_subscribe, rpc_modules calls
 )
 
 const (
@@ -79,7 +79,7 @@ type Client struct {
 	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
 
-	idCounter uint32
+	idCounter atomic.Uint32
 
 	// This function, if non-nil, is called when the connection is lost.
 	reconnectFunc reconnectFunc
@@ -263,7 +263,7 @@ func (c *Client) RegisterName(name string, receiver interface{}) error {
 }
 
 func (c *Client) nextID() json.RawMessage {
-	id := atomic.AddUint32(&c.idCounter, 1)
+	id := c.idCounter.Add(1)
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
@@ -345,7 +345,10 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	case len(resp.Result) == 0:
 		return ErrNoResult
 	default:
-		return json.Unmarshal(resp.Result, &result)
+		if result == nil {
+			return nil
+		}
+		return json.Unmarshal(resp.Result, result)
 	}
 }
 
@@ -527,7 +530,7 @@ func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 			return err
 		}
 	}
-	err := c.writeConn.writeJSON(ctx, msg)
+	err := c.writeConn.writeJSON(ctx, msg, false)
 	if err != nil {
 		c.writeConn = nil
 		if !retry {
@@ -660,7 +663,8 @@ func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {
-			codec.writeJSON(context.Background(), errorMessage(&parseError{err.Error()}))
+			msg := errorMessage(&parseError{err.Error()})
+			codec.writeJSON(context.Background(), msg, true)
 		}
 		if err != nil {
 			c.readErr <- err

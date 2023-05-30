@@ -20,62 +20,38 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
-
-// leaf represents a trie leaf node
-type leaf struct {
-	blob   []byte      // raw blob of leaf
-	parent common.Hash // the hash of parent node
-}
 
 // committer is the tool used for the trie Commit operation. The committer will
 // capture all dirty nodes during the commit process and keep them cached in
 // insertion order.
 type committer struct {
-	nodes       *NodeSet
+	nodes       *trienode.NodeSet
 	tracer      *tracer
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(owner common.Hash, tracer *tracer, collectLeaf bool) *committer {
+func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *committer {
 	return &committer{
-		nodes:       NewNodeSet(owner),
+		nodes:       nodeset,
 		tracer:      tracer,
 		collectLeaf: collectLeaf,
 	}
 }
 
-// Commit collapses a node down into a hash node and returns it along with
-// the modified nodeset.
-func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
-	h, err := c.commit(nil, n)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Some nodes can be deleted from trie which can't be captured by committer
-	// itself. Iterate all deleted nodes tracked by tracer and marked them as
-	// deleted only if they are present in database previously.
-	for _, path := range c.tracer.deleteList() {
-		// There are a few possibilities for this scenario(the node is deleted
-		// but not present in database previously), for example the node was
-		// embedded in the parent and now deleted from the trie. In this case
-		// it's noop from database's perspective.
-		val := c.tracer.getPrev(path)
-		if len(val) == 0 {
-			continue
-		}
-		c.nodes.markDeleted(path, val)
-	}
-	return h.(hashNode), c.nodes, nil
+// Commit collapses a node down into a hash node.
+func (c *committer) Commit(n node) hashNode {
+	return c.commit(nil, n).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node) (node, error) {
+func (c *committer) commit(path []byte, n node) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
-		return hash, nil
+		return hash
 	}
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
@@ -86,47 +62,28 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV, err := c.commit(append(path, cn.Key...), cn.Val)
-			if err != nil {
-				return nil, err
-			}
-			collapsed.Val = childV
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
-		// The short node now is embedded in its parent. Mark the node as
-		// deleted if it's present in database previously. It's equivalent
-		// as deletion from database's perspective.
-		if prev := c.tracer.getPrev(path); len(prev) != 0 {
-			c.nodes.markDeleted(path, prev)
-		}
-		return collapsed, nil
+		return collapsed
 	case *fullNode:
-		hashedKids, err := c.commitChildren(path, cn)
-		if err != nil {
-			return nil, err
-		}
+		hashedKids := c.commitChildren(path, cn)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nil
+			return hn
 		}
-		// The full node now is embedded in its parent. Mark the node as
-		// deleted if it's present in database previously. It's equivalent
-		// as deletion from database's perspective.
-		if prev := c.tracer.getPrev(path); len(prev) != 0 {
-			c.nodes.markDeleted(path, prev)
-		}
-		return collapsed, nil
+		return collapsed
 	case hashNode:
-		return cn, nil
+		return cn
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -134,7 +91,7 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
+func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -151,17 +108,13 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, err := c.commit(append(path, byte(i)), child)
-		if err != nil {
-			return children, err
-		}
-		children[i] = hashed
+		children[i] = c.commit(append(path, byte(i)), child)
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
-	return children, nil
+	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
@@ -175,21 +128,25 @@ func (c *committer) store(path []byte, n node) node {
 	// usually is leaf node). But small value (less than 32bytes) is not
 	// our target (leaves in account trie only).
 	if hash == nil {
+		// The node is embedded in its parent, in other words, this node
+		// will not be stored in the database independently, mark it as
+		// deleted only if the node was existent in database before.
+		prev, ok := c.tracer.accessList[string(path)]
+		if ok {
+			c.nodes.AddNode(path, trienode.NewWithPrev(common.Hash{}, nil, prev))
+		}
 		return n
 	}
-	// We have the hash already, estimate the RLP encoding-size of the node.
-	// The size is used for mem tracking, does not need to be exact
-	var (
-		size  = estimateSize(n)
-		nhash = common.BytesToHash(hash)
-		mnode = &memoryNode{
-			hash: nhash,
-			node: simplifyNode(n),
-			size: uint16(size),
-		}
-	)
 	// Collect the dirty node to nodeset for return.
-	c.nodes.markUpdated(path, mnode, c.tracer.getPrev(path))
+	var (
+		nhash = common.BytesToHash(hash)
+		node  = trienode.NewWithPrev(
+			nhash,
+			nodeToBytes(n),
+			c.tracer.accessList[string(path)],
+		)
+	)
+	c.nodes.AddNode(path, node)
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
@@ -197,38 +154,36 @@ func (c *committer) store(path []byte, n node) node {
 	if c.collectLeaf {
 		if sn, ok := n.(*shortNode); ok {
 			if val, ok := sn.Val.(valueNode); ok {
-				c.nodes.addLeaf(&leaf{blob: val, parent: nhash})
+				c.nodes.AddLeaf(nhash, val)
 			}
 		}
 	}
 	return hash
 }
 
-// estimateSize estimates the size of an rlp-encoded node, without actually
-// rlp-encoding it (zero allocs). This method has been experimentally tried, and with a trie
-// with 1000 leaves, the only errors above 1% are on small shortnodes, where this
-// method overestimates by 2 or 3 bytes (e.g. 37 instead of 35)
-func estimateSize(n node) int {
+// mptResolver the children resolver in merkle-patricia-tree.
+type mptResolver struct{}
+
+// ForEach implements childResolver, decodes the provided node and
+// traverses the children inside.
+func (resolver mptResolver) ForEach(node []byte, onChild func(common.Hash)) {
+	forGatherChildren(mustDecodeNodeUnsafe(nil, node), onChild)
+}
+
+// forGatherChildren traverses the node hierarchy and invokes the callback
+// for all the hashnode children.
+func forGatherChildren(n node, onChild func(hash common.Hash)) {
 	switch n := n.(type) {
 	case *shortNode:
-		// A short node contains a compacted key, and a value.
-		return 3 + len(n.Key) + estimateSize(n.Val)
+		forGatherChildren(n.Val, onChild)
 	case *fullNode:
-		// A full node contains up to 16 hashes (some nils), and a key
-		s := 3
 		for i := 0; i < 16; i++ {
-			if child := n.Children[i]; child != nil {
-				s += estimateSize(child)
-			} else {
-				s++
-			}
+			forGatherChildren(n.Children[i], onChild)
 		}
-		return s
-	case valueNode:
-		return 1 + len(n)
 	case hashNode:
-		return 1 + len(n)
+		onChild(common.BytesToHash(n))
+	case valueNode, nil:
 	default:
-		panic(fmt.Sprintf("node type %T", n))
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
 }

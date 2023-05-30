@@ -41,6 +41,7 @@ type ExpDecaySample struct {
 	reservoirSize int
 	t0, t1        time.Time
 	values        *expDecaySampleHeap
+	rand          *rand.Rand
 }
 
 // NewExpDecaySample constructs a new exponentially-decaying sample with the
@@ -56,6 +57,12 @@ func NewExpDecaySample(reservoirSize int, alpha float64) Sample {
 		values:        newExpDecaySampleHeap(reservoirSize),
 	}
 	s.t1 = s.t0.Add(rescaleThreshold)
+	return s
+}
+
+// SetRand sets the random source (useful in tests)
+func (s *ExpDecaySample) SetRand(prng *rand.Rand) Sample {
+	s.rand = prng
 	return s
 }
 
@@ -168,8 +175,14 @@ func (s *ExpDecaySample) update(t time.Time, v int64) {
 	if s.values.Size() == s.reservoirSize {
 		s.values.Pop()
 	}
+	var f64 float64
+	if s.rand != nil {
+		f64 = s.rand.Float64()
+	} else {
+		f64 = rand.Float64()
+	}
 	s.values.Push(expDecaySample{
-		k: math.Exp(t.Sub(s.t0).Seconds()*s.alpha) / rand.Float64(),
+		k: math.Exp(t.Sub(s.t0).Seconds()*s.alpha) / f64,
 		v: v,
 	})
 	if t.After(s.t1) {
@@ -402,6 +415,7 @@ type UniformSample struct {
 	mutex         sync.Mutex
 	reservoirSize int
 	values        []int64
+	rand          *rand.Rand
 }
 
 // NewUniformSample constructs a new uniform sample with the given reservoir
@@ -414,6 +428,12 @@ func NewUniformSample(reservoirSize int) Sample {
 		reservoirSize: reservoirSize,
 		values:        make([]int64, 0, reservoirSize),
 	}
+}
+
+// SetRand sets the random source (useful in tests)
+func (s *UniformSample) SetRand(prng *rand.Rand) Sample {
+	s.rand = prng
+	return s
 }
 
 // Clear clears all samples.
@@ -511,7 +531,12 @@ func (s *UniformSample) Update(v int64) {
 	if len(s.values) < s.reservoirSize {
 		s.values = append(s.values, v)
 	} else {
-		r := rand.Int63n(s.count)
+		var r int64
+		if s.rand != nil {
+			r = s.rand.Int63n(s.count)
+		} else {
+			r = rand.Int63n(s.count)
+		}
 		if r < int64(len(s.values)) {
 			s.values[int(r)] = v
 		}

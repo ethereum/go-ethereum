@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var _ = (*stEnvMarshaling)(nil)
@@ -29,6 +30,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		ParentTimestamp  math.HexOrDecimal64                 `json:"parentTimestamp,omitempty"`
 		BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 		Ommers           []ommer                             `json:"ommers,omitempty"`
+		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
 	}
@@ -46,6 +48,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.ParentTimestamp = math.HexOrDecimal64(s.ParentTimestamp)
 	enc.BlockHashes = s.BlockHashes
 	enc.Ommers = s.Ommers
+	enc.Withdrawals = s.Withdrawals
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
 	enc.ParentUncleHash = s.ParentUncleHash
 	return json.Marshal(&enc)
@@ -67,6 +70,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		ParentTimestamp  *math.HexOrDecimal64                `json:"parentTimestamp,omitempty"`
 		BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 		Ommers           []ommer                             `json:"ommers,omitempty"`
+		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash  *common.Hash                        `json:"parentUncleHash"`
 	}
@@ -116,6 +120,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Ommers != nil {
 		s.Ommers = dec.Ommers
+	}
+	if dec.Withdrawals != nil {
+		s.Withdrawals = dec.Withdrawals
 	}
 	if dec.BaseFee != nil {
 		s.BaseFee = (*big.Int)(dec.BaseFee)

@@ -348,7 +348,7 @@ func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			// Retrieve the requested block's receipts, skipping if unknown to us
 			results := bc.GetReceiptsByHash(hash)
 			if results == nil {
-				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyReceiptsHash {
 					p.bumpInvalid()
 					continue
 				}

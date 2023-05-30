@@ -17,9 +17,9 @@
 package miner
 
 import (
+	"crypto/rand"
 	"errors"
 	"math/big"
-	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -105,8 +105,6 @@ func init() {
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
 	newTxs = append(newTxs, tx2)
-
-	rand.Seed(time.Now().UnixNano())
 }
 
 // testWorkerBackend implements worker.Backend interfaces and wraps all information needed during the testing.
@@ -149,7 +147,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		if _, err := chain.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to insert origin chain: %v", err)
 		}
-		parent := chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
+		parent := chain.GetBlockByHash(chain.CurrentBlock().ParentHash)
 		blocks, _ = core.GenerateChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
 			gen.SetCoinbase(testUserAddress)
 		})
@@ -178,10 +176,10 @@ func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
 	cur := b.chain.CurrentBlock()
-	if cur.NumberU64() == 0 {
+	if cur.Number.Uint64() == 0 {
 		parent = b.chain.Genesis()
 	} else {
-		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
+		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 	}
 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
@@ -208,10 +206,6 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
-}
-
-func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
@@ -456,11 +450,11 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		progress = make(chan struct{}, 10)
 		result   = make([]float64, 0, 10)
 		index    = 0
-		start    uint32
+		start    atomic.Bool
 	)
 	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
 		// Short circuit if interval checking hasn't started.
-		if atomic.LoadUint32(&start) == 0 {
+		if !start.Load() {
 			return
 		}
 		var wantMinInterval, wantRecommitInterval time.Duration
@@ -495,7 +489,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	w.start()
 
 	time.Sleep(time.Second) // Ensure two tasks have been submitted due to start opt
-	atomic.StoreUint32(&start, 1)
+	start.Store(true)
 
 	w.setRecommitInterval(3 * time.Second)
 	select {
@@ -568,7 +562,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 		}
 		_, isClique := engine.(*clique.Clique)
 		if !isClique {
-			if len(block.Extra()) != 0 {
+			if len(block.Extra()) != 2 {
 				t.Error("Unexpected extra field")
 			}
 			if block.Coinbase() != coinbase {
@@ -609,21 +603,21 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			b.chain.CurrentBlock().Hash(),
 			common.HexToAddress("0xdeadbeef"),
 			common.HexToHash("0xcafebabe"),
-			b.chain.CurrentBlock().NumberU64() + 1,
+			b.chain.CurrentBlock().Number.Uint64() + 1,
 			false,
 		},
 		{
 			b.chain.CurrentBlock().Hash(),
 			common.Address{},
 			common.HexToHash("0xcafebabe"),
-			b.chain.CurrentBlock().NumberU64() + 1,
+			b.chain.CurrentBlock().Number.Uint64() + 1,
 			false,
 		},
 		{
 			b.chain.CurrentBlock().Hash(),
 			common.Address{},
 			common.Hash{},
-			b.chain.CurrentBlock().NumberU64() + 1,
+			b.chain.CurrentBlock().Number.Uint64() + 1,
 			false,
 		},
 		{
@@ -637,7 +631,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 
 	// This API should work even when the automatic sealing is not enabled
 	for _, c := range cases {
-		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, false)
+		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, nil, false)
 		if c.expectErr {
 			if err == nil {
 				t.Error("Expect error but get nil")
@@ -653,7 +647,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	// This API should work even when the automatic sealing is enabled
 	w.start()
 	for _, c := range cases {
-		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, false)
+		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, nil, false)
 		if c.expectErr {
 			if err == nil {
 				t.Error("Expect error but get nil")

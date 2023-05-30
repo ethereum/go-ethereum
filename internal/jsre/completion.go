@@ -17,11 +17,15 @@
 package jsre
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/dop251/goja"
 )
+
+// JS numerical token
+var numerical = regexp.MustCompile(`^(NaN|-?((\d*\.\d+|\d+)([Ee][+-]?\d+)?|Infinity))$`)
 
 // CompleteKeywords returns potential continuations for the given line. Since line is
 // evaluated, callers need to make sure that evaluating line does not have side effects.
@@ -43,6 +47,9 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	// and "x.y" is an object, obj will reference "x.y".
 	obj := vm.GlobalObject()
 	for i := 0; i < len(parts)-1; i++ {
+		if numerical.MatchString(parts[i]) {
+			return nil
+		}
 		v := obj.Get(parts[i])
 		if v == nil || goja.IsNull(v) || goja.IsUndefined(v) {
 			return nil // No object was found
@@ -67,7 +74,11 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	// Append opening parenthesis (for functions) or dot (for objects)
 	// if the line itself is the only completion.
 	if len(results) == 1 && results[0] == line {
-		obj := obj.Get(parts[len(parts)-1])
+		// Accessing the property will cause it to be evaluated.
+		// This can cause an error, e.g. in case of web3.eth.protocolVersion
+		// which has been dropped from geth. Ignore the error for autocompletion
+		// purposes.
+		obj := SafeGet(obj, parts[len(parts)-1])
 		if obj != nil {
 			if _, isfunc := goja.AssertFunction(obj); isfunc {
 				results[0] += "("

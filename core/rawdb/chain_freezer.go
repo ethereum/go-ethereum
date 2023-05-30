@@ -43,10 +43,7 @@ const (
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
 type chainFreezer struct {
-	// WARNING: The `threshold` field is accessed atomically. On 32 bit platforms, only
-	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
-	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
+	threshold atomic.Uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	*Freezer
 	quit    chan struct{}
@@ -55,29 +52,29 @@ type chainFreezer struct {
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
-func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*chainFreezer, error) {
-	freezer, err := NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
+func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFreezer, error) {
+	freezer, err := NewChainFreezer(datadir, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
-	return &chainFreezer{
-		Freezer:   freezer,
-		threshold: params.FullImmutabilityThreshold,
-		quit:      make(chan struct{}),
-		trigger:   make(chan chan struct{}),
-	}, nil
+	cf := chainFreezer{
+		Freezer: freezer,
+		quit:    make(chan struct{}),
+		trigger: make(chan chan struct{}),
+	}
+	cf.threshold.Store(params.FullImmutabilityThreshold)
+	return &cf, nil
 }
 
 // Close closes the chain freezer instance and terminates the background thread.
 func (f *chainFreezer) Close() error {
-	err := f.Freezer.Close()
 	select {
 	case <-f.quit:
 	default:
 		close(f.quit)
 	}
 	f.wg.Wait()
-	return err
+	return f.Freezer.Close()
 }
 
 // freeze is a background thread that periodically checks the blockchain for any
@@ -86,14 +83,14 @@ func (f *chainFreezer) Close() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
-	nfdb := &nofreezedb{KeyValueStore: db}
-
 	var (
 		backoff   bool
 		triggered chan struct{} // Used in tests
+		nfdb      = &nofreezedb{KeyValueStore: db}
 	)
 	timer := time.NewTimer(freezerRecheckInterval)
 	defer timer.Stop()
+
 	for {
 		select {
 		case <-f.quit:
@@ -125,8 +122,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		number := ReadHeaderNumber(nfdb, hash)
-		threshold := atomic.LoadUint64(&f.threshold)
-		frozen := atomic.LoadUint64(&f.frozen)
+		threshold := f.threshold.Load()
+		frozen := f.frozen.Load()
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
@@ -187,7 +184,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
-		frozen = atomic.LoadUint64(&f.frozen) // Needs reload after during freezeRange
+		frozen = f.frozen.Load() // Needs reload after during freezeRange
 		for number := first; number < frozen; number++ {
 			// Always keep the genesis block in active database
 			if number != 0 {
@@ -281,19 +278,19 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 
 			// Write to the batch.
-			if err := op.AppendRaw(chainFreezerHashTable, number, hash[:]); err != nil {
+			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerHeaderTable, number, header); err != nil {
+			if err := op.AppendRaw(ChainFreezerHeaderTable, number, header); err != nil {
 				return fmt.Errorf("can't write header to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerBodiesTable, number, body); err != nil {
+			if err := op.AppendRaw(ChainFreezerBodiesTable, number, body); err != nil {
 				return fmt.Errorf("can't write body to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerReceiptTable, number, receipts); err != nil {
+			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(chainFreezerDifficultyTable, number, td); err != nil {
+			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 

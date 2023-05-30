@@ -18,7 +18,7 @@ package logger
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -55,7 +55,7 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
-		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger})
+		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: logger})
 		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
@@ -85,7 +85,7 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}{
 		{"empty err and no fields", &StructLog{},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
-		{"with err", &StructLog{Err: fmt.Errorf("this failed")},
+		{"with err", &StructLog{Err: errors.New("this failed")},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`},
 		{"with mem", &StructLog{Memory: make([]byte, 2), MemorySize: 2},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},

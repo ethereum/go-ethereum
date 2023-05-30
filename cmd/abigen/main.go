@@ -65,7 +65,7 @@ var (
 	}
 	langFlag = &cli.StringFlag{
 		Name:  "lang",
-		Usage: "Destination language for the bindings (go, java, objc)",
+		Usage: "Destination language for the bindings (go)",
 		Value: "go",
 	}
 	aliasFlag = &cli.StringFlag{
@@ -102,11 +102,6 @@ func abigen(c *cli.Context) error {
 	switch c.String(langFlag.Name) {
 	case "go":
 		lang = bind.LangGo
-	case "java":
-		lang = bind.LangJava
-	case "objc":
-		lang = bind.LangObjC
-		utils.Fatalf("Objc binding generation is uncompleted")
 	default:
 		utils.Fatalf("Unsupported destination language \"%s\" (--lang)", c.String(langFlag.Name))
 	}

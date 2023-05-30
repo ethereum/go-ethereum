@@ -56,7 +56,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -119,9 +118,6 @@ func TestGethClient(t *testing.T) {
 			"TestGetNodeInfo",
 			func(t *testing.T) { testGetNodeInfo(t, client) },
 		}, {
-			"TestSetHead",
-			func(t *testing.T) { testSetHead(t, client) },
-		}, {
 			"TestSubscribePendingTxHashes",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
@@ -130,6 +126,9 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
+		}, {
+			"TestCallContractWithBlockOverrides",
+			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
 		// one block. The `testAcessList` fails if the miner has not yet created a
@@ -138,6 +137,9 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestAccessList",
 			func(t *testing.T) { testAccessList(t, client) },
+		}, {
+			"TestSetHead",
+			func(t *testing.T) { testSetHead(t, client) },
 		},
 	}
 	for _, tt := range tests {
@@ -299,7 +301,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Check that the transaction was send over the channel
+	// Check that the transaction was sent over the channel
 	hash := <-ch
 	if hash != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
@@ -333,7 +335,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Check that the transaction was send over the channel
+	// Check that the transaction was sent over the channel
 	tx = <-ch
 	if tx.Hash() != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
@@ -411,5 +413,77 @@ func TestOverrideAccountMarshal(t *testing.T) {
 	if string(marshalled) != expected {
 		t.Error("wrong output:", string(marshalled))
 		t.Error("want:", expected)
+	}
+}
+
+func TestBlockOverridesMarshal(t *testing.T) {
+	for i, tt := range []struct {
+		bo   BlockOverrides
+		want string
+	}{
+		{
+			bo:   BlockOverrides{},
+			want: `{}`,
+		},
+		{
+			bo: BlockOverrides{
+				Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
+			},
+			want: `{"coinbase":"0x1111111111111111111111111111111111111111"}`,
+		},
+		{
+			bo: BlockOverrides{
+				Number:     big.NewInt(1),
+				Difficulty: big.NewInt(2),
+				Time:       3,
+				GasLimit:   4,
+				BaseFee:    big.NewInt(5),
+			},
+			want: `{"number":"0x1","difficulty":"0x2","time":"0x3","gasLimit":"0x4","baseFee":"0x5"}`,
+		},
+	} {
+		marshalled, err := json.Marshal(&tt.bo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(marshalled) != tt.want {
+			t.Errorf("Testcase #%d failed. expected\n%s\ngot\n%s", i, tt.want, string(marshalled))
+		}
+	}
+}
+
+func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	msg := ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      50000,
+		GasPrice: big.NewInt(1000000000),
+		Value:    big.NewInt(1),
+	}
+	override := OverrideAccount{
+		// Returns coinbase address.
+		Code: common.FromHex("0x41806000526014600cf3"),
+	}
+	mapAcc := make(map[common.Address]OverrideAccount)
+	mapAcc[common.Address{}] = override
+	res, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(res, common.FromHex("0x0000000000000000000000000000000000000000")) {
+		t.Fatalf("unexpected result: %x", res)
+	}
+
+	// Now test with block overrides
+	bo := BlockOverrides{
+		Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
+	}
+	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, big.NewInt(0), &mapAcc, bo)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
+		t.Fatalf("unexpected result: %x", res)
 	}
 }

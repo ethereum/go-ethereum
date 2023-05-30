@@ -19,10 +19,10 @@ package downloader
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -75,7 +75,7 @@ func (b *beaconBackfiller) suspend() *types.Header {
 
 	// Sync cycle was just terminated, retrieve and return the last filled header.
 	// Can't use `filled` as that contains a stale value from before cancellation.
-	return b.downloader.blockchain.CurrentFastBlock().Header()
+	return b.downloader.blockchain.CurrentSnapBlock()
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
@@ -100,7 +100,7 @@ func (b *beaconBackfiller) resume() {
 		defer func() {
 			b.lock.Lock()
 			b.filling = false
-			b.filled = b.downloader.blockchain.CurrentFastBlock().Header()
+			b.filled = b.downloader.blockchain.CurrentSnapBlock()
 			b.lock.Unlock()
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
@@ -150,8 +150,8 @@ func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, true)
+func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.Header) error {
+	return d.beaconSync(mode, head, final, true)
 }
 
 // BeaconExtend is an optimistic version of BeaconSync, where an attempt is made
@@ -161,7 +161,7 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header) error {
 // This is useful if a beacon client is feeding us large chunks of payloads to run,
 // but is not setting the head after each.
 func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, false)
+	return d.beaconSync(mode, head, nil, false)
 }
 
 // beaconSync is the post-merge version of the chain synchronization, where the
@@ -170,7 +170,7 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) error {
+func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.Header, force bool) error {
 	// When the downloader starts a sync cycle, it needs to be aware of the sync
 	// mode to use (full, snap). To keep the skeleton chain oblivious, inject the
 	// mode into the backfiller directly.
@@ -180,7 +180,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, force bool) e
 	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
 
 	// Signal the skeleton sync to switch to a new head, however it wants
-	if err := d.skeleton.Sync(head, force); err != nil {
+	if err := d.skeleton.Sync(head, final, force); err != nil {
 		return err
 	}
 	return nil
@@ -197,16 +197,16 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 
 	switch d.getMode() {
 	case FullSync:
-		chainHead = d.blockchain.CurrentBlock().Header()
+		chainHead = d.blockchain.CurrentBlock()
 	case SnapSync:
-		chainHead = d.blockchain.CurrentFastBlock().Header()
+		chainHead = d.blockchain.CurrentSnapBlock()
 	default:
 		chainHead = d.lightchain.CurrentHeader()
 	}
 	number := chainHead.Number.Uint64()
 
 	// Retrieve the skeleton bounds and ensure they are linked to the local chain
-	beaconHead, beaconTail, err := d.skeleton.Bounds()
+	beaconHead, beaconTail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// This is a programming error. The chain backfiller was called with an
 		// invalid beacon sync state. Ideally we would panic here, but erroring
@@ -270,7 +270,8 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
-	head, tail, err := d.skeleton.Bounds()
+	var head *types.Header
+	_, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -288,6 +289,47 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
 	for {
+		// Some beacon headers might have appeared since the last cycle, make
+		// sure we're always syncing to all available ones
+		head, _, _, err = d.skeleton.Bounds()
+		if err != nil {
+			return err
+		}
+		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
+		// move it ahead to HEAD-64
+		d.pivotLock.Lock()
+		if d.pivotHeader != nil {
+			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
+				// Retrieve the next pivot header, either from skeleton chain
+				// or the filled chain
+				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+
+				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
+				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
+					if number < tail.Number.Uint64() {
+						dist := tail.Number.Uint64() - number
+						if len(localHeaders) >= int(dist) {
+							d.pivotHeader = localHeaders[dist-1]
+							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
+						}
+					}
+				}
+				// Print an error log and return directly in case the pivot header
+				// is still not found. It means the skeleton chain is not linked
+				// correctly with local chain.
+				if d.pivotHeader == nil {
+					log.Error("Pivot header is not found", "number", number)
+					d.pivotLock.Unlock()
+					return errNoPivotHeader
+				}
+				// Write out the pivot into the database so a rollback beyond
+				// it will reenable snap sync and update the state root that
+				// the state syncer will be downloading
+				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
+			}
+		}
+		d.pivotLock.Unlock()
+
 		// Retrieve a batch of headers and feed it to the header processor
 		var (
 			headers = make([]*types.Header, 0, maxHeadersProcess)
@@ -328,7 +370,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			continue
 		}
 		// If the pivot block is committed, signal header sync termination
-		if atomic.LoadInt32(&d.committed) == 1 {
+		if d.committed.Load() {
 			select {
 			case d.headerProcCh <- nil:
 				return nil
@@ -342,10 +384,6 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		case <-time.After(fsHeaderContCheck):
 		case <-d.cancelCh:
 			return errCanceled
-		}
-		head, _, err = d.skeleton.Bounds()
-		if err != nil {
-			return err
 		}
 	}
 }

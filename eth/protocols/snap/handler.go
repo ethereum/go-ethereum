@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -417,7 +418,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err != nil {
 				return nil, nil
 			}
-			acc, err := accTrie.TryGetAccountWithPreHashedKey(account[:])
+			acc, err := accTrie.GetAccountByHash(account)
 			if err != nil || acc == nil {
 				return nil, nil
 			}
@@ -464,7 +465,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 		bytes uint64
 	)
 	for _, hash := range req.Hashes {
-		if hash == emptyCode {
+		if hash == types.EmptyCodeHash {
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
@@ -509,7 +510,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 
 		case 1:
 			// If we're only retrieving an account trie node, fetch it directly
-			blob, resolved, err := accTrie.TryGetNode(pathset[0])
+			blob, resolved, err := accTrie.GetNode(pathset[0])
 			loads += resolved // always account database reads, even for failures
 			if err != nil {
 				break
@@ -523,7 +524,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if snap == nil {
 				// We don't have the requested state snapshotted yet (or it is stale),
 				// but can look up the account via the trie instead.
-				account, err := accTrie.TryGetAccountWithPreHashedKey(pathset[0])
+				account, err := accTrie.GetAccountByHash(common.BytesToHash(pathset[0]))
 				loads += 8 // We don't know the exact cost of lookup, this is an estimate
 				if err != nil || account == nil {
 					break
@@ -544,7 +545,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 				break
 			}
 			for _, path := range pathset[1:] {
-				blob, resolved, err := stTrie.TryGetNode(path)
+				blob, resolved, err := stTrie.GetNode(path)
 				loads += resolved // always account database reads, even for failures
 				if err != nil {
 					break

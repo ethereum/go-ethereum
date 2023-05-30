@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -45,6 +47,8 @@ var (
 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // testBackend is a mock implementation of the live Ethereum message handler. Its
 // purpose is to allow testing the request/reply workflows and wire serialization
 // in the `eth` protocol without actually doing any data processing.
@@ -56,26 +60,58 @@ type testBackend struct {
 
 // newTestBackend creates an empty chain and wraps it into a mock backend.
 func newTestBackend(blocks int) *testBackend {
-	return newTestBackendWithGenerator(blocks, nil)
+	return newTestBackendWithGenerator(blocks, false, nil)
 }
 
 // newTestBackend creates a chain with a number of explicitly defined blocks and
 // wraps it into a mock backend.
-func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)) *testBackend {
-	// Create a database pre-initialize with a genesis block
-	db := rawdb.NewMemoryDatabase()
+func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, *core.BlockGen)) *testBackend {
+	var (
+		// Create a database pre-initialize with a genesis block
+		db                      = rawdb.NewMemoryDatabase()
+		config                  = params.TestChainConfig
+		engine consensus.Engine = ethash.NewFaker()
+	)
+
+	if shanghai {
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(1),
+			HomesteadBlock:                big.NewInt(0),
+			DAOForkBlock:                  nil,
+			DAOForkSupport:                true,
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			ArrowGlacierBlock:             big.NewInt(0),
+			GrayGlacierBlock:              big.NewInt(0),
+			MergeNetsplitBlock:            big.NewInt(0),
+			ShanghaiTime:                  u64(0),
+			TerminalTotalDifficulty:       big.NewInt(0),
+			TerminalTotalDifficultyPassed: true,
+			Ethash:                        new(params.EthashConfig),
+		}
+		engine = beacon.NewFaker()
+	}
+
 	gspec := &core.Genesis{
-		Config: params.TestChainConfig,
+		Config: config,
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil)
 
-	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, generator)
+	_, bs, _ := core.GenerateChainWithGenesis(gspec, engine, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
 	for _, block := range bs {
-		chain.StateCache().TrieDB().Commit(block.Root(), false, nil)
+		chain.StateCache().TrieDB().Commit(block.Root(), false)
 	}
 	txconfig := txpool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
@@ -189,24 +225,24 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			[]common.Hash{backend.chain.GetBlockByNumber(0).Hash()},
 		},
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64()}, Amount: 1},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		{ // If the peer requests a bit into the future, we deliver what we have
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 10},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64()}, Amount: 10},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			getHashes(backend.chain.CurrentBlock().NumberU64(), limit),
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 1}, Amount: limit + 10, Reverse: true},
+			getHashes(backend.chain.CurrentBlock().Number.Uint64(), limit),
 		},
 		// Check that requesting more than available is handled gracefully
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64()).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64()).Hash(),
 			},
 		}, {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
@@ -217,10 +253,10 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 4).Hash(),
-				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().NumberU64() - 1).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 4).Hash(),
+				backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64() - 1).Hash(),
 			},
 		}, {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
@@ -257,7 +293,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -305,7 +341,17 @@ func TestGetBlockBodies68(t *testing.T) { testGetBlockBodies(t, ETH68) }
 func testGetBlockBodies(t *testing.T, protocol uint) {
 	t.Parallel()
 
-	backend := newTestBackend(maxBodiesServe + 15)
+	gen := func(n int, g *core.BlockGen) {
+		if n%2 == 0 {
+			w := &types.Withdrawal{
+				Address: common.Address{0xaa},
+				Amount:  42,
+			}
+			g.AddWithdrawal(w)
+		}
+	}
+
+	backend := newTestBackendWithGenerator(maxBodiesServe+15, true, gen)
 	defer backend.close()
 
 	peer, _ := newTestPeer("peer", protocol, backend)
@@ -348,14 +394,14 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		)
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(backend.chain.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(backend.chain.CurrentBlock().Number.Uint64()))
 				if !seen[num] {
 					seen[num] = true
 
 					block := backend.chain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
-						bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+						bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
 					}
 					break
 				}
@@ -365,9 +411,10 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
-				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
 			}
 		}
+
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
 			RequestId:            123,
@@ -377,7 +424,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			RequestId:         123,
 			BlockBodiesPacket: bodies,
 		}); err != nil {
-			t.Errorf("test %d: bodies mismatch: %v", i, err)
+			t.Fatalf("test %d: bodies mismatch: %v", i, err)
 		}
 	}
 }
@@ -426,7 +473,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 		}
 	}
 	// Assemble the test environment
-	backend := newTestBackendWithGenerator(4, generator)
+	backend := newTestBackendWithGenerator(4, false, generator)
 	defer backend.close()
 
 	peer, _ := newTestPeer("peer", protocol, backend)
@@ -477,12 +524,12 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	// Reconstruct state tree from the received data.
 	reconstructDB := rawdb.NewMemoryDatabase()
 	for i := 0; i < len(data); i++ {
-		rawdb.WriteTrieNode(reconstructDB, hashes[i], data[i])
+		rawdb.WriteLegacyTrieNode(reconstructDB, hashes[i], data[i])
 	}
 
 	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		root := backend.chain.GetBlockByNumber(i).Root()
 		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
 		for j, acc := range accounts {
@@ -544,7 +591,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		}
 	}
 	// Assemble the test environment
-	backend := newTestBackendWithGenerator(4, generator)
+	backend := newTestBackendWithGenerator(4, false, generator)
 	defer backend.close()
 
 	peer, _ := newTestPeer("peer", protocol, backend)
@@ -555,7 +602,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		hashes   []common.Hash
 		receipts [][]*types.Receipt
 	)
-	for i := uint64(0); i <= backend.chain.CurrentBlock().NumberU64(); i++ {
+	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())

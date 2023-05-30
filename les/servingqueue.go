@@ -38,10 +38,10 @@ type servingQueue struct {
 	setThreadsCh            chan int
 
 	wg          sync.WaitGroup
-	threadCount int          // number of currently running threads
-	queue       *prque.Prque // priority queue for waiting or suspended tasks
-	best        *servingTask // the highest priority task (not included in the queue)
-	suspendBias int64        // priority bias against suspending an already running task
+	threadCount int                               // number of currently running threads
+	queue       *prque.Prque[int64, *servingTask] // priority queue for waiting or suspended tasks
+	best        *servingTask                      // the highest priority task (not included in the queue)
+	suspendBias int64                             // priority bias against suspending an already running task
 }
 
 // servingTask represents a request serving task. Tasks can be implemented to
@@ -123,7 +123,7 @@ func (t *servingTask) waitOrStop() bool {
 // newServingQueue returns a new servingQueue
 func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 	sq := &servingQueue{
-		queue:          prque.NewWrapAround(nil),
+		queue:          prque.New[int64, *servingTask](nil),
 		suspendBias:    suspendBias,
 		queueAddCh:     make(chan *servingTask, 100),
 		queueBestCh:    make(chan *servingTask),
@@ -214,7 +214,7 @@ func (sq *servingQueue) freezePeers() {
 	}
 	sq.best = nil
 	for sq.queue.Size() > 0 {
-		task := sq.queue.PopItem().(*servingTask)
+		task := sq.queue.PopItem()
 		tasks := peerMap[task.peer]
 		if tasks == nil {
 			bufValue, bufLimit := task.peer.fcClient.BufferStatus()
@@ -251,7 +251,7 @@ func (sq *servingQueue) freezePeers() {
 		}
 	}
 	if sq.queue.Size() > 0 {
-		sq.best = sq.queue.PopItem().(*servingTask)
+		sq.best = sq.queue.PopItem()
 	}
 }
 
@@ -310,7 +310,7 @@ func (sq *servingQueue) queueLoop() {
 				if sq.queue.Size() == 0 {
 					sq.best = nil
 				} else {
-					sq.best, _ = sq.queue.PopItem().(*servingTask)
+					sq.best = sq.queue.PopItem()
 				}
 			case <-sq.quit:
 				return

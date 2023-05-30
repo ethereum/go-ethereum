@@ -27,9 +27,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -152,7 +154,7 @@ func (f *fuzzer) fuzz() int {
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB))
 		trieB   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			dbB.Scheme().WriteTrieNode(spongeB, owner, path, hash, blob)
+			rawdb.WriteTrieNode(spongeB, owner, path, hash, blob, dbB.Scheme())
 		})
 		vals        kvs
 		useful      bool
@@ -175,22 +177,19 @@ func (f *fuzzer) fuzz() int {
 		}
 		keys[string(k)] = struct{}{}
 		vals = append(vals, kv{k: k, v: v})
-		trieA.Update(k, v)
+		trieA.MustUpdate(k, v)
 		useful = true
 	}
 	if !useful {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, nodes, err := trieA.Commit(false)
-	if err != nil {
-		panic(err)
-	}
+	rootA, nodes := trieA.Commit(false)
 	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
+		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false, nil)
+	dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)
@@ -198,12 +197,10 @@ func (f *fuzzer) fuzz() int {
 		if f.debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
-		trieB.Update(kv.k, kv.v)
+		trieB.MustUpdate(kv.k, kv.v)
 	}
 	rootB := trieB.Hash()
-	if _, err := trieB.Commit(); err != nil {
-		panic(err)
-	}
+	trieB.Commit()
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
 	}
@@ -228,7 +225,7 @@ func (f *fuzzer) fuzz() int {
 		checked int
 	)
 	for _, kv := range vals {
-		trieC.Update(kv.k, kv.v)
+		trieC.MustUpdate(kv.k, kv.v)
 	}
 	rootC, _ := trieC.Commit()
 	if rootA != rootC {
