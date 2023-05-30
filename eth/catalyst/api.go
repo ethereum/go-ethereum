@@ -20,6 +20,7 @@ package catalyst
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -165,10 +166,10 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if payloadAttributes != nil {
 		if payloadAttributes.Withdrawals != nil {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 		}
-		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
+		if api.eth.BlockChain().Config().IsShanghai(api.eth.BlockChain().Config().LondonBlock, payloadAttributes.Timestamp) {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("forkChoiceUpdateV1 called post-shanghai"))
 		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
@@ -185,7 +186,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 }
 
 func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
-	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
+	if !api.eth.BlockChain().Config().IsShanghai(api.eth.BlockChain().Config().LondonBlock, attr.Timestamp) {
 		// Reject payload attributes with withdrawals before shanghai
 		if attr.Withdrawals != nil {
 			return errors.New("withdrawals before shanghai")
@@ -385,7 +386,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 				TerminalBlockNumber:     config.TerminalBlockNumber,
 			}, nil
 		}
-		return nil, fmt.Errorf("invalid terminal block hash")
+		return nil, errors.New("invalid terminal block hash")
 	}
 	return &engine.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
@@ -416,19 +417,19 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
 	return api.newPayload(params)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
+	if api.eth.BlockChain().Config().IsShanghai(new(big.Int).SetUint64(params.Number), params.Timestamp) {
 		if params.Withdrawals == nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 		}
 	} else if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
 	}
 	return api.newPayload(params)
 }

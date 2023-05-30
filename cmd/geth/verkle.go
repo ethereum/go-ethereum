@@ -100,7 +100,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 				return nil
 			}
 		}
-		return fmt.Errorf("Both balance and nonce are 0")
+		return errors.New("Both balance and nonce are 0")
 	case verkle.Empty:
 		// nothing to do
 	default:

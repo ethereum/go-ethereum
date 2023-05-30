@@ -492,18 +492,18 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
-func (c *ChainConfig) IsShanghai(time uint64) bool {
-	return isTimestampForked(c.ShanghaiTime, time)
+func (c *ChainConfig) IsShanghai(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.ShanghaiTime, time)
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
-func (c *ChainConfig) IsCancun(time uint64) bool {
-	return isTimestampForked(c.CancunTime, time)
+func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
 
 // IsPrague returns whether num is either equal to the Prague fork time or greater.
-func (c *ChainConfig) IsPrague(time uint64) bool {
-	return isTimestampForked(c.PragueTime, time)
+func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -829,8 +829,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       c.IsShanghai(timestamp),
-		IsCancun:         c.IsCancun(timestamp),
-		IsPrague:         c.IsPrague(timestamp),
+		IsShanghai:       c.IsShanghai(num, timestamp),
+		IsCancun:         c.IsCancun(num, timestamp),
+		IsPrague:         c.IsPrague(num, timestamp),
 	}
 }
