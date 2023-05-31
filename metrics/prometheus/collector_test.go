@@ -99,6 +99,7 @@ test_resetting_timer_sum 180000000
 test_resetting_timer_count 6
 
 `
+
 	c.addResettingTimer("test/empty_resetting_timer", emptyResettingTimer)
 
 	exp := c.buff.String()

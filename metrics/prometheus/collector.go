@@ -62,12 +62,14 @@ func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64) {
 func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
+
 	var sum float64 = 0
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
 		sum += ps[i]
 	}
+
 	c.writeSummarySum(name, fmt.Sprintf("%f", sum))
 	c.writeSummaryCounter(name, len(ps))
 	c.buff.WriteRune('\n')
@@ -98,10 +100,13 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 	c.writeSummaryPercentile(name, "0.50", ps[0])
 	c.writeSummaryPercentile(name, "0.95", ps[1])
 	c.writeSummaryPercentile(name, "0.99", ps[2])
+
 	var sum int64 = 0
+
 	for _, v := range val {
 		sum += v
 	}
+
 	c.writeSummarySum(name, fmt.Sprintf("%d", sum))
 	c.writeSummaryCounter(name, len(val))
 	c.buff.WriteRune('\n')
