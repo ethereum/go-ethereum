@@ -478,16 +478,16 @@ func (s *PersonalAccountAPI) SignTransaction(ctx context.Context, args Transacti
 	// No need to obtain the noncelock mutex, since we won't be sending this
 	// tx into the transaction pool, but right back to the user
 	if args.From == nil {
-		return nil, fmt.Errorf("sender not specified")
+		return nil, errors.New("sender not specified")
 	}
 	if args.Gas == nil {
-		return nil, fmt.Errorf("gas not specified")
+		return nil, errors.New("gas not specified")
 	}
 	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
-		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
-		return nil, fmt.Errorf("nonce not specified")
+		return nil, errors.New("nonce not specified")
 	}
 	// Before actually signing the transaction, ensure the transaction fee is reasonable.
 	tx := args.toTransaction()
@@ -548,7 +548,7 @@ func (s *PersonalAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.By
 		return common.Address{}, fmt.Errorf("signature must be %d bytes long", crypto.SignatureLength)
 	}
 	if sig[crypto.RecoveryIDOffset] != 27 && sig[crypto.RecoveryIDOffset] != 28 {
-		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+		return common.Address{}, errors.New("invalid Ethereum signature (V is not 27 or 28)")
 	}
 	sig[crypto.RecoveryIDOffset] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
@@ -582,7 +582,7 @@ func (s *PersonalAccountAPI) InitializeWallet(ctx context.Context, url string) (
 	case *scwallet.Wallet:
 		return mnemonic, wallet.Initialize(seed)
 	default:
-		return "", fmt.Errorf("specified wallet does not support initialization")
+		return "", errors.New("specified wallet does not support initialization")
 	}
 }
 
@@ -597,7 +597,7 @@ func (s *PersonalAccountAPI) Unpair(ctx context.Context, url string, pin string)
 	case *scwallet.Wallet:
 		return wallet.Unpair([]byte(pin))
 	default:
-		return fmt.Errorf("specified wallet does not support pairing")
+		return errors.New("specified wallet does not support pairing")
 	}
 }
 
@@ -655,44 +655,62 @@ type StorageResult struct {
 	Proof []string     `json:"proof"`
 }
 
+// proofList implements ethdb.KeyValueWriter and collects the proofs as
+// hex-strings for delivery to rpc-caller.
+type proofList []string
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, hexutil.Encode(value))
+	return nil
+}
+
+func (n *proofList) Delete(key []byte) error {
+	panic("not supported")
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	var (
+		keys         = make([]common.Hash, len(storageKeys))
+		storageProof = make([]StorageResult, len(storageKeys))
+		storageTrie  state.Trie
+		storageHash  = types.EmptyRootHash
+		codeHash     = types.EmptyCodeHash
+	)
+	// Greedily deserialize all keys. This prevents state access on invalid input
+	for i, hexKey := range storageKeys {
+		if key, err := decodeHash(hexKey); err != nil {
+			return nil, err
+		} else {
+			keys[i] = key
+		}
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	storageTrie, err := state.StorageTrie(address)
-	if err != nil {
+	if storageTrie, err = state.StorageTrie(address); err != nil {
 		return nil, err
 	}
-	storageHash := types.EmptyRootHash
-	codeHash := state.GetCodeHash(address)
-	storageProof := make([]StorageResult, len(storageKeys))
-
-	// if we have a storageTrie, (which means the account exists), we can update the storagehash
+	// if we have a storageTrie, the account exists and we must update
+	// the storage root hash and the code hash.
 	if storageTrie != nil {
 		storageHash = storageTrie.Hash()
-	} else {
-		// no storageTrie means the account does not exist, so the codeHash is the hash of an empty bytearray.
-		codeHash = crypto.Keccak256Hash(nil)
+		codeHash = state.GetCodeHash(address)
 	}
-
 	// create the proof for the storageKeys
-	for i, hexKey := range storageKeys {
-		key, err := decodeHash(hexKey)
-		keyInt := (*hexutil.Big)(new(big.Int).SetBytes(key[:]))
-		if err != nil {
+	for i, key := range keys {
+		if storageTrie == nil {
+      storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()), &hexutil.Big{}, []string{}}
+			continue
+		}
+		var proof proofList
+		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof); err != nil {
 			return nil, err
 		}
-		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, key)
-			if storageError != nil {
-				return nil, storageError
-			}
-			storageProof[i] = StorageResult{keyInt, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
-		} else {
-			storageProof[i] = StorageResult{keyInt, &hexutil.Big{}, []string{}}
-		}
+    storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()),
+			(*hexutil.Big)(state.GetState(address, key).Big()),
+			proof}
 	}
 
 	// create the accountProof
@@ -723,17 +741,19 @@ func decodeHash(s string) (common.Hash, error) {
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("hex string invalid")
+		return common.Hash{}, errors.New("hex string invalid")
 	}
 	if len(b) > 32 {
-		return common.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
+		return common.Hash{}, errors.New("hex string too long, want at most 32 bytes")
 	}
 	return common.BytesToHash(b), nil
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
+//   - When blockNr is -1 the chain pending header is returned.
+//   - When blockNr is -2 the chain latest header is returned.
+//   - When blockNr is -3 the chain finalized header is returned.
+//   - When blockNr is -4 the chain safe header is returned.
 func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
@@ -759,8 +779,10 @@ func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) m
 }
 
 // GetBlockByNumber returns the requested canonical block.
-//   - When blockNr is -1 the chain head is returned.
-//   - When blockNr is -2 the pending chain head is returned.
+//   - When blockNr is -1 the chain pending block is returned.
+//   - When blockNr is -2 the chain latest block is returned.
+//   - When blockNr is -3 the chain finalized block is returned.
+//   - When blockNr is -4 the chain safe block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
@@ -1238,7 +1260,6 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"miner":            head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
-		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
 		"gasUsed":          hexutil.Uint64(head.GasUsed),
 		"timestamp":        hexutil.Uint64(head.Time),
@@ -1834,13 +1855,13 @@ type SignTransactionResult struct {
 // the given from address and it needs to be unlocked.
 func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
-		return nil, fmt.Errorf("gas not specified")
+		return nil, errors.New("gas not specified")
 	}
 	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
-		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
-		return nil, fmt.Errorf("nonce not specified")
+		return nil, errors.New("nonce not specified")
 	}
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
@@ -1889,7 +1910,7 @@ func (s *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 // the given transaction from the pool and reinsert it with the new gas price and limit.
 func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
-		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
+		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
 	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err

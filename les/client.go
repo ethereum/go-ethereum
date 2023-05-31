@@ -18,7 +18,7 @@
 package les
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -266,14 +266,14 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 
 type LightDummyAPI struct{}
 
-// Etherbase is the address that mining rewards will be send to
+// Etherbase is the address that mining rewards will be sent to
 func (s *LightDummyAPI) Etherbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
+// Coinbase is the address that mining rewards will be sent to (alias for Etherbase)
 func (s *LightDummyAPI) Coinbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
 // Hashrate returns the POW hashrate
