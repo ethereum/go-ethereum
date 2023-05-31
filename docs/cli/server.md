@@ -258,7 +258,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```metrics.prometheus-addr```: Address for Prometheus Server (default: 127.0.0.1:7071)
 
-- ```metrics.opencollector-endpoint```: OpenCollector Endpoint (host:port)
+- ```metrics.opencollector-endpoint```: OpenCollector Endpoint (host:port) (default: 127.0.0.1:4317)
 
 - ```metrics.influxdbv2```: Enable metrics export/push to an external InfluxDB v2 database (default: false)
 

@@ -47,7 +47,7 @@ jobs:
         run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: amd64
-
+          
       - name: Running package build
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
@@ -366,7 +366,7 @@ jobs:
           ARCH: amd64
           NODE: archive
           NETWORK: mainnet
-      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: amd64
@@ -519,7 +519,7 @@ jobs:
           ARCH: arm64
           NODE: sentry
           NETWORK: mainnet
-      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: arm64
@@ -629,13 +629,13 @@ jobs:
           ARCH: arm64
           NODE: validator
           NETWORK: mainnet
-      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: arm64
           NODE: validator
           NETWORK: mainnet
-
+        
       - name: Updating the control file to use with the arm64 profile
         run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
 
@@ -675,7 +675,7 @@ jobs:
           ARCH: arm64
           NODE: archive
           NETWORK: mumbai
-      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: arm64
@@ -718,7 +718,7 @@ jobs:
           ARCH: arm64
           NODE: archive
           NETWORK: mainnet
-      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
         run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
         env:
           ARCH: arm64

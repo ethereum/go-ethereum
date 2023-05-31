@@ -35,9 +35,9 @@ devfakeauthor = false           # Run miner without validator set authorization 
   port = 30303            # Network listening port
   nodiscover = false      # Disables the peer discovery mechanism (manual peer addition)
   nat = "any"             # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
-  netrestrict = ""    # Restricts network communication to the given IP networks (CIDR masks)
-  nodekey = ""        # P2P node key file
-  nodekeyhex = ""     # P2P node key as hex
+  netrestrict = ""        # Restricts network communication to the given IP networks (CIDR masks)
+  nodekey = ""            # P2P node key file
+  nodekeyhex = ""         # P2P node key as hex
   txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
@@ -130,7 +130,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   metrics = false                            # Enable metrics collection and reporting
   expensive = false                          # Enable expensive metrics collection and reporting
   prometheus-addr = "127.0.0.1:7071"         # Address for Prometheus Server
-  opencollector-endpoint = ""  # OpenCollector Endpoint (host:port)
+  opencollector-endpoint = ""                # OpenCollector Endpoint (host:port)
   [telemetry.influx]
     influxdb = false    # Enable metrics export/push to an external InfluxDB database (v1)
     endpoint = ""       # InfluxDB API endpoint to report metrics to

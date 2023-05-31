@@ -25,7 +25,7 @@ GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) $(GO_LDFLAGS) -p 1
 
 bor:
 	mkdir -p $(GOPATH)/bin/
-	go build -o $(GOBIN)/bor $(GO_LDFLAGS) ./cmd/cli/main.go
+	go build -o $(GOBIN)/bor $(GO_LDFLAGS) ./cmd/cli/main.go 
 	cp $(GOBIN)/bor $(GOPATH)/bin/
 	@echo "Done building."
 

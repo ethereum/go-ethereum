@@ -793,11 +793,6 @@ func BenchmarkBorMining(b *testing.B) {
 	chain, _ := core.NewBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
-
 	// fulfill tx pool
 	const (
 		totalGas    = testGas + params.TxGas

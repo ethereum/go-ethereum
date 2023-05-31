@@ -129,6 +129,7 @@ type Config struct {
 
 	// ParallelEVM has the parallel evm related settings
 	ParallelEVM *ParallelEVMConfig `hcl:"parallelevm,block" toml:"parallelevm,block"`
+
 	// Develop Fake Author mode to produce blocks without authorisation
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 
@@ -311,9 +312,10 @@ type SealerConfig struct {
 	GasPriceRaw string   `hcl:"gasprice,optional" toml:"gasprice,optional"`
 
 	// The time interval for miner to re-create mining work.
-	Recommit            time.Duration `hcl:"-,optional" toml:"-"`
-	RecommitRaw         string        `hcl:"recommit,optional" toml:"recommit,optional"`
-	CommitInterruptFlag bool          `hcl:"commitinterrupt,optional" toml:"commitinterrupt,optional"`
+	Recommit    time.Duration `hcl:"-,optional" toml:"-"`
+	RecommitRaw string        `hcl:"recommit,optional" toml:"recommit,optional"`
+
+	CommitInterruptFlag bool `hcl:"commitinterrupt,optional" toml:"commitinterrupt,optional"`
 }
 
 type JsonRPCConfig struct {
