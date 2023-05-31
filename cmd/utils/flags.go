@@ -726,7 +726,7 @@ var (
 	}
 	BatchResponseMaxSize = &cli.IntFlag{
 		Name:     "rpc.batch-response-max-size",
-		Usage:    "Maximum number of bytes returned from calls (10MB)",
+		Usage:    "Maximum number of bytes returned from a batched call",
 		Value:    rpc.DefaultBatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
