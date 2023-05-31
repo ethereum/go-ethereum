@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -123,9 +122,11 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 	if full {
 		cur := blockchain.CurrentBlock()
 		tdPre = blockchain.GetTd(cur.Hash(), cur.NumberU64())
+
 		if err := testBlockChainImport(blockChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked block chain: %v", err)
 		}
+
 		last := blockChainB[len(blockChainB)-1]
 		tdPost = blockchain.GetTd(last.Hash(), last.NumberU64())
 	} else {
@@ -156,11 +157,9 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
-		if err != nil {
-			return err
-		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+
+		receipts, _, usedGas, statedb, err := blockchain.ProcessBlock(block, blockchain.GetBlockByHash(block.ParentHash()).Header())
+
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -178,6 +177,25 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		blockchain.chainmu.Unlock()
 	}
 	return nil
+}
+
+func TestParallelBlockChainImport(t *testing.T) {
+	t.Parallel()
+
+	db, blockchain, err := newCanonical(ethash.NewFaker(), 10, true)
+	blockchain.parallelProcessor = NewParallelStateProcessor(blockchain.chainConfig, blockchain, blockchain.engine)
+
+	if err != nil {
+		t.Fatalf("failed to make new canonical chain: %v", err)
+	}
+
+	defer blockchain.Stop()
+
+	blockChainB := makeFakeNonEmptyBlockChain(blockchain.CurrentBlock(), 5, ethash.NewFaker(), db, forkSeed, 5)
+
+	if err := testBlockChainImport(blockChainB, blockchain); err == nil {
+		t.Fatalf("expected error for bad tx")
+	}
 }
 
 // testHeaderChainImport tries to process a chain of header, writing them into

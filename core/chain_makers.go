@@ -105,7 +105,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -332,6 +332,19 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
+	return blocks
+}
+
+// makeBlockChain creates a deterministic chain of blocks rooted at parent with fake invalid transactions.
+func makeFakeNonEmptyBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int, numTx int) []*types.Block {
+	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
+		addr := common.Address{0: byte(seed), 19: byte(i)}
+		b.SetCoinbase(addr)
+		for j := 0; j < numTx; j++ {
+			b.txs = append(b.txs, types.NewTransaction(0, addr, big.NewInt(1000), params.TxGas, nil, nil))
+		}
+	})
+
 	return blocks
 }
 

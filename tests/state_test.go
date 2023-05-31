@@ -303,7 +303,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			for n := 0; n < b.N; n++ {
 				// Execute the message.
 				snapshot := statedb.Snapshot()
-				_, _, err = evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
+				_, _, err = evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value(), nil)
 				if err != nil {
 					b.Error(err)
 					return

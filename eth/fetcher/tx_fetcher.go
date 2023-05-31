@@ -53,13 +53,13 @@ const (
 	// re-request them.
 	maxTxUnderpricedSetSize = 32768
 
-	// txArriveTimeout is the time allowance before an announced transaction is
-	// explicitly requested.
-	txArriveTimeout = 500 * time.Millisecond
-
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
 	txGatherSlack = 100 * time.Millisecond
+
+	// maxTxArrivalWait is the longest acceptable duration for the txArrivalWait
+	// configuration value.  Longer config values will default to this.
+	maxTxArrivalWait = 500 * time.Millisecond
 )
 
 var (
@@ -176,38 +176,41 @@ type TxFetcher struct {
 	step  chan struct{} // Notification channel when the fetcher loop iterates
 	clock mclock.Clock  // Time wrapper to simulate in tests
 	rand  *mrand.Rand   // Randomizer to use in tests instead of map range loops (soft-random)
+
+	txArrivalWait time.Duration // txArrivalWait is the time allowance before an announced transaction is explicitly requested.
 }
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
-func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil)
+func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, txArrivalWait time.Duration) *TxFetcher {
+	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil, txArrivalWait)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
-	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
+	clock mclock.Clock, rand *mrand.Rand, txArrivalWait time.Duration) *TxFetcher {
 	return &TxFetcher{
-		notify:      make(chan *txAnnounce),
-		cleanup:     make(chan *txDelivery),
-		drop:        make(chan *txDrop),
-		quit:        make(chan struct{}),
-		waitlist:    make(map[common.Hash]map[string]struct{}),
-		waittime:    make(map[common.Hash]mclock.AbsTime),
-		waitslots:   make(map[string]map[common.Hash]struct{}),
-		announces:   make(map[string]map[common.Hash]struct{}),
-		announced:   make(map[common.Hash]map[string]struct{}),
-		fetching:    make(map[common.Hash]string),
-		requests:    make(map[string]*txRequest),
-		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: mapset.NewSet(),
-		hasTx:       hasTx,
-		addTxs:      addTxs,
-		fetchTxs:    fetchTxs,
-		clock:       clock,
-		rand:        rand,
+		notify:        make(chan *txAnnounce),
+		cleanup:       make(chan *txDelivery),
+		drop:          make(chan *txDrop),
+		quit:          make(chan struct{}),
+		waitlist:      make(map[common.Hash]map[string]struct{}),
+		waittime:      make(map[common.Hash]mclock.AbsTime),
+		waitslots:     make(map[string]map[common.Hash]struct{}),
+		announces:     make(map[string]map[common.Hash]struct{}),
+		announced:     make(map[common.Hash]map[string]struct{}),
+		fetching:      make(map[common.Hash]string),
+		requests:      make(map[string]*txRequest),
+		alternates:    make(map[common.Hash]map[string]struct{}),
+		underpriced:   mapset.NewSet(),
+		hasTx:         hasTx,
+		addTxs:        addTxs,
+		fetchTxs:      fetchTxs,
+		clock:         clock,
+		rand:          rand,
+		txArrivalWait: txArrivalWait,
 	}
 }
 
@@ -333,6 +336,16 @@ func (f *TxFetcher) Drop(peer string) error {
 // Start boots up the announcement based synchroniser, accepting and processing
 // hash notifications and block fetches until termination requested.
 func (f *TxFetcher) Start() {
+	// the txArrivalWait duration should not be less than the txGatherSlack duration
+	if f.txArrivalWait < txGatherSlack {
+		f.txArrivalWait = txGatherSlack
+	}
+
+	// the txArrivalWait duration should not be greater than the maxTxArrivalWait duration
+	if f.txArrivalWait > maxTxArrivalWait {
+		f.txArrivalWait = maxTxArrivalWait
+	}
+
 	go f.loop()
 }
 
@@ -350,6 +363,9 @@ func (f *TxFetcher) loop() {
 		waitTrigger    = make(chan struct{}, 1)
 		timeoutTrigger = make(chan struct{}, 1)
 	)
+
+	log.Info("TxFetcher", "txArrivalWait", f.txArrivalWait.String())
+
 	for {
 		select {
 		case ann := <-f.notify:
@@ -441,7 +457,7 @@ func (f *TxFetcher) loop() {
 			// ones into the retrieval queues
 			actives := make(map[string]struct{})
 			for hash, instance := range f.waittime {
-				if time.Duration(f.clock.Now()-instance)+txGatherSlack > txArriveTimeout {
+				if time.Duration(f.clock.Now()-instance)+txGatherSlack > f.txArrivalWait {
 					// Transaction expired without propagation, schedule for retrieval
 					if f.announced[hash] != nil {
 						panic("announce tracker already contains waitlist item")
@@ -698,14 +714,16 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 	for _, instance := range f.waittime {
 		if earliest > instance {
 			earliest = instance
-			if txArriveTimeout-time.Duration(now-earliest) < gatherSlack {
+			if f.txArrivalWait-time.Duration(now-earliest) < gatherSlack {
 				break
 			}
 		}
 	}
-	*timer = f.clock.AfterFunc(txArriveTimeout-time.Duration(now-earliest), func() {
-		trigger <- struct{}{}
-	})
+
+	*timer = f.clock.AfterFunc(
+		f.txArrivalWait-time.Duration(now-earliest),
+		func() { trigger <- struct{}{} },
+	)
 }
 
 // rescheduleTimeout iterates over all the transactions currently in flight and

@@ -69,7 +69,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
-	ret, err := env.Interpreter().Run(contract, []byte{}, false)
+	ret, err := env.Interpreter().Run(contract, []byte{}, false, nil)
 	tracer.CaptureEnd(ret, startGas-contract.Gas, 1, err)
 	if err != nil {
 		return nil, err

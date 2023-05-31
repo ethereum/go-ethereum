@@ -234,28 +234,33 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+			genesis               = gspec.MustCommit(db)
+			blockchain, _         = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 		defer blockchain.Stop()
-		for i, tt := range []struct {
-			txs  []*types.Transaction
-			want string
-		}{
-			{ // ErrTxTypeNotSupported
-				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+		defer parallelBlockchain.Stop()
+
+		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
+			for i, tt := range []struct {
+				txs  []*types.Transaction
+				want string
+			}{
+				{ // ErrTxTypeNotSupported
+					txs: []*types.Transaction{
+						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					},
+					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 				},
-				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
-			},
-		} {
-			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
-			_, err := blockchain.InsertChain(types.Blocks{block})
-			if err == nil {
-				t.Fatal("block imported without errors")
-			}
-			if have, want := err.Error(), tt.want; have != want {
-				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
+			} {
+				block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
+				_, err := bc.InsertChain(types.Blocks{block})
+				if err == nil {
+					t.Fatal("block imported without errors")
+				}
+				if have, want := err.Error(), tt.want; have != want {
+					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
+				}
 			}
 		}
 	}
@@ -274,28 +279,33 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+			genesis               = gspec.MustCommit(db)
+			blockchain, _         = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 		defer blockchain.Stop()
-		for i, tt := range []struct {
-			txs  []*types.Transaction
-			want string
-		}{
-			{ // ErrSenderNoEOA
-				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+		defer parallelBlockchain.Stop()
+
+		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
+			for i, tt := range []struct {
+				txs  []*types.Transaction
+				want string
+			}{
+				{ // ErrSenderNoEOA
+					txs: []*types.Transaction{
+						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					},
+					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
 				},
-				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
-			},
-		} {
-			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
-			_, err := blockchain.InsertChain(types.Blocks{block})
-			if err == nil {
-				t.Fatal("block imported without errors")
-			}
-			if have, want := err.Error(), tt.want; have != want {
-				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
+			} {
+				block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
+				_, err := bc.InsertChain(types.Blocks{block})
+				if err == nil {
+					t.Fatal("block imported without errors")
+				}
+				if have, want := err.Error(), tt.want; have != want {
+					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
+				}
 			}
 		}
 	}

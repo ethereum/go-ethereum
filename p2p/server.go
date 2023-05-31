@@ -156,6 +156,10 @@ type Config struct {
 	Logger log.Logger `toml:",omitempty"`
 
 	clock mclock.Clock
+
+	// TxArrivalWait is the duration (ms) that the node will wait after seeing
+	// an announced transaction before explicitly requesting it
+	TxArrivalWait time.Duration
 }
 
 // Server manages all peer connections.

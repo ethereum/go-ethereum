@@ -83,7 +83,7 @@ func Fuzz(input []byte) int {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		clock, rand,
+		clock, rand, 500*time.Millisecond,
 	)
 	f.Start()
 	defer f.Stop()

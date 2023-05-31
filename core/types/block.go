@@ -87,6 +87,11 @@ type Header struct {
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
+	// length of TxDependency          ->   n (n = number of transactions in the block)
+	// length of TxDependency[i]       ->   k (k = a whole number)
+	// k elements in TxDependency[i]   ->   transaction indexes on which transaction i is dependent on
+	TxDependency [][]uint64 `json:"txDependency" rlp:"optional"`
+
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
 		// Random was added during the merge and contains the BeaconState randomness
@@ -252,6 +257,15 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+
+	if len(h.TxDependency) > 0 {
+		cpy.TxDependency = make([][]uint64, len(h.TxDependency))
+
+		for i, dep := range h.TxDependency {
+			cpy.TxDependency[i] = make([]uint64, len(dep))
+			copy(cpy.TxDependency[i], dep)
+		}
+	}
 	return &cpy
 }
 
@@ -307,6 +321,7 @@ func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
 func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) TxDependency() [][]uint64 { return b.header.TxDependency }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {

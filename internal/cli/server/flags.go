@@ -302,6 +302,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.Sealer.Recommit,
 		Group:   "Sealer",
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "miner.interruptcommit",
+		Usage:   "Interrupt block commit when block creation time is passed",
+		Value:   &c.cliConfig.Sealer.CommitInterruptFlag,
+		Default: c.cliConfig.Sealer.CommitInterruptFlag,
+		Group:   "Sealer",
+	})
 
 	// ethstats
 	f.StringFlag(&flagset.StringFlag{
@@ -731,6 +738,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.P2P.Discovery.V5Enabled,
 		Group:   "P2P",
 	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "txarrivalwait",
+		Usage:   "Maximum duration to wait for a transaction before explicitly requesting it (defaults to 500ms)",
+		Value:   &c.cliConfig.P2P.TxArrivalWait,
+		Default: c.cliConfig.P2P.TxArrivalWait,
+		Group:   "P2P",
+	})
 
 	// metrics
 	f.BoolFlag(&flagset.BoolFlag{
@@ -889,6 +903,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "Block period to use in developer mode (0 = mine only if transaction pending)",
 		Value:   &c.cliConfig.Developer.Period,
 		Default: c.cliConfig.Developer.Period,
+	})
+
+	// parallelevm
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "parallelevm.enable",
+		Usage:   "Enable Block STM",
+		Value:   &c.cliConfig.ParallelEVM.Enable,
+		Default: c.cliConfig.ParallelEVM.Enable,
+	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "parallelevm.procs",
+		Usage:   "Number of speculative processes (cores) in Block STM",
+		Value:   &c.cliConfig.ParallelEVM.SpeculativeProcesses,
+		Default: c.cliConfig.ParallelEVM.SpeculativeProcesses,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "dev.gaslimit",
