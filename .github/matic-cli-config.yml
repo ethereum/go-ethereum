@@ -2,7 +2,7 @@ defaultStake: 10000
 defaultFee: 2000
 borChainId: 15001
 heimdallChainId: heimdall-15001
-contractsBranch: 2ed59de3641c407c64def1b40bcd090cb9cc048a
+contractsBranch: mardizzone/node-16
 genesisContractsBranch: master
 sprintSize:
   - '64'
