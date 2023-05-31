@@ -130,7 +130,7 @@ var (
 		}),
 		// EIP-4844 transactions.
 		NewTx(&BlobTx{
-			To:         &to6,
+			To:         to6,
 			Nonce:      6,
 			Value:      uint256.NewInt(6),
 			Gas:        6,
@@ -139,7 +139,7 @@ var (
 			BlobFeeCap: uint256.NewInt(100066),
 		}),
 		NewTx(&BlobTx{
-			To:         &to7,
+			To:         to7,
 			Nonce:      7,
 			Value:      uint256.NewInt(7),
 			Gas:        7,

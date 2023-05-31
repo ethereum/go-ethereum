@@ -806,9 +806,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 
 			// Validate the data blobs individually too
 			if tx.Type() == types.BlobTxType {
-				if tx.To() == nil {
-					return errInvalidBody // TODO(karalabe): Why not make the field non-nil-able
-				}
 				if len(tx.BlobHashes()) == 0 {
 					return errInvalidBody
 				}
