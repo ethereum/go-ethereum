@@ -89,9 +89,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 		// Validate the data blobs individually too
 		if tx.Type() == types.BlobTxType {
-			if tx.To() == nil {
-				return errors.New("contract creation attempt by blob transaction") // TODO(karalabe): Why not make the field non-nil-able
-			}
 			if len(tx.BlobHashes()) == 0 {
 				return errors.New("no-blob blob transaction present in block body")
 			}
