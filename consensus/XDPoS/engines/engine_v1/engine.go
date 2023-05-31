@@ -30,9 +30,9 @@ import (
 
 const (
 	// timeout waiting for M1
-	waitPeriod = 10
+	minePeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 20
+	minePeriodCheckpoint = 20
 )
 
 // XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
@@ -62,7 +62,9 @@ type XDPoS_v1 struct {
 	HookGetSignersFromContract func(blockHash common.Hash) ([]common.Address, error)
 }
 
-/* V1 Block
+/*
+	V1 Block
+
 SignerFn is a signer callback function to request a hash to be signed by a
 backing account.
 type SignerFn func(accounts.Account, []byte) ([]byte, error)
@@ -409,11 +411,11 @@ func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 			return false, nil
 		}
 		h := utils.Hop(len, preIndex, curIndex)
-		gap := waitPeriod * int64(h)
+		gap := minePeriod * int64(h)
 		// Check nearest checkpoint block in hop range.
 		nearest := x.config.Epoch - (parent.Number.Uint64() % x.config.Epoch)
 		if uint64(h) >= nearest {
-			gap = waitPeriodCheckpoint * int64(h)
+			gap = minePeriodCheckpoint * int64(h)
 		}
 		log.Info("Distance from the parent block", "seconds", gap, "hops", h)
 		waitedTime := time.Now().Unix() - parent.Time.Int64()

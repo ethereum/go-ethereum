@@ -42,7 +42,7 @@ type XDPoS_v2 struct {
 	signLock sync.RWMutex    // Protects the signer fields
 
 	BroadcastCh  chan interface{}
-	waitPeriodCh chan int
+	minePeriodCh chan int
 
 	timeoutWorker *countdown.CountdownTimer // Timer to generate broadcast timeout msg if threashold reached
 	timeoutCount  int                       // number of timeout being sent
@@ -66,7 +66,7 @@ type XDPoS_v2 struct {
 	votePoolCollectionTime time.Time
 }
 
-func New(chainConfig *params.ChainConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
+func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan int) *XDPoS_v2 {
 	config := chainConfig.XDPoS
 	// Setup timeoutTimer
 	duration := time.Duration(config.V2.CurrentConfig.TimeoutPeriod) * time.Second
@@ -93,7 +93,7 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, waitPeriodCh chan i
 		epochSwitches:   epochSwitches,
 		timeoutWorker:   timeoutTimer,
 		BroadcastCh:     make(chan interface{}),
-		waitPeriodCh:    waitPeriodCh,
+		minePeriodCh:    minePeriodCh,
 
 		timeoutPool: timeoutPool,
 		votePool:    votePool,
@@ -139,7 +139,7 @@ func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 
 	// avoid deadlock
 	go func() {
-		x.waitPeriodCh <- x.config.V2.CurrentConfig.WaitPeriod
+		x.minePeriodCh <- x.config.V2.CurrentConfig.MinePeriod
 	}()
 }
 
@@ -229,10 +229,10 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 	}
 
 	// Initial timeout
-	log.Info("[initial] miner wait period", "period", x.config.V2.CurrentConfig.WaitPeriod)
+	log.Info("[initial] miner wait period", "period", x.config.V2.CurrentConfig.MinePeriod)
 	// avoid deadlock
 	go func() {
-		x.waitPeriodCh <- x.config.V2.CurrentConfig.WaitPeriod
+		x.minePeriodCh <- x.config.V2.CurrentConfig.MinePeriod
 	}()
 
 	// Kick-off the countdown timer

@@ -267,11 +267,11 @@ func (self *worker) update() {
 	defer self.chainSideSub.Unsubscribe()
 
 	// timeout waiting for v1 inital value
-	waitPeriod := 2
-	WaitPeriodCh := self.engine.(*XDPoS.XDPoS).WaitPeriodCh
-	defer close(WaitPeriodCh)
+	minePeriod := 2
+	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
+	defer close(MinePeriodCh)
 
-	timeout := time.NewTimer(time.Duration(waitPeriod) * time.Second)
+	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	c := make(chan struct{})
 	finish := make(chan struct{})
 	defer close(finish)
@@ -290,21 +290,21 @@ func (self *worker) update() {
 	for {
 		// A real event arrived, process interesting content
 		select {
-		case v := <-WaitPeriodCh:
+		case v := <-MinePeriodCh:
 			log.Info("[worker] update wait period", "period", v)
-			waitPeriod = v
-			timeout.Reset(time.Duration(waitPeriod) * time.Second)
+			minePeriod = v
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
 
 		case <-c:
 			if atomic.LoadInt32(&self.mining) == 1 {
 				self.commitNewWork()
 			}
-			timeout.Reset(time.Duration(waitPeriod) * time.Second)
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
 
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
-			timeout.Reset(time.Duration(waitPeriod) * time.Second)
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:

@@ -125,7 +125,6 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 2)")
 		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
-		genesis.Config.XDPoS.V2.CurrentConfig.WaitPeriod = int(genesis.Config.XDPoS.Period)
 		genesis.Config.XDPoS.V2.CurrentConfig.MinePeriod = int(genesis.Config.XDPoS.Period)
 
 		fmt.Println()

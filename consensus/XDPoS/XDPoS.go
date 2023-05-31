@@ -60,7 +60,7 @@ type XDPoS struct {
 	signingTxsCache *lru.Cache
 
 	// Share Channel
-	WaitPeriodCh chan int // Miner wait Period Channel
+	MinePeriodCh chan int // Miner wait Period Channel
 
 	// Trading and lending service
 	GetXDCXService    func() utils.TradingService
@@ -97,7 +97,7 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 
 	log.Info("xdc config loading", "config", config)
 
-	waitPeriodCh := make(chan int)
+	minePeriodCh := make(chan int)
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
@@ -106,11 +106,11 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 		config: config,
 		db:     db,
 
-		WaitPeriodCh: waitPeriodCh,
+		MinePeriodCh: minePeriodCh,
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.New(chainConfig, db),
-		EngineV2:        engine_v2.New(chainConfig, db, waitPeriodCh),
+		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh),
 	}
 }
 
@@ -124,7 +124,7 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		conf = chainConfig.XDPoS
 	}
 
-	waitPeriodCh := make(chan int)
+	minePeriodCh := make(chan int)
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
@@ -133,14 +133,14 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		config: conf,
 		db:     db,
 
-		WaitPeriodCh: waitPeriodCh,
+		MinePeriodCh: minePeriodCh,
 
 		GetXDCXService:    func() utils.TradingService { return nil },
 		GetLendingService: func() utils.LendingService { return nil },
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.NewFaker(db, chainConfig),
-		EngineV2:        engine_v2.New(chainConfig, db, waitPeriodCh),
+		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh),
 	}
 	return fakeEngine
 }

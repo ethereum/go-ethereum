@@ -43,8 +43,8 @@ func TestInitialFirstV2Block(t *testing.T) {
 	assert.Equal(t, uint64(450), snap.Number)
 
 	// Test Running channels
-	waitPeriod := <-adaptor.WaitPeriodCh
-	assert.Equal(t, params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig.WaitPeriod, waitPeriod)
+	minePeriod := <-adaptor.MinePeriodCh
+	assert.Equal(t, params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig.MinePeriod, minePeriod)
 
 	t.Logf("Waiting %d secs for timeout to happen", params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig.TimeoutPeriod)
 	timeoutMsg := <-adaptor.EngineV2.BroadcastCh
