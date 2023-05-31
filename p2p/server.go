@@ -142,7 +142,7 @@ type Config struct {
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT nat.Interface `toml:",omitempty"`
+	NAT nat.Interface `toml:"-"`
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
@@ -156,7 +156,7 @@ type Config struct {
 	EnableMsgEvents bool
 
 	// Logger is a custom logger to use with the p2p.Server.
-	Logger log.Logger `toml:",omitempty"`
+	Logger log.Logger `toml:"-"`
 
 	clock mclock.Clock
 }
