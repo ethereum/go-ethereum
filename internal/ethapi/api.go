@@ -701,14 +701,14 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	// create the proof for the storageKeys
 	for i, key := range keys {
 		if storageTrie == nil {
-      storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()), &hexutil.Big{}, []string{}}
+			storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()), &hexutil.Big{}, []string{}}
 			continue
 		}
 		var proof proofList
 		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof); err != nil {
 			return nil, err
 		}
-    storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()),
+		storageProof[i] = StorageResult{(*hexutil.Big)(key.Big()),
 			(*hexutil.Big)(state.GetState(address, key).Big()),
 			proof}
 	}
