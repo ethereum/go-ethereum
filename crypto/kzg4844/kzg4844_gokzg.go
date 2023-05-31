@@ -17,7 +17,6 @@
 package kzg4844
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"sync"
 
@@ -96,13 +95,4 @@ func gokzgVerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
 	gokzgIniter.Do(gokzgInit)
 
 	return context.VerifyBlobKZGProof((gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
-}
-
-// goComputePrecompileReturnValue computes the precompile return value which is
-// FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values.
-func goComputePrecompileReturnValue() [64]byte {
-	var precompileReturnValue [64]byte
-	binary.BigEndian.PutUint64(precompileReturnValue[24:], gokzg4844.ScalarsPerBlob)
-	copy(precompileReturnValue[32:], gokzg4844.BlsModulus[:])
-	return precompileReturnValue
 }

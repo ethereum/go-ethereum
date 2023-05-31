@@ -92,7 +92,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 }
 
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
-// contracts used in the Berlin release.
+// contracts used in the Cancun release.
 var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}):  &ecrecover{},
 	common.BytesToAddress([]byte{2}):  &sha256hash{},
@@ -103,7 +103,7 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):  &blake2F{},
-	common.BytesToAddress([]byte{20}): &pointEvaluation{},
+	common.BytesToAddress([]byte{20}): &kzgPointEvaluation{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1071,17 +1071,18 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	return g.EncodePoint(r), nil
 }
 
-// pointEvaluation implements the EIP-4844 point evaluation precompile.
-type pointEvaluation struct{}
+// kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
+type kzgPointEvaluation struct{}
 
 // RequiredGas estimates the gas required for running the point evaluation precompile.
-func (b *pointEvaluation) RequiredGas(input []byte) uint64 {
-	return params.PointEvaluationPrecompileGas
+func (b *kzgPointEvaluation) RequiredGas(input []byte) uint64 {
+	return params.BlobTxPointEvaluationPrecompileGas
 }
 
 const (
-	pointBlobVerifyInputLength       = 192  // Max input length for the point evaluation precompile.
-	blobVerifyKZGVersion       uint8 = 0x01 // Version byte for the point evaluation precompile.
+	blobVerifyInputLength           = 192  // Max input length for the point evaluation precompile.
+	blobVerifyKZGVersion      uint8 = 0x01 // Version byte for the point evaluation precompile.
+	blobPrecompileReturnValue       = "000000000000000000000000000000000000000000000000000000000000100073eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
 )
 
 var (
@@ -1091,8 +1092,8 @@ var (
 )
 
 // Run executes the point evaluation precompile.
-func (b *pointEvaluation) Run(input []byte) ([]byte, error) {
-	if len(input) != pointBlobVerifyInputLength {
+func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
+	if len(input) != blobVerifyInputLength {
 		return nil, errBlobVerifyInvalidInputLength
 	}
 	// versioned hash: first 32 bytes
@@ -1117,13 +1118,13 @@ func (b *pointEvaluation) Run(input []byte) ([]byte, error) {
 
 	// Proof: next 48 bytes
 	var proof kzg4844.Proof
-	copy(proof[:], input[144:pointBlobVerifyInputLength])
+	copy(proof[:], input[144:blobVerifyInputLength])
 
 	if err := kzg4844.VerifyProof(commitment, point, claim, proof); err != nil {
 		return nil, errors.Join(errBlobVerifyKZGProof, err)
 	}
 
-	return common.CopyBytes(kzg4844.PrecompileReturnValue[:]), nil
+	return common.Hex2Bytes(blobPrecompileReturnValue), nil
 }
 
 // KZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
