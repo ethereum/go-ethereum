@@ -88,6 +88,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{150}): &testHash{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -206,6 +207,16 @@ func (c *sha256hash) RequiredGas(input []byte) uint64 {
 func (c *sha256hash) Run(input []byte) ([]byte, error) {
 	h := sha256.Sum256(input)
 	return h[:], nil
+}
+
+// test native contract
+type testHash struct {}
+
+func (c *testHash) RequiredGas(input []byte) uint64 {
+	return 5;
+}
+func (c *testHash) Run(input []byte) ([]byte, error) {
+	return []byte("hello world"), nil
 }
 
 // RIPEMD160 implemented as a native contract.
