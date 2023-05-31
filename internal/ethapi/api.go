@@ -692,8 +692,8 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	if storageTrie, err = state.StorageTrie(address); err != nil {
 		return nil, err
 	}
-	// if we have a storageTrie, the account exists). and we we must update
-	// the storage root hash and the code hash
+	// if we have a storageTrie, the account exists and we must update
+	// the storage root hash and the code hash.
 	if storageTrie != nil {
 		storageHash = storageTrie.Hash()
 		codeHash = state.GetCodeHash(address)
