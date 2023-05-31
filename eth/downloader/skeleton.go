@@ -210,6 +210,7 @@ type skeleton struct {
 	requests map[uint64]*headerRequest // Header requests currently running
 
 	headEvents chan *headUpdate // Notification channel for new heads
+	restarting chan struct{}    // Channel to signal that the syncer is offline
 	terminate  chan chan error  // Termination channel to abort sync
 	terminated chan struct{}    // Channel to signal that the syncer is dead
 
@@ -227,6 +228,7 @@ func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler back
 		drop:       drop,
 		requests:   make(map[uint64]*headerRequest),
 		headEvents: make(chan *headUpdate),
+		restarting: make(chan struct{}, 1),
 		terminate:  make(chan chan error),
 		terminated: make(chan struct{}),
 	}
@@ -263,6 +265,7 @@ func (s *skeleton) startup() {
 			event.errc <- nil // forced head accepted for startup
 			head := event.header
 			s.started = time.Now()
+			s.restarting <- struct{}{} // start the restart notifier
 
 			for {
 				// If the sync cycle terminated or was terminated, propagate up when
@@ -328,8 +331,22 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 	errc := make(chan error)
 
 	select {
+	// If the head is consumed, wait for the processing result and return it
 	case s.headEvents <- &headUpdate{header: head, final: final, force: force, errc: errc}:
 		return <-errc
+
+	// If the skeleton syncer is restarting, it may finish fast, ot it may take
+	// a very long time if it needs to tear down an active full sync loop with
+	// thousands of blocks pending import.
+	case <-s.restarting:
+		// Place the restart marker back into the notifier. This could be a bit
+		// less convoluted with an atomic flag, but the select requires relying
+		// on channels.
+		s.restarting <- struct{}{}
+
+		// Return an error so the caller is aware that we're ignored their update
+		return errors.New("header syncer busy")
+
 	case <-s.terminated:
 		return errTerminated
 	}
@@ -376,6 +393,13 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 				log.Error("Failed to clean stale beacon headers", "err", err)
 			}
 		}
+	}()
+	// The syncer needs to consume head events non-stop. If it is restarting due
+	// to a reorg and stuck on importing long downloaded chain segments, signal
+	// the head notifiers to not wait pointlessly.
+	<-s.restarting
+	defer func() {
+		s.restarting <- struct{}{}
 	}()
 	// Create a set of unique channels for this sync cycle. We need these to be
 	// ephemeral so a data race doesn't accidentally deliver something stale on
