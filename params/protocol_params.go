@@ -160,6 +160,7 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
+	BlobTxHashVersion                = 0x01    // Version byte of the commitment hash
 	BlobTxMaxDataGasPerBlock         = 1 << 19 // Maximum consumable data gas for data blobs per block
 	BlobTxTargetDataGasPerBlock      = 1 << 18 // Target consumable data gas for data blobs per block (for 1559-like pricing)
 	BlobTxDataGasPerBlob             = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
