@@ -155,54 +155,48 @@ func TestServerShortLivedConn(t *testing.T) {
 
 func TestServerBatchResponseSizeLimit(t *testing.T) {
 	server := newTestServer()
-	server.SetBatchLimits(100, 60)
 	defer server.Stop()
-
-	client := DialInProc(server)
-	batch := make([]BatchElem, 3)
-	for i := range batch {
-		batch[i].Method = "test_echo"
-		batch[i].Result = new(echoResult)
-		batch[i].Args = []any{"x", 1}
+	server.SetBatchLimits(100, 60)
+	var (
+		batch  []BatchElem
+		client = DialInProc(server)
+	)
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
 	}
-	err := client.BatchCall(batch)
-
-	if err != nil {
+	if err := client.BatchCall(batch); err != nil {
 		t.Fatal("error sending batch:", err)
 	}
 	for i := range batch {
+		// We expect the first two queries to be ok, but after that the
+		// size limit hits.
 		if i < 2 {
 			if batch[i].Error != nil {
-				t.Errorf("batch elem %d has unexpected error: %v", i, batch[i].Error)
+				t.Fatalf("batch elem %d has unexpected error: %v", i, batch[i].Error)
 			}
-		} else {
-			re, ok := batch[i].Error.(Error)
-			if !ok {
-				t.Errorf("batch elem %d has wrong error: %v", i, batch[i].Error)
-				continue
-			}
-			if re.ErrorCode() != errcodeResponseTooLarge {
-				t.Errorf("batch elem %d has wrong error code %d", i, re.ErrorCode())
-			}
+			continue
+		}
+		// After two, we expect error
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d has wrong error: %v", i, batch[i].Error)
+		}
+		if have, want := re.ErrorCode(), errcodeResponseTooLarge; have != want {
+			t.Errorf("batch elem %d wrong error code, have %d want %d", i, have, want)
 		}
 	}
 }
 
 func TestServerBatchRequestLimit(t *testing.T) {
 	server := newTestServer()
-	server.SetBatchLimits(2, 100000)
 	defer server.Stop()
-
+	server.SetBatchLimits(2, 100000)
 	client := DialInProc(server)
-	batch := make([]BatchElem, 3)
-	for i := range batch {
-		batch[i].Method = "test_echo"
-		batch[i].Result = new(echoResult)
-		batch[i].Args = []any{"x", 1}
-	}
-	err := client.BatchCall(batch)
-
-	if err.Error() != errMsgBatchTooLarge {
-		t.Errorf("error mismatch: %v", err)
+	if have, want := client.BatchCall(make([]BatchElem, 3)).Error(), errMsgBatchTooLarge; have != want {
+		t.Errorf("error mismatch, have %v want %v", have, want)
 	}
 }
