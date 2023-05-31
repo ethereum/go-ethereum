@@ -157,22 +157,26 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	return removed
 }
 
-// Cap places a hard limit on the number of items, returning all transactions
+// Cap places a hard limit on the total slots of items, returning all transactions
 // exceeding that limit.
 func (m *sortedMap) Cap(threshold int) types.Transactions {
 	// Short circuit if the number of items is under the limit
-	if len(m.items) <= threshold {
+	if m.totalslots <= threshold {
 		return nil
 	}
 	// Otherwise gather and drop the highest nonce'd transactions
-	var drops types.Transactions
+	var (
+		drops types.Transactions
+		size  int
+	)
 
 	sort.Sort(*m.index)
-	for size := len(m.items); size > threshold; size-- {
+	for size = len(m.items); m.totalslots > threshold; size-- {
 		drops = append(drops, m.items[(*m.index)[size-1]])
+		m.totalslots -= numSlots(m.items[(*m.index)[size-1]])
 		delete(m.items, (*m.index)[size-1])
 	}
-	*m.index = (*m.index)[:threshold]
+	*m.index = (*m.index)[:size]
 	heap.Init(m.index)
 
 	// If we had a cache, shift the back
