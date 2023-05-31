@@ -34,12 +34,14 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -125,6 +127,7 @@ func runCmd(ctx *cli.Context) error {
 		sender        = common.BytesToAddress([]byte("sender"))
 		receiver      = common.BytesToAddress([]byte("receiver"))
 		genesisConfig *core.Genesis
+		preimages     = ctx.Bool(DumpFlag.Name)
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -139,10 +142,12 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
 		genesis := gen.MustCommit(db)
-		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), nil)
+		sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: preimages})
+		statedb, _ = state.New(genesis.Root(), sdb, nil)
 		chainConfig = gen.Config
 	} else {
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		sdb := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: preimages})
+		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.String(SenderFlag.Name) != "" {
@@ -214,7 +219,6 @@ func runCmd(ctx *cli.Context) error {
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
 			Tracer: tracer,
-			Debug:  ctx.Bool(DebugFlag.Name) || ctx.Bool(MachineFlag.Name),
 		},
 	}
 

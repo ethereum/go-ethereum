@@ -283,7 +283,7 @@ func (op byteArrayOp) genDecode(ctx *genContext) (string, string) {
 	return resultV, b.String()
 }
 
-// bigIntNoPtrOp handles non-pointer big.Int.
+// bigIntOp handles big.Int.
 // This exists because big.Int has it's own decoder operation on rlp.Stream,
 // but the decode method returns *big.Int, so it needs to be dereferenced.
 type bigIntOp struct {
@@ -326,6 +326,49 @@ func (op bigIntOp) genDecode(ctx *genContext) (string, string) {
 	result := resultV
 	if !op.pointer {
 		result = "(*" + resultV + ")"
+	}
+	return result, b.String()
+}
+
+// uint256Op handles "github.com/holiman/uint256".Int
+type uint256Op struct {
+	pointer bool
+}
+
+func (op uint256Op) genWrite(ctx *genContext, v string) string {
+	var b bytes.Buffer
+
+	dst := v
+	if !op.pointer {
+		dst = "&" + v
+	}
+	fmt.Fprintf(&b, "w.WriteUint256(%s)\n", dst)
+
+	// Wrap with nil check.
+	if op.pointer {
+		code := b.String()
+		b.Reset()
+		fmt.Fprintf(&b, "if %s == nil {\n", v)
+		fmt.Fprintf(&b, "  w.Write(rlp.EmptyString)")
+		fmt.Fprintf(&b, "} else {\n")
+		fmt.Fprint(&b, code)
+		fmt.Fprintf(&b, "}\n")
+	}
+
+	return b.String()
+}
+
+func (op uint256Op) genDecode(ctx *genContext) (string, string) {
+	ctx.addImport("github.com/holiman/uint256")
+
+	var b bytes.Buffer
+	resultV := ctx.temp()
+	fmt.Fprintf(&b, "var %s uint256.Int\n", resultV)
+	fmt.Fprintf(&b, "if err := dec.ReadUint256(&%s); err != nil { return err }\n", resultV)
+
+	result := resultV
+	if op.pointer {
+		result = "&" + resultV
 	}
 	return result, b.String()
 }
@@ -635,6 +678,9 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
 		}
+		if isUint256(typ) {
+			return uint256Op{}, nil
+		}
 		if typ == bctx.rawValueType {
 			return bctx.makeRawValueOp(), nil
 		}
@@ -646,6 +692,9 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 	case *types.Pointer:
 		if isBigInt(typ.Elem()) {
 			return bigIntOp{pointer: true}, nil
+		}
+		if isUint256(typ.Elem()) {
+			return uint256Op{pointer: true}, nil
 		}
 		// Encoder/Decoder interfaces.
 		if bctx.isEncoder(typ) {

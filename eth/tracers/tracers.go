@@ -19,6 +19,9 @@ package tracers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -27,9 +30,10 @@ import (
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
-	BlockHash common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
-	TxIndex   int         // Index of the transaction within a block (zero if dangling tx or call)
-	TxHash    common.Hash // Hash of the transaction being traced (zero if dangling call)
+	BlockHash   common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
+	BlockNumber *big.Int    // Number of the block the tx is contained within (zero if dangling tx or call)
+	TxIndex     int         // Index of the transaction within a block (zero if dangling tx or call)
+	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
 // Tracer interface extends vm.EVMLogger and additionally
@@ -92,4 +96,28 @@ func (d *directory) IsJS(name string) bool {
 	}
 	// JS eval will execute JS code
 	return true
+}
+
+const (
+	memoryPadLimit = 1024 * 1024
+)
+
+// GetMemoryCopyPadded returns offset + size as a new slice.
+// It zero-pads the slice if it extends beyond memory bounds.
+func GetMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
+	if offset < 0 || size < 0 {
+		return nil, errors.New("offset or size must not be negative")
+	}
+	if int(offset+size) < m.Len() { // slice fully inside memory
+		return m.GetCopy(offset, size), nil
+	}
+	paddingNeeded := int(offset+size) - m.Len()
+	if paddingNeeded > memoryPadLimit {
+		return nil, fmt.Errorf("reached limit for padding memory slice: %d", paddingNeeded)
+	}
+	cpy := make([]byte, size)
+	if overlap := int64(m.Len()) - offset; overlap > 0 {
+		copy(cpy, m.GetPtr(offset, overlap))
+	}
+	return cpy, nil
 }

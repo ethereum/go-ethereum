@@ -87,9 +87,11 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(c.Email, c.Token)
 
-	if resp, err = http.DefaultClient.Do(req); err != nil {
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
 		return
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var body []byte

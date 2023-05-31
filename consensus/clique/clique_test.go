@@ -93,7 +93,7 @@ func TestReimportMirroredState(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:2]); err != nil {
 		t.Fatalf("failed to insert initial blocks: %v", err)
 	}
-	if head := chain.CurrentBlock().NumberU64(); head != 2 {
+	if head := chain.CurrentBlock().Number.Uint64(); head != 2 {
 		t.Fatalf("chain head mismatch: have %d, want %d", head, 2)
 	}
 
@@ -106,7 +106,7 @@ func TestReimportMirroredState(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:]); err != nil {
 		t.Fatalf("failed to insert final block: %v", err)
 	}
-	if head := chain.CurrentBlock().NumberU64(); head != 3 {
+	if head := chain.CurrentBlock().Number.Uint64(); head != 3 {
 		t.Fatalf("chain head mismatch: have %d, want %d", head, 3)
 	}
 }

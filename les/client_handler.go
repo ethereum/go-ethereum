@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server
@@ -41,7 +39,6 @@ import (
 type clientHandler struct {
 	ulc        *ulc
 	forkFilter forkid.Filter
-	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
 	downloader *downloader.Downloader
 	backend    *LightEthereum
@@ -54,10 +51,9 @@ type clientHandler struct {
 	syncEnd   func(header *types.Header) // Hook called when the syncing is done
 }
 
-func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
+func newClientHandler(ulcServers []string, ulcFraction int, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
 		forkFilter: forkid.NewFilter(backend.blockchain),
-		checkpoint: checkpoint,
 		backend:    backend,
 		closeCh:    make(chan struct{}),
 	}
@@ -69,12 +65,8 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 		handler.ulc = ulc
 		log.Info("Enable ultra light client mode")
 	}
-	var height uint64
-	if checkpoint != nil {
-		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
-	}
 	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
-	handler.downloader = downloader.New(height, backend.chainDb, backend.eventMux, nil, backend.blockchain, handler.removePeer)
+	handler.downloader = downloader.New(0, backend.chainDb, backend.eventMux, nil, backend.blockchain, handler.removePeer)
 	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
 }
@@ -151,8 +143,8 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	}
 
 	// Mark the peer starts to be served.
-	atomic.StoreUint32(&p.serving, 1)
-	defer atomic.StoreUint32(&p.serving, 0)
+	p.serving.Store(true)
+	defer p.serving.Store(false)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {

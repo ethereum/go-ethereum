@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 type testEncoder struct {
@@ -147,6 +148,30 @@ var encTests = []encTest{
 	{val: big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
 	{val: *big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
 
+	// uint256
+	{val: uint256.NewInt(0), output: "80"},
+	{val: uint256.NewInt(1), output: "01"},
+	{val: uint256.NewInt(127), output: "7F"},
+	{val: uint256.NewInt(128), output: "8180"},
+	{val: uint256.NewInt(256), output: "820100"},
+	{val: uint256.NewInt(1024), output: "820400"},
+	{val: uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFF), output: "84FFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFF), output: "85FFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFF), output: "86FFFFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFFFF), output: "87FFFFFFFFFFFFFF"},
+	{
+		val:    new(uint256.Int).SetBytes(unhex("102030405060708090A0B0C0D0E0F2")),
+		output: "8F102030405060708090A0B0C0D0E0F2",
+	},
+	{
+		val:    new(uint256.Int).SetBytes(unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
+		output: "9C0100020003000400050006000700080009000A000B000C000D000E01",
+	},
+	// non-pointer uint256.Int
+	{val: *uint256.NewInt(0), output: "80"},
+	{val: *uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
+
 	// byte arrays
 	{val: [0]byte{}, output: "80"},
 	{val: [1]byte{0}, output: "00"},
@@ -256,6 +281,12 @@ var encTests = []encTest{
 		output: "F90200CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376",
 	},
 
+	// Non-byte arrays are encoded as lists.
+	// Note that it is important to test [4]uint64 specifically,
+	// because that's the underlying type of uint256.Int.
+	{val: [4]uint32{1, 2, 3, 4}, output: "C401020304"},
+	{val: [4]uint64{1, 2, 3, 4}, output: "C401020304"},
+
 	// RawValue
 	{val: RawValue(unhex("01")), output: "01"},
 	{val: RawValue(unhex("82FFFF")), output: "82FFFF"},
@@ -301,6 +332,7 @@ var encTests = []encTest{
 	{val: (*[]byte)(nil), output: "80"},
 	{val: (*[10]byte)(nil), output: "80"},
 	{val: (*big.Int)(nil), output: "80"},
+	{val: (*uint256.Int)(nil), output: "80"},
 	{val: (*[]string)(nil), output: "C0"},
 	{val: (*[10]string)(nil), output: "C0"},
 	{val: (*[]interface{})(nil), output: "C0"},
@@ -496,6 +528,23 @@ func BenchmarkEncodeBigInts(b *testing.B) {
 	ints := make([]*big.Int, 200)
 	for i := range ints {
 		ints[i] = math.BigPow(2, int64(i))
+	}
+	out := bytes.NewBuffer(make([]byte, 0, 4096))
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		out.Reset()
+		if err := Encode(out, ints); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEncodeU256Ints(b *testing.B) {
+	ints := make([]*uint256.Int, 200)
+	for i := range ints {
+		ints[i], _ = uint256.FromBig(math.BigPow(2, int64(i)))
 	}
 	out := bytes.NewBuffer(make([]byte, 0, 4096))
 	b.ResetTimer()

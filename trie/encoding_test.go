@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"encoding/hex"
 	"math/rand"
 	"testing"
@@ -97,7 +98,7 @@ func TestHexToCompactInPlaceRandom(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		l := rand.Intn(128)
 		key := make([]byte, l)
-		rand.Read(key)
+		crand.Read(key)
 		hexBytes := keybytesToHex(key)
 		hexOrig := []byte(string(hexBytes))
 		exp := hexToCompact(hexBytes)

@@ -694,41 +694,19 @@ func showMetaData(ctx *cli.Context) error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
 	}
-	pp := func(val *uint64) string {
-		if val == nil {
-			return "<nil>"
-		}
-		return fmt.Sprintf("%d (%#x)", *val, *val)
-	}
-	data := [][]string{
-		{"databaseVersion", pp(rawdb.ReadDatabaseVersion(db))},
-		{"headBlockHash", fmt.Sprintf("%v", rawdb.ReadHeadBlockHash(db))},
-		{"headFastBlockHash", fmt.Sprintf("%v", rawdb.ReadHeadFastBlockHash(db))},
-		{"headHeaderHash", fmt.Sprintf("%v", rawdb.ReadHeadHeaderHash(db))}}
+	data := rawdb.ReadChainMetadata(db)
+	data = append(data, []string{"frozen", fmt.Sprintf("%d items", ancients)})
+	data = append(data, []string{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))})
 	if b := rawdb.ReadHeadBlock(db); b != nil {
 		data = append(data, []string{"headBlock.Hash", fmt.Sprintf("%v", b.Hash())})
 		data = append(data, []string{"headBlock.Root", fmt.Sprintf("%v", b.Root())})
 		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (%#x)", b.Number(), b.Number())})
-	}
-	if b := rawdb.ReadSkeletonSyncStatus(db); b != nil {
-		data = append(data, []string{"SkeletonSyncStatus", string(b)})
 	}
 	if h := rawdb.ReadHeadHeader(db); h != nil {
 		data = append(data, []string{"headHeader.Hash", fmt.Sprintf("%v", h.Hash())})
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
-	data = append(data, [][]string{{"frozen", fmt.Sprintf("%d items", ancients)},
-		{"lastPivotNumber", pp(rawdb.ReadLastPivotNumber(db))},
-		{"len(snapshotSyncStatus)", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotSyncStatus(db)))},
-		{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))},
-		{"snapshotDisabled", fmt.Sprintf("%v", rawdb.ReadSnapshotDisabled(db))},
-		{"snapshotJournal", fmt.Sprintf("%d bytes", len(rawdb.ReadSnapshotJournal(db)))},
-		{"snapshotRecoveryNumber", pp(rawdb.ReadSnapshotRecoveryNumber(db))},
-		{"snapshotRoot", fmt.Sprintf("%v", rawdb.ReadSnapshotRoot(db))},
-		{"txIndexTail", pp(rawdb.ReadTxIndexTail(db))},
-		{"fastTxLookupLimit", pp(rawdb.ReadFastTxLookupLimit(db))},
-	}...)
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)

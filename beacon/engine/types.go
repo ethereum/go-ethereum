@@ -233,5 +233,5 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 // ExecutionPayloadBodyV1 is used in the response to GetPayloadBodiesByHashV1 and GetPayloadBodiesByRangeV1
 type ExecutionPayloadBodyV1 struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
-	Withdrawals     []*types.Withdrawal `json:"withdrawals,omitempty"`
+	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
 }

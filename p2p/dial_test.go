@@ -584,7 +584,7 @@ func (d *dialTestDialer) Dial(ctx context.Context, n *enode.Node) (net.Conn, err
 // waitForDials waits for calls to Dial with the given nodes as argument.
 // Those calls will be held blocking until completeDials is called with the same nodes.
 func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
-	waitset := make(map[enode.ID]*enode.Node)
+	waitset := make(map[enode.ID]*enode.Node, len(nodes))
 	for _, n := range nodes {
 		waitset[n.ID()] = n
 	}

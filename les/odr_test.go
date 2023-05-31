@@ -68,7 +68,9 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 	var receipts types.Receipts
 	if bc != nil {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
+			if header := rawdb.ReadHeader(db, bhash, *number); header != nil {
+				receipts = rawdb.ReadReceipts(db, bhash, *number, header.Time, config)
+			}
 		}
 	} else {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
@@ -116,12 +118,6 @@ func TestOdrContractCallLes2(t *testing.T) { testOdr(t, 2, 2, true, odrContractC
 func TestOdrContractCallLes3(t *testing.T) { testOdr(t, 3, 2, true, odrContractCall) }
 func TestOdrContractCallLes4(t *testing.T) { testOdr(t, 4, 2, true, odrContractCall) }
 
-type callmsg struct {
-	types.Message
-}
-
-func (callmsg) CheckNonce() bool { return false }
-
 func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
@@ -136,7 +132,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				from := statedb.GetOrNewStateObject(bankAddr)
 				from.SetBalance(math.MaxBig256)
 
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
+				msg := &core.Message{
+					From:              from.Address(),
+					To:                &testContractAddr,
+					Value:             new(big.Int),
+					GasLimit:          100000,
+					GasPrice:          big.NewInt(params.InitialBaseFee),
+					GasFeeCap:         big.NewInt(params.InitialBaseFee),
+					GasTipCap:         new(big.Int),
+					Data:              data,
+					SkipAccountChecks: true,
+				}
 
 				context := core.NewEVMBlockContext(header, bc, nil)
 				txContext := core.NewEVMTxContext(msg)
@@ -151,7 +157,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
 			state.SetBalance(bankAddr, math.MaxBig256)
-			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
+			msg := &core.Message{
+				From:              bankAddr,
+				To:                &testContractAddr,
+				Value:             new(big.Int),
+				GasLimit:          100000,
+				GasPrice:          big.NewInt(params.InitialBaseFee),
+				GasFeeCap:         big.NewInt(params.InitialBaseFee),
+				GasTipCap:         new(big.Int),
+				Data:              data,
+				SkipAccountChecks: true,
+			}
 			context := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true})
@@ -281,7 +297,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		blockHashes  = make(map[common.Hash]common.Hash)        // Transaction hash to block hash mappings
 		intraIndex   = make(map[common.Hash]uint64)             // Transaction intra-index in block
 	)
-	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().NumberU64(); number++ {
+	for number := uint64(1); number < server.backend.Blockchain().CurrentBlock().Number.Uint64(); number++ {
 		block := server.backend.Blockchain().GetBlockByNumber(number)
 		if block == nil {
 			t.Fatalf("Failed to retrieve block %d", number)

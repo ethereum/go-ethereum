@@ -128,7 +128,7 @@ var (
 		"focal":   "golang-go",   // EOL: 04/2030
 		"jammy":   "golang-go",   // EOL: 04/2032
 		"kinetic": "golang-go",   // EOL: 07/2023
-		//"lunar": "golang-go",  // EOL: 01/2024
+		"lunar":   "golang-go",   // EOL: 01/2024
 	}
 
 	debGoBootPaths = map[string]string{
@@ -136,10 +136,18 @@ var (
 		"golang-go":   "/usr/lib/go",
 	}
 
-	// This is the version of go that will be downloaded by
+	// This is the version of Go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.20.1"
+	dlgoVersion = "1.20.3"
+
+	// This is the version of Go that will be used to bootstrap the PPA builder.
+	//
+	// This version is fine to be old and full of security holes, we just use it
+	// to build the latest Go. Don't change it. If it ever becomes insufficient,
+	// we need to switch over to a recursive builder to jumpt across supported
+	// versions.
+	gobootVersion = "1.19.6"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -199,9 +207,9 @@ func doInstall(cmdline []string) {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
-
-	// Disable CLI markdown doc generation in release builds.
-	buildTags := []string{"urfave_cli_no_docs"}
+	// Disable CLI markdown doc generation in release builds and enable linking
+	// the CKZG library since we can make it portable here.
+	buildTags := []string{"urfave_cli_no_docs", "ckzg"}
 
 	// Configure the build.
 	env := build.Env()
@@ -213,7 +221,6 @@ func doInstall(cmdline []string) {
 	if env.CI && runtime.GOARCH == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
-
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
@@ -291,7 +298,7 @@ func doTest(cmdline []string) {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
-	gotest := tc.Go("test")
+	gotest := tc.Go("test", "-tags=ckzg")
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
@@ -455,10 +462,6 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 func maybeSkipArchive(env build.Environment) {
 	if env.IsPullRequest {
 		log.Printf("skipping archive creation because this is a PR build")
-		os.Exit(0)
-	}
-	if env.IsCronJob {
-		log.Printf("skipping archive creation because this is a cron job")
 		os.Exit(0)
 	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
@@ -655,10 +658,11 @@ func doDebianSource(cmdline []string) {
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
 	}
-
-	// Download and verify the Go source package.
-	gobundle := downloadGoSources(*cachedir)
-
+	// Download and verify the Go source packages.
+	var (
+		gobootbundle = downloadGoBootstrapSources(*cachedir)
+		gobundle     = downloadGoSources(*cachedir)
+	)
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
 	srcdepfetch.Env = append(srcdepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
@@ -675,12 +679,19 @@ func doDebianSource(cmdline []string) {
 			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 
-			// Add Go source code
+			// Add bootstrapper Go source code
+			if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
+				log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
+			}
+			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".goboot")); err != nil {
+				log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
+			}
+			// Add builder Go source code
 			if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
-				log.Fatalf("Failed to extract Go sources: %v", err)
+				log.Fatalf("Failed to extract builder Go sources: %v", err)
 			}
 			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
-				log.Fatalf("Failed to rename Go source folder: %v", err)
+				log.Fatalf("Failed to rename builder Go source folder: %v", err)
 			}
 			// Add all dependency modules in compressed form
 			os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755)
@@ -707,6 +718,19 @@ func doDebianSource(cmdline []string) {
 			}
 		}
 	}
+}
+
+// downloadGoBootstrapSources downloads the Go source tarball that will be used
+// to bootstrap the builder Go.
+func downloadGoBootstrapSources(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
+	url := "https://dl.google.com/go/" + file
+	dst := filepath.Join(cachedir, file)
+	if err := csdb.DownloadFile(url, dst); err != nil {
+		log.Fatal(err)
+	}
+	return dst
 }
 
 // downloadGoSources downloads the Go source tarball.

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -579,7 +580,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _     = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		env            = NewEVM(BlockContext{}, TxContext{}, statedb, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()

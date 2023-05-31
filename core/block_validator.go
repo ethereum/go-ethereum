@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -71,16 +72,29 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if header.WithdrawalsHash != nil {
 		// Withdrawals list must be present in body after Shanghai.
 		if block.Withdrawals() == nil {
-			return fmt.Errorf("missing withdrawals in block body")
+			return errors.New("missing withdrawals in block body")
 		}
 		if hash := types.DeriveSha(block.Withdrawals(), trie.NewStackTrie(nil)); hash != *header.WithdrawalsHash {
 			return fmt.Errorf("withdrawals root hash mismatch (header value %x, calculated %x)", *header.WithdrawalsHash, hash)
 		}
 	} else if block.Withdrawals() != nil {
-		// Withdrawals are not allowed prior to shanghai fork
-		return fmt.Errorf("withdrawals present in block body")
+		// Withdrawals are not allowed prior to Shanghai fork
+		return errors.New("withdrawals present in block body")
 	}
-
+	// Blob transactions may be present after the Cancun fork.
+	var blobs int
+	for _, tx := range block.Transactions() {
+		blobs += len(tx.BlobHashes())
+	}
+	if header.DataGasUsed != nil {
+		if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.DataGasUsed, blobs*params.BlobTxDataGasPerBlob)
+		}
+	} else {
+		if blobs > 0 {
+			return errors.New("data blobs present in block body")
+		}
+	}
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
@@ -90,10 +104,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
-// ValidateState validates the various changes that happen after a state
-// transition, such as amount of used gas, the receipt roots and the state root
-// itself. ValidateState returns a database batch if the validation was a success
-// otherwise nil and an error is returned.
+// ValidateState validates the various changes that happen after a state transition,
+// such as amount of used gas, the receipt roots and the state root itself.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
 	header := block.Header()
 	if block.GasUsed() != usedGas {
@@ -113,7 +125,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil
 }

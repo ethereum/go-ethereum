@@ -50,7 +50,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		if i+count > frozen {
 			count = frozen - i
 		}
-		data, err := db.AncientRange(chainFreezerHashTable, i, count, 32*count)
+		data, err := db.AncientRange(ChainFreezerHashTable, i, count, 32*count)
 		if err != nil {
 			log.Crit("Failed to init database from freezer", "err", err)
 		}
@@ -132,11 +132,12 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		}
 	}
 	// process runs in parallel
-	nThreadsAlive := int32(threads)
+	var nThreadsAlive atomic.Int32
+	nThreadsAlive.Store(int32(threads))
 	process := func() {
 		defer func() {
 			// Last processor closes the result channel
-			if atomic.AddInt32(&nThreadsAlive, -1) == 0 {
+			if nThreadsAlive.Add(-1) == 0 {
 				close(hashesCh)
 			}
 		}()

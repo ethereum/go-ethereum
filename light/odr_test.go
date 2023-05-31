@@ -131,9 +131,10 @@ func TestOdrGetReceiptsLes2(t *testing.T) { testChainOdr(t, 1, odrGetReceipts) }
 func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	var receipts types.Receipts
 	if bc != nil {
-		number := rawdb.ReadHeaderNumber(db, bhash)
-		if number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config())
+		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
+			if header := rawdb.ReadHeader(db, bhash, *number); header != nil {
+				receipts = rawdb.ReadReceipts(db, bhash, *number, header.Time, bc.Config())
+			}
 		}
 	} else {
 		number := rawdb.ReadHeaderNumber(db, bhash)
@@ -174,12 +175,6 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 
 func TestOdrContractCallLes2(t *testing.T) { testChainOdr(t, 1, odrContractCall) }
 
-type callmsg struct {
-	types.Message
-}
-
-func (callmsg) CheckNonce() bool { return false }
-
 func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 	config := params.TestChainConfig
@@ -205,7 +200,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 
 		// Perform read-only call.
 		st.SetBalance(testBankAddress, math.MaxBig256)
-		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
+		msg := &core.Message{
+			From:              testBankAddress,
+			To:                &testContractAddr,
+			Value:             new(big.Int),
+			GasLimit:          1000000,
+			GasPrice:          big.NewInt(params.InitialBaseFee),
+			GasFeeCap:         big.NewInt(params.InitialBaseFee),
+			GasTipCap:         new(big.Int),
+			Data:              data,
+			SkipAccountChecks: true,
+		}
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(header, chain, nil)
 		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true})
@@ -279,7 +284,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 
 	gspec.MustCommit(ldb)
 	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
-	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker(), nil)
+	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +292,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	for i, block := range gchain {
 		headers[i] = block.Header()
 	}
-	if _, err := lightchain.InsertHeaderChain(headers, 1); err != nil {
+	if _, err := lightchain.InsertHeaderChain(headers); err != nil {
 		t.Fatal(err)
 	}
 

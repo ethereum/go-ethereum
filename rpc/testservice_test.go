@@ -78,6 +78,10 @@ func (o *MarshalErrObj) MarshalText() ([]byte, error) {
 
 func (s *testService) NoArgsRets() {}
 
+func (s *testService) Null() any {
+	return nil
+}
+
 func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
 	return echoResult{str, i, args}
 }

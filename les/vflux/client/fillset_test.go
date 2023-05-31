@@ -17,7 +17,7 @@
 package client
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 	"time"
 

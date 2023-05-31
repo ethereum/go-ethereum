@@ -615,6 +615,7 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
 	}
+	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 

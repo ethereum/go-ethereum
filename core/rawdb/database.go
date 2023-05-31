@@ -24,7 +24,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -72,9 +71,9 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 	}
 	// Set the freezer threshold to a temporary value
 	defer func(old uint64) {
-		atomic.StoreUint64(&frdb.AncientStore.(*chainFreezer).threshold, old)
-	}(atomic.LoadUint64(&frdb.AncientStore.(*chainFreezer).threshold))
-	atomic.StoreUint64(&frdb.AncientStore.(*chainFreezer).threshold, threshold)
+		frdb.AncientStore.(*chainFreezer).threshold.Store(old)
+	}(frdb.AncientStore.(*chainFreezer).threshold.Load())
+	frdb.AncientStore.(*chainFreezer).threshold.Store(threshold)
 
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
@@ -200,8 +199,9 @@ func resolveChainFreezerDir(ancient string) string {
 // where the chain freezer can be opened.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly)
 	if err != nil {
+		printChainMetadata(db)
 		return nil, err
 	}
 	// Since the freezer can be stored separately from the user's key-value database,
@@ -231,10 +231,12 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 			// If the freezer already contains something, ensure that the genesis blocks
 			// match, otherwise we might mix up freezers across chains and destroy both
 			// the freezer and the key-value store.
-			frgenesis, err := frdb.Ancient(chainFreezerHashTable, 0)
+			frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
 			if err != nil {
+				printChainMetadata(db)
 				return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
 			} else if !bytes.Equal(kvgenesis, frgenesis) {
+				printChainMetadata(db)
 				return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
 			}
 			// Key-value store and freezer belong to the same network. Ensure that they
@@ -242,8 +244,19 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if ldbNum := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); ldbNum > frozen-1 {
-					return nil, fmt.Errorf("gap in the chain between ancients (#%d) and leveldb (#%d) ", frozen, ldbNum)
+				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+					// Find the smallest block stored in the key-value store
+					// in range of [frozen, head]
+					var number uint64
+					for number = frozen; number <= head; number++ {
+						if present, _ := db.Has(headerHashKey(number)); present {
+							break
+						}
+					}
+					// We are about to exit on error. Print database metdata beore exiting
+					printChainMetadata(db)
+					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
+						frozen-1, number, head)
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
@@ -260,6 +273,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 				// Key-value store contains more data than the genesis block, make sure we
 				// didn't freeze anything yet.
 				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+					printChainMetadata(db)
 					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
 				}
 				// Block #1 is still in the database, we're allowed to init a new freezer
@@ -344,9 +358,15 @@ type OpenOptions struct {
 //
 //	                      type == null          type != null
 //	                   +----------------------------------------
-//	db is non-existent |  leveldb default  |  specified type
-//	db is existent     |  from db          |  specified type (if compatible)
+//	db is non-existent |  pebble default  |  specified type
+//	db is existent     |  from db         |  specified type (if compatible)
 func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
+	// Reject any unsupported database type
+	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
+		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
+	}
+	// Retrieve any pre-existing database's type and use that or the requested one
+	// as long as there's no conflict between the two types
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
@@ -359,12 +379,19 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
 	}
-	if len(o.Type) != 0 && o.Type != dbLeveldb {
-		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
+	if o.Type == dbLeveldb || existingDb == dbLeveldb {
+		log.Info("Using leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 	}
-	log.Info("Using leveldb as the backing database")
-	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
-	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	// No pre-existing database, no user-requested one either. Default to Pebble
+	// on supported platforms and LevelDB on anything else.
+	if PebbleEnabled {
+		log.Info("Defaulting to pebble as the backing database")
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	} else {
+		log.Info("Defaulting to leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	}
 }
 
 // Open opens both a disk-based key-value database such as leveldb or pebble, but also
@@ -580,4 +607,43 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
 	}
 	return nil
+}
+
+// printChainMetadata prints out chain metadata to stderr.
+func printChainMetadata(db ethdb.KeyValueStore) {
+	fmt.Fprintf(os.Stderr, "Chain metadata\n")
+	for _, v := range ReadChainMetadata(db) {
+		fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(v, ": "))
+	}
+	fmt.Fprintf(os.Stderr, "\n\n")
+}
+
+// ReadChainMetadata returns a set of key/value pairs that contains informatin
+// about the database chain status. This can be used for diagnostic purposes
+// when investigating the state of the node.
+func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
+	pp := func(val *uint64) string {
+		if val == nil {
+			return "<nil>"
+		}
+		return fmt.Sprintf("%d (%#x)", *val, *val)
+	}
+	data := [][]string{
+		{"databaseVersion", pp(ReadDatabaseVersion(db))},
+		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
+		{"headFastBlockHash", fmt.Sprintf("%v", ReadHeadFastBlockHash(db))},
+		{"headHeaderHash", fmt.Sprintf("%v", ReadHeadHeaderHash(db))},
+		{"lastPivotNumber", pp(ReadLastPivotNumber(db))},
+		{"len(snapshotSyncStatus)", fmt.Sprintf("%d bytes", len(ReadSnapshotSyncStatus(db)))},
+		{"snapshotDisabled", fmt.Sprintf("%v", ReadSnapshotDisabled(db))},
+		{"snapshotJournal", fmt.Sprintf("%d bytes", len(ReadSnapshotJournal(db)))},
+		{"snapshotRecoveryNumber", pp(ReadSnapshotRecoveryNumber(db))},
+		{"snapshotRoot", fmt.Sprintf("%v", ReadSnapshotRoot(db))},
+		{"txIndexTail", pp(ReadTxIndexTail(db))},
+		{"fastTxLookupLimit", pp(ReadFastTxLookupLimit(db))},
+	}
+	if b := ReadSkeletonSyncStatus(db); b != nil {
+		data = append(data, []string{"SkeletonSyncStatus", string(b)})
+	}
+	return data
 }

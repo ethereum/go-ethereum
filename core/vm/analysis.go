@@ -63,7 +63,7 @@ func (bits *bitvec) codeSegment(pos uint64) bool {
 // codeBitmap collects data locations in code.
 func codeBitmap(code []byte) bitvec {
 	// The bitmap is 4 bytes longer than necessary, in case the code
-	// ends with a PUSH32, the algorithm will push zeroes onto the
+	// ends with a PUSH32, the algorithm will set bits on the
 	// bitvector outside the bounds of the actual code.
 	bits := make(bitvec, len(code)/8+1+4)
 	return codeBitmapInternal(code, bits)

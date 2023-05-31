@@ -137,12 +137,14 @@ type NodeInfo struct {
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
 func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
+	hash := head.Hash()
+
 	return &NodeInfo{
 		Network:    network,
-		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
+		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
-		Head:       head.Hash(),
+		Head:       hash,
 	}
 }
 

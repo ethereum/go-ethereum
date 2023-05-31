@@ -320,6 +320,7 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 

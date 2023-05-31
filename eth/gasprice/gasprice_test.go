@@ -49,10 +49,10 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 		number = 0
 	}
 	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock().Header(), nil
+		return b.chain.CurrentFinalBlock(), nil
 	}
 	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock().Header(), nil
+		return b.chain.CurrentSafeBlock(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -75,10 +75,10 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 		number = 0
 	}
 	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock(), nil
+		number = rpc.BlockNumber(b.chain.CurrentFinalBlock().Number.Uint64())
 	}
 	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock(), nil
+		number = rpc.BlockNumber(b.chain.CurrentSafeBlock().Number.Uint64())
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -169,8 +169,8 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
 	chain.InsertChain(blocks)
-	chain.SetFinalized(chain.GetBlockByNumber(25))
-	chain.SetSafe(chain.GetBlockByNumber(25))
+	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
+	chain.SetSafe(chain.GetBlockByNumber(25).Header())
 	return &testBackend{chain: chain, pending: pending}
 }
 
