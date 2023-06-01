@@ -96,8 +96,8 @@ github.com/armon/go-metrics v0.4.1 h1:hR91U9KYmb6bLBYLQjyM+3j+rcd/UhE+G78SFnF8gJ
 github.com/armon/go-metrics v0.4.1/go.mod h1:E6amYzXo6aW1tqzoZGT755KkbgrJsSdpwZ+3JqfkOG4=
 github.com/astriaorg/metro v0.0.0-20230309025015-f1ccffce0828 h1:lu8LtNLCj3Hxz7sj6ZfJlPAPff5D4BkyXsgKN4YB9fw=
 github.com/astriaorg/metro v0.0.0-20230309025015-f1ccffce0828/go.mod h1:m6SzFNxG0yIWGIBW+S4M2lAj0vFMFOP/DdrLw38ndms=
-github.com/astriaorg/metro-transactions v0.0.0-20230329224048-ab6bf37b735c h1:exQeSyc7C00GUF8N9CIe4ScBG5UPjYVPZGXsYtyoDvM=
-github.com/astriaorg/metro-transactions v0.0.0-20230329224048-ab6bf37b735c/go.mod h1:jNUjyV3qkBr87GjGJEA7GRx6S5EC5bTpFrVWK0uCgpo=
+github.com/astriaorg/metro-transactions v0.0.0-20230531101410-401599609756 h1:G6OXxpnUmrRfkiecOPev+bZCcynRiz9Po08FrYSsanU=
+github.com/astriaorg/metro-transactions v0.0.0-20230531101410-401599609756/go.mod h1:kyZ3oeEr1ZACgk3TUsH6H20iVNUDkVJ7vktZMPMLQ1M=
 github.com/aws/aws-sdk-go v1.15.78/go.mod h1:E3/ieXAlvM0XWO57iftYVDLLvQ824smPP3ATZkfNZeM=
 github.com/aws/aws-sdk-go v1.40.45 h1:QN1nsY27ssD/JmW4s83qmSb+uL6DG4GmCDzjmJB4xUI=
 github.com/aws/aws-sdk-go v1.40.45/go.mod h1:585smgzpB/KqRA+K3y/NL/oYRqQvpNJYvLm+LY1U59Q=
