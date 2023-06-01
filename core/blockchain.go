@@ -98,6 +98,7 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
+	statePruneThreshold = 128
 	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
@@ -1388,7 +1389,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if bc.gcproc > flushInterval {
 		// If the header is missing (canonical chain behind), we're reorging a low
 		// diff sidechain. Suspend committing until this operation is completed.
-		header := bc.GetHeaderByNumber(chosen)
+		// Find the next state trie we need to be pruned
+		pruneChosen := current - statePruneThreshold
+		header := bc.GetHeaderByNumber(pruneChosen)
 		if header == nil {
 			log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
 		} else {
