@@ -826,7 +826,7 @@ func (pool *TxPool) isGapped(from common.Address, tx *types.Transaction) bool {
 	// Short circuit if transaction matches pending nonce and can be promoted
 	// to pending list as an executable transaction.
 	next := pool.pendingNonces.get(from)
-	if tx.Nonce() == next {
+	if tx.Nonce() <= next {
 		return false
 	}
 	// The transaction has a nonce gap with pending list, it's only considered
