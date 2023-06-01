@@ -23,6 +23,8 @@ In case this PR includes changes that must be applied only to a subset of nodes,
 - [ ] I have added at least 2 reviewer or the whole pos-v1 team
 - [ ] I have added sufficient documentation in code
 - [ ] I will be resolving comments - if any - by pushing each fix in a separate commit and linking the commit hash in the comment reply
+- [ ] Created a task in Jira and informed the team for implementation in Erigon client (if applicable)
+- [ ] Includes RPC methods changes, and the Notion documentation has been updated
 
 # Cross repository changes
 
