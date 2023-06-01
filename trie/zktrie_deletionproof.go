@@ -58,6 +58,10 @@ func (t *ProofTracer) Merge(another *ProofTracer) *ProofTracer {
 		t.rawPaths[k] = v
 	}
 
+	for k, v := range another.emptyTermPaths {
+		t.emptyTermPaths[k] = v
+	}
+
 	return t
 }
 
