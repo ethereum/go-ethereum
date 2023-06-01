@@ -536,7 +536,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 				if err != nil || account == nil {
 					break
 				}
-				stRoot = account.Root
+				stRoot = common.BytesToHash(account.Root)
 			}
 			id := trie.StorageTrieID(req.Root, common.BytesToHash(pathset[0]), stRoot)
 			stTrie, err := trie.NewStateTrie(id, triedb)

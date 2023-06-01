@@ -35,10 +35,10 @@ type StateAccount struct {
 	CodeHash []byte
 }
 
-// slimAccount is a modified version of an Account, where the root is replaced
+// SlimAccount is a modified version of an Account, where the root is replaced
 // with a byte slice. This format can be used to represent full-consensus format
 // or slim format which replaces the empty root and code hash as nil byte slice.
-type slimAccount struct {
+type SlimAccount struct {
 	Nonce    uint64
 	Balance  *big.Int
 	Root     []byte // Nil if root equals to types.EmptyRootHash
@@ -47,7 +47,7 @@ type slimAccount struct {
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
 func SlimAccountRLP(account StateAccount) []byte {
-	slim := slimAccount{
+	slim := SlimAccount{
 		Nonce:   account.Nonce,
 		Balance: account.Balance,
 	}
@@ -67,7 +67,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 // FullAccount decodes the data on the 'slim RLP' format and return
 // the consensus format account.
 func FullAccount(data []byte) (*StateAccount, error) {
-	var slim slimAccount
+	var slim SlimAccount
 	if err := rlp.DecodeBytes(data, &slim); err != nil {
 		return nil, err
 	}

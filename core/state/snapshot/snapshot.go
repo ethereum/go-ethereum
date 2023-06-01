@@ -101,8 +101,9 @@ type Snapshot interface {
 	// Root returns the root hash for which this snapshot was made.
 	Root() common.Hash
 
-	// Account directly retrieves the account associated with a particular hash.
-	Account(hash common.Hash) (*types.StateAccount, error)
+	// Account directly retrieves the account associated with a particular hash in
+	// the snapshot slim data format.
+	Account(hash common.Hash) (*types.SlimAccount, error)
 
 	// AccountRLP directly retrieves the account RLP associated with a particular
 	// hash in the snapshot slim data format.
