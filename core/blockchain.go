@@ -1389,7 +1389,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if bc.gcproc > flushInterval {
 		// If the header is missing (canonical chain behind), we're reorging a low
 		// diff sidechain. Suspend committing until this operation is completed.
-		// Find the next state trie we need to be pruned
+		// Find the next state trie that needs to be pruned
 		pruneChosen := current - statePruneThreshold
 		header := bc.GetHeaderByNumber(pruneChosen)
 		if header == nil {
