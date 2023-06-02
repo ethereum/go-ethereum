@@ -133,18 +133,13 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --rinkeby, --goerli, --sepolia instead)",
+		Usage:    "Explicitly set network id (integer)(For testnets: use --goerli, --sepolia instead)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
 	MainnetFlag = &cli.BoolFlag{
 		Name:     "mainnet",
 		Usage:    "Ethereum mainnet",
-		Category: flags.EthCategory,
-	}
-	RinkebyFlag = &cli.BoolFlag{
-		Name:     "rinkeby",
-		Usage:    "Rinkeby network: pre-configured proof-of-authority test network",
 		Category: flags.EthCategory,
 	}
 	GoerliFlag = &cli.BoolFlag{
@@ -931,7 +926,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
-		RinkebyFlag,
 		GoerliFlag,
 		SepoliaFlag,
 	}
@@ -958,9 +952,6 @@ func init() {
 // then a subdirectory of the specified datadir will be used.
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.String(DataDirFlag.Name); path != "" {
-		if ctx.Bool(RinkebyFlag.Name) {
-			return filepath.Join(path, "rinkeby")
-		}
 		if ctx.Bool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
@@ -1015,8 +1006,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	case ctx.Bool(SepoliaFlag.Name):
 		urls = params.SepoliaBootnodes
-	case ctx.Bool(RinkebyFlag.Name):
-		urls = params.RinkebyBootnodes
 	case ctx.Bool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
 	}
@@ -1464,8 +1453,6 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.String(DataDirFlag.Name)
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.Bool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.Bool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.Bool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
@@ -1626,7 +1613,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RinkebyFlag, GoerliFlag, SepoliaFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
@@ -1768,22 +1755,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
-	case ctx.Bool(RinkebyFlag.Name):
-		log.Warn("")
-		log.Warn("--------------------------------------------------------------------------------")
-		log.Warn("Please note, Rinkeby has been deprecated. It will still work for the time being,")
-		log.Warn("but there will be no further hard-forks shipped for it.")
-		log.Warn("The network will be permanently halted in Q2/Q3 of 2023.")
-		log.Warn("For the most future proof testnet, choose Sepolia as")
-		log.Warn("your replacement environment (--sepolia instead of --rinkeby).")
-		log.Warn("--------------------------------------------------------------------------------")
-		log.Warn("")
-
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 4
-		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
 	case ctx.Bool(GoerliFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
@@ -2114,8 +2085,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
-	case ctx.Bool(RinkebyFlag.Name):
-		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.Bool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):

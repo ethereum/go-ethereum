@@ -189,8 +189,6 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 		switch blockhash {
 		case params.MainnetGenesisHash:
 			genesis = DefaultGenesisBlock()
-		case params.RinkebyGenesisHash:
-			genesis = DefaultRinkebyGenesisBlock()
 		case params.GoerliGenesisHash:
 			genesis = DefaultGoerliGenesisBlock()
 		case params.SepoliaGenesisHash:
@@ -420,8 +418,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.MainnetChainConfig
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
-	case ghash == params.RinkebyGenesisHash:
-		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
 	default:
@@ -525,18 +521,6 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
-	}
-}
-
-// DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
-func DefaultRinkebyGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.RinkebyChainConfig,
-		Timestamp:  1492009146,
-		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
 
