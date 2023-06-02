@@ -56,6 +56,9 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
 		_, stateDb := api.eth.miner.Pending()
+		if stateDb == nil {
+			return state.Dump{}, errors.New("pending state is not available")
+		}
 		return stateDb.RawDump(opts), nil
 	}
 	var header *types.Header
@@ -141,6 +144,9 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			// both the pending block as well as the pending state from
 			// the miner and operate on those
 			_, stateDb = api.eth.miner.Pending()
+			if stateDb == nil {
+				return state.IteratorDump{}, errors.New("pending state is not available")
+			}
 		} else {
 			var header *types.Header
 			if number == rpc.LatestBlockNumber {
@@ -204,11 +210,16 @@ type storageEntry struct {
 }
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
-func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
-	// Retrieve the block
-	block := api.eth.blockchain.GetBlockByHash(blockHash)
+func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+	var block *types.Block
+
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
+
 	if block == nil {
-		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
+		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
 	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
 	if err != nil {

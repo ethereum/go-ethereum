@@ -78,10 +78,36 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return fmt.Errorf("withdrawals root hash mismatch (header value %x, calculated %x)", *header.WithdrawalsHash, hash)
 		}
 	} else if block.Withdrawals() != nil {
-		// Withdrawals are not allowed prior to shanghai fork
+		// Withdrawals are not allowed prior to Shanghai fork
 		return errors.New("withdrawals present in block body")
 	}
+	// Blob transactions may be present after the Cancun fork.
+	var blobs int
+	for _, tx := range block.Transactions() {
+		// Count the number of blobs to validate against the header's dataGasUsed
+		blobs += len(tx.BlobHashes())
 
+		// Validate the data blobs individually too
+		if tx.Type() == types.BlobTxType {
+			if len(tx.BlobHashes()) == 0 {
+				return errors.New("no-blob blob transaction present in block body")
+			}
+			for _, hash := range tx.BlobHashes() {
+				if hash[0] != params.BlobTxHashVersion {
+					return fmt.Errorf("blob hash version mismatch (have %d, supported %d)", hash[0], params.BlobTxHashVersion)
+				}
+			}
+		}
+	}
+	if header.DataGasUsed != nil {
+		if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.DataGasUsed, blobs*params.BlobTxDataGasPerBlob)
+		}
+	} else {
+		if blobs > 0 {
+			return errors.New("data blobs present in block body")
+		}
+	}
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
