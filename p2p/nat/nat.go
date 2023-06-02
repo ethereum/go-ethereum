@@ -29,6 +29,34 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
+type Spec struct {
+	spec     string
+	instance Interface
+}
+
+func NewFromSpec(spec string) (*Spec, error) {
+	instance, err := Parse(spec)
+	if err != nil {
+		return nil, err
+	}
+	return &Spec{spec, instance}, nil
+}
+
+func MustFromSpec(spec string) *Spec {
+	instance, err := Parse(spec)
+	if err != nil {
+		panic(err)
+	}
+	return &Spec{spec, instance}
+}
+
+func (s *Spec) Implementation() Interface {
+	return s.instance
+}
+func (s *Spec) MarshalTOML() ([]byte, error) {
+	return []byte(fmt.Sprintf("%q", s.spec)), nil
+}
+
 // Interface An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
 type Interface interface {

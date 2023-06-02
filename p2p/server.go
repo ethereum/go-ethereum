@@ -142,7 +142,7 @@ type Config struct {
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT nat.Interface `toml:"-"`
+	NAT *nat.Spec `toml:",omitempty"`
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
@@ -514,12 +514,13 @@ func (srv *Server) setupLocalNode() error {
 			srv.localnode.Set(e)
 		}
 	}
-	switch srv.NAT.(type) {
+	used := srv.NAT.Implementation()
+	switch used.(type) {
 	case nil:
 		// No NAT interface, do nothing.
 	case nat.ExtIP:
 		// ExtIP doesn't block, set the IP right away.
-		ip, _ := srv.NAT.ExternalIP()
+		ip, _ := used.ExternalIP()
 		srv.localnode.SetStaticIP(ip)
 	default:
 		// Ask the router about the IP. This takes a while and blocks startup,
@@ -527,7 +528,7 @@ func (srv *Server) setupLocalNode() error {
 		srv.loopWG.Add(1)
 		go func() {
 			defer srv.loopWG.Done()
-			if ip, err := srv.NAT.ExternalIP(); err == nil {
+			if ip, err := used.ExternalIP(); err == nil {
 				srv.localnode.SetStaticIP(ip)
 			}
 		}()
@@ -574,7 +575,7 @@ func (srv *Server) setupDiscovery() error {
 		if !realaddr.IP.IsLoopback() {
 			srv.loopWG.Add(1)
 			go func() {
-				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				nat.Map(srv.NAT.Implementation(), srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
 				srv.loopWG.Done()
 			}()
 		}
@@ -681,7 +682,7 @@ func (srv *Server) setupListening() error {
 		if !tcp.IP.IsLoopback() && srv.NAT != nil {
 			srv.loopWG.Add(1)
 			go func() {
-				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
+				nat.Map(srv.NAT.Implementation(), srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
 				srv.loopWG.Done()
 			}()
 		}

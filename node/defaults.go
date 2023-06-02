@@ -60,7 +60,7 @@ var DefaultConfig = Config{
 	P2P: p2p.Config{
 		ListenAddr: ":30303",
 		MaxPeers:   50,
-		NAT:        nat.Any(),
+		NAT:        nat.MustFromSpec("any"),
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
 }
