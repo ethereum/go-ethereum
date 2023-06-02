@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,9 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const basefeeWiggleMultiplier = 2
@@ -37,6 +40,8 @@ const basefeeWiggleMultiplier = 2
 var (
 	errNoEventSignature       = errors.New("no event signature")
 	errEventSignatureMismatch = errors.New("event signature mismatch")
+	errErrorSignatureMismatch = errors.New("error signature mismatch")
+	errNoErrorData            = errors.New("no error data")
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -535,6 +540,40 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event strin
 		}
 	}
 	return abi.ParseTopicsIntoMap(out, indexed, log.Topics[1:])
+}
+
+// UnpackError unpacks a retrieved error into the provided output structure.
+func (c *BoundContract) UnpackError(out interface{}, errName string, e error) error {
+	var errData rpc.DataError
+	if !errors.As(e, &errData) {
+		return errNoErrorData
+	}
+	data := errData.ErrorData().(string)
+	dataBytes, err := hexutil.Decode(data)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(c.abi.Errors[errName].ID.Bytes()[:4], dataBytes[:4]) {
+		return errErrorSignatureMismatch
+	}
+	return c.abi.UnpackIntoInterface(out, errName, dataBytes[4:])
+}
+
+// UnpackErrorIntoMap unpacks a retrieved error into the provided map.
+func (c *BoundContract) UnpackErrorIntoMap(out map[string]interface{}, errName string, e error) error {
+	var errData rpc.DataError
+	if !errors.As(e, &errData) {
+		return errNoErrorData
+	}
+	data := errData.ErrorData().(string)
+	dataBytes, err := hexutil.Decode(data)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(c.abi.Errors[errName].ID.Bytes()[:4], dataBytes[:4]) {
+		return errErrorSignatureMismatch
+	}
+	return c.abi.UnpackIntoMap(out, errName, dataBytes[4:])
 }
 
 // ensureContext is a helper method to ensure a context is not nil, even if the
