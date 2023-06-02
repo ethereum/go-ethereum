@@ -579,19 +579,19 @@ var (
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{bindtype .Type $structs}} {{end}}
-			Raw string // Blockchain specific contextual infos
+			Raw error // Blockchain specific contextual infos
 		}
 
 		// Parse{{.Normalized.Name}} is a error parse operation binding the contract error 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
-			event := new({{$contract.Type}}{{.Normalized.Name}})
-			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) Parse{{.Normalized.Name}}(e error) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+			errStruct := new({{$contract.Type}}{{.Normalized.Name}})
+			if err := _{{$contract.Type}}.contract.UnpackError(errStruct, "{{.Original.Name}}", e); err != nil {
 				return nil, err
 			}
-			event.Raw = log
-			return event, nil
+			errStruct.Raw = e
+			return errStruct, nil
 		}
 	{{end}}
 {{end}}
