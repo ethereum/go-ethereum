@@ -94,6 +94,9 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	if event, ok := abi.Events[name]; ok {
 		args = event.Inputs
 	}
+	if e, ok := abi.Errors[name]; ok {
+		args = e.Inputs
+	}
 	if args == nil {
 		return nil, fmt.Errorf("abi: could not locate named method or event: %s", name)
 	}
