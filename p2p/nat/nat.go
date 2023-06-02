@@ -53,8 +53,23 @@ func MustFromSpec(spec string) *Spec {
 func (s *Spec) Implementation() Interface {
 	return s.instance
 }
+
+// MarshalTOML implements toml.MarshalerRec.
 func (s *Spec) MarshalTOML() ([]byte, error) {
 	return []byte(fmt.Sprintf("%q", s.spec)), nil
+}
+
+// UnmarshalTOML implements toml.UnmarshalerRec.
+func (s *Spec) UnmarshalTOML(fn func(interface{}) error) error {
+	var spec string
+	fn(&spec)
+	instance, err := Parse(spec)
+	if err != nil {
+		return err
+	}
+	s.instance = instance
+	s.spec = spec
+	return nil
 }
 
 // Interface An implementation of nat.Interface can map local ports to ports
