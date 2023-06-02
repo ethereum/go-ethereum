@@ -26,6 +26,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -83,197 +84,75 @@ func ReadDir(dir, network string) ([]string, error) {
 	return eras, nil
 }
 
-// Reader reads an Era1 archive.
-// See Builder documentation for a detailed explanation of the Era1 format.
-type Reader struct {
-	r io.ReaderAt
-	e *e2store.Reader
-
-	buf      [8]byte  // buffer reading entry offsets
-	next     uint64   // next block to read
-	length   int64    // total length of r
-	metadata metadata // start, count info
-}
-
-type ReadAtSeeker interface {
+type ReadAtSeekCloser interface {
 	io.ReaderAt
 	io.Seeker
+	io.Closer
 }
 
-// NewReader returns a new Reader instance.
-func NewReader(r ReadAtSeeker) (*Reader, error) {
-	length, err := r.Seek(0, io.SeekEnd)
+// Era reads and Era1 file.
+type Era struct {
+	f   ReadAtSeekCloser // backing era1 file
+	s   *e2store.Reader  // e2store reader over f
+	m   metadata         // start, count, length info
+	mu  *sync.Mutex      // lock for buf
+	buf [8]byte          // buffer reading entry offsets
+}
+
+// From returns an Era backed by f.
+func From(f ReadAtSeekCloser) (*Era, error) {
+	m, err := readMetadata(f)
 	if err != nil {
 		return nil, err
 	}
-	m, err := readMetadata(r, length)
-	if err != nil {
-		return nil, err
-	}
-	return &Reader{
-		r:        r,
-		e:        e2store.NewReader(r),
-		next:     m.start,
-		length:   length,
-		metadata: m,
+	return &Era{
+		f:  f,
+		s:  e2store.NewReader(f),
+		m:  m,
+		mu: new(sync.Mutex),
 	}, nil
 }
 
-// readOffset reads a specific block's offset from the block index. The value n
-// is the absolute block number desired.
-func (r *Reader) readOffset(n uint64) (int64, error) {
-	var (
-		firstIndex  = -8 - int64(r.metadata.count)*8      // size of count - index entries
-		indexOffset = int64(n-r.metadata.start) * 8       // desired index * size of indexes
-		offOffset   = r.length + firstIndex + indexOffset // offset of block offset
-	)
-	r.clearBuffer()
-	if _, err := r.r.ReadAt(r.buf[:], offOffset); err != nil {
-		return 0, err
-	}
-	// Since the block offset is relative from its location + size of index
-	// value (8), we need to add it to it's offset to get the block's
-	// absolute offset.
-	return offOffset + 8 + int64(binary.LittleEndian.Uint64(r.buf[:])), nil
-}
-
-// Read reads one (block, receipts) tuple from an Era1 archive.
-func (r *Reader) Read() (*types.Block, types.Receipts, error) {
-	block, receipts, err := r.ReadBlockAndReceipts(r.next)
-	if err != nil {
-		return nil, nil, err
-	}
-	r.next += 1
-	return block, receipts, nil
-}
-
-// readBlob reads an entry of data.
-func (r *Reader) readEntry(n uint64, skip int) (*e2store.Entry, error) {
-	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
-		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
-	}
-	// Read the specified block's offset from the block index.
-	off, err := r.readOffset(n)
-	if err != nil {
-		return nil, fmt.Errorf("error reading block offset: %w", err)
-	}
-	// Skip to the requested entry.
-	for i := 0; i < skip; i++ {
-		if length, err := r.e.LengthAt(off); err != nil {
-			return nil, err
-		} else {
-			off += length
-		}
-	}
-	// Read entry.
-	var entry e2store.Entry
-	if _, err := r.e.ReadAt(&entry, off); err != nil {
-		return nil, err
-	}
-	return &entry, nil
-}
-
-// readHeaderRLP reads the header number n RLP.
-func (r *Reader) readHeaderRLP(n uint64) ([]byte, error) {
-	e, err := r.readEntry(n, 0)
+// Open returns an Era backed by the given filename.
+func Open(filename string) (*Era, error) {
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	if e.Type != TypeCompressedHeader {
-		return nil, fmt.Errorf("expected header entry, got %x", e.Type)
-	}
-	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
+	return From(f)
 }
 
-// readBodyRLP reads the block body number n RLP.
-func (r *Reader) readBodyRLP(n uint64) ([]byte, error) {
-	e, err := r.readEntry(n, 1)
+func (e *Era) Close() error {
+	return e.f.Close()
+}
+
+func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, fmt.Errorf("out-of-bounds")
+	}
+	off, err := e.readOffset(num)
 	if err != nil {
 		return nil, err
 	}
-	if e.Type != TypeCompressedBody {
-		return nil, fmt.Errorf("expected body entry, got %x", e.Type)
-	}
-	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
-}
-
-// readReceiptsRLP reads the receipts RLP associated with number n.
-func (r *Reader) readReceiptsRLP(n uint64) ([]byte, error) {
-	e, err := r.readEntry(n, 2)
-	if err != nil {
-		return nil, err
-	}
-	if e.Type != TypeCompressedReceipts {
-		return nil, fmt.Errorf("expected receipts entry, got %x", e.Type)
-	}
-	return io.ReadAll(snappy.NewReader(bytes.NewReader(e.Value)))
-}
-
-// readTotalDifficulty reads the total difficulty of block number n.
-func (r *Reader) readTotalDifficulty(n uint64) (*big.Int, error) {
-	e, err := r.readEntry(n, 3)
-	if err != nil {
-		return nil, err
-	}
-	if e.Type != TypeTotalDifficulty {
-		return nil, fmt.Errorf("expected TD entry, got %x", e.Type)
-	}
-	return new(big.Int).SetBytes(reverseOrder(e.Value)), nil
-}
-
-// ReadHeader reads the header number n.
-func (r *Reader) ReadHeader(n uint64) (*types.Header, error) {
-	h, err := r.readHeaderRLP(n)
+	r, n, err := newSnappyReader(e.s, off)
 	if err != nil {
 		return nil, err
 	}
 	var header types.Header
-	if err := rlp.DecodeBytes(h, &header); err != nil {
+	if err := rlp.Decode(r, &header); err != nil {
 		return nil, err
 	}
-	return &header, nil
-}
-
-// ReadBlock reads the block number n.
-func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
-	header, err := r.ReadHeader(n)
-	if err != nil {
-		return nil, err
-	}
-	b, err := r.readBodyRLP(n)
-	if err != nil {
-		return nil, err
-	}
+	off += int64(n)
 	var body types.Body
-	if err := rlp.DecodeBytes(b, &body); err != nil {
+	if err := rlp.Decode(r, &body); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles), nil
-}
-
-// ReadBlockAndReceipts reads the block number n and associated receipts.
-func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, error) {
-	// Read block.
-	block, err := r.ReadBlock(n)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Read receipts.
-	rr, err := r.readReceiptsRLP(n)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Decode receipts.
-	var receipts types.Receipts
-	if err := rlp.DecodeBytes(rr, &receipts); err != nil {
-		return nil, nil, err
-	}
-	return block, receipts, err
+	return types.NewBlockWithHeader(&header).WithBody(body.Transactions, body.Uncles), nil
 }
 
 // Accumulator reads the accumulator entry in the Era1 file.
-func (r *Reader) Accumulator() (common.Hash, error) {
-	entry, err := r.e.Find(TypeAccumulator)
+func (e *Era) Accumulator() (common.Hash, error) {
+	entry, err := e.s.Find(TypeAccumulator)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -282,53 +161,126 @@ func (r *Reader) Accumulator() (common.Hash, error) {
 
 // InitialTD returns initial total difficulty before the difficulty of the
 // first block of the Era1 is applied.
-func (r *Reader) InitialTD() (*big.Int, error) {
-	h, err := r.ReadHeader(r.Start())
-	if err != nil {
+func (e *Era) InitialTD() (*big.Int, error) {
+	var (
+		r      io.Reader
+		header types.Header
+		rawTd  []byte
+		n      int
+		off    int64
+		err    error
+	)
+
+	// Read first header.
+	if off, err = e.readOffset(e.m.start); err != nil {
 		return nil, err
 	}
-	// Above seek also sets reader so next TD entry will be for this block.
-	entry, err := r.e.Find(TypeTotalDifficulty)
-	if err != nil {
+	if r, n, err = newSnappyReader(e.s, off); err != nil {
 		return nil, err
 	}
-	td := new(big.Int).SetBytes(reverseOrder(entry.Value))
-	return td.Sub(td, h.Difficulty), nil
+	if err := rlp.Decode(r, header); err != nil {
+		return nil, err
+	}
+	off += int64(n)
+
+	// Skip over next two records.
+	for i := 0; i < 2; i++ {
+		length, err := e.s.LengthAt(off)
+		if err != nil {
+			return nil, err
+		}
+		off += length
+	}
+
+	// Read total difficulty after first block.
+	if r, n, err = newReader(e.s, off); err != nil {
+		return nil, err
+	}
+	if err := rlp.Decode(r, rawTd); err != nil {
+		return nil, err
+	}
+	td := new(big.Int).SetBytes(reverseOrder(rawTd))
+	return td.Sub(td, header.Difficulty), nil
 }
 
 // Start returns the listed start block.
-func (r *Reader) Start() uint64 {
-	return r.metadata.start
+func (e *Era) Start() uint64 {
+	return e.m.start
 }
 
 // Count returns the total number of blocks in the Era1.
-func (r *Reader) Count() uint64 {
-	return r.metadata.count
+func (e *Era) Count() uint64 {
+	return e.m.count
+}
+
+// readOffset reads a specific block's offset from the block index. The value n
+// is the absolute block number desired.
+func (e *Era) readOffset(n uint64) (int64, error) {
+	var (
+		firstIndex  = -8 - int64(e.m.count)*8               // size of count - index entries
+		indexOffset = int64(n-e.m.start) * 8                // desired index * size of indexes
+		offOffset   = e.m.length + firstIndex + indexOffset // offset of block offset
+	)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	clearBuffer(e.buf[:])
+	if _, err := e.f.ReadAt(e.buf[:], offOffset); err != nil {
+		return 0, err
+	}
+	// Since the block offset is relative from its location + size of index
+	// value (8), we need to add it to it's offset to get the block's
+	// absolute offset.
+	return offOffset + 8 + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
+}
+
+// newReader returns an io.Reader for the e2store entry value at off.
+func newReader(e *e2store.Reader, off int64) (io.Reader, int, error) {
+	var (
+		entry e2store.Entry
+		n     int
+		err   error
+	)
+	if n, err = e.ReadAt(&entry, off); err != nil {
+		return nil, n, err
+	}
+	return bytes.NewReader(entry.Value), n, nil
+}
+
+// newReader returns a snappy.Reader for the e2store entry value at off.
+func newSnappyReader(e *e2store.Reader, off int64) (io.Reader, int, error) {
+	r, n, err := newReader(e, off)
+	return snappy.NewReader(r), n, err
 }
 
 // clearBuffer zeroes out the buffer.
-func (r *Reader) clearBuffer() {
-	for i := 0; i < len(r.buf); i++ {
-		r.buf[i] = 0
+func clearBuffer(buf []byte) {
+	for i := 0; i < len(buf); i++ {
+		buf[i] = 0
 	}
 }
 
 // metadata wraps the metadata in the block index.
 type metadata struct {
-	start, count uint64
+	start  uint64
+	count  uint64
+	length int64
 }
 
 // readMetadata reads the metadata stored in an Era1 file's block index.
-func readMetadata(r io.ReaderAt, length int64) (m metadata, err error) {
+func readMetadata(f ReadAtSeekCloser) (m metadata, err error) {
+	// Determine length of reader.
+	if m.length, err = f.Seek(0, io.SeekEnd); err != nil {
+		return
+	}
 	b := make([]byte, 16)
 	// Read count. It's the last 8 bytes of the file.
-	if _, err = r.ReadAt(b[:8], length-8); err != nil {
+	if _, err = f.ReadAt(b[:8], m.length-8); err != nil {
 		return
 	}
 	m.count = binary.LittleEndian.Uint64(b)
 	// Read start. It's at the offset -sizeof(m.count) -
 	// count*sizeof(indexEntry) - sizeof(m.start)
-	if _, err = r.ReadAt(b[8:], length-16-int64(m.count*8)); err != nil {
+	if _, err = f.ReadAt(b[8:], m.length-16-int64(m.count*8)); err != nil {
 		return
 	}
 	m.start = binary.LittleEndian.Uint64(b[8:])

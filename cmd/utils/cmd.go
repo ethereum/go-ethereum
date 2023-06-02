@@ -285,19 +285,26 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			buf.Reset()
 
 			// Import all block data from Era1.
-			r, err := era.NewReader(f)
+			e, err := era.From(f)
+			if err != nil {
+				return fmt.Errorf("error opening era: %w", err)
+			}
+			it, err := era.NewIterator(e)
 			if err != nil {
 				return fmt.Errorf("error making era reader: %w", err)
 			}
-			for j := 0; ; j += 1 {
+			for j := 0; it.Next(); j++ {
 				n := i*era.MaxEra1Size + j
-				block, receipts, err := r.Read()
-				if err == io.EOF {
-					break
-				} else if err != nil {
+				block, err := it.Block()
+				if err != nil {
 					return fmt.Errorf("error reading block %d: %w", n, err)
-				} else if block.Number().BitLen() == 0 {
+				}
+				if block.Number().BitLen() == 0 {
 					continue // skip genesis
+				}
+				receipts, err := it.Receipts()
+				if err != nil {
+					return fmt.Errorf("error reading receipts %d: %w", n, err)
 				}
 				if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
 					return fmt.Errorf("error inserting header %d: %w", n, err)

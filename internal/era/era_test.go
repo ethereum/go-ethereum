@@ -18,6 +18,7 @@ package era
 
 import (
 	"bytes"
+	"io"
 	"math/big"
 	"os"
 	"testing"
@@ -71,43 +72,52 @@ func TestEra1Builder(t *testing.T) {
 	}
 
 	// Verify Era1 contents.
-	r, err := NewReader(f)
+	e, err := Open(f.Name())
 	if err != nil {
-		t.Fatalf("failed to make reader: %s", err)
+		t.Fatalf("failed to open era: %v", err)
+	}
+	it, err := NewRawIterator(e)
+	if err != nil {
+		t.Fatalf("failed to make iterator: %s", err)
 	}
 	for i := uint64(0); i < uint64(len(chain.headers)); i++ {
+		if !it.Next() {
+			t.Fatalf("expected more entries")
+		}
+		if it.Error() != nil {
+			t.Fatalf("unexpected error %v", it.Error())
+		}
 		// Check headers.
-		header, err := r.readHeaderRLP(i)
+		header, err := io.ReadAll(it.Header)
 		if err != nil {
-			t.Fatalf("error reading from era1: %v", err)
+			t.Fatalf("error reading header: %v", err)
 		}
 		if !bytes.Equal(header, chain.headers[i]) {
 			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], header)
 		}
-
 		// Check bodies.
-		body, err := r.readBodyRLP(i)
+		body, err := io.ReadAll(it.Body)
 		if err != nil {
-			t.Fatalf("error reading from era1: %v", err)
+			t.Fatalf("error reading body: %v", err)
 		}
 		if !bytes.Equal(body, chain.bodies[i]) {
 			t.Fatalf("mismatched body: want %s, got %s", chain.bodies[i], body)
 		}
-
 		// Check receipts.
-		receipts, err := r.readReceiptsRLP(i)
+		receipts, err := io.ReadAll(it.Receipts)
 		if err != nil {
-			t.Fatalf("error reading from era1: %v", err)
+			t.Fatalf("error reading receipts: %v", err)
 		}
 		if !bytes.Equal(receipts, chain.receipts[i]) {
-			t.Fatalf("mismatched body: want %s, got %s", chain.receipts[i], receipts)
+			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], receipts)
 		}
 
 		// Check total difficulty.
-		td, err := r.readTotalDifficulty(i)
+		rawTd, err := io.ReadAll(it.TotalDifficulty)
 		if err != nil {
-			t.Fatalf("error reading from era1: %v", err)
+			t.Fatalf("error reading td: %v", err)
 		}
+		td := new(big.Int).SetBytes(reverseOrder(rawTd))
 		if td.Cmp(chain.tds[i]) != 0 {
 			t.Fatalf("mismatched tds: want %s, got %s", chain.tds[i], td)
 		}

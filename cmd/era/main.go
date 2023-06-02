@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"path"
@@ -111,19 +110,15 @@ func block(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
-	f, err := open(ctx, num/uint64(ctx.Int(eraSizeFlag.Name)))
+	e, err := open(ctx, num/uint64(ctx.Int(eraSizeFlag.Name)))
 	if err != nil {
 		return fmt.Errorf("error opening era: %w", err)
 	}
-	defer f.Close()
-	r, err := era.NewReader(f)
-	if err != nil {
-		return fmt.Errorf("error making era reader: %w", err)
-	}
+	defer e.Close()
 	// Read block with number.
-	block, err := r.ReadBlock(num)
+	block, err := e.GetBlockByNumber(num)
 	if err != nil {
-		return fmt.Errorf("error reading era: %w", err)
+		return fmt.Errorf("error reading block %d: %w", num, err)
 	}
 	// Convert block to JSON and print.
 	val, err := ethapi.RPCMarshalBlock(block, ctx.Bool(txsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
@@ -144,20 +139,16 @@ func info(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid epoch number: %w", err)
 	}
-	f, err := open(ctx, epoch)
+	e, err := open(ctx, epoch)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	r, err := era.NewReader(f)
-	if err != nil {
-		return fmt.Errorf("error creating era reader: %w", err)
-	}
-	acc, err := r.Accumulator()
+	defer e.Close()
+	acc, err := e.Accumulator()
 	if err != nil {
 		return fmt.Errorf("error reading accumulator: %w", err)
 	}
-	td, err := r.InitialTD()
+	td, err := e.InitialTD()
 	if err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
@@ -167,7 +158,7 @@ func info(ctx *cli.Context) error {
 		StartBlock      uint64      `json:"startBlock"`
 		Count           uint64      `json:"count"`
 	}{
-		acc, td, r.Start(), r.Count(),
+		acc, td, e.Start(), e.Count(),
 	}
 	b, _ := json.MarshalIndent(info, "", "  ")
 	fmt.Println(string(b))
@@ -175,7 +166,7 @@ func info(ctx *cli.Context) error {
 }
 
 // open opens an era1 file at a certain epoch.
-func open(ctx *cli.Context, epoch uint64) (*os.File, error) {
+func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
 	var (
 		dir     = ctx.String(dirFlag.Name)
 		network = ctx.String(networkFlag.Name)
@@ -187,7 +178,7 @@ func open(ctx *cli.Context, epoch uint64) (*os.File, error) {
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return os.Open(path.Join(dir, entries[epoch]))
+	return era.Open(path.Join(dir, entries[epoch]))
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
@@ -223,29 +214,21 @@ func verify(ctx *cli.Context) error {
 		// Wrap in function so defers don't stack.
 		err := func() error {
 			name := entries[i]
-			f, err := os.Open(path.Join(dir, name))
+			e, err := era.Open(path.Join(dir, name))
 			if err != nil {
 				return fmt.Errorf("error opening era1 file %s: %w", name, err)
 			}
-			defer f.Close()
-
-			r, err := era.NewReader(f)
-			if err != nil {
-				return fmt.Errorf("unable to make era reader: %w", err)
-			}
-
+			defer e.Close()
 			// Read accumulator and check against expected.
-			if got, err := r.Accumulator(); err != nil {
+			if got, err := e.Accumulator(); err != nil {
 				return fmt.Errorf("error retrieving accumulator for %s: %w", name, err)
 			} else if got != want {
 				return fmt.Errorf("invalid root %s: got %s, want %s", name, got, want)
 			}
-
 			// Recompute accumulator.
-			if err := checkAccumulator(r); err != nil {
+			if err := checkAccumulator(e); err != nil {
 				return fmt.Errorf("error verify era1 file %s: %w", name, err)
 			}
-
 			// Give the user some feedback that something is happening.
 			if time.Since(reported) >= 8*time.Second {
 				fmt.Printf("Verifying Era1 files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
@@ -262,20 +245,24 @@ func verify(ctx *cli.Context) error {
 }
 
 // checkAccumulator verifies the accumulator matches the data in the Era.
-func checkAccumulator(r *era.Reader) error {
+func checkAccumulator(e *era.Era) error {
 	var (
 		err    error
-		start  = r.Start()
+		start  = e.Start()
 		want   common.Hash
 		td     *big.Int
 		tds    = make([]*big.Int, 0)
 		hashes = make([]common.Hash, 0)
 	)
-	if want, err = r.Accumulator(); err != nil {
+	if want, err = e.Accumulator(); err != nil {
 		return fmt.Errorf("error reading accumulator: %w", err)
 	}
-	if td, err = r.InitialTD(); err != nil {
+	if td, err = e.InitialTD(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
+	}
+	it, err := era.NewIterator(e)
+	if err != nil {
+		return fmt.Errorf("error making era iterator: %w", err)
 	}
 	// Starting at epoch 0, iterate through all available era1 files and
 	// check the following:
@@ -284,13 +271,14 @@ func checkAccumulator(r *era.Reader) error {
 	//   * the accumulator is correct by recomputing it locally,
 	//     which verifies the blocks are all correct (via hash)
 	//   * the receipts root matches the value in the block
-	for j := 0; ; j++ {
-		// read() walks the block index, so we're able to
+	for j := 0; it.Next(); j++ {
+		// next() walks the block index, so we're able to
 		// implicitly verify it.
-		block, receipts, err := r.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
+		if it.Error() != nil {
+			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
+		}
+		block, receipts, err := it.BlockAndReceipts()
+		if it.Error() != nil {
 			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
 		}
 		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
