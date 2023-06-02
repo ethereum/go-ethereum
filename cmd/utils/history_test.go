@@ -107,56 +107,58 @@ func TestHistoryImportAndExport(t *testing.T) {
 	// Verify each Era.
 	entries, _ := era.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
-		f, err := os.Open(path.Join(dir, filename))
-		if err != nil {
-			t.Fatalf("error opening era file: %v", err)
-		}
-
-		var (
-			h   = sha256.New()
-			buf = bytes.NewBuffer(nil)
-		)
-		if _, err := io.Copy(h, f); err != nil {
-			t.Fatalf("unable to recalculate checksum: %v", err)
-		}
-		if got, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; got != want {
-			t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
-		}
-
-		e, err := era.From(f)
-		if err != nil {
-			t.Fatalf("error opening era: %v", err)
-		}
-		it, err := era.NewIterator(e)
-		if err != nil {
-			t.Fatalf("error making era reader: %v", err)
-		}
-		for j := 0; it.Next(); j++ {
-			n := i*int(step) + j
-			if it.Error() != nil {
-				t.Fatalf("error reading block entry %d: %v", n, err)
-			}
-			block, receipts, err := it.BlockAndReceipts()
+		func() {
+			f, err := os.Open(path.Join(dir, filename))
 			if err != nil {
-				t.Fatalf("error reading block entry %d: %v", n, err)
+				t.Fatalf("error opening era file: %v", err)
 			}
-			want := chain.GetBlockByNumber(uint64(n))
-			if want, got := uint64(n), block.NumberU64(); want != got {
-				t.Fatalf("blocks out of order: want %d, got %d", want, got)
+			var (
+				h   = sha256.New()
+				buf = bytes.NewBuffer(nil)
+			)
+			if _, err := io.Copy(h, f); err != nil {
+				t.Fatalf("unable to recalculate checksum: %v", err)
 			}
-			if want.Hash() != block.Hash() {
-				t.Fatalf("block hash mismatch %d: want %s, got %s", n, want.Hash().Hex(), block.Hash().Hex())
+			if got, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; got != want {
+				t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
 			}
-			if got := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); got != want.TxHash() {
-				t.Fatalf("tx hash %d mismatch: want %s, got %s", n, want.TxHash(), got)
+			e, err := era.From(f)
+			if err != nil {
+				t.Fatalf("error opening era: %v", err)
 			}
-			if got := types.CalcUncleHash(block.Uncles()); got != want.UncleHash() {
-				t.Fatalf("uncle hash %d mismatch: want %s, got %s", n, want.UncleHash(), got)
+			defer e.Close()
+			it, err := era.NewIterator(e)
+			if err != nil {
+				t.Fatalf("error making era reader: %v", err)
 			}
-			if got := types.DeriveSha(receipts, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
-				t.Fatalf("receipt root %d mismatch: want %s, got %s", n, want.ReceiptHash(), got)
+			for j := 0; it.Next(); j++ {
+				n := i*int(step) + j
+				if it.Error() != nil {
+					t.Fatalf("error reading block entry %d: %v", n, err)
+				}
+				block, receipts, err := it.BlockAndReceipts()
+				if err != nil {
+					t.Fatalf("error reading block entry %d: %v", n, err)
+				}
+				want := chain.GetBlockByNumber(uint64(n))
+				if want, got := uint64(n), block.NumberU64(); want != got {
+					t.Fatalf("blocks out of order: want %d, got %d", want, got)
+				}
+				if want.Hash() != block.Hash() {
+					t.Fatalf("block hash mismatch %d: want %s, got %s", n, want.Hash().Hex(), block.Hash().Hex())
+				}
+				if got := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); got != want.TxHash() {
+					t.Fatalf("tx hash %d mismatch: want %s, got %s", n, want.TxHash(), got)
+				}
+				if got := types.CalcUncleHash(block.Uncles()); got != want.UncleHash() {
+					t.Fatalf("uncle hash %d mismatch: want %s, got %s", n, want.UncleHash(), got)
+				}
+				if got := types.DeriveSha(receipts, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
+					t.Fatalf("receipt root %d mismatch: want %s, got %s", n, want.ReceiptHash(), got)
+				}
 			}
-		}
+			return
+		}()
 	}
 
 	// Now import Era.
