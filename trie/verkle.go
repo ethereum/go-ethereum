@@ -50,7 +50,10 @@ func NewVerkleTrie(root verkle.VerkleNode, db *Database, pointCache *utils.Point
 	}
 }
 
-var errInvalidProof = errors.New("invalid proof")
+var (
+	errInvalidProof    = errors.New("invalid proof")
+	errInvalidRootType = errors.New("invalid node type for root")
+)
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
@@ -81,7 +84,16 @@ func (t *VerkleTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 		}
 	)
 	versionkey := t.pointCache.GetTreeKeyVersionCached(key)
-	values, err := t.root.(*verkle.InternalNode).GetStem(versionkey[:31], resolver)
+	var (
+		values [][]byte
+		err    error
+	)
+	switch t.root.(type) {
+	case *verkle.InternalNode:
+		values, err = t.root.(*verkle.InternalNode).GetStem(versionkey[:31], resolver)
+	default:
+		return nil, errInvalidRootType
+	}
 	if err != nil {
 		return nil, fmt.Errorf("TryGetAccount (%x) error: %v", key, err)
 	}
@@ -136,6 +148,8 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
 		err = root.InsertStem(stem, values, flusher)
+	default:
+		return errInvalidRootType
 	}
 	if err != nil {
 		return fmt.Errorf("TryUpdateAccount (%x) error: %v", key, err)
@@ -189,7 +203,7 @@ func (t *VerkleTrie) TryDeleteAccount(key []byte) error {
 	case *verkle.InternalNode:
 		err = root.InsertStem(stem, values, resolver)
 	default:
-		panic("invalid tree type")
+		return errInvalidRootType
 	}
 	if err != nil {
 		return fmt.Errorf("TryDeleteAccount (%x) error: %v", key, err)
