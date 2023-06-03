@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	"go.cypherpunks.ru/gogost/v5/gost3410"
 	"go.cypherpunks.ru/gogost/v5/gost34112012256"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -91,6 +92,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}):   &blake2F{},
 	common.BytesToAddress([]byte{150}): &testHash{},
 	common.BytesToAddress([]byte{151}): &streebog256hash{},
+	common.BytesToAddress([]byte{152}): &gost3411verify{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -233,6 +235,45 @@ func (c *streebog256hash) Run(input []byte) ([]byte, error) {
 	h := gost34112012256.New()
 	h.Write(input)
 	return common.LeftPadBytes(h.Sum(nil), 32), nil
+}
+
+// GOST 34.10 Implemented as a native contract.
+// TODO: this needs testing.
+type gost3411verify struct{}
+
+func (c *gost3411verify) RequiredGas(input []byte) uint64 {
+	return 100
+}
+func (c *gost3411verify) Run(input []byte) ([]byte, error) {
+	const gost3411verifyInputLength = 160
+
+	// We must make sure not to modify the 'input'.
+	tmp := make([]byte, 160)
+	copy(tmp, input[:160])
+
+	tmp = common.RightPadBytes(tmp, gost3411verifyInputLength)
+	// "input" is (hash, pubKey, signature)
+	// hash - 32 bytes, pubKey and signature - 64 bytes
+	digest := tmp[:32]
+	pubRaw := tmp[32:96]
+	sign := tmp[96:160]
+
+	curve := gost3410.CurveIdtc26gost341012256paramSetB()
+	pub, err := gost3410.NewPublicKey(curve, pubRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	valid, err := pub.VerifyDigest(digest, sign)
+	if err != nil {
+		return nil, err
+	}
+
+	if valid {
+		return common.LeftPadBytes([]byte{1}, 32), nil
+	} else {
+		return common.LeftPadBytes([]byte{0}, 32), nil
+	}
 }
 
 // RIPEMD160 implemented as a native contract.
