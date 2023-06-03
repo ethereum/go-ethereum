@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	"go.cypherpunks.ru/gogost/v5/gost34112012256"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -79,16 +80,17 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):   &ecrecover{},
+	common.BytesToAddress([]byte{2}):   &sha256hash{},
+	common.BytesToAddress([]byte{3}):   &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):   &dataCopy{},
+	common.BytesToAddress([]byte{5}):   &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):   &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):   &blake2F{},
 	common.BytesToAddress([]byte{150}): &testHash{},
+	common.BytesToAddress([]byte{151}): &streebog256hash{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -210,13 +212,27 @@ func (c *sha256hash) Run(input []byte) ([]byte, error) {
 }
 
 // test native contract
-type testHash struct {}
+type testHash struct{}
 
 func (c *testHash) RequiredGas(input []byte) uint64 {
-	return 5;
+	return 5
 }
 func (c *testHash) Run(input []byte) ([]byte, error) {
 	return []byte("hello world"), nil
+}
+
+// GOST 34.11 2012 256 bit implemented as a native contract.
+type streebog256hash struct{}
+
+func (c *streebog256hash) RequiredGas(input []byte) uint64 {
+	var perWordGas uint64 = 50
+	var baseGas uint64 = 40
+	return uint64(len(input)+31)/32*perWordGas + baseGas
+}
+func (c *streebog256hash) Run(input []byte) ([]byte, error) {
+	h := gost34112012256.New()
+	h.Write(input)
+	return common.LeftPadBytes(h.Sum(nil), 32), nil
 }
 
 // RIPEMD160 implemented as a native contract.
