@@ -628,21 +628,24 @@ func TestMulticall(t *testing.T) {
 	}))
 	var (
 		randomAccounts = newAccounts(3)
+		latest         = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	)
 	type res struct {
 		ReturnValue string `json:"return"`
 		Error       string
-		Logs        string
+		Logs        []types.Log
 		GasUsed     string
 	}
 	var testSuite = []struct {
 		blocks    []CallBatch
+		tag       rpc.BlockNumberOrHash
 		expectErr error
 		want      [][]res
 	}{
 		// First value transfer OK after state override, second one should succeed
 		// because of first transfer.
 		{
+			tag: latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
@@ -670,6 +673,7 @@ func TestMulticall(t *testing.T) {
 			},
 		}, {
 			// Block overrides should work, each call is simulated on a different block number
+			tag: latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(10)),
@@ -680,7 +684,7 @@ func TestMulticall(t *testing.T) {
 						Input: &hexutil.Bytes{
 							0x43,             // NUMBER
 							0x60, 0x00, 0x52, // MSTORE offset 0
-							0x60, 0x20, 0x60, 0x00, 0xf3,
+							0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
 						},
 					},
 				},
@@ -711,6 +715,7 @@ func TestMulticall(t *testing.T) {
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
 		{
+			tag: latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
@@ -738,10 +743,43 @@ func TestMulticall(t *testing.T) {
 				GasUsed:     "0x5bb7",
 			}}},
 		},
+		// Test logs output.
+		{
+			tag: latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: OverrideAccount{
+						// Yul code:
+						// object "Test" {
+						//    code {
+						//        let hash:u256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+						//        log1(0, 0, hash)
+						//        return (0, 0)
+						//    }
+						// }
+						Code: hex2Bytes("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80600080a1600080f3"),
+					},
+				},
+				Calls: []TransactionArgs{{
+					From: &randomAccounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}},
+			}},
+			want: [][]res{{{
+				ReturnValue: "0x",
+				Logs: []types.Log{{
+					Address:     randomAccounts[2].addr,
+					Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
+					BlockNumber: 10,
+					Data:        []byte{},
+				}},
+				GasUsed: "0x5508",
+			}}},
+		},
 	}
 
 	for i, tc := range testSuite {
-		result, err := api.Multicall(context.Background(), tc.blocks, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		result, err := api.Multicall(context.Background(), tc.blocks, tc.tag)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
