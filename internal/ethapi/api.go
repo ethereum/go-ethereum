@@ -1331,6 +1331,10 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 		return nil, errors.New("bundle txs and block numbers mismatch")
 	}
 
+	if len(args.Timestamps) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and timestamps mismatch")
+	}
+
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	timeoutMilliSeconds := int64(5000)
@@ -1347,10 +1351,6 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 		return nil, err
 	}
 
-	timestamp := parent.Time + 1
-	if args.Timestamp != nil {
-		timestamp = *args.Timestamp
-	}
 	coinbase := parent.Coinbase
 	if args.Coinbase != nil {
 		coinbase = common.HexToAddress(*args.Coinbase)
@@ -1398,7 +1398,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 			ParentHash: parent.Hash(),
 			Number:     big.NewInt(int64(args.BlockNumbers[i])),
 			GasLimit:   gasLimit,
-			Time:       timestamp,
+			Time:       args.Timestamps[i],
 			Difficulty: difficulty,
 			Coinbase:   coinbase,
 			BaseFee:    baseFee,
@@ -1471,6 +1471,10 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 		return nil, errors.New("bundle txs and block numbers mismatch")
 	}
 
+	if len(args.Timestamps) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and timestamps mismatch")
+	}
+
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	timeoutMilliSeconds := int64(5000)
@@ -1487,10 +1491,6 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 		return nil, err
 	}
 
-	timestamp := parent.Time + 1
-	if args.Timestamp != nil {
-		timestamp = *args.Timestamp
-	}
 	coinbase := parent.Coinbase
 	if args.Coinbase != nil {
 		coinbase = common.HexToAddress(*args.Coinbase)
@@ -1539,7 +1539,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			ParentHash: parent.Hash(),
 			Number:     big.NewInt(int64(args.BlockNumbers[i])),
 			GasLimit:   gasLimit,
-			Time:       timestamp,
+			Time:       args.Timestamps[i],
 			Difficulty: difficulty,
 			Coinbase:   coinbase,
 			BaseFee:    baseFee,

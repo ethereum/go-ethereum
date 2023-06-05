@@ -73,9 +73,9 @@ type MaxWalletSearchArgs struct {
 type CallBundleArgs struct {
 	Transactions           []TransactionArgs     `json:"transactions"`
 	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
+	Timestamps             []uint64              `json:"timestamps"`
 	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 	Coinbase               *string               `json:"coinbase"`
-	Timestamp              *uint64               `json:"timestamp"`
 	Timeout                *int64                `json:"timeout"`
 	GasLimit               *uint64               `json:"gasLimit"`
 	Difficulty             *big.Int              `json:"difficulty"`
