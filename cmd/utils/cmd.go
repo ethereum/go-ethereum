@@ -293,32 +293,31 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			if err != nil {
 				return fmt.Errorf("error making era reader: %w", err)
 			}
-			for j := 0; it.Next(); j++ {
-				n := i*era.MaxEra1Size + j
+			for it.Next() {
 				block, err := it.Block()
 				if err != nil {
-					return fmt.Errorf("error reading block %d: %w", n, err)
+					return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 				}
 				if block.Number().BitLen() == 0 {
 					continue // skip genesis
 				}
 				receipts, err := it.Receipts()
 				if err != nil {
-					return fmt.Errorf("error reading receipts %d: %w", n, err)
+					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
 				if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
-					return fmt.Errorf("error inserting header %d: %w", n, err)
+					return fmt.Errorf("error inserting header %d: %w", it.Number(), err)
 				} else if status != core.CanonStatTy {
-					return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
+					return fmt.Errorf("error inserting header %d, not canon: %v", it.Number(), status)
 				}
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
-					return fmt.Errorf("error inserting body %d: %w", n, err)
+					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
 				imported += 1
 
 				// Give the user some feedback that something is happening.
 				if time.Since(reported) >= 8*time.Second {
-					log.Info("Importing Era files", "head", n, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
+					log.Info("Importing Era files", "head", it.Number(), "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
 					imported = 0
 					reported = time.Now()
 				}

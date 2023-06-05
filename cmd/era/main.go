@@ -248,7 +248,6 @@ func verify(ctx *cli.Context) error {
 func checkAccumulator(e *era.Era) error {
 	var (
 		err    error
-		start  = e.Start()
 		want   common.Hash
 		td     *big.Int
 		tds    = make([]*big.Int, 0)
@@ -271,15 +270,15 @@ func checkAccumulator(e *era.Era) error {
 	//   * the accumulator is correct by recomputing it locally,
 	//     which verifies the blocks are all correct (via hash)
 	//   * the receipts root matches the value in the block
-	for j := 0; it.Next(); j++ {
+	for it.Next() {
 		// next() walks the block index, so we're able to
 		// implicitly verify it.
 		if it.Error() != nil {
-			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
+			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
 		block, receipts, err := it.BlockAndReceipts()
 		if it.Error() != nil {
-			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
+			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
 		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 		if tr != block.TxHash() {

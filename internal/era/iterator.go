@@ -43,6 +43,11 @@ func (it *Iterator) Next() bool {
 	return it.inner.Next()
 }
 
+// Number returns the current number block the iterator will return.
+func (it *Iterator) Number() uint64 {
+	return it.inner.next - 1
+}
+
 // Error returns the error status of the iterator.
 func (it *Iterator) Error() error {
 	return it.inner.Error()
@@ -143,6 +148,11 @@ func (it *RawIterator) Next() bool {
 	}
 	it.next += 1
 	return true
+}
+
+// Number returns the current number block the iterator will return.
+func (it *RawIterator) Number() uint64 {
+	return it.next - 1
 }
 
 // Error returns the error status of the iterator.
