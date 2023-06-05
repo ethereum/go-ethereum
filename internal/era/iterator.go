@@ -101,10 +101,9 @@ func (it *Iterator) TotalDifficulty() (*big.Int, error) {
 
 // RawIterator reads an RLP-encode Era1 entries.
 type RawIterator struct {
-	e         *Era   // backing Era1
-	curOffset int64  // offset of current block
-	next      uint64 // next block to read
-	err       error  // last error
+	e    *Era   // backing Era1
+	next uint64 // next block to read
+	err  error  // last error
 
 	Header          io.Reader
 	Body            io.Reader
@@ -143,7 +142,7 @@ func (it *RawIterator) Next() bool {
 		return true
 	}
 	off += int64(n)
-	if it.TotalDifficulty, n, it.err = newReader(it.e.s, off); it.err != nil {
+	if it.TotalDifficulty, _, it.err = newReader(it.e.s, off); it.err != nil {
 		return true
 	}
 	it.next += 1

@@ -143,6 +143,10 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 		return nil, err
 	}
 	off += int64(n)
+	r, _, err = newSnappyReader(e.s, off)
+	if err != nil {
+		return nil, err
+	}
 	var body types.Body
 	if err := rlp.Decode(r, &body); err != nil {
 		return nil, err
@@ -193,7 +197,7 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	}
 
 	// Read total difficulty after first block.
-	if r, n, err = newReader(e.s, off); err != nil {
+	if r, _, err = newReader(e.s, off); err != nil {
 		return nil, err
 	}
 	if err := rlp.Decode(r, rawTd); err != nil {

@@ -26,7 +26,7 @@ import (
 )
 
 func TestEncode(t *testing.T) {
-	for _, tt := range []struct {
+	for _, test := range []struct {
 		entries []Entry
 		want    string
 		name    string
@@ -50,6 +50,7 @@ func TestEncode(t *testing.T) {
 			want: "2a00020000000000beef0900040000000000abcdabcd",
 		},
 	} {
+		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var (

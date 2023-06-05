@@ -157,7 +157,6 @@ func TestHistoryImportAndExport(t *testing.T) {
 					t.Fatalf("receipt root %d mismatch: want %s, got %s", n, want.ReceiptHash(), got)
 				}
 			}
-			return
 		}()
 	}
 
