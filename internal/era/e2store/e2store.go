@@ -50,11 +50,17 @@ func NewWriter(w io.Writer) *Writer {
 // record store the type (2 bytes), the length (4 bytes), and some reserved
 // data (2 bytes). The remaining bytes store b.
 func (w *Writer) Write(typ uint16, b []byte) (int, error) {
-	buf := make([]byte, headerSize+len(b))
+	buf := make([]byte, headerSize)
 	binary.LittleEndian.PutUint16(buf, typ)
 	binary.LittleEndian.PutUint32(buf[2:], uint32(len(b)))
-	copy(buf[8:], b)
-	return w.w.Write(buf)
+
+	// Write header.
+	if n, err := w.w.Write(buf); err != nil {
+		return n, err
+	}
+	// Write value, return combined write size.
+	n, err := w.w.Write(b)
+	return n + headerSize, err
 }
 
 // A Reader reads entries from an e2store-encoded file.
