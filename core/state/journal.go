@@ -162,10 +162,10 @@ func (ch resetObjectChange) revert(s *StateDB) {
 	if !ch.prevdestruct {
 		delete(s.stateObjectsDestruct, ch.prev.address)
 	}
-	if len(ch.prevAccount) > 0 {
+	if ch.prevAccount != nil {
 		s.snapAccounts[ch.prev.addrHash] = ch.prevAccount
 	}
-	if len(ch.prevStorage) > 0 {
+	if ch.prevStorage != nil {
 		s.snapStorage[ch.prev.addrHash] = ch.prevStorage
 	}
 }
