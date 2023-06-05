@@ -1398,7 +1398,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 			ParentHash: parent.Hash(),
 			Number:     big.NewInt(int64(args.BlockNumbers[i])),
 			GasLimit:   gasLimit,
-			Time:       args.Timestamps[i],
+			Time:       *args.Timestamps[i],
 			Difficulty: difficulty,
 			Coinbase:   coinbase,
 			BaseFee:    baseFee,
@@ -1472,7 +1472,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 	}
 
 	if len(args.Timestamps) != len(args.Transactions) {
-		return nil, errors.New("bundle txs and timestamps mismatch")
+		return nil, errors.New("bundle txs and timestamps mismatch, len1" + strconv.Itoa(len(args.Timestamps)) + " len2 " + strconv.Itoa(len(args.Transactions)))
 	}
 
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
@@ -1539,7 +1539,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 			ParentHash: parent.Hash(),
 			Number:     big.NewInt(int64(args.BlockNumbers[i])),
 			GasLimit:   gasLimit,
-			Time:       args.Timestamps[i],
+			Time:       *args.Timestamps[i],
 			Difficulty: difficulty,
 			Coinbase:   coinbase,
 			BaseFee:    baseFee,
