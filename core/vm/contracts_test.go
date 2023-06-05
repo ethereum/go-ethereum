@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -313,10 +312,7 @@ func TestPrecompiledBLS12381G2MultiExp(t *testing.T) { testJson("blsG2MultiExp",
 func TestPrecompiledBLS12381Pairing(t *testing.T)    { testJson("blsPairing", "10", t) }
 func TestPrecompiledBLS12381MapG1(t *testing.T)      { testJson("blsMapG1", "11", t) }
 func TestPrecompiledBLS12381MapG2(t *testing.T)      { testJson("blsMapG2", "12", t) }
-func TestPrecompiledPointEvaluation(t *testing.T) {
-	kzg4844.UseCKZG(false) // We need to call this to compute the PrecompileReturnValue
-	testJson("pointEvaluation", "14", t)
-}
+func TestPrecompiledPointEvaluation(t *testing.T)    { testJson("pointEvaluation", "14", t) }
 
 func BenchmarkPrecompiledBLS12381G1Add(b *testing.B)      { benchJson("blsG1Add", "0a", b) }
 func BenchmarkPrecompiledBLS12381G1Mul(b *testing.B)      { benchJson("blsG1Mul", "0b", b) }

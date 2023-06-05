@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -1081,7 +1082,7 @@ func (b *kzgPointEvaluation) RequiredGas(input []byte) uint64 {
 
 const (
 	blobVerifyInputLength           = 192  // Max input length for the point evaluation precompile.
-	blobVerifyKZGVersion      uint8 = 0x01 // Version byte for the point evaluation precompile.
+	blobCommitmentVersionKZG  uint8 = 0x01 // Version byte for the point evaluation precompile.
 	blobPrecompileReturnValue       = "000000000000000000000000000000000000000000000000000000000000100073eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
 )
 
@@ -1098,39 +1099,39 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	}
 	// versioned hash: first 32 bytes
 	var versionedHash common.Hash
-	copy(versionedHash[:], input[:32])
+	copy(versionedHash[:], input[:])
 
 	var (
 		point kzg4844.Point
 		claim kzg4844.Claim
 	)
 	// Evaluation point: next 32 bytes
-	copy(point[:], input[32:64])
+	copy(point[:], input[32:])
 	// Expected output: next 32 bytes
-	copy(claim[:], input[64:96])
+	copy(claim[:], input[64:])
 
 	// input kzg point: next 48 bytes
 	var commitment kzg4844.Commitment
-	copy(commitment[:], input[96:144])
-	if KZGToVersionedHash(commitment) != versionedHash {
+	copy(commitment[:], input[96:])
+	if kZGToVersionedHash(commitment) != versionedHash {
 		return nil, errBlobVerifyMismatchedVersion
 	}
 
 	// Proof: next 48 bytes
 	var proof kzg4844.Proof
-	copy(proof[:], input[144:blobVerifyInputLength])
+	copy(proof[:], input[144:])
 
 	if err := kzg4844.VerifyProof(commitment, point, claim, proof); err != nil {
-		return nil, errors.Join(errBlobVerifyKZGProof, err)
+		return nil, fmt.Errorf("%w: %v", errBlobVerifyKZGProof, err)
 	}
 
 	return common.Hex2Bytes(blobPrecompileReturnValue), nil
 }
 
-// KZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
-func KZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
+// kZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
+func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h := sha256.Sum256(kzg[:])
-	h[0] = blobVerifyKZGVersion
+	h[0] = blobCommitmentVersionKZG
 
 	return h
 }
