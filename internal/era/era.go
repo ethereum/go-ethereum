@@ -17,7 +17,6 @@
 package era
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -134,7 +133,7 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, n, err := newSnappyReader(e.s, off)
+	r, n, err := newSnappyReader(e.s, TypeCompressedHeader, off)
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +141,8 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if err := rlp.Decode(r, &header); err != nil {
 		return nil, err
 	}
-	off += int64(n)
-	r, _, err = newSnappyReader(e.s, off)
+	off += n
+	r, _, err = newSnappyReader(e.s, TypeCompressedBody, off)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +169,7 @@ func (e *Era) InitialTD() (*big.Int, error) {
 		r      io.Reader
 		header types.Header
 		rawTd  []byte
-		n      int
+		n      int64
 		off    int64
 		err    error
 	)
@@ -179,13 +178,13 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	if off, err = e.readOffset(e.m.start); err != nil {
 		return nil, err
 	}
-	if r, n, err = newSnappyReader(e.s, off); err != nil {
+	if r, n, err = newSnappyReader(e.s, TypeCompressedHeader, off); err != nil {
 		return nil, err
 	}
 	if err := rlp.Decode(r, header); err != nil {
 		return nil, err
 	}
-	off += int64(n)
+	off += n
 
 	// Skip over next two records.
 	for i := 0; i < 2; i++ {
@@ -197,7 +196,7 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	}
 
 	// Read total difficulty after first block.
-	if r, _, err = newReader(e.s, off); err != nil {
+	if r, _, err = e.s.ReaderAt(TypeTotalDifficulty, off); err != nil {
 		return nil, err
 	}
 	if err := rlp.Decode(r, rawTd); err != nil {
@@ -237,23 +236,13 @@ func (e *Era) readOffset(n uint64) (int64, error) {
 	return offOffset + 8 + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
 }
 
-// newReader returns an io.Reader for the e2store entry value at off.
-func newReader(e *e2store.Reader, off int64) (io.Reader, int, error) {
-	var (
-		entry e2store.Entry
-		n     int
-		err   error
-	)
-	if n, err = e.ReadAt(&entry, off); err != nil {
-		return nil, n, err
-	}
-	return bytes.NewReader(entry.Value), n, nil
-}
-
 // newReader returns a snappy.Reader for the e2store entry value at off.
-func newSnappyReader(e *e2store.Reader, off int64) (io.Reader, int, error) {
-	r, n, err := newReader(e, off)
-	return snappy.NewReader(r), n, err
+func newSnappyReader(e *e2store.Reader, expectedType uint16, off int64) (io.Reader, int64, error) {
+	r, n, err := e.ReaderAt(expectedType, off)
+	if err != nil {
+		return nil, 0, err
+	}
+	return snappy.NewReader(r), int64(n), err
 }
 
 // clearBuffer zeroes out the buffer.

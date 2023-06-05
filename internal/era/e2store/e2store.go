@@ -118,6 +118,24 @@ func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
 	return int(headerSize + length), nil
 }
 
+// ReaderAt returns an io.Reader delivering value data for the entry at
+// the specified offset. If the entry type does not match the expected type, an
+// error is returned.
+func (r *Reader) ReaderAt(expectedType uint16, off int64) (io.Reader, int, error) {
+	// problem = need to return length+headerSize not just value length via section reader
+	typ, length, err := r.ReadMetadataAt(off)
+	if err != nil {
+		return nil, headerSize, err
+	}
+	if typ != expectedType {
+		return nil, headerSize, fmt.Errorf("wrong type, want %d have %d", expectedType, typ)
+	}
+	if length > valueSizeLimit {
+		return nil, headerSize, fmt.Errorf("item larger than item size limit %d: have %d", valueSizeLimit, length)
+	}
+	return io.NewSectionReader(r.r, off+headerSize, int64(length)), headerSize + int(length), nil
+}
+
 // LengthAt reads the header at off and returns the total length of the entry,
 // including header.
 func (r *Reader) LengthAt(off int64) (int64, error) {
