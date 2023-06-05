@@ -627,11 +627,34 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
+		// The original account should be marked as destructed and all cached
+		// account and storage data should be cleared as well. Note, it must
+		// be done here, otherwise the destruction event of original one will
+		// be lost.
 		_, prevdestruct := s.stateObjectsDestruct[prev.address]
 		if !prevdestruct {
 			s.stateObjectsDestruct[prev.address] = struct{}{}
 		}
-		s.journal.append(resetObjectChange{account: &addr, prev: prev, prevdestruct: prevdestruct})
+		var (
+			account []byte
+			storage map[common.Hash][]byte
+		)
+		// There may be some cached account/storage data already since IntermediateRoot
+		// will be called for each transaction before byzantium fork which will always
+		// cache the latest account/storage data.
+		if s.snap != nil {
+			account = s.snapAccounts[prev.addrHash]
+			storage = s.snapStorage[prev.addrHash]
+			delete(s.snapAccounts, prev.addrHash)
+			delete(s.snapStorage, prev.addrHash)
+		}
+		s.journal.append(resetObjectChange{
+			account:      &addr,
+			prev:         prev,
+			prevdestruct: prevdestruct,
+			prevAccount:  account,
+			prevStorage:  storage,
+		})
 	}
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
