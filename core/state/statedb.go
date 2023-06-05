@@ -642,12 +642,10 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		// There may be some cached account/storage data already since IntermediateRoot
 		// will be called for each transaction before byzantium fork which will always
 		// cache the latest account/storage data.
-		if s.snapAccounts != nil {
+		if s.snap != nil {
 			account = s.snapAccounts[prev.addrHash]
-			delete(s.snapAccounts, prev.addrHash)
-		}
-		if s.snapStorage != nil {
 			storage = s.snapStorage[prev.addrHash]
+			delete(s.snapAccounts, prev.addrHash)
 			delete(s.snapStorage, prev.addrHash)
 		}
 		s.journal.append(resetObjectChange{
