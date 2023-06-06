@@ -52,6 +52,12 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	default:
 		precompiles = PrecompiledContractsHomestead
 	}
+	// ECRecoverCode can be set only through RPC calls
+	if evm.Config.DisableECRecover {
+		if addr == common.BytesToAddress([]byte{1}) {
+			return nil, false
+		}
+	}
 	p, ok := precompiles[addr]
 	return p, ok
 }
