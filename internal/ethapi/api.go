@@ -1162,7 +1162,8 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 			state.SetTxContext(txhash, i)
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, &vm.Config{NoBaseFee: true, DisableECRecover: true})
 			if err != nil {
-				return nil, err
+				results[bi][i] = callResult{Error: err.Error()}
+				continue
 			}
 			// If the result contains a revert reason, try to unpack it.
 			if len(result.Revert()) > 0 {
