@@ -919,7 +919,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
 	Number     *hexutil.Big
-	Difficulty *hexutil.Big
+	Difficulty *hexutil.Big // No-op if we're simulating post-merge calls.
 	Time       *hexutil.Uint64
 	GasLimit   *hexutil.Uint64
 	Coinbase   *common.Address
@@ -1141,8 +1141,18 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		globalGasCap = s.b.RPCGasCap()
 		gp           = new(core.GasPool).AddGas(globalGasCap)
+		prevNumber   = header.Number.Uint64()
 	)
 	for bi, block := range blocks {
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		if block.BlockOverrides != nil {
+			block.BlockOverrides.Apply(&blockContext)
+		}
+		// TODO: Consider hoisting this check up
+		if blockContext.BlockNumber.Uint64() < prevNumber {
+			return nil, fmt.Errorf("block numbers must be in order")
+		}
+		prevNumber = blockContext.BlockNumber.Uint64()
 		// State overrides are applied prior to execution of a block
 		if err := block.StateOverrides.Apply(state); err != nil {
 			return nil, err
@@ -1150,10 +1160,6 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 		// ECRecover replacement code will be fetched from statedb and executed as a normal EVM bytecode.
 		if block.ECRecoverOverride != nil {
 			state.SetCode(common.BytesToAddress([]byte{1}), *block.ECRecoverOverride)
-		}
-		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
-		if block.BlockOverrides != nil {
-			block.BlockOverrides.Apply(&blockContext)
 		}
 		results[bi] = make([]callResult, len(block.Calls))
 		for i, call := range block.Calls {

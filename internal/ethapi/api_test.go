@@ -758,18 +758,6 @@ func TestMulticall(t *testing.T) {
 						0x60, 0x20, 0x60, 0x00, 0xf3,
 					},
 				}},
-			}, {
-				// No block number override, should use latest
-				Calls: []TransactionArgs{
-					{
-						From: &accounts[0].addr,
-						Input: &hexutil.Bytes{
-							0x43,             // NUMBER
-							0x60, 0x00, 0x52, // MSTORE offset 0
-							0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
-						},
-					},
-				},
 			}},
 			want: [][]res{{
 				res{
@@ -781,12 +769,38 @@ func TestMulticall(t *testing.T) {
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
 				},
-			}, {
-				res{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000a",
-					GasUsed:     "0xe891",
-				},
 			}},
+		},
+		// Block numbers must be in order.
+		{
+			tag: latest,
+			blocks: []CallBatch{{
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(12)),
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[1].addr,
+					Input: &hexutil.Bytes{
+						0x43,             // NUMBER
+						0x60, 0x00, 0x52, // MSTORE offset 0
+						0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
+					},
+				}},
+			}, {
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(11)),
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					Input: &hexutil.Bytes{
+						0x43,             // NUMBER
+						0x60, 0x00, 0x52, // MSTORE offset 0
+						0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
+					},
+				}},
+			}},
+			want:      [][]res{},
+			expectErr: errors.New("block numbers must be in order"),
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
 		{
@@ -915,7 +929,10 @@ func TestMulticall(t *testing.T) {
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+				// Second try
+				if !reflect.DeepEqual(err, tc.expectErr) {
+					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+				}
 			}
 			continue
 		}
