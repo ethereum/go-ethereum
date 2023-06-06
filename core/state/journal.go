@@ -169,7 +169,6 @@ func (ch suicideChange) revert(s *StateDB) {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
 		RevertWrite(s, blockstm.NewSubpathKey(*ch.account, SuicidePath))
-		RevertWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 	}
 }
 
@@ -188,7 +187,6 @@ func (ch touchChange) dirtied() *common.Address {
 
 func (ch balanceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setBalance(ch.prev)
-	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 }
 
 func (ch balanceChange) dirtied() *common.Address {
@@ -197,7 +195,6 @@ func (ch balanceChange) dirtied() *common.Address {
 
 func (ch nonceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
-	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, NoncePath))
 }
 
 func (ch nonceChange) dirtied() *common.Address {
