@@ -119,7 +119,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 	return &testBackend{
 		db:     db,
 		chain:  chain,
-		txpool: txpool.NewTxPool(txconfig, params.TestChainConfig, chain),
+		txpool: txpool.New(txconfig, params.TestChainConfig, chain),
 	}
 }
 

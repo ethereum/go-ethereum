@@ -267,7 +267,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(chainDB), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
-	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
+	pool := txpool.New(testTxPoolConfig, chainConfig, blockchain)
 	backend := NewMockBackend(bc, pool)
 	// Create event Mux
 	mux := new(event.TypeMux)

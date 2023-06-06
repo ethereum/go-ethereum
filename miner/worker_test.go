@@ -135,7 +135,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	return &testWorkerBackend{
 		db:      db,
 		chain:   chain,
-		txPool:  txpool.NewTxPool(testTxPoolConfig, chainConfig, chain),
+		txPool:  txpool.New(testTxPoolConfig, chainConfig, chain),
 		genesis: gspec,
 	}
 }

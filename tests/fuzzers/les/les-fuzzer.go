@@ -138,7 +138,7 @@ func newFuzzer(input []byte) *fuzzer {
 		chtKeys:   chtKeys,
 		bloomKeys: bloomKeys,
 		nonce:     uint64(len(txHashes)),
-		pool:      txpool.NewTxPool(txpool.DefaultConfig, params.TestChainConfig, chain),
+		pool:      txpool.New(txpool.DefaultConfig, params.TestChainConfig, chain),
 		input:     bytes.NewReader(input),
 	}
 }
