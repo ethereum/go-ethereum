@@ -406,6 +406,8 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 
 // SetTrieFlushInterval configures how often in-memory tries are persisted
 // to disk. The value is in terms of block processing time, not wall clock.
+// If the value is shorter than the block generation time, or even 0 or negative,
+// the node will flush trie after processing each block (effectively archive mode).
 func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	t, err := time.ParseDuration(interval)
 	if err != nil {
@@ -413,4 +415,9 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	}
 	api.eth.blockchain.SetTrieFlushInterval(t)
 	return nil
+}
+
+// GetTrieFlushInterval gets the current value of in-memory trie flush interval
+func (api *DebugAPI) GetTrieFlushInterval() string {
+	return api.eth.blockchain.GetTrieFlushInterval().String()
 }
