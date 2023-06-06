@@ -269,8 +269,6 @@ type TxPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
-
-	subpools []SubPool // List of subpools for specialized transaction handling
 }
 
 type txpoolResetRequest struct {
@@ -332,16 +330,6 @@ func New(config Config, chainconfig *params.ChainConfig, chain blockChain) *TxPo
 	go pool.loop()
 
 	return pool
-}
-
-// AddSubPool injects a specialized pool into the main transaction pool to have
-// a consistent view of the chain state across both of them.
-func (pool *TxPool) AddSubPool(subpool SubPool) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	pool.subpools = append(pool.subpools, subpool)
-	subpool.Reset(nil, pool.currentHead.Load())
 }
 
 // loop is the transaction pool's main event loop, waiting for and reacting to
@@ -461,10 +449,6 @@ func (pool *TxPool) SetGasTip(tip *big.Int) {
 			pool.removeTx(tx.Hash(), false)
 		}
 		pool.priced.Removed(len(drop))
-	}
-	// Propagate the new gas tip requirement to all the subpools too
-	for _, subpool := range pool.subpools {
-		subpool.SetGasTip(tip)
 	}
 	log.Info("Transaction pool tip threshold updated", "tip", tip)
 }
@@ -1201,9 +1185,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	if reset != nil {
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
-		for _, subpool := range pool.subpools {
-			subpool.Reset(reset.oldHead, reset.newHead)
-		}
+
 		// Nonces were reset, discard any events that became stale
 		for addr := range events {
 			events[addr].Forward(pool.pendingNonces.get(addr))
