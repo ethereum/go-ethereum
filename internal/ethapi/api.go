@@ -1012,16 +1012,16 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx)
+	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true})
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext) (*core.ExecutionResult, error) {
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(gp.Gas(), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, blockContext)
+	evm, vmError := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
 
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -1096,9 +1096,10 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 
 // CallBatch is a batch of calls to be simulated sequentially.
 type CallBatch struct {
-	BlockOverrides *BlockOverrides
-	StateOverrides *StateOverride
-	Calls          []TransactionArgs
+	BlockOverrides    *BlockOverrides
+	StateOverrides    *StateOverride
+	ECRecoverOverride *hexutil.Bytes // Override bytecode for ecrecover precompile.
+	Calls             []TransactionArgs
 }
 
 type callResult struct {
@@ -1146,6 +1147,10 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 		if err := block.StateOverrides.Apply(state); err != nil {
 			return nil, err
 		}
+		// ECRecover replacement code will be fetched from statedb and executed as a normal EVM bytecode.
+		if block.ECRecoverOverride != nil {
+			state.SetCode(common.BytesToAddress([]byte{1}), *block.ECRecoverOverride)
+		}
 		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
 		if block.BlockOverrides != nil {
 			block.BlockOverrides.Apply(&blockContext)
@@ -1155,7 +1160,7 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 			// Hack to get logs from statedb which stores logs by txhash.
 			txhash := common.BigToHash(big.NewInt(int64(i)))
 			state.SetTxContext(txhash, i)
-			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext)
+			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, &vm.Config{NoBaseFee: true, DisableECRecover: true})
 			if err != nil {
 				return nil, err
 			}

@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -774,6 +775,60 @@ func TestMulticall(t *testing.T) {
 					Data:        []byte{},
 				}},
 				GasUsed: "0x5508",
+			}}},
+		},
+		// Test ecrecover override
+		{
+			tag: latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: OverrideAccount{
+						// Yul code that returns ecrecover(0, 0, 0, 0).
+						// object "Test" {
+						//    code {
+						//        // Free memory pointer
+						//        let free_ptr := mload(0x40)
+						//
+						//        // Initialize inputs with zeros
+						//        mstore(free_ptr, 0)  // Hash
+						//        mstore(add(free_ptr, 0x20), 0)  // v
+						//        mstore(add(free_ptr, 0x40), 0)  // r
+						//        mstore(add(free_ptr, 0x60), 0)  // s
+						//
+						//        // Call ecrecover precompile (at address 1) with all 0 inputs
+						//        let success := staticcall(gas(), 1, free_ptr, 0x80, free_ptr, 0x20)
+						//
+						//        // Check if the call was successful
+						//        if eq(success, 0) {
+						//            revert(0, 0)
+						//        }
+						//
+						//        // Return the recovered address
+						//        return(free_ptr, 0x14)
+						//    }
+						// }
+						Code: hex2Bytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
+					},
+				},
+				BlockOverrides: &BlockOverrides{},
+				// Yul code that returns the address of the caller.
+				// object "Test" {
+				//    code {
+				//        let c := caller()
+				//        mstore(0, c)
+				//        return(0xc, 0x14)
+				//    }
+				// }
+				ECRecoverOverride: hex2Bytes("33806000526014600cf3"),
+				Calls: []TransactionArgs{{
+					From: &randomAccounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}},
+			}},
+			want: [][]res{{{
+				// Caller is in this case the contract that invokes ecrecover.
+				ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
+				GasUsed:     "0x52f6",
 			}}},
 		},
 	}
