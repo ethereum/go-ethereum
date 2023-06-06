@@ -581,11 +581,10 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	opts := &ValidationOptions{
 		Config: pool.chainconfig,
-		Accept: map[uint8]struct{}{
-			types.LegacyTxType:     {},
-			types.AccessListTxType: {},
-			types.DynamicFeeTxType: {},
-		},
+		Accept: 0 |
+			1<<types.LegacyTxType |
+			1<<types.AccessListTxType |
+			1<<types.DynamicFeeTxType,
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load(),
 	}
