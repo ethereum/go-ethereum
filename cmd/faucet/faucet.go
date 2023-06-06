@@ -228,7 +228,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		Version: params.VersionWithCommit(git.Commit, git.Date),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
-			NAT:              nat.Any(),
+			NAT:              nat.MustFromSpec("any"),
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
 			ListenAddr:       fmt.Sprintf(":%d", port),
