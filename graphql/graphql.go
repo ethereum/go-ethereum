@@ -183,6 +183,31 @@ func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
 	return at.storageKeys
 }
 
+// Withdrawal represents a withdrawal of value from the beacon chain
+// by a validator. For details see EIP-4895.
+type Withdrawal struct {
+	index     uint64
+	validator uint64
+	address   common.Address
+	amount    uint64
+}
+
+func (w *Withdrawal) Index(ctx context.Context) hexutil.Uint64 {
+	return hexutil.Uint64(w.index)
+}
+
+func (w *Withdrawal) Validator(ctx context.Context) hexutil.Uint64 {
+	return hexutil.Uint64(w.validator)
+}
+
+func (w *Withdrawal) Address(ctx context.Context) common.Address {
+	return w.address
+}
+
+func (w *Withdrawal) Amount(ctx context.Context) hexutil.Uint64 {
+	return hexutil.Uint64(w.amount)
+}
+
 // Transaction represents an Ethereum transaction.
 // backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
@@ -949,6 +974,39 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index Long }) (*Block,
 		header:       uncle,
 		hash:         uncle.Hash(),
 	}, nil
+}
+
+func (b *Block) WithdrawalsRoot(ctx context.Context) (*common.Hash, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Pre-shanghai blocks
+	if header.WithdrawalsHash == nil {
+		return nil, nil
+	}
+	return header.WithdrawalsHash, nil
+}
+
+func (b *Block) Withdrawals(ctx context.Context) (*[]*Withdrawal, error) {
+	block, err := b.resolve(ctx)
+	if err != nil || block == nil {
+		return nil, err
+	}
+	// Pre-shanghai blocks
+	if block.Header().WithdrawalsHash == nil {
+		return nil, nil
+	}
+	ret := make([]*Withdrawal, 0, len(block.Withdrawals()))
+	for _, w := range block.Withdrawals() {
+		ret = append(ret, &Withdrawal{
+			index:     w.Index,
+			validator: w.Validator,
+			address:   w.Address,
+			amount:    w.Amount,
+		})
+	}
+	return &ret, nil
 }
 
 // BlockFilterCriteria encapsulates criteria passed to a `logs` accessor inside
