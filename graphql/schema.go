@@ -83,7 +83,7 @@ const schema string = `
         index: Long!
         # Validator is index of the validator associated with withdrawal.
         validator: Long!
-        # Address recipient of the withdrawn amount.
+        # Recipient address of the withdrawn amount.
         address: Address!
         # Amount is the withdrawal value in Gwei.
         amount: Long!
@@ -260,7 +260,7 @@ const schema string = `
         rawHeader: Bytes!
         # Raw is the RLP encoding of the block.
         raw: Bytes!
-        # WithdrawalsRoot is the keccak256 hash of the root of the trie of withdrawals in this block.
+        # WithdrawalsRoot is the withdrawals trie root in this block.
         # If withdrawals are unavailable for this block, this field will be null.
         withdrawalsRoot: Bytes32
         # Withdrawals is a list of withdrawals associated with this block. If
