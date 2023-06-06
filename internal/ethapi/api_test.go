@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash"
 	"math/big"
 	"reflect"
@@ -628,7 +629,7 @@ func TestMulticall(t *testing.T) {
 		b.AddTx(tx)
 	}))
 	var (
-		randomAccounts = newAccounts(3)
+		randomAccounts = newAccounts(4)
 		latest         = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	)
 	type res struct {
@@ -643,8 +644,9 @@ func TestMulticall(t *testing.T) {
 		expectErr error
 		want      [][]res
 	}{
-		// First value transfer OK after state override, second one should succeed
-		// because of first transfer.
+		// State build-up over calls:
+		// First value transfer OK after state override.
+		// Second one should succeed because of first transfer.
 		{
 			tag: latest,
 			blocks: []CallBatch{{
@@ -670,7 +672,62 @@ func TestMulticall(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 				},
-			},
+			}},
+		}, {
+			// State build-up over blocks.
+			tag: latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
+				},
+				Calls: []TransactionArgs{
+					{
+						From:  &randomAccounts[0].addr,
+						To:    &randomAccounts[1].addr,
+						Value: (*hexutil.Big)(big.NewInt(1000)),
+					}, {
+						From:  &randomAccounts[0].addr,
+						To:    &randomAccounts[3].addr,
+						Value: (*hexutil.Big)(big.NewInt(1000)),
+					},
+				},
+			}, {
+				StateOverrides: &StateOverride{
+					randomAccounts[3].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+				},
+				Calls: []TransactionArgs{
+					{
+						From:  &randomAccounts[1].addr,
+						To:    &randomAccounts[2].addr,
+						Value: (*hexutil.Big)(big.NewInt(1000)),
+					}, {
+						From:  &randomAccounts[3].addr,
+						To:    &randomAccounts[2].addr,
+						Value: (*hexutil.Big)(big.NewInt(1000)),
+					},
+				},
+			}},
+			want: [][]res{
+				{
+					res{
+						ReturnValue: "0x",
+						GasUsed:     "0x5208",
+					},
+					res{
+						ReturnValue: "0x",
+						GasUsed:     "0x5208",
+					},
+				}, {
+					res{
+						ReturnValue: "0x",
+						GasUsed:     "0x5208",
+					},
+					res{
+						ReturnValue: "0x",
+						GasUsed:     "0x0",
+						Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
+					},
+				},
 			},
 		}, {
 			// Block overrides should work, each call is simulated on a different block number
