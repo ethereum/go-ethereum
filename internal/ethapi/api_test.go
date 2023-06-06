@@ -734,7 +734,7 @@ func TestMulticall(t *testing.T) {
 			tag: latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(10)),
+					Number: (*hexutil.Big)(big.NewInt(11)),
 				},
 				Calls: []TransactionArgs{
 					{
@@ -748,7 +748,7 @@ func TestMulticall(t *testing.T) {
 				},
 			}, {
 				BlockOverrides: &BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(11)),
+					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
 				Calls: []TransactionArgs{{
 					From: &accounts[1].addr,
@@ -758,15 +758,32 @@ func TestMulticall(t *testing.T) {
 						0x60, 0x20, 0x60, 0x00, 0xf3,
 					},
 				}},
+			}, {
+				// No block number override, should use latest
+				Calls: []TransactionArgs{
+					{
+						From: &accounts[0].addr,
+						Input: &hexutil.Bytes{
+							0x43,             // NUMBER
+							0x60, 0x00, 0x52, // MSTORE offset 0
+							0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
+						},
+					},
+				},
 			}},
 			want: [][]res{{
 				res{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000a",
+					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
 				},
 			}, {
 				res{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
+					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
+					GasUsed:     "0xe891",
+				},
+			}, {
+				res{
+					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000a",
 					GasUsed:     "0xe891",
 				},
 			}},
