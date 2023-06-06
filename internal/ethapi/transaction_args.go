@@ -67,6 +67,8 @@ type MaxWalletSearchArgs struct {
 	MaxWalletTransaction   TransactionArgs       `json:"maxWalletTransaction"`
 	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
 	MaxWalletBlockNumber   rpc.BlockNumber       `json:"maxWalletBlockNumber"`
+	Timestamps             []*uint64             `json:"timestamps"`
+	MaxWalletTimestamp     *uint64               `json:"maxWalletTimestamp"`
 	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
 }
 
