@@ -271,34 +271,60 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	var (
 		rpcSub      = notifier.CreateSubscription()
 		matchedLogs = make(chan []*types.Log)
+		rmLogsCh    = make(chan []*types.Log)
 	)
 
 	syncHistLogs := func(n int64) error {
 		for {
-			// Get latest head block num
+			// get the latest block header
 			head := api.sys.backend.CurrentHeader().Number.Int64()
 			if n >= head {
 				return nil
 			}
-			// Do historical sync from n to head
+
+			// do historical sync from n to head
 			f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
 			logChan, errChan := f.rangeLogsAsync(ctx)
-			select {
-			case <-notifier.Closed():
-				return errors.New("connection dropped")
-			case log := <-logChan:
-				notifier.Notify(rpcSub.ID, &log)
-			case err := <-errChan:
-				if err != nil {
-					return err
+
+			// subscribe rmLogs
+			query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
+			rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
+			if err != nil {
+				return err
+			}
+
+			var rmLogs []*types.Log
+		FORLOOP:
+			for {
+				select {
+				case <-notifier.Closed():
+					rmLogsSub.Unsubscribe()
+					return errors.New("connection dropped")
+				case log := <-logChan:
+					notifier.Notify(rpcSub.ID, &log)
+				case logs := <-rmLogsCh:
+					for _, log := range logs {
+						if log.Removed {
+							rmLogs = append(rmLogs, log)
+						}
+					}
+				case err := <-errChan:
+					if err != nil {
+						return err
+					}
+					// range filter is done, let's also stop the rmLogs subscribe
+					rmLogsSub.Unsubscribe()
+					break FORLOOP
 				}
 			}
 
-			// TODO: Check if any logs from n to head have been reorged
 			// send the reorged logs
+			for _, log := range rmLogs {
+				notifier.Notify(rpcSub.ID, &log)
+			}
 
-			// Head is stable, move n to current head
-			n = head
+			// move forward to the next batch
+			n = head + 1
 		}
 	}
 
