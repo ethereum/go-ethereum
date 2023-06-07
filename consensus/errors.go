@@ -37,4 +37,19 @@ var (
 
 	// ErrInvalidTxCount is returned if a block contains too many transactions.
 	ErrInvalidTxCount = errors.New("invalid transaction count")
+
+	// ErrMissingL1MessageData is returned if a block contains L1 messages that the
+	// node has not synced yet. In this case we insert the block into the future
+	// queue and process it again later.
+	ErrMissingL1MessageData = errors.New("unknown L1 message data")
+
+	// ErrInvalidL1MessageOrder is returned if a block contains L1 messages in the wrong
+	// order. Possible scenarios are: (1) L1 messages do not follow their QueueIndex order,
+	// (2) the block skipped one or more L1 messages, (3) L1 messages are not included in
+	// a contiguous block at the front of the block.
+	ErrInvalidL1MessageOrder = errors.New("invalid L1 message order")
+
+	// ErrUnknownL1Message is returned if a block contains an L1 message that does not
+	// match the corresponding message in the node's local database.
+	ErrUnknownL1Message = errors.New("unknown L1 message")
 )

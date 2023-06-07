@@ -233,7 +233,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	}
 
 	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
-	ethservice, err := eth.New(n, ethcfg)
+	ethservice, err := eth.New(n, ethcfg, nil)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
 	}

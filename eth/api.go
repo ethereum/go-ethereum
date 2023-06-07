@@ -607,3 +607,43 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	}
 	return 0, fmt.Errorf("No state found")
 }
+
+// ScrollAPI provides private RPC methods to query the L1 message database.
+type ScrollAPI struct {
+	eth *Ethereum
+}
+
+// NewScrollAPI creates a new RPC service to query the L1 message database.
+func NewScrollAPI(eth *Ethereum) *ScrollAPI {
+	return &ScrollAPI{eth: eth}
+}
+
+// GetL1SyncHeight returns the latest synced L1 block height from the local database.
+func (api *ScrollAPI) GetL1SyncHeight(ctx context.Context) (height *uint64, err error) {
+	return rawdb.ReadSyncedL1BlockNumber(api.eth.ChainDb()), nil
+}
+
+// GetL1MessageByIndex queries an L1 message by its index in the local database.
+func (api *ScrollAPI) GetL1MessageByIndex(ctx context.Context, queueIndex uint64) (height *types.L1MessageTx, err error) {
+	return rawdb.ReadL1Message(api.eth.ChainDb(), queueIndex), nil
+}
+
+// GetFirstQueueIndexNotInL2Block returns the first L1 message queue index that is
+// not included in the chain up to and including the provided block.
+func (api *ScrollAPI) GetFirstQueueIndexNotInL2Block(ctx context.Context, hash common.Hash) (queueIndex *uint64, err error) {
+	return rawdb.ReadFirstQueueIndexNotInL2Block(api.eth.ChainDb(), hash), nil
+}
+
+// GetLatestRelayedQueueIndex returns the highest L1 message queue index included in the canonical chain.
+func (api *ScrollAPI) GetLatestRelayedQueueIndex(ctx context.Context) (queueIndex *uint64, err error) {
+	block := api.eth.blockchain.CurrentBlock()
+	queueIndex, err = api.GetFirstQueueIndexNotInL2Block(ctx, block.Hash())
+	if queueIndex == nil || err != nil {
+		return queueIndex, err
+	}
+	if *queueIndex == 0 {
+		return nil, nil
+	}
+	lastIncluded := *queueIndex - 1
+	return &lastIncluded, nil
+}

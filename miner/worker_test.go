@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
@@ -36,6 +38,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 )
 
 const (
@@ -166,8 +169,10 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 }
 
-func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
+func (b *testWorkerBackend) BlockChain() *core.BlockChain           { return b.chain }
+func (b *testWorkerBackend) TxPool() *core.TxPool                   { return b.txPool }
+func (b *testWorkerBackend) ChainDb() ethdb.Database                { return b.db }
+func (b *testWorkerBackend) SyncService() *sync_service.SyncService { return nil }
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
@@ -523,5 +528,206 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("interval reset timeout")
+	}
+}
+
+func TestGenerateBlockWithL1MsgEthash(t *testing.T) {
+	testGenerateBlockWithL1Msg(t, false)
+}
+
+func TestGenerateBlockWithL1MsgClique(t *testing.T) {
+	testGenerateBlockWithL1Msg(t, true)
+}
+
+func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
+	assert := assert.New(t)
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 21016, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}}
+	rawdb.WriteL1Messages(db, msgs)
+
+	if isClique {
+		chainConfig = params.AllCliqueProtocolChanges
+		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		chainConfig = params.AllEthashProtocolChanges
+		engine = ethash.NewFaker()
+	}
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 1,
+	}
+
+	chainConfig.LondonBlock = big.NewInt(0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Start mining!
+	w.start()
+
+	for i := 0; i < 2; i++ {
+
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
+			assert.Equal(1, len(block.Transactions()))
+
+			queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+			assert.NotNil(queueIndex)
+			assert.Equal(uint64(i+1), *queueIndex)
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout")
+		}
+	}
+}
+
+func TestExcludeL1MsgFromTxlimit(t *testing.T) {
+	assert := assert.New(t)
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine = clique.New(chainConfig.Clique, db)
+
+	// Set maxTxPerBlock = 2 and NumL1MessagesPerBlock = 2
+	maxTxPerBlock := 2
+	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 2,
+	}
+
+	// Insert 2 l1msgs
+	l1msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 21016, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}}
+	rawdb.WriteL1Messages(db, l1msgs)
+
+	chainConfig.LondonBlock = big.NewInt(0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Insert 2 non-l1msg txs
+	b.txPool.AddLocal(b.newRandomTx(true))
+	b.txPool.AddLocal(b.newRandomTx(false))
+
+	// Start mining!
+	w.start()
+
+	select {
+	case ev := <-sub.Chan():
+		block := ev.Data.(core.NewMinedBlockEvent).Block
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+		}
+		assert.Equal(4, len(block.Transactions()))
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout")
+	}
+}
+
+func TestL1MsgCorrectOrder(t *testing.T) {
+	assert := assert.New(t)
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine = clique.New(chainConfig.Clique, db)
+
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 10,
+	}
+
+	// Insert 3 l1msgs
+	l1msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 21016, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}}}
+	rawdb.WriteL1Messages(db, l1msgs)
+
+	chainConfig.LondonBlock = big.NewInt(0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Insert local tx
+	b.txPool.AddLocal(b.newRandomTx(true))
+
+	// Start mining!
+	w.start()
+
+	select {
+	case ev := <-sub.Chan():
+		block := ev.Data.(core.NewMinedBlockEvent).Block
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+		}
+		assert.Equal(4, len(block.Transactions()))
+		assert.True(block.Transactions()[0].IsL1MessageTx() && block.Transactions()[1].IsL1MessageTx() && block.Transactions()[2].IsL1MessageTx())
+		assert.Equal(uint64(0), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+		assert.Equal(uint64(1), block.Transactions()[1].AsL1MessageTx().QueueIndex)
+		assert.Equal(uint64(2), block.Transactions()[2].AsL1MessageTx().QueueIndex)
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout")
 	}
 }

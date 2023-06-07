@@ -166,8 +166,9 @@ type Block struct {
 	transactions Transactions
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
+	hash       atomic.Value
+	size       atomic.Value
+	l1MsgCount atomic.Value
 
 	// Td is used by package core to store the total difficulty
 	// of the chain up to and including the block.
@@ -394,6 +395,26 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+// L1MessageCount returns the number of L1 messages in this block.
+func (b *Block) L1MessageCount() int {
+	if l1MsgCount := b.l1MsgCount.Load(); l1MsgCount != nil {
+		return l1MsgCount.(int)
+	}
+	count := 0
+	for _, tx := range b.transactions {
+		if tx.IsL1MessageTx() {
+			count += 1
+		}
+	}
+	b.l1MsgCount.Store(count)
+	return count
+}
+
+// CountL2Tx returns the number of L2 transactions in this block.
+func (b *Block) CountL2Tx() int {
+	return len(b.transactions) - b.L1MessageCount()
 }
 
 type Blocks []*Block

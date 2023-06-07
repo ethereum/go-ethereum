@@ -45,6 +45,8 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+
+	L1MessageTxType = 0x7E
 )
 
 // Transaction is an Ethereum transaction.
@@ -186,6 +188,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case L1MessageTxType:
+		var inner L1MessageTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -287,6 +293,28 @@ func (tx *Transaction) To() *common.Address {
 	return copyAddressPtr(tx.inner.to())
 }
 
+// IsL1MessageTx returns true if the transaction is an L1 cross-domain tx.
+func (tx *Transaction) IsL1MessageTx() bool {
+	return tx.Type() == L1MessageTxType
+}
+
+// AsL1MessageTx casts the tx into an L1 cross-domain tx.
+func (tx *Transaction) AsL1MessageTx() *L1MessageTx {
+	if !tx.IsL1MessageTx() {
+		return nil
+	}
+	return tx.inner.(*L1MessageTx)
+}
+
+// L1MessageQueueIndex returns the L1 queue index if `tx` is of type `L1MessageTx`.
+// It returns 0 otherwise.
+func (tx *Transaction) L1MessageQueueIndex() uint64 {
+	if !tx.IsL1MessageTx() {
+		return 0
+	}
+	return tx.AsL1MessageTx().QueueIndex
+}
+
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
@@ -324,6 +352,9 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	if tx.IsL1MessageTx() {
+		return new(big.Int), nil
+	}
 	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
@@ -563,48 +594,51 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	data       []byte
-	accessList AccessList
-	isFake     bool
+	to            *common.Address
+	from          common.Address
+	nonce         uint64
+	amount        *big.Int
+	gasLimit      uint64
+	gasPrice      *big.Int
+	gasFeeCap     *big.Int
+	gasTipCap     *big.Int
+	data          []byte
+	accessList    AccessList
+	isFake        bool
+	isL1MessageTx bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		gasFeeCap:  gasFeeCap,
-		gasTipCap:  gasTipCap,
-		data:       data,
-		accessList: accessList,
-		isFake:     isFake,
+		from:          from,
+		to:            to,
+		nonce:         nonce,
+		amount:        amount,
+		gasLimit:      gasLimit,
+		gasPrice:      gasPrice,
+		gasFeeCap:     gasFeeCap,
+		gasTipCap:     gasTipCap,
+		data:          data,
+		accessList:    accessList,
+		isFake:        isFake,
+		isL1MessageTx: false,
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		isFake:     false,
+		nonce:         tx.Nonce(),
+		gasLimit:      tx.Gas(),
+		gasPrice:      new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:     new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:     new(big.Int).Set(tx.GasTipCap()),
+		to:            tx.To(),
+		amount:        tx.Value(),
+		data:          tx.Data(),
+		accessList:    tx.AccessList(),
+		isFake:        false,
+		isL1MessageTx: tx.IsL1MessageTx(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -626,6 +660,7 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
+func (m Message) IsL1MessageTx() bool    { return m.isL1MessageTx }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

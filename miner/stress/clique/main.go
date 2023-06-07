@@ -214,7 +214,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second,
 		},
-	})
+	}, nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -352,6 +352,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
+	rawdb.WriteFirstQueueIndexNotInL2Block(db, block.Hash(), 0)
 	return block, nil
 }
 

@@ -30,6 +30,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/event"
@@ -88,6 +89,7 @@ type environment struct {
 	uncles    mapset.Set         // uncle set
 	tcount    int                // tx count in cycle
 	blockSize common.StorageSize // approximate size of tx payload in bytes
+	l1TxCount int                // l1 msg count in cycle
 	gasPool   *core.GasPool      // available gas used to pack transactions
 
 	header   *types.Header
@@ -142,6 +144,8 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
+	l1MsgsCh     chan core.NewL1MsgsEvent
+	l1MsgsSub    event.Subscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -172,8 +176,9 @@ type worker struct {
 	snapshotState    *state.StateDB
 
 	// atomic status counters
-	running int32 // The indicator whether the consensus engine is running or not.
-	newTxs  int32 // New arrival transaction count since last sealing work submitting.
+	running   int32 // The indicator whether the consensus engine is running or not.
+	newTxs    int32 // New arrival transaction count since last sealing work submitting.
+	newL1Msgs int32 // New arrival L1 message count since last sealing work submitting.
 
 	// noempty is the flag used to control whether the feature of pre-seal empty
 	// block is enabled. The default value is false(pre-seal is enabled by default).
@@ -206,6 +211,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
+		l1MsgsCh:           make(chan core.NewL1MsgsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
@@ -216,8 +222,21 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
+
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+
+	// Subscribe NewL1MsgsEvent for sync service
+	if s := eth.SyncService(); s != nil {
+		worker.l1MsgsSub = s.SubscribeNewL1MsgsEvent(worker.l1MsgsCh)
+	} else {
+		// create an empty subscription so that the tests won't fail
+		worker.l1MsgsSub = event.NewSubscription(func(quit <-chan struct{}) error {
+			<-quit
+			return nil
+		})
+	}
+
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
@@ -376,6 +395,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		}
 		timer.Reset(recommit)
 		atomic.StoreInt32(&w.newTxs, 0)
+		atomic.StoreInt32(&w.newL1Msgs, 0)
 	}
 	// clearPending cleans the stale pending tasks.
 	clearPending := func(number uint64) {
@@ -405,7 +425,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
-				if atomic.LoadInt32(&w.newTxs) == 0 {
+				if atomic.LoadInt32(&w.newTxs) == 0 && atomic.LoadInt32(&w.newL1Msgs) == 0 {
 					timer.Reset(recommit)
 					continue
 				}
@@ -452,6 +472,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
+	defer w.l1MsgsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
 	defer func() {
@@ -543,10 +564,15 @@ func (w *worker) mainLoop() {
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
+		case ev := <-w.l1MsgsCh:
+			atomic.AddInt32(&w.newL1Msgs, int32(ev.Count))
+
 		// System stopped
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
+			return
+		case <-w.l1MsgsSub.Err():
 			return
 		case <-w.chainHeadSub.Err():
 			return
@@ -709,6 +735,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	env.blockSize = 0
+	env.l1TxCount = 0
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
@@ -821,8 +848,8 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we have collected enough transactions then we're done
-		if !w.chainConfig.Scroll.IsValidTxCount(w.current.tcount + 1) {
-			log.Trace("Transaction count limit reached", "have", w.current.tcount, "want", w.chainConfig.Scroll.MaxTxPerBlock)
+		if !w.chainConfig.Scroll.IsValidL2TxCount(w.current.tcount - w.current.l1TxCount + 1) {
+			log.Trace("Transaction count limit reached", "have", w.current.tcount-w.current.l1TxCount, "want", w.chainConfig.Scroll.MaxTxPerBlock)
 			break
 		}
 		// If we don't have enough gas for any further transactions then we're done
@@ -876,6 +903,9 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
+			if tx.IsL1MessageTx() {
+				w.current.l1TxCount++
+			}
 			w.current.tcount++
 			w.current.blockSize += tx.Size()
 			txs.Shift()
@@ -914,6 +944,17 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
 	return false
+}
+
+func (w *worker) collectPendingL1Messages() []types.L1MessageTx {
+	nextQueueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), w.chain.CurrentHeader().Hash())
+	if nextQueueIndex == nil {
+		// the parent (w.chain.CurrentHeader) must have been processed before we start a new mining job.
+		log.Crit("Failed to read last L1 message in L2 block", "l2BlockHash", w.chain.CurrentHeader().Hash())
+	}
+	startIndex := *nextQueueIndex
+	maxCount := w.chainConfig.Scroll.L1Config.NumL1MessagesPerBlock
+	return rawdb.ReadL1MessagesFrom(w.eth.ChainDb(), startIndex, maxCount)
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
@@ -1016,13 +1057,30 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		w.commit(uncles, nil, false, tstart)
 	}
-
+	// fetch l1Txs
+	l1Txs := make(map[common.Address]types.Transactions)
+	pendingL1Txs := 0
+	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
+		l1Messages := w.collectPendingL1Messages()
+		pendingL1Txs = len(l1Messages)
+		for _, l1msg := range l1Messages {
+			tx := types.NewTx(&l1msg)
+			sender := l1msg.Sender
+			senderTxs, ok := l1Txs[sender]
+			if ok {
+				senderTxs = append(senderTxs, tx)
+				l1Txs[sender] = senderTxs
+			} else {
+				l1Txs[sender] = types.Transactions{tx}
+			}
+		}
+	}
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
+	if len(pending) == 0 && pendingL1Txs == 0 && atomic.LoadUint32(&w.noempty) == 0 {
 		w.updateSnapshot()
 		return
 	}
@@ -1032,6 +1090,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
 			localTxs[account] = txs
+		}
+	}
+	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Txs) > 0 {
+		log.Trace("Processing L1 messages for inclusion", "count", pendingL1Txs)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, l1Txs, header.BaseFee)
+		if w.commitTransactions(txs, w.coinbase, interrupt) {
+			return
 		}
 	}
 	if len(localTxs) > 0 {

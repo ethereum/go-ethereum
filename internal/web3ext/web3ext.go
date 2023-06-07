@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"scroll":   ScrollJs,
 }
 
 const CliqueJs = `
@@ -845,6 +846,40 @@ web3._extend({
 			name: 'requestStats',
 			getter: 'vflux_requestStats'
 		}),
+	]
+});
+`
+
+const ScrollJs = `
+web3._extend({
+	property: 'scroll',
+	methods: [
+		new web3._extend.Method({
+			name: 'getBlockTraceByNumberOrHash',
+			call: 'scroll_getBlockTraceByNumberOrHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getL1MessageByIndex',
+			call: 'scroll_getL1MessageByIndex',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getFirstQueueIndexNotInL2Block',
+			call: 'scroll_getFirstQueueIndexNotInL2Block',
+			params: 1
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'l1SyncHeight',
+			getter: 'scroll_getL1SyncHeight'
+		}),
+		new web3._extend.Property({
+			name: 'latestRelayedQueueIndex',
+			getter: 'scroll_getLatestRelayedQueueIndex'
+		})
 	]
 });
 `

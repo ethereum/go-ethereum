@@ -97,7 +97,7 @@ func setupGeth(stack *node.Node) error {
 		TrieDirtyCache:          16,
 		TrieTimeout:             60 * time.Minute,
 		SnapshotCache:           10,
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}

@@ -166,10 +166,16 @@ func NewTransactionData(tx *Transaction, blockNumber uint64, config *params.Chai
 	signer := MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	from, _ := Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
+
+	nonce := tx.Nonce()
+	if tx.IsL1MessageTx() {
+		nonce = tx.L1MessageQueueIndex()
+	}
+
 	result := &TransactionData{
 		Type:     tx.Type(),
 		TxHash:   tx.Hash().String(),
-		Nonce:    tx.Nonce(),
+		Nonce:    nonce,
 		ChainId:  (*hexutil.Big)(tx.ChainId()),
 		From:     from,
 		Gas:      tx.Gas(),
