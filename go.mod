@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/VictoriaMetrics/fastcache v1.6.0
-	github.com/astriaorg/metro-transactions v0.0.0-20230531101410-401599609756
+	github.com/astriaorg/metro-transactions v0.0.0-20230607144122-328c2c68e83e
 	github.com/aws/aws-sdk-go-v2 v1.17.7
 	github.com/aws/aws-sdk-go-v2/config v1.1.1
 	github.com/aws/aws-sdk-go-v2/credentials v1.1.1
@@ -233,8 +233,8 @@ require (
 )
 
 replace (
-	github.com/cosmos/cosmos-sdk => github.com/histolabs/cosmos-sdk v0.0.0-20221230021044-779df3c9a0f5
+	github.com/cosmos/cosmos-sdk => github.com/astriaorg/cosmos-sdk v0.0.0-20230607143928-694756d0eb0a
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
-	github.com/histolabs/metro => github.com/astriaorg/metro v0.0.0-20230309025015-f1ccffce0828
+	github.com/histolabs/metro => github.com/astriaorg/metro v0.0.5-0.20230607144242-bf533f6cc7c8
 	github.com/tendermint/tendermint => github.com/histolabs/tendermint v0.0.0-20221227204023-ec49dd7d580f
 )
