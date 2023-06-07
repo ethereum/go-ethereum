@@ -273,26 +273,76 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		matchedLogs = make(chan []*types.Log)
 	)
 
-	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
-	if err != nil {
-		return nil, err
+	syncHistLogs := func(n int64) error {
+		for {
+			// Get latest head block num
+			head := api.sys.backend.CurrentHeader().Number.Int64()
+			if n >= head {
+				return nil
+			}
+			// Do historical sync from n to head
+			f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
+			logChan, errChan := f.rangeLogsAsync(ctx)
+			select {
+			case <-notifier.Closed():
+				return errors.New("connection dropped")
+			case log := <-logChan:
+				notifier.Notify(rpcSub.ID, &log)
+			case err := <-errChan:
+				if err != nil {
+					return err
+				}
+			}
+
+			// TODO: Check if any logs from n to head have been reorged
+			// send the reorged logs
+
+			// Head is stable, move n to current head
+			n = head
+		}
 	}
 
-	go func() {
-		defer logsSub.Unsubscribe()
-		for {
-			select {
-			case logs := <-matchedLogs:
-				for _, log := range logs {
-					notifier.Notify(rpcSub.ID, &log)
+	syncLiveLogs := func() error {
+		logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			for {
+				select {
+				case logs := <-matchedLogs:
+					for _, log := range logs {
+						log := log
+						notifier.Notify(rpcSub.ID, &log)
+					}
+				case <-rpcSub.Err(): // client send an unsubscribe request
+					logsSub.Unsubscribe()
+					return
+				case <-notifier.Closed(): // connection dropped
+					logsSub.Unsubscribe()
+					return
 				}
-			case <-rpcSub.Err(): // client send an unsubscribe request
+			}
+		}()
+		return nil
+	}
+
+	if crit.FromBlock != nil {
+		n := crit.FromBlock.Int64()
+		go func() {
+			// do historical sync first
+			if err := syncHistLogs(n); err != nil {
 				return
 			}
-		}
-	}()
+			// subscribe from latest
+			syncLiveLogs()
+		}()
+		return rpcSub, nil
+	}
 
-	return rpcSub, nil
+	err := syncLiveLogs()
+	return rpcSub, err
 }
 
 // FilterCriteria represents a request to create a new filter.
