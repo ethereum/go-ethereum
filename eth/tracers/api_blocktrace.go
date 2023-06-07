@@ -345,7 +345,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 				m = make(map[string][]hexutil.Bytes)
 				env.StorageProofs[addrStr] = m
 				if zktrieTracer.Available() {
-					env.zkTrieTracer[addrStr] = zktrieTracer
+					env.zkTrieTracer[addrStr] = state.NewProofTracer(trie)
 				}
 			} else if _, existed := m[keyStr]; existed {
 				// still need to touch tracer for deletion
