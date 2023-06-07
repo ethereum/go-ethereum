@@ -194,7 +194,8 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.SnapshotStorageReads += time.Since(start)
 		}
 		if len(enc) > 0 {
-			_, content, _, err := rlp.Split(enc)
+			var content []byte
+			_, content, _, err = rlp.Split(enc)
 			if err != nil {
 				s.db.setError(err)
 			}
