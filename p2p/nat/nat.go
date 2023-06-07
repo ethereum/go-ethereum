@@ -34,23 +34,36 @@ type Spec struct {
 	instance Interface
 }
 
+// NewFromSpec parses the spec and returns a Spec. If the string specification
+// is "none", then nil will be returned.
 func NewFromSpec(spec string) (*Spec, error) {
 	instance, err := Parse(spec)
 	if err != nil {
 		return nil, err
 	}
+	if instance == nil {
+		return nil, nil
+	}
 	return &Spec{spec, instance}, nil
 }
 
+// MustFromSpec parses the spec and returns a Spec. If the string specification
+// is "none", then nil will be returned.
 func MustFromSpec(spec string) *Spec {
 	instance, err := Parse(spec)
 	if err != nil {
 		panic(err)
 	}
+	if instance == nil {
+		return nil
+	}
 	return &Spec{spec, instance}
 }
 
 func (s *Spec) Implementation() Interface {
+	if s == nil {
+		return nil
+	}
 	return s.instance
 }
 
