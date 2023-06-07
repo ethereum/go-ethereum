@@ -625,7 +625,7 @@ func (db *Database) Scheme() string {
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (*reader, error) {
 	if _, err := db.Node(root); err != nil {
-		return nil, fmt.Errorf("state %x is not available", root)
+		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}
 	return &reader{db: db}, nil
 }
