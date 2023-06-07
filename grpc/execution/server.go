@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
-	executionv1 "github.com/ethereum/go-ethereum/grpc/gen/proto/execution/v1"
+	executionv1 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1"
 	"github.com/ethereum/go-ethereum/log"
 )
 

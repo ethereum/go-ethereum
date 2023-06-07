@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             (unknown)
-// source: proto/execution/v1/execution.proto
+// source: astria/execution/v1/execution.proto
 
 package executionv1
 
@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ExecutionService_InitState_FullMethodName     = "/execution.v1.ExecutionService/InitState"
-	ExecutionService_DoBlock_FullMethodName       = "/execution.v1.ExecutionService/DoBlock"
-	ExecutionService_FinalizeBlock_FullMethodName = "/execution.v1.ExecutionService/FinalizeBlock"
+	ExecutionService_InitState_FullMethodName     = "/astria.execution.v1.ExecutionService/InitState"
+	ExecutionService_DoBlock_FullMethodName       = "/astria.execution.v1.ExecutionService/DoBlock"
+	ExecutionService_FinalizeBlock_FullMethodName = "/astria.execution.v1.ExecutionService/FinalizeBlock"
 )
 
 // ExecutionServiceClient is the client API for ExecutionService service.
@@ -162,7 +162,7 @@ func _ExecutionService_FinalizeBlock_Handler(srv interface{}, ctx context.Contex
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ExecutionService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "execution.v1.ExecutionService",
+	ServiceName: "astria.execution.v1.ExecutionService",
 	HandlerType: (*ExecutionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -179,5 +179,5 @@ var ExecutionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/execution/v1/execution.proto",
+	Metadata: "astria/execution/v1/execution.proto",
 }
