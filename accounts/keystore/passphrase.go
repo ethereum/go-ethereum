@@ -226,6 +226,10 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		return nil, err
 	}
 	key := crypto.ToECDSAUnsafe(keyBytes)
+	if key == nil {
+		return nil, fmt.Errorf("failed to convert key bytes to ECDSA key")
+	}
+
 	id, err := uuid.FromBytes(keyId)
 	if err != nil {
 		return nil, err
