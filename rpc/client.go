@@ -35,6 +35,7 @@ var (
 	ErrBadResult                 = errors.New("bad result in JSON-RPC response")
 	ErrClientQuit                = errors.New("client is closed")
 	ErrNoResult                  = errors.New("no result in JSON-RPC response")
+	ErrMissingBatchResp          = errors.New("response batch did not contain a result for this call")
 	ErrSubscriptionQueueOverflow = errors.New("subscription queue overflow")
 	errClientReconnected         = errors.New("client reconnected")
 	errDead                      = errors.New("connection lost")
@@ -138,14 +139,17 @@ type readOp struct {
 	batch bool
 }
 
+// requestOp represents a pending request. This is used for both batch and non-batch
+// requests.
 type requestOp struct {
-	ids  []json.RawMessage
-	err  error
-	resp chan *jsonrpcMessage // receives up to len(ids) responses
-	sub  *ClientSubscription  // only set for EthSubscribe requests
+	ids         []json.RawMessage
+	err         error
+	resp        chan []*jsonrpcMessage // the response goes here
+	sub         *ClientSubscription    // set for Subscribe requests.
+	hadResponse bool                   // true when the request was responded to
 }
 
-func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, error) {
+func (op *requestOp) wait(ctx context.Context, c *Client) ([]*jsonrpcMessage, error) {
 	select {
 	case <-ctx.Done():
 		// Send the timeout to dispatch so it can remove the request IDs.
@@ -350,7 +354,10 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	if err != nil {
 		return err
 	}
-	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
+	op := &requestOp{
+		ids:  []json.RawMessage{msg.ID},
+		resp: make(chan []*jsonrpcMessage, 1),
+	}
 
 	if c.isHTTP {
 		err = c.sendHTTP(ctx, op, msg)
@@ -362,9 +369,12 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 
 	// dispatch has accepted the request and will close the channel when it quits.
-	switch resp, err := op.wait(ctx, c); {
-	case err != nil:
+	batchresp, err := op.wait(ctx, c)
+	if err != nil {
 		return err
+	}
+	resp := batchresp[0]
+	switch {
 	case resp.Error != nil:
 		return resp.Error
 	case len(resp.Result) == 0:
@@ -405,7 +415,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	)
 	op := &requestOp{
 		ids:  make([]json.RawMessage, len(b)),
-		resp: make(chan *jsonrpcMessage, len(b)),
+		resp: make(chan []*jsonrpcMessage, 1),
 	}
 	for i, elem := range b {
 		msg, err := c.newMessage(elem.Method, elem.Args...)
@@ -423,22 +433,32 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	} else {
 		err = c.send(ctx, op, msgs)
 	}
+	if err != nil {
+		return err
+	}
+
+	batchresp, err := op.wait(ctx, c)
+	if err != nil {
+		return err
+	}
 
 	// Wait for all responses to come back.
-	for n := 0; n < len(b) && err == nil; n++ {
-		var resp *jsonrpcMessage
-		resp, err = op.wait(ctx, c)
-		if err != nil {
-			break
+	for n := 0; n < len(batchresp) && err == nil; n++ {
+		resp := batchresp[n]
+		if resp == nil {
+			// Ignore null responses. These can happen for batches sent via HTTP.
+			continue
 		}
+
 		// Find the element corresponding to this response.
-		// The element is guaranteed to be present because dispatch
-		// only sends valid IDs to our channel.
-		elem := &b[byID[string(resp.ID)]]
+		index, ok := byID[string(resp.ID)]
+		if !ok {
+			continue
+		}
+		delete(byID, string(resp.ID))
+
+		elem := &b[index]
 		if resp.Error != nil {
-			if resp.Error.Message == errMsgBatchTooLarge {
-				return resp.Error
-			}
 			elem.Error = resp.Error
 			continue
 		}
@@ -448,6 +468,13 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		}
 		elem.Error = json.Unmarshal(resp.Result, elem.Result)
 	}
+
+	// Check that all expected responses have been received.
+	for _, index := range byID {
+		elem := &b[index]
+		elem.Error = ErrMissingBatchResp
+	}
+
 	return err
 }
 
@@ -508,7 +535,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
-		resp: make(chan *jsonrpcMessage),
+		resp: make(chan []*jsonrpcMessage, 1),
 		sub:  newClientSubscription(c, namespace, chanVal),
 	}
 

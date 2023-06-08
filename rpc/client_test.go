@@ -169,10 +169,12 @@ func TestClientBatchRequest(t *testing.T) {
 	}
 }
 
+// This checks that, for HTTP connections, the length of batch responses is validated to
+// match the request exactly.
 func TestClientBatchRequest_len(t *testing.T) {
 	b, err := json.Marshal([]jsonrpcMessage{
-		{Version: "2.0", ID: json.RawMessage("1"), Method: "foo", Result: json.RawMessage(`"0x1"`)},
-		{Version: "2.0", ID: json.RawMessage("2"), Method: "bar", Result: json.RawMessage(`"0x2"`)},
+		{Version: "2.0", ID: json.RawMessage("1"), Result: json.RawMessage(`"0x1"`)},
+		{Version: "2.0", ID: json.RawMessage("2"), Result: json.RawMessage(`"0x2"`)},
 	})
 	if err != nil {
 		t.Fatal("failed to encode jsonrpc message:", err)

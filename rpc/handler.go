@@ -164,6 +164,16 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 }
 
+// handleMsg handles a single non-batch message.
+func (h *handler) handleMsg(msg *jsonrpcMessage) {
+	msgs := []*jsonrpcMessage{msg}
+	h.handleResponses(msgs, func(msg *jsonrpcMessage) {
+		h.startCallProc(func(cp *callProc) {
+			h.handleNonBatchCall(cp, msg)
+		})
+	})
+}
+
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
@@ -183,13 +193,12 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		return
 	}
 
-	// Handle non-call messages first:
+	// Handle non-call messages first.
+	// Here we need to find the requestOp that sent the request batch.
 	calls := make([]*jsonrpcMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		if handled := h.handleImmediate(msg); !handled {
-			calls = append(calls, msg)
-		}
-	}
+	h.handleResponses(msgs, func(msg *jsonrpcMessage) {
+		calls = append(calls, msg)
+	})
 	if len(calls) == 0 {
 		return
 	}
@@ -241,6 +250,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			timer.Stop()
 		}
 		callBuffer.write(cp.ctx, h.conn)
+
 		h.addSubscriptions(cp.notifiers)
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -248,47 +258,41 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	})
 }
 
-// handleMsg handles a single message.
-func (h *handler) handleMsg(msg *jsonrpcMessage) {
-	if ok := h.handleImmediate(msg); ok {
-		return
-	}
-	h.startCallProc(func(cp *callProc) {
-		var (
-			responded sync.Once
-			timer     *time.Timer
-			cancel    context.CancelFunc
-		)
-		cp.ctx, cancel = context.WithCancel(cp.ctx)
-		defer cancel()
+func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
+	var (
+		responded sync.Once
+		timer     *time.Timer
+		cancel    context.CancelFunc
+	)
+	cp.ctx, cancel = context.WithCancel(cp.ctx)
+	defer cancel()
 
-		// Cancel the request context after timeout and send an error response. Since the
-		// running method might not return immediately on timeout, we must wait for the
-		// timeout concurrently with processing the request.
-		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
-			timer = time.AfterFunc(timeout, func() {
-				cancel()
-				responded.Do(func() {
-					resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
-					h.conn.writeJSON(cp.ctx, resp, true)
-				})
-			})
-		}
-
-		answer := h.handleCallMsg(cp, msg)
-		if timer != nil {
-			timer.Stop()
-		}
-		h.addSubscriptions(cp.notifiers)
-		if answer != nil {
+	// Cancel the request context after timeout and send an error response. Since the
+	// running method might not return immediately on timeout, we must wait for the
+	// timeout concurrently with processing the request.
+	if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
+		timer = time.AfterFunc(timeout, func() {
+			cancel()
 			responded.Do(func() {
-				h.conn.writeJSON(cp.ctx, answer, false)
+				resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+				h.conn.writeJSON(cp.ctx, resp, true)
 			})
-		}
-		for _, n := range cp.notifiers {
-			n.activate()
-		}
-	})
+		})
+	}
+
+	answer := h.handleCallMsg(cp, msg)
+	if timer != nil {
+		timer.Stop()
+	}
+	h.addSubscriptions(cp.notifiers)
+	if answer != nil {
+		responded.Do(func() {
+			h.conn.writeJSON(cp.ctx, answer, false)
+		})
+	}
+	for _, n := range cp.notifiers {
+		n.activate()
+	}
 }
 
 // close cancels all requests except for inflightReq and waits for
@@ -371,23 +375,60 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 	}()
 }
 
-// handleImmediate executes non-call messages. It returns false if the message is a
-// call or requires a reply.
-func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
-	start := time.Now()
-	switch {
-	case msg.isNotification():
-		if strings.HasSuffix(msg.Method, notificationMethodSuffix) {
-			h.handleSubscriptionResult(msg)
-			return true
+// handleResponse processes method call responses.
+func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*jsonrpcMessage)) {
+	var resolvedops []*requestOp
+	handleResp := func(msg *jsonrpcMessage) {
+		op := h.respWait[string(msg.ID)]
+		if op == nil {
+			h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
+			return
 		}
-		return false
-	case msg.isResponse():
-		h.handleResponse(msg)
-		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
-		return true
-	default:
-		return false
+		resolvedops = append(resolvedops, op)
+		delete(h.respWait, string(msg.ID))
+
+		// For subscription responses, start the subscription if the server
+		// indicates success. EthSubscribe gets unblocked in either case through
+		// the op.resp channel.
+		if op.sub != nil {
+			if msg.Error != nil {
+				op.err = msg.Error
+			} else {
+				op.err = json.Unmarshal(msg.Result, &op.sub.subid)
+				if op.err == nil {
+					go op.sub.run()
+					h.clientSubs[op.sub.subid] = op.sub
+				}
+			}
+		}
+
+		if !op.hadResponse {
+			op.hadResponse = true
+			op.resp <- batch
+		}
+	}
+
+	for _, msg := range batch {
+		start := time.Now()
+		switch {
+		case msg.isResponse():
+			handleResp(msg)
+			h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+
+		case msg.isNotification():
+			if strings.HasSuffix(msg.Method, notificationMethodSuffix) {
+				h.handleSubscriptionResult(msg)
+				continue
+			}
+			handleCall(msg)
+
+		default:
+			handleCall(msg)
+		}
+	}
+
+	for _, op := range resolvedops {
+		h.removeRequestOp(op)
 	}
 }
 
@@ -403,33 +444,6 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	}
 }
 
-// handleResponse processes method call responses.
-func (h *handler) handleResponse(msg *jsonrpcMessage) {
-	op := h.respWait[string(msg.ID)]
-	if op == nil {
-		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
-		return
-	}
-	delete(h.respWait, string(msg.ID))
-	// For normal responses, just forward the reply to Call/BatchCall.
-	if op.sub == nil {
-		op.resp <- msg
-		return
-	}
-	// For subscription responses, start the subscription if the server
-	// indicates success. EthSubscribe gets unblocked in either case through
-	// the op.resp channel.
-	defer close(op.resp)
-	if msg.Error != nil {
-		op.err = msg.Error
-		return
-	}
-	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
-		go op.sub.run()
-		h.clientSubs[op.sub.subid] = op.sub
-	}
-}
-
 // handleCallMsg executes a call message and returns the answer.
 func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	start := time.Now()
@@ -438,6 +452,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 		h.handleCall(ctx, msg)
 		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
 		return nil
+
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
 		var ctx []interface{}
@@ -452,8 +467,10 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			h.log.Debug("Served "+msg.Method, ctx...)
 		}
 		return resp
+
 	case msg.hasValidID():
 		return msg.errorResponse(&invalidRequestError{"invalid request"})
+
 	default:
 		return errorMessage(&invalidRequestError{"invalid request"})
 	}
@@ -473,12 +490,14 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
+
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
 	answer := h.runMethod(cp.ctx, msg, callb, args)
+
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
 	if callb != h.unsubscribeCb {
@@ -491,6 +510,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		rpcServingTimer.UpdateSince(start)
 		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 	}
+
 	return answer
 }
 
