@@ -103,8 +103,8 @@ func (it *Iterator) BlockAndReceipts() (*types.Block, types.Receipts, error) {
 // TotalDifficulty returns the total difficulty for the iterator's current
 // position.
 func (it *Iterator) TotalDifficulty() (*big.Int, error) {
-	var td []byte
-	if err := rlp.Decode(it.inner.TotalDifficulty, td); err != nil {
+	td, err := io.ReadAll(it.inner.TotalDifficulty)
+	if err != nil {
 		return nil, err
 	}
 	return new(big.Int).SetBytes(reverseOrder(td)), nil

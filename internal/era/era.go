@@ -181,7 +181,7 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	if r, n, err = newSnappyReader(e.s, TypeCompressedHeader, off); err != nil {
 		return nil, err
 	}
-	if err := rlp.Decode(r, header); err != nil {
+	if err := rlp.Decode(r, &header); err != nil {
 		return nil, err
 	}
 	off += n
@@ -199,7 +199,8 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	if r, _, err = e.s.ReaderAt(TypeTotalDifficulty, off); err != nil {
 		return nil, err
 	}
-	if err := rlp.Decode(r, rawTd); err != nil {
+	rawTd, err = io.ReadAll(r)
+	if err != nil {
 		return nil, err
 	}
 	td := new(big.Int).SetBytes(reverseOrder(rawTd))
