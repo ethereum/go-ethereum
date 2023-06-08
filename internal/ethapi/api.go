@@ -1105,6 +1105,7 @@ type CallBatch struct {
 type callResult struct {
 	ReturnValue hexutil.Bytes  `json:"return"`
 	Logs        []*types.Log   `json:"logs"`
+	Transfers   []transfer     `json:"transfers,omitempty"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
 	Error       string         `json:"error"`
 }
@@ -1116,12 +1117,11 @@ type callResult struct {
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash) ([][]callResult, error) {
+func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([][]callResult, error) {
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-
 	// Setup context so it may be cancelled before the calls completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var (
@@ -1166,7 +1166,14 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 			// Hack to get logs from statedb which stores logs by txhash.
 			txhash := common.BigToHash(big.NewInt(int64(i)))
 			state.SetTxContext(txhash, i)
-			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, &vm.Config{NoBaseFee: true, DisableECRecover: true})
+			vmConfig := &vm.Config{NoBaseFee: true}
+			if block.ECRecoverOverride != nil {
+				vmConfig.DisableECRecover = true
+			}
+			if includeTransfers != nil && *includeTransfers {
+				vmConfig.Tracer = newTracer()
+			}
+			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig)
 			if err != nil {
 				results[bi][i] = callResult{Error: err.Error()}
 				continue
@@ -1180,7 +1187,11 @@ func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, block
 			for _, l := range logs {
 				l.TxHash = common.Hash{}
 			}
-			callRes := callResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+			var transfers []transfer
+			if includeTransfers != nil && *includeTransfers {
+				transfers = vmConfig.Tracer.(*tracer).Transfers()
+			}
+			callRes := callResult{ReturnValue: result.Return(), Logs: logs, Transfers: transfers, GasUsed: hexutil.Uint64(result.UsedGas)}
 			if result.Err != nil {
 				callRes.Error = result.Err.Error()
 			}

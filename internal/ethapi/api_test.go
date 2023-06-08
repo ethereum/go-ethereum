@@ -629,20 +629,23 @@ func TestMulticall(t *testing.T) {
 		b.AddTx(tx)
 	}))
 	var (
-		randomAccounts = newAccounts(4)
-		latest         = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		randomAccounts   = newAccounts(4)
+		latest           = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		includeTransfers = true
 	)
 	type res struct {
 		ReturnValue string `json:"return"`
 		Error       string
 		Logs        []types.Log
 		GasUsed     string
+		Transfers   []transfer
 	}
 	var testSuite = []struct {
-		blocks    []CallBatch
-		tag       rpc.BlockNumberOrHash
-		expectErr error
-		want      [][]res
+		blocks           []CallBatch
+		tag              rpc.BlockNumberOrHash
+		includeTransfers *bool
+		expectErr        error
+		want             [][]res
 	}{
 		// State build-up over calls:
 		// First value transfer OK after state override.
@@ -919,10 +922,55 @@ func TestMulticall(t *testing.T) {
 				GasUsed:     "0x52f6",
 			}}},
 		},
+		// Test ether transfers.
+		{
+			tag: latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[0].addr: OverrideAccount{
+						Balance: newRPCBalance(big.NewInt(100)),
+						// Yul code that transfers 100 wei to address passed in calldata:
+						// object "Test" {
+						//    code {
+						//        let recipient := shr(96, calldataload(0))
+						//        let value := 100
+						//        let success := call(gas(), recipient, value, 0, 0, 0, 0)
+						//        if eq(success, 0) {
+						//            revert(0, 0)
+						//        }
+						//    }
+						// }
+						Code: hex2Bytes("60003560601c606460008060008084865af160008103601d57600080fd5b505050"),
+					},
+				},
+				Calls: []TransactionArgs{{
+					From:  &accounts[0].addr,
+					To:    &randomAccounts[0].addr,
+					Value: (*hexutil.Big)(big.NewInt(50)),
+					Input: hex2Bytes(strings.TrimPrefix(randomAccounts[1].addr.String(), "0x")),
+				}},
+			}},
+			includeTransfers: &includeTransfers,
+			want: [][]res{{{
+				ReturnValue: "0x",
+				GasUsed:     "0xd984",
+				Transfers: []transfer{
+					{
+						From:  accounts[0].addr,
+						To:    randomAccounts[0].addr,
+						Value: big.NewInt(50),
+					}, {
+						From:  randomAccounts[0].addr,
+						To:    randomAccounts[1].addr,
+						Value: big.NewInt(100),
+					},
+				},
+			}}},
+		},
 	}
 
 	for i, tc := range testSuite {
-		result, err := api.Multicall(context.Background(), tc.blocks, tc.tag)
+		result, err := api.Multicall(context.Background(), tc.blocks, tc.tag, tc.includeTransfers)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
