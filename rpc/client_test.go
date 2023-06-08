@@ -187,33 +187,61 @@ func TestClientBatchRequest_len(t *testing.T) {
 	}))
 	t.Cleanup(s.Close)
 
-	client, err := Dial(s.URL)
-	if err != nil {
-		t.Fatal("failed to dial test server:", err)
-	}
-	defer client.Close()
-
 	t.Run("too-few", func(t *testing.T) {
+		client, err := Dial(s.URL)
+		if err != nil {
+			t.Fatal("failed to dial test server:", err)
+		}
+		defer client.Close()
+
 		batch := []BatchElem{
-			{Method: "foo"},
-			{Method: "bar"},
-			{Method: "baz"},
+			{Method: "foo", Result: new(string)},
+			{Method: "bar", Result: new(string)},
+			{Method: "baz", Result: new(string)},
 		}
 		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 		defer cancelFn()
-		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
-			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+
+		if err := client.BatchCallContext(ctx, batch); err != nil {
+			t.Fatal("error:", err)
+		}
+		for i, elem := range batch[:2] {
+			if elem.Error != nil {
+				t.Errorf("expected no error for batch element %d, got %q", i, elem.Error)
+			}
+		}
+		for i, elem := range batch[2:] {
+			if elem.Error != ErrMissingBatchResp {
+				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
+			}
 		}
 	})
 
 	t.Run("too-many", func(t *testing.T) {
+		client, err := Dial(s.URL)
+		if err != nil {
+			t.Fatal("failed to dial test server:", err)
+		}
+		defer client.Close()
+
 		batch := []BatchElem{
-			{Method: "foo"},
+			{Method: "foo", Result: new(string)},
 		}
 		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 		defer cancelFn()
-		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
-			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+
+		if err := client.BatchCallContext(ctx, batch); err != nil {
+			t.Fatal("error:", err)
+		}
+		for i, elem := range batch[:1] {
+			if elem.Error != nil {
+				t.Errorf("expected no error for batch element %d, got %q", i, elem.Error)
+			}
+		}
+		for i, elem := range batch[1:] {
+			if elem.Error != ErrMissingBatchResp {
+				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
+			}
 		}
 	})
 }
@@ -349,7 +377,7 @@ func testClientCancel(transport string, t *testing.T) {
 				_, hasDeadline := ctx.Deadline()
 				t.Errorf("no error for call with %v wait time (deadline: %v)", timeout, hasDeadline)
 				// default:
-				// 	t.Logf("got expected error with %v wait time: %v", timeout, err)
+				//	t.Logf("got expected error with %v wait time: %v", timeout, err)
 			}
 			cancel()
 		}
