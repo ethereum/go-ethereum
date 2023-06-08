@@ -345,6 +345,9 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 				case <-notifier.Closed():
 					rmLogsSub.Unsubscribe()
 					return 0, errors.New("connection dropped")
+				case err := <-rpcSub.Err(): // client send an unsubscribe request
+					rmLogsSub.Unsubscribe()
+					return 0, err
 				case log := <-logChan:
 					notifier.Notify(rpcSub.ID, &log)
 				case logs := <-rmLogsCh:
@@ -365,7 +368,14 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 
 			// send the reorged logs
 			for _, log := range rmLogs {
-				notifier.Notify(rpcSub.ID, &log)
+				select {
+				case <-notifier.Closed():
+					return head, errors.New("connection dropped")
+				case err := <-rpcSub.Err(): // client send an unsubscribe request
+					return head, err
+				default:
+					notifier.Notify(rpcSub.ID, &log)
+				}
 			}
 
 			// move forward to the next batch
