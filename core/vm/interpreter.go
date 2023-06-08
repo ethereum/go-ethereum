@@ -36,9 +36,11 @@ type Config struct {
 
 	ExtraEips []int // Additional EIPS that are to be enabled
 
+	// specifies the initial call depth of the EVM (useful when the EVM is integrated into a separate execution context)
+	InitialDepth int
 	// TODO: mark external contracts via magic CodeHash instead of using a static list
 	ExternalContracts []common.Address
-	ExternalCallback  func(caller, callee common.Address, value *big.Int, input []byte, gas uint64, readOnly bool) (ret []byte, leftOverGas uint64, err error)
+	ExternalCallback  func(caller, callee common.Address, value *big.Int, input []byte, gas uint64, readOnly bool, depth int) (ret []byte, leftOverGas uint64, err error)
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

@@ -67,6 +67,11 @@ func (evm *EVM) isExternalContract(addr common.Address) bool {
 	return false
 }
 
+func (evm *EVM) invokeExternalCallback(caller, callee common.Address, value *big.Int, input []byte, gas uint64, readOnly bool) (ret []byte, leftOverGas uint64, err error) {
+	// pass only the part of the call-depth that was exclusively within the EVM
+	return evm.Config.ExternalCallback(caller, callee, value, input, gas, readOnly, evm.depth-evm.Config.InitialDepth)
+}
+
 // BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
 type BlockContext struct {
@@ -143,6 +148,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
+		depth:       config.InitialDepth,
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -225,7 +231,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else if isExternal {
-		ret, gas, err = evm.Config.ExternalCallback(caller.Address(), addr, value, input, gas, false)
+		ret, gas, err = evm.invokeExternalCallback(caller.Address(), addr, value, input, gas, false)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -389,7 +395,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else if evm.isExternalContract(addr) {
-		ret, gas, err = evm.Config.ExternalCallback(caller.Address(), addr, common.Big0, input, gas, true)
+		ret, gas, err = evm.invokeExternalCallback(caller.Address(), addr, common.Big0, input, gas, true)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
