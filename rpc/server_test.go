@@ -19,7 +19,6 @@ package rpc
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"io"
 	"net"
 	"os"
@@ -71,6 +70,7 @@ func TestServer(t *testing.T) {
 
 func runTestScript(t *testing.T, file string) {
 	server := newTestServer()
+	server.SetBatchLimits(4, 100000)
 	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
@@ -188,36 +188,6 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 		wantedCode := errcodeResponseTooLarge
 		if re.ErrorCode() != wantedCode {
 			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), wantedCode)
-		}
-	}
-}
-
-func TestServerBatchRequestLimit(t *testing.T) {
-	server := newTestServer()
-	defer server.Stop()
-	server.SetBatchLimits(2, 100000)
-	client := DialInProc(server)
-
-	batch := make([]BatchElem, 3)
-	err := client.BatchCall(batch)
-	if err != nil {
-		t.Fatal("unexpected error:", err)
-	}
-
-	// Check that the first response indicates an error with batch size.
-	var err0 Error
-	if !errors.As(batch[0].Error, &err0) {
-		t.Fatalf("batch elem 0 has wrong error type: %T", batch[0].Error)
-	} else {
-		if err0.ErrorCode() != -32600 || err0.Error() != errMsgBatchTooLarge {
-			t.Fatalf("wrong error on batch elem zero: %v", err0)
-		}
-	}
-
-	// Check that remaining response batch elements are reported as absent.
-	for i, elem := range batch[1:] {
-		if elem.Error != ErrMissingBatchResp {
-			t.Fatalf("batch elem %d has unexpected error: %v", i+1, elem.Error)
 		}
 	}
 }

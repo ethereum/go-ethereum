@@ -218,6 +218,43 @@ func TestClientBatchRequest_len(t *testing.T) {
 	})
 }
 
+// This checks that the client can handle the case where the server doesn't
+// respond to all requests in a batch.
+func TestClientBatchRequestLimit(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+	server.SetBatchLimits(2, 100000)
+	client := DialInProc(server)
+
+	batch := []BatchElem{
+		{Method: "foo"},
+		{Method: "bar"},
+		{Method: "baz"},
+	}
+	err := client.BatchCall(batch)
+	if err != nil {
+		t.Fatal("unexpected error:", err)
+	}
+
+	// Check that the first response indicates an error with batch size.
+	var err0 Error
+	if !errors.As(batch[0].Error, &err0) {
+		t.Log("error zero:", batch[0].Error)
+		t.Fatalf("batch elem 0 has wrong error type: %T", batch[0].Error)
+	} else {
+		if err0.ErrorCode() != -32600 || err0.Error() != errMsgBatchTooLarge {
+			t.Fatalf("wrong error on batch elem zero: %v", err0)
+		}
+	}
+
+	// Check that remaining response batch elements are reported as absent.
+	for i, elem := range batch[1:] {
+		if elem.Error != ErrMissingBatchResp {
+			t.Fatalf("batch elem %d has unexpected error: %v", i+1, elem.Error)
+		}
+	}
+}
+
 func TestClientNotify(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()

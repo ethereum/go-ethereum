@@ -457,16 +457,16 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		}
 		delete(byID, string(resp.ID))
 
+		// Assign result and error.
 		elem := &b[index]
-		if resp.Error != nil {
+		switch {
+		case resp.Error != nil:
 			elem.Error = resp.Error
-			continue
-		}
-		if len(resp.Result) == 0 {
+		case resp.Result == nil:
 			elem.Error = ErrNoResult
-			continue
+		default:
+			elem.Error = json.Unmarshal(resp.Result, elem.Result)
 		}
-		elem.Error = json.Unmarshal(resp.Result, elem.Result)
 	}
 
 	// Check that all expected responses have been received.

@@ -164,16 +164,6 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	}
 }
 
-// handleMsg handles a single non-batch message.
-func (h *handler) handleMsg(msg *jsonrpcMessage) {
-	msgs := []*jsonrpcMessage{msg}
-	h.handleResponses(msgs, func(msg *jsonrpcMessage) {
-		h.startCallProc(func(cp *callProc) {
-			h.handleNonBatchCall(cp, msg)
-		})
-	})
-}
-
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
@@ -184,11 +174,10 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		})
 		return
 	}
-
-	if len(msgs) > h.batchRequestLimit && h.batchRequestLimit != 0 {
+	// Apply limit on total number of requests.
+	if h.batchRequestLimit != 0 && len(msgs) > h.batchRequestLimit {
 		h.startCallProc(func(cp *callProc) {
-			resp := msgs[0].errorResponse(&invalidRequestError{errMsgBatchTooLarge})
-			h.conn.writeJSON(cp.ctx, resp, true)
+			h.respondWithBatchTooLarge(cp, msgs)
 		})
 		return
 	}
@@ -249,12 +238,36 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		if timer != nil {
 			timer.Stop()
 		}
-		callBuffer.write(cp.ctx, h.conn)
 
 		h.addSubscriptions(cp.notifiers)
+		callBuffer.write(cp.ctx, h.conn)
 		for _, n := range cp.notifiers {
 			n.activate()
 		}
+	})
+}
+
+func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage) {
+	resp := errorMessage(&invalidRequestError{errMsgBatchTooLarge})
+	// Find the first call and add its "id" field to the error.
+	// This is the best we can do, given that the protocol doesn't have a way
+	// of reporting an error for the entire batch.
+	for _, msg := range batch {
+		if msg.isCall() {
+			resp.ID = msg.ID
+			break
+		}
+	}
+	h.conn.writeJSON(cp.ctx, []*jsonrpcMessage{resp}, true)
+}
+
+// handleMsg handles a single non-batch message.
+func (h *handler) handleMsg(msg *jsonrpcMessage) {
+	msgs := []*jsonrpcMessage{msg}
+	h.handleResponses(msgs, func(msg *jsonrpcMessage) {
+		h.startCallProc(func(cp *callProc) {
+			h.handleNonBatchCall(cp, msg)
+		})
 	})
 }
 
