@@ -36,6 +36,8 @@ type transfer struct {
 	Value *big.Int       `json:"value"`
 }
 
+// tracer is a simple tracer that records all ether transfers.
+// This includes tx value, call value, and self destructs.
 type tracer struct {
 	transfers []transfer
 }
@@ -48,7 +50,6 @@ func (t *tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addres
 	if value.Cmp(common.Big0) > 0 {
 		t.transfers = append(t.transfers, transfer{From: from, To: to, Value: value})
 	}
-
 }
 
 func (t *tracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
