@@ -49,11 +49,11 @@ func memoryMStore(stack *Stack) (uint64, bool) {
 }
 
 func memoryMcopy(stack *Stack) (uint64, bool) {
-    maxTouchedStart := stack.Back(0)
-    if stack.Back(1).Gt(max) {
-        maxTouchedStart = stack.Back(1)
-    }
-	return calcMemSize64(maxTouchedStart, stack.Back(2))
+	mStart := stack.Back(0) // stack[0]: dest
+	if stack.Back(1).Gt(mStart) {
+		mStart = stack.Back(1) // stack[1]: source
+	}
+	return calcMemSize64(mStart, stack.Back(2)) // stack[2]: length
 }
 
 func memoryCreate(stack *Stack) (uint64, bool) {

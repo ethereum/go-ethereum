@@ -243,6 +243,32 @@ func enable3860(jt *JumpTable) {
 	jt[CREATE2].dynamicGas = gasCreate2Eip3860
 }
 
+// enable5656 enables EIP-5656 (MCOPY opcode)
+// https://eips.ethereum.org/EIPS/eip-5656
+func enable5656(jt *JumpTable) {
+	jt[MCOPY] = &operation{
+		execute:     opMcopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasMcopy,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryMcopy,
+	}
+}
+
+// opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
+func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		dst    = scope.Stack.pop()
+		src    = scope.Stack.pop()
+		length = scope.Stack.pop()
+	)
+	// These values are checked for overflow during memory expansion calculation
+	// (the memorySize function on the opcode).
+	scope.Memory.Copy(dst.Uint64(), src.Uint64(), length.Uint64())
+	return nil, nil
+}
+
 // opBlobHash implements the BLOBHASH opcode
 func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	index := scope.Stack.peek()
@@ -264,46 +290,4 @@ func enable4844(jt *JumpTable) {
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
-}
-
-// enable5656 enables EIP-5656 (MCOPY opcode)
-// https://eips.ethereum.org/EIPS/eip-5656
-func enable5656(jt *JumpTable) {
-	jt[MCOPY] = &operation{
-		execute:     opMemoryCopy,
-		constantGas: GasFastestStep,
-		dynamicGas:  gasMcopy,
-		minStack:    minStack(3, 0),
-		maxStack:    maxStack(3, 0),
-		memorySize:  memoryMcopy,
-	}
-}
-
-// opMcopy implements the MCOPY opcode
-func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	var (
-		dst    = scope.Stack.pop()
-		src    = scope.Stack.pop()
-		length = scope.Stack.pop()
-	)
-	// These values are checked for overflow during gas cost calculation.
-	src := src.Uint64()
-	dst := dst.Uint64()
-	length64 := length.Uint64()
-
-	// Note: The spec requires that copying behave "as if" an intermediate
-	// buffer were used. However, actually using an intermediate buffer
-	// raises a DoS vector because it could cause memory allocation even
-	// when no expansion happens. Most memmove implementations check if the
-	// src and dst overlap, and copy backwards if there is overlap (cf.
-	// https://stackoverflow.com/a/22915130/), but does the golang runtime?
-	// `Memory.Set` dispatches into `copy()` builtin, which ultimately calls
-	// runtime.memmove (see https://github.com/golang/go/blob/fd13444b2b4bf1ce6/src/runtime/slice.go#L83).
-	// runtime.memmove itself dispatches into a system-specific optimized
-	// memmove, which is written in assembly and therefore very unlikely to
-	// do any heap allocations - and in fact they indeed do the overlap check.
-	// For instance, see the amd64 implementation:
-	// https://github.com/golang/go/blob/fd13444b2b4bf1ce6/src/runtime/memmove_amd64.s#L78-L82
-	scope.Memory.Set(dst, length64, scope.Memory.Get(src, length64))
-	return nil, nil
 }
