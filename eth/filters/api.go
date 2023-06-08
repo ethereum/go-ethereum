@@ -309,7 +309,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		return rpcSub, err
 	}
 
-	filterHistLogs := func(n int64) error {
+	filterHistLogs := func(n int64) (int64, error) {
 		// the ctx will be canceled after this callback(filter.Logs) is called
 		// and we are run in a background goroutine, use a new context instead
 		var (
@@ -320,18 +320,22 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 			// get the latest block header
 			head := api.sys.backend.CurrentHeader().Number.Int64()
 			if n >= head {
-				return nil
+				return head, nil
 			}
 
-			// do historical sync from n to head
-			f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
+			to := big.NewInt(head)
+			if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(to) < 0 {
+				to = toBlock
+			}
+			// do historical sync from n to min(head, to)
+			f := api.sys.NewRangeFilter(n, to.Int64(), crit.Addresses, crit.Topics)
 			logChan, errChan := f.rangeLogsAsync(cctx)
 
 			// subscribe rmLogs
-			query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
+			query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: to, Addresses: crit.Addresses, Topics: crit.Topics}
 			rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
 			if err != nil {
-				return err
+				return 0, err
 			}
 
 			var rmLogs []*types.Log
@@ -340,7 +344,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 				select {
 				case <-notifier.Closed():
 					rmLogsSub.Unsubscribe()
-					return errors.New("connection dropped")
+					return 0, errors.New("connection dropped")
 				case log := <-logChan:
 					notifier.Notify(rpcSub.ID, &log)
 				case logs := <-rmLogsCh:
@@ -353,7 +357,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 					// range filter is done or error, let's also stop the rmLogs subscribe
 					rmLogsSub.Unsubscribe()
 					if err != nil {
-						return err
+						return 0, err
 					}
 					break FORLOOP
 				}
@@ -372,7 +376,12 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	n := crit.FromBlock.Int64()
 	go func() {
 		// do historical sync first
-		if err := filterHistLogs(n); err != nil {
+		head, err := filterHistLogs(n)
+		if err != nil {
+			return
+		}
+		// if toBlock is limited and handled, no need to subscribe live logs anymore
+		if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(big.NewInt(head)) <= 0 {
 			return
 		}
 		// then subscribe from the header
