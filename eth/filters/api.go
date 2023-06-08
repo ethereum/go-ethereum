@@ -275,6 +275,9 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	)
 
 	syncHistLogs := func(n int64) error {
+		// the ctx will be canceled after this function is called
+		// and we are run in a background goroutine, use a new context instead
+		cctx := context.Background()
 		for {
 			// get the latest block header
 			head := api.sys.backend.CurrentHeader().Number.Int64()
@@ -284,7 +287,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 
 			// do historical sync from n to head
 			f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
-			logChan, errChan := f.rangeLogsAsync(ctx)
+			logChan, errChan := f.rangeLogsAsync(cctx)
 
 			// subscribe rmLogs
 			query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
