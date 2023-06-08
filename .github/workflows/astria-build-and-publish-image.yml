@@ -57,9 +57,12 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
+          # this gets rid of the unknown/unknown image that is created without this setting
+          # https://github.com/docker/build-push-action/issues/820#issuecomment-1455687416
+          provenance: false
           context: .
           # It takes a long time to build the arm image right now, so we only build it on tags which is what we use for releases, or on merges to the default branch.
-          platforms: ${{ (contains(github.ref, 'refs/tags/v') || github.ref == join('refs/heads/', github.event.repository.default_branch)) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          platforms: ${{ (contains(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/astria') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
