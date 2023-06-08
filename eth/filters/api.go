@@ -299,8 +299,12 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		return nil
 	}
 
+	isLiveFilter := true
+	if crit.FromBlock != nil {
+		isLiveFilter = crit.FromBlock.Sign() < 0
+	}
 	// do live filter only
-	if crit.FromBlock == nil {
+	if isLiveFilter {
 		err := filterLiveLogs()
 		return rpcSub, err
 	}
@@ -346,11 +350,11 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 						}
 					}
 				case err := <-errChan:
+					// range filter is done or error, let's also stop the rmLogs subscribe
+					rmLogsSub.Unsubscribe()
 					if err != nil {
 						return err
 					}
-					// range filter is done, let's also stop the rmLogs subscribe
-					rmLogsSub.Unsubscribe()
 					break FORLOOP
 				}
 			}
