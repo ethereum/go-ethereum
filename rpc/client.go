@@ -47,12 +47,6 @@ const (
 	subscribeTimeout   = 10 * time.Second // overall timeout eth_subscribe, rpc_modules calls
 )
 
-// Batch limits
-const (
-	DefaultBatchRequestLimit    = 1000             // Maximum number of items in a batch.
-	DefaultBatchResponseMaxSize = 25 * 1000 * 1000 // Maximum number of bytes returned from calls.
-)
-
 const (
 	// Subscriptions are removed when the subscriber cannot keep up.
 	//
@@ -268,12 +262,6 @@ func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) 
 	// Set defaults.
 	if c.idgen == nil {
 		c.idgen = randomIDGenerator()
-	}
-	if c.batchItemLimit == 0 {
-		c.batchItemLimit = DefaultBatchRequestLimit
-	}
-	if c.batchResponseMaxSize == 0 {
-		c.batchResponseMaxSize = DefaultBatchResponseMaxSize
 	}
 
 	// Launch the main loop.

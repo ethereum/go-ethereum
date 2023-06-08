@@ -721,13 +721,13 @@ var (
 	BatchRequestLimit = &cli.IntFlag{
 		Name:     "rpc.batch-request-limit",
 		Usage:    "Maximum number of requests in a batch",
-		Value:    rpc.DefaultBatchRequestLimit,
+		Value:    node.DefaultConfig.BatchRequestLimit,
 		Category: flags.APICategory,
 	}
 	BatchResponseMaxSize = &cli.IntFlag{
 		Name:     "rpc.batch-response-max-size",
 		Usage:    "Maximum number of bytes returned from a batched call",
-		Value:    rpc.DefaultBatchResponseMaxSize,
+		Value:    node.DefaultConfig.BatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
 	EnablePersonal = &cli.BoolFlag{
