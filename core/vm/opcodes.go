@@ -119,7 +119,7 @@ const (
 	JUMPDEST OpCode = 0x5b
 	TLOAD    OpCode = 0x5c
 	TSTORE   OpCode = 0x5d
-	MCOPY    OpCode = 0x5c
+	MCOPY    OpCode = 0x5e
 	PUSH0    OpCode = 0x5f
 )
 
