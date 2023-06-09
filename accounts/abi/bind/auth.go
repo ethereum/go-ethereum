@@ -44,17 +44,14 @@ var ErrNotAuthorized = errors.New("not authorized to sign this account")
 // Deprecated: Use NewTransactorWithChainID instead.
 func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	log.Warn("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
-
 	json, err := io.ReadAll(keyin)
 	if err != nil {
 		return nil, err
 	}
-
 	key, err := keystore.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}
-
 	return NewKeyedTransactor(key.PrivateKey), nil
 }
 

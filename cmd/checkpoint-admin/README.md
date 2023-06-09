@@ -46,7 +46,7 @@ Deploy checkpoint oracle contract. `--signers` indicates the specified trusted s
 checkpoint-admin deploy --rpc <NODE_RPC_ENDPOINT> --clef <CLEF_ENDPOINT> --signer <SIGNER_TO_SIGN_TX> --signers <TRUSTED_SIGNER_LIST> --threshold 1
 ```
 
-It is worth noting that checkpoint-admin only supports clef as a signer for transactions and plain text(checkpoint). For more clef usage, please see the clef [tutorial](https://geth.ethereum.org/docs/clef/tutorial) .
+It is worth noting that checkpoint-admin only supports clef as a signer for transactions and plain text(checkpoint). For more clef usage, please see the clef [tutorial](https://geth.ethereum.org/docs/tools/clef/tutorial) .
 
 #### Sign
 
@@ -86,7 +86,7 @@ checkpoint-admin status --rpc <NODE_RPC_ENDPOINT>
 
 ### Enable checkpoint oracle in your private network
 
-Currently, only the Ethereum mainnet and the default supported test networks (ropsten, rinkeby, goerli) activate this feature. If you want to activate this feature in your private network, you can overwrite the relevant checkpoint oracle settings through the configuration file after deploying the oracle contract.
+Currently, only the Ethereum mainnet and the default supported test networks (rinkeby, goerli) activate this feature. If you want to activate this feature in your private network, you can overwrite the relevant checkpoint oracle settings through the configuration file after deploying the oracle contract.
 
 * Get your node configuration file `geth dumpconfig OTHER_COMMAND_LINE_OPTIONS > config.toml`
 * Edit the configuration file and add the following information

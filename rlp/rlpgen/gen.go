@@ -1,3 +1,19 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -267,7 +283,7 @@ func (op byteArrayOp) genDecode(ctx *genContext) (string, string) {
 	return resultV, b.String()
 }
 
-// bigIntNoPtrOp handles non-pointer big.Int.
+// bigIntOp handles big.Int.
 // This exists because big.Int has it's own decoder operation on rlp.Stream,
 // but the decode method returns *big.Int, so it needs to be dereferenced.
 type bigIntOp struct {
@@ -310,6 +326,49 @@ func (op bigIntOp) genDecode(ctx *genContext) (string, string) {
 	result := resultV
 	if !op.pointer {
 		result = "(*" + resultV + ")"
+	}
+	return result, b.String()
+}
+
+// uint256Op handles "github.com/holiman/uint256".Int
+type uint256Op struct {
+	pointer bool
+}
+
+func (op uint256Op) genWrite(ctx *genContext, v string) string {
+	var b bytes.Buffer
+
+	dst := v
+	if !op.pointer {
+		dst = "&" + v
+	}
+	fmt.Fprintf(&b, "w.WriteUint256(%s)\n", dst)
+
+	// Wrap with nil check.
+	if op.pointer {
+		code := b.String()
+		b.Reset()
+		fmt.Fprintf(&b, "if %s == nil {\n", v)
+		fmt.Fprintf(&b, "  w.Write(rlp.EmptyString)")
+		fmt.Fprintf(&b, "} else {\n")
+		fmt.Fprint(&b, code)
+		fmt.Fprintf(&b, "}\n")
+	}
+
+	return b.String()
+}
+
+func (op uint256Op) genDecode(ctx *genContext) (string, string) {
+	ctx.addImport("github.com/holiman/uint256")
+
+	var b bytes.Buffer
+	resultV := ctx.temp()
+	fmt.Fprintf(&b, "var %s uint256.Int\n", resultV)
+	fmt.Fprintf(&b, "if err := dec.ReadUint256(&%s); err != nil { return err }\n", resultV)
+
+	result := resultV
+	if op.pointer {
+		result = "&" + resultV
 	}
 	return result, b.String()
 }
@@ -619,6 +678,9 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
 		}
+		if isUint256(typ) {
+			return uint256Op{}, nil
+		}
 		if typ == bctx.rawValueType {
 			return bctx.makeRawValueOp(), nil
 		}
@@ -630,6 +692,9 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 	case *types.Pointer:
 		if isBigInt(typ.Elem()) {
 			return bigIntOp{pointer: true}, nil
+		}
+		if isUint256(typ.Elem()) {
+			return uint256Op{pointer: true}, nil
 		}
 		// Encoder/Decoder interfaces.
 		if bctx.isEncoder(typ) {

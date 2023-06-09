@@ -154,7 +154,7 @@ func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byt
 	return i1, v1, i2, v2, i3, v3
 }
 
-// BloomLookup is a convenience-method to check presence int he bloom filter
+// BloomLookup is a convenience-method to check presence in the bloom filter
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	return bin.Test(topic.Bytes())
 }

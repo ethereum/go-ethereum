@@ -20,14 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var gethPubKeys []string = []string{
@@ -112,14 +113,14 @@ func checkCurrent(url, current string) error {
 // fetch makes an HTTP request to the given url and returns the response body
 func fetch(url string) ([]byte, error) {
 	if filep := strings.TrimPrefix(url, "file://"); filep != url {
-		return ioutil.ReadFile(filep)
+		return os.ReadFile(filep)
 	}
 	res, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}

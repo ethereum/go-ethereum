@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -269,9 +270,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
-	txpoolConfig := core.DefaultTxPoolConfig
+	txpoolConfig := txpool.DefaultConfig
 	txpoolConfig.Journal = ""
-	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
+	txpool := txpool.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
 	if indexers != nil {
 		checkpointConfig := &params.CheckpointOracleConfig{
 			Address:   crypto.CreateAddress(bankAddr, 0),
@@ -488,7 +489,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		head    = client.handler.backend.blockchain.CurrentHeader()
 		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
 	// Ensure the connection is established or exits when any error occurs
@@ -552,7 +553,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		head    = server.handler.blockchain.CurrentHeader()
 		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs

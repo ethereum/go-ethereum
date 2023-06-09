@@ -35,10 +35,15 @@ import (
 )
 
 var (
-	testdb       = rawdb.NewMemoryDatabase()
-	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
-	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
+	testdb      = rawdb.NewMemoryDatabase()
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
+
+	gspec = core.Genesis{
+		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	genesis      = gspec.MustCommit(testdb)
 	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 

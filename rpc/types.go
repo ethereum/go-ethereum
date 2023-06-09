@@ -31,9 +31,9 @@ import (
 // API describes the set of methods offered over the RPC interface
 type API struct {
 	Namespace     string      // namespace under which the rpc methods of Service are exposed
-	Version       string      // api version for DApp's
+	Version       string      // deprecated - this field is no longer used, but retained for compatibility
 	Service       interface{} // receiver instance which holds the methods
-	Public        bool        // indication if the methods must be considered safe for public use
+	Public        bool        // deprecated - this field is no longer used, but retained for compatibility
 	Authenticated bool        // whether the api should only be available behind authentication.
 }
 
@@ -51,7 +51,9 @@ type ServerCodec interface {
 // jsonWriter can write JSON messages to its underlying connection.
 // Implementations must be safe for concurrent use.
 type jsonWriter interface {
-	writeJSON(context.Context, interface{}) error
+	// writeJSON writes a message to the connection.
+	writeJSON(ctx context.Context, msg interface{}, isError bool) error
+
 	// Closed returns a channel which is closed when the connection is closed.
 	closed() <-chan interface{}
 	// RemoteAddr returns the peer address of the connection.
@@ -69,7 +71,7 @@ const (
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "latest", "earliest" or "pending" as string arguments
+// - "safe", "finalized", "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -90,6 +92,12 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case "pending":
 		*bn = PendingBlockNumber
 		return nil
+	case "finalized":
+		*bn = FinalizedBlockNumber
+		return nil
+	case "safe":
+		*bn = SafeBlockNumber
+		return nil
 	}
 
 	blckNum, err := hexutil.DecodeUint64(input)
@@ -104,7 +112,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalText implements encoding.TextMarshaler. It marshals:
-// - "latest", "earliest" or "pending" as strings
+// - "safe", "finalized", "latest", "earliest" or "pending" as strings
 // - other numbers as hex
 func (bn BlockNumber) MarshalText() ([]byte, error) {
 	switch bn {
@@ -114,6 +122,10 @@ func (bn BlockNumber) MarshalText() ([]byte, error) {
 		return []byte("latest"), nil
 	case PendingBlockNumber:
 		return []byte("pending"), nil
+	case FinalizedBlockNumber:
+		return []byte("finalized"), nil
+	case SafeBlockNumber:
+		return []byte("safe"), nil
 	default:
 		return hexutil.Uint64(bn).MarshalText()
 	}
@@ -158,6 +170,14 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		return nil
 	case "pending":
 		bn := PendingBlockNumber
+		bnh.BlockNumber = &bn
+		return nil
+	case "finalized":
+		bn := FinalizedBlockNumber
+		bnh.BlockNumber = &bn
+		return nil
+	case "safe":
+		bn := SafeBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
 	default:

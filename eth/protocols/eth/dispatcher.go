@@ -203,7 +203,7 @@ func (p *Peer) dispatcher() {
 			}
 
 		case cancelOp := <-p.reqCancel:
-			// Retrieve the pendign request to cancel and short circuit if it
+			// Retrieve the pending request to cancel and short circuit if it
 			// has already been serviced and is not available anymore
 			req := pending[cancelOp.id]
 			if req == nil {
@@ -224,7 +224,7 @@ func (p *Peer) dispatcher() {
 			switch {
 			case res.Req == nil:
 				// Response arrived with an untracked ID. Since even cancelled
-				// requests are tracked until fulfilment, a dangling repsponse
+				// requests are tracked until fulfilment, a dangling response
 				// means the remote peer implements the protocol badly.
 				resOp.fail <- errDanglingResponse
 

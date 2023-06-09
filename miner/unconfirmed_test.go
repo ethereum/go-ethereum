@@ -78,7 +78,7 @@ func TestUnconfirmedShifts(t *testing.T) {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, limit/2)
 	}
 
-	// Try to shift all the remaining blocks out and verify emptyness
+	// Try to shift all the remaining blocks out and verify emptiness
 	pool.Shift(start + 2*uint64(limit))
 
 	if n := pool.blocks.Len(); n != 0 {

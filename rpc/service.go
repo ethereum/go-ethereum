@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -199,7 +198,7 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
 			log.Error("RPC method " + method + " crashed: " + fmt.Sprintf("%v\n%s", err, buf))
-			errRes = errors.New("method handler crashed")
+			errRes = &internalServerError{errcodePanic, "method handler crashed"}
 		}
 	}()
 	// Run the callback.

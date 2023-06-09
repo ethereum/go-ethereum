@@ -60,6 +60,8 @@ const (
 
 	// chain2HeadChanSize is the size of channel listening to Chain2HeadEvent.
 	chain2HeadChanSize = 10
+
+	messageSizeLimit = 15 * 1024 * 1024
 )
 
 // backend encompasses the bare-minimum functionality needed for ethstats reporting
@@ -125,13 +127,17 @@ type Service struct {
 // websocket.
 //
 // From Gorilla websocket docs:
-//   Connections support one concurrent reader and one concurrent writer.
-//   Applications are responsible for ensuring that no more than one goroutine calls the write methods
-//     - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
-//   concurrently and that no more than one goroutine calls the read methods
-//     - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
-//   concurrently.
-//   The Close and WriteControl methods can be called concurrently with all other methods.
+//
+// Connections support one concurrent reader and one concurrent writer. Applications are
+// responsible for ensuring that
+//   - no more than one goroutine calls the write methods
+//     NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression,
+//     SetCompressionLevel concurrently; and
+//   - that no more than one goroutine calls the
+//     read methods NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler,
+//     SetPingHandler concurrently.
+//
+// The Close and WriteControl methods can be called concurrently with all other methods.
 type connWrapper struct {
 	conn *websocket.Conn
 
@@ -140,6 +146,7 @@ type connWrapper struct {
 }
 
 func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
+	conn.SetReadLimit(messageSizeLimit)
 	return &connWrapper{conn: conn}
 }
 
@@ -405,7 +412,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 		// If the network packet is a system ping, respond to it directly
 		var ping string
 		if err := json.Unmarshal(blob, &ping); err == nil && strings.HasPrefix(ping, "primus::ping::") {
-			if err := conn.WriteJSON(strings.Replace(ping, "ping", "pong", -1)); err != nil {
+			if err := conn.WriteJSON(strings.ReplaceAll(ping, "ping", "pong")); err != nil {
 				log.Warn("Failed to respond to system ping message", "err", err)
 				return
 			}

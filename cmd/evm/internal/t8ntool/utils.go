@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // readFile reads the json-data in the provided path and marshals into dest.

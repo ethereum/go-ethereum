@@ -1,3 +1,19 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -8,7 +24,6 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +47,7 @@ func init() {
 	}
 }
 
-var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint"}
+var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256"}
 
 func TestOutput(t *testing.T) {
 	for _, test := range tests {
@@ -51,16 +66,16 @@ func TestOutput(t *testing.T) {
 
 			// Set this environment variable to regenerate the test outputs.
 			if os.Getenv("WRITE_TEST_FILES") != "" {
-				ioutil.WriteFile(outputFile, output, 0644)
+				os.WriteFile(outputFile, output, 0644)
 			}
 
 			// Check if output matches.
-			wantOutput, err := ioutil.ReadFile(outputFile)
+			wantOutput, err := os.ReadFile(outputFile)
 			if err != nil {
 				t.Fatal("error loading expected test output:", err)
 			}
 			if !bytes.Equal(output, wantOutput) {
-				t.Fatal("output mismatch:\n", string(output))
+				t.Fatalf("output mismatch, want: %v got %v", string(wantOutput), string(output))
 			}
 		})
 	}
@@ -68,7 +83,7 @@ func TestOutput(t *testing.T) {
 
 func loadTestSource(file string, typeName string) (*buildContext, *types.Named, error) {
 	// Load the test input.
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		return nil, nil, err
 	}

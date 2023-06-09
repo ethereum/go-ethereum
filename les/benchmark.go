@@ -17,6 +17,7 @@
 package les
 
 import (
+	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -114,7 +115,7 @@ func (b *benchmarkProofsOrCode) init(h *serverHandler, count int) error {
 
 func (b *benchmarkProofsOrCode) request(peer *serverPeer, index int) error {
 	key := make([]byte, 32)
-	rand.Read(key)
+	crand.Read(key)
 	if b.code {
 		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
 	}
@@ -176,7 +177,7 @@ func (b *benchmarkTxSend) init(h *serverHandler, count int) error {
 
 	for i := range b.txs {
 		data := make([]byte, txSizeCostLimit)
-		rand.Read(data)
+		crand.Read(data)
 		tx, err := types.SignTx(types.NewTransaction(0, addr, new(big.Int), 0, new(big.Int), data), signer, key)
 		if err != nil {
 			panic(err)
@@ -200,7 +201,7 @@ func (b *benchmarkTxStatus) init(h *serverHandler, count int) error {
 
 func (b *benchmarkTxStatus) request(peer *serverPeer, index int) error {
 	var hash common.Hash
-	rand.Read(hash[:])
+	crand.Read(hash[:])
 	return peer.requestTxStatus(0, []common.Hash{hash})
 }
 
@@ -278,7 +279,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	clientMeteredPipe := &meteredPipe{rw: clientPipe}
 	serverMeteredPipe := &meteredPipe{rw: serverPipe}
 	var id enode.ID
-	rand.Read(id[:])
+	crand.Read(id[:])
 
 	peer1 := newServerPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
 	peer2 := newClientPeer(lpv2, NetworkId, p2p.NewPeer(id, "server", nil), serverMeteredPipe)

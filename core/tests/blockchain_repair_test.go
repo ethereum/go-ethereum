@@ -21,9 +21,7 @@
 package tests
 
 import (
-	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -575,7 +573,7 @@ func testShortReorgedSnapSyncingRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks where a recent
 // block - newer than the ancient limit - was already committed to disk and then
 // the process crashed. In this case we expect the chain to be rolled back to the
-// committed block, with everything afterwads kept as fast sync data.
+// committed block, with everything afterwards kept as fast sync data.
 func TestLongShallowRepair(t *testing.T)              { testLongShallowRepair(t, false) }
 func TestLongShallowRepairWithSnapshots(t *testing.T) { testLongShallowRepair(t, true) }
 
@@ -620,7 +618,7 @@ func testLongShallowRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks where a recent
 // block - older than the ancient limit - was already committed to disk and then
 // the process crashed. In this case we expect the chain to be rolled back to the
-// committed block, with everything afterwads deleted.
+// committed block, with everything afterwards deleted.
 func TestLongDeepRepair(t *testing.T)              { testLongDeepRepair(t, false) }
 func TestLongDeepRepairWithSnapshots(t *testing.T) { testLongDeepRepair(t, true) }
 
@@ -664,7 +662,7 @@ func testLongDeepRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
 // sync pivot point - newer than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
-// to the committed block, with everything afterwads kept as fast sync data.
+// to the committed block, with everything afterwards kept as fast sync data.
 func TestLongSnapSyncedShallowRepair(t *testing.T) {
 	testLongSnapSyncedShallowRepair(t, false)
 }
@@ -713,7 +711,7 @@ func testLongSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks where the fast
 // sync pivot point - older than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
-// to the committed block, with everything afterwads deleted.
+// to the committed block, with everything afterwards deleted.
 func TestLongSnapSyncedDeepRepair(t *testing.T)              { testLongSnapSyncedDeepRepair(t, false) }
 func TestLongSnapSyncedDeepRepairWithSnapshots(t *testing.T) { testLongSnapSyncedDeepRepair(t, true) }
 
@@ -854,7 +852,7 @@ func testLongSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
 // side chain, where a recent block - newer than the ancient limit - was already
 // committed to disk and then the process crashed. In this test scenario the side
 // chain is below the committed block. In this case we expect the chain to be
-// rolled back to the committed block, with everything afterwads kept as fast
+// rolled back to the committed block, with everything afterwards kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongOldForkedShallowRepair(t *testing.T) {
 	testLongOldForkedShallowRepair(t, false)
@@ -906,7 +904,7 @@ func testLongOldForkedShallowRepair(t *testing.T, snapshots bool) {
 // side chain, where a recent block - older than the ancient limit - was already
 // committed to disk and then the process crashed. In this test scenario the side
 // chain is below the committed block. In this case we expect the canonical chain
-// to be rolled back to the committed block, with everything afterwads deleted;
+// to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedDeepRepair(t *testing.T)              { testLongOldForkedDeepRepair(t, false) }
 func TestLongOldForkedDeepRepairWithSnapshots(t *testing.T) { testLongOldForkedDeepRepair(t, true) }
@@ -953,7 +951,7 @@ func testLongOldForkedDeepRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was already committed to disk and then the process crashed. In this test scenario
 // the side chain is below the committed block. In this case we expect the chain
-// to be rolled back to the committed block, with everything afterwads kept as
+// to be rolled back to the committed block, with everything afterwards kept as
 // fast sync data; the side chain completely nuked by the freezer.
 func TestLongOldForkedSnapSyncedShallowRepair(t *testing.T) {
 	testLongOldForkedSnapSyncedShallowRepair(t, false)
@@ -1005,7 +1003,7 @@ func testLongOldForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already committed to disk and then the process crashed. In this test scenario
 // the side chain is below the committed block. In this case we expect the canonical
-// chain to be rolled back to the committed block, with everything afterwads deleted;
+// chain to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedSnapSyncedDeepRepair(t *testing.T) {
 	testLongOldForkedSnapSyncedDeepRepair(t, false)
@@ -1160,7 +1158,7 @@ func testLongOldForkedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
 // side chain, where a recent block - newer than the ancient limit - was already
 // committed to disk and then the process crashed. In this test scenario the side
 // chain is above the committed block. In this case we expect the chain to be
-// rolled back to the committed block, with everything afterwads kept as fast
+// rolled back to the committed block, with everything afterwards kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongNewerForkedShallowRepair(t *testing.T) {
 	testLongNewerForkedShallowRepair(t, false)
@@ -1212,7 +1210,7 @@ func testLongNewerForkedShallowRepair(t *testing.T, snapshots bool) {
 // side chain, where a recent block - older than the ancient limit - was already
 // committed to disk and then the process crashed. In this test scenario the side
 // chain is above the committed block. In this case we expect the canonical chain
-// to be rolled back to the committed block, with everything afterwads deleted;
+// to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedDeepRepair(t *testing.T)              { testLongNewerForkedDeepRepair(t, false) }
 func TestLongNewerForkedDeepRepairWithSnapshots(t *testing.T) { testLongNewerForkedDeepRepair(t, true) }
@@ -1259,7 +1257,7 @@ func testLongNewerForkedDeepRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was already committed to disk and then the process crashed. In this test scenario
 // the side chain is above the committed block. In this case we expect the chain
-// to be rolled back to the committed block, with everything afterwads kept as fast
+// to be rolled back to the committed block, with everything afterwards kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongNewerForkedSnapSyncedShallowRepair(t *testing.T) {
 	testLongNewerForkedSnapSyncedShallowRepair(t, false)
@@ -1311,7 +1309,7 @@ func testLongNewerForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already committed to disk and then the process crashed. In this test scenario
 // the side chain is above the committed block. In this case we expect the canonical
-// chain to be rolled back to the committed block, with everything afterwads deleted;
+// chain to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedSnapSyncedDeepRepair(t *testing.T) {
 	testLongNewerForkedSnapSyncedDeepRepair(t, false)
@@ -1465,7 +1463,7 @@ func testLongNewerForkedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks and a longer side
 // chain, where a recent block - newer than the ancient limit - was already committed
 // to disk and then the process crashed. In this case we expect the chain to be
-// rolled back to the committed block, with everything afterwads kept as fast sync
+// rolled back to the committed block, with everything afterwards kept as fast sync
 // data. The side chain completely nuked by the freezer.
 func TestLongReorgedShallowRepair(t *testing.T)              { testLongReorgedShallowRepair(t, false) }
 func TestLongReorgedShallowRepairWithSnapshots(t *testing.T) { testLongReorgedShallowRepair(t, true) }
@@ -1512,7 +1510,7 @@ func testLongReorgedShallowRepair(t *testing.T, snapshots bool) {
 // Tests a recovery for a long canonical chain with frozen blocks and a longer side
 // chain, where a recent block - older than the ancient limit - was already committed
 // to disk and then the process crashed. In this case we expect the canonical chains
-// to be rolled back to the committed block, with everything afterwads deleted. The
+// to be rolled back to the committed block, with everything afterwards deleted. The
 // side chain completely nuked by the freezer.
 func TestLongReorgedDeepRepair(t *testing.T)              { testLongReorgedDeepRepair(t, false) }
 func TestLongReorgedDeepRepairWithSnapshots(t *testing.T) { testLongReorgedDeepRepair(t, true) }
@@ -1559,7 +1557,7 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - newer than the ancient limit -
 // was already committed to disk and then the process crashed. In this case we
 // expect the chain to be rolled back to the committed block, with everything
-// afterwads kept as fast sync data. The side chain completely nuked by the
+// afterwards kept as fast sync data. The side chain completely nuked by the
 // freezer.
 func TestLongReorgedSnapSyncedShallowRepair(t *testing.T) {
 	testLongReorgedSnapSyncedShallowRepair(t, false)
@@ -1611,7 +1609,7 @@ func testLongReorgedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // side chain, where the fast sync pivot point - older than the ancient limit -
 // was already committed to disk and then the process crashed. In this case we
 // expect the canonical chains to be rolled back to the committed block, with
-// everything afterwads deleted. The side chain completely nuked by the freezer.
+// everything afterwards deleted. The side chain completely nuked by the freezer.
 func TestLongReorgedSnapSyncedDeepRepair(t *testing.T) {
 	testLongReorgedSnapSyncedDeepRepair(t, false)
 }
@@ -1775,13 +1773,12 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// fmt.Println(tt.dump(true))
 
 	// Create a temporary persistent database
-	datadir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary datadir: %v", err)
-	}
-	os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -1851,7 +1848,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		err = back.BlockChain().StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		err = back.BlockChain().StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true)
 		if err != nil {
 			t.Fatal("on trieDB.Commit", err)
 		}
@@ -1882,9 +1879,14 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	db, err = rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
+
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
@@ -1908,12 +1910,12 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
 
-	if head := newChain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
+	if head := newChain.CurrentSnapBlock(); head.Number.Uint64() != tt.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, tt.expHeadFastBlock)
 	}
 
-	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
+	if head := newChain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
 
 	if frozen, err := db.(freezer).Ancients(); err != nil {
@@ -1942,25 +1944,26 @@ func TestIssue23496(t *testing.T) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Create a temporary persistent database
-	datadir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary datadir: %v", err)
-	}
+	datadir := t.TempDir()
 
-	os.RemoveAll(datadir)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
-
 	defer db.Close() // Might double close, should be fine
 
 	// Initialize a fresh chain
 	var (
-		genesis = (&core.Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
-		engine  = ethash.NewFullFaker()
-		config  = &core.CacheConfig{
+		gspec = &Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		engine = ethash.NewFullFaker()
+		config = &CacheConfig{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
@@ -1968,13 +1971,11 @@ func TestIssue23496(t *testing.T) {
 			SnapshotWait:   true,
 		}
 	)
-
-	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
-
-	blocks, _ := core.GenerateChain(params.TestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), 4, func(i int, b *core.BlockGen) {
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 4, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
 	})
@@ -1983,18 +1984,15 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-
 	err = chain.StateCache().TrieDB().Commit(blocks[0].Root(), true, nil)
 	if err != nil {
 		t.Fatal("on trieDB.Commit", err)
 	}
-
 	// Insert block B2 and commit the snapshot into disk
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-
-	if err := chain.Snaps().Cap(blocks[1].Root(), 0); err != nil {
+	if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
 		t.Fatalf("Failed to flatten snapshots: %v", err)
 	}
 
@@ -2002,64 +2000,60 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-
-	err = chain.StateCache().TrieDB().Commit(blocks[2].Root(), true, nil)
-	if err != nil {
-		t.Fatal("on trieDB.Commit", err)
-	}
+	chain.stateCache.TrieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 
+	err = chain.StateCache().TrieDB().Commit(blocks[2].Root(), true, nil)
+	if err != nil {
+		t.Fatal("on trieDB.Commit", err)
+	}
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	db, err = rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
-
 	defer db.Close()
 
-	chain, err = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
+	chain, err = NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
 	defer chain.Stop()
 
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(1) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(1))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(1) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(1))
 	}
 
 	// Reinsert B2-B4
 	if _, err := chain.InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
-
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-
 	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
 		t.Error("Failed to regenerate the snapshot of known state")
 	}

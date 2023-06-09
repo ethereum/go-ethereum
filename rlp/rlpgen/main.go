@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"os"
 
 	"golang.org/x/tools/go/packages"
@@ -60,10 +59,9 @@ func main() {
 			fmt.Println("path not verified: " + err.Error())
 			fatal(err)
 		}
-		if err := ioutil.WriteFile(canonicalPath, code, 0600); err != nil {
+		if err := os.WriteFile(canonicalPath, code, 0600); err != nil {
 			fatal(err)
 		}
-	}
 }
 
 func fatal(args ...interface{}) {
@@ -116,7 +114,7 @@ func (cfg *Config) process() (code []byte, err error) {
 	// Find the type and generate.
 	typ, err := lookupStructType(pkg.Scope(), cfg.Type)
 	if err != nil {
-		return nil, fmt.Errorf("can't find %s in %s: %v", typ, pkg, err)
+		return nil, fmt.Errorf("can't find %s in %s: %v", cfg.Type, pkg, err)
 	}
 	code, err = bctx.generate(typ, cfg.GenerateEncoder, cfg.GenerateDecoder)
 	if err != nil {

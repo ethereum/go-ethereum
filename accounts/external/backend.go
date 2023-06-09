@@ -152,10 +152,6 @@ func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain eth
 	log.Error("operation SelfDerive not supported on external signers")
 }
 
-func (api *ExternalSigner) signHash(account accounts.Account, hash []byte) ([]byte, error) {
-	return []byte{}, fmt.Errorf("operation not supported on external signers")
-}
-
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	var res hexutil.Bytes

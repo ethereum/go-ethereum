@@ -233,7 +233,7 @@ func (vt *ValueTracker) StatsExpirer() *utils.Expirer {
 	return &vt.statsExpirer
 }
 
-// StatsExpirer returns the current expiration factor so that other values can be expired
+// StatsExpFactor returns the current expiration factor so that other values can be expired
 // with the same rate as the service value statistics.
 func (vt *ValueTracker) StatsExpFactor() utils.ExpirationFactor {
 	vt.statsExpLock.RLock()

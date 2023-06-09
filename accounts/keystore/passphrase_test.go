@@ -17,7 +17,7 @@
 package keystore
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +30,7 @@ const (
 
 // Tests that a json key file can be decrypted and encrypted in multiple rounds.
 func TestKeyEncryptDecrypt(t *testing.T) {
-	keyjson, err := ioutil.ReadFile("testdata/very-light-scrypt.json")
+	keyjson, err := os.ReadFile("testdata/very-light-scrypt.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestKeyEncryptDecrypt(t *testing.T) {
 			t.Errorf("test %d: key address mismatch: have %x, want %x", i, key.Address, address)
 		}
 		// Recrypt with a new password and start over
-		password += "new data appended"
+		password += "new data appended" // nolint: gosec
 		if keyjson, err = EncryptKey(key, password, veryLightScryptN, veryLightScryptP); err != nil {
 			t.Errorf("test %d: failed to recrypt key %v", i, err)
 		}

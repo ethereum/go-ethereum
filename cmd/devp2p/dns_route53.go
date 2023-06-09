@@ -32,7 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -45,21 +45,21 @@ const (
 )
 
 var (
-	route53AccessKeyFlag = cli.StringFlag{
-		Name:   "access-key-id",
-		Usage:  "AWS Access Key ID",
-		EnvVar: "AWS_ACCESS_KEY_ID",
+	route53AccessKeyFlag = &cli.StringFlag{
+		Name:    "access-key-id",
+		Usage:   "AWS Access Key ID",
+		EnvVars: []string{"AWS_ACCESS_KEY_ID"},
 	}
-	route53AccessSecretFlag = cli.StringFlag{
-		Name:   "access-key-secret",
-		Usage:  "AWS Access Key Secret",
-		EnvVar: "AWS_SECRET_ACCESS_KEY",
+	route53AccessSecretFlag = &cli.StringFlag{
+		Name:    "access-key-secret",
+		Usage:   "AWS Access Key Secret",
+		EnvVars: []string{"AWS_SECRET_ACCESS_KEY"},
 	}
-	route53ZoneIDFlag = cli.StringFlag{
+	route53ZoneIDFlag = &cli.StringFlag{
 		Name:  "zone-id",
 		Usage: "Route53 Zone ID",
 	}
-	route53RegionFlag = cli.StringFlag{
+	route53RegionFlag = &cli.StringFlag{
 		Name:  "aws-region",
 		Usage: "AWS Region",
 		Value: "eu-central-1",
@@ -221,7 +221,13 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	}
 	records = lrecords
 
-	var changes []types.Change
+	var (
+		changes []types.Change
+		inserts int
+		upserts int
+		skips   int
+	)
+
 	for path, newValue := range records {
 		prevRecords, exists := existing[path]
 		prevValue := strings.Join(prevRecords.values, "")
@@ -237,20 +243,30 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %s", path, newValue))
+			log.Debug(fmt.Sprintf("Creating %s = %s", path, newValue))
 			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+			inserts++
 		} else if prevValue != newValue || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, newValue))
 			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
+			upserts++
 		} else {
 			log.Debug(fmt.Sprintf("Skipping %s = %s", path, newValue))
+			skips++
 		}
 	}
 
 	// Iterate over the old records and delete anything stale.
-	changes = append(changes, makeDeletionChanges(existing, records)...)
+	deletions := makeDeletionChanges(existing, records)
+	changes = append(changes, deletions...)
 
+	log.Info("Computed DNS changes",
+		"changes", len(changes),
+		"inserts", inserts,
+		"skips", skips,
+		"deleted", len(deletions),
+		"upserts", upserts)
 	// Ensure changes are in the correct order.
 	sortChanges(changes)
 	return changes
@@ -263,7 +279,7 @@ func makeDeletionChanges(records map[string]recordSet, keep map[string]string) [
 		if _, ok := keep[path]; ok {
 			continue
 		}
-		log.Info(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
+		log.Debug(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
 		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
 	return changes
@@ -329,8 +345,9 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
+	log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID)
 	for page := 0; ; page++ {
-		log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
+		log.Debug("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
 		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
 		if err != nil {
 			return existing, err
@@ -360,7 +377,7 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 		req.StartRecordName = resp.NextRecordName
 		req.StartRecordType = resp.NextRecordType
 	}
-
+	log.Info("Loaded existing TXT records", "name", name, "zone", c.zoneID, "records", len(existing))
 	return existing, nil
 }
 

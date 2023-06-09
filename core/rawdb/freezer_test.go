@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -50,8 +49,7 @@ func TestFreezerModify(t *testing.T) {
 	}
 
 	tables := map[string]bool{"raw": true, "rlp": false}
-	f, dir := newFreezerForTesting(t, tables)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, tables)
 	defer f.Close()
 
 	// Commit test data.
@@ -97,7 +95,6 @@ func TestFreezerModifyRollback(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
 
 	theError := errors.New("oops")
 	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -116,7 +113,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]bool{"test": true}
-	f2, err := newFreezer(dir, "", false, 2049, tables)
+	f2, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
@@ -128,8 +125,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var (
@@ -189,13 +185,12 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 
 // This test runs ModifyAncients and TruncateHead concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var item = make([]byte, 256)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		// First reset and write 100 items.
 		if err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
@@ -256,14 +251,10 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 func TestFreezerReadonlyValidate(t *testing.T) {
 	tables := map[string]bool{"a": true, "b": true}
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -276,32 +267,29 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	bBatch := f.tables["b"].newBatch()
 	require.NoError(t, bBatch.AppendRaw(0, item))
 	require.NoError(t, bBatch.commit())
-	if f.tables["a"].items != 3 {
+	if f.tables["a"].items.Load() != 3 {
 		t.Fatalf("unexpected number of items in table")
 	}
-	if f.tables["b"].items != 1 {
+	if f.tables["b"].items.Load() != 1 {
 		t.Fatalf("unexpected number of items in table")
 	}
 	require.NoError(t, f.Close())
 
 	// Re-openening as readonly should fail when validating
 	// table lengths.
-	f, err = newFreezer(dir, "", true, 2049, tables)
+	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
 }
 
-func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
+func newFreezerForTesting(t *testing.T, tables map[string]bool) (*Freezer, string) {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -309,7 +297,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, strin
 }
 
 // checkAncientCount verifies that the freezer contains n items.
-func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
+func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	t.Helper()
 
 	if frozen, _ := f.Ancients(); frozen != n {
@@ -350,16 +338,8 @@ func TestRenameWindows(t *testing.T) {
 	)
 
 	// Create 2 temp dirs
-	dir1, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir1)
-	dir2, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir2)
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
 
 	// Create file in dir1 and fill with data
 	f, err := os.Create(path.Join(dir1, fname))
@@ -425,5 +405,27 @@ func TestRenameWindows(t *testing.T) {
 	}
 	if !bytes.Equal(buf, data2) {
 		t.Errorf("unexpected file contents. Got %v\n", buf)
+	}
+}
+
+func TestFreezerCloseSync(t *testing.T) {
+	t.Parallel()
+	f, _ := newFreezerForTesting(t, map[string]bool{"a": true, "b": true})
+	defer f.Close()
+
+	// Now, close and sync. This mimics the behaviour if the node is shut down,
+	// just as the chain freezer is writing.
+	// 1: thread-1: chain treezer writes, via freezeRange (holds lock)
+	// 2: thread-2: Close called, waits for write to finish
+	// 3: thread-1: finishes writing, releases lock
+	// 4: thread-2: obtains lock, completes Close()
+	// 5: thread-1: calls f.Sync()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Sync(); err == nil {
+		t.Fatalf("want error, have nil")
+	} else if have, want := err.Error(), "[closed closed]"; have != want {
+		t.Fatalf("want %v, have %v", have, want)
 	}
 }

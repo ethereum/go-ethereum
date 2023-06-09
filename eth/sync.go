@@ -168,7 +168,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	// An alternative would be to check the local chain for exceeding the TTD and
 	// avoid triggering a sync in that case, but that could also miss sibling or
 	// other family TTD block being accepted.
-	if cs.handler.merger.TDDReached() {
+	if cs.handler.chain.Config().TerminalTotalDifficultyPassed || cs.handler.merger.TDDReached() {
 		return nil
 	}
 	// Ensure we're at minimum peer count.
@@ -215,7 +215,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 
 	// Handle full sync mode only
 	head := cs.handler.chain.CurrentBlock()
-	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
+	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	return downloader.FullSync, td
 
 	// TODO(snap): Uncomment when we have snap sync working
@@ -279,21 +279,23 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
 	head := h.chain.CurrentBlock()
-	if head.NumberU64() >= h.checkpointNumber {
+	if head.Number.Uint64() >= h.checkpointNumber {
 		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
 		// for non-checkpointed (number = 0) private networks.
-		if head.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
+		if head.Time >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
 			atomic.StoreUint32(&h.acceptTxs, 1)
 		}
 	}
-	if head.NumberU64() > 0 {
+	if head.Number.Uint64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify
 		// all its out-of-date peers of the availability of a new block. This failure
 		// scenario will most often crop up in private and hackathon networks with
 		// degenerate connectivity, but it should be healthy for the mainnet too to
 		// more reliably update peers or the local TD state.
-		h.BroadcastBlock(head, false)
+		if block := h.chain.GetBlock(head.Hash(), head.Number.Uint64()); block != nil {
+			h.BroadcastBlock(block, false)
+		}
 	}
 	return nil
 }

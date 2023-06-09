@@ -66,6 +66,7 @@ var DefaultConfig = Config{
 		NAT:           nat.Any(),
 		TxArrivalWait: 500 * time.Millisecond,
 	},
+	DBEngine: "",
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other

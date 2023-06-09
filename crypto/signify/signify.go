@@ -25,7 +25,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -68,7 +68,7 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
 	}
 
-	filedata, err := ioutil.ReadFile(input)
+	filedata, err := os.ReadFile(input)
 	if err != nil {
 		return err
 	}
@@ -96,5 +96,5 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(dataSig))
 	fmt.Fprintln(out, "trusted comment:", trustedComment)
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(commentSig))
-	return ioutil.WriteFile(output, out.Bytes(), 0644)
+	return os.WriteFile(output, out.Bytes(), 0644)
 }

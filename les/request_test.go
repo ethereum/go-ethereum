@@ -104,6 +104,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+
 				err := client.handler.backend.odr.Retrieve(ctx, req)
 				cancel()
 

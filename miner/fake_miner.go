@@ -1,7 +1,7 @@
 package miner
 
 import (
-	"errors"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"math/big"
 	"testing"
 	"time"
@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type DefaultBorMiner struct {
@@ -92,7 +91,7 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
-	pool := core.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
+	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
 	backend := NewMockBackend(bc, pool)
 
 	// Create event Mux
@@ -155,57 +154,9 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
 }
 
-type mockBackend struct {
-	bc     *core.BlockChain
-	txPool *core.TxPool
-}
-
-func NewMockBackend(bc *core.BlockChain, txPool *core.TxPool) *mockBackend {
-	return &mockBackend{
-		bc:     bc,
-		txPool: txPool,
-	}
-}
-
-func (m *mockBackend) BlockChain() *core.BlockChain {
-	return m.bc
-}
-
-func (m *mockBackend) TxPool() *core.TxPool {
-	return m.txPool
-}
-
-func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
-	return nil, errors.New("not supported")
-}
-
-type testBlockChain struct {
-	statedb       *state.StateDB
-	gasLimit      uint64
-	chainHeadFeed *event.Feed
-}
-
-func (bc *testBlockChain) CurrentBlock() *types.Block {
-	return types.NewBlock(&types.Header{
-		GasLimit: bc.gasLimit,
-	}, nil, nil, nil, trie.NewStackTrie(nil))
-}
-
-func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
-}
-
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
-	return bc.statedb, nil
-}
-
-func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return bc.chainHeadFeed.Subscribe(ch)
-}
-
 var (
 	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
+	testTxPoolConfig  txpool.Config
 	ethashChainConfig *params.ChainConfig
 	cliqueChainConfig *params.ChainConfig
 
@@ -229,7 +180,7 @@ var (
 )
 
 func init() {
-	testTxPoolConfig = core.DefaultTxPoolConfig
+	testTxPoolConfig = txpool.DefaultConfig
 	testTxPoolConfig.Journal = ""
 	ethashChainConfig = new(params.ChainConfig)
 	*ethashChainConfig = *params.TestChainConfig

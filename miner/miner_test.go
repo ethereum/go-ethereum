@@ -18,12 +18,72 @@
 package miner
 
 import (
+	"errors"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/trie"
 )
+
+type MockBackend struct {
+	bc     *core.BlockChain
+	txPool *txpool.TxPool
+}
+
+func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
+	return &MockBackend{
+		bc:     bc,
+		txPool: txPool,
+	}
+}
+
+func (m *MockBackend) BlockChain() *core.BlockChain {
+	return m.bc
+}
+
+func (m *MockBackend) TxPool() *txpool.TxPool {
+	return m.txPool
+}
+
+func (m *MockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
+
+type testBlockChain struct {
+	statedb       *state.StateDB
+	gasLimit      uint64
+	chainHeadFeed *event.Feed
+}
+
+func (bc *testBlockChain) CurrentBlock() *types.Header {
+	return &types.Header{
+		Number:   new(big.Int),
+		GasLimit: bc.gasLimit,
+	}
+}
+
+func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
+}
+
+func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+	return bc.statedb, nil
+}
+
+func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return bc.chainHeadFeed.Subscribe(ch)
+}
 
 func TestMiner(t *testing.T) {
 	t.Parallel()
@@ -37,7 +97,7 @@ func TestMiner(t *testing.T) {
 	miner := minerBor.Miner
 	mux := minerBor.Mux
 
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	// Start the downloader
@@ -76,7 +136,7 @@ func TestMinerDownloaderFirstFails(t *testing.T) {
 	miner := minerBor.Miner
 	mux := minerBor.Mux
 
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	// Start the downloader
@@ -118,7 +178,7 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 	miner := minerBor.Miner
 	mux := minerBor.Mux
 
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	// Start the downloader
@@ -132,7 +192,7 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 	miner.Stop()
 	waitForMiningState(t, miner, false)
 
-	miner.Start(common.HexToAddress("0x678910"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	miner.Stop()
@@ -152,7 +212,7 @@ func TestStartWhileDownload(t *testing.T) {
 	mux := minerBor.Mux
 
 	waitForMiningState(t, miner, false)
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	// Stop the downloader and wait for the update loop to run
@@ -160,7 +220,7 @@ func TestStartWhileDownload(t *testing.T) {
 	waitForMiningState(t, miner, false)
 
 	// Starting the miner after the downloader should not work
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 	waitForMiningState(t, miner, false)
 }
 
@@ -176,8 +236,7 @@ func TestStartStopMiner(t *testing.T) {
 	miner := minerBor.Miner
 
 	waitForMiningState(t, miner, false)
-	miner.Start(common.HexToAddress("0x12345"))
-
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	miner.Stop()
@@ -197,8 +256,9 @@ func TestCloseMiner(t *testing.T) {
 	miner := minerBor.Miner
 
 	waitForMiningState(t, miner, false)
+	miner.Start()
 
-	miner.Start(common.HexToAddress("0x12345"))
+	miner.Start()
 
 	waitForMiningState(t, miner, true)
 
@@ -223,7 +283,7 @@ func TestMinerSetEtherbase(t *testing.T) {
 	mux := minerBor.Mux
 
 	// Start with a 'bad' mining address
-	miner.Start(common.HexToAddress("0xdead"))
+	miner.Start()
 	waitForMiningState(t, miner, true)
 
 	// Start the downloader
@@ -231,16 +291,15 @@ func TestMinerSetEtherbase(t *testing.T) {
 	waitForMiningState(t, miner, false)
 
 	// Now user tries to configure proper mining address
-	miner.Start(common.HexToAddress("0x1337"))
-
+	miner.Start()
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
-
 	waitForMiningState(t, miner, true)
 
-	// The miner should now be using the good address
-	if got, exp := miner.coinbase, common.HexToAddress("0x1337"); got != exp {
-		t.Fatalf("Wrong coinbase, got %x expected %x", got, exp)
+	coinbase := common.HexToAddress("0xdeedbeef")
+	miner.SetEtherbase(coinbase)
+	if addr := miner.worker.etherbase(); addr != coinbase {
+		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
 	}
 }
 
@@ -257,6 +316,44 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 			return
 		}
 	}
-
 	t.Fatalf("Mining() == %t, want %t", state, mining)
+}
+
+func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
+	// Create Ethash config
+	config := Config{
+		Etherbase: common.HexToAddress("123456789"),
+	}
+	// Create chainConfig
+	chainDB := rawdb.NewMemoryDatabase()
+	genesis := core.DeveloperGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
+	if err != nil {
+		t.Fatalf("can't create new chain config: %v", err)
+	}
+	// Create consensus engine
+	engine := clique.New(chainConfig.Clique, chainDB)
+	// Create Ethereum backend
+	bc, err := core.NewBlockChain(chainDB, nil, genesis, nil, engine, vm.Config{}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("can't create new chain %v", err)
+	}
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
+	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
+
+	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
+	backend := NewMockBackend(bc, pool)
+	// Create event Mux
+	mux := new(event.TypeMux)
+	// Create Miner
+	miner := New(backend, &config, chainConfig, mux, engine, nil)
+	cleanup := func(skipMiner bool) {
+		bc.Stop()
+		engine.Close()
+		pool.Stop()
+		if !skipMiner {
+			miner.Close()
+		}
+	}
+	return miner, mux, cleanup
 }

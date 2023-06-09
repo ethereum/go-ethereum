@@ -1,10 +1,29 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
+	"encoding/binary"
 	"io"
 	"math/big"
 	"reflect"
 	"sync"
+
+	"github.com/holiman/uint256"
 )
 
 type encBuffer struct {
@@ -151,6 +170,23 @@ func (w *encBuffer) writeBigInt(i *big.Int) {
 			d >>= 8
 		}
 	}
+}
+
+// writeUint256 writes z as an integer.
+func (w *encBuffer) writeUint256(z *uint256.Int) {
+	bitlen := z.BitLen()
+	if bitlen <= 64 {
+		w.writeUint64(z.Uint64())
+		return
+	}
+	nBytes := byte((bitlen + 7) / 8)
+	var b [33]byte
+	binary.BigEndian.PutUint64(b[1:9], z[3])
+	binary.BigEndian.PutUint64(b[9:17], z[2])
+	binary.BigEndian.PutUint64(b[17:25], z[1])
+	binary.BigEndian.PutUint64(b[25:33], z[0])
+	b[32-nBytes] = 0x80 + nBytes
+	w.str = append(w.str, b[32-nBytes:]...)
 }
 
 // list adds a new list header to the header stack. It returns the index of the header.
@@ -360,12 +396,17 @@ func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 	w.buf.writeBigInt(i)
 }
 
+// WriteUint256 encodes uint256.Int as an RLP string.
+func (w EncoderBuffer) WriteUint256(i *uint256.Int) {
+	w.buf.writeUint256(i)
+}
+
 // WriteBytes encodes b as an RLP string.
 func (w EncoderBuffer) WriteBytes(b []byte) {
 	w.buf.writeBytes(b)
 }
 
-// WriteBytes encodes s as an RLP string.
+// WriteString encodes s as an RLP string.
 func (w EncoderBuffer) WriteString(s string) {
 	w.buf.writeString(s)
 }

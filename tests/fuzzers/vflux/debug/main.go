@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests/fuzzers/vflux"
 )
@@ -35,11 +34,10 @@ func main() {
 		os.Exit(1)
 	}
 	crasher := os.Args[1]
-
-	data := common.VerifyCrasher(crasher)
-	if data == nil {
-		return
+	data, err := os.ReadFile(crasher)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
+		os.Exit(1)
 	}
-
 	vflux.FuzzClientPool(data)
 }

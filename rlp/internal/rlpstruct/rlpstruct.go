@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ type Type struct {
 	Elem      *Type // non-nil for Kind values of Ptr, Slice, Array
 }
 
-// defaultNilValue determines whether a nil pointer to t encodes/decodes
+// DefaultNilValue determines whether a nil pointer to t encodes/decodes
 // as an empty string or empty list.
 func (t Type) DefaultNilValue() NilKind {
 	k := t.Kind
