@@ -81,8 +81,7 @@ var caps = []string{
 	"engine_exchangeTransitionConfigurationV1",
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
-	"engine_newPayloadV1",
-	"engine_newPayloadV2",
+	"engine_newPayload",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 }
@@ -414,24 +413,25 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 	return data, nil
 }
 
-// NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
-	}
-	return api.newPayload(params)
-}
+// NewPayload creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+// It automatically decides the behavior based on the Ethereum upgrade stages.
+// If the withdrawals parameter is provided, it should be used correctly according to the
+// Ethereum upgrade stages, otherwise it returns an INVALID status with corresponding error.
+func (api *ConsensusAPI) NewPayload(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+    // Assuming the IsShanghai function can tell if it's "V1" or "V2"
+    if !api.eth.BlockChain().Config().IsShanghai(new(big.Int).SetUint64(params.Number), params.Timestamp) {
+        if params.Withdrawals != nil {
+            return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
+        }
+    } else {
+        if params.Withdrawals == nil {
+            return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+        } else {
+            return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
+        }
+    }
 
-// NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsShanghai(new(big.Int).SetUint64(params.Number), params.Timestamp) {
-		if params.Withdrawals == nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
-		}
-	} else if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
-	}
-	return api.newPayload(params)
+    return api.newPayload(params)
 }
 
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
@@ -516,7 +516,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData) (engine.Payloa
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
-		log.Warn("NewPayloadV1: inserting block failed", "error", err)
+		log.Warn("NewPayload: inserting block failed", "error", err)
 
 		api.invalidLock.Lock()
 		api.invalidBlocksHits[block.Hash()] = 1
