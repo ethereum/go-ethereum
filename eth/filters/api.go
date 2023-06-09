@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -54,20 +55,22 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys       *FilterSystem
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
-	timeout   time.Duration
+	chainConfig *params.ChainConfig
+	sys         *FilterSystem
+	events      *EventSystem
+	filtersMu   sync.Mutex
+	filters     map[rpc.ID]*filter
+	timeout     time.Duration
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
-func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
+func NewFilterAPI(cfg *params.ChainConfig, system *FilterSystem, lightMode bool) *FilterAPI {
 	api := &FilterAPI{
-		sys:     system,
-		events:  NewEventSystem(system, lightMode),
-		filters: make(map[rpc.ID]*filter),
-		timeout: system.cfg.Timeout,
+		chainConfig: cfg,
+		sys:         system,
+		events:      NewEventSystem(system, lightMode),
+		filters:     make(map[rpc.ID]*filter),
+		timeout:     system.cfg.Timeout,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -192,7 +195,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 	)
 
 	api.filtersMu.Lock()
-	api.filters[headerSub.ID] = &filter{typ: BlocksSubscription, deadline: time.NewTimer(api.timeout), hashes: make([]common.Hash, 0), s: headerSub}
+	api.filters[headerSub.ID] = &filter{typ: BlockHeadersSubscription, deadline: time.NewTimer(api.timeout), hashes: make([]common.Hash, 0), s: headerSub}
 	api.filtersMu.Unlock()
 
 	go func() {
@@ -238,6 +241,37 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				return
 			case <-notifier.Closed():
 				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// NewBlocks send a notification each time a new block is appended to the chain.
+func (api *FilterAPI) NewBlocks(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		blocks := make(chan *types.Block)
+		blocksSub := api.events.SubscribeNewBlocks(blocks)
+
+		for {
+			select {
+			case b := <-blocks:
+				resp := ethapi.RPCMarshalBlock(b, true, true, api.chainConfig)
+				notifier.Notify(rpcSub.ID, resp)
+			case <-rpcSub.Err():
+				blocksSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				blocksSub.Unsubscribe()
 				return
 			}
 		}
@@ -430,7 +464,7 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		f.deadline.Reset(api.timeout)
 
 		switch f.typ {
-		case BlocksSubscription:
+		case BlockHeadersSubscription:
 			hashes := f.hashes
 			f.hashes = nil
 			return returnHashes(hashes), nil
