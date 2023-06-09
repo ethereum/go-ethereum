@@ -352,6 +352,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 					notifier.Notify(rpcSub.ID, &log)
 				case logs := <-rmLogsCh:
 					for _, log := range logs {
+						log := log
 						if log.Removed {
 							rmLogs = append(rmLogs, log)
 						}
