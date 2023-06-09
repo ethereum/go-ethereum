@@ -218,6 +218,7 @@ func TestTraceCall(t *testing.T) {
 			config:    nil,
 			expectErr: nil,
 			expect: &types.ExecutionResult{
+				L1Fee:       (*hexutil.Big)(big.NewInt(0)),
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
@@ -235,6 +236,7 @@ func TestTraceCall(t *testing.T) {
 			config:    nil,
 			expectErr: nil,
 			expect: &types.ExecutionResult{
+				L1Fee:       (*hexutil.Big)(big.NewInt(0)),
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
@@ -264,6 +266,7 @@ func TestTraceCall(t *testing.T) {
 			config:    nil,
 			expectErr: nil,
 			expect: &types.ExecutionResult{
+				L1Fee:       (*hexutil.Big)(big.NewInt(0)),
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
@@ -281,6 +284,7 @@ func TestTraceCall(t *testing.T) {
 			config:    nil,
 			expectErr: nil,
 			expect: &types.ExecutionResult{
+				L1Fee:       (*hexutil.Big)(big.NewInt(0)),
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
@@ -334,6 +338,7 @@ func TestTraceTransaction(t *testing.T) {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
 	if !reflect.DeepEqual(result, &types.ExecutionResult{
+		L1Fee:       (*hexutil.Big)(big.NewInt(0)),
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",

@@ -164,10 +164,12 @@ func checkStructLogs(t *testing.T, expect []*txTraceResult, actual []*types.Exec
 	assert.Equal(t, len(expect), len(actual))
 	for i, val := range expect {
 		trace1, trace2 := val.Result.(*types.ExecutionResult), actual[i]
+		assert.Equal(t, trace1.L1Fee, trace2.L1Fee)
 		assert.Equal(t, trace1.Failed, trace2.Failed)
 		assert.Equal(t, trace1.Gas, trace2.Gas)
 		assert.Equal(t, trace1.ReturnValue, trace2.ReturnValue)
 		assert.Equal(t, len(trace1.StructLogs), len(trace2.StructLogs))
+		// TODO: compare other fields
 
 		for i, opcode := range trace1.StructLogs {
 			data1, err := json.Marshal(opcode)
