@@ -211,7 +211,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[2:] {
-			if elem.Error != ErrMissingBatchResp {
+			if elem.Error != ErrMissingBatchResponse {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -239,7 +239,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[1:] {
-			if elem.Error != ErrMissingBatchResp {
+			if elem.Error != ErrMissingBatchResponse {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -277,7 +277,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 
 	// Check that remaining response batch elements are reported as absent.
 	for i, elem := range batch[1:] {
-		if elem.Error != ErrMissingBatchResp {
+		if elem.Error != ErrMissingBatchResponse {
 			t.Fatalf("batch elem %d has unexpected error: %v", i+1, elem.Error)
 		}
 	}

@@ -34,8 +34,8 @@ import (
 var (
 	ErrBadResult                 = errors.New("bad result in JSON-RPC response")
 	ErrClientQuit                = errors.New("client is closed")
-	ErrNoResult                  = errors.New("no result in JSON-RPC response")
-	ErrMissingBatchResp          = errors.New("response batch did not contain a result for this call")
+	ErrNoResult                  = errors.New("JSON-RPC response has no result")
+	ErrMissingBatchResponse      = errors.New("response batch did not contain a response to this call")
 	ErrSubscriptionQueueOverflow = errors.New("subscription queue overflow")
 	errClientReconnected         = errors.New("client reconnected")
 	errDead                      = errors.New("connection lost")
@@ -460,7 +460,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	// Check that all expected responses have been received.
 	for _, index := range byID {
 		elem := &b[index]
-		elem.Error = ErrMissingBatchResp
+		elem.Error = ErrMissingBatchResponse
 	}
 
 	return err
