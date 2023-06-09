@@ -191,6 +191,7 @@ type subscription struct {
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
 	blocks    chan *types.Block
+	receipts  chan []*types.Receipt
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -429,6 +430,24 @@ func (es *EventSystem) SubscribeNewBlocks(blocks chan *types.Block) *Subscriptio
 	return es.subscribe(sub)
 }
 
+// SubscribeNewReceipts creates a subscription that writes the receipts of transactions that is
+// generated in the chain.
+func (es *EventSystem) SubscribeNewReceipts(receipts chan []*types.Receipt) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       ReceiptsSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		txs:       make(chan []*types.Transaction),
+		headers:   make(chan *types.Header),
+		blocks:    make(chan *types.Block),
+		receipts:  receipts,
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
 // SubscribePendingTxs creates a subscription that writes transactions for
 // transactions that enter the transaction pool.
 func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subscription {
@@ -486,6 +505,10 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 	for _, f := range filters[BlocksSubscription] {
 		f.blocks <- ev.Block
+	}
+
+	for _, f := range filters[ReceiptsSubscription] {
+		f.receipts <- ev.Receipts
 	}
 
 	if es.lightMode && len(filters[LogsSubscription]) > 0 {

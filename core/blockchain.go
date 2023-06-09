@@ -1455,7 +1455,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
-		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs, Receipts: receipts})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
 		}
@@ -2046,7 +2046,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 
 // collectLogs collects the logs that were generated or removed during
 // the processing of a block. These logs are later announced as deleted or reborn.
-func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
+func (bc *BlockChain) collectLogs(b *types.Block, removed bool) ([]*types.Log, types.Receipts) {
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
 	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), b.Transactions())
 
@@ -2059,7 +2059,7 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 			logs = append(logs, log)
 		}
 	}
-	return logs
+	return logs, receipts
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -2200,7 +2200,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 
 		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
+		if logs, _ := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
 		if len(deletedLogs) > 512 {
@@ -2215,7 +2215,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		if logs := bc.collectLogs(newChain[i], false); len(logs) > 0 {
+		if logs, _ := bc.collectLogs(newChain[i], false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
 		if len(rebirthLogs) > 512 {
@@ -2270,8 +2270,8 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	bc.writeHeadBlock(head)
 
 	// Emit events
-	logs := bc.collectLogs(head, false)
-	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
+	logs, receipts := bc.collectLogs(head, false)
+	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs, Receipts: receipts})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}

@@ -280,6 +280,36 @@ func (api *FilterAPI) NewBlocks(ctx context.Context) (*rpc.Subscription, error) 
 	return rpcSub, nil
 }
 
+// NewReceipts send a notification each time receipts is appended to the chain.
+func (api *FilterAPI) NewReceipts(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		receipts := make(chan []*types.Receipt)
+		receiptsSub := api.events.SubscribeNewReceipts(receipts)
+
+		for {
+			select {
+			case r := <-receipts:
+				notifier.Notify(rpcSub.ID, r)
+			case <-rpcSub.Err():
+				receiptsSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				receiptsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
