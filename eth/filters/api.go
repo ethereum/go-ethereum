@@ -261,19 +261,25 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
+type notify interface {
+	Notify(id rpc.ID, data interface{}) error
+	Closed() <-chan interface{}
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
+	rpcSub := notifier.CreateSubscription()
+	err := api.logs(ctx, notifier, rpcSub, crit)
+	return rpcSub, err
+}
 
-	var (
-		rpcSub      = notifier.CreateSubscription()
-		matchedLogs = make(chan []*types.Log)
-	)
-
+func (api *FilterAPI) logs(ctx context.Context, notifier notify, rpcSub *rpc.Subscription, crit FilterCriteria) error {
 	filterLiveLogs := func() error {
+		matchedLogs := make(chan []*types.Log)
 		logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 		if err != nil {
 			return err
@@ -306,7 +312,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	// do live filter only
 	if isLiveFilter {
 		err := filterLiveLogs()
-		return rpcSub, err
+		return err
 	}
 
 	filterHistLogs := func(n int64) (int64, error) {
@@ -398,7 +404,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		// then subscribe from the header
 		filterLiveLogs()
 	}()
-	return rpcSub, nil
+	return nil
 }
 
 // FilterCriteria represents a request to create a new filter.
