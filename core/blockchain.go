@@ -1780,7 +1780,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
 		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
 		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
-		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
+		// The time spent on block validation
+		if bc.chainConfig.IsByzantium(block.Number()) {
+			blockValidationTimer.Update(vtime - (triehash + trieUpdate))
+		} else {
+			blockValidationTimer.Update(vtime)
+		}
 
 		// Write the block to the chain and get the status.
 		var (
