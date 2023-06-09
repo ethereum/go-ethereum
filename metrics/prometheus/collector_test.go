@@ -80,9 +80,6 @@ test_histogram_count 6
 # TYPE test_meter gauge
 test_meter 9999999
 
-# TYPE test_timer_count counter
-test_timer_count 6
-
 # TYPE test_timer summary
 test_timer {quantile="0.5"} 2.25e+07
 test_timer {quantile="0.75"} 4.8e+07
@@ -90,6 +87,8 @@ test_timer {quantile="0.95"} 1.2e+08
 test_timer {quantile="0.99"} 1.2e+08
 test_timer {quantile="0.999"} 1.2e+08
 test_timer {quantile="0.9999"} 1.2e+08
+test_timer_sum 550500000.000000
+test_timer_count 6
 
 # TYPE test_resetting_timer summary
 test_resetting_timer {quantile="0.50"} 12000000
