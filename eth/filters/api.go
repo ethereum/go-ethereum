@@ -261,7 +261,7 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
-type notify interface {
+type notifier interface {
 	Notify(id rpc.ID, data interface{}) error
 	Closed() <-chan interface{}
 }
@@ -277,123 +277,126 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	return rpcSub, err
 }
 
-func (api *FilterAPI) logs(ctx context.Context, notifier notify, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	filterLiveLogs := func() error {
-		matchedLogs := make(chan []*types.Log)
-		logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
-		if err != nil {
-			return err
-		}
-
-		go func() {
-			for {
-				select {
-				case logs := <-matchedLogs:
-					for _, log := range logs {
-						log := log
-						notifier.Notify(rpcSub.ID, &log)
-					}
-				case <-rpcSub.Err(): // client send an unsubscribe request
-					logsSub.Unsubscribe()
-					return
-				case <-notifier.Closed(): // connection dropped
-					logsSub.Unsubscribe()
-					return
-				}
-			}
-		}()
-		return nil
+// liveLogs only retrieves live logs
+func (api *FilterAPI) liveLogs(ctx context.Context, notify notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+	matchedLogs := make(chan []*types.Log)
+	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
+	if err != nil {
+		return err
 	}
 
+	go func() {
+		for {
+			select {
+			case logs := <-matchedLogs:
+				for _, log := range logs {
+					log := log
+					notify.Notify(rpcSub.ID, &log)
+				}
+			case <-rpcSub.Err(): // client send an unsubscribe request
+				logsSub.Unsubscribe()
+				return
+			case <-notify.Closed(): // connection dropped
+				logsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+// histLogs only retrieves the logs older than current header
+func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) (int64, error) {
+	// the ctx will be canceled after this callback(filter.Logs) is called
+	// and we are run in a background goroutine, use a new context instead
+	var (
+		cctx     = context.Background()
+		rmLogsCh = make(chan []*types.Log)
+		n        = crit.FromBlock.Int64()
+	)
+	for {
+		// get the latest block header
+		head := api.sys.backend.CurrentHeader().Number.Int64()
+		if n >= head {
+			return head, nil
+		}
+
+		to := big.NewInt(head)
+		if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(to) < 0 {
+			to = toBlock
+		}
+		// do historical sync from n to min(head, to)
+		f := api.sys.NewRangeFilter(n, to.Int64(), crit.Addresses, crit.Topics)
+		logChan, errChan := f.rangeLogsAsync(cctx)
+
+		// subscribe rmLogs
+		query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: to, Addresses: crit.Addresses, Topics: crit.Topics}
+		rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
+		if err != nil {
+			return 0, err
+		}
+
+		var rmLogs []*types.Log
+	FORLOOP:
+		for {
+			select {
+			case <-notifier.Closed():
+				rmLogsSub.Unsubscribe()
+				return 0, errors.New("connection dropped")
+			case err := <-rpcSub.Err(): // client send an unsubscribe request
+				rmLogsSub.Unsubscribe()
+				return 0, err
+			case log := <-logChan:
+				notifier.Notify(rpcSub.ID, &log)
+			case logs := <-rmLogsCh:
+				for _, log := range logs {
+					log := log
+					if log.Removed {
+						rmLogs = append(rmLogs, log)
+					}
+				}
+			case err := <-errChan:
+				// range filter is done or error, let's also stop the rmLogs subscribe
+				rmLogsSub.Unsubscribe()
+				if err != nil {
+					return 0, err
+				}
+				break FORLOOP
+			}
+		}
+
+		// send the reorged logs
+		for _, log := range rmLogs {
+			select {
+			case <-notifier.Closed():
+				return head, errors.New("connection dropped")
+			case err := <-rpcSub.Err(): // client send an unsubscribe request
+				return head, err
+			default:
+				notifier.Notify(rpcSub.ID, &log)
+			}
+		}
+
+		// move forward to the next batch
+		n = head + 1
+	}
+}
+
+// logs is the inner implmention of logs filter
+func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
 	isLiveFilter := true
 	if crit.FromBlock != nil {
 		isLiveFilter = crit.FromBlock.Sign() < 0
 	}
+
 	// do live filter only
 	if isLiveFilter {
-		err := filterLiveLogs()
-		return err
+		return api.liveLogs(ctx, notifier, rpcSub, crit)
 	}
 
-	filterHistLogs := func(n int64) (int64, error) {
-		// the ctx will be canceled after this callback(filter.Logs) is called
-		// and we are run in a background goroutine, use a new context instead
-		var (
-			cctx     = context.Background()
-			rmLogsCh = make(chan []*types.Log)
-		)
-		for {
-			// get the latest block header
-			head := api.sys.backend.CurrentHeader().Number.Int64()
-			if n >= head {
-				return head, nil
-			}
-
-			to := big.NewInt(head)
-			if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(to) < 0 {
-				to = toBlock
-			}
-			// do historical sync from n to min(head, to)
-			f := api.sys.NewRangeFilter(n, to.Int64(), crit.Addresses, crit.Topics)
-			logChan, errChan := f.rangeLogsAsync(cctx)
-
-			// subscribe rmLogs
-			query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: to, Addresses: crit.Addresses, Topics: crit.Topics}
-			rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
-			if err != nil {
-				return 0, err
-			}
-
-			var rmLogs []*types.Log
-		FORLOOP:
-			for {
-				select {
-				case <-notifier.Closed():
-					rmLogsSub.Unsubscribe()
-					return 0, errors.New("connection dropped")
-				case err := <-rpcSub.Err(): // client send an unsubscribe request
-					rmLogsSub.Unsubscribe()
-					return 0, err
-				case log := <-logChan:
-					notifier.Notify(rpcSub.ID, &log)
-				case logs := <-rmLogsCh:
-					for _, log := range logs {
-						log := log
-						if log.Removed {
-							rmLogs = append(rmLogs, log)
-						}
-					}
-				case err := <-errChan:
-					// range filter is done or error, let's also stop the rmLogs subscribe
-					rmLogsSub.Unsubscribe()
-					if err != nil {
-						return 0, err
-					}
-					break FORLOOP
-				}
-			}
-
-			// send the reorged logs
-			for _, log := range rmLogs {
-				select {
-				case <-notifier.Closed():
-					return head, errors.New("connection dropped")
-				case err := <-rpcSub.Err(): // client send an unsubscribe request
-					return head, err
-				default:
-					notifier.Notify(rpcSub.ID, &log)
-				}
-			}
-
-			// move forward to the next batch
-			n = head + 1
-		}
-	}
-
-	n := crit.FromBlock.Int64()
 	go func() {
 		// do historical sync first
-		head, err := filterHistLogs(n)
+		head, err := api.histLogs(ctx, notifier, rpcSub, crit)
 		if err != nil {
 			return
 		}
@@ -402,7 +405,7 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notify, rpcSub *rpc.Sub
 			return
 		}
 		// then subscribe from the header
-		filterLiveLogs()
+		api.liveLogs(ctx, notifier, rpcSub, crit)
 	}()
 	return nil
 }
