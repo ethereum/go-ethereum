@@ -60,10 +60,6 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	// Other fields are set conditionally depending on tx type.
 	switch itx := tx.inner.(type) {
 	case *LegacyTx:
-		// Only derive the chain ID if tx is signed and post EIP-155
-		if (itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0) && tx.ChainId().Sign() != 0 {
-			enc.ChainID = (*hexutil.Big)(tx.ChainId())
-		}
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
 		enc.To = tx.To()
 		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
@@ -73,6 +69,10 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(itx.V)
 		enc.R = (*hexutil.Big)(itx.R)
 		enc.S = (*hexutil.Big)(itx.S)
+		// Only derive the chain ID if tx is signed and post EIP-155
+		if tx.Protected() {
+			enc.ChainID = (*hexutil.Big)(tx.ChainId())
+		}
 
 	case *AccessListTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID)
