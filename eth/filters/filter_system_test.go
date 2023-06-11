@@ -17,8 +17,10 @@
 package filters
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"runtime"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -691,6 +694,153 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		case <-sub.Err():
 		case <-time.After(1 * time.Second):
 			t.Fatalf("Filter timeout is hanging")
+		}
+	}
+}
+
+func flattenLogs(pl [][]*types.Log) []*types.Log {
+	var logs []*types.Log
+	for _, l := range pl {
+		logs = append(logs, l...)
+	}
+	return logs
+}
+
+type mockNotifier struct {
+	c chan interface{}
+}
+
+func newMockNotifier() *mockNotifier {
+	return &mockNotifier{c: make(chan interface{})}
+}
+
+func (n *mockNotifier) Notify(id rpc.ID, data interface{}) error {
+	n.c <- data
+	return nil
+}
+
+func (n *mockNotifier) Closed() <-chan interface{} {
+	return nil
+}
+
+// TestLogsSubscription tests if a rpc subscription receives the correct logs
+func TestLogsSubscription(t *testing.T) {
+	t.Parallel()
+
+	var (
+		signer   = types.HomesteadSigner{}
+		key, _   = crypto.GenerateKey()
+		addr     = crypto.PubkeyToAddress(key.PublicKey)
+		contract = common.HexToAddress("0000000000000000000000000000000000031ec7")
+		genesis  = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				// // SPDX-License-Identifier: GPL-3.0
+				// pragma solidity >=0.7.0 <0.9.0;
+				//
+				// contract Token {
+				//     event Transfer(address indexed from, address indexed to, uint256 value);
+				//     function transfer(address to, uint256 value) public returns (bool) {
+				//         emit Transfer(msg.sender, to, value);
+				//         return true;
+				//     }
+				// }
+				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b60073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
+				addr:     {Balance: big.NewInt(params.Ether)},
+			},
+		}
+
+		db, blocks, receipts = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 4, func(i int, b *core.BlockGen) {
+			// transfer(address to, uint256 value)
+			data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+			b.AddTx(tx)
+		})
+	)
+
+	for i, block := range blocks {
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+	}
+
+	var (
+		_, sys = newTestFilterSystem(t, db, Config{})
+		api    = NewFilterAPI(sys, false)
+		// Transfer(address indexed from, address indexed to, uint256 value);
+		topic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	)
+
+	allLogs := []*types.Log{
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(1))}, Data: common.BigToHash(big.NewInt(11)).Bytes(), BlockNumber: 1},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(2))}, Data: common.BigToHash(big.NewInt(12)).Bytes(), BlockNumber: 2},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(3))}, Data: common.BigToHash(big.NewInt(13)).Bytes(), BlockNumber: 3},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(4))}, Data: common.BigToHash(big.NewInt(14)).Bytes(), BlockNumber: 4},
+	}
+
+	// pendingBlockNumber := big.NewInt(rpc.PendingBlockNumber.Int64())
+	testCases := []struct {
+		crit     FilterCriteria
+		expected []*types.Log
+		notifier *mockNotifier
+		sub      *rpc.Subscription
+		err      chan error
+	}{
+		// from 1 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(0), ToBlock: big.NewInt(5)},
+			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+		},
+	}
+
+	// subscribe logs
+	for i, tc := range testCases {
+		testCases[i].err = make(chan error)
+		err := api.logs(context.Background(), tc.notifier, tc.sub, tc.crit)
+		if err != nil {
+			t.Fatalf("SubscribeLogs %d failed: %v\n", i, err)
+		}
+	}
+
+	// receive logs
+	for n, test := range testCases {
+		i := n
+		tt := test
+		go func() {
+			var fetched []*types.Log
+
+			timeout := time.After(3 * time.Second)
+		fetchLoop:
+			for {
+				select {
+				case log := <-tt.notifier.c:
+					fetched = append(fetched, *log.(**types.Log))
+				case <-timeout:
+					break fetchLoop
+				}
+			}
+
+			if len(fetched) != len(tt.expected) {
+				tt.err <- fmt.Errorf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched))
+				return
+			}
+
+			for l := range fetched {
+				have, want := fetched[l], tt.expected[l]
+				if have.Address != contract || len(have.Topics) != len(want.Topics) || have.Topics[2] != want.Topics[2] || bytes.Compare(have.Data, want.Data) != 0 || have.BlockNumber != want.BlockNumber {
+					tt.err <- fmt.Errorf("invalid log on index %d for case %d have: %+v want: %+v\n", l, i, have, want)
+					return
+				}
+			}
+			tt.err <- nil
+		}()
+	}
+
+	for i := range testCases {
+		err := <-testCases[i].err
+		if err != nil {
+			t.Fatalf("test %d failed: %v", i, err)
 		}
 	}
 }
