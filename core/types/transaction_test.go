@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -500,6 +501,10 @@ func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
 	var parsedTx = &Transaction{}
 	if err := json.Unmarshal(data, &parsedTx); err != nil {
 		return nil, fmt.Errorf("json decoding failed: %v", err)
+	}
+
+	if !strings.Contains(string(data), "chainId") {
+		return nil, fmt.Errorf("json encoding does not contain chainId: %v", string(data))
 	}
 	return parsedTx, nil
 }
