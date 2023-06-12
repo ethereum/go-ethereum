@@ -252,7 +252,7 @@ func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *NodeSet, error) {
 		}
 	}
 
-	return nodes[0].CommitmentBytes, NewNodeSet(common.Hash{}), nil
+	return nodes[0].CommitmentBytes, nil /* XXX this fixes the multiple 0-owner issue, but something more significant should be returned */, nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration

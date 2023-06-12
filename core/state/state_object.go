@@ -160,9 +160,9 @@ func (s *stateObject) getTrie(db Database) Trie {
 		}
 		if s.trie == nil {
 			var err error
-			s.trie, err = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+			s.trie, err = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root, s.db.trie)
 			if err != nil {
-				s.trie, _ = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, common.Hash{})
+				s.trie, _ = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, common.Hash{}, s.db.trie)
 				s.setError(fmt.Errorf("can't create storage trie: %v", err))
 			}
 		}
@@ -222,19 +222,14 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
-		var tr Trie
-		if s.db.GetTrie().IsVerkle() {
-			tr = s.db.GetTrie()
-		} else {
-			tr = s.getTrie(db)
-		}
+		tr := s.getTrie(db)
 		start := time.Now()
 		if s.db.GetTrie().IsVerkle() {
 			var v []byte
 			v, err = tr.TryGet(s.address[:], key.Bytes())
 			copy(value[:], v)
 		} else {
-			enc, err = s.getTrie(db).TryGet(s.address[:], key.Bytes())
+			enc, err = tr.TryGet(s.address[:], key.Bytes())
 		}
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
@@ -332,12 +327,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	var tr Trie
-	if s.db.trie.IsVerkle() {
-		tr = s.db.trie
-	} else {
-		tr = s.getTrie(db)
-	}
+	tr := s.getTrie(db)
+
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
