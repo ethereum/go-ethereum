@@ -48,10 +48,10 @@ var (
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
-	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
-	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
-	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
-	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
+	headerIdle  atomic.Int32 // Current header activity state of the peer (idle = 0, active = 1)
+	blockIdle   atomic.Int32 // Current block activity state of the peer (idle = 0, active = 1)
+	receiptIdle atomic.Int32 // Current receipt activity state of the peer (idle = 0, active = 1)
+	stateIdle   atomic.Int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
 	headerStarted  time.Time // Time instance when the last header fetch was started
 	blockStarted   time.Time // Time instance when the last block (body) fetch was started
@@ -121,10 +121,10 @@ func (p *peerConnection) Reset() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	atomic.StoreInt32(&p.headerIdle, 0)
-	atomic.StoreInt32(&p.blockIdle, 0)
-	atomic.StoreInt32(&p.receiptIdle, 0)
-	atomic.StoreInt32(&p.stateIdle, 0)
+	p.headerIdle.Store(0)
+	p.blockIdle.Store(0)
+	p.receiptIdle.Store(0)
+	p.stateIdle.Store(0)
 
 	p.lacking = make(map[common.Hash]struct{})
 }
@@ -132,7 +132,7 @@ func (p *peerConnection) Reset() {
 // FetchHeaders sends a header retrieval request to the remote peer.
 func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
+	if !p.headerIdle.CompareAndSwap(0, 1) {
 		return errAlreadyFetching
 	}
 	p.headerStarted = time.Now()
@@ -146,7 +146,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 // FetchBodies sends a block body retrieval request to the remote peer.
 func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
+	if !p.blockIdle.CompareAndSwap(0, 1) {
 		return errAlreadyFetching
 	}
 	p.blockStarted = time.Now()
@@ -166,7 +166,7 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 // FetchReceipts sends a receipt retrieval request to the remote peer.
 func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
+	if !p.receiptIdle.CompareAndSwap(0, 1) {
 		return errAlreadyFetching
 	}
 	p.receiptStarted = time.Now()
@@ -186,7 +186,7 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 // FetchNodeData sends a node state data retrieval request to the remote peer.
 func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.stateIdle, 0, 1) {
+	if !p.stateIdle.CompareAndSwap(0, 1) {
 		return errAlreadyFetching
 	}
 	p.stateStarted = time.Now()
@@ -201,7 +201,7 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // just now.
 func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.BlockHeadersMsg, deliveryTime.Sub(p.headerStarted), delivered)
-	atomic.StoreInt32(&p.headerIdle, 0)
+	p.headerIdle.Store(0)
 }
 
 // SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
@@ -209,7 +209,7 @@ func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
 // just now.
 func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.BlockBodiesMsg, deliveryTime.Sub(p.blockStarted), delivered)
-	atomic.StoreInt32(&p.blockIdle, 0)
+	p.blockIdle.Store(0)
 }
 
 // SetReceiptsIdle sets the peer to idle, allowing it to execute new receipt
@@ -217,7 +217,7 @@ func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
 // with that measured just now.
 func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.ReceiptsMsg, deliveryTime.Sub(p.receiptStarted), delivered)
-	atomic.StoreInt32(&p.receiptIdle, 0)
+	p.receiptIdle.Store(0)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
@@ -225,7 +225,7 @@ func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) 
 // with that measured just now.
 func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.NodeDataMsg, deliveryTime.Sub(p.stateStarted), delivered)
-	atomic.StoreInt32(&p.stateIdle, 0)
+	p.stateIdle.Store(0)
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
@@ -409,7 +409,7 @@ func (ps *peerSet) AllPeers() []*peerConnection {
 // within the active peer set, ordered by their reputation.
 func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
-		return atomic.LoadInt32(&p.headerIdle) == 0
+		return p.headerIdle.Load() == 0
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
@@ -421,7 +421,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 // the active peer set, ordered by their reputation.
 func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
-		return atomic.LoadInt32(&p.blockIdle) == 0
+		return p.blockIdle.Load() == 0
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
@@ -433,7 +433,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 // within the active peer set, ordered by their reputation.
 func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
-		return atomic.LoadInt32(&p.receiptIdle) == 0
+		return p.receiptIdle.Load() == 0
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
@@ -445,7 +445,7 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 // peers within the active peer set, ordered by their reputation.
 func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 	idle := func(p *peerConnection) bool {
-		return atomic.LoadInt32(&p.stateIdle) == 0
+		return p.stateIdle.Load() == 0
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
