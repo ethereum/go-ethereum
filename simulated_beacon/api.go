@@ -1,4 +1,4 @@
-package clmock
+package simulated_beacon
 
 import (
 	"context"
@@ -8,17 +8,17 @@ import (
 )
 
 type API struct {
-	mock *CLMock
+	simBeacon *SimulatedBeacon
 }
 
 func (api *API) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
-	api.mock.mu.Lock()
-	defer api.mock.mu.Unlock()
-	return api.mock.withdrawals.add(withdrawal)
+	api.simBeacon.mu.Lock()
+	defer api.simBeacon.mu.Unlock()
+	return api.simBeacon.withdrawals.add(withdrawal)
 }
 
 func (api *API) SetFeeRecipient(ctx context.Context, feeRecipient *common.Address) {
-	api.mock.mu.Lock()
-	api.mock.feeRecipient = *feeRecipient
-	api.mock.mu.Unlock()
+	api.simBeacon.mu.Lock()
+	api.simBeacon.feeRecipient = *feeRecipient
+	api.simBeacon.mu.Unlock()
 }

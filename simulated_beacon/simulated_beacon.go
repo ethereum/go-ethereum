@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package clmock
+package simulated_beacon
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
 	return nil
 }
 
-type CLMock struct {
+type SimulatedBeacon struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	eth          *eth.Ethereum
@@ -74,13 +74,13 @@ type CLMock struct {
 	mu sync.Mutex
 }
 
-func NewCLMock(eth *eth.Ethereum) *CLMock {
+func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
 	chainConfig := eth.APIBackend.ChainConfig()
 	if chainConfig.Dev == nil {
 		log.Crit("incompatible pre-existing chain configuration")
 	}
 
-	return &CLMock{
+	return &SimulatedBeacon{
 		eth:          eth,
 		period:       time.Duration(chainConfig.Dev.Period) * time.Second,
 		withdrawals:  withdrawals{[]*types.Withdrawal{}, 0},
@@ -88,22 +88,22 @@ func NewCLMock(eth *eth.Ethereum) *CLMock {
 	}
 }
 
-// Start invokes the clmock life-cycle function in a goroutine
-func (c *CLMock) Start() error {
+// Start invokes the SimulatedBeacon life-cycle function in a goroutine
+func (c *SimulatedBeacon) Start() error {
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	go c.loop()
 	return nil
 }
 
-// Stop halts the clmock service
-func (c *CLMock) Stop() error {
+// Stop halts the SimulatedBeacon service
+func (c *SimulatedBeacon) Stop() error {
 	c.cancel()
 	return nil
 }
 
-// loop manages the lifecycle of clmock.
+// loop manages the lifecycle of the SimulatedBeacon.
 // it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
-func (c *CLMock) loop() {
+func (c *SimulatedBeacon) loop() {
 	var (
 		ticker             = time.NewTicker(time.Millisecond * 100)
 		lastBlockTime      = time.Now()
@@ -212,7 +212,7 @@ func (c *CLMock) loop() {
 	}
 }
 
-func RegisterAPIs(stack *node.Node, c *CLMock) {
+func RegisterAPIs(stack *node.Node, c *SimulatedBeacon) {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "dev",

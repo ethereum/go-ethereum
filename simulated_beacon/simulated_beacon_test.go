@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package clmock
+package simulated_beacon
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func startEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *CLMock) {
+func startEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -54,21 +54,21 @@ func startEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethe
 		t.Fatal("can't create eth service:", err)
 	}
 
-	clmock := NewCLMock(ethservice)
+	simBeacon := NewSimulatedBeacon(ethservice)
 
-	n.RegisterLifecycle(clmock)
+	n.RegisterLifecycle(simBeacon)
 
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
 
 	ethservice.SetSynced()
-	return n, ethservice, clmock
+	return n, ethservice, simBeacon
 }
 
 // send 20 transactions, >10 withdrawals and ensure they are included in order
 // send enough transactions to fill multiple blocks
-func TestCLMockSendWithdrawals(t *testing.T) {
+func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	var withdrawals []types.Withdrawal
 	txs := make(map[common.Hash]types.Transaction)
 

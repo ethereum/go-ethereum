@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/clmock"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -42,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/simulated_beacon"
 	"github.com/naoina/toml"
 )
 
@@ -197,9 +197,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	// Start the dev mode if requested
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
-		mock := clmock.NewCLMock(eth)
-		clmock.RegisterAPIs(stack, mock)
-		stack.RegisterLifecycle(mock)
+		simBeacon := simulated_beacon.NewSimulatedBeacon(eth)
+		simulated_beacon.RegisterAPIs(stack, simBeacon)
+		stack.RegisterLifecycle(simBeacon)
 	}
 
 	return stack, backend
