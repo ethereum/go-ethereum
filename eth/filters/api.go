@@ -342,7 +342,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	var borLogsFilter *BorBlockLogsFilter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
-		filter = NewBlockFilter(api.sys.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
+		filter = api.sys.NewBlockFilter(*crit.BlockHash, crit.Addresses, crit.Topics)
 		// Block bor filter
 		if api.borLogs {
 			borLogsFilter = NewBorBlockLogsFilter(api.sys.backend, borConfig, *crit.BlockHash, crit.Addresses, crit.Topics)

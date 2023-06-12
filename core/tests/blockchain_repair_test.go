@@ -1812,7 +1812,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0, 0, 0, 0)
+	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0, false, 0, 0)
 	defer closeFn()
 
 	genesis := back.BlockChain().Genesis()
@@ -1879,7 +1879,6 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
-	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
@@ -1893,7 +1892,21 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	defer db.Close()
 
-	newChain, err := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
+	var (
+		gspec = &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		config = &core.CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  256,
+			SnapshotWait:   true,
+		}
+	)
+
+	newChain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -1958,12 +1971,12 @@ func TestIssue23496(t *testing.T) {
 
 	// Initialize a fresh chain
 	var (
-		gspec = &Genesis{
+		gspec = &core.Genesis{
 			Config:  params.TestChainConfig,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		engine = ethash.NewFullFaker()
-		config = &CacheConfig{
+		config = &core.CacheConfig{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
@@ -1975,7 +1988,7 @@ func TestIssue23496(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 4, func(i int, b *BlockGen) {
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 4, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
 	})
@@ -1984,7 +1997,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	err = chain.StateCache().TrieDB().Commit(blocks[0].Root(), true, nil)
+	err = chain.StateCache().TrieDB().Commit(blocks[0].Root(), true)
 	if err != nil {
 		t.Fatal("on trieDB.Commit", err)
 	}
@@ -1992,7 +2005,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
+	if err := chain.Snaps().Cap(blocks[1].Root(), 0); err != nil {
 		t.Fatalf("Failed to flatten snapshots: %v", err)
 	}
 
@@ -2000,20 +2013,19 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.stateCache.TrieDB().Commit(blocks[2].Root(), false)
+	chain.StateCache().TrieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 
-	err = chain.StateCache().TrieDB().Commit(blocks[2].Root(), true, nil)
+	err = chain.StateCache().TrieDB().Commit(blocks[2].Root(), true)
 	if err != nil {
 		t.Fatal("on trieDB.Commit", err)
 	}
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
-	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
@@ -2025,7 +2037,7 @@ func TestIssue23496(t *testing.T) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err = core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

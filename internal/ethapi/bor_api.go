@@ -8,7 +8,7 @@ import (
 )
 
 // GetRootHash returns root hash for given start and end block
-func (s *PublicBlockChainAPI) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+func (s *BlockChainAPI) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
 	root, err := s.b.GetRootHash(ctx, starBlockNr, endBlockNr)
 	if err != nil {
 		return "", err
@@ -16,7 +16,7 @@ func (s *PublicBlockChainAPI) GetRootHash(ctx context.Context, starBlockNr uint6
 	return root, nil
 }
 
-func (s *PublicBlockChainAPI) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (s *BlockChainAPI) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return s.b.GetBorBlockReceipt(ctx, hash)
 }
 
@@ -24,7 +24,7 @@ func (s *PublicBlockChainAPI) GetBorBlockReceipt(ctx context.Context, hash commo
 // Bor transaction utils
 //
 
-func (s *PublicBlockChainAPI) appendRPCMarshalBorTransaction(ctx context.Context, block *types.Block, fields map[string]interface{}, fullTx bool) map[string]interface{} {
+func (s *BlockChainAPI) appendRPCMarshalBorTransaction(ctx context.Context, block *types.Block, fields map[string]interface{}, fullTx bool) map[string]interface{} {
 	if block != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		borTx, blockHash, blockNumber, txIndex, _ := s.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())

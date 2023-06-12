@@ -404,7 +404,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 
-	if rules.isLondon {
+	if rules.IsLondon {
 		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
 		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 		st.state.AddBalance(burntContractAddress, burnAmount)

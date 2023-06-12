@@ -356,7 +356,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 // assembling the block.
 func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, txs, uncles, receipts)
+		return beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, txs, uncles, receipts, nil)
 	}
 	// TODO marcello isShangai?
 	shanghai := chain.Config().IsShanghai(header.Time)

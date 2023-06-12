@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"math/big"
 	"os"
@@ -33,7 +34,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -81,7 +81,7 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 
-	blockImportTimer     = metrics.NewRegisteredMeter("chain/imports", nil)
+	blockImportTimer  = metrics.NewRegisteredMeter("chain/imports", nil)
 	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
@@ -238,10 +238,10 @@ type BlockChain struct {
 	vmConfig   vm.Config
 
 	// Bor related changes
-	borReceiptsCache *lru.Cache             // Cache for the most recent bor receipt receipts per block
-	stateSyncData    []*types.StateSyncData // State sync data
-	stateSyncFeed    event.Feed             // State sync feed
-	chain2HeadFeed   event.Feed             // Reorg/NewHead/Fork data feed
+	borReceiptsCache *lru.Cache[common.Hash, []*types.Receipt] // Cache for the most recent bor receipt receipts per block
+	stateSyncData    []*types.StateSyncData                    // State sync data
+	stateSyncFeed    event.Feed                                // State sync feed
+	chain2HeadFeed   event.Feed                                // Reorg/NewHead/Fork data feed
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -278,8 +278,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	borReceiptsCache, _ := lru.New(receiptsCacheLimit)
-
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
 		cacheConfig:   cacheConfig,
@@ -297,10 +295,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		engine:        engine,
 		vmConfig:      vmConfig,
 
-		borReceiptsCache: borReceiptsCache,
+		borReceiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	// TODO marcello checker must be there
 	bc.forker = NewForkChoice(bc, shouldPreserve, checker)
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -1539,11 +1536,11 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 	var reorg bool
 
 	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.ReorgNeeded", func(_ context.Context, span trace.Span) {
-		reorg, err = bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+		reorg, err = bc.forker.ReorgNeeded(currentBlock, block.Header())
 		tracing.SetAttributes(
 			span,
 			attribute.Int("number", int(block.Number().Uint64())),
-			attribute.Int("current block", int(currentBlock.Number().Uint64())),
+			attribute.Int("current block", int(currentBlock.Number.Uint64())),
 			attribute.Bool("reorg needed", reorg),
 			attribute.Bool("error", err != nil),
 		)
@@ -1551,7 +1548,6 @@ func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Blo
 	if err != nil {
 		return NonStatTy, err
 	}
-
 
 	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.reorg", func(_ context.Context, span trace.Span) {
 		if reorg {
@@ -2407,8 +2403,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 			}
 		}
 
-
-
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
 	// Insert the new chain(except the head block(reverse order)),
@@ -2525,7 +2519,6 @@ func ExportN(w io.Writer, blocks []*types.Block) error {
 
 	return nil
 }
-
 
 // InsertBlockWithoutSetHead executes the block, runs the necessary verification
 // upon it and then persist the block and the associate state into the database.
@@ -2794,4 +2787,8 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 // It is thread-safe and can be called repeatedly without side effects.
 func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 	bc.flushInterval.Store(int64(interval))
+}
+
+func (bc *BlockChain) SubscribeChain2HeadEvent(ch chan<- Chain2HeadEvent) event.Subscription {
+	return bc.scope.Track(bc.chain2HeadFeed.Subscribe(ch))
 }

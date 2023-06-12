@@ -2,10 +2,9 @@ package utils
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/urfave/cli/v2"
 	"os"
-
-	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
@@ -19,39 +18,39 @@ var (
 	//
 
 	// HeimdallURLFlag flag for heimdall url
-	HeimdallURLFlag = cli.StringFlag{
+	HeimdallURLFlag = &cli.StringFlag{
 		Name:  "bor.heimdall",
 		Usage: "URL of Heimdall service",
 		Value: "http://localhost:1317",
 	}
 
 	// WithoutHeimdallFlag no heimdall (for testing purpose)
-	WithoutHeimdallFlag = cli.BoolFlag{
+	WithoutHeimdallFlag = &cli.BoolFlag{
 		Name:  "bor.withoutheimdall",
 		Usage: "Run without Heimdall service (for testing purpose)",
 	}
 
 	// HeimdallgRPCAddressFlag flag for heimdall gRPC address
-	HeimdallgRPCAddressFlag = cli.StringFlag{
+	HeimdallgRPCAddressFlag = &cli.StringFlag{
 		Name:  "bor.heimdallgRPC",
 		Usage: "Address of Heimdall gRPC service",
 		Value: "",
 	}
 
 	// RunHeimdallFlag flag for running heimdall internally from bor
-	RunHeimdallFlag = cli.BoolFlag{
+	RunHeimdallFlag = &cli.BoolFlag{
 		Name:  "bor.runheimdall",
 		Usage: "Run Heimdall service as a child process",
 	}
 
-	RunHeimdallArgsFlag = cli.StringFlag{
+	RunHeimdallArgsFlag = &cli.StringFlag{
 		Name:  "bor.runheimdallargs",
 		Usage: "Arguments to pass to Heimdall service",
 		Value: "",
 	}
 
 	// UseHeimdallApp flag for using internall heimdall app to fetch data
-	UseHeimdallAppFlag = cli.BoolFlag{
+	UseHeimdallAppFlag = &cli.BoolFlag{
 		Name:  "bor.useheimdallapp",
 		Usage: "Use child heimdall process to fetch data, Only works when bor.runheimdall is true",
 	}
@@ -84,17 +83,17 @@ func getGenesis(genesisPath string) (*core.Genesis, error) {
 
 // SetBorConfig sets bor config
 func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
-	cfg.HeimdallURL = ctx.GlobalString(HeimdallURLFlag.Name)
-	cfg.WithoutHeimdall = ctx.GlobalBool(WithoutHeimdallFlag.Name)
-	cfg.HeimdallgRPCAddress = ctx.GlobalString(HeimdallgRPCAddressFlag.Name)
-	cfg.RunHeimdall = ctx.GlobalBool(RunHeimdallFlag.Name)
-	cfg.RunHeimdallArgs = ctx.GlobalString(RunHeimdallArgsFlag.Name)
-	cfg.UseHeimdallApp = ctx.GlobalBool(UseHeimdallAppFlag.Name)
+	cfg.HeimdallURL = ctx.String(HeimdallURLFlag.Name)
+	cfg.WithoutHeimdall = ctx.Bool(WithoutHeimdallFlag.Name)
+	cfg.HeimdallgRPCAddress = ctx.String(HeimdallgRPCAddressFlag.Name)
+	cfg.RunHeimdall = ctx.Bool(RunHeimdallFlag.Name)
+	cfg.RunHeimdallArgs = ctx.String(RunHeimdallArgsFlag.Name)
+	cfg.UseHeimdallApp = ctx.Bool(UseHeimdallAppFlag.Name)
 }
 
 // CreateBorEthereum Creates bor ethereum object from eth.Config
-func CreateBorEthereum(cfg *eth.Config) *eth.Ethereum {
-	workspace, err := ioutil.TempDir("", "bor-command-node-")
+func CreateBorEthereum(cfg *ethconfig.Config) *eth.Ethereum {
+	workspace, err := os.MkdirTemp("", "bor-command-node-")
 	if err != nil {
 		Fatalf("Failed to create temporary keystore: %v", err)
 	}

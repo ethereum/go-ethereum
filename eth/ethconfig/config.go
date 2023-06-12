@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -93,7 +94,7 @@ var Defaults = Config{
 	Miner:                   miner.DefaultConfig,
 	TxPool:                  txpool.DefaultConfig,
 	RPCGasCap:               50000000,
-	RPCReturnDataLimit: 	 100000,
+	RPCReturnDataLimit:      100000,
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
 	RPCTxFeeCap:             5, // 1 ether
@@ -243,11 +244,10 @@ type Config struct {
 
 	// Develop Fake Author mode to produce blocks without authorisation
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
-
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, ethConfig *Config, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if cliqueConfig != nil {
@@ -257,8 +257,9 @@ func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, clique
 	// If Matic bor consensus is requested, set it up
 	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
 	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
+
 	// TODO marcello FIXME based on proper ethConfig for Bor (ideally ethashConfig) and blockchainAPI
-	if ethashConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
+	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		genesisContractsClient := contract.NewGenesisContractsClient(chainConfig, chainConfig.Bor.ValidatorContract, chainConfig.Bor.StateReceiverContract, blockchainAPI)
 		spanner := span.NewChainSpanner(blockchainAPI, contract.ValidatorSet(), chainConfig, common.HexToAddress(chainConfig.Bor.ValidatorContract))
 

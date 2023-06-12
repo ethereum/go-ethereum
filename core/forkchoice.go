@@ -61,7 +61,7 @@ type Floater interface {
 	Float64() float64
 }
 
-func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool) *ForkChoice {
+func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool, validator ethereum.ChainValidator) *ForkChoice {
 	// Seed a fast but crypto originating random generator
 	r := crand.NewRand()
 	return &ForkChoice{

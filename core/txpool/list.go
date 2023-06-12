@@ -69,8 +69,8 @@ type sortedMap struct {
 // newSortedMap creates a new nonce-sorted transaction map.
 func newSortedMap() *sortedMap {
 	return &sortedMap{
-		items: make(map[uint64]*types.Transaction),
-		index: new(nonceHeap),
+		items:   make(map[uint64]*types.Transaction),
+		index:   new(nonceHeap),
 		isEmpty: true,
 	}
 }
@@ -426,8 +426,8 @@ type list struct {
 	txs    *sortedMap // Heap indexed sorted hash map of the transactions
 
 	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap    uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
-	totalcost *big.Int // Total cost of all transactions in the list
+	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	totalcost *big.Int     // Total cost of all transactions in the list
 }
 
 // newList create a new transaction list for maintaining nonce-indexable fast,
@@ -436,7 +436,6 @@ func newList(strict bool) *list {
 	return &list{
 		strict:    strict,
 		txs:       newSortedMap(),
-		costcap:   new(big.Int),
 		totalcost: new(big.Int),
 	}
 }

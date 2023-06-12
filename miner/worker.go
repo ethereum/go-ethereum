@@ -304,30 +304,30 @@ type worker struct {
 //nolint:staticcheck
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		chain:              eth.BlockChain(),
-		mux:                mux,
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
-		coinbase:           config.Etherbase,
-		extra:              config.ExtraData,
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		startCh:            make(chan struct{}, 1),
-		exitCh:             make(chan struct{}),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		config:              config,
+		chainConfig:         chainConfig,
+		engine:              engine,
+		eth:                 eth,
+		chain:               eth.BlockChain(),
+		mux:                 mux,
+		isLocalBlock:        isLocalBlock,
+		localUncles:         make(map[common.Hash]*types.Block),
+		remoteUncles:        make(map[common.Hash]*types.Block),
+		unconfirmed:         newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		coinbase:            config.Etherbase,
+		extra:               config.ExtraData,
+		pendingTasks:        make(map[common.Hash]*task),
+		txsCh:               make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:         make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:           make(chan *newWorkReq),
+		getWorkCh:           make(chan *getWorkReq),
+		taskCh:              make(chan *task),
+		resultCh:            make(chan *types.Block, resultQueueSize),
+		startCh:             make(chan struct{}, 1),
+		exitCh:              make(chan struct{}),
+		resubmitIntervalCh:  make(chan time.Duration),
+		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
 	worker.noempty.Store(true)
@@ -505,6 +505,7 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
+//
 //nolint:gocognit
 func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 	defer w.wg.Done()
@@ -697,9 +698,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				// TODO marcello
-				//  isn't this 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee)) ?
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
 				//nolint:contextcheck
@@ -854,7 +853,7 @@ func (w *worker) resultLoop() {
 					_, err = w.chain.WriteBlockAndSetHead(ctx, block, receipts, logs, task.state, true)
 				})
 
-					tracing.SetAttributes(
+				tracing.SetAttributes(
 					span,
 					attribute.String("hash", hash.String()),
 					attribute.Int("number", int(block.Number().Uint64())),
@@ -863,8 +862,7 @@ func (w *worker) resultLoop() {
 					attribute.Int("elapsed", int(time.Since(task.createdAt).Milliseconds())),
 					attribute.Bool("error", err != nil),
 				)
-		})
-
+			})
 
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
@@ -1250,7 +1248,7 @@ func startProfiler(profile string, filepath string, number uint64) (func() error
 
 		if buf.Len() == 0 {
 			return nil
-}
+		}
 
 		f, err := os.Create(filepath + "/" + profile + "-" + fmt.Sprint(number) + ".prof")
 		if err != nil {
@@ -1357,11 +1355,11 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		postPendingTime := time.Now()
 
 		for _, account := range w.eth.TxPool().Locals() {
-		if txs := remoteTxs[account]; len(txs) > 0 {
-			delete(remoteTxs, account)
-			localTxs[account] = txs
+			if txs := remoteTxs[account]; len(txs) > 0 {
+				delete(remoteTxs, account)
+				localTxs[account] = txs
+			}
 		}
-	}
 
 		postLocalsTime := time.Now()
 
@@ -1377,7 +1375,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	var (
 		localEnvTCount  int
 		remoteEnvTCount int
-		err       	error
+		err             error
 	)
 
 	if len(localTxs) > 0 {
@@ -1458,7 +1456,6 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) (*typ
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	// TODO marcello add withdrawals as last param of FinalizeAndAssemble
 	block, err := w.engine.FinalizeAndAssemble(ctx, w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts, params.withdrawals)
 	if err != nil {
 		return nil, nil, err
@@ -1505,7 +1502,8 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	}()
 
 	if !noempty && w.interruptCommitFlag {
-		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().TxHash)
+		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
 		// nolint : staticcheck
 		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
 	}
@@ -1583,7 +1581,6 @@ func getInterruptTimer(ctx context.Context, work *environment, current *types.Bl
 
 	return interruptCtx, cancel
 }
-
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.

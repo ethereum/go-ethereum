@@ -2000,7 +2000,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
-	canonblocks, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *BlockGen) {
+	canonblocks, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
 	})
@@ -2008,7 +2008,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		err = chain.StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		err = chain.StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true)
 		if err != nil {
 			t.Fatal("on trieDB.Commit", err)
 		}

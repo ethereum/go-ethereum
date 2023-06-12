@@ -17,6 +17,7 @@
 package txpool
 
 import (
+	"github.com/holiman/uint256"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -66,9 +67,9 @@ func BenchmarkListAdd(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
-	for _, v := range rand.Perm(len(txs)) {
+		for _, v := range rand.Perm(len(txs)) {
 			list.Add(txs[v], DefaultConfig.PriceBump)
-			list.Filter(priceLimit, DefaultConfig.PriceBump)
+			list.Filter(uint256.NewInt(priceLimit.Uint64()), DefaultConfig.PriceBump)
 		}
 	}
 }

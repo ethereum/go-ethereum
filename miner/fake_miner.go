@@ -1,7 +1,9 @@
 package miner
 
 import (
+	"errors"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"testing"
 	"time"
@@ -77,13 +79,24 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	t.Helper()
 
+	addr0 := common.Address{0x1}
+
+	genspec := &core.Genesis{
+		Alloc: map[common.Address]core.GenesisAccount{
+			addr0: {
+				Balance: big.NewInt(0),
+				Code:    []byte{0x1, 0x1},
+			},
+		},
+	}
+
 	// Create Ethash config
 	chainDB, _, chainConfig := NewDBForFakes(t)
 
 	engine := NewFakeBor(t, chainDB, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil, nil)
+	bc, err := core.NewBlockChain(chainDB, nil, genspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
@@ -129,7 +142,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 	chainDB := rawdb.NewDatabase(memdb)
 	genesis := core.DeveloperGenesisBlock(2, 11_500_000, common.HexToAddress("12345"))
 
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, genesis)
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}
@@ -152,6 +165,54 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 	}
 
 	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
+}
+
+type mockBackend struct {
+	bc     *core.BlockChain
+	txPool *txpool.TxPool
+}
+
+func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
+	return &mockBackend{
+		bc:     bc,
+		txPool: txPool,
+	}
+}
+
+func (m *mockBackend) BlockChain() *core.BlockChain {
+	return m.bc
+}
+
+func (m *mockBackend) TxPool() *txpool.TxPool {
+	return m.txPool
+}
+
+func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
+
+type testBlockChain struct {
+	statedb       *state.StateDB
+	gasLimit      uint64
+	chainHeadFeed *event.Feed
+}
+
+func (bc *testBlockChain) CurrentBlock() *types.Header {
+	return &types.Header{
+		GasLimit: bc.gasLimit,
+	}
+}
+
+func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
+}
+
+func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+	return bc.statedb, nil
+}
+
+func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return bc.chainHeadFeed.Subscribe(ch)
 }
 
 var (

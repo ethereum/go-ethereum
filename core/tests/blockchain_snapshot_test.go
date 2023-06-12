@@ -55,7 +55,7 @@ type snapshotTestBasic struct {
 	db      ethdb.Database
 	genDb   ethdb.Database
 	engine  consensus.Engine
-	gspec   *Genesis
+	gspec   *core.Genesis
 }
 
 func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*types.Block) {
@@ -105,7 +105,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 		startPoint = point
 
 		if basic.commitBlock > 0 && basic.commitBlock == point {
-			err = chain.StateCache().TrieDB().Commit(blocks[point-1].Root(), true, nil)
+			err = chain.StateCache().TrieDB().Commit(blocks[point-1].Root(), true)
 			if err != nil {
 				t.Fatal("on trieDB.Commit", err)
 			}
@@ -267,7 +267,6 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// Pull the plug on the database, simulating a hard crash
 	db := chain.DB()
 	db.Close()
-	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
@@ -414,13 +413,10 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  256,
 		SnapshotWait:   false, // Don't wait rebuild
 	}
-	tmp, err := core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	_, err = core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
-	// Simulate the blockchain crash.
-	tmp.stopWithoutSaving()
 
 	newchain, err = core.NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {

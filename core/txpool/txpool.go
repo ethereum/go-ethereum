@@ -33,7 +33,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
@@ -256,16 +255,16 @@ func (config *Config) sanitize() Config {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config      Config
-	chainconfig *params.ChainConfig
-	chain       blockChain
-	gasPrice    *big.Int
+	config       Config
+	chainconfig  *params.ChainConfig
+	chain        blockChain
+	gasPrice     *big.Int
 	gasPriceUint *uint256.Int
 	gasPriceMu   sync.RWMutex
-	txFeed      event.Feed
-	scope       event.SubscriptionScope
-	signer      types.Signer
-	mu          sync.RWMutex
+	txFeed       event.Feed
+	scope        event.SubscriptionScope
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	istanbul atomic.Bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  atomic.Bool // Fork indicator whether we are using EIP-2718 type transactions.
@@ -279,13 +278,13 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
 
-	pending map[common.Address]*list     // All currently processable transactions
+	pending      map[common.Address]*list // All currently processable transactions
 	pendingCount int
 	pendingMu    sync.RWMutex
-	queue   map[common.Address]*list     // Queued but non-processable transactions
-	beats   map[common.Address]time.Time // Last heartbeat from each known account
-	all     *lookup                      // All transactions to allow lookups
-	priced  *pricedList                  // All transactions sorted by price
+	queue        map[common.Address]*list     // Queued but non-processable transactions
+	beats        map[common.Address]time.Time // Last heartbeat from each known account
+	all          *lookup                      // All transactions to allow lookups
+	priced       *pricedList                  // All transactions sorted by price
 
 	chainHeadCh     chan core.ChainHeadEvent
 	chainHeadSub    event.Subscription
@@ -823,7 +822,7 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 		}
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul.Load(), pool.shanghai.Load())
 	if err != nil {
 		return err
 	}
@@ -832,6 +831,38 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 		return core.ErrIntrinsicGas
 	}
 
+	return nil
+}
+
+// validateTx checks whether a transaction is valid according to the consensus
+// rules and adheres to some heuristic limits of the local node (price and size).
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// Signature has been checked already, this cannot error.
+	from, _ := types.Sender(pool.signer, tx)
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return core.ErrNonceTooLow
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	balance := pool.currentState.GetBalance(from)
+	if balance.Cmp(tx.Cost()) < 0 {
+		return core.ErrInsufficientFunds
+	}
+
+	// Verify that replacing transactions will not result in overdraft
+	list := pool.pending[from]
+	if list != nil { // Sender already has pending txs
+		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+		if repl := list.txs.Get(tx.Nonce()); repl != nil {
+			// Deduct the cost of a transaction replaced by this
+			sum.Sub(sum, repl.Cost())
+		}
+		if balance.Cmp(sum) < 0 {
+			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+			return ErrOverdraft
+		}
+	}
 	return nil
 }
 
@@ -899,7 +930,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 			for _, dropTx := range drop {
 				dropSender, _ := types.Sender(pool.signer, dropTx)
-				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
+				if list := pool.pending[dropSender]; list != nil && list.Contains(dropTx.Nonce()) {
 					replacesPending = true
 					break
 				}
@@ -1694,7 +1725,7 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 				addr, _ := types.Sender(pool.signer, tx)
 
 				if _, ok := events[addr]; !ok {
-			events[addr] = newSortedMap()
+					events[addr] = newSortedMap()
 				}
 
 				events[addr].Put(tx)
@@ -1850,7 +1881,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		// Drop all transactions that are too costly (low balance or out of gas)
 		balance.SetFromBig(pool.currentState.GetBalance(addr))
 
-		drops, _ = list.Filter(balance, pool.currentMaxGas)
+		drops, _ = list.Filter(balance, pool.currentMaxGas.Load())
 		dropsLen = len(drops)
 
 		for _, tx := range drops {
@@ -1928,7 +1959,7 @@ func (pool *TxPool) truncatePending() {
 	}
 
 	// Assemble a spam order to penalize large transactors first
-	spammers := prque.New[int64, common.Address](nil)
+	spammers := make([]pair, 0, 8)
 	count := 0
 
 	var ok bool
@@ -1980,7 +2011,7 @@ func (pool *TxPool) truncatePending() {
 	// todo: metrics: spammers, offenders, total loops
 	for len(spammers) != 0 && pending > pool.config.GlobalSlots {
 		// Retrieve the next offender if not local address
-		offender, _ := spammers.Pop()
+		offender, spammers = spammers[len(spammers)-1].address, spammers[:len(spammers)-1]
 		offenders = append(offenders, offender)
 
 		// Equalize balances until all the same or below threshold
@@ -2178,7 +2209,7 @@ func (pool *TxPool) demoteUnexecutables() {
 
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		balance.SetFromBig(pool.currentState.GetBalance(addr))
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas.Load())
+		drops, invalids := list.Filter(balance, pool.currentMaxGas.Load())
 		dropsLen = len(drops)
 		invalidsLen = len(invalids)
 
@@ -2219,9 +2250,7 @@ func (pool *TxPool) demoteUnexecutables() {
 				pool.enqueueTx(hash, tx, false, false)
 			}
 
-			pendingGauge.Dec(int64(len(gapped)))
-			// This might happen in a reorg, so log it to the metering
-			blockReorgInvalidatedTx.Mark(int64(gappedLen))
+			pendingGauge.Dec(int64(gappedLen))
 		}
 
 		// Delete the entire pending entry if it became empty.

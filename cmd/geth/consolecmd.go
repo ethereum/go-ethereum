@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -125,18 +126,7 @@ func remoteConsole(ctx *cli.Context) error {
 			path = ctx.String(utils.DataDirFlag.Name)
 		}
 		if path != "" {
-			if ctx.Bool(utils.RopstenFlag.Name) {
-				// Maintain compatibility with older Geth configurations storing the
-				// Ropsten database in `testnet` instead of `ropsten`.
-				legacyPath := filepath.Join(path, "testnet")
-				if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-					path = legacyPath
-				} else {
-					path = filepath.Join(path, "ropsten")
-				}
-			} else if ctx.Bool(utils.RinkebyFlag.Name) {
-				path = filepath.Join(path, "rinkeby")
-			} else if ctx.Bool(utils.GoerliFlag.Name) {
+			if ctx.Bool(utils.GoerliFlag.Name) {
 				path = filepath.Join(path, "goerli")
 			} else if ctx.Bool(utils.MumbaiFlag.Name) || ctx.Bool(utils.BorMainnetFlag.Name) {
 				homeDir, _ := os.UserHomeDir()
@@ -148,7 +138,7 @@ func remoteConsole(ctx *cli.Context) error {
 		}
 		endpoint = fmt.Sprintf("%s/bor.ipc", path)
 	}
-	client, err := dialRPC(endpoint)
+	client, err := utils.DialRPCWithHeaders(endpoint, ctx.StringSlice(utils.HttpHeaderFlag.Name))
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}

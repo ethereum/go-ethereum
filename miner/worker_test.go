@@ -19,6 +19,10 @@ package miner
 import (
 	"crypto/rand"
 	"errors"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"math/big"
 	"os"
 	"sync/atomic"
@@ -46,9 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
 
-
-// TODO marcello check redeclarations
-
 const (
 	// testCode is the testing contract binary code which will initialises some
 	// variables in constructor
@@ -56,30 +57,6 @@ const (
 
 	// testGas is the gas required for contract deployment.
 	testGas = 144109
-)
-
-var (
-	// Test chain configurations
-	testTxPoolConfig  txpool.Config
-	ethashChainConfig *params.ChainConfig
-	cliqueChainConfig *params.ChainConfig
-
-	// Test accounts
-	testBankKey, _  = crypto.GenerateKey()
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000000000000000)
-
-	testUserKey, _  = crypto.GenerateKey()
-	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
-
-	// Test transactions
-	pendingTxs []*types.Transaction
-	newTxs     []*types.Transaction
-
-	testConfig = &Config{
-		Recommit: time.Second,
-		GasCeil:  params.GenesisGasLimit,
-	}
 )
 
 func init() {
@@ -124,23 +101,52 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+// newTestWorker creates a new test worker with the given parameters.
+func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
+	backend.txPool.AddLocals(pendingTxs)
+
+	var w *worker
+
+	if delay != 0 || opcodeDelay != 0 {
+		//nolint:staticcheck
+		w = newWorkerWithDelay(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, delay, opcodeDelay)
+	} else {
+		//nolint:staticcheck
+		w = newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+	}
+
+	w.setEtherbase(TestBankAddress)
+
+	// enable empty blocks
+	w.noempty.Store(noempty)
+
+	return w, backend, w.close
+}
+
+func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
 	var gspec = &core.Genesis{
 		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		Alloc:  core.GenesisAlloc{TestBankAddress: {Balance: testBankFunds}},
 	}
 	switch e := engine.(type) {
+	case *bor.Bor:
+		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
+		copy(gspec.ExtraData[32:32+common.AddressLength], TestBankAddress.Bytes())
+		e.Authorize(TestBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		})
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
-		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
-		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+		copy(gspec.ExtraData[32:32+common.AddressLength], TestBankAddress.Bytes())
+		e.Authorize(TestBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
 			return crypto.Sign(crypto.Keccak256(data), testBankKey)
 		})
 	case *ethash.Ethash:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}
@@ -150,7 +156,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	var uncle *types.Block
 	if n > 0 {
 		genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, func(i int, gen *core.BlockGen) {
-			gen.SetCoinbase(testBankAddress)
+			gen.SetCoinbase(TestBankAddress)
 		})
 		if _, err := chain.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to insert origin chain: %v", err)
@@ -181,7 +187,7 @@ func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base
 	return nil, errors.New("not supported")
 }
 
-func (b *testWorkerBackend) newRandomUncle() *types.Block {
+func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
 	var parent *types.Block
 	cur := b.chain.CurrentBlock()
 	if cur.Number.Uint64() == 0 {
@@ -189,31 +195,65 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	} else {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 	}
+	var err error
 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
-		rand.Read(addr)
+		_, err = rand.Read(addr)
+		if err != nil {
+			return
+		}
 		gen.SetCoinbase(common.BytesToAddress(addr))
 	})
-	return blocks[0]
+	return blocks[0], err
 }
 
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
 	if creation {
-		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
-		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(TestBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
 	}
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
-	w.setEtherbase(testBankAddress)
-	return w, backend
+// newRandomTxWithNonce creates a new transaction with the given nonce.
+func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(100 * params.InitialBaseFee)
+
+	if creation {
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+	} else {
+		tx, _ = types.SignTx(types.NewTransaction(nonce, testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	}
+
+	return tx
+}
+
+// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
+func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(storageContractByteCode)), types.HomesteadSigner{}, testBankKey)
+	contractAddr := crypto.CreateAddress(TestBankAddress, b.txPool.Nonce(TestBankAddress))
+
+	return tx, contractAddr
+}
+
+// newStorageContractCallTx creates a new transaction to call a storage smart contract.
+func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewTransaction(nonce, to, nil, storageCallTxGas, gasPrice, common.FromHex(storageContractTxCallData)), types.HomesteadSigner{}, testBankKey)
+
+	return tx
 }
 
 // nolint : paralleltest
@@ -241,9 +281,9 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	)
 
 	if isBor {
-		chainConfig = params.BorUnittestChainConfig
+		chainConfig = *params.BorUnittestChainConfig
 
-		engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+		engine, ctrl = getFakeBorFromConfig(t, &chainConfig)
 		defer ctrl.Finish()
 	} else {
 		if isClique {
@@ -258,7 +298,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 
 	defer engine.Close()
 
-	w, b := newTestWorker(t, &chainConfig, engine, db, 0)
+	w, b, _ := newTestWorker(t, &chainConfig, engine, db, 0, false, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -361,7 +401,7 @@ func TestEmptyWorkClique(t *testing.T) {
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
+	w, _, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	var (
@@ -413,7 +453,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b, _ := NewTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, 0, 0, 0)
+	w, b, _ := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1, false, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{}, 3)
@@ -471,7 +511,7 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{}, 3)
@@ -535,7 +575,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
+	w, _, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -636,7 +676,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, 0, 0, 0)
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
@@ -759,7 +799,6 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
-
 // nolint : paralleltest
 // TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
 func TestCommitInterruptExperimentBor(t *testing.T) {
@@ -803,7 +842,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay, opcodeDelay)
+	w, b, _ := newTestWorker(t, chainConfig, engine, db, 0, true, delay, opcodeDelay)
 	defer func() {
 		w.close()
 		engine.Close()
@@ -859,7 +898,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
-	w, b, _ := NewTestWorker(t, chainConfig, engine, db, 0, 1, delay, opcodeDelay)
+	w, b, _ := newTestWorker(t, chainConfig, engine, db, 0, true, delay, opcodeDelay)
 	defer func() {
 		w.close()
 		engine.Close()
@@ -920,14 +959,10 @@ func BenchmarkBorMining(b *testing.B) {
 
 	chainConfig.LondonBlock = big.NewInt(0)
 
-	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0, 0)
+	w, back, _ := newTestWorker(b, chainConfig, engine, db, 0, false, 0, 0)
 	defer w.close()
 
-	// This test chain imports the mined blocks.
-	db2 := rawdb.NewMemoryDatabase()
-	back.Genesis.MustCommit(db2)
-
-	chain, _ := core.NewBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{}, nil, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -943,7 +978,7 @@ func BenchmarkBorMining(b *testing.B) {
 
 	var err error
 
-	txInBlock := int(back.Genesis.GasLimit/totalGas) + 1
+	txInBlock := int(back.genesis.GasLimit/totalGas) + 1
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
@@ -969,7 +1004,7 @@ func BenchmarkBorMining(b *testing.B) {
 	// Start mining!
 	w.start()
 
-	blockPeriod, ok := back.Genesis.Config.Bor.Period["0"]
+	blockPeriod, ok := back.genesis.Config.Bor.Period["0"]
 	if !ok {
 		blockPeriod = 1
 	}

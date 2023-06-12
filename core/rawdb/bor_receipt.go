@@ -15,9 +15,6 @@ var (
 	// bor receipt key
 	borReceiptKey = types.BorReceiptKey
 
-	// bor derived tx hash
-	getDerivedBorTxHash = types.GetDerivedBorTxHash
-
 	// borTxLookupPrefix + hash -> transaction/receipt lookup metadata
 	borTxLookupPrefix = []byte(borTxLookupPrefixStr)
 )
@@ -37,7 +34,7 @@ func borTxLookupKey(hash common.Hash) []byte {
 func ReadBorReceiptRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 
-	err := db.ReadAncients(func(reader ethdb.AncientReader) error {
+	err := db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(freezerBorReceiptTable, number)

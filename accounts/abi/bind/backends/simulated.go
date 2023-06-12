@@ -83,8 +83,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, nil, &genesis, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -670,7 +669,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
-	return core.ApplyMessage(vmEnv, *msg, gasPool, context.Background())
+	return core.ApplyMessage(vmEnv, msg, gasPool, context.Background())
 }
 
 // SendTransaction updates the pending block to include the given transaction.
