@@ -32,13 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// withdrawals implements a FIFO queue which manages
+// withdrawals implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawals struct {
 	pending []*types.Withdrawal
 	next    uint64
 }
 
-// remove up to 10 withdrawals from the queue
+// pop removes up to 10 withdrawals from the queue
 func (w *withdrawals) pop() []*types.Withdrawal {
 	var popCount int
 	if len(w.pending) >= 10 {
@@ -53,6 +53,7 @@ func (w *withdrawals) pop() []*types.Withdrawal {
 	return popped
 }
 
+// add adds a withdrawal to the queue
 func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
 	if withdrawal.Index < w.next {
 		return fmt.Errorf("withdrawal has index (%d) less than or equal to latest received withdrawal index (%d)", withdrawal.Index, w.next-1)
