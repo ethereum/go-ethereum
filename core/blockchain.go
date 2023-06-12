@@ -1757,6 +1757,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		ptime := time.Since(pstart)
 
+		trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+		blockExecution := ptime - trieRead
+		var trieHashUpdate time.Duration
+		if !bc.chainConfig.IsByzantium(block.Number()) {
+			// IntermediateRoot (trieHash, trieUpdate) is performed at the end of every tx for pre-Byzantium blocks
+			// thus, trieHashUpdate time should be substracted from blockExecution time
+			trieHashUpdate = statedb.AccountHashes + statedb.StorageHashes + statedb.AccountUpdates + statedb.StorageUpdates
+			blockExecution -= trieHashUpdate
+		}
+
 		vstart := time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -1767,20 +1778,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		proctime := time.Since(start) // processing + validation
 
 		// Update the metrics touched during block processing and validation
-		accountReadTimer.Update(statedb.AccountReads)                   // Account reads are complete(in processing)
-		storageReadTimer.Update(statedb.StorageReads)                   // Storage reads are complete(in processing)
-		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads)   // Account reads are complete(in processing)
-		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads)   // Storage reads are complete(in processing)
-		accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
-		storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
-		accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
-		storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
-		triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
-		trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
-		trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
-		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
-		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
-		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
+		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete(in processing)
+		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete(in processing)
+		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete(in processing)
+		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete(in processing)
+		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete(in processing & validation)
+		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete(in processing & validation)
+		accountHashTimer.Update(statedb.AccountHashes)                // Account hashes are complete(in processing & validation)
+		storageHashTimer.Update(statedb.StorageHashes)                // Storage hashes are complete(in processing & validation)
+		triehash := statedb.AccountHashes + statedb.StorageHashes     // The time spent on tries hashing
+		trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates // The time spent on tries update
+		blockExecutionTimer.Update(blockExecution)                    // The time spent on EVM processing
+		vtime -= triehash + trieUpdate
+		if !bc.chainConfig.IsByzantium(block.Number()) {
+			// deduct the trieHashUpdate time spent in processing
+			vtime += trieHashUpdate
+		}
+		blockValidationTimer.Update(vtime) // The time spent on block validation
 
 		// Write the block to the chain and get the status.
 		var (
