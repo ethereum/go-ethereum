@@ -69,7 +69,6 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(itx.V)
 		enc.R = (*hexutil.Big)(itx.R)
 		enc.S = (*hexutil.Big)(itx.S)
-		// Only derive the chain ID if tx is signed and post EIP-155
 		if tx.Protected() {
 			enc.ChainID = (*hexutil.Big)(tx.ChainId())
 		}
