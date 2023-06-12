@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"io/ioutil" // nolint: staticcheck
 	_log "log"
 	"math/big"
@@ -16,7 +17,6 @@ import (
 	"gotest.tools/assert"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -778,7 +778,6 @@ func InitGenesisSprintLength(t *testing.T, faucets []*ecdsa.PrivateKey, fileLoca
 	}
 
 	genesis.Config.ChainID = big.NewInt(15001)
-	genesis.Config.EIP150Hash = common.Hash{}
 	genesis.Config.Bor.Sprint["0"] = sprintSize
 
 	return genesis
@@ -811,7 +810,7 @@ func InitMinerSprintLength(genesis *core.Genesis, privKey *ecdsa.PrivateKey, wit
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{

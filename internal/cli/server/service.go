@@ -197,7 +197,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 
 	resp := &proto.StatusResponse{
 		CurrentHeader: headerToProtoHeader(apiBackend.CurrentHeader()),
-		CurrentBlock:  headerToProtoHeader(apiBackend.CurrentBlock().Header()),
+		CurrentBlock:  headerToProtoHeader(apiBackend.CurrentBlock()),
 		NumPeers:      int64(len(s.node.Server().PeersInfo())),
 		SyncMode:      s.config.SyncMode,
 		Syncing: &proto.StatusResponse_Syncing{

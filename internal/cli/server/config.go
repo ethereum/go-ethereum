@@ -897,8 +897,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	{
 		n.GPO.Blocks = int(c.Gpo.Blocks)
 		n.GPO.Percentile = int(c.Gpo.Percentile)
-		n.GPO.MaxHeaderHistory = c.Gpo.MaxHeaderHistory
-		n.GPO.MaxBlockHistory = c.Gpo.MaxBlockHistory
+		n.GPO.MaxHeaderHistory = uint64(c.Gpo.MaxHeaderHistory)
+		n.GPO.MaxBlockHistory = uint64(c.Gpo.MaxBlockHistory)
 		n.GPO.MaxPrice = c.Gpo.MaxPrice
 		n.GPO.IgnorePrice = c.Gpo.IgnorePrice
 	}
@@ -1022,7 +1022,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	// RequiredBlocks
 	{
-		n.PeerRequiredBlocks = map[uint64]common.Hash{}
+		n.RequiredBlocks = map[uint64]common.Hash{}
 		for k, v := range c.RequiredBlocks {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
@@ -1034,7 +1034,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 				return nil, fmt.Errorf("invalid required block hash %s: %v", v, err)
 			}
 
-			n.PeerRequiredBlocks[number] = hash
+			n.RequiredBlocks[number] = hash
 		}
 	}
 

@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package core
+package txpool
 
 import (
 	"crypto/ecdsa"
@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// TODO marcello merge this file with txpool2_test.go
+
 func pricedValuedTransaction(nonce uint64, value int64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
 	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(value), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
 	return tx
@@ -36,9 +38,9 @@ func pricedValuedTransaction(nonce uint64, value int64, gaslimit uint64, gaspric
 func count(t *testing.T, pool *TxPool) (pending int, queued int) {
 	t.Helper()
 
-	pending, queued = pool.stats()
+	pending, queued = pool.Stats()
 
-	if err := validateTxPoolInternals(pool); err != nil {
+	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 
@@ -55,7 +57,7 @@ func fillPool(t *testing.T, pool *TxPool) {
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(10000000000))
 		// Add executable ones
-		for j := 0; j < int(pool.config.AccountSlots); j++ {
+		for j := 0; j < int(pool.config().AccountSlots); j++ {
 			executableTxs = append(executableTxs, pricedTransaction(uint64(j), 100000, big.NewInt(300), key))
 		}
 	}

@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"io"
 	"math/big"
 	"net"
@@ -165,6 +167,8 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 	// flag to set if we're authorizing consensus here
 	authorized := false
 
+	var ethCfg *ethconfig.Config
+
 	// check if personal wallet endpoints are disabled or not
 	// nolint:nestif
 	if !config.Accounts.DisableBorWallet {
@@ -172,7 +176,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
 
 		// register the ethereum backend
-		ethCfg, err := config.buildEth(stack, stack.AccountManager())
+		ethCfg, err = config.buildEth(stack, stack.AccountManager())
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +189,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 		srv.backend = backend
 	} else {
 		// register the ethereum backend (with temporary created account manager)
-		ethCfg, err := config.buildEth(stack, accountManager)
+		ethCfg, err = config.buildEth(stack, accountManager)
 		if err != nil {
 			return nil, err
 		}
@@ -244,13 +248,15 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 	// set the auth status in backend
 	srv.backend.SetAuthorized(authorized)
 
+	filterSystem := utils.RegisterFilterAPI(stack, srv.backend.APIBackend, ethCfg)
+
 	// debug tracing is enabled by default
 	stack.RegisterAPIs(tracers.APIs(srv.backend.APIBackend))
 	srv.tracerAPI = tracers.NewAPI(srv.backend.APIBackend)
 
 	// graphql is started from another place
 	if config.JsonRPC.Graphql.Enabled {
-		if err := graphql.New(stack, srv.backend.APIBackend, config.JsonRPC.Graphql.Cors, config.JsonRPC.Graphql.VHost); err != nil {
+		if err := graphql.New(stack, srv.backend.APIBackend, filterSystem, config.JsonRPC.Graphql.Cors, config.JsonRPC.Graphql.VHost); err != nil {
 			return nil, fmt.Errorf("failed to register the GraphQL service: %v", err)
 		}
 	}
@@ -500,7 +506,7 @@ func setupLogger(logLevel string, loggingInfo LoggingConfig) {
 }
 
 func (s *Server) GetLatestBlockNumber() *big.Int {
-	return s.backend.BlockChain().CurrentBlock().Number()
+	return s.backend.BlockChain().CurrentBlock().Number
 }
 
 func (s *Server) GetGrpcAddr() string {

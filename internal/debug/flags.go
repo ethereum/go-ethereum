@@ -312,7 +312,7 @@ func Setup(ctx *cli.Context) error {
 		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
-	} else if ctx.GlobalIsSet("bor-mumbai") || ctx.GlobalIsSet("bor-mainnet") {
+	} else if ctx.IsSet("bor-mumbai") || ctx.IsSet("bor-mainnet") {
 		address := fmt.Sprintf("%s:%d", "0.0.0.0", 7071)
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}

@@ -43,7 +43,7 @@ func TestNodeIterator(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	blockchain, _ := core.NewBlockChain(fulldb, nil, gspec, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := core.NewBlockChain(fulldb, nil, gspec, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil, nil)
 	_, gchain, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)

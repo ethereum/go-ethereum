@@ -343,3 +343,43 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (b *backendMock) RPCRpcReturnDataLimit() uint64 {
+	return b.RPCRpcReturnDataLimit()
+}
+
+func (b *backendMock) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return b.SubscribeStateSyncEvent(ch)
+}
+
+func (b *backendMock) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+	return b.GetRootHash(ctx, starBlockNr, endBlockNr)
+}
+
+func (b *backendMock) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	return b.GetBorBlockReceipt(ctx, hash)
+}
+
+func (b *backendMock) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	return b.GetBorBlockLogs(ctx, hash)
+}
+
+func (b *backendMock) GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	return b.GetBorBlockTransaction(ctx, txHash)
+}
+
+func (b *backendMock) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	return b.GetBorBlockTransactionWithBlockHash(ctx, txHash, blockHash)
+}
+
+func (b *backendMock) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	return b.SubscribeChain2HeadEvent(ch)
+}
+
+func (b *backendMock) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return b.GetCheckpointWhitelist()
+}
+
+func (b *backendMock) PurgeCheckpointWhitelist() {
+	b.PurgeCheckpointWhitelist()
+}

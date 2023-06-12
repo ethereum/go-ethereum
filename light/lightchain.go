@@ -93,7 +93,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		engine:        engine,
 	}
-	bc.forker = core.NewForkChoice(bc, nil)
+	bc.forker = core.NewForkChoice(bc, nil, checker)
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
@@ -399,24 +399,6 @@ func (lc *LightChain) SetCanonical(header *types.Header) error {
 	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
 	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())
 	return nil
-}
-
-func (lc *LightChain) InsertHeader(header *types.Header) error {
-	// Verify the header first before obtaining the lock
-	headers := []*types.Header{header}
-	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
-		return err
-	}
-	// Make sure only one thread manipulates the chain at once
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
-	_, err := lc.hc.WriteHeaders(headers)
-	log.Info("Inserted header", "number", header.Number, "hash", header.Hash())
-	return err
 }
 
 func (lc *LightChain) SetChainHead(header *types.Header) error {

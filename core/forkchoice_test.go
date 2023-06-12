@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"testing"
 
@@ -33,11 +34,12 @@ func TestPastChainInsert(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	gspec.Commit(db, trie.NewDatabase(db))
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +50,11 @@ func TestPastChainInsert(t *testing.T) {
 	}
 	validate := func(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 		// Put all explicit conditions here
-		// If canonical chain is empty and we're importing a chain of 64 blocks
+		// If canonical chain is empty, and we're importing a chain of 64 blocks
 		if currentHeader.Number.Uint64() == uint64(0) && len(chain) == 64 {
 			return true, nil
 		}
-		// If canonical chain is of len 64 and we're importing a past chain from 54-64, then accept it
+		// If canonical chain is of len 64, and we're importing a past chain from 54-64, then accept it
 		if currentHeader.Number.Uint64() == uint64(64) && chain[0].Number.Uint64() == 55 && len(chain) == 10 {
 			return true, nil
 		}
@@ -64,7 +66,7 @@ func TestPastChainInsert(t *testing.T) {
 	mockForker := NewForkChoice(mockChainReader, nil, mockChainValidator)
 
 	// chain A: G->A1->A2...A64
-	chainA := makeHeaderChain(genesis.Header(), 64, ethash.NewFaker(), db, 10)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 64, ethash.NewFaker(), 10)
 
 	// Inserting 64 headers on an empty chain
 	// expecting 1 write status with no error
@@ -72,11 +74,11 @@ func TestPastChainInsert(t *testing.T) {
 
 	// The current chain is: G->A1->A2...A64
 	// chain B: G->A1->A2...A44->B45->B46...B64
-	chainB := makeHeaderChain(chainA[43], 20, ethash.NewFaker(), db, 10)
+	chainB := makeHeaderChain(gspec.Config, chainA[43], 20, ethash.NewFaker(), genDb, 10)
 
 	// The current chain is: G->A1->A2...A64
 	// chain C: G->A1->A2...A54->C55->C56...C64
-	chainC := makeHeaderChain(chainA[53], 10, ethash.NewFaker(), db, 10)
+	chainC := makeHeaderChain(gspec.Config, chainA[53], 10, ethash.NewFaker(), genDb, 10)
 
 	// Update the function to consider chainC with higher difficulty
 	getTd = func(hash common.Hash, number uint64) *big.Int {
@@ -103,11 +105,12 @@ func TestFutureChainInsert(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	gspec.Commit(db, trie.NewDatabase(db))
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +137,7 @@ func TestFutureChainInsert(t *testing.T) {
 	mockForker := NewForkChoice(mockChainReader, nil, mockChainValidator)
 
 	// chain A: G->A1->A2...A64
-	chainA := makeHeaderChain(genesis.Header(), 64, ethash.NewFaker(), db, 10)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 64, ethash.NewFaker(), 10)
 
 	// Inserting 64 headers on an empty chain
 	// expecting 1 write status with no error
@@ -142,7 +145,7 @@ func TestFutureChainInsert(t *testing.T) {
 
 	// The current chain is: G->A1->A2...A64
 	// chain B: G->A1->A2...A64->B65->B66...B84
-	chainB := makeHeaderChain(chainA[63], 20, ethash.NewFaker(), db, 10)
+	chainB := makeHeaderChain(gspec.Config, chainA[63], 20, ethash.NewFaker(), genDb, 10)
 
 	// Inserting 20 headers on the canonical chain
 	// expecting 0 write status with no error
@@ -150,7 +153,7 @@ func TestFutureChainInsert(t *testing.T) {
 
 	// The current chain is: G->A1->A2...A64
 	// chain C: G->A1->A2...A64->C65->C66...C74
-	chainC := makeHeaderChain(chainA[63], 10, ethash.NewFaker(), db, 10)
+	chainC := makeHeaderChain(gspec.Config, chainA[63], 10, ethash.NewFaker(), genDb, 10)
 
 	// Inserting 10 headers on the canonical chain
 	// expecting 0 write status with no error
@@ -161,11 +164,12 @@ func TestOverlappingChainInsert(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	gspec.Commit(db, trie.NewDatabase(db))
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +196,7 @@ func TestOverlappingChainInsert(t *testing.T) {
 	mockForker := NewForkChoice(mockChainReader, nil, mockChainValidator)
 
 	// chain A: G->A1->A2...A64
-	chainA := makeHeaderChain(genesis.Header(), 64, ethash.NewFaker(), db, 10)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 64, ethash.NewFaker(), 10)
 
 	// Inserting 64 headers on an empty chain
 	// expecting 1 write status with no error
@@ -200,7 +204,7 @@ func TestOverlappingChainInsert(t *testing.T) {
 
 	// The current chain is: G->A1->A2...A64
 	// chain B: G->A1->A2...A54->B55->B56...B84
-	chainB := makeHeaderChain(chainA[53], 30, ethash.NewFaker(), db, 10)
+	chainB := makeHeaderChain(gspec.Config, chainA[53], 30, ethash.NewFaker(), genDb, 10)
 
 	// Inserting 20 blocks on canonical chain
 	// expecting 2 write status with no error
@@ -208,7 +212,7 @@ func TestOverlappingChainInsert(t *testing.T) {
 
 	// The current chain is: G->A1->A2...A64
 	// chain C: G->A1->A2...A54->C55->C56...C74
-	chainC := makeHeaderChain(chainA[53], 20, ethash.NewFaker(), db, 10)
+	chainC := makeHeaderChain(gspec.Config, chainA[53], 20, ethash.NewFaker(), genDb, 10)
 
 	// Inserting 10 blocks on canonical chain
 	// expecting 1 write status with no error

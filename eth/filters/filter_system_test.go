@@ -50,6 +50,12 @@ type testBackend struct {
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
+
+	stateSyncFeed event.Feed
+}
+
+func (b *testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return b.stateSyncFeed.Subscribe(ch)
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {

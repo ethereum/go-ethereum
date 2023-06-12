@@ -214,11 +214,6 @@ func (c *jsonCodec) peerInfo() PeerInfo {
 	return PeerInfo{Transport: "ipc", RemoteAddr: c.remote}
 }
 
-func (c *jsonCodec) peerInfo() PeerInfo {
-	// This returns "ipc" because all other built-in transports have a separate codec type.
-	return PeerInfo{Transport: "ipc", RemoteAddr: c.remote}
-}
-
 func (c *jsonCodec) remoteAddr() string {
 	return c.remote
 }

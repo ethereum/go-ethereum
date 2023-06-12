@@ -62,6 +62,7 @@ func main() {
 		if err := os.WriteFile(canonicalPath, code, 0600); err != nil {
 			fatal(err)
 		}
+	}
 }
 
 func fatal(args ...interface{}) {

@@ -19,7 +19,6 @@ package miner
 import (
 	"crypto/rand"
 	"errors"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -48,15 +47,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-)
-
-const (
-	// testCode is the testing contract binary code which will initialises some
-	// variables in constructor
-	testCode = "0x60806040527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060005534801561003457600080fd5b5060fc806100436000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80630c4dae8814603757806398a213cf146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506084565b005b60005481565b806000819055507fe9e44f9f7da8c559de847a3232b57364adc0354f15a2cd8dc636d54396f9587a6000546040518082815260200191505060405180910390a15056fea265627a7a723058208ae31d9424f2d0bc2a3da1a5dd659db2d71ec322a17db8f87e19e209e3a1ff4a64736f6c634300050a0032"
-
-	// testGas is the gas required for contract deployment.
-	testGas = 144109
 )
 
 func init() {
@@ -92,15 +82,6 @@ func init() {
 	newTxs = append(newTxs, tx2)
 }
 
-// testWorkerBackend implements worker.Backend interfaces and wraps all information needed during the testing.
-type testWorkerBackend struct {
-	db         ethdb.Database
-	txPool     *txpool.TxPool
-	chain      *core.BlockChain
-	genesis    *core.Genesis
-	uncleBlock *types.Block
-}
-
 // newTestWorker creates a new test worker with the given parameters.
 func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
@@ -124,63 +105,6 @@ func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 	return w, backend, w.close
 }
 
-func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
-	var gspec = &core.Genesis{
-		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{TestBankAddress: {Balance: testBankFunds}},
-	}
-	switch e := engine.(type) {
-	case *bor.Bor:
-		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
-		copy(gspec.ExtraData[32:32+common.AddressLength], TestBankAddress.Bytes())
-		e.Authorize(TestBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testBankKey)
-		})
-	case *clique.Clique:
-		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
-		copy(gspec.ExtraData[32:32+common.AddressLength], TestBankAddress.Bytes())
-		e.Authorize(TestBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testBankKey)
-		})
-	case *ethash.Ethash:
-	default:
-		t.Fatalf("unexpected consensus engine type: %T", engine)
-	}
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("core.NewBlockChain failed: %v", err)
-	}
-	txpool := txpool.NewTxPool(testTxPoolConfig, chainConfig, chain)
-
-	// Generate a small n-block chain and an uncle block for it
-	var uncle *types.Block
-	if n > 0 {
-		genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, func(i int, gen *core.BlockGen) {
-			gen.SetCoinbase(TestBankAddress)
-		})
-		if _, err := chain.InsertChain(blocks); err != nil {
-			t.Fatalf("failed to insert origin chain: %v", err)
-		}
-		parent := chain.GetBlockByHash(chain.CurrentBlock().ParentHash)
-		blocks, _ = core.GenerateChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
-			gen.SetCoinbase(testUserAddress)
-		})
-		uncle = blocks[0]
-	} else {
-		_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, gen *core.BlockGen) {
-			gen.SetCoinbase(testUserAddress)
-		})
-		uncle = blocks[0]
-	}
-	return &testWorkerBackend{
-		db:         db,
-		chain:      chain,
-		txPool:     txpool,
-		genesis:    gspec,
-		uncleBlock: uncle,
-	}
-}
-
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
 func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
@@ -196,7 +120,7 @@ func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 	}
 	var err error
-	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.DB, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
 		_, err = rand.Read(addr)
 		if err != nil {
@@ -302,7 +226,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	defer w.close()
 
 	// This test chain imports the mined blocks.
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.Genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -962,7 +886,7 @@ func BenchmarkBorMining(b *testing.B) {
 	w, back, _ := newTestWorker(b, chainConfig, engine, db, 0, false, 0, 0)
 	defer w.close()
 
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.Genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -978,7 +902,7 @@ func BenchmarkBorMining(b *testing.B) {
 
 	var err error
 
-	txInBlock := int(back.genesis.GasLimit/totalGas) + 1
+	txInBlock := int(back.Genesis.GasLimit/totalGas) + 1
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
@@ -1004,7 +928,7 @@ func BenchmarkBorMining(b *testing.B) {
 	// Start mining!
 	w.start()
 
-	blockPeriod, ok := back.genesis.Config.Bor.Period["0"]
+	blockPeriod, ok := back.Genesis.Config.Bor.Period["0"]
 	if !ok {
 		blockPeriod = 1
 	}

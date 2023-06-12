@@ -151,7 +151,7 @@ func TestCreateGas(t *testing.T) {
 
 			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
 			var startGas = uint64(testGas)
-			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
+			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int), nil)
 			if err != nil {
 				return false
 			}

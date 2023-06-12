@@ -53,6 +53,8 @@ import (
 	"github.com/JekaMas/crand"
 )
 
+// TODO marcello merge this file with txpool2_test_BOR.go
+
 var (
 	// testTxPoolConfig is a transaction pool configuration without stateful disk
 	// sideeffects used during testing.

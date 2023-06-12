@@ -114,10 +114,10 @@ type HTTPTimeouts struct {
 // DefaultHTTPTimeouts represents the default timeout values used if further
 // configuration is not provided.
 var DefaultHTTPTimeouts = HTTPTimeouts{
-	ReadTimeout:  10 * time.Second,
+	ReadTimeout:       10 * time.Second,
 	ReadHeaderTimeout: 30 * time.Second,
-	WriteTimeout: 30 * time.Second,
-	IdleTimeout:  120 * time.Second,
+	WriteTimeout:      30 * time.Second,
+	IdleTimeout:       120 * time.Second,
 }
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
@@ -165,7 +165,6 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 
 	return func(ctx context.Context) (ServerCodec, error) {
 		return hc, nil
-}
 	}
 }
 

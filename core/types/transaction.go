@@ -56,7 +56,7 @@ type Transaction struct {
 
 	// caches
 	hash atomic.Pointer[common.Hash]
-	size atomic.Pointer[common.StorageSize]
+	size atomic.Pointer[uint64]
 	from atomic.Pointer[sigCache]
 }
 
@@ -207,8 +207,7 @@ func (tx *Transaction) setDecoded(inner TxData, size uint64) {
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
-		v := float64(size)
-		tx.size.Store((*common.StorageSize)(&v))
+		tx.size.Store(&size)
 	}
 }
 
@@ -486,17 +485,19 @@ func (tx *Transaction) Hash() common.Hash {
 
 // Size returns the true encoded storage size of the transaction, either by encoding
 // and returning it, or returning a previously cached value.
-func (tx *Transaction) Size() common.StorageSize {
+func (tx *Transaction) Size() uint64 {
 	if size := tx.size.Load(); size != nil {
 		return *size
 	}
-
 	c := writeCounter(0)
-
 	rlp.Encode(&c, &tx.inner)
-	tx.size.Store((*common.StorageSize)(&c))
 
-	return common.StorageSize(c)
+	size := uint64(c)
+	if tx.Type() != LegacyTxType {
+		size += 1 // type byte
+	}
+	tx.size.Store(&size)
+	return size
 }
 
 // WithSignature returns a new transaction with the given signature.

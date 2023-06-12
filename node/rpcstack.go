@@ -308,7 +308,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	// Create RPC server and handler.
 	srv := rpc.NewServer(config.executionPoolSize, config.executionPoolRequestTimeout)
 	srv.SetRPCBatchLimit(h.RPCBatchLimit)
-	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.httpConfig = config
