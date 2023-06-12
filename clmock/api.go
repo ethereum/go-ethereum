@@ -12,7 +12,9 @@ type API struct {
 }
 
 func (api *API) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
-	return api.mock.addWithdrawal(*withdrawal)
+	api.mock.mu.Lock()
+	defer api.mock.mu.Unlock()
+	return api.mock.withdrawals.add(withdrawal)
 }
 
 func (api *API) SetFeeRecipient(ctx context.Context, feeRecipient *common.Address) {

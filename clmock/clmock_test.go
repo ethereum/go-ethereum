@@ -95,7 +95,7 @@ func TestCLMockSendWithdrawals(t *testing.T) {
 	// generate some withdrawals
 	for i := 0; i < 20; i++ {
 		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
-		if err := mock.addWithdrawal(withdrawals[i]); err != nil {
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
 			t.Fatal("addWithdrawal failed", err)
 		}
 	}

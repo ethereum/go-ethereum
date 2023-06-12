@@ -32,16 +32,45 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// withdrawals implements a FIFO queue which manages
+type withdrawals struct {
+	pending []*types.Withdrawal
+	next    uint64
+}
+
+// remove up to 10 withdrawals from the queue
+func (w *withdrawals) pop() []*types.Withdrawal {
+	var popCount int
+	if len(w.pending) >= 10 {
+		popCount = 10
+	} else {
+		popCount = len(w.pending)
+	}
+
+	popped := make([]*types.Withdrawal, popCount)
+	copy(popped[:], w.pending[0:popCount])
+	w.pending = append([]*types.Withdrawal{}, w.pending[popCount:]...)
+	return popped
+}
+
+func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
+	if withdrawal.Index < w.next {
+		return fmt.Errorf("withdrawal has index (%d) less than or equal to latest received withdrawal index (%d)", withdrawal.Index, w.next-1)
+	}
+	w.next = withdrawal.Index + 1
+	w.pending = append(w.pending, withdrawal)
+	return nil
+}
+
 type CLMock struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	eth          *eth.Ethereum
 	period       time.Duration
-	withdrawals  []*types.Withdrawal
+	withdrawals  withdrawals
 	feeRecipient common.Address
 	// mu controls access to the feeRecipient/withdrawals which can be modified by the dev-mode RPC API methods
-	mu                sync.Mutex
-	nextWithdrawalIdx uint64
+	mu sync.Mutex
 }
 
 func NewCLMock(eth *eth.Ethereum) *CLMock {
@@ -53,7 +82,7 @@ func NewCLMock(eth *eth.Ethereum) *CLMock {
 	return &CLMock{
 		eth:          eth,
 		period:       time.Duration(chainConfig.Dev.Period) * time.Second,
-		withdrawals:  []*types.Withdrawal{},
+		withdrawals:  withdrawals{[]*types.Withdrawal{}, 0},
 		feeRecipient: common.Address{},
 	}
 }
@@ -69,36 +98,6 @@ func (c *CLMock) Start() error {
 func (c *CLMock) Stop() error {
 	c.cancel()
 	return nil
-}
-
-func (c *CLMock) addWithdrawal(w types.Withdrawal) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if w.Index < c.nextWithdrawalIdx {
-		return fmt.Errorf("withdrawal has index (%d) less than or equal to latest received withdrawal index (%d)", w.Index, c.nextWithdrawalIdx-1)
-	}
-	c.nextWithdrawalIdx = w.Index + 1
-	c.withdrawals = append(c.withdrawals, &w)
-	return nil
-}
-
-// remove up to 10 withdrawals from the withdrawal queue
-func (c *CLMock) popWithdrawals() []*types.Withdrawal {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var popCount int
-	if len(c.withdrawals) >= 10 {
-		popCount = 10
-	} else {
-		popCount = len(c.withdrawals)
-	}
-
-	popped := make([]*types.Withdrawal, popCount)
-	copy(popped[:], c.withdrawals[0:popCount])
-	c.withdrawals = append([]*types.Withdrawal{}, c.withdrawals[popCount:]...)
-	return popped
 }
 
 // loop manages the lifecycle of clmock.
@@ -131,13 +130,14 @@ func (c *CLMock) loop() {
 			if curTime.Unix() > lastBlockTime.Add(c.period).Unix() {
 				c.mu.Lock()
 				feeRecipient := c.feeRecipient
+				pendingWithdrawals := c.withdrawals.pop()
 				c.mu.Unlock()
 
 				payloadAttr := &engine.PayloadAttributes{
 					Timestamp:             uint64(curTime.Unix()),
 					Random:                common.Hash{}, // TODO: make this configurable?
 					SuggestedFeeRecipient: feeRecipient,
-					Withdrawals:           c.popWithdrawals(),
+					Withdrawals:           pendingWithdrawals,
 				}
 
 				// trigger block building
