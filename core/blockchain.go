@@ -1763,7 +1763,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		var trieHashUpdate time.Duration
 		if !bc.chainConfig.IsByzantium(block.Number()) {
 			// IntermediateRoot (trieHash, trieUpdate) is performed at the end of every tx for pre-Byzantium blocks
-			// thus, trieHashUpdate time should be substracted from blockExecution time
+			// thus, trieHashUpdate time should be subtracted from blockExecution time
 			trieHashUpdate = statedb.AccountHashes + statedb.StorageHashes + statedb.AccountUpdates + statedb.StorageUpdates
 			blockExecution -= trieHashUpdate
 		}
