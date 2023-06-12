@@ -163,6 +163,7 @@ var (
 	DeveloperPeriodFlag = &cli.IntFlag{
 		Name:     "dev.period",
 		Usage:    "Block period to use in developer mode (0 = mine only if transaction pending)",
+		Value:    12,
 		Category: flags.DevCategory,
 	}
 	DeveloperGasLimitFlag = &cli.Uint64Flag{

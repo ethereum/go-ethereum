@@ -72,6 +72,7 @@ func localConsole(ctx *cli.Context) error {
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	startNode(ctx, stack, backend, true)
+
 	defer stack.Close()
 
 	// Attach to the newly started node and create the JavaScript console.
