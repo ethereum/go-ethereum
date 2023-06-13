@@ -5,7 +5,7 @@ description: Overview of Geth's database architecture
 
 Since v1.9.0, Geth has divided its database into two parts. Recent blocks and state data are kept in quick-access storage, but older blocks and receipts ("ancients") are stored in a "freezer" database. The point of this separation is to minimize the dependency on expensive, sensitive SSDs, and instead push the less frequently-accessed data into a database that can be supported by cheaper and more durable drives. Storing less data in the faster LevelDB database also enables faster compactions and improves the database performance by allowing more state trie nodes to be held in active memory for a given cache-size.
 
-# Recent blocks
+## Recent blocks
 
 Geth stores recent blocks in a LevelDB database. This is a persistent key-value store that can be queried very quickly. The LevelDB database is supposed to be run on top of a fast SSD hard disk so that the disk IO is not bottlenecked by the underlying hardware. In addition to basic storage, the LevelDB database supports batch writes and iterations over the keyspace in binary-alphabetical order.
 The database is periodically compacted to reduce the operational cost of accessing indivdual items. This is achieved by flattening the underlying data store for a given range of keys. Any deleted or overwritten items in that key range are removed and the surviving data is reorganized for efficiency.
