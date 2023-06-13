@@ -101,6 +101,14 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient *common.Address) {
 	c.mu.Unlock()
 }
 
+func (c *SimulatedBeacon) getFeeRecipient() common.Address {
+	c.mu.Lock()
+	feeRecipient := c.feeRecipient
+	c.mu.Unlock()
+
+	return feeRecipient
+}
+
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
 func (c *SimulatedBeacon) Start() error {
 	c.ctx, c.cancel = context.WithCancel(context.Background())
@@ -142,16 +150,13 @@ func (c *SimulatedBeacon) loop() {
 			break
 		case curTime := <-ticker.C:
 			if curTime.Unix() > lastBlockTime.Add(c.period).Unix() {
-				c.mu.Lock()
-				feeRecipient := c.feeRecipient
-				pendingWithdrawals := c.withdrawals.pop()
-				c.mu.Unlock()
+				feeRecipient := c.getFeeRecipient()
 
 				payloadAttr := &engine.PayloadAttributes{
 					Timestamp:             uint64(curTime.Unix()),
 					Random:                common.Hash{}, // TODO: make this configurable?
 					SuggestedFeeRecipient: feeRecipient,
-					Withdrawals:           pendingWithdrawals,
+					Withdrawals:           c.withdrawals.pop(),
 				}
 
 				// trigger block building
