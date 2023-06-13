@@ -712,7 +712,7 @@ func (c *BorConfig) IsDelhi(number *big.Int) bool {
 }
 
 func (c *BorConfig) IsIndore(number *big.Int) bool {
-	return isForked(c.IndoreBlock, number)
+	return isBlockForked(c.IndoreBlock, number)
 }
 
 func (c *BorConfig) CalculateStateSyncDelay(number uint64) uint64 {
@@ -725,7 +725,7 @@ func (c *BorConfig) IsParallelUniverse(number *big.Int) bool {
 		return false
 	}
 
-	return isForked(c.ParallelUniverseBlock, number)
+	return isBlockForked(c.ParallelUniverseBlock, number)
 }
 
 func (c *BorConfig) IsSprintStart(number uint64) bool {

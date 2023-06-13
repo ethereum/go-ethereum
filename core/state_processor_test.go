@@ -248,7 +248,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 		defer blockchain.Stop()
 		defer parallelBlockchain.Stop()
@@ -292,7 +292,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 		defer blockchain.Stop()
 		defer parallelBlockchain.Stop()
@@ -356,7 +356,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			}
 			genesis               = gspec.MustCommit(db)
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 			tooBigInitCode        = [params.MaxInitCodeSize + 1]byte{}
 			smallInitCode         = [320]byte{}
 		)
