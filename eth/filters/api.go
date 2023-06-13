@@ -316,7 +316,11 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 	)
 	for {
 		// get the latest block header
-		head := api.sys.backend.CurrentHeader().Number.Int64()
+		header := api.sys.backend.CurrentHeader()
+		if header == nil {
+			return 0, errors.New("header is null")
+		}
+		head := header.Number.Int64()
 		if n >= head {
 			return head, nil
 		}
