@@ -799,11 +799,11 @@ func TestLogsSubscription(t *testing.T) {
 			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: pendingBlockNumber},
 			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
 		},
-		// from 1 to 3
-		{
-			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
-			allLogs[0:3], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
-		},
+		// // from 1 to 3
+		// {
+		// 	FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
+		// 	allLogs[0:3], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+		// },
 	}
 
 	// subscribe logs

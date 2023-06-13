@@ -398,14 +398,17 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 		return api.liveLogs(ctx, notifier, rpcSub, crit)
 	}
 
+	// if toBlock is limited and handled, no need to subscribe live logs anymore
+	if toBlock := crit.ToBlock; toBlock != nil {
+		if header := api.sys.backend.CurrentHeader(); header != nil && toBlock.Sign() > 0 && toBlock.Cmp(header.Number) <= 0 {
+			return errors.New("historical only log subscription is not supported")
+		}
+	}
+
 	go func() {
 		// do historical sync first
-		head, err := api.histLogs(ctx, notifier, rpcSub, crit)
+		_, err := api.histLogs(ctx, notifier, rpcSub, crit)
 		if err != nil {
-			return
-		}
-		// if toBlock is limited and handled, no need to subscribe live logs anymore
-		if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(big.NewInt(head)) <= 0 {
 			return
 		}
 		// then subscribe from the header
