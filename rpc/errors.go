@@ -61,12 +61,15 @@ const (
 	errcodeDefault                  = -32000
 	errcodeNotificationsUnsupported = -32001
 	errcodeTimeout                  = -32002
+	errcodeResponseTooLarge         = -32003
 	errcodePanic                    = -32603
 	errcodeMarshalError             = -32603
 )
 
 const (
-	errMsgTimeout = "request timed out"
+	errMsgTimeout          = "request timed out"
+	errMsgResponseTooLarge = "response too large"
+	errMsgBatchTooLarge    = "batch too large"
 )
 
 type methodNotFoundError struct{ method string }
