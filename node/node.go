@@ -495,20 +495,9 @@ func (n *Node) startRPC() error {
 	}
 	// Configure authenticated API
 	if len(openAPIs) != len(allAPIs) {
-		var (
-			jwtSecret []byte
-			err       error
-		)
-		if n.config.DataDir == "" {
-			// TODO: make dev-mode and jwt secret flags mutually exclusive
-
-			// in dev-mode we use a preconfigured jwt secret
-			jwtSecret = make([]byte, 32)
-		} else {
-			jwtSecret, err = n.obtainJWTSecret(n.config.JWTSecret)
-			if err != nil {
-				return err
-			}
+		jwtSecret, err := n.obtainJWTSecret(n.config.JWTSecret)
+		if err != nil {
+			return err
 		}
 		if err := initAuth(n.config.AuthPort, jwtSecret); err != nil {
 			return err

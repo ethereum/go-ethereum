@@ -36,10 +36,14 @@ import (
 type withdrawals struct {
 	pending []*types.Withdrawal
 	next    uint64
+	mu      sync.Mutex
 }
 
 // pop removes up to 10 withdrawals from the queue
 func (w *withdrawals) pop() []*types.Withdrawal {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	var popCount int
 	if len(w.pending) >= 10 {
 		popCount = 10
@@ -55,6 +59,9 @@ func (w *withdrawals) pop() []*types.Withdrawal {
 
 // add adds a withdrawal to the queue
 func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if withdrawal.Index < w.next {
 		return fmt.Errorf("withdrawal has index (%d) less than or equal to latest received withdrawal index (%d)", withdrawal.Index, w.next-1)
 	}
@@ -70,7 +77,7 @@ type SimulatedBeacon struct {
 	period       time.Duration
 	withdrawals  withdrawals
 	feeRecipient common.Address
-	// mu controls access to the feeRecipient/withdrawals which can be modified by the dev-mode RPC API methods
+	// mu gates concurrent access to the feeRecipient
 	mu sync.Mutex
 }
 
@@ -83,9 +90,15 @@ func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
 	return &SimulatedBeacon{
 		eth:          eth,
 		period:       time.Duration(chainConfig.Dev.Period) * time.Second,
-		withdrawals:  withdrawals{[]*types.Withdrawal{}, 0},
+		withdrawals:  withdrawals{[]*types.Withdrawal{}, 0, sync.Mutex{}},
 		feeRecipient: common.Address{},
 	}
+}
+
+func (c *SimulatedBeacon) setFeeRecipient(feeRecipient *common.Address) {
+	c.mu.Lock()
+	c.feeRecipient = *feeRecipient
+	c.mu.Unlock()
 }
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
