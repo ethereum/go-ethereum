@@ -17,7 +17,6 @@
 package simulated_beacon
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 // withdrawals implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawals struct {
 	pending []*types.Withdrawal
-	next    uint64
 	mu      sync.Mutex
 }
 
@@ -61,10 +59,6 @@ func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if withdrawal.Index < w.next {
-		return fmt.Errorf("withdrawal has index (%d) less than or equal to latest received withdrawal index (%d)", withdrawal.Index, w.next-1)
-	}
-	w.next = withdrawal.Index + 1
 	w.pending = append(w.pending, withdrawal)
 	return nil
 }
@@ -88,7 +82,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
 	return &SimulatedBeacon{
 		eth:          eth,
 		period:       chainConfig.Dev.Period,
-		withdrawals:  withdrawals{[]*types.Withdrawal{}, 0, sync.Mutex{}},
+		withdrawals:  withdrawals{[]*types.Withdrawal{}, sync.Mutex{}},
 		feeRecipient: common.Address{},
 	}
 }
