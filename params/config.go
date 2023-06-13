@@ -959,8 +959,8 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 	return parentTotalDiff.Cmp(c.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(c.TerminalTotalDifficulty) >= 0
 }
 
-// TODO marcello Shanghai
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
+// TODO marcello double check
 func (c *ChainConfig) IsShanghai(time uint64) bool {
 	return isTimestampForked(c.ShanghaiTime, time)
 }

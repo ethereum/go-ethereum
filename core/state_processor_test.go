@@ -321,7 +321,6 @@ func TestStateProcessorErrors(t *testing.T) {
 		}
 	}
 
-	// TODO marcello Shanghai?
 	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (EIP-3860) enabled.
 	{
 		var (
@@ -345,7 +344,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					MergeNetsplitBlock:            big.NewInt(0),
 					TerminalTotalDifficulty:       big.NewInt(0),
 					TerminalTotalDifficultyPassed: true,
-					ShanghaiTime:                  u64(0),
+					// TODO marcello double check
+					ShanghaiTime: u64(0),
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -422,7 +422,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	if config.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
 	}
-	// TODO marcello Shanghai?
+	// TODO marcello double check
 	if config.IsShanghai(header.Time) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
@@ -442,8 +442,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		cumulativeGas += tx.Gas()
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
-	// TODO marcello Shanghai?
 	// Assemble and return the final block for sealing
+	// TODO marcello double check
 	if config.IsShanghai(header.Time) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
 	}

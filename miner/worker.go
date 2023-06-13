@@ -1267,7 +1267,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
-		// TODO marcello check ToBig()
 		header.BaseFee = misc.CalcBaseFeeUint(w.chainConfig, parent).ToBig()
 		if !w.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * w.chainConfig.ElasticityMultiplier()

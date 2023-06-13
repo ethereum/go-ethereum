@@ -261,8 +261,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
-	// TODO marcello isShangai?
 	// Verify existence / non-existence of withdrawalsHash.
+	// TODO marcello double check
 	shanghai := chain.Config().IsShanghai(header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
@@ -358,7 +358,7 @@ func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.C
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, txs, uncles, receipts, nil)
 	}
-	// TODO marcello isShangai?
+	// TODO marcello double check
 	shanghai := chain.Config().IsShanghai(header.Time)
 	if shanghai {
 		// All blocks after Shanghai must include a withdrawals root.

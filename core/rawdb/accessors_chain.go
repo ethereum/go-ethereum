@@ -732,7 +732,6 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		// TODO marcello remove this? (waiting for answer from Arpit)
 		// Receipts might be in the legacy format, try decoding that.
 		// TODO: to be removed after users migrated
 		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
@@ -749,7 +748,6 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	return logs
 }
 
-// TODO marcello remove this? (waiting for answer from Arpit)
 // readLegacyLogs is a temporary workaround for when trying to read logs
 // from a block which has its receipt stored in the legacy format. It'll
 // be removed after users have migrated their freezer databases.

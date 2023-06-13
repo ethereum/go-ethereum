@@ -1067,7 +1067,6 @@ func (c *CallResult) Status() Long {
 func (b *Block) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
-	// TODO marcello check args number
 	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap())
 	if err != nil {
 		return nil, err

@@ -311,7 +311,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// TODO marcello remove?
+	// TODO marcello double check
 	if chain.Config().IsShanghai(header.Time) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}

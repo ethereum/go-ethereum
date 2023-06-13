@@ -217,7 +217,7 @@ type Config struct {
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
-	// TODO marcello Shanghai
+	// TODO marcello double check
 	// OverrideShanghai (TODO: remove after the fork)
 	OverrideShanghai *uint64 `toml:",omitempty"`
 
@@ -261,7 +261,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
 	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
 
-	// TODO marcello FIXME based on proper ethConfig for Bor (ideally ethashConfig) and blockchainAPI
 	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		genesisContractsClient := contract.NewGenesisContractsClient(chainConfig, chainConfig.Bor.ValidatorContract, chainConfig.Bor.StateReceiverContract, blockchainAPI)
 		spanner := span.NewChainSpanner(blockchainAPI, contract.ValidatorSet(), chainConfig, common.HexToAddress(chainConfig.Bor.ValidatorContract))

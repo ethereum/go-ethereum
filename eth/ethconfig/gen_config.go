@@ -286,7 +286,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.CheckpointOracle != nil {
 		c.CheckpointOracle = dec.CheckpointOracle
 	}
-	// TODO marcello OverrideShanghai
+	// TODO marcello double check
 	if dec.OverrideShanghai != nil {
 		c.OverrideShanghai = dec.OverrideShanghai
 	}

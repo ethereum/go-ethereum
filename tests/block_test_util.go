@@ -124,7 +124,6 @@ func (t *BlockTest) Run(snapshotter bool) error {
 		engine = ethash.NewShared()
 	}
 	// Wrap the original engine within the beacon-engine
-	// TODO marcello check everything "beacon" related
 	engine = beacon.New(engine)
 
 	cache := &core.CacheConfig{TrieCleanLimit: 0}

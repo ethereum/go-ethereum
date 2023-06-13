@@ -70,7 +70,7 @@ var (
 		utils.NoUSBFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		// TODO marcello Shanghai
+		// TODO marcello double check
 		utils.OverrideShanghai,
 		utils.EnablePersonal,
 		utils.EthashCacheDirFlag,

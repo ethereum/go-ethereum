@@ -96,7 +96,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
-	// TODO marcello IsShanghai
+	// TODO marcello double check
 	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time()) {
 		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
 	}

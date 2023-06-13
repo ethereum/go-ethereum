@@ -153,7 +153,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsPending:  make(map[common.Address]struct{}),
 		stateObjectsDirty:    make(map[common.Address]struct{}),
 		stateObjectsDestruct: make(map[common.Address]struct{}),
-		revertedKeys:        make(map[blockstm.Key]struct{}),
+		revertedKeys:         make(map[blockstm.Key]struct{}),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
@@ -928,26 +928,26 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 					Root:     common.BytesToHash(acc.Root),
 				}
 				if len(data.CodeHash) == 0 {
-				data.CodeHash = types.EmptyCodeHash.Bytes()
+					data.CodeHash = types.EmptyCodeHash.Bytes()
 				}
 				if data.Root == (common.Hash{}) {
-				data.Root = types.EmptyRootHash
+					data.Root = types.EmptyRootHash
 				}
 			}
 		}
 		// If snapshot unavailable or reading from it failed, load from the database
 		if data == nil {
 			start := time.Now()
-		var err error
-		data, err = s.trie.GetAccount(addr)
+			var err error
+			data, err = s.trie.GetAccount(addr)
 			if metrics.EnabledExpensive {
 				s.AccountReads += time.Since(start)
 			}
 			if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 				return nil
 			}
-		if data == nil {
+			if data == nil {
 				return nil
 			}
 		}
@@ -1083,7 +1083,7 @@ func (s *StateDB) Copy() *StateDB {
 		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
 		stateObjectsDestruct: make(map[common.Address]struct{}, len(s.stateObjectsDestruct)),
-		revertedKeys:        make(map[blockstm.Key]struct{}),
+		revertedKeys:         make(map[blockstm.Key]struct{}),
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
@@ -1498,7 +1498,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 				al.AddSlot(el.Address, key)
 			}
 		}
-		// TODO marcello Shanghai?
+		// TODO marcello double check
 		if rules.IsShanghai { // EIP-3651: warm coinbase
 			al.AddAddress(coinbase)
 		}

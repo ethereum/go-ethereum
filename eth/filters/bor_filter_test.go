@@ -74,7 +74,6 @@ func TestBorFilters(t *testing.T) {
 	// Block 1
 	backend.expectBorReceiptsFromMock([]*common.Hash{nil, &hash1, &hash2, &hash3, &hash4})
 
-	// TODO marcello regenerate ctrls for gomock to include the new methods
 	filter := NewBorBlockLogsRangeFilter(backend, testBorConfig, 0, 18, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, err := filter.Logs(context.Background())
 

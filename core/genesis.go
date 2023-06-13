@@ -297,7 +297,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	applyOverrides := func(config *params.ChainConfig) {
 		if config != nil {
-			// TODO marcello Shanghai?
+			// TODO marcello double check
 			if overrides != nil && overrides.OverrideShanghai != nil {
 				config.ShanghaiTime = overrides.OverrideShanghai
 			}
@@ -593,7 +593,7 @@ func DefaultMumbaiGenesisBlock() *Genesis {
 	}
 }
 
-//DefaultBorMainnet returns the Bor Mainnet network gensis block.
+// DefaultBorMainnet returns the Bor Mainnet network gensis block.
 func DefaultBorMainnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.BorMainnetChainConfig,
