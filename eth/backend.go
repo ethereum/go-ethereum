@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"runtime"
 	"sync"
@@ -181,9 +182,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	ethereum.APIBackend.gpo = gasprice.NewOracle(ethereum.APIBackend, gpoParams)
 
+	// Override the chain config with provided settings.
+	var overrides core.ChainOverrides
+	if config.OverrideShanghai != nil {
+		overrides.OverrideShanghai = config.OverrideShanghai
+	}
+
+	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, trie.NewDatabase(chainDb), config.Genesis, &overrides)
+	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
+		return nil, genesisErr
+	}
+
 	blockChainAPI := ethapi.NewBlockChainAPI(ethereum.APIBackend)
-	// TODO marcello fix configs (using nil atm)
-	engine := ethconfig.CreateConsensusEngine(stack, nil, nil, &ethashConfig, cliqueConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, nil)
+	engine := ethconfig.CreateConsensusEngine(stack, chainConfig, config, &ethashConfig, cliqueConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, blockChainAPI)
 	ethereum.engine = engine
 	// END: Bor changes
 
@@ -223,11 +234,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TriesInMemory:       config.TriesInMemory,
 		}
 	)
-	// Override the chain config with provided settings.
-	var overrides core.ChainOverrides
-	if config.OverrideShanghai != nil {
-		overrides.OverrideShanghai = config.OverrideShanghai
-	}
 
 	checker := whitelist.NewService(10)
 

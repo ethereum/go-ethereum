@@ -78,7 +78,7 @@ type EVMInterpreter struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
-// TxCacher is an wrapper of lru.cache for caching transactions that get interrupted
+// TxCache is a wrapper of lru.cache for caching transactions that get interrupted
 type TxCache struct {
 	Cache *lru.Cache
 }
