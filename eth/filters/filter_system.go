@@ -354,6 +354,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		blocks:    make(chan *types.Block),
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -372,6 +373,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		blocks:    make(chan *types.Block),
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -390,6 +392,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		blocks:    make(chan *types.Block),
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -407,6 +410,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		txs:       make(chan []*types.Transaction),
 		headers:   headers,
 		blocks:    make(chan *types.Block),
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -424,6 +428,7 @@ func (es *EventSystem) SubscribeNewBlocks(blocks chan *types.Block) *Subscriptio
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		blocks:    blocks,
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -459,6 +464,7 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 		txs:       txs,
 		headers:   make(chan *types.Header),
 		blocks:    make(chan *types.Block),
+		receipts:  make(chan []*types.Receipt),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
