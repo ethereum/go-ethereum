@@ -71,8 +71,7 @@ func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
 }
 
 type SimulatedBeacon struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
+	shutdownCh   chan struct{}
 	eth          *eth.Ethereum
 	period       time.Duration
 	withdrawals  withdrawals
@@ -111,14 +110,14 @@ func (c *SimulatedBeacon) getFeeRecipient() common.Address {
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
 func (c *SimulatedBeacon) Start() error {
-	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.shutdownCh = make(chan struct{})
 	go c.loop()
 	return nil
 }
 
 // Stop halts the SimulatedBeacon service
 func (c *SimulatedBeacon) Stop() error {
-	c.cancel()
+	close(c.shutdownCh)
 	return nil
 }
 
@@ -146,7 +145,7 @@ func (c *SimulatedBeacon) loop() {
 
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-c.shutdownCh:
 			break
 		case curTime := <-ticker.C:
 			if curTime.Unix() > lastBlockTime.Add(c.period).Unix() {
@@ -200,7 +199,7 @@ func (c *SimulatedBeacon) loop() {
 						}
 					case <-payloadTimeout.C:
 						restartPayloadBuilding = true
-					case <-c.ctx.Done():
+					case <-c.shutdownCh:
 						return
 					}
 					break
