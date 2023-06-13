@@ -588,6 +588,31 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
+// NewFilter creates a log subscription id, based on filter options, to notify when the logs change
+func (ec *Client) NewFilter(ctx context.Context, q ethereum.FilterQuery) (*rpc.ID, error) {
+	var id *rpc.ID
+	arg, err := toFilterArg(q)
+	if err != nil {
+		return nil, err
+	}
+	err = ec.c.CallContext(ctx, &id, "eth_newFilter", arg)
+	return id, err
+}
+
+// UninstallFilter uninstall a filter by subscription id
+func (ec *Client) UninstallFilter(ctx context.Context, id rpc.ID) (*bool, error) {
+	var res *bool
+	err := ec.c.CallContext(ctx, &res, "eth_uninstallFilter", id)
+	return res, err
+}
+
+// GetFilterChanges is a polling method for a filter that retrieves an array of logs that have taken place since the previous poll.
+func (ec *Client) GetFilterChanges(ctx context.Context, id rpc.ID) ([]types.Log, error) {
+	var result []types.Log
+	err := ec.c.CallContext(ctx, &result, "eth_getFilterChanges", id)
+	return result, err
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
