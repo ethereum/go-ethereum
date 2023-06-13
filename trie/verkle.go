@@ -104,10 +104,10 @@ func (t *VerkleTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	if len(values[utils.NonceLeafKey]) > 0 {
 		acc.Nonce = binary.LittleEndian.Uint64(values[utils.NonceLeafKey])
 	}
-	balance := values[utils.BalanceLeafKey]
-	if len(balance) > 0 {
-		for i := 0; i < len(balance)/2; i++ {
-			balance[len(balance)-i-1], balance[i] = balance[i], balance[len(balance)-i-1]
+	var balance [32]byte
+	if len(values[utils.BalanceLeafKey]) > 0 {
+		for i := 0; i < len(balance); i++ {
+			balance[len(balance)-i-1] = values[utils.BalanceLeafKey][i]
 		}
 	}
 	acc.Balance = new(big.Int).SetBytes(balance[:])
