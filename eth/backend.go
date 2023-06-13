@@ -111,7 +111,6 @@ type Ethereum struct {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-// TODO fixme marcello c'é qcls che non va qua (CreateConsensusEngine chiamata due volte)
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
@@ -207,7 +206,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	var (
 		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
+			EnablePreimageRecording:      config.EnablePreimageRecording,
+			ParallelEnable:               config.ParallelEVM.Enable,
+			ParallelSpeculativeProcesses: config.ParallelEVM.SpeculativeProcesses,
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
@@ -230,7 +231,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	checker := whitelist.NewService(10)
 
-	ethereum.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
+	// check if Parallel EVM is enabled
+	// if enabled, use parallel state processor
+	if config.ParallelEVM.Enable {
+		// TODO marcello fix NewParallelBlockChain
+		ethereum.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
+	} else {
+		ethereum.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
+	}
+
 	if err != nil {
 		return nil, err
 	}

@@ -889,6 +889,107 @@ func BenchmarkBorMining(b *testing.B) {
 	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.Genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
+	// fulfill tx pool
+	const (
+		totalGas    = testGas + params.TxGas
+		totalBlocks = 10
+	)
+
+	var err error
+
+	txInBlock := int(back.Genesis.GasLimit/totalGas) + 1
+
+	// a bit risky
+	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
+		err = back.txPool.AddLocal(back.newRandomTx(true))
+		if err != nil {
+			b.Fatal("while adding a local transaction", err)
+		}
+
+		err = back.txPool.AddLocal(back.newRandomTx(false))
+		if err != nil {
+			b.Fatal("while adding a remote transaction", err)
+		}
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	b.ResetTimer()
+
+	prev := uint64(time.Now().Unix())
+
+	// Start mining!
+	w.start()
+
+	blockPeriod, ok := back.Genesis.Config.Bor.Period["0"]
+	if !ok {
+		blockPeriod = 1
+	}
+
+	for i := 0; i < totalBlocks; i++ {
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
+
+			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())
+
+			prev = block.Time()
+		case <-time.After(time.Duration(blockPeriod) * time.Second):
+			b.Fatalf("timeout")
+		}
+	}
+}
+
+// uses core.NewParallelBlockChain to use the dependencies present in the block header
+// params.BorUnittestChainConfig contains the ParallelUniverseBlock ad big.NewInt(5), so the first 4 blocks will not have metadata.
+// nolint: gocognit
+func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
+	chainConfig := params.BorUnittestChainConfig
+
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
+
+	ethAPIMock := api.NewMockCaller(ctrl)
+	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	spanner := bor.NewMockSpanner(ctrl)
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+		{
+			ID:               0,
+			Address:          TestBankAddress,
+			VotingPower:      100,
+			ProposerPriority: 0,
+		},
+	}, nil).AnyTimes()
+
+	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClientMock.EXPECT().Close().Times(1)
+
+	contractMock := bor.NewMockGenesisContract(ctrl)
+
+	db, _, _ := NewDBForFakes(b)
+
+	engine := NewFakeBor(b, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	defer engine.Close()
+
+	chainConfig.LondonBlock = big.NewInt(0)
+
+	w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, 0, 0, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	db2 := rawdb.NewMemoryDatabase()
+	back.Genesis.MustCommit(db2)
+
+	chain, _ := core.NewParallelBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+	defer chain.Stop()
+
 	// Ignore empty commit here for less noise.
 	w.skipSealHook = func(task *task) bool {
 		return len(task.receipts) == 0
@@ -940,6 +1041,23 @@ func BenchmarkBorMining(b *testing.B) {
 
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
+
+			// check for dependencies for block number > 4
+			if block.NumberU64() <= 4 {
+				if block.TxDependency() != nil {
+					b.Fatalf("dependency not nil")
+				}
+			} else {
+				deps := block.TxDependency()
+				if len(deps[0]) != 0 {
+					b.Fatalf("wrong dependency")
+				}
+				for i := 1; i < block.Transactions().Len(); i++ {
+					if deps[i][0] != uint64(i-1) || len(deps[i]) != 1 {
+						b.Fatalf("wrong dependency")
+					}
+				}
 			}
 
 			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())

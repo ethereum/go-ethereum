@@ -204,7 +204,7 @@ func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *t
 	return tx
 }
 
-// newRandomTxWithGas creates a new transactionto deploy a storage smart contract.
+// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
 func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
 	var tx *types.Transaction
 
@@ -427,28 +427,13 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
-				var interruptCtx = context.Background()
-				stopFn := func() {}
-				defer func() {
-					stopFn()
-				}()
-
-				if w.interruptCommitFlag {
-					block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
-					interruptCtx, stopFn = getInterruptTimer(ctx, w.current, block)
-					// nolint : staticcheck
-					interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
-				}
-
-				w.commitTransactionsWithDelay(w.current, txset, nil, interruptCtx)
+				w.commitTransactions(w.current, txset, nil, context.Background())
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-
-				stopFn()
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
@@ -502,7 +487,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 		return
 	}
 
-	// nolint : contextcheck
+	//nolint:contextcheck
 	var interruptCtx = context.Background()
 
 	stopFn := func() {}
@@ -813,7 +798,6 @@ mainloop:
 			continue
 		}
 		// Start executing the transaction
-		// TODO marcello check how "Prepare" has been replaced
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		var start time.Time

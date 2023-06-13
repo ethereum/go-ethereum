@@ -35,6 +35,10 @@ type ExecutionResult struct {
 	UsedGas    uint64 // Total used gas but include the refunded gas
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+	SenderInitBalance    *big.Int
+	FeeBurnt             *big.Int
+	BurntContractAddress common.Address
+	FeeTipped            *big.Int
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -177,6 +181,13 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool, interruptCtx context.C
 	return NewStateTransition(evm, msg, gp).TransitionDb(interruptCtx)
 }
 
+func ApplyMessageNoFeeBurnOrTip(evm *vm.EVM, msg Message, gp *GasPool, interruptCtx context.Context) (*ExecutionResult, error) {
+	st := NewStateTransition(evm, msg, gp)
+	st.noFeeBurnAndTip = true
+
+	return st.TransitionDb(interruptCtx)
+}
+
 // StateTransition represents a state transition.
 //
 // == The State Transitioning Model
@@ -311,8 +322,10 @@ func (st *StateTransition) preCheck() error {
 // nil evm execution result.
 func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*ExecutionResult, error) {
 	input1 := st.state.GetBalance(st.msg.From)
-	input2 := st.state.GetBalance(st.evm.Context.Coinbase)
-
+	var input2 *big.Int
+	if !st.noFeeBurnAndTip {
+		input2 := st.state.GetBalance(st.evm.Context.Coinbase)
+	}
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -404,34 +417,47 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 
+	var burnAmount *big.Int
+
+	var burntContractAddress common.Address
+
 	if rules.IsLondon {
 		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
 		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
-		st.state.AddBalance(burntContractAddress, burnAmount)
+		if !st.noFeeBurnAndTip {
+			st.state.AddBalance(burntContractAddress, burnAmount)
+		}
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, amount)
-	output1 := new(big.Int).SetBytes(input1.Bytes())
-	output2 := new(big.Int).SetBytes(input2.Bytes())
+	if !st.noFeeBurnAndTip {
+		st.state.AddBalance(st.evm.Context.Coinbase, amount)
+		output1 := new(big.Int).SetBytes(input1.Bytes())
+		output2 := new(big.Int).SetBytes(input2.Bytes())
 
-	// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
-	// add transfer log
-	AddFeeTransferLog(
-		st.state,
+		// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
+		// add transfer log
+		AddFeeTransferLog(
+			st.state,
 
-		msg.From,
-		st.evm.Context.Coinbase,
+			msg.From,
+			st.evm.Context.Coinbase,
 
-		amount,
-		input1,
-		input2,
-		output1.Sub(output1, amount),
-		output2.Add(output2, amount),
-	)
+			amount,
+			input1,
+			input2,
+			output1.Sub(output1, amount),
+			output2.Add(output2, amount),
+		)
+	}
+
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
 		ReturnData: ret,
+		SenderInitBalance:    input1,
+		FeeBurnt:             burnAmount,
+		BurntContractAddress: burntContractAddress,
+		FeeTipped:            amount,
 	}, nil
 }
 

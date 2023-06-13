@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -84,10 +85,12 @@ var (
 	blockImportTimer  = metrics.NewRegisteredMeter("chain/imports", nil)
 	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
+	blockInsertTimer              = metrics.NewRegisteredTimer("chain/inserts", nil)
+	blockValidationTimer          = metrics.NewRegisteredTimer("chain/validation", nil)
+	blockExecutionTimer           = metrics.NewRegisteredTimer("chain/execution", nil)
+	blockWriteTimer               = metrics.NewRegisteredTimer("chain/write", nil)
+	blockExecutionParallelCounter = metrics.NewRegisteredCounter("chain/execution/parallel", nil)
+	blockExecutionSerialCounter   = metrics.NewRegisteredCounter("chain/execution/serial", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -230,12 +233,13 @@ type BlockChain struct {
 	stopping      atomic.Bool    // false if chain is running, true when stopped
 	procInterrupt atomic.Bool    // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	forker     *ForkChoice
-	vmConfig   vm.Config
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor // Block transaction processor interface
+	parallelProcessor Processor // Parallel block transaction processor interface
+	forker            *ForkChoice
+	vmConfig          vm.Config
 
 	// Bor related changes
 	borReceiptsCache *lru.Cache[common.Hash, *types.Receipt] // Cache for the most recent bor receipt receipts per block
@@ -465,6 +469,94 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		go bc.maintainTxIndex()
 	}
 	return bc, nil
+}
+
+// NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
+// TODO marcello check this func
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, chainConfig, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
+
+	return bc, nil
+}
+
+func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (types.Receipts, []*types.Log, uint64, *state.StateDB, error) {
+	// Process the block using processor and parallelProcessor at the same time, take the one which finishes first, cancel the other, and return the result
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type Result struct {
+		receipts types.Receipts
+		logs     []*types.Log
+		usedGas  uint64
+		err      error
+		statedb  *state.StateDB
+		counter  metrics.Counter
+	}
+
+	resultChan := make(chan Result, 2)
+
+	processorCount := 0
+
+	if bc.parallelProcessor != nil {
+		parallelStatedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return nil, nil, 0, nil, err
+		}
+
+		processorCount++
+
+		go func() {
+			parallelStatedb.StartPrefetcher("chain")
+			receipts, logs, usedGas, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig, ctx)
+			resultChan <- Result{receipts, logs, usedGas, err, parallelStatedb, blockExecutionParallelCounter}
+		}()
+	}
+
+	if bc.processor != nil {
+		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return nil, nil, 0, nil, err
+		}
+
+		processorCount++
+
+		go func() {
+			statedb.StartPrefetcher("chain")
+			receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
+			resultChan <- Result{receipts, logs, usedGas, err, statedb, blockExecutionSerialCounter}
+		}()
+	}
+
+	result := <-resultChan
+
+	if _, ok := result.err.(blockstm.ParallelExecFailedError); ok {
+		log.Warn("Parallel state processor failed", "err", result.err)
+
+		// If the parallel processor failed, we will fallback to the serial processor if enabled
+		if processorCount == 2 {
+			result.statedb.StopPrefetcher()
+			result = <-resultChan
+			processorCount--
+		}
+	}
+
+	result.counter.Inc(1)
+
+	// Make sure we are not leaking any prefetchers
+	if processorCount == 2 {
+		go func() {
+			second_result := <-resultChan
+			second_result.statedb.StopPrefetcher()
+		}()
+	}
+
+	return result.receipts, result.logs, result.usedGas, result.statedb, result.err
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1933,7 +2025,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, statedb, err := bc.ProcessBlock(block, parent)
+		activeState = statedb
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
@@ -2769,7 +2862,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	// TODO marcello check headerchain method
 	_, err := bc.hc.InsertHeaderChain(chain, start, bc.forker)
 	return 0, err
 }

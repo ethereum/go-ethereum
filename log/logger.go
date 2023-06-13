@@ -18,13 +18,13 @@ const skipLevel = 2
 type Lvl int
 
 const (
-	LvlDiscard Lvl = -1
-	LvlCrit    Lvl = iota
+	LvlCrit Lvl = iota
 	LvlError
 	LvlWarn
 	LvlInfo
 	LvlDebug
 	LvlTrace
+	LvlDiscard Lvl = -1
 )
 
 // AlignedString returns a 5-character string containing the name of a Lvl.

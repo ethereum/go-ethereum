@@ -544,7 +544,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		insertNewBlock(t, chain, block)
 	}
 
-	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(sprintSize)
+	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(nil, sprintSize, block.Hash())
 
 	// state 6 was not written
 	require.Equal(t, uint64(4), lastStateID.Uint64())
@@ -573,7 +573,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		insertNewBlock(t, chain, block)
 	}
 
-	lastStateID, _ = _bor.GenesisContractsClient.LastStateId(spanSize)
+	lastStateID, _ = _bor.GenesisContractsClient.LastStateId(nil, spanSize, block.Hash())
 	require.Equal(t, uint64(6), lastStateID.Uint64())
 }
 

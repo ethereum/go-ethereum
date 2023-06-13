@@ -42,7 +42,8 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Nonce[:])
 	_tmp1 := obj.BaseFee != nil
 	_tmp2 := obj.WithdrawalsHash != nil
-	if _tmp1 || _tmp2 {
+	_tmp3 := len(obj.TxDependency) > 0
+	if _tmp1 || _tmp2 || _tmp3 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -58,6 +59,17 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 		} else {
 			w.WriteBytes(obj.WithdrawalsHash[:])
 		}
+	}
+	if _tmp3 {
+		_tmp3 := w.List()
+		for _, _tmp4 := range obj.TxDependency {
+			_tmp5 := w.List()
+			for _, _tmp6 := range _tmp4 {
+				w.WriteUint64(_tmp6)
+			}
+			w.ListEnd(_tmp5)
+		}
+		w.ListEnd(_tmp3)
 	}
 	w.ListEnd(_tmp0)
 	return w.Flush()

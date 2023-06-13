@@ -127,6 +127,9 @@ type Config struct {
 	// Developer has the developer mode related settings
 	Developer *DeveloperConfig `hcl:"developer,block" toml:"developer,block"`
 
+	// ParallelEVM has the parallel evm related settings
+	ParallelEVM *ParallelEVMConfig `hcl:"parallelevm,block" toml:"parallelevm,block"`
+
 	// Develop Fake Author mode to produce blocks without authorisation
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 
@@ -309,9 +312,10 @@ type SealerConfig struct {
 	GasPriceRaw string   `hcl:"gasprice,optional" toml:"gasprice,optional"`
 
 	// The time interval for miner to re-create mining work.
-	Recommit            time.Duration `hcl:"-,optional" toml:"-"`
-	RecommitRaw         string        `hcl:"recommit,optional" toml:"recommit,optional"`
-	CommitInterruptFlag bool          `hcl:"commitinterrupt,optional" toml:"commitinterrupt,optional"`
+	Recommit    time.Duration `hcl:"-,optional" toml:"-"`
+	RecommitRaw string        `hcl:"recommit,optional" toml:"recommit,optional"`
+
+	CommitInterruptFlag bool `hcl:"commitinterrupt,optional" toml:"commitinterrupt,optional"`
 }
 
 type JsonRPCConfig struct {
@@ -569,6 +573,12 @@ type DeveloperConfig struct {
 	GasLimit uint64 `hcl:"gaslimit,optional" toml:"gaslimit,optional"`
 }
 
+type ParallelEVMConfig struct {
+	Enable bool `hcl:"enable,optional" toml:"enable,optional"`
+
+	SpeculativeProcesses int `hcl:"procs,optional" toml:"procs,optional"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:                   "mainnet",
@@ -695,7 +705,7 @@ func DefaultConfig() *Config {
 			Enabled:               false,
 			Expensive:             false,
 			PrometheusAddr:        "127.0.0.1:7071",
-			OpenCollectorEndpoint: "127.0.0.1:4317",
+			OpenCollectorEndpoint: "",
 			InfluxDB: &InfluxDBConfig{
 				V1Enabled:    false,
 				Endpoint:     "",
@@ -747,6 +757,10 @@ func DefaultConfig() *Config {
 			MemProfileRate:   512 * 1024,
 			BlockProfileRate: 0,
 			// CPUProfile:       "",
+		},
+		ParallelEVM: &ParallelEVMConfig{
+			Enable:               true,
+			SpeculativeProcesses: 8,
 		},
 	}
 }
@@ -1131,6 +1145,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
 
+	n.ParallelEVM.Enable = c.ParallelEVM.Enable
+	n.ParallelEVM.SpeculativeProcesses = c.ParallelEVM.SpeculativeProcesses
 	n.RPCReturnDataLimit = c.RPCReturnDataLimit
 
 	if c.Ancient != "" {

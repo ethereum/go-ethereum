@@ -18,6 +18,7 @@ package core
 
 import (
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -83,12 +84,18 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
 	var cache []common.Hash
 
+	cacheMutex := &sync.Mutex{}
+
 	return func(n uint64) common.Hash {
 		if ref.Number.Uint64() <= n {
 			// This situation can happen if we're doing tracing and using
 			// block overrides.
 			return common.Hash{}
 		}
+
+		cacheMutex.Lock()
+		defer cacheMutex.Unlock()
+
 		// If there's no hash cache yet, make one
 		if len(cache) == 0 {
 			cache = append(cache, ref.ParentHash)

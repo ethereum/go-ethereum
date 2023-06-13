@@ -18,7 +18,7 @@
 package ethconfig
 
 import (
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -241,6 +242,9 @@ type Config struct {
 
 	// Bor logs flag
 	BorLogs bool
+
+	// Parallel EVM (Block-STM) related config
+	ParallelEVM core.ParallelEVMConfig `toml:",omitempty"`
 
 	// Develop Fake Author mode to produce blocks without authorisation
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`

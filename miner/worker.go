@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -988,6 +989,53 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	var coalescedLogs []*types.Log
 
+	var depsMVReadList [][]blockstm.ReadDescriptor
+
+	var depsMVFullWriteList [][]blockstm.WriteDescriptor
+
+	var mvReadMapList []map[blockstm.Key]blockstm.ReadDescriptor
+
+	var deps map[int]map[int]bool
+
+	chDeps := make(chan blockstm.TxDep)
+
+	var count int
+
+	var depsWg sync.WaitGroup
+
+	var EnableMVHashMap bool
+
+	if w.chainConfig.Bor.IsParallelUniverse(env.header.Number) {
+		EnableMVHashMap = true
+	} else {
+		EnableMVHashMap = false
+	}
+
+	// create and add empty mvHashMap in statedb
+	if EnableMVHashMap {
+		depsMVReadList = [][]blockstm.ReadDescriptor{}
+
+		depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
+
+		mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
+
+		deps = map[int]map[int]bool{}
+
+		chDeps = make(chan blockstm.TxDep)
+
+		count = 0
+
+		depsWg.Add(1)
+
+		go func(chDeps chan blockstm.TxDep) {
+			for t := range chDeps {
+				deps = blockstm.UpdateDeps(deps, t)
+			}
+
+			depsWg.Done()
+		}(chDeps)
+	}
+
 	initialGasLimit := env.gasPool.Gas()
 	initialTxs := txs.GetTxs()
 
@@ -1007,6 +1055,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 mainloop:
 	for {
 		if interruptCtx != nil {
+			if EnableMVHashMap {
+				env.state.AddEmptyMVHashMap()
+			}
+
 			// case of interrupting by timeout
 			select {
 			case <-interruptCtx.Done():
@@ -1069,6 +1121,22 @@ mainloop:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
+
+			if EnableMVHashMap {
+				depsMVReadList = append(depsMVReadList, env.state.MVReadList())
+				depsMVFullWriteList = append(depsMVFullWriteList, env.state.MVFullWriteList())
+				mvReadMapList = append(mvReadMapList, env.state.MVReadMap())
+
+				temp := blockstm.TxDep{
+					Index:         env.tcount - 1,
+					ReadList:      depsMVReadList[count],
+					FullWriteList: depsMVFullWriteList,
+				}
+
+				chDeps <- temp
+				count++
+			}
+
 			txs.Shift()
 
 			log.OnDebug(func(lg log.Logging) {
@@ -1080,6 +1148,50 @@ mainloop:
 			// the same sender because of `nonce-too-high` clause.
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Pop()
+		}
+
+		if EnableMVHashMap {
+			env.state.ClearReadMap()
+			env.state.ClearWriteMap()
+		}
+	}
+
+	// nolint:nestif
+	if EnableMVHashMap {
+		close(chDeps)
+		depsWg.Wait()
+
+		if len(mvReadMapList) > 0 {
+			tempDeps := make([][]uint64, len(mvReadMapList))
+
+			for j := range deps[0] {
+				tempDeps[0] = append(tempDeps[0], uint64(j))
+			}
+
+			delayFlag := true
+
+			for i := 1; i <= len(mvReadMapList)-1; i++ {
+				reads := mvReadMapList[i-1]
+
+				_, ok1 := reads[blockstm.NewSubpathKey(env.coinbase, state.BalancePath)]
+				_, ok2 := reads[blockstm.NewSubpathKey(common.HexToAddress(w.chainConfig.Bor.CalculateBurntContract(env.header.Number.Uint64())), state.BalancePath)]
+
+				if ok1 || ok2 {
+					delayFlag = false
+				}
+
+				for j := range deps[i] {
+					tempDeps[i] = append(tempDeps[i], uint64(j))
+				}
+			}
+
+			if delayFlag {
+				env.header.TxDependency = tempDeps
+			} else {
+				env.header.TxDependency = nil
+			}
+		} else {
+			env.header.TxDependency = nil
 		}
 	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -1493,7 +1605,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		return
 	}
 
-	// nolint : contextcheck
+	// nolint:contextcheck
 	var interruptCtx = context.Background()
 
 	stopFn := func() {}
