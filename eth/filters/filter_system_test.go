@@ -772,14 +772,16 @@ func TestLogsSubscription(t *testing.T) {
 		topic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	)
 
+	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
+
 	allLogs := []*types.Log{
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(1))}, Data: common.BigToHash(big.NewInt(11)).Bytes(), BlockNumber: 1},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(2))}, Data: common.BigToHash(big.NewInt(12)).Bytes(), BlockNumber: 2},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(3))}, Data: common.BigToHash(big.NewInt(13)).Bytes(), BlockNumber: 3},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), common.BigToHash(big.NewInt(4))}, Data: common.BigToHash(big.NewInt(14)).Bytes(), BlockNumber: 4},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3},
+		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(14).Bytes(), BlockNumber: 4},
 	}
 
-	// pendingBlockNumber := big.NewInt(rpc.PendingBlockNumber.Int64())
+	pendingBlockNumber := big.NewInt(rpc.PendingBlockNumber.Int64())
 	testCases := []struct {
 		crit     FilterCriteria
 		expected []*types.Log
@@ -787,10 +789,20 @@ func TestLogsSubscription(t *testing.T) {
 		sub      *rpc.Subscription
 		err      chan error
 	}{
-		// from 1 to latest
+		// from 0 to latest
 		{
 			FilterCriteria{FromBlock: big.NewInt(0), ToBlock: big.NewInt(5)},
 			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+		},
+		// from 1 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: pendingBlockNumber},
+			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+		},
+		// from 1 to 3
+		{
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
+			allLogs[0:3], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
 		},
 	}
 
