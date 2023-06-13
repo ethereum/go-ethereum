@@ -16,6 +16,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 	"github.com/scroll-tech/go-ethereum/rpc"
@@ -182,7 +183,12 @@ func (api *API) getBlockTrace(block *types.Block, env *traceEnv) (*types.BlockTr
 		msg, _ := tx.AsMessage(env.signer, block.BaseFee())
 		env.state.Prepare(tx.Hash(), i)
 		vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, api.backend.ChainConfig(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		l1DataFee, err := fees.CalculateL1DataFee(tx, env.state)
+		if err != nil {
+			failed = err
+			break
+		}
+		if _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), l1DataFee); err != nil {
 			failed = err
 			break
 		}
@@ -258,7 +264,11 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 	state.Prepare(txctx.TxHash, txctx.TxIndex)
 
 	// Computes the new state by applying the given message.
-	result, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+	l1DataFee, err := fees.CalculateL1DataFee(tx, state)
+	if err != nil {
+		return fmt.Errorf("tracing failed: %w", err)
+	}
+	result, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), l1DataFee)
 	if err != nil {
 		return fmt.Errorf("tracing failed: %w", err)
 	}
@@ -389,7 +399,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		To:             receiver,
 		AccountCreated: createdAcc,
 		AccountsAfter:  after,
-		L1Fee:          (*hexutil.Big)(result.L1Fee),
+		L1DataFee:      (*hexutil.Big)(result.L1DataFee),
 		Gas:            result.UsedGas,
 		Failed:         result.Failed(),
 		ReturnValue:    fmt.Sprintf("%x", returnVal),

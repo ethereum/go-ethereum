@@ -695,7 +695,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 	if pool.chainconfig.Scroll.FeeVaultEnabled() {
 		if err := fees.VerifyFee(pool.signer, tx, pool.currentState); err != nil {
-			log.Trace("Discarding insufficient l1fee transaction", "hash", hash, "err", err)
+			log.Trace("Discarding insufficient l1DataFee transaction", "hash", hash, "err", err)
 			invalidTxMeter.Mark(1)
 			return false, err
 		}

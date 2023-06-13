@@ -334,7 +334,7 @@ func testCallContractNoGas(t *testing.T, client *rpc.Client) {
 	}
 
 	// this would fail with `insufficient funds for gas * price + value`
-	// before we started considering l1fee for 0 gas calls.
+	// before we started considering l1DataFee for 0 gas calls.
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

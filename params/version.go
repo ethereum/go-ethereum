@@ -23,8 +23,8 @@ import (
 
 const (
 	VersionMajor = 4         // Major version component of the current release
-	VersionMinor = 1         // Minor version component of the current release
-	VersionPatch = 1         // Patch version component of the current release
+	VersionMinor = 2         // Minor version component of the current release
+	VersionPatch = 0         // Patch version component of the current release
 	VersionMeta  = "sepolia" // Version metadata to append to the version string
 )
 

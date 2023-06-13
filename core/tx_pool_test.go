@@ -43,32 +43,32 @@ var (
 	// sideeffects used during testing.
 	testTxPoolConfig TxPoolConfig
 
-	// noL1feeConfig is a chain config without L1fee enabled.
-	noL1feeConfig *params.ChainConfig
+	// noL1DataFeeConfig is a chain config without L1DataFee enabled.
+	noL1DataFeeConfig *params.ChainConfig
 
 	// eip1559Config is a chain config with EIP-1559 enabled at block 0.
 	eip1559Config *params.ChainConfig
 
-	// eip1559NoL1feeConfig is a chain config with EIP-1559 enabled at block 0 but not enabling L1fee.
-	eip1559NoL1feeConfig *params.ChainConfig
+	// eip1559NoL1DataFeeConfig is a chain config with EIP-1559 enabled at block 0 but not enabling L1DataFee.
+	eip1559NoL1DataFeeConfig *params.ChainConfig
 )
 
 func init() {
 	testTxPoolConfig = DefaultTxPoolConfig
 	testTxPoolConfig.Journal = ""
 
-	cpy0 := *params.TestNoL1feeChainConfig
-	noL1feeConfig = &cpy0
+	cpy0 := *params.TestNoL1DataFeeChainConfig
+	noL1DataFeeConfig = &cpy0
 
 	cpy1 := *params.TestChainConfig
 	eip1559Config = &cpy1
 	eip1559Config.BerlinBlock = common.Big0
 	eip1559Config.LondonBlock = common.Big0
 
-	cpy2 := *params.TestNoL1feeChainConfig
-	eip1559NoL1feeConfig = &cpy2
-	eip1559NoL1feeConfig.BerlinBlock = common.Big0
-	eip1559NoL1feeConfig.LondonBlock = common.Big0
+	cpy2 := *params.TestNoL1DataFeeChainConfig
+	eip1559NoL1DataFeeConfig = &cpy2
+	eip1559NoL1DataFeeConfig.BerlinBlock = common.Big0
+	eip1559NoL1DataFeeConfig.LondonBlock = common.Big0
 }
 
 type testBlockChain struct {
@@ -290,7 +290,7 @@ func testSetNonce(pool *TxPool, addr common.Address, nonce uint64) {
 func TestInvalidTransactions(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx := transaction(0, 100, key)
@@ -327,7 +327,7 @@ func TestInvalidTransactions(t *testing.T) {
 func TestTransactionQueue(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx := transaction(0, 100, key)
@@ -358,7 +358,7 @@ func TestTransactionQueue(t *testing.T) {
 func TestTransactionQueue2(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx1 := transaction(0, 100, key)
@@ -384,7 +384,7 @@ func TestTransactionQueue2(t *testing.T) {
 func TestTransactionNegativeValue(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, big.NewInt(1), nil), types.HomesteadSigner{}, key)
@@ -398,7 +398,7 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
@@ -411,7 +411,7 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 func TestTransactionVeryHighValues(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	veryBigNumber := big.NewInt(1)
@@ -431,7 +431,7 @@ func TestTransactionVeryHighValues(t *testing.T) {
 func TestTransactionChainFork(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -460,7 +460,7 @@ func TestTransactionChainFork(t *testing.T) {
 func TestTransactionDoubleNonce(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -511,7 +511,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 func TestTransactionMissingNonce(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -535,7 +535,7 @@ func TestTransactionNonceRecovery(t *testing.T) {
 	t.Parallel()
 
 	const n = 10
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -561,7 +561,7 @@ func TestTransactionDropping(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -779,7 +779,7 @@ func TestTransactionGapFilling(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -833,7 +833,7 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -1114,7 +1114,7 @@ func TestTransactionPendingLimiting(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -1203,7 +1203,7 @@ func TestTransactionAllowedTxSize(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -1463,7 +1463,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, _ := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1834,7 +1834,7 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 2
@@ -1941,7 +1941,7 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 func TestDualHeapEviction(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 10
@@ -2144,7 +2144,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, key := setupTxPoolWithConfig(eip1559NoL1feeConfig)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
@@ -2443,7 +2443,7 @@ func BenchmarkPendingDemotion10000(b *testing.B) { benchmarkPendingDemotion(b, 1
 
 func benchmarkPendingDemotion(b *testing.B, size int) {
 	// Add a batch of transactions to a pool one by one
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -2468,7 +2468,7 @@ func BenchmarkFuturePromotion10000(b *testing.B) { benchmarkFuturePromotion(b, 1
 
 func benchmarkFuturePromotion(b *testing.B, size int) {
 	// Add a batch of transactions to a pool one by one
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
@@ -2496,7 +2496,7 @@ func BenchmarkPoolBatchLocalInsert10000(b *testing.B) { benchmarkPoolBatchInsert
 
 func benchmarkPoolBatchInsert(b *testing.B, size int, local bool) {
 	// Generate a batch of transactions to enqueue into the pool
-	pool, key := setupTxPoolWithConfig(noL1feeConfig)
+	pool, key := setupTxPoolWithConfig(noL1DataFeeConfig)
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)

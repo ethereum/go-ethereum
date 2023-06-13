@@ -36,6 +36,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -199,7 +200,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		context := core.NewEVMBlockContext(header, chain, nil)
 		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true})
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		result, _ := core.ApplyMessage(vmenv, msg, gp)
+		signer := types.MakeSigner(config, header.Number)
+		l1DataFee, _ := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, config.ChainID, signer, st)
+		result, _ := core.ApplyMessage(vmenv, msg, gp, l1DataFee)
 		res = append(res, result.Return()...)
 		if st.Error() != nil {
 			return res, st.Error()

@@ -8,24 +8,17 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 )
 
 var (
-	// errTransactionSigned represents the error case of passing in a signed
-	// transaction to the L1 fee calculation routine. The signature is accounted
-	// for externally
-	errTransactionSigned = errors.New("transaction is signed")
-
 	// txExtraDataBytes is the number of bytes that we commit to L1 in addition
-	// to the RLP-encoded unsigned transaction. Note that these are all assumed
+	// to the RLP-encoded signed transaction. Note that these are all assumed
 	// to be non-zero.
 	// - tx length prefix: 4 bytes
-	// - sig.r: 32 bytes + 1 byte rlp prefix
-	// - sig.s: 32 bytes + 1 byte rlp prefix
-	// - sig.v:  3 bytes + 1 byte rlp prefix
-	txExtraDataBytes = uint64(74)
+	txExtraDataBytes = uint64(4)
 )
 
 // Message represents the interface of a message.
@@ -36,9 +29,13 @@ type Message interface {
 	To() *common.Address
 	GasPrice() *big.Int
 	Gas() uint64
+	GasFeeCap() *big.Int
+	GasTipCap() *big.Int
 	Value() *big.Int
 	Nonce() uint64
 	Data() []byte
+	AccessList() types.AccessList
+	IsL1MessageTx() bool
 }
 
 // StateDB represents the StateDB interface
@@ -48,59 +45,87 @@ type StateDB interface {
 	GetBalance(addr common.Address) *big.Int
 }
 
-// CalculateL1MsgFee computes the L1 portion of the fee given
-// a Message and a StateDB
-// Reference: https://github.com/ethereum-optimism/optimism/blob/develop/l2geth/rollup/fees/rollup_fee.go
-func CalculateL1MsgFee(msg Message, state StateDB) (*big.Int, error) {
-	tx := asTransaction(msg)
+func EstimateL1DataFeeForMessage(msg Message, baseFee, chainID *big.Int, signer types.Signer, state StateDB) (*big.Int, error) {
+	if msg.IsL1MessageTx() {
+		return big.NewInt(0), nil
+	}
+
+	unsigned := asUnsignedTx(msg, baseFee, chainID)
+	// with v=1
+	tx, err := unsigned.WithSignature(signer, append(bytes.Repeat([]byte{0xff}, crypto.SignatureLength-1), 0x01))
+	if err != nil {
+		return nil, err
+	}
+
 	raw, err := rlpEncode(tx)
 	if err != nil {
 		return nil, err
 	}
 
 	l1BaseFee, overhead, scalar := readGPOStorageSlots(rcfg.L1GasPriceOracleAddress, state)
-	l1Fee := CalculateL1Fee(raw, overhead, l1BaseFee, scalar)
-	return l1Fee, nil
+	l1DataFee := calculateEncodedL1DataFee(raw, overhead, l1BaseFee, scalar)
+	return l1DataFee, nil
 }
 
-// asTransaction turns a Message into a types.Transaction
-func asTransaction(msg Message) *types.Transaction {
-	if msg.To() == nil {
-		return types.NewContractCreation(
-			msg.Nonce(),
-			msg.Value(),
-			msg.Gas(),
-			msg.GasPrice(),
-			msg.Data(),
-		)
+// asUnsignedTx turns a Message into a types.Transaction
+func asUnsignedTx(msg Message, baseFee, chainID *big.Int) *types.Transaction {
+	if baseFee == nil {
+		if msg.AccessList() == nil {
+			return asUnsignedLegacyTx(msg)
+		}
+
+		return asUnsignedAccessListTx(msg, chainID)
 	}
-	return types.NewTransaction(
-		msg.Nonce(),
-		*msg.To(),
-		msg.Value(),
-		msg.Gas(),
-		msg.GasPrice(),
-		msg.Data(),
-	)
+
+	return asUnsignedDynamicTx(msg, chainID)
+}
+
+func asUnsignedLegacyTx(msg Message) *types.Transaction {
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    msg.Nonce(),
+		To:       msg.To(),
+		Value:    msg.Value(),
+		Gas:      msg.Gas(),
+		GasPrice: msg.GasPrice(),
+		Data:     msg.Data(),
+	})
+}
+
+func asUnsignedAccessListTx(msg Message, chainID *big.Int) *types.Transaction {
+	return types.NewTx(&types.AccessListTx{
+		Nonce:      msg.Nonce(),
+		To:         msg.To(),
+		Value:      msg.Value(),
+		Gas:        msg.Gas(),
+		GasPrice:   msg.GasPrice(),
+		Data:       msg.Data(),
+		AccessList: msg.AccessList(),
+		ChainID:    chainID,
+	})
+}
+
+func asUnsignedDynamicTx(msg Message, chainID *big.Int) *types.Transaction {
+	return types.NewTx(&types.DynamicFeeTx{
+		Nonce:      msg.Nonce(),
+		To:         msg.To(),
+		Value:      msg.Value(),
+		Gas:        msg.Gas(),
+		GasFeeCap:  msg.GasFeeCap(),
+		GasTipCap:  msg.GasTipCap(),
+		Data:       msg.Data(),
+		AccessList: msg.AccessList(),
+		ChainID:    chainID,
+	})
 }
 
 // rlpEncode RLP encodes the transaction into bytes
-// When a signature is not included, set pad to true to
-// fill in a dummy signature full on non 0 bytes
 func rlpEncode(tx *types.Transaction) ([]byte, error) {
 	raw := new(bytes.Buffer)
 	if err := tx.EncodeRLP(raw); err != nil {
 		return nil, err
 	}
 
-	r, v, s := tx.RawSignatureValues()
-	if r.Cmp(common.Big0) != 0 || v.Cmp(common.Big0) != 0 || s.Cmp(common.Big0) != 0 {
-		return nil, errTransactionSigned
-	}
-
-	// Slice off the 0 bytes representing the signature
-	b := raw.Bytes()
-	return b[:len(b)-3], nil
+	return raw.Bytes(), nil
 }
 
 func readGPOStorageSlots(addr common.Address, state StateDB) (*big.Int, *big.Int, *big.Int) {
@@ -110,11 +135,11 @@ func readGPOStorageSlots(addr common.Address, state StateDB) (*big.Int, *big.Int
 	return l1BaseFee.Big(), overhead.Big(), scalar.Big()
 }
 
-// CalculateL1Fee computes the L1 fee
-func CalculateL1Fee(data []byte, overhead, l1GasPrice *big.Int, scalar *big.Int) *big.Int {
+// calculateEncodedL1DataFee computes the L1 fee for an RLP-encoded tx
+func calculateEncodedL1DataFee(data []byte, overhead, l1GasPrice *big.Int, scalar *big.Int) *big.Int {
 	l1GasUsed := CalculateL1GasUsed(data, overhead)
-	l1Fee := new(big.Int).Mul(l1GasUsed, l1GasPrice)
-	return mulAndScale(l1Fee, scalar, rcfg.Precision)
+	l1DataFee := new(big.Int).Mul(l1GasUsed, l1GasPrice)
+	return mulAndScale(l1DataFee, scalar, rcfg.Precision)
 }
 
 // CalculateL1GasUsed computes the L1 gas used based on the calldata and
@@ -150,41 +175,24 @@ func mulAndScale(x *big.Int, y *big.Int, precision *big.Int) *big.Int {
 	return new(big.Int).Quo(z, precision)
 }
 
-// copyTransaction copies the transaction, removing the signature
-func copyTransaction(tx *types.Transaction) *types.Transaction {
-	if tx.To() == nil {
-		return types.NewContractCreation(
-			tx.Nonce(),
-			tx.Value(),
-			tx.Gas(),
-			tx.GasPrice(),
-			tx.Data(),
-		)
+func CalculateL1DataFee(tx *types.Transaction, state StateDB) (*big.Int, error) {
+	if tx.IsL1MessageTx() {
+		return big.NewInt(0), nil
 	}
-	return types.NewTransaction(
-		tx.Nonce(),
-		*tx.To(),
-		tx.Value(),
-		tx.Gas(),
-		tx.GasPrice(),
-		tx.Data(),
-	)
-}
 
-func CalculateFees(tx *types.Transaction, state StateDB) (*big.Int, *big.Int, *big.Int, error) {
-	unsigned := copyTransaction(tx)
-	raw, err := rlpEncode(unsigned)
+	raw, err := rlpEncode(tx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	l1BaseFee, overhead, scalar := readGPOStorageSlots(rcfg.L1GasPriceOracleAddress, state)
-	l1Fee := CalculateL1Fee(raw, overhead, l1BaseFee, scalar)
+	l1DataFee := calculateEncodedL1DataFee(raw, overhead, l1BaseFee, scalar)
+	return l1DataFee, nil
+}
 
+func calculateL2Fee(tx *types.Transaction) *big.Int {
 	l2GasLimit := new(big.Int).SetUint64(tx.Gas())
-	l2Fee := new(big.Int).Mul(tx.GasPrice(), l2GasLimit)
-	fee := new(big.Int).Add(l1Fee, l2Fee)
-	return l1Fee, l2Fee, fee, nil
+	return new(big.Int).Mul(tx.GasPrice(), l2GasLimit)
 }
 
 func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error {
@@ -194,8 +202,8 @@ func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error 
 	}
 
 	balance := state.GetBalance(from)
-
-	l1Fee, l2Fee, _, err := CalculateFees(tx, state)
+	l2Fee := calculateL2Fee(tx)
+	l1DataFee, err := CalculateL1DataFee(tx, state)
 	if err != nil {
 		return fmt.Errorf("invalid transaction: %w", err)
 	}
@@ -206,7 +214,7 @@ func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error 
 		return errors.New("invalid transaction: insufficient funds for gas * price + value")
 	}
 
-	cost = cost.Add(cost, l1Fee)
+	cost = cost.Add(cost, l1DataFee)
 	if balance.Cmp(cost) < 0 {
 		return errors.New("invalid transaction: insufficient funds for l1fee + gas * price + value")
 	}
