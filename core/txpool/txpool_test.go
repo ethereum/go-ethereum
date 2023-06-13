@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/holiman/uint256"
+	"github.com/maticnetwork/crand"
 	"go.uber.org/goleak"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
@@ -49,11 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-
-	"github.com/JekaMas/crand"
 )
-
-// TODO marcello merge this file with txpool2_test_BOR.go
 
 var (
 	// testTxPoolConfig is a transaction pool configuration without stateful disk
@@ -120,7 +117,7 @@ func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ec
 
 func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, bytes uint64) *types.Transaction {
 	data := make([]byte, bytes)
-	crand.Read(data)
+	rand.Read(data)
 
 	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gaslimit, gasprice, data), types.HomesteadSigner{}, key)
 	return tx
@@ -145,7 +142,7 @@ func setupPool() (*TxPool, *ecdsa.PrivateKey) {
 	return setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit)
 }
 
-func setupPoolWithConfig(config *params.ChainConfig, txPoolConfig TxPoolConfig, gasLimit uint64, options ...func(pool *TxPool)) (*TxPool, *ecdsa.PrivateKey) {
+func setupPoolWithConfig(config *params.ChainConfig, txPoolConfig Config, gasLimit uint64, options ...func(pool *TxPool)) (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(10000000, statedb, new(event.Feed))
 
@@ -4458,7 +4455,7 @@ func apiWithMining(tb testing.TB, balanceStr string, batchesSize int, singleCase
 			}()
 
 			runWithTicker(tb, func(c chan struct{}) {
-				ch := make(chan NewTxsEvent, 10)
+				ch := make(chan core.NewTxsEvent, 10)
 				sub := pool.SubscribeNewTxsEvent(ch)
 
 				if sub == nil {
