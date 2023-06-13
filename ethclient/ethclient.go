@@ -599,6 +599,20 @@ func (ec *Client) NewFilter(ctx context.Context, q ethereum.FilterQuery) (*rpc.I
 	return id, err
 }
 
+// NewBlockFilter creates a new block header hash filter, to notify when receiving new blocks
+func (ec *Client) NewBlockFilter(ctx context.Context) (*rpc.ID, error) {
+	var id *rpc.ID
+	err := ec.c.CallContext(ctx, &id, "eth_newBlockFilter", nil)
+	return id, err
+}
+
+// NewPendingTransactionFilter creates a new pending transaction filter, to notify when receiving pending transactions
+func (ec *Client) NewPendingTransactionFilter(ctx context.Context, fullTx bool) (*rpc.ID, error) {
+	var id *rpc.ID
+	err := ec.c.CallContext(ctx, &id, "eth_newPendingTransactionFilter", fullTx)
+	return id, err
+}
+
 // UninstallFilter uninstall a filter by subscription id
 func (ec *Client) UninstallFilter(ctx context.Context, id rpc.ID) (*bool, error) {
 	var res *bool
@@ -607,10 +621,10 @@ func (ec *Client) UninstallFilter(ctx context.Context, id rpc.ID) (*bool, error)
 }
 
 // GetFilterChanges is a polling method for a filter that retrieves an array of logs that have taken place since the previous poll.
-func (ec *Client) GetFilterChanges(ctx context.Context, id rpc.ID) ([]types.Log, error) {
-	var result []types.Log
-	err := ec.c.CallContext(ctx, &result, "eth_getFilterChanges", id)
-	return result, err
+func (ec *Client) GetFilterChanges(ctx context.Context, id rpc.ID) (interface{}, error) {
+	var res interface{}
+	err := ec.c.CallContext(ctx, &res, "eth_getFilterChanges", id)
+	return res, err
 }
 
 func toBlockNumArg(number *big.Int) string {
