@@ -136,7 +136,7 @@ func (c *SimulatedBeacon) loop() {
 	)
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
-	if header.Number.BitLen() == 0 {
+	if header.Number.Sign() == 0 {
 		if _, err := engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
 			log.Crit("failed to initiate PoS transition for genesis via Forkchoiceupdated", "err", err)
 		}
