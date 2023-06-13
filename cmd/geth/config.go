@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/simulated_beacon"
+	"github.com/ethereum/go-ethereum/cmd/geth/simulatedbeacon"
 	"github.com/naoina/toml"
 )
 
@@ -197,8 +197,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	// Start the dev mode if requested
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
-		simBeacon := simulated_beacon.NewSimulatedBeacon(eth)
-		simulated_beacon.RegisterAPIs(stack, simBeacon)
+		simBeacon := simulatedbeacon.NewSimulatedBeacon(eth)
+		simulatedbeacon.RegisterAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 	}
 

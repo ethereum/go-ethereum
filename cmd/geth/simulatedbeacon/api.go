@@ -1,4 +1,4 @@
-package simulated_beacon
+package simulatedbeacon
 
 import (
 	"context"
