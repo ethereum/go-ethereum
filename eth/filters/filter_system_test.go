@@ -840,7 +840,7 @@ func TestLogsSubscription(t *testing.T) {
 
 			for l := range fetched {
 				have, want := fetched[l], tt.expected[l]
-				if have.Address != contract || len(have.Topics) != len(want.Topics) || have.Topics[2] != want.Topics[2] || bytes.Compare(have.Data, want.Data) != 0 || have.BlockNumber != want.BlockNumber {
+				if have.Address != contract || len(have.Topics) != len(want.Topics) || !bytes.Equal(have.Topics[2].Bytes(), want.Topics[2].Bytes()) || !bytes.Equal(have.Data, want.Data) || have.BlockNumber != want.BlockNumber {
 					tt.err <- fmt.Errorf("invalid log on index %d for case %d have: %+v want: %+v\n", l, i, have, want)
 					return
 				}
