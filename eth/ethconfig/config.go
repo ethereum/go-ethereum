@@ -18,7 +18,6 @@
 package ethconfig
 
 import (
-	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
