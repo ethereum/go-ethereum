@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/BurntSushi/toml v1.2.0
-	github.com/JekaMas/crand v1.0.1
 	github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d
 	github.com/JekaMas/workerpool v1.1.5
 	github.com/VictoriaMetrics/fastcache v1.6.0
@@ -44,7 +43,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/hashicorp/hcl/v2 v2.10.1
 	github.com/heimdalr/dag v1.2.1
-	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.2-0.20230321075855-87b91420868c
 	github.com/huin/goupnp v1.0.3
@@ -143,8 +141,6 @@ require (
 	gonum.org/v1/gonum v0.11.0
 	google.golang.org/grpc v1.51.0
 	google.golang.org/protobuf v1.28.1
-	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
-	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools v2.2.0+incompatible
@@ -182,9 +178,6 @@ require (
 	github.com/cosmos/go-bip39 v0.0.0-20180618194314-52158e4697b8 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.10.3 // indirect
 	github.com/cosmos/ledger-go v0.9.2 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91 // indirect
 	github.com/emirpasic/gods v1.18.1
 	github.com/etcd-io/bbolt v1.3.3 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
