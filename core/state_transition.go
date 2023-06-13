@@ -381,8 +381,8 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	if !st.noFeeBurnAndTip {
 		st.state.AddBalance(st.evm.Context.Coinbase, amount)
 
-		output1 := new(big.Int).SetBytes(input1.Bytes())
-		output2 := new(big.Int).SetBytes(input2.Bytes())
+		output1 := new(big.Int).Set(input1)
+		output2 := new(big.Int).Set(input2)
 
 		// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
 		// add transfer log
