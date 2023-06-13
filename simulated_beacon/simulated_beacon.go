@@ -17,7 +17,6 @@
 package simulated_beacon
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -148,83 +147,80 @@ func (c *SimulatedBeacon) loop() {
 		case <-c.shutdownCh:
 			break
 		case curTime := <-ticker.C:
-			if curTime.Unix() > lastBlockTime.Add(c.period).Unix() {
-				feeRecipient := c.getFeeRecipient()
-
-				payloadAttr := &engine.PayloadAttributes{
-					Timestamp:             uint64(curTime.Unix()),
-					Random:                common.Hash{}, // TODO: make this configurable?
-					SuggestedFeeRecipient: feeRecipient,
-					Withdrawals:           c.withdrawals.pop(),
-				}
-
-				// trigger block building
-				fcState, err := engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, payloadAttr)
-				if err != nil {
-					log.Crit("failed to trigger block building via forkchoiceupdated", "err", err)
-				}
-
-				var payload *engine.ExecutableData
-
-				var (
-					restartPayloadBuilding bool
-					// building a payload times out after SECONDS_PER_SLOT (12s on mainnet).
-					// trigger building a new payload if this amount of time elapses w/o any transactions or withdrawals
-					// having been received.
-					payloadTimeout = time.NewTimer(12 * time.Second)
-					// interval to poll the pending state to detect if transactions have arrived, and proceed if they have
-					// (or if there are pending withdrawals to include)
-					buildTicker = time.NewTicker(100 * time.Millisecond)
-				)
-				for {
-					select {
-					case <-buildTicker.C:
-						pendingHeader, err := c.eth.APIBackend.HeaderByNumber(context.Background(), rpc.PendingBlockNumber)
-						if err != nil {
-							log.Crit("failed to get pending block header", "err", err)
-						}
-						// don't build a block if we don't have pending txs or withdrawals
-						if pendingHeader.TxHash == types.EmptyTxsHash && len(payloadAttr.Withdrawals) == 0 {
-							continue
-						}
-						payload, err = engineAPI.GetPayloadV1(*fcState.PayloadID)
-						if err != nil {
-							log.Crit("error retrieving payload", "err", err)
-						}
-						// Don't build a block if it doesn't contain transactions or withdrawals.
-						// Somehow, txs can arrive, be detected by this routine, but be missed by the miner payload builder.
-						// So this last clause prevents empty blocks from being built.
-						if len(payload.Transactions) == 0 && len(payloadAttr.Withdrawals) == 0 {
-							restartPayloadBuilding = true
-						}
-					case <-payloadTimeout.C:
-						restartPayloadBuilding = true
-					case <-c.shutdownCh:
-						return
-					}
-					break
-				}
-				if restartPayloadBuilding {
-					continue
-				}
-				// mark the payload as the one we have chosen
-				if _, err = engineAPI.NewPayloadV2(*payload); err != nil {
-					log.Crit("failed to mark payload as canonical", "err", err)
-				}
-
-				newForkchoiceState := &engine.ForkchoiceStateV1{
-					HeadBlockHash:      payload.BlockHash,
-					SafeBlockHash:      payload.BlockHash,
-					FinalizedBlockHash: payload.BlockHash,
-				}
-				// mark the block containing the payload as canonical
-				_, err = engineAPI.ForkchoiceUpdatedV2(*newForkchoiceState, nil)
-				if err != nil {
-					log.Crit("failed to mark block as canonical", "err", err)
-				}
-				lastBlockTime = time.Unix(int64(payload.Timestamp), 0)
-				curForkchoiceState = *newForkchoiceState
+			if curTime.Unix() <= lastBlockTime.Add(c.period).Unix() {
+				continue
 			}
+			feeRecipient := c.getFeeRecipient()
+
+			payloadAttr := &engine.PayloadAttributes{
+				Timestamp:             uint64(curTime.Unix()),
+				Random:                common.Hash{}, // TODO: make this configurable?
+				SuggestedFeeRecipient: feeRecipient,
+				Withdrawals:           c.withdrawals.pop(),
+			}
+
+			// trigger block building
+			fcState, err := engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, payloadAttr)
+			if err != nil {
+				log.Crit("failed to trigger block building via forkchoiceupdated", "err", err)
+			}
+
+			var payload *engine.ExecutableData
+
+			var (
+				restartPayloadBuilding bool
+				// building a payload times out after SECONDS_PER_SLOT (12s on mainnet).
+				// trigger building a new payload if this amount of time elapses w/o any transactions or withdrawals
+				// having been received.
+				payloadTimeout = time.NewTimer(12 * time.Second)
+				// interval to poll the pending state to detect if transactions have arrived, and proceed if they have
+				// (or if there are pending withdrawals to include)
+				buildTicker = time.NewTicker(100 * time.Millisecond)
+			)
+			for {
+				select {
+				case <-buildTicker.C:
+					// don't build a block if we don't have pending txs or withdrawals
+					if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(payloadAttr.Withdrawals) == 0 {
+						continue
+					}
+					payload, err = engineAPI.GetPayloadV1(*fcState.PayloadID)
+					if err != nil {
+						log.Crit("error retrieving payload", "err", err)
+					}
+					// Don't build a block if it doesn't contain transactions or withdrawals.
+					// Somehow, txs can arrive, be detected by this routine, but be missed by the miner payload builder.
+					// So this last clause prevents empty blocks from being built.
+					if len(payload.Transactions) == 0 && len(payloadAttr.Withdrawals) == 0 {
+						restartPayloadBuilding = true
+					}
+				case <-payloadTimeout.C:
+					restartPayloadBuilding = true
+				case <-c.shutdownCh:
+					return
+				}
+				break
+			}
+			if restartPayloadBuilding {
+				continue
+			}
+			// mark the payload as the one we have chosen
+			if _, err = engineAPI.NewPayloadV2(*payload); err != nil {
+				log.Crit("failed to mark payload as canonical", "err", err)
+			}
+
+			newForkchoiceState := &engine.ForkchoiceStateV1{
+				HeadBlockHash:      payload.BlockHash,
+				SafeBlockHash:      payload.BlockHash,
+				FinalizedBlockHash: payload.BlockHash,
+			}
+			// mark the block containing the payload as canonical
+			_, err = engineAPI.ForkchoiceUpdatedV2(*newForkchoiceState, nil)
+			if err != nil {
+				log.Crit("failed to mark block as canonical", "err", err)
+			}
+			lastBlockTime = time.Unix(int64(payload.Timestamp), 0)
+			curForkchoiceState = *newForkchoiceState
 		}
 	}
 }
