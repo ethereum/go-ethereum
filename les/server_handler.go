@@ -18,6 +18,7 @@ package les
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -363,8 +364,11 @@ func getAccount(triedb *trie.Database, root common.Hash, addr common.Address) (t
 		return types.StateAccount{}, err
 	}
 	acc, err := trie.GetAccount(addr)
-	if err != nil || acc == nil {
+	if err != nil {
 		return types.StateAccount{}, err
+	}
+	if acc == nil {
+		return types.StateAccount{}, fmt.Errorf("account %#x is not present", addr)
 	}
 	return *acc, nil
 }

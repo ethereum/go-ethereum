@@ -81,7 +81,7 @@ func (db *odrDatabase) ContractCode(addr common.Address, codeHash common.Hash) (
 		return code, nil
 	}
 	id := *db.id
-	id.AccKey = addr[:]
+	id.AccountAddress = addr[:]
 	req := &CodeRequest{Id: &id, Hash: codeHash}
 	err := db.backend.Retrieve(db.ctx, req)
 	return req.Data, err
@@ -207,8 +207,8 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		var err error
 		if t.trie == nil {
 			var id *trie.ID
-			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccKey), t.id.Root)
+			if len(t.id.AccountAddress) > 0 {
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccountAddress), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
@@ -239,8 +239,8 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 	if t.trie == nil {
 		it.do(func() error {
 			var id *trie.ID
-			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccKey), t.id.Root)
+			if len(t.id.AccountAddress) > 0 {
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccountAddress), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
