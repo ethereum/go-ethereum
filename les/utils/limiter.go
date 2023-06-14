@@ -345,10 +345,6 @@ type dropListItem struct {
 	priority float64
 }
 
-func (i dropListItem) Less(other dropListItem) bool {
-	return i.priority < other.priority
-}
-
 // dropRequests selects the nodes with the highest queued request cost to selection
 // weight ratio and drops their queued request. The empty node queues stay in the
 // selectors with a low selection weight in order to penalize these nodes.
@@ -374,7 +370,7 @@ func (l *Limiter) dropRequests() {
 		})
 	}
 	slices.SortFunc(list, func(a, b dropListItem) bool {
-		return a.Less(b)
+		return a.priority < b.priority
 	})
 	for _, item := range list {
 		for _, request := range item.nq.queue {
