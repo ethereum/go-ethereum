@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -527,7 +526,7 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 		vals = append(vals, randBytes(vsize))
 	}
 	if order {
-		sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+		slices.SortFunc(keys, func(a, b []byte) bool { return bytes.Compare(a, b) < 0 })
 	}
 	return keys, vals
 }
