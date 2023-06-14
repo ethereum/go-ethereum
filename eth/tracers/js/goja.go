@@ -86,7 +86,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		if !obj.Get("constructor").SameAs(bufType) {
 			break
 		}
-		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+		b := obj.Export().([]byte)
 		return b, nil
 	}
 	return nil, errors.New("invalid buffer type")
