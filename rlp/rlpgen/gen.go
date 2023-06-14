@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"go/format"
 	"go/types"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
+	"golang.org/x/exp/slices"
 )
 
 // buildContext keeps the data needed for make*Op.
@@ -131,7 +131,7 @@ func (ctx *genContext) importsList() []string {
 	for k := range ctx.imports {
 		imp = append(imp, k)
 	}
-	sort.Strings(imp)
+	slices.Sort(imp)
 	return imp
 }
 
