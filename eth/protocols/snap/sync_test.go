@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 func TestHashing(t *testing.T) {
@@ -127,9 +127,9 @@ type testPeer struct {
 	remote        *Syncer
 	logger        log.Logger
 	accountTrie   *trie.Trie
-	accountValues []*kv
+	accountValues entrySlice
 	storageTries  map[common.Hash]*trie.Trie
-	storageValues map[common.Hash][]*kv
+	storageValues map[common.Hash]entrySlice
 
 	accountRequestHandler accountHandlerFunc
 	storageRequestHandler storageHandlerFunc
@@ -1321,16 +1321,12 @@ type kv struct {
 	k, v []byte
 }
 
-func (kv *kv) Less(other *kv) bool {
-	return bytes.Compare(kv.k, other.k) < 0
-}
+// Some helpers for sorting
+type entrySlice []*kv
 
-// // Some helpers for sorting
-// type []*kv []*kv
-
-// func (p []*kv) Len() int           { return len(p) }
-// func (p []*kv) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
-// func (p []*kv) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p entrySlice) Len() int           { return len(p) }
+func (p entrySlice) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
+func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func key32(i uint64) []byte {
 	key := make([]byte, 32)
@@ -1371,11 +1367,11 @@ func getCodeByHash(hash common.Hash) []byte {
 }
 
 // makeAccountTrieNoStorage spits out a trie, along with the leafs
-func makeAccountTrieNoStorage(n int) (string, *trie.Trie, []*kv) {
+func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 	var (
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie = trie.NewEmpty(db)
-		entries []*kv
+		entries entrySlice
 	)
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
@@ -1389,9 +1385,7 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, []*kv) {
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1405,9 +1399,9 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, []*kv) {
 // makeBoundaryAccountTrie constructs an account trie. Instead of filling
 // accounts normally, this function will fill a few accounts which have
 // boundary hash.
-func makeBoundaryAccountTrie(n int) (string, *trie.Trie, []*kv) {
+func makeBoundaryAccountTrie(n int) (string, *trie.Trie, entrySlice) {
 	var (
-		entries    []*kv
+		entries    entrySlice
 		boundaries []common.Hash
 
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
@@ -1453,9 +1447,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, []*kv) {
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1468,14 +1460,14 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, []*kv) {
 
 // makeAccountTrieWithStorageWithUniqueStorage creates an account trie where each accounts
 // has a unique storage set.
-func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool) (string, *trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
+func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool) (string, *trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
 		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie        = trie.NewEmpty(db)
-		entries        []*kv
+		entries        entrySlice
 		storageRoots   = make(map[common.Hash]common.Hash)
 		storageTries   = make(map[common.Hash]*trie.Trie)
-		storageEntries = make(map[common.Hash][]*kv)
+		storageEntries = make(map[common.Hash]entrySlice)
 		nodes          = trienode.NewMergedNodeSet()
 	)
 	// Create n accounts in the trie
@@ -1502,9 +1494,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
@@ -1525,14 +1515,14 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 }
 
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
-func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (string, *trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
+func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (string, *trie.Trie, entrySlice, map[common.Hash]*trie.Trie, map[common.Hash]entrySlice) {
 	var (
 		db             = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie        = trie.NewEmpty(db)
-		entries        []*kv
+		entries        entrySlice
 		storageRoots   = make(map[common.Hash]common.Hash)
 		storageTries   = make(map[common.Hash]*trie.Trie)
-		storageEntries = make(map[common.Hash][]*kv)
+		storageEntries = make(map[common.Hash]entrySlice)
 		nodes          = trienode.NewMergedNodeSet()
 	)
 	// Create n accounts in the trie
@@ -1546,7 +1536,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 		var (
 			stRoot    common.Hash
 			stNodes   *trienode.NodeSet
-			stEntries []*kv
+			stEntries entrySlice
 		)
 		if boundary {
 			stRoot, stNodes, stEntries = makeBoundaryStorageTrie(common.BytesToHash(key), slots, db)
@@ -1569,9 +1559,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
@@ -1600,9 +1588,9 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 // makeStorageTrieWithSeed fills a storage trie with n items, returning the
 // not-yet-committed trie and the sorted entries. The seeds can be used to ensure
 // that tries are unique.
-func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Database) (common.Hash, *trienode.NodeSet, []*kv) {
+func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Database) (common.Hash, *trienode.NodeSet, entrySlice) {
 	trie, _ := trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
-	var entries []*kv
+	var entries entrySlice
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
 		slotValue := key32(i + seed)
@@ -1615,9 +1603,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
@@ -1625,9 +1611,9 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 // makeBoundaryStorageTrie constructs a storage trie. Instead of filling
 // storage slots normally, this function will fill a few slots which have
 // boundary hash.
-func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (common.Hash, *trienode.NodeSet, []*kv) {
+func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (common.Hash, *trienode.NodeSet, entrySlice) {
 	var (
-		entries    []*kv
+		entries    entrySlice
 		boundaries []common.Hash
 		trie, _    = trie.New(trie.StorageTrieID(types.EmptyRootHash, owner, types.EmptyRootHash), db)
 	)
@@ -1668,9 +1654,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return a.Less(b)
-	})
+	sort.Sort(entries)
 	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
