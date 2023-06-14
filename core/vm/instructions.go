@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"encoding/binary"
+
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 
@@ -440,13 +442,28 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
-	if upper < 2 {
+	if upper < 257 {
 		lower = 0
 	} else {
-		lower = upper - 1
+		lower = upper - 256
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		chainId := interpreter.evm.ChainConfig().ChainID
+		chainIdBuf := make([]byte, 8)
+		binary.BigEndian.PutUint64(chainIdBuf, chainId.Uint64())
+		num64Buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(num64Buf, num64)
+
+		if interpreter.hasher == nil {
+			interpreter.hasher = sha3.NewLegacyKeccak256().(keccakState)
+		} else {
+			interpreter.hasher.Reset()
+		}
+		interpreter.hasher.Write(chainIdBuf)
+		interpreter.hasher.Write(num64Buf)
+		interpreter.hasher.Read(interpreter.hasherBuf[:])
+
+		num.SetBytes(interpreter.hasherBuf[:])
 	} else {
 		num.Clear()
 	}
