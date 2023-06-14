@@ -251,14 +251,14 @@ type Config struct {
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, ethConfig *Config, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) consensus.Engine {
-	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if cliqueConfig != nil {
+		// If proof-of-authority is requested, set it up
 		engine = clique.New(cliqueConfig, db)
+	} else if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		// If Matic bor consensus is requested, set it up
 		// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
 		// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
-	} else if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		genesisContractsClient := contract.NewGenesisContractsClient(chainConfig, chainConfig.Bor.ValidatorContract, chainConfig.Bor.StateReceiverContract, blockchainAPI)
 		spanner := span.NewChainSpanner(blockchainAPI, contract.ValidatorSet(), chainConfig, common.HexToAddress(chainConfig.Bor.ValidatorContract))
 
