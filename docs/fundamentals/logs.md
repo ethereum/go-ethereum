@@ -9,7 +9,7 @@ Note that there are a large number of log messages covering a wide range of poss
 
 ## Configuring log messages {#configuring-log-messages}
 
-Log messages are displayed to the console by default. The messages can be tuned to be more or less detailed by passing `--verbosity` and a value between 0 and 6 to Geth at startup:
+Log messages are displayed to the console by default. The messages can be tuned to be more or less detailed by passing `--verbosity` and a value between 0 and 5 to Geth at startup:
 
 ```sh
 0 = silent (no log messages)
@@ -116,7 +116,7 @@ The logs above relate to Geth starting up its peer-to-peer components and seekin
 
 ### Syncing {#syncing}
 
-The default for Geth is to sync in snap mode. This requires a block header to be provided to Geth by the consensus client. The header is then used as a target to sync to. Geth requests block headers from its peers that are parents of the target until there is a continuous chain of sequential headers of sufficient length. Then, Geth requests block bodies and receipts for each header and simultaneously starts downloading state data. This state data is stored in the form of a [Patricia Merkle Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/). Only the leaves of the trie are downloaded, the full trie structure is then locally regenerated from the leaves up. Meanwhile, the blockchain continues to progress and the target header is updated. This means some of the regenerated state data needs to be updated. This is known as _healing_.
+The default for Geth is to sync in snap mode. This requires a block header to be provided to Geth by the consensus client. The header is then used as a target to sync to. Geth requests block headers from its peers that are parents of the target until there is a continuous chain of sequential headers of sufficient length. Then, Geth requests block bodies and receipts for each header and simultaneously starts downloading state data. This state data is stored in the form of a [Patricia Merkle Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/). Only the leaves of the trie are downloaded, the full trie structure is then locally regenerated from the leaves up. Meanwhile, the blockchain continues to progress and the target header is updated. This means some of the regenerated state data need to be updated. This is known as _healing_.
 
 Assuming Geth has a synced consensus client and some peers it will start importing headers, block bodies and receipts. The log messages for data downloading look as follows:
 
@@ -128,7 +128,7 @@ INFO [07-28|10:30:18.658] Imported new block headers               count=1    el
 INFO [07-28|10:30:21.665] Imported new state entries
 ```
 
-For state sync, Geth reports when the state heal is in progress. This can take a long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
+For state sync, Geth reports when the state heal is in progress. This can take a long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that need to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
 
 ```terminal
 INFO [07-28|10:30:21.965] State heal in progress                   accounts=169,633@7.48MiB  slots=57314@4.17MiB    codes=4895@38.14MiB nodes=43,293,196@11.70GiB pending=112,626
