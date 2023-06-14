@@ -24,9 +24,7 @@ func WriteOnce(r Registry, w io.Writer) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
 
-	slices.SortFunc(namedMetrics, func(a, b namedMetric) bool {
-		return a.Less(b)
-	})
+	slices.SortFunc(namedMetrics, namedMetricLessFunc)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
@@ -94,6 +92,6 @@ type namedMetric struct {
 	m    interface{}
 }
 
-func (nms namedMetric) Less(other namedMetric) bool {
-	return nms.name < other.name
+func namedMetricLessFunc(a, b namedMetric) bool {
+	return a.name < b.name
 }

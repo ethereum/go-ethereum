@@ -14,9 +14,7 @@ func TestMetricsSorting(t *testing.T) {
 		{name: "ggg"},
 	}
 
-	slices.SortFunc(namedMetrics, func(a, b namedMetric) bool {
-		return a.Less(b)
-	})
+	slices.SortFunc(namedMetrics, namedMetricLessFunc)
 	for i, name := range []string{"bbb", "fff", "ggg", "zzz"} {
 		if namedMetrics[i].name != name {
 			t.Fail()
