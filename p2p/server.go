@@ -772,7 +772,11 @@ running:
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
 					inboundCount++
+					ingressDialSuccessMeter.Mark(1)
+				} else {
+					egressDialSuccessMeter.Mark(1)
 				}
+				activePeerGauge.Inc(1)
 			}
 			c.cont <- err
 
@@ -785,6 +789,7 @@ running:
 			if pd.Inbound() {
 				inboundCount--
 			}
+			activePeerGauge.Dec(1)
 		}
 	}
 
@@ -894,11 +899,8 @@ func (srv *Server) listenLoop() {
 			continue
 		}
 		if remoteIP != nil {
-			var addr *net.TCPAddr
-			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
-				addr = tcp
-			}
-			fd = newMeteredConn(fd, true, addr)
+			fd = newMeteredConn(fd)
+			ingressDialMeter.Mark(1)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
 		go func() {

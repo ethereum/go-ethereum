@@ -25,23 +25,41 @@ import (
 )
 
 const (
+	// HandleHistName is the prefix of the per-packet serving time histograms.
+	HandleHistName = "p2p/handle"
+
 	// ingressMeterName is the prefix of the per-packet inbound metrics.
 	ingressMeterName = "p2p/ingress"
 
 	// egressMeterName is the prefix of the per-packet outbound metrics.
 	egressMeterName = "p2p/egress"
-
-	// HandleHistName is the prefix of the per-packet serving time histograms.
-	HandleHistName = "p2p/handle"
 )
 
 var (
-	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/dials", nil)
-	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
-	activePeerGauge     = metrics.NewRegisteredGauge("p2p/peers", nil)
+	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
+	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
+
+	ingressDialMeter        metrics.Meter
+	ingressDialSuccessMeter metrics.Meter
+	egressDialAttemptMeter  metrics.Meter
+	egressDialSuccessMeter  metrics.Meter
+	activePeerGauge         metrics.Gauge
 )
+
+func init() {
+	if metrics.Enabled {
+		ingressDialMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
+		ingressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
+		egressDialAttemptMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
+		egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
+		activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
+		return
+	}
+	ingressDialMeter = metrics.NilMeter{}
+	egressDialAttemptMeter = metrics.NilMeter{}
+	egressDialSuccessMeter = metrics.NilMeter{}
+	activePeerGauge = metrics.NilGauge{}
+}
 
 // meteredConn is a wrapper around a net.Conn that meters both the
 // inbound and outbound network traffic.
@@ -52,18 +70,10 @@ type meteredConn struct {
 // newMeteredConn creates a new metered connection, bumps the ingress or egress
 // connection meter and also increases the metered peer count. If the metrics
 // system is disabled, function returns the original connection.
-func newMeteredConn(conn net.Conn, ingress bool, addr *net.TCPAddr) net.Conn {
-	// Short circuit if metrics are disabled
+func newMeteredConn(conn net.Conn) net.Conn {
 	if !metrics.Enabled {
 		return conn
 	}
-	// Bump the connection counters and wrap the connection
-	if ingress {
-		ingressConnectMeter.Mark(1)
-	} else {
-		egressConnectMeter.Mark(1)
-	}
-	activePeerGauge.Inc(1)
 	return &meteredConn{Conn: conn}
 }
 
@@ -81,14 +91,4 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
 	return n, err
-}
-
-// Close delegates a close operation to the underlying connection, unregisters
-// the peer from the traffic registries and emits close event.
-func (c *meteredConn) Close() error {
-	err := c.Conn.Close()
-	if err == nil {
-		activePeerGauge.Dec(1)
-	}
-	return err
 }
