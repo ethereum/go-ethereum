@@ -365,10 +365,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					if stateSyncPresent && i == len(txs)-1 {
 						if *config.BorTraceEnabled {
 							config.BorTx = newBoolPtr(true)
-							res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 						}
-					} else {
-						res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 					}
 
 					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
