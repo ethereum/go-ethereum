@@ -18,11 +18,11 @@ package vm
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/slices"
 )
 
 var activators = map[int]func(*JumpTable){
@@ -58,7 +58,7 @@ func ActivateableEips() []string {
 	for k := range activators {
 		nums = append(nums, fmt.Sprintf("%d", k))
 	}
-	sort.Strings(nums)
+	slices.Sort(nums)
 	return nums
 }
 

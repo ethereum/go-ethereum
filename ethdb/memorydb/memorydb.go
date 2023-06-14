@@ -19,12 +19,12 @@ package memorydb
 
 import (
 	"errors"
-	"sort"
 	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -164,7 +164,7 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		}
 	}
 	// Sort the items and retrieve the associated values
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, key := range keys {
 		values = append(values, db.db[key])
 	}

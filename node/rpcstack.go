@@ -23,7 +23,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
+	"golang.org/x/exp/slices"
 )
 
 // httpConfig is the JSON-RPC/HTTP configuration.
@@ -182,7 +182,7 @@ func (h *httpServer) start() error {
 	for path := range h.handlerNames {
 		paths = append(paths, path)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	logged := make(map[string]bool, len(paths))
 	for _, path := range paths {
 		name := h.handlerNames[path]
