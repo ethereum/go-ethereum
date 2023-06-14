@@ -26,11 +26,11 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
-	"sort"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -266,7 +266,7 @@ func sortedMapKeys(m reflect.Value) []string {
 	for i, k := range m.MapKeys() {
 		keys[i] = k.String()
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
