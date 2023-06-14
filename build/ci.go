@@ -241,8 +241,8 @@ func doInstall(cmdline []string) {
 func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
-		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
-		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitDate="+env.Date)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
@@ -653,8 +653,7 @@ func doDebianSource(cmdline []string) {
 	}
 	// Download and verify the Go source packages.
 	var (
-		gobootbundle = downloadGoBootstrapSources(*cachedir)
-		gobundle     = downloadGoSources(*cachedir)
+		gobundle = downloadGoSources(*cachedir)
 	)
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
@@ -678,13 +677,6 @@ func doDebianSource(cmdline []string) {
 				return
 			}
 
-			// Add bootstrapper Go source code
-			if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
-				log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
-			}
-			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".goboot")); err != nil {
-				log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
-			}
 			// Add builder Go source code
 			if err := build.ExtractArchive(gobundle, canonicalPath); err != nil {
 				log.Fatalf("Failed to extract builder Go sources: %v", err)
@@ -717,19 +709,6 @@ func doDebianSource(cmdline []string) {
 			}
 		}
 	}
-}
-
-// downloadGoBootstrapSources downloads the Go source tarball that will be used
-// to bootstrap the builder Go.
-func downloadGoBootstrapSources(cachedir string) string {
-	csdb := build.MustLoadChecksums("build/checksums.txt")
-	file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
-	url := "https://dl.google.com/go/" + file
-	dst := filepath.Join(cachedir, file)
-	if err := csdb.DownloadFile(url, dst); err != nil {
-		log.Fatal(err)
-	}
-	return dst
 }
 
 // downloadGoSources downloads the Go source tarball.
