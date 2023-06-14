@@ -28,7 +28,7 @@ To summarize, snap sync progresses in the following sequence:
 - download block bodies and receipts. In parallel, download raw state data and build state trie
 - heal state trie to account for newly arriving data
 
-**Note** Snap sync is the default behaviour, so if the `--syncmode` value is not passed to Geth at startup, Geth will use snap sync. A node that is started using `snap` will switch to block-by-block sync once it has caught up to the head of the chain.
+<Note>Snap sync is the default behaviour, so if the `--syncmode` value is not passed to Geth at startup, Geth will use snap sync. A node that is started using `snap` will switch to block-by-block sync once it has caught up to the head of the chain.</Note>
 
 ### Full {#full-sync}
 
