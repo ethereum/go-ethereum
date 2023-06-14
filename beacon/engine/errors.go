@@ -54,6 +54,7 @@ var (
 	_ rpc.DataError = new(EngineAPIError)
 )
 
+// nolint : errname
 var (
 	// VALID is returned by the engine API in the following calls:
 	//   - newPayloadV1:       if the payload was already known or was just validated and executed

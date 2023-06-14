@@ -846,6 +846,7 @@ func (fb *filterBackend) ChainDb() ethdb.Database { return fb.db }
 func (fb *filterBackend) EventMux() *event.TypeMux { panic("not supported") }
 
 func (fb *filterBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	// nolint : exhaustive
 	switch number {
 	case rpc.PendingBlockNumber:
 		if block := fb.backend.pendingBlock; block != nil {

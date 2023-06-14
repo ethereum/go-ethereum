@@ -734,6 +734,7 @@ func increaseKey(key []byte) []byte {
 
 // abortErr wraps an interruption signal received to represent the
 // generation is aborted by external processes.
+// nolint : errname
 type abortErr struct {
 	abort chan *generatorStats
 }

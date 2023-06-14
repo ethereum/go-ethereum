@@ -970,6 +970,7 @@ func TestTraceChain(t *testing.T) {
 				t.Error("Unexpected tracing result")
 			}
 			for _, trace := range result.Traces {
+				// nolint : errchkjson
 				blob, _ := json.Marshal(trace)
 				if string(blob) != single {
 					t.Error("Unexpected tracing result")

@@ -280,6 +280,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false)
 		}
 	} else {
+		// nolint : exhaustive
 		switch ethashConfig.PowMode {
 		case ethash.ModeFake:
 			log.Warn("Ethash used in fake mode")

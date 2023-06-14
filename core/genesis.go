@@ -378,6 +378,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		return newcfg, stored, compatErr
 	}
 	// Don't overwrite if the old is identical to the new
+	// nolint : errchkjson
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}

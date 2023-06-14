@@ -69,6 +69,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
+	// nolint : errname
 	DiscSubprotocolError = DiscReason(0x10)
 )
 
