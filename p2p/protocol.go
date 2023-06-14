@@ -77,6 +77,6 @@ func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
-func (cap Cap) Less(other Cap) bool {
-	return cap.Name < other.Name || (cap.Name == other.Name && cap.Version < other.Version)
+func capLessFunc(a, b Cap) bool {
+	return a.Name < b.Name || (a.Name == b.Name && a.Version < b.Version)
 }

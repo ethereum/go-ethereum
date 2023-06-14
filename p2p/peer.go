@@ -375,9 +375,7 @@ func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
 
 // matchProtocols creates structures for matching named subprotocols.
 func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[string]*protoRW {
-	slices.SortFunc(caps, func(a, b Cap) bool {
-		return a.Less(b)
-	})
+	slices.SortFunc(caps, capLessFunc)
 	offset := baseProtocolLength
 	result := make(map[string]*protoRW)
 
