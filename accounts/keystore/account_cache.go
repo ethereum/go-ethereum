@@ -66,7 +66,7 @@ type accountCache struct {
 	keydir   string
 	watcher  *watcher
 	mu       sync.Mutex
-	all      accountsByURL
+	all      []accounts.Account
 	byAddr   map[common.Address][]accounts.Account
 	throttle *time.Timer
 	notify   chan struct{}
