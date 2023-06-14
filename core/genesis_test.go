@@ -35,7 +35,7 @@ func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
 	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, trie.NewDatabase(db)); err == nil {
+	if _, err := block.Commit(db, trie.NewDatabase(db), false); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
 }
@@ -78,7 +78,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "mainnet block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				DefaultGenesisBlock().MustCommit(db)
+				DefaultGenesisBlock().MustCommit(db, false)
 				return SetupGenesisBlock(db, trie.NewDatabase(db), nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
@@ -87,7 +87,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				customg.MustCommit(db)
+				customg.MustCommit(db, false)
 				return SetupGenesisBlock(db, trie.NewDatabase(db), nil)
 			},
 			wantHash:   customghash,
@@ -96,7 +96,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "custom block in DB, genesis == goerli",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				customg.MustCommit(db)
+				customg.MustCommit(db, false)
 				return SetupGenesisBlock(db, trie.NewDatabase(db), DefaultGoerliGenesisBlock())
 			},
 			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.GoerliGenesisHash},
@@ -106,7 +106,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				oldcustomg.MustCommit(db)
+				oldcustomg.MustCommit(db, false)
 				return SetupGenesisBlock(db, trie.NewDatabase(db), &customg)
 			},
 			wantHash:   customghash,
@@ -117,7 +117,7 @@ func TestSetupGenesis(t *testing.T) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
-				genesis := oldcustomg.MustCommit(db)
+				genesis := oldcustomg.MustCommit(db, false)
 
 				bc, _ := NewBlockChain(db, nil, &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil)
 				defer bc.Stop()
@@ -175,7 +175,7 @@ func TestGenesisHashes(t *testing.T) {
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 	} {
 		// Test via MustCommit
-		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
+		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase(), false).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
@@ -193,7 +193,7 @@ func TestGenesis_Commit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	genesisBlock := genesis.MustCommit(db)
+	genesisBlock := genesis.MustCommit(db, false)
 
 	if genesis.Difficulty != nil {
 		t.Fatalf("assumption wrong")

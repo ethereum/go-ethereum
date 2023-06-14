@@ -49,7 +49,7 @@ func TestNodeIterator(t *testing.T) {
 		panic(err)
 	}
 
-	gspec.MustCommit(lightdb)
+	gspec.MustCommit(lightdb, false)
 	ctx := context.Background()
 	odr := &testOdr{sdb: fulldb, ldb: lightdb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 	head := blockchain.CurrentHeader()

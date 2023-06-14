@@ -75,7 +75,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		Code:    common.Hex2Bytes("600154600354"),
 	}
 
-	genesis := gspec.MustCommit(gendb)
+	genesis := gspec.MustCommit(gendb, false)
 
 	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
@@ -153,7 +153,7 @@ func ExampleGenerateChain() {
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db, false)
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the

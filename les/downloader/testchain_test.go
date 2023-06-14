@@ -40,7 +40,7 @@ var (
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	testGenesis = gspec.MustCommit(testDB)
+	testGenesis = gspec.MustCommit(testDB, false)
 )
 
 // The common prefix of all test chains:

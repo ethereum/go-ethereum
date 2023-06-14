@@ -274,9 +274,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
-	if chainConfig.IsCancun(bc.CurrentBlock().Time) {
-		bc.stateCache.EndVerkleTransition()
-	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
@@ -305,6 +302,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Load blockchain states from disk
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
+	}
+	if chainConfig != nil && chainConfig.IsCancun(bc.CurrentBlock().Time) {
+		bc.stateCache.EndVerkleTransition()
 	}
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
