@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -31,14 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// withdrawals implements a FIFO queue which holds withdrawals that are pending inclusion
-type withdrawals struct {
+// withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
+type withdrawalQueue struct {
 	pending []*types.Withdrawal
 	mu      sync.Mutex
 }
 
 // pop removes up to 10 withdrawals from the queue
-func (w *withdrawals) pop() []*types.Withdrawal {
+func (w *withdrawalQueue) pop() []*types.Withdrawal {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -56,7 +57,7 @@ func (w *withdrawals) pop() []*types.Withdrawal {
 }
 
 // add adds a withdrawal to the queue
-func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
+func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -64,19 +65,14 @@ func (w *withdrawals) add(withdrawal *types.Withdrawal) error {
 	return nil
 }
 
-// length returns the length of the pending withdrawals.
-func (w *withdrawals) length() int {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return len(w.pending)
-}
-
 type SimulatedBeacon struct {
-	shutdownCh   chan struct{}
-	eth          *eth.Ethereum
-	period       uint64
-	withdrawals  withdrawals
-	feeRecipient common.Address
+	shutdownCh  chan struct{}
+	eth         *eth.Ethereum
+	period      uint64
+	withdrawals withdrawalQueue
+	// list of withdrawals to be included in the next block
+	pendingWithdrawals []*types.Withdrawal
+	feeRecipient       common.Address
 	// mu gates concurrent access to the feeRecipient
 	mu sync.Mutex
 }
@@ -88,10 +84,11 @@ func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
 	}
 
 	return &SimulatedBeacon{
-		eth:          eth,
-		period:       chainConfig.Dev.Period,
-		withdrawals:  withdrawals{[]*types.Withdrawal{}, sync.Mutex{}},
-		feeRecipient: common.Address{},
+		eth:                eth,
+		period:             chainConfig.Dev.Period,
+		withdrawals:        withdrawalQueue{[]*types.Withdrawal{}, sync.Mutex{}},
+		pendingWithdrawals: nil,
+		feeRecipient:       common.Address{},
 	}
 }
 
@@ -149,10 +146,13 @@ func (c *SimulatedBeacon) loop() {
 		if tstamp <= lastBlockTime {
 			tstamp = lastBlockTime + 1
 		}
+		if c.pendingWithdrawals == nil {
+			c.pendingWithdrawals = c.withdrawals.pop()
+		}
 		return engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, &engine.PayloadAttributes{
 			Timestamp:             tstamp,
 			SuggestedFeeRecipient: c.getFeeRecipient(),
-			Withdrawals:           c.withdrawals.pop(),
+			Withdrawals:           c.pendingWithdrawals,
 		})
 	}
 	finalizeSealing := func(id *engine.PayloadID, onDemand bool) error {
@@ -184,6 +184,7 @@ func (c *SimulatedBeacon) loop() {
 		if _, err = engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
 			return fmt.Errorf("failed to mark block as canonical: %v", err)
 		}
+		c.pendingWithdrawals = nil
 		lastBlockTime = payload.Timestamp
 		return nil
 	}
@@ -202,7 +203,7 @@ func (c *SimulatedBeacon) loop() {
 		case <-ticker.C:
 			if onDemand {
 				// Do nothing as long as blocks are empty
-				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && c.withdrawals.length() == 0 {
+				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.pendingWithdrawals) == 0 {
 					ticker.Reset(buildWaitTime)
 					continue
 				}
