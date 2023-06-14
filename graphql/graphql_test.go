@@ -272,6 +272,8 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 }
 
 func TestGraphQLConcurrentResolvers(t *testing.T) {
+	t.Parallel()
+
 	var (
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
@@ -366,6 +368,8 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 }
 
 func createNode(t *testing.T) *node.Node {
+	t.Helper()
+
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
 		HTTPPort:     0,
@@ -380,6 +384,8 @@ func createNode(t *testing.T) *node.Node {
 }
 
 func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
+	t.Helper()
+
 	ethConf := &ethconfig.Config{
 		Genesis: gspec,
 		Ethash: ethash.Config{

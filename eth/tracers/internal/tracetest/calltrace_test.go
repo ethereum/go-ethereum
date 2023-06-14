@@ -90,6 +90,7 @@ func TestCallTracerNative(t *testing.T) {
 }
 
 func TestCallTracerNativeWithLog(t *testing.T) {
+	t.Parallel()
 	testCallTracer("callTracer", "call_tracer_withLog", t)
 }
 
@@ -261,6 +262,8 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 }
 
 func TestInternals(t *testing.T) {
+	t.Parallel()
+
 	var (
 		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")

@@ -74,6 +74,8 @@ func TestClientResponseType(t *testing.T) {
 
 // This test checks calling a method that returns 'null'.
 func TestClientNullResponse(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -172,7 +174,10 @@ func TestClientBatchRequest(t *testing.T) {
 	}
 }
 
+// nolint: tparallel
 func TestClientBatchRequest_len(t *testing.T) {
+	t.Parallel()
+
 	b, err := json.Marshal([]jsonrpcMessage{
 		{Version: "2.0", ID: json.RawMessage("1"), Method: "foo", Result: json.RawMessage(`"0x1"`)},
 		{Version: "2.0", ID: json.RawMessage("2"), Method: "bar", Result: json.RawMessage(`"0x2"`)},
@@ -195,6 +200,8 @@ func TestClientBatchRequest_len(t *testing.T) {
 	defer client.Close()
 
 	t.Run("too-few", func(t *testing.T) {
+		t.Parallel()
+
 		batch := []BatchElem{
 			{Method: "foo"},
 			{Method: "bar"},
@@ -208,6 +215,8 @@ func TestClientBatchRequest_len(t *testing.T) {
 	})
 
 	t.Run("too-many", func(t *testing.T) {
+		t.Parallel()
+
 		batch := []BatchElem{
 			{Method: "foo"},
 		}

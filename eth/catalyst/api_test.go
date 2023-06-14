@@ -389,45 +389,45 @@ func TestEth2DeepReorg(t *testing.T) {
 	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold
 	/*
-			genesis, preMergeBlocks := generateMergeChain(core.TriesInMemory * 2, false)
-			n, ethservice := startEthService(t, genesis, preMergeBlocks)
-			defer n.Close()
+				genesis, preMergeBlocks := generateMergeChain(core.TriesInMemory * 2, false)
+				n, ethservice := startEthService(t, genesis, preMergeBlocks)
+				defer n.Close()
 
-			var (
-				api    = NewConsensusAPI(ethservice, nil)
-				parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
-				head   = ethservice.BlockChain().CurrentBlock().Number.Uint64()()
-			)
-			if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
-				t.Errorf("Block %d not pruned", parent.NumberU64())
+				var (
+					api    = NewConsensusAPI(ethservice, nil)
+					parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
+					head   = ethservice.BlockChain().CurrentBlock().Number.Uint64()()
+				)
+				if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
+					t.Errorf("Block %d not pruned", parent.NumberU64())
+			}
+				for i := 0; i < 10; i++ {
+					execData, err := api.assembleBlock(AssembleBlockParams{
+						ParentHash: parent.Hash(),
+						Timestamp:  parent.Time() + 5,
+					})
+					if err != nil {
+						t.Fatalf("Failed to create the executable data %v", err)
+					}
+					block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+					if err != nil {
+						t.Fatalf("Failed to convert executable data to block %v", err)
+					}
+					newResp, err := api.ExecutePayload(*execData)
+					if err != nil || newResp.Status != "VALID" {
+						t.Fatalf("Failed to insert block: %v", err)
+					}
+					if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != head {
+						t.Fatalf("Chain head shouldn't be updated")
+					}
+					if err := api.setHead(block.Hash()); err != nil {
+						t.Fatalf("Failed to set head: %v", err)
+					}
+					if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != block.NumberU64() {
+						t.Fatalf("Chain head should be updated")
+					}
+					parent, head = block, block.NumberU64()
 		}
-			for i := 0; i < 10; i++ {
-				execData, err := api.assembleBlock(AssembleBlockParams{
-					ParentHash: parent.Hash(),
-					Timestamp:  parent.Time() + 5,
-				})
-				if err != nil {
-					t.Fatalf("Failed to create the executable data %v", err)
-				}
-				block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
-				if err != nil {
-					t.Fatalf("Failed to convert executable data to block %v", err)
-				}
-				newResp, err := api.ExecutePayload(*execData)
-				if err != nil || newResp.Status != "VALID" {
-					t.Fatalf("Failed to insert block: %v", err)
-				}
-				if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != head {
-					t.Fatalf("Chain head shouldn't be updated")
-				}
-				if err := api.setHead(block.Hash()); err != nil {
-					t.Fatalf("Failed to set head: %v", err)
-				}
-				if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != block.NumberU64() {
-					t.Fatalf("Chain head should be updated")
-				}
-				parent, head = block, block.NumberU64()
-	}
 	*/
 }
 
@@ -584,6 +584,8 @@ We expect
 	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
+	t.Parallel()
+
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -679,6 +681,8 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *engine.Pay
 }
 
 func TestEmptyBlocks(t *testing.T) {
+	t.Parallel()
+
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -739,6 +743,8 @@ func TestEmptyBlocks(t *testing.T) {
 }
 
 func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal) *engine.ExecutableData {
+	t.Helper()
+
 	params := engine.PayloadAttributes{
 		Timestamp:             parent.Time + 1,
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
@@ -794,6 +800,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 }
 
 func TestTrickRemoteBlockCache(t *testing.T) {
+	t.Parallel()
+
 	// Setup two nodes
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	nodeA, ethserviceA := startEthService(t, genesis, preMergeBlocks)
@@ -858,6 +866,8 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 }
 
 func TestInvalidBloom(t *testing.T) {
+	t.Parallel()
+
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	ethservice.Merger().ReachTTD()
@@ -882,6 +892,8 @@ func TestInvalidBloom(t *testing.T) {
 }
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
+	t.Parallel()
+
 	genesis, preMergeBlocks := generateMergeChain(100, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -949,6 +961,8 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 // newPayLoad and forkchoiceUpdate. This is to test that the api behaves
 // well even of the caller is not being 'serial'.
 func TestSimultaneousNewBlock(t *testing.T) {
+	t.Parallel()
+
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -1036,6 +1050,8 @@ func TestSimultaneousNewBlock(t *testing.T) {
 // TestWithdrawals creates and verifies two post-Shanghai blocks. The first
 // includes zero withdrawals and the second includes two.
 func TestWithdrawals(t *testing.T) {
+	t.Parallel()
+
 	genesis, blocks := generateMergeChain(10, true)
 	// Set shanghai time to last block + 5 seconds (first post-merge block)
 	time := blocks[len(blocks)-1].Time() + 5
@@ -1150,6 +1166,8 @@ func TestWithdrawals(t *testing.T) {
 }
 
 func TestNilWithdrawals(t *testing.T) {
+	t.Parallel()
+
 	genesis, blocks := generateMergeChain(10, true)
 	// Set shanghai time to last block + 4 seconds (first post-merge block)
 	time := blocks[len(blocks)-1].Time() + 4
@@ -1262,6 +1280,8 @@ func TestNilWithdrawals(t *testing.T) {
 }
 
 func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
+	t.Helper()
+
 	genesis, blocks := generateMergeChain(10, true)
 	// enable shanghai on the last block
 	time := blocks[len(blocks)-1].Header().Time + 1
@@ -1316,6 +1336,8 @@ func allBodies(blocks []*types.Block) []*types.Body {
 }
 
 func TestGetBlockBodiesByHash(t *testing.T) {
+	t.Parallel()
+
 	node, eth, blocks := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
@@ -1372,6 +1394,8 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 }
 
 func TestGetBlockBodiesByRange(t *testing.T) {
+	t.Parallel()
+
 	node, eth, blocks := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
@@ -1453,6 +1477,8 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 }
 
 func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
+	t.Parallel()
+
 	node, eth, _ := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()

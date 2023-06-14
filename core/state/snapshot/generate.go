@@ -509,6 +509,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 // generateStorages generates the missing storage slots of the specific contract.
 // It's supposed to restart the generation from the given origin position.
 func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Hash, account common.Hash, storageRoot common.Hash, storeMarker []byte) error {
+	//nolint: predeclared
 	onStorage := func(key []byte, val []byte, write bool, delete bool) error {
 		defer func(start time.Time) {
 			snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())

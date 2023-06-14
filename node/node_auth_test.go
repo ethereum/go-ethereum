@@ -92,7 +92,10 @@ func (at *authTest) Run(t *testing.T) {
 	}
 }
 
+// nolint: tparallel, paralleltest
 func TestAuthEndpoints(t *testing.T) {
+	t.Parallel()
+
 	var secret [32]byte
 	if _, err := crand.Read(secret[:]); err != nil {
 		t.Fatalf("failed to create jwt secret: %v", err)
@@ -193,6 +196,7 @@ func TestAuthEndpoints(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
+		t.Parallel()
 		t.Run(testCase.name, testCase.Run)
 	}
 }

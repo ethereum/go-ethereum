@@ -25,6 +25,8 @@ import (
 )
 
 func TestCalcBlobFee(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		excessDataGas int64
 		blobfee       int64
@@ -47,6 +49,8 @@ func TestCalcBlobFee(t *testing.T) {
 }
 
 func TestFakeExponential(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		factor      int64
 		numerator   int64

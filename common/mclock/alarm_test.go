@@ -20,6 +20,8 @@ import "testing"
 
 // This test checks basic functionality of Alarm.
 func TestAlarm(t *testing.T) {
+	t.Parallel()
+
 	clk := new(Simulated)
 	clk.Run(20)
 	a := NewAlarm(clk)
@@ -64,6 +66,8 @@ func TestAlarm(t *testing.T) {
 // This test checks that scheduling an Alarm to an earlier time than the
 // one already scheduled works properly.
 func TestAlarmScheduleEarlier(t *testing.T) {
+	t.Parallel()
+
 	clk := new(Simulated)
 	clk.Run(20)
 	a := NewAlarm(clk)
@@ -80,6 +84,8 @@ func TestAlarmScheduleEarlier(t *testing.T) {
 // This test checks that scheduling an Alarm to a later time than the
 // one already scheduled works properly.
 func TestAlarmScheduleLater(t *testing.T) {
+	t.Parallel()
+
 	clk := new(Simulated)
 	clk.Run(20)
 	a := NewAlarm(clk)
@@ -95,6 +101,8 @@ func TestAlarmScheduleLater(t *testing.T) {
 
 // This test checks that scheduling an Alarm in the past makes it fire immediately.
 func TestAlarmNegative(t *testing.T) {
+	t.Parallel()
+
 	clk := new(Simulated)
 	clk.Run(50)
 	a := NewAlarm(clk)

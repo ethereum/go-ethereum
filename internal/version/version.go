@@ -58,6 +58,7 @@ func VCS() (VCSInfo, bool) {
 func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
+		//nolint: staticcheck
 		strings.Title(clientIdentifier),
 		params.VersionWithCommit(git.Commit, git.Date),
 		runtime.GOOS, runtime.GOARCH,

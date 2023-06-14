@@ -42,6 +42,8 @@ import (
 
 // TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {
+	t.Parallel()
+
 	type test struct {
 		name     string
 		isLondon bool
@@ -345,41 +347,51 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 func (b *backendMock) Engine() consensus.Engine { return nil }
 
 func (b *backendMock) RPCRpcReturnDataLimit() uint64 {
+	//nolint: staticcheck
 	return b.RPCRpcReturnDataLimit()
 }
 
 func (b *backendMock) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	//nolint: staticcheck
 	return b.SubscribeStateSyncEvent(ch)
 }
 
 func (b *backendMock) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+	//nolint: staticcheck
 	return b.GetRootHash(ctx, starBlockNr, endBlockNr)
 }
 
 func (b *backendMock) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	//nolint: staticcheck
 	return b.GetBorBlockReceipt(ctx, hash)
 }
 
 func (b *backendMock) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	//nolint: staticcheck
 	return b.GetBorBlockLogs(ctx, hash)
 }
 
 func (b *backendMock) GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	//nolint: staticcheck
 	return b.GetBorBlockTransaction(ctx, txHash)
 }
 
 func (b *backendMock) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	//nolint: staticcheck
 	return b.GetBorBlockTransactionWithBlockHash(ctx, txHash, blockHash)
 }
 
 func (b *backendMock) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	//nolint: staticcheck
 	return b.SubscribeChain2HeadEvent(ch)
 }
 
 func (b *backendMock) GetCheckpointWhitelist() map[uint64]common.Hash {
+	//nolint: staticcheck
 	return b.GetCheckpointWhitelist()
 }
 
 func (b *backendMock) PurgeCheckpointWhitelist() {
+	//nolint: staticcheck
 	b.PurgeCheckpointWhitelist()
 }

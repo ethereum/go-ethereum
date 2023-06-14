@@ -61,6 +61,8 @@ func TestRemoteDbWithHeaders(t *testing.T) {
 }
 
 func testReceiveHeaders(t *testing.T, ln net.Listener, gethArgs ...string) {
+	t.Helper()
+
 	var ok uint32
 	server := &http.Server{
 		Addr: "localhost:0",

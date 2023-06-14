@@ -51,6 +51,7 @@ var (
 )
 
 func TestTrieTracer(t *testing.T) {
+	t.Parallel()
 	testTrieTracer(t, tiny)
 	testTrieTracer(t, nonAligned)
 	testTrieTracer(t, standard)
@@ -59,6 +60,8 @@ func TestTrieTracer(t *testing.T) {
 // Tests if the trie diffs are tracked correctly. Tracer should capture
 // all non-leaf dirty nodes, no matter the node is embedded or not.
 func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
+	t.Helper()
+
 	db := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(db)
 
@@ -96,12 +99,15 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 // Test that after inserting a new batch of nodes and deleting them immediately,
 // the trie tracer should be cleared normally as no operation happened.
 func TestTrieTracerNoop(t *testing.T) {
+	t.Parallel()
 	testTrieTracerNoop(t, tiny)
 	testTrieTracerNoop(t, nonAligned)
 	testTrieTracerNoop(t, standard)
 }
 
 func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
+	t.Helper()
+
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
@@ -119,12 +125,15 @@ func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
 
 // Tests if the accessList is correctly tracked.
 func TestAccessList(t *testing.T) {
+	t.Parallel()
 	testAccessList(t, tiny)
 	testAccessList(t, nonAligned)
 	testAccessList(t, standard)
 }
 
 func testAccessList(t *testing.T, vals []struct{ k, v string }) {
+	t.Helper()
+
 	var (
 		db   = NewDatabase(rawdb.NewMemoryDatabase())
 		trie = NewEmpty(db)
@@ -204,6 +213,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 
 // Tests origin values won't be tracked in Iterator or Prover
 func TestAccessListLeak(t *testing.T) {
+	t.Parallel()
 	var (
 		db   = NewDatabase(rawdb.NewMemoryDatabase())
 		trie = NewEmpty(db)
@@ -255,6 +265,7 @@ func TestAccessListLeak(t *testing.T) {
 // Tests whether the original tree node is correctly deleted after being embedded
 // in its parent due to the smaller size of the original tree node.
 func TestTinyTree(t *testing.T) {
+	t.Parallel()
 	var (
 		db   = NewDatabase(rawdb.NewMemoryDatabase())
 		trie = NewEmpty(db)

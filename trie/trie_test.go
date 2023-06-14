@@ -402,8 +402,8 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(steps)
 }
 
-func verifyAccessList(old *Trie, new *Trie, set *NodeSet) error {
-	deletes, inserts, updates := diffTries(old, new)
+func verifyAccessList(oldTrie *Trie, newTrie *Trie, set *NodeSet) error {
+	deletes, inserts, updates := diffTries(oldTrie, newTrie)
 
 	// Check insertion set
 	for path := range inserts {
@@ -590,6 +590,8 @@ func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
 const benchElemCount = 20000
 
 func benchGet(b *testing.B) {
+	b.Helper()
+
 	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(triedb)
 	k := make([]byte, 32)
@@ -666,6 +668,8 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 }
 
 func benchmarkCommitAfterHash(b *testing.B, collectLeaf bool) {
+	b.Helper()
+
 	// Make the random benchmark deterministic
 	addresses, accounts := makeAccounts(b.N)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))

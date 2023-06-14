@@ -203,6 +203,8 @@ func TestHTTPPeerInfo(t *testing.T) {
 }
 
 func TestNewContextWithHeaders(t *testing.T) {
+	t.Parallel()
+
 	expectedHeaders := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		for i := 0; i < expectedHeaders; i++ {

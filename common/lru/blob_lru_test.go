@@ -30,6 +30,8 @@ func mkKey(i int) (key testKey) {
 }
 
 func TestSizeConstrainedCache(t *testing.T) {
+	t.Parallel()
+
 	lru := NewSizeConstrainedCache[testKey, []byte](100)
 	var want uint64
 	// Add 11 items of 10 byte each. First item should be swapped out
@@ -68,6 +70,8 @@ func TestSizeConstrainedCache(t *testing.T) {
 
 // This test adds inserting an element exceeding the max size.
 func TestSizeConstrainedCacheOverflow(t *testing.T) {
+	t.Parallel()
+
 	lru := NewSizeConstrainedCache[testKey, []byte](100)
 
 	// Add 10 items of 10 byte each, filling the cache
@@ -107,6 +111,8 @@ func TestSizeConstrainedCacheOverflow(t *testing.T) {
 
 // This checks what happens when inserting the same k/v multiple times.
 func TestSizeConstrainedCacheSameItem(t *testing.T) {
+	t.Parallel()
+
 	lru := NewSizeConstrainedCache[testKey, []byte](100)
 
 	// Add one 10 byte-item 10 times.
@@ -124,6 +130,8 @@ func TestSizeConstrainedCacheSameItem(t *testing.T) {
 
 // This tests that empty/nil values are handled correctly.
 func TestSizeConstrainedCacheEmpties(t *testing.T) {
+	t.Parallel()
+
 	lru := NewSizeConstrainedCache[testKey, []byte](100)
 
 	// This test abuses the lru a bit, using different keys for identical value(s).

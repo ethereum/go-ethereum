@@ -112,6 +112,8 @@ func BenchmarkTransactionTrace(b *testing.B) {
 }
 
 func TestMemCopying(t *testing.T) {
+	t.Parallel()
+
 	for i, tc := range []struct {
 		memsize  int64
 		offset   int64

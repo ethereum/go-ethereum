@@ -397,6 +397,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 }
 
 func TestNodesPush(t *testing.T) {
+	t.Parallel()
 	var target enode.ID
 	n1 := nodeAtDistance(target, 255, intIP(1))
 	n2 := nodeAtDistance(target, 254, intIP(2))

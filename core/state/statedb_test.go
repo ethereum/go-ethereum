@@ -1382,6 +1382,8 @@ func TestStateDBAccessList(t *testing.T) {
 // Tests that account and storage tries are flushed in the correct order and that
 // no data loss occurs.
 func TestFlushOrderDataLoss(t *testing.T) {
+	t.Parallel()
+
 	// Create a state trie with many accounts and slots
 	var (
 		memdb    = rawdb.NewMemoryDatabase()
@@ -1420,6 +1422,8 @@ func TestFlushOrderDataLoss(t *testing.T) {
 }
 
 func TestStateDBTransientStorage(t *testing.T) {
+	t.Parallel()
+
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	state, _ := New(common.Hash{}, db, nil)

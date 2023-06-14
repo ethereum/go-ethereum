@@ -122,10 +122,16 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testGetNodeInfo(t, client) },
 		}, {
 			"TestSubscribePendingTxHashes",
-			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
+			func(t *testing.T) {
+				t.Helper()
+				testSubscribePendingTransactions(t, client)
+			},
 		}, {
 			"TestSubscribePendingTxs",
-			func(t *testing.T) { testSubscribeFullPendingTransactions(t, client) },
+			func(t *testing.T) {
+				t.Helper()
+				testSubscribeFullPendingTransactions(t, client)
+			},
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
@@ -136,10 +142,16 @@ func TestGethClient(t *testing.T) {
 		// Hence: this test should be last, execute the tests serially.
 		{
 			"TestAccessList",
-			func(t *testing.T) { testAccessList(t, client) },
+			func(t *testing.T) {
+				t.Helper()
+				testAccessList(t, client)
+			},
 		}, {
 			"TestSetHead",
-			func(t *testing.T) { testSetHead(t, client) },
+			func(t *testing.T) {
+				t.Helper()
+				testSetHead(t, client)
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -309,6 +321,8 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 }
 
 func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
+	t.Helper()
+
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
@@ -367,6 +381,8 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 }
 
 func TestOverrideAccountMarshal(t *testing.T) {
+	t.Parallel()
+
 	om := map[common.Address]OverrideAccount{
 		common.Address{0x11}: OverrideAccount{
 			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.

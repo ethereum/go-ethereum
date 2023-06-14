@@ -78,6 +78,8 @@ func TestStoreCapture(t *testing.T) {
 // Tests that blank fields don't appear in logs when JSON marshalled, to reduce
 // logs bloat and confusion. See https://github.com/ethereum/go-ethereum/issues/24487
 func TestStructLogMarshalingOmitEmpty(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		log  *StructLog
@@ -94,7 +96,10 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			blob, err := json.Marshal(tt.log)
 			if err != nil {
 				t.Fatal(err)

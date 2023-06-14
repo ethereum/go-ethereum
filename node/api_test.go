@@ -49,6 +49,7 @@ func TestStartRPC(t *testing.T) {
 			name: "all off",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
 			},
 			wantReachable: false,
 			wantHandlers:  false,
@@ -59,6 +60,7 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc enabled through config",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
 			},
 			wantReachable: true,
 			wantHandlers:  true,
@@ -69,6 +71,8 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 			},
@@ -81,6 +85,8 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc start again after failure",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				// Listen on a random port.
 				listener, err := net.Listen("tcp", "127.0.0.1:0")
 				if err != nil {
@@ -109,6 +115,8 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc stopped through API",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StopHTTP()
 				assert.NoError(t, err)
 			},
@@ -121,6 +129,8 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc stopped twice",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StopHTTP()
 				assert.NoError(t, err)
 
@@ -144,6 +154,8 @@ func TestStartRPC(t *testing.T) {
 			name: "ws enabled through API",
 			cfg:  Config{},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 			},
@@ -156,6 +168,8 @@ func TestStartRPC(t *testing.T) {
 			name: "ws stopped through API",
 			cfg:  Config{WSHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StopWS()
 				assert.NoError(t, err)
 			},
@@ -168,6 +182,8 @@ func TestStartRPC(t *testing.T) {
 			name: "ws stopped twice",
 			cfg:  Config{WSHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StopWS()
 				assert.NoError(t, err)
 
@@ -183,6 +199,8 @@ func TestStartRPC(t *testing.T) {
 			name: "ws enabled after RPC",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				wsport := n.http.port
 				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
@@ -196,6 +214,8 @@ func TestStartRPC(t *testing.T) {
 			name: "ws enabled after RPC then stopped",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				wsport := n.http.port
 				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
@@ -211,6 +231,8 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc stopped with ws enabled",
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 
@@ -229,6 +251,8 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc enabled after ws",
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				t.Helper()
+
 				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 

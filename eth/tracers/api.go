@@ -1306,43 +1306,43 @@ func APIs(backend Backend) []rpc.API {
 // along with a boolean that indicates whether the copy is canonical (equivalent to the original).
 // Note: the Clique-part is _not_ deep copied
 func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
-	copy := new(params.ChainConfig)
-	*copy = *original
+	chainConfigCopy := new(params.ChainConfig)
+	*chainConfigCopy = *original
 	canon := true
 
-	// Apply forks (after Berlin) to the copy.
+	// Apply forks (after Berlin) to the chainConfigCopy.
 	if block := override.BerlinBlock; block != nil {
-		copy.BerlinBlock = block
+		chainConfigCopy.BerlinBlock = block
 		canon = false
 	}
 	if block := override.LondonBlock; block != nil {
-		copy.LondonBlock = block
+		chainConfigCopy.LondonBlock = block
 		canon = false
 	}
 	if block := override.ArrowGlacierBlock; block != nil {
-		copy.ArrowGlacierBlock = block
+		chainConfigCopy.ArrowGlacierBlock = block
 		canon = false
 	}
 	if block := override.GrayGlacierBlock; block != nil {
-		copy.GrayGlacierBlock = block
+		chainConfigCopy.GrayGlacierBlock = block
 		canon = false
 	}
 	if block := override.MergeNetsplitBlock; block != nil {
-		copy.MergeNetsplitBlock = block
+		chainConfigCopy.MergeNetsplitBlock = block
 		canon = false
 	}
 	if timestamp := override.ShanghaiTime; timestamp != nil {
-		copy.ShanghaiTime = timestamp
+		chainConfigCopy.ShanghaiTime = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {
-		copy.CancunTime = timestamp
+		chainConfigCopy.CancunTime = timestamp
 		canon = false
 	}
 	if timestamp := override.PragueTime; timestamp != nil {
-		copy.PragueTime = timestamp
+		chainConfigCopy.PragueTime = timestamp
 		canon = false
 	}
 
-	return copy, canon
+	return chainConfigCopy, canon
 }

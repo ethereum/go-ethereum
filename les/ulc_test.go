@@ -38,6 +38,8 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 
 	// newTestLightPeer creates node with light sync mode
 	newTestLightPeer := func(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
+		t.Helper()
+
 		netconfig := testnetConfig{
 			protocol:    protocol,
 			ulcServers:  ulcServers,
@@ -146,6 +148,8 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 
 // newTestServerPeer creates server peer.
 func newTestServerPeer(t *testing.T, blocks int, protocol int, indexFn indexerCallback) (*testServer, *enode.Node, func()) {
+	t.Helper()
+
 	netconfig := testnetConfig{
 		blocks:    blocks,
 		protocol:  protocol,

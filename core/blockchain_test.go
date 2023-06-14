@@ -3858,6 +3858,8 @@ func TestCanonicalHashMarker(t *testing.T) {
 
 // TestTxIndexer tests the tx indexes are updated correctly.
 func TestTxIndexer(t *testing.T) {
+	t.Parallel()
+
 	var (
 		testBankKey, _  = crypto.GenerateKey()
 		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
@@ -4063,6 +4065,8 @@ func TestTxIndexer(t *testing.T) {
 }
 
 func TestCreateThenDeletePreByzantium(t *testing.T) {
+	t.Parallel()
+
 	// We use Ropsten chain config instead of Testchain config, this is
 	// deliberate: we want to use pre-byz rules where we have intermediate state roots
 	// between transactions.
@@ -4076,12 +4080,15 @@ func TestCreateThenDeletePreByzantium(t *testing.T) {
 	})
 }
 func TestCreateThenDeletePostByzantium(t *testing.T) {
+	t.Parallel()
 	testCreateThenDelete(t, params.TestChainConfig)
 }
 
 // testCreateThenDelete tests a creation and subsequent deletion of a contract, happening
 // within the same block.
 func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
+	t.Helper()
+
 	var (
 		engine = ethash.NewFaker()
 		// A sender who makes transactions, has some funds
@@ -4158,6 +4165,8 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 // TestTransientStorageReset ensures the transient storage is wiped correctly
 // between transactions.
 func TestTransientStorageReset(t *testing.T) {
+	t.Parallel()
+
 	var (
 		engine      = ethash.NewFaker()
 		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -4250,6 +4259,8 @@ func TestTransientStorageReset(t *testing.T) {
 }
 
 func TestEIP3651(t *testing.T) {
+	t.Parallel()
+
 	var (
 		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")

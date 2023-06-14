@@ -28,7 +28,10 @@ import (
 )
 
 func TestPebbleDB(t *testing.T) {
+	t.Parallel()
+
 	t.Run("DatabaseSuite", func(t *testing.T) {
+		t.Parallel()
 		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
 			db, err := pebble.Open("", &pebble.Options{
 				FS: vfs.NewMem(),

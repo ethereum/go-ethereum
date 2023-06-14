@@ -120,6 +120,8 @@ func TestCheckCompatible(t *testing.T) {
 }
 
 func TestConfigRules(t *testing.T) {
+	t.Parallel()
+
 	c := &ChainConfig{
 		ShanghaiTime: newUint64(500),
 	}

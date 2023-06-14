@@ -131,6 +131,8 @@ var createGasTests = []struct {
 }
 
 func TestCreateGas(t *testing.T) {
+	t.Parallel()
+
 	for i, tt := range createGasTests {
 		var gasUsed = uint64(0)
 		doCheck := func(testGas int) bool {

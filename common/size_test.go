@@ -40,6 +40,8 @@ func TestStorageSizeString(t *testing.T) {
 }
 
 func TestStorageSizeTerminalString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		size StorageSize
 		str  string

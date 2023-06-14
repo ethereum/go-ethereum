@@ -25,6 +25,8 @@ import (
 )
 
 func TestIteratorHold(t *testing.T) {
+	t.Parallel()
+
 	// Create the key-value data store
 	var (
 		content = map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"}
@@ -87,6 +89,8 @@ func TestIteratorHold(t *testing.T) {
 }
 
 func TestReopenIterator(t *testing.T) {
+	t.Parallel()
+
 	var (
 		content = map[common.Hash]string{
 			common.HexToHash("a1"): "v1",

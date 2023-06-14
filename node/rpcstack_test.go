@@ -281,6 +281,8 @@ func rpcRequest(t *testing.T, url, method string, extraHeaders ...string) *http.
 }
 
 func batchRpcRequest(t *testing.T, url string, methods []string, extraHeaders ...string) *http.Response {
+	t.Helper()
+
 	reqs := make([]string, len(methods))
 	for i, m := range methods {
 		reqs[i] = fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, m)
@@ -448,6 +450,8 @@ func TestJWT(t *testing.T) {
 }
 
 func TestGzipHandler(t *testing.T) {
+	t.Parallel()
+
 	type gzipTest struct {
 		name    string
 		handler http.HandlerFunc
@@ -522,6 +526,7 @@ func TestGzipHandler(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			srv := httptest.NewServer(newGzipHandler(test.handler))
 			defer srv.Close()
 
@@ -556,6 +561,8 @@ func TestGzipHandler(t *testing.T) {
 }
 
 func TestHTTPWriteTimeout(t *testing.T) {
+	t.Parallel()
+
 	const (
 		timeoutRes = `{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"request timed out"}}`
 		greetRes   = `{"jsonrpc":"2.0","id":1,"result":"Hello"}`
@@ -568,6 +575,7 @@ func TestHTTPWriteTimeout(t *testing.T) {
 
 	// Send normal request
 	t.Run("message", func(t *testing.T) {
+		t.Parallel()
 		resp := rpcRequest(t, url, "test_sleep")
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
@@ -581,6 +589,7 @@ func TestHTTPWriteTimeout(t *testing.T) {
 
 	// Batch request
 	t.Run("batch", func(t *testing.T) {
+		t.Parallel()
 		want := fmt.Sprintf("[%s,%s,%s]", greetRes, timeoutRes, timeoutRes)
 		resp := batchRpcRequest(t, url, []string{"test_greet", "test_sleep", "test_greet"})
 		defer resp.Body.Close()

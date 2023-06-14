@@ -299,6 +299,7 @@ func TestEstimatedPriority(t *testing.T) {
 }
 
 func TestPositiveBalanceCounting(t *testing.T) {
+	t.Parallel()
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 

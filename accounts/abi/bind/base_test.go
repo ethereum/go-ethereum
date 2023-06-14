@@ -115,6 +115,8 @@ func (mc *mockPendingCaller) PendingCallContract(ctx context.Context, call ether
 }
 
 func TestPassingBlockNumber(t *testing.T) {
+	t.Parallel()
+
 	mc := &mockPendingCaller{
 		mockCaller: &mockCaller{
 			codeAtBytes: []byte{1, 2, 3},
@@ -187,6 +189,8 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackAnonymousLogIntoMap(t *testing.T) {
+	t.Parallel()
+
 	mockLog := newMockLog(nil, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":false,"name":"amount","type":"uint256"}],"name":"received","type":"event"}]`
@@ -377,6 +381,8 @@ func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 }
 
 func TestCall(t *testing.T) {
+	t.Parallel()
+
 	var method, methodWithArg = "something", "somethingArrrrg"
 	tests := []struct {
 		name, method string
@@ -507,6 +513,8 @@ func TestCall(t *testing.T) {
 
 // TestCrashers contains some strings which previously caused the abi codec to crash.
 func TestCrashers(t *testing.T) {
+	t.Parallel()
+
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"_1"}]}]}]`))
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"&"}]}]}]`))
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"----"}]}]}]`))

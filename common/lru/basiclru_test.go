@@ -102,6 +102,8 @@ func TestBasicLRU(t *testing.T) {
 }
 
 func TestBasicLRUAddExistingKey(t *testing.T) {
+	t.Parallel()
+
 	cache := NewBasicLRU[int, int](1)
 
 	cache.Add(1, 1)
@@ -115,6 +117,8 @@ func TestBasicLRUAddExistingKey(t *testing.T) {
 
 // This test checks GetOldest and RemoveOldest.
 func TestBasicLRUGetOldest(t *testing.T) {
+	t.Parallel()
+
 	cache := NewBasicLRU[int, int](128)
 	for i := 0; i < 256; i++ {
 		cache.Add(i, i)
@@ -147,6 +151,8 @@ func TestBasicLRUGetOldest(t *testing.T) {
 
 // Test that Add returns true/false if an eviction occurred
 func TestBasicLRUAddReturnValue(t *testing.T) {
+	t.Parallel()
+
 	cache := NewBasicLRU[int, int](1)
 	if cache.Add(1, 1) {
 		t.Errorf("first add shouldn't have evicted")
@@ -158,6 +164,8 @@ func TestBasicLRUAddReturnValue(t *testing.T) {
 
 // This test verifies that Contains doesn't change item recency.
 func TestBasicLRUContains(t *testing.T) {
+	t.Parallel()
+
 	cache := NewBasicLRU[int, int](2)
 	cache.Add(1, 1)
 	cache.Add(2, 2)

@@ -848,10 +848,10 @@ func TestTracingWithOverrides(t *testing.T) {
 			}
 			continue
 		}
-			if err != nil {
+		if err != nil {
 			t.Errorf("test %d: want no error, have %v", i, err)
-				continue
-			}
+			continue
+		}
 		// Turn result into res-struct
 		var (
 			have res
@@ -910,6 +910,8 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 }
 
 func TestTraceChain(t *testing.T) {
+	t.Parallel()
+
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{

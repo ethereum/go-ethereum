@@ -42,8 +42,8 @@ func count(t *testing.T, pool *TxPool) (pending int, queued int) {
 	return pending, queued
 }
 
-func fillPool(t testing.TB, pool *TxPool) {
-	t.Helper()
+func fillPool(tb testing.TB, pool *TxPool) {
+	tb.Helper()
 	// Create a number of test accounts, fund them and make transactions
 	executableTxs := types.Transactions{}
 	nonExecutableTxs := types.Transactions{}
@@ -62,14 +62,14 @@ func fillPool(t testing.TB, pool *TxPool) {
 	slots := pool.all.Slots()
 	// sanity-check that the test prerequisites are ok (pending full)
 	if have, want := pending, slots; have != want {
-		t.Fatalf("have %d, want %d", have, want)
+		tb.Fatalf("have %d, want %d", have, want)
 	}
 	if have, want := queued, 0; have != want {
-		t.Fatalf("have %d, want %d", have, want)
+		tb.Fatalf("have %d, want %d", have, want)
 	}
 
-	t.Logf("pool.config: GlobalSlots=%d, GlobalQueue=%d\n", pool.config.GlobalSlots, pool.config.GlobalQueue)
-	t.Logf("pending: %d queued: %d, all: %d\n", pending, queued, slots)
+	tb.Logf("pool.config: GlobalSlots=%d, GlobalQueue=%d\n", pool.config.GlobalSlots, pool.config.GlobalQueue)
+	tb.Logf("pending: %d queued: %d, all: %d\n", pending, queued, slots)
 }
 
 // Tests that if a batch high-priced of non-executables arrive, they do not kick out

@@ -71,7 +71,9 @@ type flatCallTracerTest struct {
 	Result       []flatCallTrace `json:"result"`
 }
 
-func flatCallTracerTestRunner(tracerName string, filename string, dirPath string, t testing.TB) error {
+func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string, dirPath string) error {
+	tb.Helper()
+
 	// Call tracer test found, read if from disk
 	blob, err := os.ReadFile(filepath.Join("testdata", dirPath, filename))
 	if err != nil {
@@ -130,21 +132,21 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
 	if !jsonEqualFlat(ret, test.Result) {
-		t.Logf("tracer name: %s", tracerName)
+		tb.Logf("tracer name: %s", tracerName)
 
 		// uncomment this for easier debugging
 		// have, _ := json.MarshalIndent(ret, "", " ")
 		// want, _ := json.MarshalIndent(test.Result, "", " ")
-		// t.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
+		// tb.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
 
 		// uncomment this for harder debugging <3 meowsbits
 		// lines := deep.Equal(ret, test.Result)
 		// for _, l := range lines {
-		// 	t.Logf("%s", l)
-		// 	t.FailNow()
+		// 	tb.Logf("%s", l)
+		// 	tb.FailNow()
 		// }
 
-		t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+		tb.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 	}
 	return nil
 }
@@ -152,10 +154,13 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 // Iterates over all the input-output datasets in the tracer parity test harness and
 // runs the Native tracer against them.
 func TestFlatCallTracerNative(t *testing.T) {
-	testFlatCallTracer("flatCallTracer", "call_tracer_flat", t)
+	t.Parallel()
+	testFlatCallTracer(t, "flatCallTracer", "call_tracer_flat")
 }
 
-func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
+func testFlatCallTracer(t *testing.T, tracerName string, dirPath string) {
+	t.Helper()
+
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -168,7 +173,7 @@ func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
-			err := flatCallTracerTestRunner(tracerName, file.Name(), dirPath, t)
+			err := flatCallTracerTestRunner(t, tracerName, file.Name(), dirPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -204,7 +209,7 @@ func BenchmarkFlatCallTracer(b *testing.B) {
 		filename := strings.TrimPrefix(file, "testdata/call_tracer_flat/")
 		b.Run(camel(strings.TrimSuffix(filename, ".json")), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
-				err := flatCallTracerTestRunner("flatCallTracer", filename, "call_tracer_flat", b)
+				err := flatCallTracerTestRunner(b, "flatCallTracer", filename, "call_tracer_flat")
 				if err != nil {
 					b.Fatal(err)
 				}

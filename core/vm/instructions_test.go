@@ -578,6 +578,8 @@ func BenchmarkOpMstore(bench *testing.B) {
 }
 
 func TestOpTstore(t *testing.T) {
+	t.Parallel()
+
 	var (
 		statedb, _     = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		env            = NewEVM(BlockContext{}, TxContext{}, statedb, params.TestChainConfig, Config{})

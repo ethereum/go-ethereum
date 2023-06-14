@@ -40,6 +40,8 @@ func (no *testNativeObjectBinding) TestMethod(call goja.FunctionCall) goja.Value
 }
 
 func newWithTestJS(t *testing.T, testjs string) *JSRE {
+	t.Helper()
+
 	dir := t.TempDir()
 	if testjs != "" {
 		if err := os.WriteFile(path.Join(dir, "test.js"), []byte(testjs), os.ModePerm); err != nil {

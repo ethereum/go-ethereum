@@ -23,6 +23,8 @@ import (
 )
 
 func TestTracker(t *testing.T) {
+	t.Parallel()
+
 	var cases = []struct {
 		limit   int
 		calls   []uint64
@@ -118,6 +120,8 @@ func TestTracker(t *testing.T) {
 }
 
 func TestTrackerWait(t *testing.T) {
+	t.Parallel()
+
 	var (
 		tracker = newStateTracker(5, 0) // limit = 5, oldest = 0
 		result  = make(chan error, 1)

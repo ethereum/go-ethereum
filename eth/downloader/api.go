@@ -38,6 +38,7 @@ type DownloaderAPI struct {
 // listens for events from the downloader through the global event mux. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
+// nolint: staticcheck
 func NewDownloaderAPI(d *Downloader, m *event.TypeMux) *DownloaderAPI {
 	api := &DownloaderAPI{
 		d:                         d,

@@ -813,6 +813,8 @@ func populateDangling(disk ethdb.KeyValueStore) {
 //
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
+	t.Parallel()
+
 	var helper = newHelper()
 
 	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
@@ -848,6 +850,8 @@ func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 //
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateBrokenSnapshotWithDanglingStorage(t *testing.T) {
+	t.Parallel()
+
 	var helper = newHelper()
 
 	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)

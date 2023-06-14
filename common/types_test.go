@@ -161,6 +161,8 @@ func BenchmarkAddressHex(b *testing.B) {
 // but not the pointer level, so that this customized marshalled can be used
 // for both MixedcaseAddress object and pointer.
 func TestMixedcaseAddressMarshal(t *testing.T) {
+	t.Parallel()
+
 	var (
 		output string
 		input  = "0xae967917c465db8578ca9024c205720b1a3651A9"

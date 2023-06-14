@@ -57,6 +57,8 @@ func TestMain(m *testing.M) {
 // This method creates a temporary  keystore folder which will be removed after
 // the test exits.
 func runClef(t *testing.T, args ...string) *testproc {
+	t.Helper()
+
 	ddir, err := os.MkdirTemp("", "cleftest-*")
 	if err != nil {
 		return nil
@@ -71,6 +73,8 @@ func runClef(t *testing.T, args ...string) *testproc {
 // This method does _not_ create the keystore folder, but it _does_ add the arg
 // to the args.
 func runWithKeystore(t *testing.T, keystore string, args ...string) *testproc {
+	t.Helper()
+
 	args = append([]string{"--keystore", keystore}, args...)
 	tt := &testproc{Datadir: keystore}
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)

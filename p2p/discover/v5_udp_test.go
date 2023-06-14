@@ -519,34 +519,40 @@ func TestUDPv5_talkRequest(t *testing.T) {
 
 // This test checks that lookupDistances works.
 func TestUDPv5_lookupDistances(t *testing.T) {
+	t.Parallel()
 	test := newUDPV5Test(t)
 	lnID := test.table.self().ID()
 
 	t.Run("target distance of 1", func(t *testing.T) {
+		t.Parallel()
 		node := nodeAtDistance(lnID, 1, intIP(0))
 		dists := lookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{1, 2, 3}, dists)
 	})
 
 	t.Run("target distance of 2", func(t *testing.T) {
+		t.Parallel()
 		node := nodeAtDistance(lnID, 2, intIP(0))
 		dists := lookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{2, 3, 1}, dists)
 	})
 
 	t.Run("target distance of 128", func(t *testing.T) {
+		t.Parallel()
 		node := nodeAtDistance(lnID, 128, intIP(0))
 		dists := lookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{128, 129, 127}, dists)
 	})
 
 	t.Run("target distance of 255", func(t *testing.T) {
+		t.Parallel()
 		node := nodeAtDistance(lnID, 255, intIP(0))
 		dists := lookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{255, 256, 254}, dists)
 	})
 
 	t.Run("target distance of 256", func(t *testing.T) {
+		t.Parallel()
 		node := nodeAtDistance(lnID, 256, intIP(0))
 		dists := lookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{256, 255, 254}, dists)

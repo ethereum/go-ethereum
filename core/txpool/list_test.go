@@ -29,6 +29,8 @@ import (
 // Tests that transactions can be added to strict lists and list contents and
 // nonce boundaries are correctly maintained.
 func TestStrictListAdd(t *testing.T) {
+	t.Parallel()
+
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
 

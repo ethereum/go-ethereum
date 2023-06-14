@@ -10,6 +10,7 @@ import (
 const FANOUT = 128
 
 func TestReadRuntimeValues(t *testing.T) {
+	t.Parallel()
 	var v runtimeStats
 	readRuntimeStats(&v)
 	t.Logf("%+v", v)

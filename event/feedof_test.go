@@ -23,6 +23,8 @@ import (
 )
 
 func TestFeedOf(t *testing.T) {
+	t.Parallel()
+
 	var feed FeedOf[int]
 	var done, subscribed sync.WaitGroup
 	subscriber := func(i int) {
@@ -71,6 +73,8 @@ func TestFeedOf(t *testing.T) {
 }
 
 func TestFeedOfSubscribeSameChannel(t *testing.T) {
+	t.Parallel()
+
 	var (
 		feed FeedOf[int]
 		done sync.WaitGroup
@@ -114,6 +118,8 @@ func TestFeedOfSubscribeSameChannel(t *testing.T) {
 }
 
 func TestFeedOfSubscribeBlockedPost(t *testing.T) {
+	t.Parallel()
+
 	var (
 		feed   FeedOf[int]
 		nsends = 2000
@@ -147,6 +153,8 @@ func TestFeedOfSubscribeBlockedPost(t *testing.T) {
 }
 
 func TestFeedOfUnsubscribeBlockedPost(t *testing.T) {
+	t.Parallel()
+
 	var (
 		feed   FeedOf[int]
 		nsends = 200
@@ -184,6 +192,8 @@ func TestFeedOfUnsubscribeBlockedPost(t *testing.T) {
 // Checks that unsubscribing a channel during Send works even if that
 // channel has already been sent on.
 func TestFeedOfUnsubscribeSentChan(t *testing.T) {
+	t.Parallel()
+
 	var (
 		feed FeedOf[int]
 		ch1  = make(chan int)
@@ -221,6 +231,8 @@ func TestFeedOfUnsubscribeSentChan(t *testing.T) {
 }
 
 func TestFeedOfUnsubscribeFromInbox(t *testing.T) {
+	t.Parallel()
+
 	var (
 		feed FeedOf[int]
 		ch1  = make(chan int)

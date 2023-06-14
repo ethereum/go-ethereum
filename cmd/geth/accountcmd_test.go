@@ -118,6 +118,8 @@ func TestAccountImport(t *testing.T) {
 }
 
 func TestAccountHelp(t *testing.T) {
+	t.Parallel()
+
 	geth := runGeth(t, "account", "-h")
 	geth.WaitExit()
 	if have, want := geth.ExitStatus(), 0; have != want {

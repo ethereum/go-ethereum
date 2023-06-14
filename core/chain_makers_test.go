@@ -32,6 +32,8 @@ import (
 )
 
 func TestGenerateWithdrawalChain(t *testing.T) {
+	t.Parallel()
+
 	var (
 		keyHex  = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
 		key, _  = crypto.HexToECDSA(keyHex)

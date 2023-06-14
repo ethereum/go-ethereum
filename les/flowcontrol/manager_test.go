@@ -56,6 +56,8 @@ func TestConstantTotalCapacity(t *testing.T) {
 }
 
 func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, randomSend int, priorityOverflow bool) {
+	t.Helper()
+
 	clock := &mclock.Simulated{}
 	nodes := make([]*testNode, nodeCount)
 	var totalCapacity uint64

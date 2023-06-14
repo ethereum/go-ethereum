@@ -83,6 +83,8 @@ func TestPrettyBigInt(t *testing.T) {
 }
 
 func TestPrettyUint256(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		int string
 		s   string
@@ -117,6 +119,8 @@ func BenchmarkPrettyUint64Logfmt(b *testing.B) {
 }
 
 func TestSanitation(t *testing.T) {
+	t.Parallel()
+
 	msg := "\u001b[1G\u001b[K\u001b[1A"
 	msg2 := "\u001b  \u0000"
 	msg3 := "NiceMessage"

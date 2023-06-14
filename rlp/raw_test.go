@@ -61,6 +61,8 @@ func TestCountValues(t *testing.T) {
 }
 
 func TestSplitString(t *testing.T) {
+	t.Parallel()
+
 	for i, test := range []string{
 		"C0",
 		"C100",
@@ -75,6 +77,8 @@ func TestSplitString(t *testing.T) {
 }
 
 func TestSplitList(t *testing.T) {
+	t.Parallel()
+
 	for i, test := range []string{
 		"80",
 		"00",
@@ -305,6 +309,8 @@ func TestAppendUint64Random(t *testing.T) {
 }
 
 func TestBytesSize(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		v    []byte
 		size uint64

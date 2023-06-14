@@ -289,6 +289,8 @@ func TestEnterExit(t *testing.T) {
 }
 
 func TestSetup(t *testing.T) {
+	t.Parallel()
+
 	// Test empty config
 	_, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, new(tracers.Context), nil)
 	if err != nil {

@@ -25,6 +25,8 @@ import (
 )
 
 func TestResetFreezer(t *testing.T) {
+	t.Parallel()
+
 	items := []struct {
 		id   uint64
 		blob []byte
@@ -78,6 +80,8 @@ func TestResetFreezer(t *testing.T) {
 }
 
 func TestFreezerCleanup(t *testing.T) {
+	t.Parallel()
+
 	items := []struct {
 		id   uint64
 		blob []byte

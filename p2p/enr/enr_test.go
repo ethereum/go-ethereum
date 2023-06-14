@@ -170,6 +170,7 @@ func TestDirty(t *testing.T) {
 }
 
 func TestSize(t *testing.T) {
+	t.Parallel()
 	var r Record
 
 	// Empty record size is 3 bytes.

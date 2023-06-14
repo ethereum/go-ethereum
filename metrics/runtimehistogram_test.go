@@ -26,6 +26,7 @@ type runtimeHistogramTest struct {
 // This test checks the results of statistical functions implemented
 // by runtimeHistogramSnapshot.
 func TestRuntimeHistogramStats(t *testing.T) {
+	t.Parallel()
 	tests := []runtimeHistogramTest{
 		0: {
 			h: metrics.Float64Histogram{
@@ -73,7 +74,10 @@ func TestRuntimeHistogramStats(t *testing.T) {
 	}
 
 	for i, test := range tests {
+		i, test := i, test
+
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Parallel()
 			s := runtimeHistogramSnapshot(test.h)
 
 			if v := s.Count(); v != test.Count {
@@ -121,6 +125,7 @@ func approxEqual(x, y, ε float64) bool {
 // This test verifies that requesting Percentiles in unsorted order
 // returns them in the requested order.
 func TestRuntimeHistogramStatsPercentileOrder(t *testing.T) {
+	t.Parallel()
 	p := runtimeHistogramSnapshot{
 		Counts:  []uint64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 		Buckets: []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},

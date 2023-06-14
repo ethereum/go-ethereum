@@ -183,7 +183,7 @@ type lru[T cacheOrDataset] struct {
 
 // newlru create a new least-recently-used cache for either the verification caches
 // or the mining datasets.
-func newlru[T cacheOrDataset](maxItems int, new func(epoch uint64) T) *lru[T] {
+func newlru[T cacheOrDataset](maxItems int, newLru func(epoch uint64) T) *lru[T] {
 	var what string
 	switch any(T(nil)).(type) {
 	case *cache:
@@ -195,7 +195,7 @@ func newlru[T cacheOrDataset](maxItems int, new func(epoch uint64) T) *lru[T] {
 	}
 	return &lru[T]{
 		what:  what,
-		new:   new,
+		new:   newLru,
 		cache: lrupkg.NewBasicLRU[uint64, T](maxItems),
 	}
 }

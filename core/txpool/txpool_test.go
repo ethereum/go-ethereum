@@ -1019,13 +1019,16 @@ func TestAllowUnprotectedTransactionWhenSet(t *testing.T) {
 // This logic should not hold for local transactions, unless the local tracking
 // mechanism is disabled.
 func TestQueueGlobalLimiting(t *testing.T) {
+	t.Parallel()
 	testQueueGlobalLimiting(t, false)
 }
 func TestQueueGlobalLimitingNoLocals(t *testing.T) {
+	t.Parallel()
 	testQueueGlobalLimiting(t, true)
 }
 
 func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
+	t.Helper()
 	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
@@ -1110,9 +1113,11 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 // This logic should not hold for local transactions, unless the local tracking
 // mechanism is disabled.
 func TestQueueTimeLimiting(t *testing.T) {
+	t.Parallel()
 	testQueueTimeLimiting(t, false)
 }
 func TestQueueTimeLimitingNoLocals(t *testing.T) {
+	t.Parallel()
 	testQueueTimeLimiting(t, true)
 }
 
@@ -2495,10 +2500,17 @@ func TestReplacementDynamicFee(t *testing.T) {
 
 // Tests that local transactions are journaled to disk, but remote transactions
 // get discarded between restarts.
-func TestJournaling(t *testing.T)         { testJournaling(t, false) }
-func TestJournalingNoLocals(t *testing.T) { testJournaling(t, true) }
+func TestJournaling(t *testing.T) {
+	t.Parallel()
+	testJournaling(t, false)
+}
+func TestJournalingNoLocals(t *testing.T) {
+	t.Parallel()
+	testJournaling(t, true)
+}
 
 func testJournaling(t *testing.T, nolocals bool) {
+	t.Helper()
 	t.Parallel()
 
 	// Create a temporary file for the journal
@@ -2741,6 +2753,8 @@ func BenchmarkBatchLocalInsert10000(b *testing.B) { benchmarkBatchInsert(b, 1000
 
 // Benchmarks the speed of batched transaction insertion.
 func benchmarkBatchInsert(b *testing.B, size int, local bool) {
+	b.Helper()
+
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupPool()
 	defer pool.Stop()

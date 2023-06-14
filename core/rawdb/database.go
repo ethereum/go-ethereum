@@ -576,7 +576,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
 			stats = append(stats, []string{
-				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
+				fmt.Sprintf("Ancient store (%s)",
+					//nolint: staticcheck
+					strings.Title(ancient.name)),
+				//nolint: staticcheck
 				strings.Title(table.name),
 				table.size.String(),
 				fmt.Sprintf("%d", ancient.count()),

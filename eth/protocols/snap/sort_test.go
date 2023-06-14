@@ -37,6 +37,8 @@ func hexToNibbles(s string) []byte {
 }
 
 func TestRequestSorting(t *testing.T) {
+	t.Parallel()
+
 	//   - Path 0x9  -> {0x19}
 	//   - Path 0x99 -> {0x0099}
 	//   - Path 0x01234567890123456789012345678901012345678901234567890123456789019  -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x19}
