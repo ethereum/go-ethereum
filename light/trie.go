@@ -136,7 +136,7 @@ func (t *odrTrie) GetAccount(address common.Address) (*types.StateAccount, error
 	return &res, err
 }
 
-func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
+func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount, _ []byte, _ bool) error {
 	key := crypto.Keccak256(address.Bytes())
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {
