@@ -302,11 +302,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 	w.WriteByte(r.Type)
 	switch r.Type {
-	case AccessListTxType:
-		rlp.Encode(w, data)
-	case DynamicFeeTxType:
-		rlp.Encode(w, data)
-	case BlobTxType:
+	case AccessListTxType, DynamicFeeTxType, BlobTxType:
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for
