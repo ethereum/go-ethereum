@@ -1740,7 +1740,7 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 					txs = append(txs, set.Flatten()...)
 				}
 
-				pool.txFeed.Send(core.NewTxsEvent{txs})
+				pool.txFeed.Send(core.NewTxsEvent{Txs: txs})
 			})
 		}
 	})
