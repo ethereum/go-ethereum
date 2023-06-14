@@ -20,7 +20,6 @@ import (
 	"errors"
 	"math"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -1495,13 +1495,15 @@ func (pool *TxPool) truncateQueue() {
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
-	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
+	addresses := make([]addressByHeartbeat, 0, len(pool.queue))
 	for addr := range pool.queue {
 		if !pool.locals.contains(addr) { // don't drop locals
 			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 		}
 	}
-	sort.Sort(sort.Reverse(addresses))
+	slices.SortFunc(addresses, func(a, b addressByHeartbeat) bool {
+		return !a.heartbeat.Before(b.heartbeat) // Sort descending
+	})
 
 	// Drop transactions until the total is below the limit or only locals remain
 	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
@@ -1593,12 +1595,6 @@ type addressByHeartbeat struct {
 	address   common.Address
 	heartbeat time.Time
 }
-
-type addressesByHeartbeat []addressByHeartbeat
-
-func (a addressesByHeartbeat) Len() int           { return len(a) }
-func (a addressesByHeartbeat) Less(i, j int) bool { return a[i].heartbeat.Before(a[j].heartbeat) }
-func (a addressesByHeartbeat) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // accountSet is simply a set of addresses to check for existence, and a signer
 // capable of deriving addresses from transactions.
