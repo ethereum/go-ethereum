@@ -81,6 +81,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		hash = rawdb.ReadHeadBlockHash(b.db)
 		number := rawdb.ReadHeaderNumber(b.db, hash)
 		if number == nil {
+			//nolint:nilnil
 			return nil, nil
 		}
 		num = *number
@@ -88,6 +89,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		hash = rawdb.ReadFinalizedBlockHash(b.db)
 		number := rawdb.ReadHeaderNumber(b.db, hash)
 		if number == nil {
+			//nolint:nilnil
 			return nil, nil
 		}
 		num = *number
@@ -103,6 +105,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	number := rawdb.ReadHeaderNumber(b.db, hash)
 	if number == nil {
+		//nolint:nilnil
 		return nil, nil
 	}
 	return rawdb.ReadHeader(b.db, hash, *number), nil

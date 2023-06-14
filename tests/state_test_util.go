@@ -193,6 +193,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if err != nil {
 		// Here, an error exists but it was expected.
 		// We do not check the post state or logs.
+		//nolint:nilerr
 		return snaps, statedb, nil
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]

@@ -2,6 +2,7 @@ package librato
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,7 +81,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 		return
 	}
 
-	if req, err = http.NewRequest(http.MethodPost, MetricsPostUrl, bytes.NewBuffer(js)); err != nil {
+	if req, err = http.NewRequestWithContext(context.Background(), http.MethodPost, MetricsPostUrl, bytes.NewBuffer(js)); err != nil {
 		return
 	}
 

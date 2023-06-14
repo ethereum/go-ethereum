@@ -357,6 +357,7 @@ func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	}
 	// If nothing changed, don't bother with committing anything
 	if tr == nil {
+		//nolint:nilnil
 		return nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie

@@ -417,6 +417,7 @@ func LoadCliqueConfig(db ethdb.Database, genesis *Genesis) (*params.CliqueConfig
 	// There is no stored chain config and no new config provided,
 	// In this case the default chain config(mainnet) will be used,
 	// namely ethash is the specified consensus engine, return nil.
+	//nolint:nilnil
 	return nil, nil
 }
 

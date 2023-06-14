@@ -272,25 +272,32 @@ func (b *backendMock) RPCTxFeeCap() float64              { return 0 }
 func (b *backendMock) UnprotectedAllowed() bool          { return false }
 func (b *backendMock) SetHead(number uint64)             {}
 func (b *backendMock) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) CurrentBlock() *types.Header { return nil }
 func (b *backendMock) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
@@ -299,11 +306,16 @@ func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.Blo
 func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
-func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) { return nil, nil }
+func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	//nolint:nilnil
+	return nil, nil
+}
 func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
+	//nolint:nilnil
 	return nil, nil
 }
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }

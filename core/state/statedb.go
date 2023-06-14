@@ -692,6 +692,7 @@ func (s *StateDB) Database() Database {
 func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
+		//nolint:nilnil
 		return nil, nil
 	}
 	cpy := stateObject.deepCopy(s)

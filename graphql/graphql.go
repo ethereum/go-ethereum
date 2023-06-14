@@ -470,6 +470,7 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	}
 	// Pending tx
 	if block == nil {
+		//nolint:nilnil
 		return nil, nil
 	}
 	h, err := block.Hash(ctx)

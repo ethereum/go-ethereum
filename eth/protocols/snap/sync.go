@@ -29,7 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -2901,6 +2900,7 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
 		var account types.StateAccount
 		if err := rlp.DecodeBytes(value, &account); err != nil {
+			//nolint:nilerr
 			return nil // Returning the error here would drop the remote peer
 		}
 		blob := snapshot.SlimAccountRLP(account.Nonce, account.Balance, account.Root, account.CodeHash)

@@ -427,8 +427,15 @@ func execP2PNode() {
 	}
 
 	// Send status to the host.
+	cli := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 	statusJSON, _ := json.Marshal(status)
-	resp, err := http.Post(statusURL, "application/json", bytes.NewReader(statusJSON))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, statusURL, bytes.NewReader(statusJSON))
+	if err != nil {
+		log.Crit("Can't build request", "url", statusURL, "err", err)
+	}
+	resp, err := cli.Do(req)
 	if err != nil {
 		log.Crit("Can't post startup info", "url", statusURL, "err", err)
 	}

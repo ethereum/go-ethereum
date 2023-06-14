@@ -18,6 +18,7 @@ package node
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -167,7 +168,7 @@ func TestWebsocketOrigins(t *testing.T) {
 
 // TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.
 func TestIsWebsocket(t *testing.T) {
-	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	assert.False(t, isWebsocket(r))
 	r.Header.Set("upgrade", "websocket")
@@ -296,7 +297,7 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 
 	// Create the request.
 	body := bytes.NewReader([]byte(bodyStr))
-	req, err := http.NewRequest(http.MethodPost, url, body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
 	if err != nil {
 		t.Fatal("could not create http request:", err)
 	}
@@ -530,7 +531,14 @@ func TestGzipHandler(t *testing.T) {
 			srv := httptest.NewServer(newGzipHandler(test.handler))
 			defer srv.Close()
 
-			resp, err := http.Get(srv.URL)
+			cli := &http.Client{
+				Timeout: 10 * time.Second,
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+			if err != nil {
+				log.Crit("Can't build request", "url", srv.URL, "err", err)
+			}
+			resp, err := cli.Do(req)
 			if err != nil {
 				t.Fatal(err)
 			}

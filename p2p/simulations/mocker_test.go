@@ -19,7 +19,9 @@
 package simulations
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -152,7 +154,15 @@ func TestMocker(t *testing.T) {
 	}
 
 	//reset the network
-	resp, err = http.Post(s.URL+"/reset", "", nil)
+	cli := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resetUrl := s.URL + "/reset"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, resetUrl, nil)
+	if err != nil {
+		log.Crit("Can't build request", "url", resetUrl, "err", err)
+	}
+	resp, err = cli.Do(req)
 	if err != nil {
 		t.Fatalf("Could not reset network: %s", err)
 	}
