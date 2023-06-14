@@ -70,7 +70,10 @@ JavaScript API. See https://geth.ethereum.org/docs/interacting-with-geth/javascr
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
+	stack, backend, err := makeFullNode(ctx)
+	if err != nil {
+		return err
+	}
 	startNode(ctx, stack, backend, true)
 	defer stack.Close()
 

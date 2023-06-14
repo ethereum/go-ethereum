@@ -165,7 +165,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 }
 
 // makeFullNode loads geth configuration and creates the Ethereum backend.
-func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
+func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, error) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideCancun.Name) {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
@@ -197,12 +197,16 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	// Start the dev mode if requested
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
-		simBeacon := simulatedbeacon.NewSimulatedBeacon(eth)
+		simBeacon, err := simulatedbeacon.NewSimulatedBeacon(eth)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		simulatedbeacon.RegisterAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 	}
 
-	return stack, backend
+	return stack, backend, nil
 }
 
 // dumpConfig is the dumpconfig command.

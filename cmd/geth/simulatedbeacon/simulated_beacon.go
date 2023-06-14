@@ -17,6 +17,7 @@
 package simulatedbeacon
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -77,10 +78,10 @@ type SimulatedBeacon struct {
 	mu sync.Mutex
 }
 
-func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
+func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	chainConfig := eth.APIBackend.ChainConfig()
 	if chainConfig.Dev == nil {
-		log.Crit("incompatible pre-existing chain configuration")
+		return nil, errors.New("incompatible pre-existing chain configuration")
 	}
 
 	return &SimulatedBeacon{
@@ -89,7 +90,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) *SimulatedBeacon {
 		withdrawals:        withdrawalQueue{[]*types.Withdrawal{}, sync.Mutex{}},
 		pendingWithdrawals: nil,
 		feeRecipient:       common.Address{},
-	}
+	}, nil
 }
 
 func (c *SimulatedBeacon) setFeeRecipient(feeRecipient *common.Address) {
@@ -137,7 +138,8 @@ func (c *SimulatedBeacon) loop() {
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if header.Number.Sign() == 0 {
 		if _, err := engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
-			log.Crit("failed to initiate PoS transition for genesis via Forkchoiceupdated", "err", err)
+			log.Error("failed to initiate PoS transition for genesis via Forkchoiceupdated", "err", err)
+			return
 		}
 	}
 

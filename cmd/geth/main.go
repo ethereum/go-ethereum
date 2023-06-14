@@ -322,7 +322,10 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
+	stack, backend, err := makeFullNode(ctx)
+	if err != nil {
+		return err
+	}
 	defer stack.Close()
 
 	startNode(ctx, stack, backend, false)

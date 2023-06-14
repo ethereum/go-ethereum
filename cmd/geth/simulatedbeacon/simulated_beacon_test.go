@@ -54,7 +54,10 @@ func startEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethe
 		t.Fatal("can't create eth service:", err)
 	}
 
-	simBeacon := NewSimulatedBeacon(ethservice)
+	simBeacon, err := NewSimulatedBeacon(ethservice)
+	if err != nil {
+		t.Fatal("can't create simulated beacon:", err)
+	}
 
 	n.RegisterLifecycle(simBeacon)
 
