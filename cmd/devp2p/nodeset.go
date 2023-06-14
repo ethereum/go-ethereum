@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"golang.org/x/exp/slices"
 )
 
 const jsonIndent = "    "
@@ -103,8 +104,8 @@ func (ns nodeSet) topN(n int) nodeSet {
 	for _, v := range ns {
 		byscore = append(byscore, v)
 	}
-	sort.Slice(byscore, func(i, j int) bool {
-		return byscore[i].Score >= byscore[j].Score
+	slices.SortFunc(byscore, func(a, b nodeJSON) bool {
+		return a.Score >= b.Score
 	})
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {
