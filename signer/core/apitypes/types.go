@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"reflect"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/exp/slices"
 )
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
@@ -306,7 +306,7 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	deps := typedData.Dependencies(primaryType, []string{})
 	if len(deps) > 0 {
 		slicedDeps := deps[1:]
-		sort.Strings(slicedDeps)
+		slices.Sort(slicedDeps)
 		deps = append([]string{primaryType}, slicedDeps...)
 	}
 
