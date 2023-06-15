@@ -670,10 +670,12 @@ func TestMulticall(t *testing.T) {
 				res{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
+					Logs:        []types.Log{},
 				},
 				res{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
+					Logs:        []types.Log{},
 				},
 			}},
 		}, {
@@ -715,19 +717,23 @@ func TestMulticall(t *testing.T) {
 					res{
 						ReturnValue: "0x",
 						GasUsed:     "0x5208",
+						Logs:        []types.Log{},
 					},
 					res{
 						ReturnValue: "0x",
 						GasUsed:     "0x5208",
+						Logs:        []types.Log{},
 					},
 				}, {
 					res{
 						ReturnValue: "0x",
 						GasUsed:     "0x5208",
+						Logs:        []types.Log{},
 					},
 					res{
 						ReturnValue: "0x",
 						GasUsed:     "0x0",
+						Logs:        []types.Log{},
 						Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
 					},
 				},
@@ -766,11 +772,13 @@ func TestMulticall(t *testing.T) {
 				res{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
+					Logs:        []types.Log{},
 				},
 			}, {
 				res{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
+					Logs:        []types.Log{},
 				},
 			}},
 		},
@@ -830,9 +838,11 @@ func TestMulticall(t *testing.T) {
 			want: [][]res{{{
 				ReturnValue: "0x",
 				GasUsed:     "0xaacc",
+				Logs:        []types.Log{},
 			}, {
 				ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
 				GasUsed:     "0x5bb7",
+				Logs:        []types.Log{},
 			}}},
 		},
 		// Test logs output.
@@ -920,6 +930,7 @@ func TestMulticall(t *testing.T) {
 				// Caller is in this case the contract that invokes ecrecover.
 				ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
 				GasUsed:     "0x52f6",
+				Logs:        []types.Log{},
 			}}},
 		},
 		// Test ether transfers.
@@ -965,6 +976,7 @@ func TestMulticall(t *testing.T) {
 						Value: big.NewInt(100),
 					},
 				},
+				Logs: []types.Log{},
 			}}},
 		},
 	}

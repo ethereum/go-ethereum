@@ -19,6 +19,7 @@ package ethapi
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1107,7 +1108,16 @@ type callResult struct {
 	Logs        []*types.Log   `json:"logs"`
 	Transfers   []transfer     `json:"transfers,omitempty"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
-	Error       string         `json:"error"`
+	Error       string         `json:"error,omitempty"`
+}
+
+func (r *callResult) MarshalJSON() ([]byte, error) {
+	type callResultAlias callResult
+	// Marshal logs to be an empty array instead of nil when empty
+	if r.Logs == nil {
+		r.Logs = []*types.Log{}
+	}
+	return json.Marshal((*callResultAlias)(r))
 }
 
 // Multicall executes series of transactions on top of a base state.
