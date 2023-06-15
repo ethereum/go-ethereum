@@ -160,6 +160,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
 
+		// nolint : contextcheck
 		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{}, nil)
 
 		if err != nil {

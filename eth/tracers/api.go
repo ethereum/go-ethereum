@@ -290,6 +290,7 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 	}
 	sub := notifier.CreateSubscription()
 
+	// nolint : contextcheck
 	resCh := api.traceChain(from, to, config, notifier.Closed())
 	go func() {
 		for result := range resCh {
@@ -1276,6 +1277,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 
 	if *config.BorTx {
 		callmsg := prepareCallMessage(*message)
+		// nolint : contextcheck
 		if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}

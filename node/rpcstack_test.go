@@ -45,11 +45,15 @@ func TestCorsHandler(t *testing.T) {
 	defer srv.stop()
 	url := "http://" + srv.listenAddr()
 
-	resp := rpcRequest(t, url, testMethod, "origin", "test.com")
-	assert.Equal(t, "test.com", resp.Header.Get("Access-Control-Allow-Origin"))
+	var resp, resp2 *http.Response
 
-	resp2 := rpcRequest(t, url, testMethod, "origin", "bad")
+	resp = rpcRequest(t, url, testMethod, "origin", "test.com")
+	assert.Equal(t, "test.com", resp.Header.Get("Access-Control-Allow-Origin"))
+	defer resp.Body.Close()
+
+	resp2 = rpcRequest(t, url, testMethod, "origin", "bad")
 	assert.Equal(t, "", resp2.Header.Get("Access-Control-Allow-Origin"))
+	defer resp2.Body.Close()
 }
 
 // TestVhosts makes sure vhosts are properly handled on the http server.
@@ -58,11 +62,15 @@ func TestVhosts(t *testing.T) {
 	defer srv.stop()
 	url := "http://" + srv.listenAddr()
 
-	resp := rpcRequest(t, url, testMethod, "host", "test")
-	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	var resp, resp2 *http.Response
 
-	resp2 := rpcRequest(t, url, testMethod, "host", "bad")
+	resp = rpcRequest(t, url, testMethod, "host", "test")
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	defer resp.Body.Close()
+
+	resp2 = rpcRequest(t, url, testMethod, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
+	defer resp2.Body.Close()
 }
 
 type originTest struct {
@@ -435,6 +443,7 @@ func TestJWT(t *testing.T) {
 			return fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
 		},
 	}
+	var resp *http.Response
 	for i, tokenFn := range expFail {
 		token := tokenFn()
 		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
@@ -442,11 +451,12 @@ func TestJWT(t *testing.T) {
 		}
 
 		token = tokenFn()
-		resp := rpcRequest(t, htUrl, testMethod, "Authorization", token)
+		resp = rpcRequest(t, htUrl, testMethod, "Authorization", token)
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
 	}
+	defer resp.Body.Close()
 	srv.stop()
 }
 

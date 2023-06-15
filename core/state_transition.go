@@ -391,6 +391,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
+		// nolint : contextcheck
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)
 	} else {
 		// Increment the nonce for the next transaction

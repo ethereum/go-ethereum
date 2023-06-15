@@ -557,19 +557,21 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 	if node.WSEndpoint() != wsBase+test.wsPrefix {
 		t.Errorf("Error: node has wrong WSEndpoint %q", node.WSEndpoint())
 	}
-
+	var resp *http.Response
 	for _, path := range test.wantHTTP {
-		resp := rpcRequest(t, httpBase+path, testMethod)
+		resp = rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 200 {
 			t.Errorf("Error: %s: bad status code %d, want 200", path, resp.StatusCode)
 		}
 	}
+	defer resp.Body.Close()
 	for _, path := range test.wantNoHTTP {
-		resp := rpcRequest(t, httpBase+path, testMethod)
+		resp = rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 404 {
 			t.Errorf("Error: %s: bad status code %d, want 404", path, resp.StatusCode)
 		}
 	}
+	defer resp.Body.Close()
 	for _, path := range test.wantWS {
 		err := wsRequest(t, wsBase+path)
 		if err != nil {
