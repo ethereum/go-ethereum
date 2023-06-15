@@ -94,6 +94,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
 			utils.TxLookupLimitFlag,
+			utils.VMTraceFlag,
 		}, utils.DatabasePathFlags),
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file

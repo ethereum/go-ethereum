@@ -153,6 +153,12 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 }
 
+type BlockchainLogger interface {
+	vm.EVMLogger
+	CaptureBlockStart(*types.Block)
+	CaptureBlockEnd()
+}
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -226,6 +232,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+	logger     BlockchainLogger
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -441,6 +448,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		go bc.maintainTxIndex()
 	}
 	return bc, nil
+}
+
+// TODO: need to move this to NewBlockchain to capture genesis block
+func (bc *BlockChain) SetLogger(l BlockchainLogger) {
+	bc.logger = l
+	bc.vmConfig.Tracer = l
 }
 
 // empty returns an indicator whether the blockchain is empty.

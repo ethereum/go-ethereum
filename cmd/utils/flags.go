@@ -529,6 +529,11 @@ var (
 		Usage:    "Record information useful for VM and contract debugging",
 		Category: flags.VMCategory,
 	}
+	VMTraceFlag = &cli.BoolFlag{
+		Name:     "vmtrace",
+		Usage:    "Record internal VM operations (costly)",
+		Category: flags.VMCategory,
+	}
 
 	// API options.
 	RPCGlobalGasCapFlag = &cli.Uint64Flag{
@@ -2163,6 +2168,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
+	}
+	if ctx.IsSet(VMTraceFlag.Name) {
+		chain.SetLogger(tracers.NewPrinter())
 	}
 	return chain, chainDb
 }

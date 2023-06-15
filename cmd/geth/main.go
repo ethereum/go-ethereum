@@ -130,6 +130,7 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.DeveloperGasLimitFlag,
 		utils.VMEnableDebugFlag,
+		utils.VMTraceFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
 		utils.NoCompactionFlag,
