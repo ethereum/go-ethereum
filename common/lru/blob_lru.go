@@ -63,15 +63,20 @@ func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 		for targetSize > c.maxSize {
 			evicted = true
 			_, v, ok := c.lru.RemoveOldest()
+
 			if !ok {
 				// list is now empty. Break
 				break
 			}
+
 			targetSize -= uint64(len(v))
 		}
+
 		c.size = targetSize
 	}
+
 	c.lru.Add(key, value)
+
 	return evicted
 }
 

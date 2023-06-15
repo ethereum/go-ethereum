@@ -37,11 +37,13 @@ func NewBasicLRU[K comparable, V any](capacity int) BasicLRU[K, V] {
 	if capacity <= 0 {
 		capacity = 1
 	}
+
 	c := BasicLRU[K, V]{
 		items: make(map[K]cacheItem[K, V]),
 		list:  newList[K](),
 		cap:   capacity,
 	}
+
 	return c
 }
 
@@ -53,6 +55,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 		item.value = value
 		c.items[key] = item
 		c.list.moveToFront(item.elem)
+
 		return false
 	}
 
@@ -60,6 +63,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	if c.Len() >= c.cap {
 		elem = c.list.removeLast()
 		delete(c.items, elem.v)
+
 		evicted = true
 	} else {
 		elem = new(listElem[K])
@@ -70,6 +74,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	elem.v = key
 	c.items[key] = cacheItem[K, V]{elem, value}
 	c.list.pushElem(elem)
+
 	return evicted
 }
 
@@ -85,7 +90,9 @@ func (c *BasicLRU[K, V]) Get(key K) (value V, ok bool) {
 	if !ok {
 		return value, false
 	}
+
 	c.list.moveToFront(item.elem)
+
 	return item.value, true
 }
 
@@ -96,8 +103,10 @@ func (c *BasicLRU[K, V]) GetOldest() (key K, value V, ok bool) {
 	if lastElem == nil {
 		return key, value, false
 	}
+
 	key = lastElem.v
 	item := c.items[key]
+
 	return key, item.value, true
 }
 
@@ -115,6 +124,7 @@ func (c *BasicLRU[K, V]) Peek(key K) (value V, ok bool) {
 // Purge empties the cache.
 func (c *BasicLRU[K, V]) Purge() {
 	c.list.init()
+
 	for k := range c.items {
 		delete(c.items, k)
 	}
@@ -127,6 +137,7 @@ func (c *BasicLRU[K, V]) Remove(key K) bool {
 		delete(c.items, key)
 		c.list.remove(item.elem)
 	}
+
 	return ok
 }
 
@@ -141,6 +152,7 @@ func (c *BasicLRU[K, V]) RemoveOldest() (key K, value V, ok bool) {
 	item := c.items[key]
 	delete(c.items, key)
 	c.list.remove(lastElem)
+
 	return key, item.value, true
 }
 
@@ -165,6 +177,7 @@ type listElem[T any] struct {
 func newList[T any]() *list[T] {
 	l := new(list[T])
 	l.init()
+
 	return l
 }
 
@@ -202,6 +215,7 @@ func (l *list[T]) removeLast() *listElem[T] {
 	if last != nil {
 		l.remove(last)
 	}
+
 	return last
 }
 
@@ -211,6 +225,7 @@ func (l *list[T]) last() *listElem[T] {
 	if e == &l.root {
 		return nil
 	}
+
 	return e
 }
 
@@ -219,5 +234,6 @@ func (l *list[T]) appendTo(slice []T) []T {
 	for e := l.root.prev; e != &l.root; e = e.prev {
 		slice = append(slice, e.v)
 	}
+
 	return slice
 }

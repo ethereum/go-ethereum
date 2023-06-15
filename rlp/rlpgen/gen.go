@@ -342,6 +342,7 @@ func (op uint256Op) genWrite(ctx *genContext, v string) string {
 	if !op.pointer {
 		dst = "&" + v
 	}
+
 	fmt.Fprintf(&b, "w.WriteUint256(%s)\n", dst)
 
 	// Wrap with nil check.
@@ -362,6 +363,7 @@ func (op uint256Op) genDecode(ctx *genContext) (string, string) {
 	ctx.addImport("github.com/holiman/uint256")
 
 	var b bytes.Buffer
+
 	resultV := ctx.temp()
 	fmt.Fprintf(&b, "var %s uint256.Int\n", resultV)
 	fmt.Fprintf(&b, "if err := dec.ReadUint256(&%s); err != nil { return err }\n", resultV)
@@ -370,6 +372,7 @@ func (op uint256Op) genDecode(ctx *genContext) (string, string) {
 	if op.pointer {
 		result = "&" + resultV
 	}
+
 	return result, b.String()
 }
 
@@ -678,6 +681,7 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
 		}
+
 		if isUint256(typ) {
 			return uint256Op{}, nil
 		}
@@ -693,6 +697,7 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ.Elem()) {
 			return bigIntOp{pointer: true}, nil
 		}
+
 		if isUint256(typ.Elem()) {
 			return uint256Op{pointer: true}, nil
 		}

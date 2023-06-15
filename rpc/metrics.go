@@ -40,6 +40,7 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 	if !success {
 		note = "failure"
 	}
+
 	h := fmt.Sprintf("%s/%s/%s", serveTimeHistName, method, note)
 	sampler := func() metrics.Sample {
 		return metrics.ResettingSample(

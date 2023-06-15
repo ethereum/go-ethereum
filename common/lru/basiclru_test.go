@@ -33,6 +33,7 @@ func TestBasicLRU(t *testing.T) {
 	for i := 0; i < 256; i++ {
 		cache.Add(i, i)
 	}
+
 	if cache.Len() != 128 {
 		t.Fatalf("bad len: %v", cache.Len())
 	}
@@ -42,14 +43,17 @@ func TestBasicLRU(t *testing.T) {
 	if len(keys) != 128 {
 		t.Fatal("wrong Keys() length", len(keys))
 	}
+
 	for i, k := range keys {
 		v, ok := cache.Peek(k)
 		if !ok {
 			t.Fatalf("expected key %d be present", i)
 		}
+
 		if v != k {
 			t.Fatalf("expected %d == %d", k, v)
 		}
+
 		if v != i+128 {
 			t.Fatalf("wrong value at key %d: %d, want %d", i, v, i+128)
 		}
@@ -61,6 +65,7 @@ func TestBasicLRU(t *testing.T) {
 			t.Fatalf("%d should be evicted", i)
 		}
 	}
+
 	for i := 128; i < 256; i++ {
 		_, ok := cache.Get(i)
 		if !ok {
@@ -73,11 +78,15 @@ func TestBasicLRU(t *testing.T) {
 		if !ok {
 			t.Fatalf("%d should be in cache", i)
 		}
+
 		ok = cache.Remove(i)
+
 		if ok {
 			t.Fatalf("%d should not be in cache", i)
 		}
+
 		_, ok = cache.Get(i)
+
 		if ok {
 			t.Fatalf("%d should be deleted", i)
 		}
@@ -93,9 +102,11 @@ func TestBasicLRU(t *testing.T) {
 	}
 
 	cache.Purge()
+
 	if cache.Len() != 0 {
 		t.Fatalf("bad len: %v", cache.Len())
 	}
+
 	if _, ok := cache.Get(200); ok {
 		t.Fatalf("should contain nothing")
 	}
@@ -128,6 +139,7 @@ func TestBasicLRUGetOldest(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing")
 	}
+
 	if k != 128 {
 		t.Fatalf("bad: %v", k)
 	}
@@ -136,6 +148,7 @@ func TestBasicLRUGetOldest(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing")
 	}
+
 	if k != 128 {
 		t.Fatalf("bad: %v", k)
 	}
@@ -144,6 +157,7 @@ func TestBasicLRUGetOldest(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing oldest item")
 	}
+
 	if k != 129 {
 		t.Fatalf("wrong oldest item: %v", k)
 	}
@@ -157,6 +171,7 @@ func TestBasicLRUAddReturnValue(t *testing.T) {
 	if cache.Add(1, 1) {
 		t.Errorf("first add shouldn't have evicted")
 	}
+
 	if !cache.Add(2, 2) {
 		t.Errorf("second add should have evicted")
 	}
@@ -169,10 +184,13 @@ func TestBasicLRUContains(t *testing.T) {
 	cache := NewBasicLRU[int, int](2)
 	cache.Add(1, 1)
 	cache.Add(2, 2)
+
 	if !cache.Contains(1) {
 		t.Errorf("1 should be in the cache")
 	}
+
 	cache.Add(3, 3)
+
 	if cache.Contains(1) {
 		t.Errorf("Contains should not have updated recency of 1")
 	}
@@ -185,9 +203,11 @@ func BenchmarkLRU(b *testing.B) {
 		keys     = make([]string, capacity)
 		values   = make([][]byte, capacity)
 	)
+
 	for i := range indexes {
 		indexes[i] = rand.Intn(capacity)
 	}
+
 	for i := range keys {
 		b := make([]byte, 32)
 		crand.Read(b)

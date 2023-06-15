@@ -37,15 +37,18 @@ func (db *Database) Has(key []byte) (bool, error) {
 		//nolint:nilerr
 		return false, nil
 	}
+
 	return true, nil
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {
 	var resp hexutil.Bytes
 	err := db.remote.Call(&resp, "debug_dbGet", hexutil.Bytes(key))
+
 	if err != nil {
 		return nil, err
 	}
+
 	return resp, nil
 }
 
@@ -54,15 +57,18 @@ func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
 		//nolint:nilerr
 		return false, nil
 	}
+
 	return true, nil
 }
 
 func (db *Database) Ancient(kind string, number uint64) ([]byte, error) {
 	var resp hexutil.Bytes
 	err := db.remote.Call(&resp, "debug_dbAncient", kind, number)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return resp, nil
 }
 
@@ -73,6 +79,7 @@ func (db *Database) AncientRange(kind string, start, count, maxBytes uint64) ([]
 func (db *Database) Ancients() (uint64, error) {
 	var resp uint64
 	err := db.remote.Call(&resp, "debug_dbAncients")
+
 	return resp, err
 }
 

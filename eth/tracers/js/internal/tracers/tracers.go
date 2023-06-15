@@ -31,6 +31,7 @@ var files embed.FS
 // returns a mapping of tracer name to source.
 func Load() (map[string]string, error) {
 	var assetTracers = make(map[string]string)
+
 	err := fs.WalkDir(files, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -46,6 +47,7 @@ func Load() (map[string]string, error) {
 		assetTracers[name] = string(b)
 		return nil
 	})
+
 	return assetTracers, err
 }
 
@@ -55,5 +57,6 @@ func camel(str string) string {
 	for i := 1; i < len(pieces); i++ {
 		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
 	}
+
 	return strings.Join(pieces, "")
 }

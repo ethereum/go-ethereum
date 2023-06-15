@@ -25,6 +25,7 @@ func NewGauge() Gauge {
 	if !Enabled {
 		return NilGauge{}
 	}
+
 	return &StandardGauge{}
 }
 

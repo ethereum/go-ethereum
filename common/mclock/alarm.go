@@ -38,6 +38,7 @@ func NewAlarm(clock Clock) *Alarm {
 	if clock == nil {
 		panic("nil clock")
 	}
+
 	return &Alarm{
 		ch:    make(chan struct{}, 1),
 		clock: clock,
@@ -57,6 +58,7 @@ func (e *Alarm) Stop() {
 	if e.timer != nil {
 		e.timer.Stop()
 	}
+
 	e.deadline = 0
 
 	// Drain the channel.
@@ -84,16 +86,19 @@ func (e *Alarm) schedule(now, newDeadline AbsTime) {
 			// to be rescheduled.
 			return
 		}
+
 		e.timer.Stop()
 	}
 
 	// Set the timer.
 	d := time.Duration(0)
+
 	if newDeadline < now {
 		newDeadline = now
 	} else {
 		d = newDeadline.Sub(now)
 	}
+
 	e.timer = e.clock.AfterFunc(d, e.send)
 	e.deadline = newDeadline
 }

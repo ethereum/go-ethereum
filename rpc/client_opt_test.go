@@ -18,8 +18,10 @@ func ExampleDialOptions() {
 
 	ctx := context.Background()
 	c, err := rpc.DialOptions(ctx, "http://rpc.example.com", httpClient, tokenHeader)
+
 	if err != nil {
 		panic(err)
 	}
+
 	c.Close()
 }

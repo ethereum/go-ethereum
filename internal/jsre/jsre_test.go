@@ -49,6 +49,7 @@ func newWithTestJS(t *testing.T, testjs string) *JSRE {
 		}
 	}
 	jsre := New(dir, os.Stdout)
+
 	return jsre
 }
 

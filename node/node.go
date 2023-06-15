@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/gofrs/flock"
 )
 
 // Node is a container on which services can be registered.
@@ -429,9 +428,9 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(openAPIs, wsConfig{
-			Modules: 					 n.config.WSModules,
-			Origins: 					 n.config.WSOrigins,
-			prefix:						 n.config.WSPathPrefix,
+			Modules:                     n.config.WSModules,
+			Origins:                     n.config.WSOrigins,
+			prefix:                      n.config.WSPathPrefix,
 			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
 			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
 		}); err != nil {

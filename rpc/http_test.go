@@ -94,6 +94,7 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
+
 	resp.Body.Close()
 	confirmStatusCode(t, resp.StatusCode, expectedStatusCode)
 }
@@ -216,6 +217,7 @@ func TestNewContextWithHeaders(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{}`))
 	}))
+
 	defer server.Close()
 
 	client, err := Dial(server.URL)
@@ -227,6 +229,7 @@ func TestNewContextWithHeaders(t *testing.T) {
 	newHdr := func(k, v string) http.Header {
 		header := http.Header{}
 		header.Set(k, v)
+
 		return header
 	}
 	ctx1 := NewContextWithHeaders(context.Background(), newHdr("key-0", "val-0"))
@@ -234,11 +237,13 @@ func TestNewContextWithHeaders(t *testing.T) {
 	ctx3 := NewContextWithHeaders(ctx2, newHdr("key-2", "val-2"))
 
 	expectedHeaders = 3
+
 	if err := client.CallContext(ctx3, nil, "test"); err != ErrNoResult {
 		t.Error("call failed", err)
 	}
 
 	expectedHeaders = 2
+
 	if err := client.CallContext(ctx2, nil, "test"); err != ErrNoResult {
 		t.Error("call failed:", err)
 	}

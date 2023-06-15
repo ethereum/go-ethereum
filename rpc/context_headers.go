@@ -32,12 +32,15 @@ func NewContextWithHeaders(ctx context.Context, h http.Header) context.Context {
 	}
 
 	var ctxh http.Header
+
 	prev, ok := ctx.Value(mdHeaderKey{}).(http.Header)
+
 	if ok {
 		ctxh = setHeaders(prev.Clone(), h)
 	} else {
 		ctxh = h.Clone()
 	}
+
 	return context.WithValue(ctx, mdHeaderKey{}, ctxh)
 }
 
@@ -52,5 +55,6 @@ func setHeaders(dst http.Header, src http.Header) http.Header {
 	for key, values := range src {
 		dst[http.CanonicalHeaderKey(key)] = values
 	}
+
 	return dst
 }

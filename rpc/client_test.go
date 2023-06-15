@@ -86,9 +86,11 @@ func TestClientNullResponse(t *testing.T) {
 	if err := client.Call(&result, "test_null"); err != nil {
 		t.Fatal(err)
 	}
+
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
+
 	if !reflect.DeepEqual(result, json.RawMessage("null")) {
 		t.Errorf("Expected null, got %s", result)
 	}
@@ -185,6 +187,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to encode jsonrpc message:", err)
 	}
+
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		_, err := rw.Write(b)
 		if err != nil {

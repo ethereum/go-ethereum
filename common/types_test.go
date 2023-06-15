@@ -167,28 +167,34 @@ func TestMixedcaseAddressMarshal(t *testing.T) {
 		output string
 		input  = "0xae967917c465db8578ca9024c205720b1a3651A9"
 	)
+
 	addr, err := NewMixedcaseAddressFromString(input)
+
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	blob, err := json.Marshal(*addr)
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	json.Unmarshal(blob, &output)
+
 	if output != input {
 		t.Fatal("Failed to marshal/unmarshal MixedcaseAddress object")
 	}
 }
 
 func TestMixedcaseAccount_Address(t *testing.T) {
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
-	// Note: 0X{checksum_addr} is not valid according to spec above
-
+	t.Parallel()
 	var res []struct {
 		A     MixedcaseAddress
 		Valid bool
 	}
+
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
+	// Note: 0X{checksum_addr} is not valid according to spec above
 	if err := json.Unmarshal([]byte(`[
 		{"A" : "0xae967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
 		{"A" : "0xAe967917c465db8578ca9024c205720b1a3651A9", "Valid": true},

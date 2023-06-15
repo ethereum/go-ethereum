@@ -145,6 +145,7 @@ var runtimeSamples = []metrics.Sample{
 
 func readRuntimeStats(v *runtimeStats) {
 	metrics.Read(runtimeSamples)
+
 	for _, s := range runtimeSamples {
 		// Skip invalid/unknown metrics. This is needed because some metrics
 		// are unavailable in older Go versions, and attempting to read a 'bad'
@@ -226,12 +227,15 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
+
 	for ; ; now, prev = prev, now {
 		// Gather CPU times.
 		ReadCPUStats(&cpustats[now])
+
 		collectTime := time.Now()
 		secondsSinceLastCollect := collectTime.Sub(lastCollectTime).Seconds()
 		lastCollectTime = collectTime
+
 		if secondsSinceLastCollect > 0 {
 			sysLoad := cpustats[now].GlobalTime - cpustats[prev].GlobalTime
 			sysWait := cpustats[now].GlobalWait - cpustats[prev].GlobalWait

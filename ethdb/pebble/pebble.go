@@ -29,6 +29,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -89,7 +90,9 @@ func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	if d.activeComp == 0 {
 		d.compStartTime = time.Now()
 	}
+
 	l0 := info.Input[0]
+
 	if l0.Level == 0 {
 		d.level0Comp.Add(1)
 	} else {
@@ -122,9 +125,11 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if cache < minCache {
 		cache = minCache
 	}
+
 	if handles < minHandles {
 		handles = minHandles
 	}
+
 	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
@@ -137,9 +142,11 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// including a frozen memory table and another live one.
 	memTableLimit := 2
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
+
 	if memTableSize > maxMemTableSize {
 		memTableSize = maxMemTableSize
 	}
+
 	db := &Database{
 		fn:       file,
 		log:      logger,
@@ -195,6 +202,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if err != nil {
 		return nil, err
 	}
+
 	db.db = innerDB
 
 	db.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
@@ -213,6 +221,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval)
+
 	return db, nil
 }
 
@@ -225,11 +234,14 @@ func (d *Database) Close() error {
 	if d.quitChan != nil {
 		errc := make(chan error)
 		d.quitChan <- errc
+
 		if err := <-errc; err != nil {
 			d.log.Error("Metrics collection failed", "err", err)
 		}
+
 		d.quitChan = nil
 	}
+
 	return d.db.Close()
 }
 
@@ -241,7 +253,9 @@ func (d *Database) Has(key []byte) (bool, error) {
 	} else if err != nil {
 		return false, err
 	}
+
 	closer.Close()
+
 	return true, nil
 }
 
@@ -251,9 +265,11 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ret := make([]byte, len(dat))
 	copy(ret, dat)
 	closer.Close()
+
 	return ret, nil
 }
 
@@ -311,7 +327,9 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 			return false, nil
 		}
 	}
+
 	closer.Close()
+
 	return true, nil
 }
 
@@ -322,9 +340,11 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ret := make([]byte, len(dat))
 	copy(ret, dat)
 	closer.Close()
+
 	return ret, nil
 }
 
@@ -341,11 +361,14 @@ func upperBound(prefix []byte) (limit []byte) {
 		if c == 0xff {
 			continue
 		}
+
 		limit = make([]byte, i+1)
 		copy(limit, prefix)
 		limit[i] = c + 1
+
 		break
 	}
+
 	return limit
 }
 
@@ -373,6 +396,7 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 	if limit == nil {
 		limit = bytes.Repeat([]byte{0xff}, 32)
 	}
+
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
 
@@ -385,7 +409,9 @@ func (d *Database) Path() string {
 // the metrics subsystem.
 func (d *Database) meter(refresh time.Duration) {
 	var errc chan error
+
 	timer := time.NewTimer(refresh)
+
 	defer timer.Stop()
 
 	// Create storage and warning log tracer for write delay.
@@ -413,6 +439,7 @@ func (d *Database) meter(refresh time.Duration) {
 			nonLevel0CompCount = int64(d.nonLevel0Comp.Load())
 			level0CompCount    = int64(d.level0Comp.Load())
 		)
+
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
@@ -433,24 +460,31 @@ func (d *Database) meter(refresh time.Duration) {
 		if d.writeDelayNMeter != nil {
 			d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
 		}
+
 		if d.writeDelayMeter != nil {
 			d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
 		}
+
 		if d.compTimeMeter != nil {
 			d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
 		}
+
 		if d.compReadMeter != nil {
 			d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
 		}
+
 		if d.compWriteMeter != nil {
 			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
 		}
+
 		if d.diskSizeGauge != nil {
 			d.diskSizeGauge.Update(int64(metrics.DiskSpaceUsage()))
 		}
+
 		if d.diskReadMeter != nil {
 			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
 		}
+
 		if d.diskWriteMeter != nil {
 			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
 		}
@@ -467,8 +501,8 @@ func (d *Database) meter(refresh time.Duration) {
 		case errc = <-d.quitChan:
 			// Quit requesting, stop hammering the database
 		case <-timer.C:
-			timer.Reset(refresh)
 			// Timeout, gather a new set of stats
+			timer.Reset(refresh)
 		}
 	}
 	errc <- nil
@@ -485,6 +519,7 @@ type batch struct {
 func (b *batch) Put(key, value []byte) error {
 	b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
+
 	return nil
 }
 
@@ -492,6 +527,7 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)
+
 	return nil
 }
 
@@ -514,6 +550,7 @@ func (b *batch) Reset() {
 // Replay replays the batch contents.
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	reader := b.b.Reader()
+
 	for {
 		kind, k, v, ok := reader.Next()
 		if !ok {
@@ -529,6 +566,7 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
+
 	return nil
 }
 
@@ -548,6 +586,7 @@ func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		UpperBound: upperBound(prefix),
 	})
 	iter.First()
+
 	return &pebbleIterator{iter: iter, moved: true}
 }
 
@@ -558,6 +597,7 @@ func (iter *pebbleIterator) Next() bool {
 		iter.moved = false
 		return iter.iter.Valid()
 	}
+
 	return iter.iter.Next()
 }
 

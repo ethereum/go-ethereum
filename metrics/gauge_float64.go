@@ -26,6 +26,7 @@ func NewGaugeFloat64() GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
 	}
+
 	return &StandardGaugeFloat64{}
 }
 

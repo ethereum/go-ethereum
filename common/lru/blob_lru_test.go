@@ -33,6 +33,7 @@ func TestSizeConstrainedCache(t *testing.T) {
 	t.Parallel()
 
 	lru := NewSizeConstrainedCache[testKey, []byte](100)
+
 	var want uint64
 	// Add 11 items of 10 byte each. First item should be swapped out
 	for i := 0; i < 11; i++ {
@@ -40,9 +41,11 @@ func TestSizeConstrainedCache(t *testing.T) {
 		v := fmt.Sprintf("value-%04d", i)
 		lru.Add(k, []byte(v))
 		want += uint64(len(v))
+
 		if want > 100 {
 			want = 100
 		}
+
 		if have := lru.size; have != want {
 			t.Fatalf("size wrong, have %d want %d", have, want)
 		}
@@ -59,9 +62,11 @@ func TestSizeConstrainedCache(t *testing.T) {
 		k := mkKey(i)
 		want := fmt.Sprintf("value-%04d", i)
 		have, ok := lru.Get(k)
+
 		if !ok {
 			t.Fatalf("missing key %v", k)
 		}
+
 		if string(have) != want {
 			t.Fatalf("wrong value, have %v want %v", have, want)
 		}
@@ -118,6 +123,7 @@ func TestSizeConstrainedCacheSameItem(t *testing.T) {
 	// Add one 10 byte-item 10 times.
 	k := mkKey(0)
 	v := fmt.Sprintf("value-%04d", 0)
+
 	for i := 0; i < 10; i++ {
 		lru.Add(k, []byte(v))
 	}

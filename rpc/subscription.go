@@ -181,6 +181,7 @@ func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
 		Method:  n.namespace + notificationMethodSuffix,
 		Params:  params,
 	}
+
 	return n.h.conn.writeJSON(ctx, msg, false)
 }
 

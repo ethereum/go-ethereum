@@ -797,6 +797,7 @@ func (c *ChainConfig) Description() string {
 	if network == "" {
 		network = "unknown"
 	}
+
 	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
 	switch {
 	case c.Ethash != nil:
@@ -820,6 +821,7 @@ func (c *ChainConfig) Description() string {
 	default:
 		banner += "Consensus: unknown\n"
 	}
+
 	banner += "\n"
 
 	// Create a list of forks with a short description of them. Forks that only
@@ -827,9 +829,11 @@ func (c *ChainConfig) Description() string {
 	// the output for testnets and private networks.
 	banner += "Pre-Merge hard forks (block based):\n"
 	banner += fmt.Sprintf(" - Homestead:                   #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)\n", c.HomesteadBlock)
+
 	if c.DAOForkBlock != nil {
 		banner += fmt.Sprintf(" - DAO Fork:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md)\n", c.DAOForkBlock)
 	}
+
 	banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md)\n", c.EIP150Block)
 	banner += fmt.Sprintf(" - Spurious Dragon/1 (EIP 155): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
 	banner += fmt.Sprintf(" - Spurious Dragon/2 (EIP 158): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
@@ -837,17 +841,22 @@ func (c *ChainConfig) Description() string {
 	banner += fmt.Sprintf(" - Constantinople:              #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md)\n", c.ConstantinopleBlock)
 	banner += fmt.Sprintf(" - Petersburg:                  #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md)\n", c.PetersburgBlock)
 	banner += fmt.Sprintf(" - Istanbul:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md)\n", c.IstanbulBlock)
+
 	if c.MuirGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Muir Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md)\n", c.MuirGlacierBlock)
 	}
+
 	banner += fmt.Sprintf(" - Berlin:                      #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md)\n", c.BerlinBlock)
 	banner += fmt.Sprintf(" - London:                      #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md)\n", c.LondonBlock)
+
 	if c.ArrowGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Arrow Glacier:               #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)\n", c.ArrowGlacierBlock)
 	}
+
 	if c.GrayGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
+
 	banner += "\n"
 
 	// Add a special section for the merge as it's non-obvious
@@ -863,6 +872,7 @@ func (c *ChainConfig) Description() string {
 			banner += fmt.Sprintf(" - Merge netsplit block:       #%-8v\n", c.MergeNetsplitBlock)
 		}
 	}
+
 	banner += "\n"
 
 	// Create a list of forks post-merge
@@ -870,12 +880,15 @@ func (c *ChainConfig) Description() string {
 	if c.ShanghaiTime != nil {
 		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiTime)
 	}
+
 	if c.CancunTime != nil {
 		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", *c.CancunTime)
 	}
+
 	if c.PragueTime != nil {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
 	}
+
 	return banner
 }
 
@@ -1071,30 +1084,39 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, headNumber) {
 		return newBlockCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
+
 	if isForkBlockIncompatible(c.DAOForkBlock, newcfg.DAOForkBlock, headNumber) {
 		return newBlockCompatError("DAO fork block", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
+
 	if c.IsDAOFork(headNumber) && c.DAOForkSupport != newcfg.DAOForkSupport {
 		return newBlockCompatError("DAO fork support flag", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
+
 	if isForkBlockIncompatible(c.EIP150Block, newcfg.EIP150Block, headNumber) {
 		return newBlockCompatError("EIP150 fork block", c.EIP150Block, newcfg.EIP150Block)
 	}
+
 	if isForkBlockIncompatible(c.EIP155Block, newcfg.EIP155Block, headNumber) {
 		return newBlockCompatError("EIP155 fork block", c.EIP155Block, newcfg.EIP155Block)
 	}
+
 	if isForkBlockIncompatible(c.EIP158Block, newcfg.EIP158Block, headNumber) {
 		return newBlockCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
 	}
+
 	if c.IsEIP158(headNumber) && !configBlockEqual(c.ChainID, newcfg.ChainID) {
 		return newBlockCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
+
 	if isForkBlockIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, headNumber) {
 		return newBlockCompatError("Byzantium fork block", c.ByzantiumBlock, newcfg.ByzantiumBlock)
 	}
+
 	if isForkBlockIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, headNumber) {
 		return newBlockCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
 	}
+
 	if isForkBlockIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, headNumber) {
 		// the only case where we allow Petersburg to be set in the past is if it is equal to Constantinople
 		// mainly to satisfy fork ordering requirements which state that Petersburg fork be set if Constantinople fork is set
@@ -1102,33 +1124,43 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 			return newBlockCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
 		}
 	}
+
 	if isForkBlockIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, headNumber) {
 		return newBlockCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
 	}
+
 	if isForkBlockIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, headNumber) {
 		return newBlockCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
+
 	if isForkBlockIncompatible(c.BerlinBlock, newcfg.BerlinBlock, headNumber) {
 		return newBlockCompatError("Berlin fork block", c.BerlinBlock, newcfg.BerlinBlock)
 	}
+
 	if isForkBlockIncompatible(c.LondonBlock, newcfg.LondonBlock, headNumber) {
 		return newBlockCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
+
 	if isForkBlockIncompatible(c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock, headNumber) {
 		return newBlockCompatError("Arrow Glacier fork block", c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock)
 	}
+
 	if isForkBlockIncompatible(c.GrayGlacierBlock, newcfg.GrayGlacierBlock, headNumber) {
 		return newBlockCompatError("Gray Glacier fork block", c.GrayGlacierBlock, newcfg.GrayGlacierBlock)
 	}
+
 	if isForkBlockIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, headNumber) {
 		return newBlockCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
 	}
+
 	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
 	}
+
 	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
 		return newTimestampCompatError("Cancun fork timestamp", c.CancunTime, newcfg.CancunTime)
 	}
+
 	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
 		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
 	}
@@ -1184,6 +1216,7 @@ func isTimestampForked(s *uint64, head uint64) bool {
 	if s == nil {
 		return false
 	}
+
 	return *s <= head
 }
 
@@ -1191,9 +1224,11 @@ func configTimestampEqual(x, y *uint64) bool {
 	if x == nil {
 		return y == nil
 	}
+
 	if y == nil {
 		return x == nil
 	}
+
 	return *x == *y
 }
 
@@ -1225,6 +1260,7 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 	default:
 		rew = newblock
 	}
+
 	err := &ConfigCompatError{
 		What:          what,
 		StoredBlock:   storedblock,
@@ -1234,11 +1270,13 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 	if rew != nil && rew.Sign() > 0 {
 		err.RewindToBlock = rew.Uint64() - 1
 	}
+
 	return err
 }
 
 func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
 	var rew *uint64
+
 	switch {
 	case storedtime == nil:
 		rew = newtime
@@ -1247,12 +1285,14 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 	default:
 		rew = newtime
 	}
+
 	err := &ConfigCompatError{
 		What:         what,
 		StoredTime:   storedtime,
 		NewTime:      newtime,
 		RewindToTime: 0,
 	}
+
 	if rew != nil {
 		err.RewindToTime = *rew - 1
 	}
@@ -1263,6 +1303,7 @@ func (err *ConfigCompatError) Error() string {
 	if err.StoredBlock != nil {
 		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
 	}
+
 	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, err.StoredTime, err.NewTime, err.RewindToTime)
 }
 

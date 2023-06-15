@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/urfave/cli/v2"
 )
 
 const (

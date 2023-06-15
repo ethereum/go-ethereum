@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 const (

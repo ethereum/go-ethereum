@@ -67,8 +67,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	}
 
 	var (
-		num   = new(big.Int)
-		denom = new(big.Int)
+		num                            = new(big.Int)
+		denom                          = new(big.Int)
 		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
 	)
 

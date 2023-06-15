@@ -171,14 +171,17 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	case "pending":
 		bn := PendingBlockNumber
 		bnh.BlockNumber = &bn
+
 		return nil
 	case "finalized":
 		bn := FinalizedBlockNumber
 		bnh.BlockNumber = &bn
+
 		return nil
 	case "safe":
 		bn := SafeBlockNumber
 		bnh.BlockNumber = &bn
+
 		return nil
 	default:
 		if len(input) == 66 {

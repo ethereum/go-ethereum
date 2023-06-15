@@ -20,6 +20,7 @@ func GetOrRegisterCounterFloat64(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewCounterFloat64).(CounterFloat64)
 }
 
@@ -31,6 +32,7 @@ func GetOrRegisterCounterFloat64Forced(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewCounterFloat64Forced).(CounterFloat64)
 }
 
@@ -39,6 +41,7 @@ func NewCounterFloat64() CounterFloat64 {
 	if !Enabled {
 		return NilCounterFloat64{}
 	}
+
 	return &StandardCounterFloat64{}
 }
 
@@ -51,10 +54,12 @@ func NewCounterFloat64Forced() CounterFloat64 {
 // NewRegisteredCounterFloat64 constructs and registers a new StandardCounterFloat64.
 func NewRegisteredCounterFloat64(name string, r Registry) CounterFloat64 {
 	c := NewCounterFloat64()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
 	r.Register(name, c)
+
 	return c
 }
 
@@ -64,10 +69,12 @@ func NewRegisteredCounterFloat64(name string, r Registry) CounterFloat64 {
 // allow for garbage collection.
 func NewRegisteredCounterFloat64Forced(name string, r Registry) CounterFloat64 {
 	c := NewCounterFloat64Forced()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
 	r.Register(name, c)
+
 	return c
 }
 
@@ -148,6 +155,7 @@ func atomicAddFloat(fbits *atomic.Uint64, v float64) {
 	for {
 		loadedBits := fbits.Load()
 		newBits := math.Float64bits(math.Float64frombits(loadedBits) + v)
+
 		if fbits.CompareAndSwap(loadedBits, newBits) {
 			break
 		}

@@ -29,6 +29,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
+
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestStreamKind(t *testing.T) {

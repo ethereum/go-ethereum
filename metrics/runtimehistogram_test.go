@@ -27,6 +27,7 @@ type runtimeHistogramTest struct {
 // by runtimeHistogramSnapshot.
 func TestRuntimeHistogramStats(t *testing.T) {
 	t.Parallel()
+
 	tests := []runtimeHistogramTest{
 		0: {
 			h: metrics.Float64Histogram{
@@ -113,12 +114,15 @@ func approxEqual(x, y, ε float64) bool {
 	if math.IsInf(x, -1) && math.IsInf(y, -1) {
 		return true
 	}
+
 	if math.IsInf(x, 1) && math.IsInf(y, 1) {
 		return true
 	}
+
 	if math.IsNaN(x) && math.IsNaN(y) {
 		return true
 	}
+
 	return math.Abs(x-y) < ε
 }
 
@@ -126,12 +130,14 @@ func approxEqual(x, y, ε float64) bool {
 // returns them in the requested order.
 func TestRuntimeHistogramStatsPercentileOrder(t *testing.T) {
 	t.Parallel()
+
 	p := runtimeHistogramSnapshot{
 		Counts:  []uint64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 		Buckets: []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 	}
 	result := p.Percentiles([]float64{1, 0.2, 0.5, 0.1, 0.2})
 	expected := []float64{10, 2, 5, 1, 2}
+
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatal("wrong result:", result)
 	}

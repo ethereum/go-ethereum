@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/node"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/urfave/cli/v2"
 )
 
 var (

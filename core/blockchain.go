@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"math/big"
 	"os"

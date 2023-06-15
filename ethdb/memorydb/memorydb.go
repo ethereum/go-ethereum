@@ -292,7 +292,9 @@ func (it *iterator) Next() bool {
 	if it.index >= len(it.keys) {
 		return false
 	}
+
 	it.index += 1
+
 	return it.index < len(it.keys)
 }
 
@@ -310,6 +312,7 @@ func (it *iterator) Key() []byte {
 	if it.index < 0 || it.index >= len(it.keys) {
 		return nil
 	}
+
 	return []byte(it.keys[it.index])
 }
 
@@ -321,6 +324,7 @@ func (it *iterator) Value() []byte {
 	if it.index < 0 || it.index >= len(it.keys) {
 		return nil
 	}
+
 	return it.values[it.index]
 }
 

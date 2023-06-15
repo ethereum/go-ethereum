@@ -5,9 +5,10 @@ import (
 	uurl "net/url"
 	"time"
 
+	client "github.com/influxdata/influxdb1-client/v2"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	client "github.com/influxdata/influxdb1-client/v2"
 )
 
 type reporter struct {
@@ -131,6 +132,7 @@ func (r *reporter) send() error {
 	if err != nil {
 		return err
 	}
+
 	r.reg.Each(func(name string, i interface{}) {
 		now := time.Now()
 		measurement, fields := readMeter(r.namespace, name, i)
@@ -141,5 +143,6 @@ func (r *reporter) send() error {
 			bps.AddPoint(p)
 		}
 	})
+
 	return r.client.Write(bps)
 }

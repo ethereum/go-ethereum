@@ -117,6 +117,7 @@ func (b *batchCallBuffer) nextCall() *jsonrpcMessage {
 	// The popping happens in `pushAnswer`. The in progress call is kept
 	// so we can return an error for it in case of timeout.
 	msg := b.calls[0]
+
 	return msg
 }
 
@@ -128,6 +129,7 @@ func (b *batchCallBuffer) pushResponse(answer *jsonrpcMessage) {
 	if answer != nil {
 		b.resp = append(b.resp, answer)
 	}
+
 	b.calls = b.calls[1:]
 }
 
@@ -151,6 +153,7 @@ func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
 			b.resp = append(b.resp, resp)
 		}
 	}
+
 	b.doWrite(ctx, conn, true)
 }
 
@@ -160,7 +163,9 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	if b.wrote {
 		return
 	}
+
 	b.wrote = true // can only write once
+
 	if len(b.resp) > 0 {
 		conn.writeJSON(ctx, b.resp, isErrorResponse)
 	}

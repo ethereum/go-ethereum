@@ -51,7 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
 )
 
 var client *simulations.Client

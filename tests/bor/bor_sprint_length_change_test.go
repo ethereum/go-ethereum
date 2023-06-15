@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"io/ioutil" // nolint: staticcheck
 	_log "log"
 	"math/big"

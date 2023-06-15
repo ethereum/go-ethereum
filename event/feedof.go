@@ -58,8 +58,10 @@ func (f *FeedOf[T]) Subscribe(channel chan<- T) Subscription {
 	// The next Send will add it to f.sendCases.
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
 	f.inbox = append(f.inbox, cas)
+
 	return sub
 }
 
@@ -68,9 +70,11 @@ func (f *FeedOf[T]) remove(sub *feedOfSub[T]) {
 	// that have not been added to f.sendCases yet.
 	f.mu.Lock()
 	index := f.inbox.find(sub.channel)
+
 	if index != -1 {
 		f.inbox = f.inbox.delete(index)
 		f.mu.Unlock()
+
 		return
 	}
 	f.mu.Unlock()
@@ -108,6 +112,7 @@ func (f *FeedOf[T]) Send(value T) (nsent int) {
 	// of sendCases. When a send succeeds, the corresponding case moves to the end of
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
+
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
@@ -115,10 +120,12 @@ func (f *FeedOf[T]) Send(value T) (nsent int) {
 		for i := firstSubSendCase; i < len(cases); i++ {
 			if cases[i].Chan.TrySend(rvalue) {
 				nsent++
+
 				cases = cases.deactivate(i)
 				i--
 			}
 		}
+
 		if len(cases) == firstSubSendCase {
 			break
 		}
@@ -127,6 +134,7 @@ func (f *FeedOf[T]) Send(value T) (nsent int) {
 		if chosen == 0 /* <-f.removeSub */ {
 			index := f.sendCases.find(recv.Interface())
 			f.sendCases = f.sendCases.delete(index)
+
 			if index >= 0 && index < len(cases) {
 				// Shrink 'cases' too because the removed case was still active.
 				cases = f.sendCases[:len(cases)-1]
@@ -142,6 +150,7 @@ func (f *FeedOf[T]) Send(value T) (nsent int) {
 		f.sendCases[i].Send = reflect.Value{}
 	}
 	f.sendLock <- struct{}{}
+
 	return nsent
 }
 

@@ -206,6 +206,7 @@ func NewCodec(conn Conn) ServerCodec {
 	encode := func(v interface{}, isErrorResponse bool) error {
 		return enc.Encode(v)
 	}
+
 	return NewFuncCodec(conn, encode, dec.Decode)
 }
 
@@ -245,6 +246,7 @@ func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}, isErrorRespons
 		deadline = time.Now().Add(defaultWriteTimeout)
 	}
 	c.conn.SetWriteDeadline(deadline)
+
 	return c.encode(v, isErrorResponse)
 }
 

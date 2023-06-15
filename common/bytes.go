@@ -101,6 +101,7 @@ func ParseHexOrString(str string) ([]byte, error) {
 	if errors.Is(err, hexutil.ErrMissingPrefix) {
 		return []byte(str), nil
 	}
+
 	return b, err
 }
 

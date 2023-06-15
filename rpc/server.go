@@ -50,7 +50,7 @@ type Server struct {
 
 	mutex  sync.Mutex
 	codecs map[ServerCodec]struct{}
-	run      int32
+	run    int32
 
 	BatchLimit    uint64
 	executionPool *SafePool
@@ -60,7 +60,7 @@ type Server struct {
 func NewServer(executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
 	server := &Server{
 		idgen:         randomIDGenerator(),
-		codecs: make(map[ServerCodec]struct{}),
+		codecs:        make(map[ServerCodec]struct{}),
 		run:           1,
 		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout),
 	}
@@ -125,7 +125,9 @@ func (s *Server) trackCodec(codec ServerCodec) bool {
 	if atomic.LoadInt32(&s.run) == 0 {
 		return false // Don't serve if server is stopped.
 	}
+
 	s.codecs[codec] = struct{}{}
+
 	return true
 }
 
@@ -184,6 +186,7 @@ func (s *Server) Stop() {
 
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")
+
 		for codec := range s.codecs {
 			codec.close()
 		}

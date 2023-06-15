@@ -499,18 +499,22 @@ func randBytes(length int) []byte {
 	if n, err := rand.Read(buf); n != length || err != nil {
 		panic(err)
 	}
+
 	return buf
 }
 
 func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 	var keys [][]byte
 	var vals [][]byte
+
 	for i := 0; i < size; i += 1 {
 		keys = append(keys, randBytes(ksize))
 		vals = append(vals, randBytes(vsize))
 	}
+
 	if order {
 		sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
 	}
+
 	return keys, vals
 }

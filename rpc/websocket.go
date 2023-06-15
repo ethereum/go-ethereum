@@ -190,13 +190,16 @@ func parseOriginURL(origin string) (string, string, string, error) {
 func DialWebsocketWithDialer(ctx context.Context, endpoint, origin string, dialer websocket.Dialer) (*Client, error) {
 	cfg := new(clientConfig)
 	cfg.wsDialer = &dialer
+
 	if origin != "" {
 		cfg.setHeader("origin", origin)
 	}
+
 	connect, err := newClientTransportWS(endpoint, cfg)
 	if err != nil {
 		return nil, err
 	}
+
 	return newClient(ctx, connect)
 }
 
@@ -210,10 +213,13 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 	if origin != "" {
 		cfg.setHeader("origin", origin)
 	}
+
 	connect, err := newClientTransportWS(endpoint, cfg)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return newClient(ctx, connect)
 }
 
@@ -231,6 +237,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 	if err != nil {
 		return nil, err
 	}
+
 	for key, values := range cfg.httpHeaders {
 		header[key] = values
 	}
@@ -242,16 +249,23 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 				return nil, err
 			}
 		}
+
 		conn, resp, err := dialer.DialContext(ctx, dialURL, header)
+
 		if err != nil {
 			hErr := wsHandshakeError{err: err}
 			if resp != nil {
 				hErr.status = resp.Status
 			}
+
 			return nil, hErr
 		}
+
+		resp.Body.Close()
+
 		return newWebsocketCodec(conn, dialURL, header), nil
 	}
+
 	return connect, nil
 }
 

@@ -175,7 +175,9 @@ func (s *ExpDecaySample) update(t time.Time, v int64) {
 	if s.values.Size() == s.reservoirSize {
 		s.values.Pop()
 	}
+
 	var f64 float64
+
 	if s.rand != nil {
 		f64 = s.rand.Float64()
 	} else {

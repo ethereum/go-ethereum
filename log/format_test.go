@@ -96,6 +96,7 @@ func TestPrettyUint256(t *testing.T) {
 	for _, tt := range tests {
 		v := new(uint256.Int)
 		v.SetFromDecimal(tt.int)
+
 		if have := formatLogfmtUint256(v); have != tt.s {
 			t.Errorf("invalid output %s, want %s", have, tt.s)
 		}
@@ -156,8 +157,10 @@ func TestSanitation(t *testing.T) {
 			logger = New()
 			out    = new(strings.Builder)
 		)
+
 		logger.SetHandler(LvlFilterHandler(LvlInfo, StreamHandler(out, TerminalFormat(false))))
 		logger.Info(tt.msg, tt.msg, tt.msg)
+
 		if have := out.String()[24:]; tt.want != have {
 			t.Fatalf("test %d: want / have: \n%v\n%v", i, tt.want, have)
 		}

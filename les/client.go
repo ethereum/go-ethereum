@@ -19,7 +19,6 @@ package les
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"strings"
 	"time"
 

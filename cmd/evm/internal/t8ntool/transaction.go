@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/urfave/cli/v2"
 )
 
 type result struct {

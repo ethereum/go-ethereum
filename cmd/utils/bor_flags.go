@@ -2,8 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/urfave/cli/v2"
 	"os"
 
 	"github.com/ethereum/go-ethereum/core"

@@ -45,8 +45,10 @@ func buildInfoVCS(info *debug.BuildInfo) (s VCSInfo, ok bool) {
 			}
 		}
 	}
+
 	if s.Commit != "" && s.Date != "" {
 		ok = true
 	}
+
 	return
 }

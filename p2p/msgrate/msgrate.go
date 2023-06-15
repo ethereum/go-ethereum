@@ -296,6 +296,7 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 	sort.Float64s(rtts)
 
 	var median time.Duration
+
 	switch len(rtts) {
 	case 0:
 		median = rttMaxEstimate

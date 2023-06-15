@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"testing"
 

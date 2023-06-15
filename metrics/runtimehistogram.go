@@ -11,7 +11,9 @@ func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runt
 	if r == nil {
 		r = DefaultRegistry
 	}
+
 	constructor := func() Histogram { return newRuntimeHistogram(scale) }
+
 	return r.GetOrRegister(name, constructor).(*runtimeHistogram)
 }
 
@@ -24,6 +26,7 @@ type runtimeHistogram struct {
 func newRuntimeHistogram(scale float64) *runtimeHistogram {
 	h := &runtimeHistogram{scaleFactor: scale}
 	h.update(&metrics.Float64Histogram{})
+
 	return h
 }
 
@@ -41,9 +44,11 @@ func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
 	}
 	copy(s.Counts, mh.Counts)
 	copy(s.Buckets, mh.Buckets)
+
 	for i, b := range s.Buckets {
 		s.Buckets[i] = b * h.scaleFactor
 	}
+
 	h.v.Store(&s)
 }
 
@@ -133,6 +138,7 @@ func (h *runtimeHistogramSnapshot) Count() int64 {
 	for _, c := range h.Counts {
 		count += int64(c)
 	}
+
 	return count
 }
 
@@ -141,35 +147,42 @@ func (h *runtimeHistogramSnapshot) Mean() float64 {
 	if len(h.Counts) == 0 {
 		return 0
 	}
+
 	mean, _ := h.mean()
+
 	return mean
 }
 
 // mean computes the mean and also the total sample count.
 func (h *runtimeHistogramSnapshot) mean() (mean, totalCount float64) {
 	var sum float64
+
 	for i, c := range h.Counts {
 		midpoint := h.midpoint(i)
 		sum += midpoint * float64(c)
 		totalCount += float64(c)
 	}
+
 	return sum / totalCount, totalCount
 }
 
 func (h *runtimeHistogramSnapshot) midpoint(bucket int) float64 {
 	high := h.Buckets[bucket+1]
 	low := h.Buckets[bucket]
+
 	if math.IsInf(high, 1) {
 		// The edge of the highest bucket can be +Inf, and it's supposed to mean that this
 		// bucket contains all remaining samples > low. We can't get the middle of an
 		// infinite range, so just return the lower bound of this bucket instead.
 		return low
 	}
+
 	if math.IsInf(low, -1) {
 		// Similarly, we can get -Inf in the left edge of the lowest bucket,
 		// and it means the bucket contains all remaining values < high.
 		return high
 	}
+
 	return (low + high) / 2
 }
 
@@ -191,11 +204,13 @@ func (h *runtimeHistogramSnapshot) Variance() float64 {
 	}
 
 	var sum float64
+
 	for i, c := range h.Counts {
 		midpoint := h.midpoint(i)
 		d := midpoint - mean
 		sum += float64(c) * (d * d)
 	}
+
 	return sum / (totalCount - 1)
 }
 
@@ -204,6 +219,7 @@ func (h *runtimeHistogramSnapshot) Percentile(p float64) float64 {
 	threshold := float64(h.Count()) * p
 	values := [1]float64{threshold}
 	h.computePercentiles(values[:])
+
 	return values[0]
 }
 
@@ -215,10 +231,12 @@ func (h *runtimeHistogramSnapshot) Percentiles(ps []float64) []float64 {
 	count := float64(h.Count())
 	thresholds := make([]float64, len(ps))
 	indexes := make([]int, len(ps))
+
 	for i, percentile := range ps {
 		thresholds[i] = count * math.Max(0, math.Min(1.0, percentile))
 		indexes[i] = i
 	}
+
 	sort.Sort(floatsAscendingKeepingIndex{thresholds, indexes})
 
 	// Now compute. The result is stored back into the thresholds slice.
@@ -226,6 +244,7 @@ func (h *runtimeHistogramSnapshot) Percentiles(ps []float64) []float64 {
 
 	// Put the result back into the requested order.
 	sort.Sort(floatsByIndex{thresholds, indexes})
+
 	return thresholds
 }
 
@@ -238,6 +257,7 @@ func (h *runtimeHistogramSnapshot) computePercentiles(thresh []float64) {
 			thresh[0] = h.Buckets[i]
 			thresh = thresh[1:]
 		}
+
 		if len(thresh) == 0 {
 			return
 		}
@@ -257,9 +277,11 @@ func (h *runtimeHistogramSnapshot) Max() int64 {
 			if math.IsInf(edge, 1) {
 				edge = h.Buckets[i]
 			}
+
 			return int64(math.Ceil(edge))
 		}
 	}
+
 	return 0
 }
 
@@ -270,6 +292,7 @@ func (h *runtimeHistogramSnapshot) Min() int64 {
 			return int64(math.Floor(h.Buckets[i]))
 		}
 	}
+
 	return 0
 }
 
@@ -279,6 +302,7 @@ func (h *runtimeHistogramSnapshot) Sum() int64 {
 	for i := range h.Counts {
 		sum += h.Buckets[i] * float64(h.Counts[i])
 	}
+
 	return int64(math.Ceil(sum))
 }
 

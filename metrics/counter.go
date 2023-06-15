@@ -38,6 +38,7 @@ func NewCounter() Counter {
 	if !Enabled {
 		return NilCounter{}
 	}
+
 	return &StandardCounter{}
 }
 

@@ -21,7 +21,6 @@ package simulations
 import (
 	"context"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/log"
 	"net/http"
 	"net/url"
 	"strconv"

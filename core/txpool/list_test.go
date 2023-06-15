@@ -17,7 +17,6 @@
 package txpool
 
 import (
-	"github.com/holiman/uint256"
 	"math/big"
 	"math/rand"
 	"testing"

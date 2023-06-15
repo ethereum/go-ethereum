@@ -202,6 +202,7 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 		if err != nil {
 			return nil, err
 		}
+
 		reconnect = rc
 	case "stdio":
 		reconnect = newClientTransportIO(os.Stdin, os.Stdout)
@@ -348,6 +349,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		if result == nil {
 			return nil
 		}
+
 		return json.Unmarshal(resp.Result, result)
 	}
 }
@@ -530,6 +532,7 @@ func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 			return err
 		}
 	}
+
 	err := c.writeConn.writeJSON(ctx, msg, false)
 	if err != nil {
 		c.writeConn = nil

@@ -13,30 +13,35 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		fields := map[string]interface{}{
 			"value": metric.Count(),
 		}
+
 		return measurement, fields
 	case metrics.CounterFloat64:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Count(),
 		}
+
 		return measurement, fields
 	case metrics.Gauge:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
 		}
+
 		return measurement, fields
 	case metrics.GaugeFloat64:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
 		}
+
 		return measurement, fields
 	case metrics.Histogram:
 		ms := metric.Snapshot()
 		if ms.Count() <= 0 {
 			break
 		}
+
 		ps := ms.Percentiles([]float64{0.25, 0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 		measurement := fmt.Sprintf("%s%s.histogram", namespace, name)
 		fields := map[string]interface{}{
@@ -54,6 +59,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"p999":     ps[5],
 			"p9999":    ps[6],
 		}
+
 		return measurement, fields
 	case metrics.Meter:
 		ms := metric.Snapshot()
@@ -65,6 +71,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"m15":   ms.Rate15(),
 			"mean":  ms.RateMean(),
 		}
+
 		return measurement, fields
 	case metrics.Timer:
 		ms := metric.Snapshot()
@@ -89,12 +96,14 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"m15":      ms.Rate15(),
 			"meanrate": ms.RateMean(),
 		}
+
 		return measurement, fields
 	case metrics.ResettingTimer:
 		t := metric.Snapshot()
 		if len(t.Values()) == 0 {
 			break
 		}
+
 		ps := t.Percentiles([]float64{50, 95, 99})
 		val := t.Values()
 		measurement := fmt.Sprintf("%s%s.span", namespace, name)
@@ -107,7 +116,9 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"p95":   ps[1],
 			"p99":   ps[2],
 		}
+
 		return measurement, fields
 	}
+
 	return "", nil
 }

@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
 )
 
 func decodeEncode(input []byte, val interface{}, i int) {

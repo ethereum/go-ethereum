@@ -45,11 +45,13 @@ func VCS() (VCSInfo, bool) {
 		// Use information set by the build script if present.
 		return VCSInfo{Commit: gitCommit, Date: gitDate}, true
 	}
+
 	if buildInfo, ok := debug.ReadBuildInfo(); ok {
 		if buildInfo.Main.Path == ourPath {
 			return buildInfoVCS(buildInfo)
 		}
 	}
+
 	return VCSInfo{}, false
 }
 
@@ -57,6 +59,7 @@ func VCS() (VCSInfo, bool) {
 // conventions in the Ethereum p2p network.
 func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
+
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
 		//nolint: staticcheck
 		strings.Title(clientIdentifier),
@@ -66,8 +69,7 @@ func ClientName(clientIdentifier string) string {
 	)
 }
 
-// runtimeInfo returns build and platform information about the current binary.
-//
+// Info returns build and platform information about the current binary.
 // If the package that is currently executing is a prefixed by our go-ethereum
 // module path, it will print out commit and date VCS information. Otherwise,
 // it will assume it's imported by a third-party and will return the imported
@@ -75,21 +77,28 @@ func ClientName(clientIdentifier string) string {
 func Info() (version, vcs string) {
 	version = params.VersionWithMeta
 	buildInfo, ok := debug.ReadBuildInfo()
+
 	if !ok {
 		return version, ""
 	}
+
 	version = versionInfo(buildInfo)
+
 	if status, ok := VCS(); ok {
 		modified := ""
 		if status.Dirty {
 			modified = " (dirty)"
 		}
+
 		commit := status.Commit
+
 		if len(commit) > 8 {
 			commit = commit[:8]
 		}
+
 		vcs = commit + "-" + status.Date + modified
 	}
+
 	return version, vcs
 }
 
@@ -111,7 +120,9 @@ func versionInfo(info *debug.BuildInfo) string {
 		// These can be empty when invoked with "go run".
 		version = fmt.Sprintf("%s@%s ", info.Main.Path, info.Main.Version)
 	}
+
 	mod := findModule(info, ourPath)
+
 	if mod == nil {
 		// If our module path wasn't imported, it's unclear which
 		// version of our code they are running. Fallback to hardcoded
@@ -125,6 +136,7 @@ func versionInfo(info *debug.BuildInfo) string {
 		// If our package was replaced by something else, also note that.
 		version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
 	}
+
 	return version
 }
 
@@ -133,10 +145,12 @@ func findModule(info *debug.BuildInfo, path string) *debug.Module {
 	if info.Path == ourPath {
 		return &info.Main
 	}
+
 	for _, mod := range info.Deps {
 		if mod.Path == path {
 			return mod
 		}
 	}
+
 	return nil
 }

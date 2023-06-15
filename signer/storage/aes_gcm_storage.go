@@ -135,6 +135,7 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 	if err != nil {
 		return err
 	}
+
 	if err = os.WriteFile(s.filename, raw, 0600); err != nil {
 		return err
 	}

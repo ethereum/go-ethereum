@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/urfave/cli/v2"
 )
 
 var (

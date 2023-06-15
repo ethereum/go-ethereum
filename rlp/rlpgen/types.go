@@ -103,7 +103,9 @@ func isUint256(typ types.Type) bool {
 	if !ok {
 		return false
 	}
+
 	name := named.Obj()
+
 	return name.Pkg().Path() == "github.com/holiman/uint256" && name.Name() == "Int"
 }
 

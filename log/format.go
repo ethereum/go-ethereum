@@ -354,6 +354,7 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		if v == nil {
 			return "<nil>"
 		}
+
 		return formatLogfmtUint256(v)
 	}
 	if term {
@@ -484,12 +485,14 @@ func formatLogfmtUint256(n *uint256.Int) string {
 	if n.IsUint64() {
 		return FormatLogfmtUint64(n.Uint64())
 	}
+
 	var (
 		text  = n.Dec()
 		buf   = make([]byte, len(text)+len(text)/3)
 		comma = 0
 		i     = len(buf) - 1
 	)
+
 	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
 		c := text[j]
 
@@ -499,13 +502,16 @@ func formatLogfmtUint256(n *uint256.Int) string {
 		case comma == 3:
 			buf[i] = ','
 			i--
+
 			comma = 0
+
 			fallthrough
 		default:
 			buf[i] = c
 			comma++
 		}
 	}
+
 	return string(buf[i+1:])
 }
 
@@ -531,6 +537,7 @@ func escapeString(s string) string {
 // for spaces and linebreaks to occur without needing quoting.
 func escapeMessage(s string) string {
 	needsQuoting := false
+
 	for _, r := range s {
 		// Allow CR/LF/TAB. This is to make multi-line messages work.
 		if r == '\r' || r == '\n' || r == '\t' {
@@ -543,8 +550,10 @@ func escapeMessage(s string) string {
 			break
 		}
 	}
+
 	if !needsQuoting {
 		return s
 	}
+
 	return strconv.Quote(s)
 }

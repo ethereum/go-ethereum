@@ -26,6 +26,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"

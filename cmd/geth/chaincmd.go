@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/urfave/cli/v2"
 )
 
 var (

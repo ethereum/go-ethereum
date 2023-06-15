@@ -70,9 +70,11 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 		if err := json.Unmarshal([]byte(info.Abi), &abi); err != nil {
 			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}
+
 		if err := json.Unmarshal([]byte(info.Userdoc), &userdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading userdoc definition (%v)", err)
 		}
+
 		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading devdoc definition (%v)", err)
 		}

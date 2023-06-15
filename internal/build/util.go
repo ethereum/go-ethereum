@@ -52,15 +52,19 @@ func MustRun(cmd *exec.Cmd) {
 
 func printArgs(args []string) string {
 	var s strings.Builder
+
 	for i, arg := range args {
 		if i > 0 {
 			s.WriteByte(' ')
 		}
+
 		if strings.IndexByte(arg, ' ') >= 0 {
 			arg = strconv.QuoteToASCII(arg)
 		}
+
 		s.WriteString(arg)
 	}
+
 	return s.String()
 }
 
@@ -191,6 +195,7 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 // package paths.
 func FindMainPackages(dir string) []string {
 	var commands []string
+
 	cmds, err := os.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)

@@ -139,6 +139,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	var cfg clientConfig
 	cfg.httpClient = client
 	fn := newClientTransportHTTP(endpoint, &cfg)
+
 	return newClient(context.Background(), fn)
 }
 
@@ -146,6 +147,7 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 	headers := make(http.Header, 2+len(cfg.httpHeaders))
 	headers.Set("accept", contentType)
 	headers.Set("content-type", contentType)
+
 	for key, values := range cfg.httpHeaders {
 		headers[key] = values
 	}
@@ -195,6 +197,7 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
 	}
+
 	if len(respmsgs) != len(msgs) {
 		return fmt.Errorf("batch has %d requests but response has %d: %w", len(msgs), len(respmsgs), ErrBadResult)
 	}
@@ -209,6 +212,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
@@ -275,6 +279,7 @@ func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 		if err != nil {
 			return err
 		}
+
 		w.Header().Set("content-length", strconv.Itoa(len(encdata)))
 
 		// If this request is wrapped in a handler that might remove Content-Length (such
@@ -285,9 +290,11 @@ func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 		w.Header().Set("transfer-encoding", "identity")
 
 		_, err = w.Write(encdata)
+
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
+
 		return err
 	}
 

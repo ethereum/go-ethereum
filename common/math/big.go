@@ -59,6 +59,7 @@ func (i *HexOrDecimal256) UnmarshalJSON(input []byte) error {
 	if len(input) > 0 && input[0] == '"' {
 		input = input[1 : len(input)-1]
 	}
+
 	return i.UnmarshalText(input)
 }
 

@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"runtime"
 	"sync"
