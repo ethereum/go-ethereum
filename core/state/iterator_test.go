@@ -89,7 +89,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 
 // isTrieNode is a helper function which reports if the provided
 // database entry belongs to a trie node or not.
-func isTrieNode(scheme string, key, val []byte) (bool, common.Hash) {
+func isTrieNode(scheme string, key, _ []byte) (bool, common.Hash) {
 	if scheme == rawdb.HashScheme {
 		if len(key) == common.HashLength {
 			return true, common.BytesToHash(key)

@@ -154,11 +154,13 @@ func (set *NodeSet) Size() (int, int) {
 
 // Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
 // we get rid of it?
+// nolint:makezero
 func (set *NodeSet) Hashes() []common.Hash {
-	var ret []common.Hash
+	ret := make([]common.Hash, len(set.nodes))
 	for _, node := range set.nodes {
 		ret = append(ret, node.hash)
 	}
+
 	return ret
 }
 

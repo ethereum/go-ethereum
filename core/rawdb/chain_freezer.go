@@ -82,6 +82,7 @@ func (f *chainFreezer) Close() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
+// nolint:gocognit
 func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	var (
 		backoff   bool
@@ -250,6 +251,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	}
 }
 
+// nolint:gocognit
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 

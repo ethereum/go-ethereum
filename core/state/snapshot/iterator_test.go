@@ -48,7 +48,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
 			value := make([]byte, 32)
-			crand.Read(value)
+			_ , _ = crand.Read(value)
 			accStorage[randomHash()] = value
 			storage[h] = accStorage
 		}
@@ -80,7 +80,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 
 		var nilstorage int
 		for i := 0; i < 100; i++ {
-			crand.Read(value)
+			_ , _ = crand.Read(value)
 			if rand.Intn(2) == 0 {
 				accStorage[randomHash()] = common.CopyBytes(value)
 			} else {

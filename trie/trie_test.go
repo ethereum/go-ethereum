@@ -470,6 +470,7 @@ func verifyAccessList(oldTrie *Trie, newTrie *Trie, set *NodeSet) error {
 	return nil
 }
 
+// nolint:gocognit
 func runRandTest(rt randTest) bool {
 	var (
 		triedb   = NewDatabase(rawdb.NewMemoryDatabase())

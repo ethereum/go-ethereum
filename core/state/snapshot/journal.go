@@ -281,6 +281,7 @@ type journalCallback = func(parent common.Hash, root common.Hash, destructs map[
 // the most recent layer.
 // This method returns error either if there was some error reading from disk,
 // OR if the callback returns an error when invoked.
+// nolint:gocognit
 func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {

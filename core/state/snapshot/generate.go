@@ -159,6 +159,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 //
 // The proof result will be returned if the range proving is finished, otherwise
 // the error will be returned to abort the entire procedure.
+// nolint:gocognit
 func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
 		keys     [][]byte
@@ -307,6 +308,7 @@ type onStateCallback func(key []byte, val []byte, write bool, delete bool) error
 // generateRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through range-proof and skip
 // generation, or iterate trie to regenerate state on demand.
+// nolint:gocognit
 func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefix []byte, kind string, origin []byte, max int, onState onStateCallback, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	// Use range prover to check the validity of the flat state in the range
 	result, err := dl.proveRange(ctx, trieId, prefix, kind, origin, max, valueConvertFn)
@@ -573,6 +575,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 // generateAccounts generates the missing snapshot accounts as well as their
 // storage slots in the main trie. It's supposed to restart the generation
 // from the given origin position.
+// nolint:nestif,gocognit
 func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) error {
 	onAccount := func(key []byte, val []byte, write bool, delete bool) error {
 		// Make sure to clear all dangling storages before this account
@@ -636,7 +639,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root == types.EmptyRootHash {
-			ctx.removeStorageAt(account)
+			_ = ctx.removeStorageAt(account)
 		} else {
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(account[:], accMarker) && len(dl.genMarker) > common.HashLength {

@@ -409,6 +409,7 @@ type convertLegacyFn = func([]byte) ([]byte, error)
 
 // MigrateTable processes the entries in a given table in sequence
 // converting them to a new format if they're of an old format.
+// nolint:gocognit
 func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if f.readonly {
 		return errReadOnly

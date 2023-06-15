@@ -770,6 +770,7 @@ func (c *cleaner) Delete(key []byte) error {
 
 // Update inserts the dirty nodes in provided nodeset into database and
 // link the account trie with multiple storage tries if necessary.
+// nolint:prealloc
 func (db *Database) Update(nodes *MergedNodeSet) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()

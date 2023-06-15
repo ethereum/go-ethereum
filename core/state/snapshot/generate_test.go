@@ -200,7 +200,7 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 	root, nodes := stTrie.Commit(false)
 
 	if nodes != nil {
-		t.nodes.Merge(nodes)
+		_ = t.nodes.Merge(nodes)
 	}
 	return root.Bytes()
 }
@@ -208,10 +208,10 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 func (t *testHelper) Commit() common.Hash {
 	root, nodes := t.accTrie.Commit(true)
 	if nodes != nil {
-		t.nodes.Merge(nodes)
+		_ = t.nodes.Merge(nodes)
 	}
-	t.triedb.Update(t.nodes)
-	t.triedb.Commit(root, false)
+	_ = t.triedb.Update(t.nodes)
+	_ = t.triedb.Commit(root, false)
 
 	return root
 }
@@ -400,8 +400,8 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie leaf and ensure the generator chokes
-	helper.triedb.Commit(root, false)
-	helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
+	_ = helper.triedb.Commit(root, false)
+	_ = helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -436,7 +436,7 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 	root := helper.Commit()
 
 	// Delete a storage trie root and ensure the generator chokes
-	helper.diskdb.Delete(stRoot)
+	_ = helper.diskdb.Delete(stRoot)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -470,7 +470,7 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	root := helper.Commit()
 
 	// Delete a storage trie leaf and ensure the generator chokes
-	helper.diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
+	_ = helper.diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {

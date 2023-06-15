@@ -314,7 +314,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 		for _, arg := range intArgs {
 			stack.push(arg)
 		}
-		op(&pc, evmInterpreter, scope)
+		_ , _ = op(&pc, evmInterpreter, scope)
 		stack.pop()
 	}
 	bench.StopTimer()
@@ -610,14 +610,14 @@ func TestOpTstore(t *testing.T) {
 	stack.push(new(uint256.Int).SetBytes(value))
 	// push the location to the stack
 	stack.push(new(uint256.Int))
-	opTstore(&pc, evmInterpreter, &scopeContext)
+	_ , _ = opTstore(&pc, evmInterpreter, &scopeContext)
 	// there should be no elements on the stack after TSTORE
 	if stack.len() != 0 {
 		t.Fatal("stack wrong size")
 	}
 	// push the location to the stack
 	stack.push(new(uint256.Int))
-	opTload(&pc, evmInterpreter, &scopeContext)
+	_ , _ = opTload(&pc, evmInterpreter, &scopeContext)
 	// there should be one element on the stack after TLOAD
 	if stack.len() != 1 {
 		t.Fatal("stack wrong size")

@@ -471,8 +471,9 @@ func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, err
 	return nil, errors.New("not found")
 }
 
+// nolint:prealloc
 func parseNodes(rec []string) []*enode.Node {
-	ns := make([]*enode.Node, len(rec))
+	var ns []*enode.Node
 
 	for _, r := range rec {
 		var n enode.Node

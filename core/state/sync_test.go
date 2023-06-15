@@ -173,6 +173,7 @@ type stateElement struct {
 	syncPath trie.SyncPath
 }
 
+// nolint:nestif
 func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 	// Create a random state to copy
 	_, srcDb, srcRoot, srcAccounts := makeTestState()
@@ -298,6 +299,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 
 // Tests that the trie scheduler can correctly reconstruct the state even if only
 // partial results are returned, and the others sent only later.
+// nolint:prealloc
 func TestIterativeDelayedStateSync(t *testing.T) {
 	// Create a random state to copy
 	_, srcDb, srcRoot, srcAccounts := makeTestState()

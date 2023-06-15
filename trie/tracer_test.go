@@ -179,6 +179,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	// Add more new nodes
 	trie, _ = New(TrieID(root), db)
 	orig = trie.Copy()
+	// nolint:prealloc
 	var keys []string
 
 	for i := 0; i < 30; i++ {

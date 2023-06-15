@@ -124,6 +124,7 @@ func TestIterativeSyncBatched(t *testing.T)          { testIterativeSync(t, 100,
 func TestIterativeSyncIndividualByPath(t *testing.T) { testIterativeSync(t, 1, true) }
 func TestIterativeSyncBatchedByPath(t *testing.T)    { testIterativeSync(t, 100, true) }
 
+// nolint:prealloc
 func testIterativeSync(t *testing.T, count int, bypath bool) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()
@@ -195,6 +196,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool) {
 
 // Tests that the trie scheduler can correctly reconstruct the state even if only
 // partial results are returned, and the others sent only later.
+// nolint:prealloc
 func TestIterativeDelayedSync(t *testing.T) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()
@@ -384,12 +386,12 @@ func TestIterativeRandomDelayedSync(t *testing.T) {
 			}
 		}
 	}
-	// Cross check that the two tries are in sync
+	// Cross-check that the two tries are in sync
 	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
-// Tests that a trie sync will not request nodes multiple times, even if they
-// have such references.
+// Tests that a trie sync will not request nodes multiple times, even if they have such references.
+// nolint:prealloc
 func TestDuplicateAvoidanceSync(t *testing.T) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()
@@ -456,8 +458,8 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
-// Tests that at any point in time during a sync, only complete sub-tries are in
-// the database.
+// Tests that at any point in time during a sync, only complete sub-tries are in the database.
+// nolint:prealloc
 func TestIncompleteSync(t *testing.T) {
 	t.Parallel()
 	// Create a random trie to copy
@@ -543,8 +545,8 @@ func TestIncompleteSync(t *testing.T) {
 	}
 }
 
-// Tests that trie nodes get scheduled lexicographically when having the same
-// depth.
+// Tests that trie nodes get scheduled lexicographically when having the same depth.
+// nolint:prealloc
 func TestSyncOrdering(t *testing.T) {
 	// Create a random trie to copy
 	srcDb, srcTrie, srcData := makeTestTrie()

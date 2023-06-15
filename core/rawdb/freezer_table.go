@@ -555,13 +555,13 @@ func (t *freezerTable) Close() error {
 	defer t.lock.Unlock()
 
 	var errs []error
-	doClose := func(f *os.File, sync bool, close bool) {
+	doClose := func(f *os.File, sync bool, closed bool) {
 		if sync && !t.readonly {
 			if err := f.Sync(); err != nil {
 				errs = append(errs, err)
 			}
 		}
-		if close {
+		if closed {
 			if err := f.Close(); err != nil {
 				errs = append(errs, err)
 			}
