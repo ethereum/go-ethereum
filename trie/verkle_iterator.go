@@ -142,7 +142,18 @@ func (it *verkleNodeIterator) Parent() common.Hash {
 // Callers must not retain references to the return value after calling Next.
 // For leaf nodes, the last element of the path is the 'terminator symbol' 0x10.
 func (it *verkleNodeIterator) Path() []byte {
-	panic("not completely implemented")
+	if it.Leaf() {
+		return it.LeafKey()
+	}
+	var path []byte
+	for i, state := range it.stack {
+		// skip the last byte
+		if i <= len(it.stack)-1 {
+			break
+		}
+		path = append(path, byte(state.Index))
+	}
+	return path
 }
 
 func (it *verkleNodeIterator) NodeBlob() []byte {
@@ -204,5 +215,5 @@ func (it *verkleNodeIterator) LeafProof() [][]byte {
 // making trie.Database an interface and wrapping at that level. It's a huge
 // refactor, but it could be worth it if another occurrence arises.
 func (it *verkleNodeIterator) AddResolver(ethdb.KeyValueReader) {
-	panic("not completely implemented")
+	// Not implemented, but should not panic
 }
