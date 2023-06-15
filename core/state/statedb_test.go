@@ -1396,6 +1396,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 
 	for a := byte(0); a < 10; a++ {
 		state.CreateAccount(common.Address{a})
+
 		for s := byte(0); s < 10; s++ {
 			state.SetState(common.Address{a}, common.Hash{a, s}, common.Hash{a, s})
 		}

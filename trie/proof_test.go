@@ -40,12 +40,14 @@ func initRnd() *mrand.Rand {
 	crand.Read(seed[:])
 	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
 	fmt.Printf("Seed: %x\n", seed)
+
 	return rnd
 }
 
 func randBytes(n int) []byte {
 	r := make([]byte, n)
 	prng.Read(r)
+
 	return r
 }
 
@@ -1047,6 +1049,7 @@ func randomTrie(n int) (*Trie, map[string]*kv) {
 	for i := byte(0); i < 100; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
+
 		trie.MustUpdate(value.k, value.v)
 		trie.MustUpdate(value2.k, value2.v)
 		vals[string(value.k)] = value

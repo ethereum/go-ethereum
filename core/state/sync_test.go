@@ -111,6 +111,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if err != nil {
 		return err
 	}
+
 	it := t.NodeIterator(nil)
 	for it.Next(true) {
 	}
@@ -189,6 +190,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 		nodeElements []stateElement
 		codeElements []stateElement
 	)
+
 	paths, nodes, codes := sched.Missing(count)
 
 	for i := 0; i < len(paths); i++ {
@@ -559,6 +561,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}
+
 				results = append(results, trie.NodeSyncResult{Path: path, Data: data})
 
 				if len(results) >= cap(results) {

@@ -34,6 +34,7 @@ func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
 	if err := checkDanglingDiskStorage(chaindb); err != nil {
 		log.Error("Database check error", "err", err)
 	}
+
 	return checkDanglingMemStorage(chaindb)
 }
 
@@ -46,27 +47,34 @@ func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 		lastKey    []byte
 		it         = rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.SnapshotStoragePrefix, nil), 1+2*common.HashLength)
 	)
+
 	log.Info("Checking dangling snapshot disk storage")
 
 	defer it.Release()
+
 	for it.Next() {
 		k := it.Key()
 		accKey := k[1:33]
+
 		if bytes.Equal(accKey, lastKey) {
 			// No need to look up for every slot
 			continue
 		}
+
 		lastKey = common.CopyBytes(accKey)
+
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
+
 		if data := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
 			log.Warn("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
 			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
 		}
 	}
 	log.Info("Verified the snapshot disk storage", "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+
 	return nil
 }
 
@@ -74,7 +82,9 @@ func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 // snapshot difflayers.
 func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 	start := time.Now()
+
 	log.Info("Checking dangling journalled storage")
+
 	err := iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
 		for accHash := range storage {
 			if _, ok := accounts[accHash]; !ok {
@@ -83,11 +93,14 @@ func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 		}
 		return nil
 	})
+
 	if err != nil {
 		log.Info("Failed to resolve snapshot journal", "err", err)
 		return err
 	}
+
 	log.Info("Verified the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }
 
@@ -97,11 +110,14 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 	// Look up the disk layer first
 	baseRoot := rawdb.ReadSnapshotRoot(db)
 	fmt.Printf("Disklayer: Root: %x\n", baseRoot)
+
 	if data := rawdb.ReadAccountSnapshot(db, hash); data != nil {
 		account := new(Account)
+
 		if err := rlp.DecodeBytes(data, account); err != nil {
 			panic(err)
 		}
+
 		fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
 		fmt.Printf("\taccount.balance: %x\n", account.Balance)
 		fmt.Printf("\taccount.root: %x\n", account.Root)
@@ -117,6 +133,7 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 		}
 		it.Release()
 	}
+
 	var depth = 0
 
 	return iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {

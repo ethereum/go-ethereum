@@ -195,7 +195,9 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 	if len(code) > 0 {
 		return code, nil
 	}
+
 	code = rawdb.ReadCode(db.disk, codeHash)
+
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
@@ -212,7 +214,9 @@ func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]b
 	if len(code) > 0 {
 		return code, nil
 	}
+
 	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
+
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))

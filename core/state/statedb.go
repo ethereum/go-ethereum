@@ -662,11 +662,14 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 	if trie == nil {
 		return nil, errors.New("storage trie for requested address does not exist")
 	}
+
 	var proof proofList
 	err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return proof, nil
 }
 
@@ -696,6 +699,7 @@ func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
 		return nil, nil
 	}
 	cpy := stateObject.deepCopy(s)
+
 	if _, err := cpy.updateTrie(s.db); err != nil {
 		return nil, err
 	}
@@ -794,6 +798,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	// to a previous incarnation of the object.
 	s.stateObjectsDestruct[addr] = struct{}{}
 	stateObject := s.GetOrNewStateObject(addr)
+
 	for k, v := range storage {
 		stateObject.SetState(s.db, k, v)
 	}

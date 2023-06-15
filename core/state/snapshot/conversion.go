@@ -369,6 +369,7 @@ func stackTrieGenerate(db ethdb.KeyValueWriter, scheme string, owner common.Hash
 			rawdb.WriteTrieNode(db, owner, path, hash, blob, scheme)
 		}
 	}
+
 	t := trie.NewStackTrieWithOwner(nodeWriter, owner)
 	for leaf := range in {
 		t.Update(leaf.key[:], leaf.value)

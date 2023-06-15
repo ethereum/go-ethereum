@@ -109,6 +109,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// is not matched with disk layer; or the it's the legacy-format journal,
 	// etc.), we just discard all diffs and try to recover them later.
 	var current snapshot = base
+
 	err := iterateJournal(db, func(parent common.Hash, root common.Hash, destructSet map[common.Hash]struct{}, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
 		current = newDiffLayer(current, root, destructSet, accountData, storageData)
 		return nil
@@ -116,6 +117,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err != nil {
 		return base, generator, nil
 	}
+
 	return current, generator, nil
 }
 
@@ -285,6 +287,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		log.Warn("Loaded snapshot journal", "diffs", "missing")
 		return nil
 	}
+
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
 	// Firstly, resolve the first element as the journal version
 	version, err := r.Uint64()
@@ -292,6 +295,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		log.Warn("Failed to resolve the journal version", "error", err)
 		return errors.New("failed to resolve journal version")
 	}
+
 	if version != journalVersion {
 		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
 		return errors.New("wrong journal version")
@@ -303,10 +307,12 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	if err := r.Decode(&parent); err != nil {
 		return errors.New("missing disk layer root")
 	}
+
 	if baseRoot := rawdb.ReadSnapshotRoot(db); baseRoot != parent {
 		log.Warn("Loaded snapshot journal", "diskroot", baseRoot, "diffs", "unmatched")
 		return fmt.Errorf("mismatched disk and diff layers")
 	}
+
 	for {
 		var (
 			root        common.Hash
@@ -323,20 +329,26 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
+
 			return fmt.Errorf("load diff root: %v", err)
 		}
+
 		if err := r.Decode(&destructs); err != nil {
 			return fmt.Errorf("load diff destructs: %v", err)
 		}
+
 		if err := r.Decode(&accounts); err != nil {
 			return fmt.Errorf("load diff accounts: %v", err)
 		}
+
 		if err := r.Decode(&storage); err != nil {
 			return fmt.Errorf("load diff storage: %v", err)
 		}
+
 		for _, entry := range destructs {
 			destructSet[entry.Hash] = struct{}{}
 		}
+
 		for _, entry := range accounts {
 			if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
 				accountData[entry.Hash] = entry.Blob
@@ -344,8 +356,10 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 				accountData[entry.Hash] = nil
 			}
 		}
+
 		for _, entry := range storage {
 			slots := make(map[common.Hash][]byte)
+
 			for i, key := range entry.Keys {
 				if len(entry.Vals[i]) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
 					slots[key] = entry.Vals[i]
@@ -353,11 +367,14 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 					slots[key] = nil
 				}
 			}
+
 			storageData[entry.Hash] = slots
 		}
+
 		if err := callback(parent, root, destructSet, accountData, storageData); err != nil {
 			return err
 		}
+
 		parent = root
 	}
 }

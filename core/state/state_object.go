@@ -146,9 +146,11 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			s.trie = tr
 		}
 	}
+
 	return s.trie, nil
 }
 
@@ -197,10 +199,12 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if s.db.snap == nil || err != nil {
 		start := time.Now()
 		tr, err := s.getTrie(db)
+
 		if err != nil {
 			s.db.setError(err)
 			return common.Hash{}
 		}
+
 		enc, err = tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
@@ -252,6 +256,7 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
+
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}
@@ -278,7 +283,9 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		storage map[common.Hash][]byte
 		hasher  = s.db.hasher
 	)
+
 	tr, err := s.getTrie(db)
+
 	if err != nil {
 		s.db.setError(err)
 		return nil, err
@@ -327,6 +334,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
+
 	return tr, nil
 }
 
@@ -345,6 +353,7 @@ func (s *stateObject) updateRoot(db Database) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
+
 	s.data.Root = tr.Hash()
 }
 
@@ -364,8 +373,10 @@ func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
+
 	root, nodes := tr.Commit(false)
 	s.data.Root = root
+
 	return nodes, nil
 }
 
@@ -433,6 +444,7 @@ func (s *stateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
+
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
@@ -451,6 +463,7 @@ func (s *stateObject) CodeSize(db Database) int {
 	if s.code != nil {
 		return len(s.code)
 	}
+
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return 0
 	}

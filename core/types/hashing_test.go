@@ -222,6 +222,7 @@ func (d *hashToHumanReadable) Reset() {
 func (d *hashToHumanReadable) Update(i []byte, i2 []byte) error {
 	l := fmt.Sprintf("%x %x\n", i, i2)
 	d.data = append(d.data, []byte(l)...)
+
 	return nil
 }
 

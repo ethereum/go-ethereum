@@ -361,11 +361,14 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
+
 		root, nodes := snapTrie.Commit(false)
+
 		if nodes != nil {
 			tdb.Update(trie.NewWithNodeSet(nodes))
 			tdb.Commit(root, false)
 		}
+
 		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
 			return rawdb.ReadTrieNode(mdb, owner, path, hash, tdb.Scheme())
 		}
@@ -397,6 +400,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		start    = time.Now()
 		internal time.Duration
 	)
+
 	nodeIt.AddResolver(resolver)
 
 	for iter.Next() {
@@ -457,6 +461,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	} else {
 		snapAccountTrieReadCounter.Inc((time.Since(start) - internal).Nanoseconds())
 	}
+
 	logger.Debug("Regenerated state range", "root", trieId.Root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 
@@ -473,6 +478,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 	case abort = <-dl.genAbort:
 	default:
 	}
+
 	if ctx.batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
 		if bytes.Compare(current, dl.genMarker) < 0 {
 			log.Error("Snapshot generator went backwards", "current", fmt.Sprintf("%x", current), "genMarker", fmt.Sprintf("%x", dl.genMarker))
@@ -485,6 +491,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		if err := ctx.batch.Write(); err != nil {
 			return err
 		}
+
 		ctx.batch.Reset()
 
 		dl.lock.Lock()
@@ -499,10 +506,12 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		ctx.reopenIterator(snapAccount)
 		ctx.reopenIterator(snapStorage)
 	}
+
 	if time.Since(ctx.logged) > 8*time.Second {
 		ctx.stats.Log("Generating state snapshot", dl.root, current)
 		ctx.logged = time.Now()
 	}
+
 	return nil
 }
 
@@ -518,14 +527,17 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		if delete {
 			rawdb.DeleteStorageSnapshot(ctx.batch, account, common.BytesToHash(key))
 			snapWipedStorageMeter.Mark(1)
+
 			return nil
 		}
+
 		if write {
 			rawdb.WriteStorageSnapshot(ctx.batch, account, common.BytesToHash(key), val)
 			snapGeneratedStorageMeter.Mark(1)
 		} else {
 			snapRecoveredStorageMeter.Mark(1)
 		}
+
 		ctx.stats.storage += common.StorageSize(1 + 2*common.HashLength + len(val))
 		ctx.stats.slots++
 
@@ -537,9 +549,11 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 	}
 	// Loop for re-generating the missing storage slots.
 	var origin = common.CopyBytes(storeMarker)
+
 	for {
 		id := trie.StorageTrieID(stateRoot, account, storageRoot)
 		exhausted, last, err := dl.generateRange(ctx, id, append(rawdb.SnapshotStoragePrefix, account.Bytes()...), snapStorage, origin, storageCheckRange, onStorage, nil)
+
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
@@ -547,10 +561,12 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		if exhausted {
 			break
 		}
+
 		if origin = increaseKey(last); origin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
 	}
+
 	return nil
 }
 
@@ -589,6 +605,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				if bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
 					dataLen -= 32
 				}
+
 				if acc.Root == types.EmptyRootHash {
 					dataLen -= 32
 				}
@@ -599,6 +616,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
 				snapGeneratedAccountMeter.Mark(1)
 			}
+
 			ctx.stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			ctx.stats.accounts++
 		}
@@ -612,6 +630,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err := dl.checkAndFlush(ctx, marker); err != nil {
 			return err
 		}
+
 		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds()) // let's count flush time as well
 
 		// If the iterated account is the contract, create a further loop to
@@ -637,6 +656,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	if len(accMarker) > 0 {
 		accountRange = 1
 	}
+
 	origin := common.CopyBytes(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
@@ -644,6 +664,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
+
 		origin = increaseKey(last)
 
 		// Last step, cleanup the storages after the last account.
@@ -654,6 +675,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		}
 		accountRange = accountCheckRange
 	}
+
 	return nil
 }
 
@@ -666,9 +688,11 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		accMarker []byte
 		abort     chan *generatorStats
 	)
+
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
 	}
+
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
 	// Initialize the global generator context. The snapshot iterators are
@@ -692,12 +716,14 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			abort = <-dl.genAbort
 		}
 		abort <- stats
+
 		return
 	}
 	// Snapshot fully generated, set the marker to nil.
 	// Note even there is nothing to commit, persist the
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(ctx.batch, nil, stats)
+
 	if err := ctx.batch.Write(); err != nil {
 		log.Error("Failed to flush batch", "err", err)
 
@@ -705,6 +731,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		abort <- stats
 		return
 	}
+
 	ctx.batch.Reset()
 
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,

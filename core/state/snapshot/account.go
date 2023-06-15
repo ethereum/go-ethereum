@@ -45,6 +45,7 @@ func SlimAccount(nonce uint64, balance *big.Int, root common.Hash, codehash []by
 	if root != types.EmptyRootHash {
 		slim.Root = root[:]
 	}
+
 	if !bytes.Equal(codehash, types.EmptyCodeHash[:]) {
 		slim.CodeHash = codehash
 	}

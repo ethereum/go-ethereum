@@ -169,10 +169,12 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		if !conf.SkipStorage {
 			account.Storage = make(map[common.Hash]string)
 			tr, err := obj.getTrie(s.db)
+
 			if err != nil {
 				log.Error("Failed to load storage trie", "err", err)
 				continue
 			}
+
 			storageIt := trie.NewIterator(tr.NodeIterator(nil))
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Value)

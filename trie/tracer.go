@@ -67,6 +67,7 @@ func (t *tracer) onInsert(path []byte) {
 		delete(t.deletes, string(path))
 		return
 	}
+
 	t.inserts[string(path)] = struct{}{}
 }
 
@@ -78,6 +79,7 @@ func (t *tracer) onDelete(path []byte) {
 		delete(t.inserts, string(path))
 		return
 	}
+
 	t.deletes[string(path)] = struct{}{}
 }
 
@@ -95,15 +97,19 @@ func (t *tracer) copy() *tracer {
 		deletes    = make(map[string]struct{})
 		accessList = make(map[string][]byte)
 	)
+
 	for path := range t.inserts {
 		inserts[path] = struct{}{}
 	}
+
 	for path := range t.deletes {
 		deletes[path] = struct{}{}
 	}
+
 	for path, blob := range t.accessList {
 		accessList[path] = common.CopyBytes(blob)
 	}
+
 	return &tracer{
 		inserts:    inserts,
 		deletes:    deletes,
@@ -120,6 +126,7 @@ func (t *tracer) markDeletions(set *NodeSet) {
 		if _, ok := set.accessList[path]; !ok {
 			continue
 		}
+
 		set.markDeleted([]byte(path))
 	}
 }

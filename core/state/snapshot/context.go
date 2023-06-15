@@ -82,6 +82,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
+
 	log.Info(msg, ctx...)
 }
 
@@ -105,6 +106,7 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 	}
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
+
 	return ctx
 }
 
@@ -115,8 +117,10 @@ func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
 		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
 		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
+
 		return
 	}
+
 	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
 	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
@@ -130,17 +134,23 @@ func (ctx *generatorContext) reopenIterator(kind string) {
 	if kind == snapStorage {
 		iter = ctx.storage
 	}
+
 	hasNext := iter.Next()
+
 	if !hasNext {
 		// Iterator exhausted, release forever and create an already exhausted virtual iterator
 		iter.Release()
+
 		if kind == snapAccount {
 			ctx.account = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
 			return
 		}
+
 		ctx.storage = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+
 		return
 	}
+
 	next := iter.Key()
 	iter.Release()
 	ctx.openIterator(kind, next[1:])
@@ -157,6 +167,7 @@ func (ctx *generatorContext) iterator(kind string) *holdableIterator {
 	if kind == snapAccount {
 		return ctx.account
 	}
+
 	return ctx.storage
 }
 
@@ -170,6 +181,7 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 		start = time.Now()
 		iter  = ctx.storage
 	)
+
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Compare(key[1:1+common.HashLength], account.Bytes()) >= 0 {
@@ -178,12 +190,15 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 		}
 		count++
 		ctx.batch.Delete(key)
+
 		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
 		}
 	}
+
 	ctx.stats.dangling += count
+
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 }
 
@@ -197,18 +212,22 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 		start = time.Now()
 		iter  = ctx.storage
 	)
+
 	for iter.Next() {
 		key := iter.Key()
 		cmp := bytes.Compare(key[1:1+common.HashLength], account.Bytes())
+
 		if cmp < 0 {
 			return errors.New("invalid iterator position")
 		}
+
 		if cmp > 0 {
 			iter.Hold()
 			break
 		}
 		count++
 		ctx.batch.Delete(key)
+
 		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
@@ -216,6 +235,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	}
 	snapWipedStorageMeter.Mark(count)
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
+
 	return nil
 }
 
@@ -227,14 +247,17 @@ func (ctx *generatorContext) removeStorageLeft() {
 		start = time.Now()
 		iter  = ctx.storage
 	)
+
 	for iter.Next() {
 		count++
 		ctx.batch.Delete(iter.Key())
+
 		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
 		}
 	}
+
 	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())

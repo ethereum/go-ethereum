@@ -42,6 +42,7 @@ func (it *holdableIterator) Hold() {
 	if it.it.Key() == nil {
 		return // nothing to hold
 	}
+
 	it.key = common.CopyBytes(it.it.Key())
 	it.val = common.CopyBytes(it.it.Value())
 	it.atHeld = false
@@ -57,9 +58,11 @@ func (it *holdableIterator) Next() bool {
 		it.key = nil
 		it.val = nil
 	}
+
 	if it.key != nil {
 		return true // shifted to locally held value
 	}
+
 	return it.it.Next()
 }
 
@@ -83,6 +86,7 @@ func (it *holdableIterator) Key() []byte {
 	if it.key != nil {
 		return it.key
 	}
+
 	return it.it.Key()
 }
 
@@ -93,5 +97,6 @@ func (it *holdableIterator) Value() []byte {
 	if it.val != nil {
 		return it.val
 	}
+
 	return it.it.Value()
 }

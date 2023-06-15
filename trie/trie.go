@@ -83,6 +83,7 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 		reader: reader,
 		tracer: newTracer(),
 	}
+
 	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
 		if err != nil {
@@ -139,6 +140,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 			// key not found in trie
 			return nil, n, false, nil
 		}
+
 		value, newnode, didResolve, err = t.get(n.Val, key, pos+len(n.Key))
 		if err == nil && didResolve {
 			n = n.copy()
@@ -157,6 +159,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		if err != nil {
 			return nil, n, true, err
 		}
+
 		value, newnode, _, err := t.get(child, key, pos)
 		return value, newnode, true, err
 	default:
@@ -171,6 +174,7 @@ func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.GetNode", "err", err)
 	}
+
 	return item, resolved
 }
 
@@ -190,6 +194,7 @@ func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
 	if item == nil {
 		return nil, resolved, nil
 	}
+
 	return item, resolved, nil
 }
 
@@ -212,6 +217,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
+
 		blob, err := t.reader.nodeBlob(path, common.BytesToHash(hash))
 		return blob, origNode, 1, err
 	}
@@ -226,6 +232,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 			// Path branches off from short node
 			return nil, n, 0, nil
 		}
+
 		item, newnode, resolved, err = t.getNode(n.Val, path, pos+len(n.Key))
 		if err == nil && resolved > 0 {
 			n = n.copy()
@@ -246,6 +253,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		if err != nil {
 			return nil, n, 1, err
 		}
+
 		item, newnode, resolved, err := t.getNode(child, path, pos)
 		return item, newnode, resolved + 1, err
 
@@ -553,7 +561,9 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	t.tracer.onRead(prefix, blob)
+
 	return mustDecodeNode(n, blob), nil
 }
 
@@ -595,7 +605,9 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 		t.root = hashedNode
 		return rootHash, nil
 	}
+
 	t.root = newCommitter(nodes, collectLeaf).Commit(t.root)
+
 	return rootHash, nodes
 }
 
@@ -608,9 +620,11 @@ func (t *Trie) hashRoot() (node, node) {
 	h := newHasher(t.unhashed >= 100)
 	defer func() {
 		returnHasherToPool(h)
+
 		t.unhashed = 0
 	}()
 	hashed, cached := h.hash(t.root, true)
+
 	return hashed, cached
 }
 

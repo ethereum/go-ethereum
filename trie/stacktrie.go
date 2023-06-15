@@ -144,9 +144,11 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 		Val      []byte
 		Key      []byte
 	}
+
 	if err := gob.NewDecoder(r).Decode(&dec); err != nil {
 		return err
 	}
+
 	st.owner = dec.Owner
 	st.nodeType = dec.NodeType
 	st.val = dec.Val
@@ -160,6 +162,7 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 			continue
 		}
 		var child StackTrie
+
 		if err := child.unmarshalBinary(r); err != nil {
 			return err
 		}
@@ -208,6 +211,7 @@ func (st *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		panic("deletion not supported")
 	}
+
 	st.insert(k[:len(k)-1], value, nil)
 	return nil
 }
@@ -426,6 +430,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 				nodes[i] = nilValueNode
 				continue
 			}
+
 			child.hashRec(hasher, append(path, byte(i)))
 			if len(child.val) < 32 {
 				nodes[i] = rawNode(child.val)

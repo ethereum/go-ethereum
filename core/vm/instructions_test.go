@@ -250,6 +250,7 @@ func TestWriteExpectedValues(t *testing.T) {
 			pc          = uint64(0)
 			interpreter = env.interpreter
 		)
+
 		result := make([]TwoOperandTestcase, len(args))
 
 		for i, param := range args {

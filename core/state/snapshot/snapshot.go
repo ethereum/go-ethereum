@@ -211,6 +211,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *trie.Database, root 
 	}
 	if err != nil {
 		log.Warn("Failed to load snapshot", "err", err)
+
 		if !config.NoBuild {
 			snap.Rebuild(root)
 			return snap, nil

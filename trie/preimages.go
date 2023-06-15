@@ -51,6 +51,7 @@ func (store *preimageStore) insertPreimage(preimages map[common.Hash][]byte) {
 		if _, ok := store.preimages[hash]; ok {
 			continue
 		}
+
 		store.preimages[hash] = preimage
 		store.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 	}
@@ -66,6 +67,7 @@ func (store *preimageStore) preimage(hash common.Hash) []byte {
 	if preimage != nil {
 		return preimage
 	}
+
 	return rawdb.ReadPreimage(store.disk, hash)
 }
 
@@ -77,12 +79,16 @@ func (store *preimageStore) commit(force bool) error {
 	if store.preimagesSize <= 4*1024*1024 && !force {
 		return nil
 	}
+
 	batch := store.disk.NewBatch()
 	rawdb.WritePreimages(batch, store.preimages)
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
+
 	store.preimages, store.preimagesSize = make(map[common.Hash][]byte), 0
+
 	return nil
 }
 

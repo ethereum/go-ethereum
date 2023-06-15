@@ -57,6 +57,7 @@ func TestNull(t *testing.T) {
 	key := make([]byte, 32)
 	value := []byte("test")
 	trie.MustUpdate(key, value)
+
 	if !bytes.Equal(trie.MustGet(key), value) {
 		t.Fatal("wrong value")
 	}
@@ -94,21 +95,25 @@ func testMissingNode(t *testing.T, memonly bool) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	err = trie.Delete([]byte("123456"))
 	if err != nil {
@@ -127,21 +132,25 @@ func testMissingNode(t *testing.T, memonly bool) {
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	err = trie.Update([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+
 	trie, _ = New(TrieID(root), triedb)
 	err = trie.Delete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
@@ -191,6 +200,7 @@ func TestGet(t *testing.T) {
 		if i == 1 {
 			return
 		}
+
 		root, nodes := trie.Commit(false)
 		db.Update(NewWithNodeSet(nodes))
 		trie, _ = New(TrieID(root), db)
@@ -263,6 +273,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
+
 	exp, nodes := trie.Commit(false)
 	triedb.Update(NewWithNodeSet(nodes))
 
@@ -276,6 +287,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
+
 	hash, nodes := trie2.Commit(false)
 	if hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
@@ -285,7 +297,9 @@ func TestReplication(t *testing.T) {
 	if nodes != nil {
 		triedb.Update(NewWithNodeSet(nodes))
 	}
+
 	trie2, err = New(TrieID(hash), triedb)
+
 	if err != nil {
 		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
@@ -411,7 +425,9 @@ func verifyAccessList(oldTrie *Trie, newTrie *Trie, set *NodeSet) error {
 		if !ok || n.isDeleted() {
 			return errors.New("expect new node")
 		}
+
 		_, ok = set.accessList[path]
+
 		if ok {
 			return errors.New("unexpected origin value")
 		}
@@ -422,10 +438,13 @@ func verifyAccessList(oldTrie *Trie, newTrie *Trie, set *NodeSet) error {
 		if !ok || !n.isDeleted() {
 			return errors.New("expect deleted node")
 		}
+
 		v, ok := set.accessList[path]
+
 		if !ok {
 			return errors.New("expect origin value")
 		}
+
 		if !bytes.Equal(v, blob) {
 			return errors.New("invalid origin value")
 		}
@@ -436,14 +455,18 @@ func verifyAccessList(oldTrie *Trie, newTrie *Trie, set *NodeSet) error {
 		if !ok || n.isDeleted() {
 			return errors.New("expect updated node")
 		}
+
 		v, ok := set.accessList[path]
+
 		if !ok {
 			return errors.New("expect origin value")
 		}
+
 		if !bytes.Equal(v, blob) {
 			return errors.New("invalid origin value")
 		}
 	}
+
 	return nil
 }
 
@@ -476,12 +499,16 @@ func runRandTest(rt randTest) bool {
 			if hash == types.EmptyRootHash {
 				continue
 			}
+
 			proofDb := rawdb.NewMemoryDatabase()
 			err := tr.Prove(step.key, 0, proofDb)
+
 			if err != nil {
 				rt[i].err = fmt.Errorf("failed for proving key %#x, %v", step.key, err)
 			}
+
 			_, err = VerifyProof(hash, step.key, proofDb)
+
 			if err != nil {
 				rt[i].err = fmt.Errorf("failed for verifying key %#x, %v", step.key, err)
 			}
@@ -492,11 +519,13 @@ func runRandTest(rt randTest) bool {
 			if nodes != nil {
 				triedb.Update(NewWithNodeSet(nodes))
 			}
+
 			newtr, err := New(TrieID(root), triedb)
 			if err != nil {
 				rt[i].err = err
 				return false
 			}
+
 			if nodes != nil {
 				if err := verifyAccessList(origTrie, newtr, nodes); err != nil {
 					rt[i].err = err
@@ -521,45 +550,56 @@ func runRandTest(rt randTest) bool {
 				origSeen = make(map[string]struct{})
 				curSeen  = make(map[string]struct{})
 			)
+
 			for origIter.Next(true) {
 				if origIter.Leaf() {
 					continue
 				}
+
 				origSeen[string(origIter.Path())] = struct{}{}
 			}
+
 			for curIter.Next(true) {
 				if curIter.Leaf() {
 					continue
 				}
+
 				curSeen[string(curIter.Path())] = struct{}{}
 			}
+
 			var (
 				insertExp = make(map[string]struct{})
 				deleteExp = make(map[string]struct{})
 			)
+
 			for path := range curSeen {
 				_, present := origSeen[path]
 				if !present {
 					insertExp[path] = struct{}{}
 				}
 			}
+
 			for path := range origSeen {
 				_, present := curSeen[path]
 				if !present {
 					deleteExp[path] = struct{}{}
 				}
 			}
+
 			if len(insertExp) != len(tr.tracer.inserts) {
 				rt[i].err = fmt.Errorf("insert set mismatch")
 			}
+
 			if len(deleteExp) != len(tr.tracer.deletes) {
 				rt[i].err = fmt.Errorf("delete set mismatch")
 			}
+
 			for insert := range tr.tracer.inserts {
 				if _, present := insertExp[insert]; !present {
 					rt[i].err = fmt.Errorf("missing inserted node")
 				}
 			}
+
 			for del := range tr.tracer.deletes {
 				if _, present := deleteExp[del]; !present {
 					rt[i].err = fmt.Errorf("missing deleted node")
@@ -691,19 +731,24 @@ func TestTinyTrie(t *testing.T) {
 	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
 	}
+
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
 	if exp, root := common.HexToHash("ec63b967e98a5720e7f720482151963982890d82c9093c0d486b7eb8883a66b1"), trie.Hash(); exp != root {
 		t.Errorf("2: got %x, exp %x", root, exp)
 	}
+
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
 	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
+
 	checktr := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	it := NewIterator(trie.NodeIterator(nil))
+
 	for it.Next() {
 		checktr.MustUpdate(it.Key, it.Value)
 	}
+
 	if troot, itroot := trie.Hash(), checktr.Hash(); troot != itroot {
 		t.Fatalf("hash mismatch in opItercheckhash, trie: %x, check: %x", troot, itroot)
 	}
@@ -721,10 +766,13 @@ func TestCommitAfterHash(t *testing.T) {
 	trie.Commit(false)
 	root := trie.Hash()
 	exp := common.HexToHash("72f9d3f3fe1e1dd7b8936442e7642aef76371472d94319900790053c493f3fe6")
+
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
+
 	root, _ = trie.Commit(false)
+
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -1019,7 +1067,9 @@ func BenchmarkHashFixedSize(b *testing.B) {
 
 func benchmarkHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
 	b.ReportAllocs()
+
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -1070,7 +1120,9 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 
 func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
 	b.ReportAllocs()
+
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -1122,8 +1174,10 @@ func BenchmarkDerefRootFixedSize(b *testing.B) {
 
 func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
 	b.ReportAllocs()
+
 	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(triedb)
+
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}

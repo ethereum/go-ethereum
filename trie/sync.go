@@ -188,10 +188,13 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	if root == types.EmptyRootHash {
 		return
 	}
+
 	if s.membatch.hasNode(path) {
 		return
 	}
+
 	owner, inner := ResolvePath(path)
+
 	if rawdb.HasTrieNode(s.database, owner, inner, root, s.scheme) {
 		return
 	}
@@ -210,6 +213,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 		ancestor.deps++
 		req.parent = ancestor
 	}
+
 	s.scheduleNodeRequest(req)
 }
 
@@ -246,6 +250,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
+
 	s.scheduleCodeRequest(req)
 }
 
@@ -280,10 +285,12 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 				log.Error("Missing node request", "path", item)
 				continue // System very wrong, shouldn't happen
 			}
+
 			nodePaths = append(nodePaths, item)
 			nodeHashes = append(nodeHashes, req.hash)
 		}
 	}
+
 	return nodePaths, nodeHashes, codeHashes
 }
 
@@ -299,10 +306,13 @@ func (s *Sync) ProcessCode(result CodeSyncResult) error {
 	if req == nil {
 		return ErrNotRequested
 	}
+
 	if req.data != nil {
 		return ErrAlreadyProcessed
 	}
+
 	req.data = result.Data
+
 	return s.commitCodeRequest(req)
 }
 
@@ -318,6 +328,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 	if req == nil {
 		return ErrNotRequested
 	}
+
 	if req.data != nil {
 		return ErrAlreadyProcessed
 	}
@@ -326,6 +337,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 	if err != nil {
 		return err
 	}
+
 	req.data = result.Data
 
 	// Create and schedule a request for all the children nodes
@@ -333,6 +345,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 	if err != nil {
 		return err
 	}
+
 	if len(requests) == 0 && req.deps == 0 {
 		s.commitNodeRequest(req)
 	} else {
@@ -352,6 +365,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 		owner, inner := ResolvePath([]byte(path))
 		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
+
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
 	}
@@ -394,6 +408,7 @@ func (s *Sync) scheduleCodeRequest(req *codeRequest) {
 		old.parents = append(old.parents, req.parents...)
 		return
 	}
+
 	s.codeReqs[req.hash] = req
 
 	// Schedule the request for future retrieval. This queue is shared
@@ -413,6 +428,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		path []byte
 		node node
 	}
+
 	var children []childNode
 
 	switch node := (object).(type) {
@@ -421,6 +437,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		if hasTerm(key) {
 			key = key[:len(key)-1]
 		}
+
 		children = []childNode{{
 			node: node.Val,
 			path: append(append([]byte(nil), req.path...), key...),
@@ -453,6 +470,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					paths = append(paths, hexToKeybytes(child.path[:2*common.HashLength]))
 					paths = append(paths, hexToKeybytes(child.path[2*common.HashLength:]))
 				}
+
 				if err := req.callback(paths, child.path, node, req.hash, req.path); err != nil {
 					return nil, err
 				}
@@ -466,6 +484,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			}
 			// Check the presence of children concurrently
 			pending.Add(1)
+
 			go func(child childNode) {
 				defer pending.Done()
 
@@ -475,6 +494,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					chash        = common.BytesToHash(node)
 					owner, inner = ResolvePath(child.path)
 				)
+
 				if rawdb.HasTrieNode(s.database, owner, inner, chash, s.scheme) {
 					return
 				}
@@ -488,9 +508,11 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			}(child)
 		}
 	}
+
 	pending.Wait()
 
 	requests := make([]*nodeRequest, 0, len(children))
+
 	for done := false; !done; {
 		select {
 		case miss := <-missing:
@@ -525,6 +547,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -558,5 +581,6 @@ func ResolvePath(path []byte) (common.Hash, []byte) {
 		owner = common.BytesToHash(hexToKeybytes(path[:2*common.HashLength]))
 		path = path[2*common.HashLength:]
 	}
+
 	return owner, path
 }

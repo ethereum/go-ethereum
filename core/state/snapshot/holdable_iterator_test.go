@@ -33,6 +33,7 @@ func TestIteratorHold(t *testing.T) {
 		order   = []string{"k1", "k2", "k3"}
 		db      = rawdb.NewMemoryDatabase()
 	)
+
 	for key, val := range content {
 		if err := db.Put([]byte(key), []byte(val)); err != nil {
 			t.Fatalf("failed to insert item %s:%s into database: %v", key, val, err)
@@ -49,9 +50,11 @@ func TestIteratorHold(t *testing.T) {
 			t.Errorf("more items than expected: checking idx=%d (key %q), expecting len=%d", idx, it.Key(), len(order))
 			break
 		}
+
 		if !bytes.Equal(it.Key(), []byte(order[idx])) {
 			t.Errorf("item %d: key mismatch: have %s, want %s", idx, string(it.Key()), order[idx])
 		}
+
 		if !bytes.Equal(it.Value(), []byte(content[order[idx]])) {
 			t.Errorf("item %d: value mismatch: have %s, want %s", idx, string(it.Value()), content[order[idx]])
 		}
@@ -61,9 +64,11 @@ func TestIteratorHold(t *testing.T) {
 
 		// Shift iterator to the discarded element
 		it.Next()
+
 		if !bytes.Equal(it.Key(), []byte(order[idx])) {
 			t.Errorf("item %d: key mismatch: have %s, want %s", idx, string(it.Key()), order[idx])
 		}
+
 		if !bytes.Equal(it.Value(), []byte(content[order[idx]])) {
 			t.Errorf("item %d: value mismatch: have %s, want %s", idx, string(it.Value()), content[order[idx]])
 		}
@@ -71,20 +76,25 @@ func TestIteratorHold(t *testing.T) {
 		// Discard/Next combo should work always
 		it.Hold()
 		it.Next()
+
 		if !bytes.Equal(it.Key(), []byte(order[idx])) {
 			t.Errorf("item %d: key mismatch: have %s, want %s", idx, string(it.Key()), order[idx])
 		}
+
 		if !bytes.Equal(it.Value(), []byte(content[order[idx]])) {
 			t.Errorf("item %d: value mismatch: have %s, want %s", idx, string(it.Value()), content[order[idx]])
 		}
 		idx++
 	}
+
 	if err := it.Error(); err != nil {
 		t.Errorf("iteration failed: %v", err)
 	}
+
 	if idx != len(order) {
 		t.Errorf("iteration terminated prematurely: have %d, want %d", idx, len(order))
 	}
+
 	db.Close()
 }
 
@@ -110,13 +120,16 @@ func TestReopenIterator(t *testing.T) {
 		}
 		db = rawdb.NewMemoryDatabase()
 	)
+
 	for key, val := range content {
 		rawdb.WriteAccountSnapshot(db, key, []byte(val))
 	}
+
 	checkVal := func(it *holdableIterator, index int) {
 		if !bytes.Equal(it.Key(), append(rawdb.SnapshotAccountPrefix, order[index].Bytes()...)) {
 			t.Fatalf("Unexpected data entry key, want %v got %v", order[index], it.Key())
 		}
+
 		if !bytes.Equal(it.Value(), []byte(content[order[index]])) {
 			t.Fatalf("Unexpected data entry key, want %v got %v", []byte(content[order[index]]), it.Value())
 		}
@@ -125,11 +138,13 @@ func TestReopenIterator(t *testing.T) {
 	ctx, idx := newGeneratorContext(&generatorStats{}, db, nil, nil), -1
 
 	idx++
+
 	ctx.account.Next()
 	checkVal(ctx.account, idx)
 
 	ctx.reopenIterator(snapAccount)
 	idx++
+
 	ctx.account.Next()
 	checkVal(ctx.account, idx)
 
@@ -137,6 +152,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.reopenIterator(snapAccount)
 	ctx.reopenIterator(snapAccount)
 	idx++
+
 	ctx.account.Next()
 	checkVal(ctx.account, idx)
 
@@ -145,6 +161,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.account.Hold()
 	ctx.reopenIterator(snapAccount)
 	idx++
+
 	ctx.account.Next()
 	checkVal(ctx.account, idx)
 
@@ -154,6 +171,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.reopenIterator(snapAccount)
 	ctx.reopenIterator(snapAccount)
 	idx++
+
 	ctx.account.Next()
 	checkVal(ctx.account, idx)
 
@@ -161,6 +179,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.account.Next() // the end
 	ctx.reopenIterator(snapAccount)
 	ctx.account.Next()
+
 	if ctx.account.Key() != nil {
 		t.Fatal("Unexpected iterated entry")
 	}
