@@ -83,6 +83,7 @@ func main() {
 		if err != nil {
 			die(err)
 		}
+
 		fmt.Printf("%#x\n", data)
 		return
 	} else {

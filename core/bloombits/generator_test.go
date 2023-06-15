@@ -79,7 +79,7 @@ func BenchmarkGenerator(b *testing.B) {
 		}
 	})
 	for i := 0; i < types.BloomBitLength; i++ {
-		crand.Read(input[i][:])
+		_, _ = crand.Read(input[i][:])
 	}
 	b.Run("random", func(b *testing.B) {
 		b.ReportAllocs()

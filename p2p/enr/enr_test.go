@@ -171,6 +171,7 @@ func TestDirty(t *testing.T) {
 
 func TestSize(t *testing.T) {
 	t.Parallel()
+
 	var r Record
 
 	// Empty record size is 3 bytes.
@@ -185,12 +186,14 @@ func TestSize(t *testing.T) {
 
 	// Now add a signature.
 	nodeid := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	signTest(nodeid, &r)
+	_ = signTest(nodeid, &r)
 	assert.Equal(t, uint64(45), r.Size())
 	enc, _ := rlp.EncodeToBytes(&r)
+
 	if r.Size() != uint64(len(enc)) {
 		t.Error("Size() not equal encoded length", len(enc))
 	}
+
 	if r.Size() != computeSize(&r) {
 		t.Error("Size() not equal computed size", computeSize(&r))
 	}

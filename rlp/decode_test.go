@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -1251,10 +1250,13 @@ func BenchmarkDecodeU256Ints(b *testing.B) {
 	for i := range ints {
 		ints[i], _ = uint256.FromBig(math.BigPow(2, int64(i)))
 	}
+
 	enc, err := EncodeToBytes(ints)
+
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
 	b.ResetTimer()

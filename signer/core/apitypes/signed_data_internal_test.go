@@ -123,14 +123,18 @@ func TestParseAddress(t *testing.T) {
 			if err == nil {
 				t.Errorf("test %d: expected error, got no error (result %x)", i, val)
 			}
+
 			continue
 		}
+
 		if err != nil {
 			t.Errorf("test %d: expected no error, got %v", i, err)
 		}
+
 		if have, want := len(val), 32; have != want {
 			t.Errorf("test %d: have len %d, want %d", i, have, want)
 		}
+
 		if !bytes.Equal(val, test.Output) {
 			t.Errorf("test %d: want %x, have %x", i, test.Output, val)
 		}
@@ -205,8 +209,10 @@ func TestConvertStringDataToSlice(t *testing.T) {
 	t.Parallel()
 
 	slice := []string{"a", "b", "c"}
+
 	var it interface{} = slice
 	_, err := convertDataToSlice(it)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,8 +226,10 @@ func TestConvertUint256DataToSlice(t *testing.T) {
 		math.NewHexOrDecimal256(2),
 		math.NewHexOrDecimal256(3),
 	}
+
 	var it interface{} = slice
 	_, err := convertDataToSlice(it)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,8 +243,10 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 		common.HexToAddress("0x0000000000000000000000000000000000000002"),
 		common.HexToAddress("0x0000000000000000000000000000000000000003"),
 	}
+
 	var it interface{} = slice
 	_, err := convertDataToSlice(it)
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,6 +29,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gofrs/flock"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -336,7 +338,7 @@ func (n *Node) openDataDir() error {
 func (n *Node) closeDataDir() {
 	// Release instance directory lock.
 	if n.dirLock != nil && n.dirLock.Locked() {
-		n.dirLock.Unlock()
+		_ = n.dirLock.Unlock()
 		n.dirLock = nil
 	}
 }

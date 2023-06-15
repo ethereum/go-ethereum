@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/kylelemons/godebug/diff"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"

@@ -51,6 +51,7 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	case rules.IsHomestead:
 		return newHomesteadInstructionSet(), nil
 	}
+
 	return newFrontierInstructionSet(), nil
 }
 

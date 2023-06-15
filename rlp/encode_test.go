@@ -26,7 +26,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -498,11 +497,11 @@ func TestEncodeToReaderReturnToPool(t *testing.T) {
 		go func() {
 			for i := 0; i < 1000; i++ {
 				_, r, _ := EncodeToReader("foo")
-				io.ReadAll(r)
-				r.Read(buf)
-				r.Read(buf)
-				r.Read(buf)
-				r.Read(buf)
+				_, _ = io.ReadAll(r)
+				_, _ = r.Read(buf)
+				_, _ = r.Read(buf)
+				_, _ = r.Read(buf)
+				_, _ = r.Read(buf)
 			}
 			wg.Done()
 		}()
@@ -548,12 +547,15 @@ func BenchmarkEncodeU256Ints(b *testing.B) {
 	for i := range ints {
 		ints[i], _ = uint256.FromBig(math.BigPow(2, int64(i)))
 	}
+
 	out := bytes.NewBuffer(make([]byte, 0, 4096))
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		out.Reset()
+
 		if err := Encode(out, ints); err != nil {
 			b.Fatal(err)
 		}

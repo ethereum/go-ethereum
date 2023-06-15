@@ -34,6 +34,7 @@ type ethPeer struct {
 }
 
 // info gathers and returns some `eth` protocol metadata known about a peer.
+// nolint:typecheck
 func (p *ethPeer) info() *ethPeerInfo {
 	return &ethPeerInfo{
 		Version: p.Version(),

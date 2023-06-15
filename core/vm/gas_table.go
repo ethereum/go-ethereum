@@ -307,7 +307,9 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if err != nil {
 		return 0, err
 	}
+
 	size, overflow := stack.Back(2).Uint64WithOverflow()
+
 	if overflow || size > params.MaxInitCodeSize {
 		return 0, ErrGasUintOverflow
 	}
@@ -316,6 +318,7 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
+
 	return gas, nil
 }
 func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -323,7 +326,9 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if err != nil {
 		return 0, err
 	}
+
 	size, overflow := stack.Back(2).Uint64WithOverflow()
+
 	if overflow || size > params.MaxInitCodeSize {
 		return 0, ErrGasUintOverflow
 	}
@@ -332,6 +337,7 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
+
 	return gas, nil
 }
 

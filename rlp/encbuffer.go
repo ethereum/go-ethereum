@@ -179,8 +179,11 @@ func (w *encBuffer) writeUint256(z *uint256.Int) {
 		w.writeUint64(z.Uint64())
 		return
 	}
+
 	nBytes := byte((bitlen + 7) / 8)
+
 	var b [33]byte
+
 	binary.BigEndian.PutUint64(b[1:9], z[3])
 	binary.BigEndian.PutUint64(b[9:17], z[2])
 	binary.BigEndian.PutUint64(b[17:25], z[1])

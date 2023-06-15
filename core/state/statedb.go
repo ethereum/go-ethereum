@@ -833,6 +833,7 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	if prev == value {
 		return
 	}
+
 	s.journal.append(transientStorageChange{
 		account:  &addr,
 		key:      key,
@@ -1044,10 +1045,13 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if so == nil {
 		return nil
 	}
+
 	tr, err := so.getTrie(s.db)
+
 	if err != nil {
 		return err
 	}
+
 	it := trie.NewIterator(tr.NodeIterator(nil))
 
 	for it.Next() {
@@ -1337,6 +1341,7 @@ func (s *StateDB) clearJournalAndRefund() {
 		s.journal = newJournal()
 		s.refund = 0
 	}
+
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
 }
 
@@ -1375,6 +1380,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
 				}
+
 				updates, deleted := set.Size()
 				storageTrieNodesUpdated += updates
 				storageTrieNodesDeleted += deleted
@@ -1400,12 +1406,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
+
 	root, set := s.trie.Commit(true)
 	// Merge the dirty nodes of account trie into global set
 	if set != nil {
 		if err := nodes.Merge(set); err != nil {
 			return common.Hash{}, err
 		}
+
 		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 	}
 	if metrics.EnabledExpensive {
@@ -1438,31 +1446,42 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 			}
 		}
+
 		if metrics.EnabledExpensive {
 			s.SnapshotCommits += time.Since(start)
 		}
+
 		s.snap, s.snapAccounts, s.snapStorage = nil, nil, nil
 	}
+
 	if len(s.stateObjectsDestruct) > 0 {
 		s.stateObjectsDestruct = make(map[common.Address]struct{})
 	}
+
 	if root == (common.Hash{}) {
 		root = types.EmptyRootHash
 	}
+
 	origin := s.originalRoot
+
 	if origin == (common.Hash{}) {
 		origin = types.EmptyRootHash
 	}
+
 	if root != origin {
 		start := time.Now()
+
 		if err := s.db.TrieDB().Update(nodes); err != nil {
 			return common.Hash{}, err
 		}
+
 		s.originalRoot = root
+
 		if metrics.EnabledExpensive {
 			s.TrieDBCommits += time.Since(start)
 		}
 	}
+
 	return root, nil
 }
 
@@ -1486,15 +1505,19 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		s.accessList = al
 
 		al.AddAddress(sender)
+
 		if dst != nil {
-			al.AddAddress(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
+			al.AddAddress(*dst)
 		}
+
 		for _, addr := range precompiles {
 			al.AddAddress(addr)
 		}
+
 		for _, el := range list {
 			al.AddAddress(el.Address)
+
 			for _, key := range el.StorageKeys {
 				al.AddSlot(el.Address, key)
 			}
@@ -1546,6 +1569,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
 func (s *StateDB) convertAccountSet(set map[common.Address]struct{}) map[common.Hash]struct{} {
 	ret := make(map[common.Hash]struct{})
+
 	for addr := range set {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -1554,5 +1578,6 @@ func (s *StateDB) convertAccountSet(set map[common.Address]struct{}) map[common.
 			ret[obj.addrHash] = struct{}{}
 		}
 	}
+
 	return ret
 }

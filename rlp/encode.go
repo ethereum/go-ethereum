@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
@@ -219,13 +218,16 @@ func writeU256IntPtr(val reflect.Value, w *encBuffer) error {
 		w.str = append(w.str, 0x80)
 		return nil
 	}
+
 	w.writeUint256(ptr)
+
 	return nil
 }
 
 func writeU256IntNoPtr(val reflect.Value, w *encBuffer) error {
 	i := val.Interface().(uint256.Int)
 	w.writeUint256(&i)
+
 	return nil
 }
 

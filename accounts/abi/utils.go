@@ -32,9 +32,11 @@ import "fmt"
 func ResolveNameConflict(rawName string, used func(string) bool) string {
 	name := rawName
 	ok := used(name)
+
 	for idx := 0; ok; idx++ {
 		name = fmt.Sprintf("%s%d", rawName, idx)
 		ok = used(name)
 	}
+
 	return name
 }

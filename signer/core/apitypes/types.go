@@ -251,11 +251,15 @@ func TypedDataAndHash(typedData TypedData) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+
 	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+
 	if err != nil {
 		return nil, "", err
 	}
+
 	rawData := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
+
 	return crypto.Keccak256([]byte(rawData)), rawData, nil
 }
 
@@ -412,6 +416,7 @@ func parseBytes(encType interface{}) ([]byte, bool) {
 	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
 		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
 		reflect.Copy(v, val)
+
 		return v.Bytes(), true
 	}
 
@@ -490,6 +495,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 	switch encType {
 	case "address":
 		retval := make([]byte, 32)
+
 		switch val := encValue.(type) {
 		case string:
 			if common.IsHexAddress(val) {
@@ -505,6 +511,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 			copy(retval[12:], val[:])
 			return retval, nil
 		}
+
 		return nil, dataMismatchError(encType, encValue)
 	case "bool":
 		boolValue, ok := encValue.(bool)
@@ -564,7 +571,9 @@ func dataMismatchError(encType string, encValue interface{}) error {
 
 func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
 	var outEncValue []interface{}
+
 	rv := reflect.ValueOf(encValue)
+
 	if rv.Kind() == reflect.Slice {
 		for i := 0; i < rv.Len(); i++ {
 			outEncValue = append(outEncValue, rv.Index(i).Interface())
@@ -572,6 +581,7 @@ func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
 	} else {
 		return outEncValue, fmt.Errorf("provided data '%v' is not slice", encValue)
 	}
+
 	return outEncValue, nil
 }
 
@@ -720,6 +730,7 @@ func (t Types) validate() error {
 			if typeKey == typeObj.Type {
 				return fmt.Errorf("type %q cannot reference itself", typeObj.Type)
 			}
+
 			if isPrimitiveTypeValid(typeObj.Type) {
 				continue
 			}
@@ -727,6 +738,7 @@ func (t Types) validate() error {
 			if _, exist := t[typeObj.typeName()]; !exist {
 				return fmt.Errorf("reference type %q is undefined", typeObj.Type)
 			}
+
 			if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
 				return fmt.Errorf("unknown reference type %q", typeObj.Type)
 			}
@@ -763,6 +775,7 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		if primitiveType == fmt.Sprintf("int%d", n) || primitiveType == fmt.Sprintf("int%d[]", n) {
 			return true
 		}
+
 		if primitiveType == fmt.Sprintf("uint%d", n) || primitiveType == fmt.Sprintf("uint%d[]", n) {
 			return true
 		}

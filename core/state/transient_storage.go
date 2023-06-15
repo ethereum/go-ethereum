@@ -33,6 +33,7 @@ func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
 	if _, ok := t[addr]; !ok {
 		t[addr] = make(Storage)
 	}
+
 	t[addr][key] = value
 }
 
@@ -42,6 +43,7 @@ func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash 
 	if !ok {
 		return common.Hash{}
 	}
+
 	return val[key]
 }
 
@@ -51,5 +53,6 @@ func (t transientStorage) Copy() transientStorage {
 	for key, value := range t {
 		storage[key] = value.Copy()
 	}
+
 	return storage
 }

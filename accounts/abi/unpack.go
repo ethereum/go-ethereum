@@ -34,6 +34,7 @@ var (
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
+// nolint:gocognit
 func ReadInteger(typ Type, b []byte) (interface{}, error) {
 	ret := new(big.Int).SetBytes(b)
 
@@ -44,21 +45,25 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 			if !isu64 || u64 > math.MaxUint8 {
 				return nil, errBadUint8
 			}
+
 			return byte(u64), nil
 		case 16:
 			if !isu64 || u64 > math.MaxUint16 {
 				return nil, errBadUint16
 			}
+
 			return uint16(u64), nil
 		case 32:
 			if !isu64 || u64 > math.MaxUint32 {
 				return nil, errBadUint32
 			}
+
 			return uint32(u64), nil
 		case 64:
 			if !isu64 {
 				return nil, errBadUint64
 			}
+
 			return u64, nil
 		default:
 			// the only case left for unsigned integer is uint256.
@@ -74,27 +79,32 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 		ret.Add(ret, common.Big1)
 		ret.Neg(ret)
 	}
+
 	i64, isi64 := ret.Int64(), ret.IsInt64()
 	switch typ.Size {
 	case 8:
 		if !isi64 || i64 < math.MinInt8 || i64 > math.MaxInt8 {
 			return nil, errBadInt8
 		}
+
 		return int8(i64), nil
 	case 16:
 		if !isi64 || i64 < math.MinInt16 || i64 > math.MaxInt16 {
 			return nil, errBadInt16
 		}
+
 		return int16(i64), nil
 	case 32:
 		if !isi64 || i64 < math.MinInt32 || i64 > math.MaxInt32 {
 			return nil, errBadInt32
 		}
+
 		return int32(i64), nil
 	case 64:
 		if !isi64 {
 			return nil, errBadInt64
 		}
+
 		return i64, nil
 	default:
 		// the only case left for integer is int256

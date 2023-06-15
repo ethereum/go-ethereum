@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -553,7 +555,7 @@ func TestUDPv5_lookupDistances(t *testing.T) {
 	t.Run("target distance of 256", func(t *testing.T) {
 		t.Parallel()
 		node := nodeAtDistance(lnID, 256, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := lookupDistances(lnID, node.ID()) // nolint:typecheck
 		require.Equal(t, []uint{256, 255, 254}, dists)
 	})
 }

@@ -55,6 +55,7 @@ func (s *Suite) sendSuccessfulTxs(t *utesting.T) error {
 	return nil
 }
 
+// nolint:typecheck
 func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction) error {
 	sendConn, recvConn, err := s.createSendAndRecvConns()
 	if err != nil {
@@ -269,6 +270,7 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 
 // checkMaliciousTxPropagation checks whether the given malicious transactions were
 // propagated by the node.
+// nolint:typecheck
 func checkMaliciousTxPropagation(s *Suite, txs []*types.Transaction, conn *Conn) error {
 	switch msg := conn.readAndServe(s.chain, time.Second*8).(type) {
 	case *Transactions:

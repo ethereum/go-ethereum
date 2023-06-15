@@ -102,6 +102,7 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if len(rest) == 0 || rest[0] != ')' {
 		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
 	}
+
 	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
 		return append(result, "[]"), rest[3:], nil
 	}
@@ -131,6 +132,7 @@ func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to assemble components: %v", err)
 			}
+			// nolint:goconst
 			tupleType := "tuple"
 			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
 				subArgs = subArgs[:len(subArgs)-1]

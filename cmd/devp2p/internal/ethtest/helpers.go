@@ -571,6 +571,7 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	}
 }
 
+// nolint:typecheck
 func (s *Suite) hashAnnounce() error {
 	// create connections
 	sendConn, recvConn, err := s.createSendAndRecvConns()

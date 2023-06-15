@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"io/ioutil" // nolint: staticcheck
 	_log "log"
 	"math/big"
@@ -35,7 +36,7 @@ var (
 	// Only this account is a validator for the 0th span
 	keySprintLength, _ = crypto.HexToECDSA(privKeySprintLength)
 
-	// This account is one the validators for 1st span (0-indexed)
+	// This account is one of the validators for 1st span (0-indexed)
 	keySprintLength2, _ = crypto.HexToECDSA(privKeySprintLength2)
 
 	keysSprintLength = []*ecdsa.PrivateKey{keySprintLength, keySprintLength2}

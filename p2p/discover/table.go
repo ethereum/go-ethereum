@@ -677,6 +677,7 @@ func (h *nodesByDistance) push(n *node, maxElems int) {
 	if len(h.entries) < maxElems {
 		h.entries = append(h.entries, n)
 	}
+
 	if ix < end {
 		// Slide existing entries down to make room.
 		// This will overwrite the entry we just appended.

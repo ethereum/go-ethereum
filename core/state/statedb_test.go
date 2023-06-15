@@ -104,11 +104,12 @@ func TestIntermediateLeaks(t *testing.T) {
 		modify(finalState, common.Address{i}, i, 99)
 	}
 
-	// Commit and cross check the databases.
+	// Commit and cross-check the databases.
 	transRoot, err := transState.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
+
 	if err = transState.Database().TrieDB().Commit(transRoot, false); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
@@ -117,6 +118,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
+
 	if err = finalState.Database().TrieDB().Commit(finalRoot, false); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", finalRoot.Hex())
 	}
@@ -476,6 +478,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
 			state.GetRefund(), checkstate.GetRefund())
 	}
+
 	if !reflect.DeepEqual(state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{})) {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}))
@@ -1390,20 +1393,26 @@ func TestFlushOrderDataLoss(t *testing.T) {
 		statedb  = NewDatabase(memdb)
 		state, _ = New(common.Hash{}, statedb, nil)
 	)
+
 	for a := byte(0); a < 10; a++ {
 		state.CreateAccount(common.Address{a})
 		for s := byte(0); s < 10; s++ {
 			state.SetState(common.Address{a}, common.Hash{a, s}, common.Hash{a, s})
 		}
 	}
+
 	root, err := state.Commit(false)
+
 	if err != nil {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}
+
 	statedb.TrieDB().Reference(root, common.Hash{})
+
 	if err := statedb.TrieDB().Cap(1024); err != nil {
 		t.Fatalf("failed to cap trie dirty cache: %v", err)
 	}
+
 	if err := statedb.TrieDB().Commit(root, false); err != nil {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}
@@ -1412,6 +1421,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reopen state trie: %v", err)
 	}
+
 	for a := byte(0); a < 10; a++ {
 		for s := byte(0); s < 10; s++ {
 			if have := state.GetState(common.Address{a}, common.Hash{a, s}); have != (common.Hash{a, s}) {
@@ -1433,6 +1443,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 	addr := common.Address{}
 
 	state.SetTransientState(addr, key, value)
+
 	if exp, got := 1, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
@@ -1444,6 +1455,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 	// revert the transient state being set and then check that the
 	// value is now the empty hash
 	state.journal.revert(state, 0)
+
 	if got, exp := state.GetTransientState(addr, key), (common.Hash{}); exp != got {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, exp)
 	}
@@ -1452,6 +1464,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 	// the transient state is copied
 	state.SetTransientState(addr, key, value)
 	cpy := state.Copy()
+
 	if got := cpy.GetTransientState(addr, key); got != value {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, value)
 	}

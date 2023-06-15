@@ -136,6 +136,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 // TestSimultaneousRequests sends two simultaneous `GetBlockHeader` requests from
 // the same connection with different request IDs and checks to make sure the node
 // responds with the correct headers per request.
+// nolint:typecheck
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	// create a connection
 	conn, err := s.dial()
@@ -214,6 +215,7 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 
 // TestSameRequestID sends two requests with the same request ID to a
 // single node.
+// nolint:typecheck
 func (s *Suite) TestSameRequestID(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
@@ -462,6 +464,7 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 
 // TestLargeTxRequest tests whether a node can fulfill a large GetPooledTransactions
 // request.
+// nolint:typecheck
 func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
 	// is able to accept txs

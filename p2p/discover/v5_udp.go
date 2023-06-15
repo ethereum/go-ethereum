@@ -309,6 +309,7 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 	)
 	var r []*enode.Node
 	r, err = t.findnode(unwrapNode(destNode), dists)
+
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
@@ -411,6 +412,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
 	}
+
 	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
@@ -665,6 +667,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 			up := ReadPacket{Data: make([]byte, len(rawpacket)), Addr: fromAddr}
 			copy(up.Data, rawpacket)
 			t.unhandled <- up
+
 			return nil
 		}
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
@@ -861,16 +864,19 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 	for len(nodes) > 0 {
 		p := &v5wire.Nodes{ReqID: reqid}
 		size := uint64(0)
+
 		for len(nodes) > 0 {
 			r := nodes[0].Record()
 			if size += r.Size(); size > sizeLimit {
 				break
 			}
+
 			p.Nodes = append(p.Nodes, r)
 			nodes = nodes[1:]
 		}
 		resp = append(resp, p)
 	}
+
 	for _, msg := range resp {
 		msg.RespCount = uint8(len(resp))
 	}

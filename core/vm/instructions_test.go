@@ -251,15 +251,19 @@ func TestWriteExpectedValues(t *testing.T) {
 			interpreter = env.interpreter
 		)
 		result := make([]TwoOperandTestcase, len(args))
+
 		for i, param := range args {
 			x := new(uint256.Int).SetBytes(common.Hex2Bytes(param.x))
 			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
+
 			stack.push(x)
 			stack.push(y)
-			opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+
+			_, _ = opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
 			actual := stack.pop()
 			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 		}
+
 		return result
 	}
 
@@ -268,6 +272,7 @@ func TestWriteExpectedValues(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		_ = os.WriteFile(fmt.Sprintf("testdata/testcases_%v.json", name), data, 0644)
 		if err != nil {
 			t.Fatal(err)
@@ -616,7 +621,9 @@ func TestOpTstore(t *testing.T) {
 	if stack.len() != 1 {
 		t.Fatal("stack wrong size")
 	}
+
 	val := stack.peek()
+
 	if !bytes.Equal(val.Bytes(), value) {
 		t.Fatal("incorrect element read from transient storage")
 	}

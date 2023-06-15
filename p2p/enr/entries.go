@@ -192,5 +192,6 @@ func IsNotFound(err error) bool {
 	if errors.As(err, &ke) {
 		return ke.Err == errNotFound
 	}
+
 	return false
 }

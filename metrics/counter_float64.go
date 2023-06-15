@@ -58,6 +58,7 @@ func NewRegisteredCounterFloat64(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	_ = r.Register(name, c)
 
 	return c
@@ -73,6 +74,7 @@ func NewRegisteredCounterFloat64Forced(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	_ = r.Register(name, c)
 
 	return c

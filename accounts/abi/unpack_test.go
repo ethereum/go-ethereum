@@ -430,6 +430,7 @@ func TestMultiReturnWithStringArray(t *testing.T) {
 	}
 	buff := new(bytes.Buffer)
 	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000005c1b78ea0000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000001a055690d9db80000000000000000000000000000ab1257528b3782fb40d7ed5f72e624b744dffb2f00000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000008457468657265756d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001048656c6c6f2c20457468657265756d2100000000000000000000000000000000"))
+
 	temp, _ := new(big.Int).SetString("30000000000000000000", 10)
 	ret1, ret1Exp := new([3]*big.Int), [3]*big.Int{big.NewInt(1545304298), big.NewInt(6), temp}
 	ret2, ret2Exp := new(common.Address), common.HexToAddress("ab1257528b3782fb40d7ed5f72e624b744dffb2f")
@@ -949,10 +950,13 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 	t.Parallel()
 
 	var encodeABI Arguments
+
 	uint256Ty, err := NewType("uint256", "", nil)
+
 	if err != nil {
 		panic(err)
 	}
+
 	encodeABI = Arguments{
 		{Type: uint256Ty},
 	}
@@ -961,6 +965,7 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 	if !ok {
 		panic("bug")
 	}
+
 	maxU64Plus1 := new(big.Int).Add(maxU64, big.NewInt(1))
 	cases := []struct {
 		decodeType  string
@@ -1083,25 +1088,32 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			expectValue: int64(math.MaxInt64),
 		},
 	}
+
 	for i, testCase := range cases {
 		packed, err := encodeABI.Pack(testCase.inputValue)
 		if err != nil {
 			panic(err)
 		}
+
 		ty, err := NewType(testCase.decodeType, "", nil)
+
 		if err != nil {
 			panic(err)
 		}
+
 		decodeABI := Arguments{
 			{Type: ty},
 		}
 		decoded, err := decodeABI.Unpack(packed)
+
 		if err != testCase.err {
 			t.Fatalf("Expected error %v, actual error %v. case %d", testCase.err, err, i)
 		}
+
 		if err != nil {
 			continue
 		}
+
 		if !reflect.DeepEqual(decoded[0], testCase.expectValue) {
 			t.Fatalf("Expected value %v, actual value %v", testCase.expectValue, decoded[0])
 		}

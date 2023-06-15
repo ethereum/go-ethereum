@@ -130,6 +130,7 @@ func PutCache(ctx context.Context, cache *TxCache) context.Context {
 func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
+
 	switch {
 	// TODO marcello double check
 	case evm.chainRules.IsShanghai:
@@ -155,11 +156,14 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	default:
 		table = &frontierInstructionSet
 	}
+
 	var extraEips []int
+
 	if len(evm.Config.ExtraEips) > 0 {
 		// Deep-copy jumptable to prevent modification of opcodes in other tables
 		table = copyJumpTable(table)
 	}
+
 	for _, eip := range evm.Config.ExtraEips {
 		if err := EnableEIP(eip, table); err != nil {
 			// Disable it, so caller can check if it's activated or not
@@ -168,7 +172,9 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 			extraEips = append(extraEips, eip)
 		}
 	}
+
 	evm.Config.ExtraEips = extraEips
+
 	return &EVMInterpreter{evm: evm, table: table}
 }
 
@@ -244,6 +250,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 	defer func() {
 		returnStack(stack)
 	}()
+
 	contract.Input = input
 
 	if debug {
@@ -504,6 +511,7 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 			// Do tracing before memory expansion
 			if debug {
 				in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+
 				logged = true
 			}
 			if memorySize > 0 {

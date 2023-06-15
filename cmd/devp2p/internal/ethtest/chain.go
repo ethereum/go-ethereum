@@ -96,6 +96,7 @@ func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
 }
 
+// nolint:typecheck
 func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
 		return nil, fmt.Errorf("no block headers requested")

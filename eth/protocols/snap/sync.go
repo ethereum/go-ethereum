@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/sha3"
 	gomath "math"
 	"math/big"
 	"math/rand"
@@ -2744,7 +2745,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	}
 	s.lock.Unlock()
 
-	// Cross reference the requested trienodes with the response to find gaps
+	// Cross-reference the requested trie-nodes with the response to find gaps
 	// that the serving node is missing
 	var (
 		hasher = sha3.NewLegacyKeccak256().(crypto.KeccakState)
@@ -2755,8 +2756,8 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	for i, j := 0, 0; i < len(trienodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
 		hasher.Reset()
-		hasher.Write(trienodes[i])
-		hasher.Read(hash)
+		_, _ = hasher.Write(trienodes[i])
+		_, _ = hasher.Read(hash)
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++

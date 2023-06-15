@@ -331,7 +331,9 @@ func TestBytesSize(t *testing.T) {
 		if s != test.size {
 			t.Errorf("BytesSize(%#x) -> %d, want %d", test.v, s, test.size)
 		}
+
 		s = StringSize(string(test.v))
+
 		if s != test.size {
 			t.Errorf("StringSize(%#x) -> %d, want %d", test.v, s, test.size)
 		}

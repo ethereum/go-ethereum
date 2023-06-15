@@ -194,6 +194,7 @@ func (p *Findnode) AppendLogInfo(ctx []interface{}) []interface{} {
 	if p.OpID != 0 {
 		ctx = append(ctx, "opid", p.OpID)
 	}
+
 	return ctx
 }
 

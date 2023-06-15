@@ -85,16 +85,20 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head, time uint64) I
 			hash = checksumUpdate(hash, fork)
 			continue
 		}
+
 		return ID{Hash: checksumToBytes(hash), Next: fork}
 	}
+
 	for _, fork := range forksByTime {
 		if fork <= time {
 			// Fork already passed, checksum the previous hash and fork timestamp
 			hash = checksumUpdate(hash, fork)
 			continue
 		}
+
 		return ID{Hash: checksumToBytes(hash), Next: fork}
 	}
+
 	return ID{Hash: checksumToBytes(hash), Next: 0}
 }
 
@@ -132,6 +136,7 @@ func NewStaticFilter(config *params.ChainConfig, genesis common.Hash) Filter {
 // newFilter is the internal version of NewFilter, taking closures as its arguments
 // instead of a chain. The reason is to allow testing it without having to simulate
 // an entire blockchain.
+// nolint:gocognit
 func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (uint64, uint64)) Filter {
 	// Calculate the all the valid fork hash and fork next combos
 	var (
@@ -148,6 +153,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 	// Add two sentries to simplify the fork checks and don't require special
 	// casing the last one.
 	forks = append(forks, math.MaxUint64) // Last fork will never be passed
+
 	if len(forksByTime) == 0 {
 		// In purely block based forks, avoid the sentry spilling into timestapt territory
 		forksByBlock = append(forksByBlock, math.MaxUint64) // Last fork will never be passed
@@ -245,6 +251,7 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	kind := reflect.TypeOf(params.ChainConfig{})
 	conf := reflect.ValueOf(config).Elem()
 	x := uint64(0)
+
 	var (
 		forksByBlock []uint64
 		forksByTime  []uint64
@@ -264,6 +271,7 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 				forksByTime = append(forksByTime, *rule)
 			}
 		}
+
 		if field.Type == reflect.TypeOf(new(big.Int)) {
 			if rule := conf.Field(i).Interface().(*big.Int); rule != nil {
 				forksByBlock = append(forksByBlock, rule.Uint64())
@@ -280,6 +288,7 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 			i--
 		}
 	}
+
 	for i := 1; i < len(forksByTime); i++ {
 		if forksByTime[i] == forksByTime[i-1] {
 			forksByTime = append(forksByTime[:i], forksByTime[i+1:]...)
@@ -290,8 +299,10 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	if len(forksByBlock) > 0 && forksByBlock[0] == 0 {
 		forksByBlock = forksByBlock[1:]
 	}
+
 	if len(forksByTime) > 0 && forksByTime[0] == 0 {
 		forksByTime = forksByTime[1:]
 	}
+
 	return forksByBlock, forksByTime
 }

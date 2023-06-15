@@ -50,6 +50,7 @@ func TestCopyAndClose(t *testing.T) {
 	prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	time.Sleep(1 * time.Second)
+
 	a := prefetcher.trie(common.Hash{}, db.originalRoot)
 	prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	b := prefetcher.trie(common.Hash{}, db.originalRoot)

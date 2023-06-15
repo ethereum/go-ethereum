@@ -172,6 +172,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	}
 }
 
+// nolint:typecheck
 func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	// Account for signing txes
 	var (
@@ -277,6 +278,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+// nolint:typecheck
 func TestGraphQLConcurrentResolvers(t *testing.T) {
 	t.Parallel()
 

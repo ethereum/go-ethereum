@@ -347,6 +347,7 @@ func (d *dialScheduler) rearmHistoryTimer() {
 	if len(d.history) == 0 {
 		return
 	}
+
 	d.historyTimer.Schedule(d.history.nextExpiry())
 }
 

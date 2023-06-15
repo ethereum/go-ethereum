@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
@@ -259,6 +258,7 @@ func decodeU256(s *Stream, val reflect.Value) error {
 	if err != nil {
 		return wrapStreamError(err, val.Type())
 	}
+
 	return nil
 }
 
@@ -893,7 +893,9 @@ func (s *Stream) decodeBigInt(dst *big.Int) error {
 // ReadUint256 decodes the next value as a uint256.
 func (s *Stream) ReadUint256(dst *uint256.Int) error {
 	var buffer []byte
+
 	kind, size, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err
@@ -926,6 +928,7 @@ func (s *Stream) ReadUint256(dst *uint256.Int) error {
 	}
 	// Set the integer bytes.
 	dst.SetBytes(buffer)
+
 	return nil
 }
 

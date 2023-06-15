@@ -38,6 +38,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 	// Register the account callback to connect the state trie and the storage
 	// trie belongs to the contract.
 	var syncer *trie.Sync
+
 	onAccount := func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
 		if onLeaf != nil {
 			if err := onLeaf(keys, leaf); err != nil {
@@ -48,6 +49,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
 			return err
 		}
+
 		syncer.AddSubTrie(obj.Root, path, parent, parentPath, onSlot)
 		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
 		return nil

@@ -37,9 +37,11 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 111},
 	}
 	have := CalcBlobFee(nil)
+
 	if have.Int64() != params.BlobTxMinDataGasprice {
 		t.Errorf("nil test: blobfee mismatch: have %v, want %v", have, params.BlobTxMinDataGasprice)
 	}
+
 	for i, tt := range tests {
 		have := CalcBlobFee(big.NewInt(tt.excessDataGas))
 		if have.Int64() != tt.blobfee {
@@ -78,10 +80,13 @@ func TestFakeExponential(t *testing.T) {
 		f, n, d := big.NewInt(tt.factor), big.NewInt(tt.numerator), big.NewInt(tt.denominator)
 		original := fmt.Sprintf("%d %d %d", f, n, d)
 		have := fakeExponential(f, n, d)
+
 		if have.Int64() != tt.want {
 			t.Errorf("test %d: fake exponential mismatch: have %v want %v", i, have, tt.want)
 		}
+
 		later := fmt.Sprintf("%d %d %d", f, n, d)
+
 		if original != later {
 			t.Errorf("test %d: fake exponential modified arguments: have\n%v\nwant\n%v", i, later, original)
 		}

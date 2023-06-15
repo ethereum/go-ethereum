@@ -102,6 +102,7 @@ func errOut(n int, err error) chan error {
 	for i := 0; i < n; i++ {
 		errs <- err
 	}
+
 	return errs
 }
 
@@ -116,7 +117,9 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 	if ttd == nil {
 		return headers, nil, nil
 	}
+
 	ptd := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+
 	if ptd == nil {
 		return nil, nil, consensus.ErrUnknownAncestor
 	}
@@ -130,19 +133,23 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 		td          = new(big.Int).Set(ptd)
 		tdPassed    bool
 	)
+
 	for i, header := range headers {
 		if tdPassed {
 			preHeaders = headers[:i]
 			postHeaders = headers[i:]
 			break
 		}
+
 		td = td.Add(td, header.Difficulty)
+
 		if td.Cmp(ttd) >= 0 {
 			// This is the last PoW header, it still belongs to
 			// the preHeaders, so we cannot split+break yet.
 			tdPassed = true
 		}
 	}
+
 	return preHeaders, postHeaders, nil
 }
 
@@ -155,6 +162,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 	if err != nil {
 		return make(chan struct{}), errOut(len(headers), err)
 	}
+
 	if len(postHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
@@ -267,6 +275,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
+
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
@@ -275,9 +284,11 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if cancun && header.ExcessDataGas == nil {
 		return errors.New("missing excessDataGas")
 	}
+
 	if !cancun && header.ExcessDataGas != nil {
 		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
 	}
+
 	return nil
 }
 
@@ -455,6 +466,7 @@ func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, par
 	if chain.Config().TerminalTotalDifficulty == nil {
 		return false, nil
 	}
+
 	td := chain.GetTd(parentHash, parentNumber)
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor

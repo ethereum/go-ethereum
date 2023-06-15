@@ -211,6 +211,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	if retrievals != 0 && requested.Load() != retrievals {
 		t.Errorf("filter = %v  blocks = %v  intermittent = %v: request count mismatch, have #%v, want #%v", filter, blocks, intermittent, requested.Load(), retrievals)
 	}
+
 	return requested.Load()
 }
 
@@ -238,6 +239,7 @@ func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *at
 					for i, section := range task.Sections {
 						if rand.Int()%4 != 0 { // Handle occasional missing deliveries
 							task.Bitsets[i] = generateBitset(task.Bit, section)
+
 							retrievals.Add(1)
 						}
 					}

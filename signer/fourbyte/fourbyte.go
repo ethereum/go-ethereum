@@ -82,6 +82,7 @@ func NewWithFile(path string) (*Database, error) {
 	// Custom file may not exist. Will be created during save, if needed.
 	if _, err := os.Stat(path); err == nil {
 		var blob []byte
+
 		if blob, err = os.ReadFile(path); err != nil {
 			return nil, err
 		}
@@ -136,5 +137,6 @@ func (db *Database) AddSelector(selector string, data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(db.customPath, blob, 0600)
 }

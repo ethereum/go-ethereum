@@ -33,6 +33,7 @@ func CalcBlobFee(excessDataGas *big.Int) *big.Int {
 	if excessDataGas == nil {
 		return big.NewInt(params.BlobTxMinDataGasprice)
 	}
+
 	return fakeExponential(minDataGasPrice, excessDataGas, dataGaspriceUpdateFraction)
 }
 
@@ -43,6 +44,7 @@ func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 		output = new(big.Int)
 		accum  = new(big.Int).Mul(factor, denominator)
 	)
+
 	for i := 1; accum.Sign() > 0; i++ {
 		output.Add(output, accum)
 
@@ -50,5 +52,6 @@ func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 		accum.Div(accum, denominator)
 		accum.Div(accum, big.NewInt(int64(i)))
 	}
+
 	return output.Div(output, denominator)
 }

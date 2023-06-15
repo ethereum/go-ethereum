@@ -135,39 +135,49 @@ func TestCreateGas(t *testing.T) {
 
 	for i, tt := range createGasTests {
 		var gasUsed = uint64(0)
+
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
 			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 			statedb.CreateAccount(address)
 			statedb.SetCode(address, hexutil.MustDecode(tt.code))
 			statedb.Finalise(true)
+
 			vmctx := BlockContext{
 				CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
 				Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
 				BlockNumber: big.NewInt(0),
 			}
 			config := Config{}
+
 			if tt.eip3860 {
 				config.ExtraEips = []int{3860}
 			}
 
 			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
+
 			var startGas = uint64(testGas)
 			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int), nil)
+
 			if err != nil {
 				return false
 			}
+
 			gasUsed = startGas - gas
+
 			if len(ret) != 32 {
 				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
 			}
+
 			if bytes.Equal(ret, make([]byte, 32)) {
 				// Failure
 				return false
 			}
+
 			return true
 		}
 		minGas := sort.Search(100_000, doCheck)
+
 		if uint64(minGas) != tt.minimumGas {
 			t.Fatalf("test %d: min gas error, want %d, have %d", i, tt.minimumGas, minGas)
 		}

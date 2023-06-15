@@ -240,6 +240,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	if l.reason != nil {
 		return nil, l.reason
 	}
+
 	failed := l.err != nil
 	returnData := common.CopyBytes(l.output)
 	// Return data when successful and revert reason when reverted, otherwise empty.
@@ -247,6 +248,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	if failed && l.err != vm.ErrExecutionReverted {
 		returnVal = ""
 	}
+
 	return json.Marshal(&ExecutionResult{
 		Gas:         l.usedGas,
 		Failed:      failed,
@@ -436,27 +438,34 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			Error:         trace.ErrorString(),
 			RefundCounter: trace.RefundCounter,
 		}
+
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
 			for i, stackValue := range trace.Stack {
 				stack[i] = stackValue.Hex()
 			}
+
 			formatted[index].Stack = &stack
 		}
+
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
 				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
 			}
+
 			formatted[index].Memory = &memory
 		}
+
 		if trace.Storage != nil {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
 				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 			}
+
 			formatted[index].Storage = &storage
 		}
 	}
+
 	return formatted
 }

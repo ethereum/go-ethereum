@@ -193,6 +193,7 @@ func newlru[T cacheOrDataset](maxItems int, newLru func(epoch uint64) T) *lru[T]
 	default:
 		panic("unknown type")
 	}
+
 	return &lru[T]{
 		what:  what,
 		new:   newLru,
@@ -610,6 +611,7 @@ func (ethash *Ethash) dataset(block uint64, async bool) *dataset {
 	if async && !current.generated() {
 		go func() {
 			current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
+
 			if future != nil {
 				future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
 			}

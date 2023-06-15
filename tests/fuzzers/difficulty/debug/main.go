@@ -30,6 +30,7 @@ func main() {
 	}
 	crasher := os.Args[1]
 	data, err := os.ReadFile(crasher)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
 		os.Exit(1)

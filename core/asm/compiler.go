@@ -114,6 +114,7 @@ func (c *Compiler) Compile() (string, []error) {
 			bin.WriteString(fmt.Sprintf("%x", v))
 		}
 	}
+
 	return bin.String(), errors
 }
 

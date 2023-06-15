@@ -391,6 +391,7 @@ func TestTraceTransaction(t *testing.T) {
 	}
 }
 
+// nolint:typecheck
 func TestTraceBlock(t *testing.T) {
 	t.Parallel()
 
@@ -552,6 +553,7 @@ func TestIOdump(t *testing.T) {
 	}
 }
 
+// nolint:typecheck
 func TestTracingWithOverrides(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
@@ -923,6 +925,7 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 	return &m
 }
 
+// nolint:typecheck
 func TestTraceChain(t *testing.T) {
 	t.Parallel()
 

@@ -300,6 +300,7 @@ func (sf *subfetcher) loop() {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return
 		}
+
 		sf.trie = trie
 	} else {
 		trie, err := sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)

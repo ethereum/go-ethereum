@@ -45,12 +45,15 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		seenNodes = make(map[common.Hash]struct{})
 		seenCodes = make(map[common.Hash]struct{})
 	)
+
 	it := db.NewIterator(nil, nil)
+
 	for it.Next() {
 		ok, hash := isTrieNode(sdb.TrieDB().Scheme(), it.Key(), it.Value())
 		if !ok {
 			continue
 		}
+
 		seenNodes[hash] = struct{}{}
 	}
 	it.Release()
@@ -62,19 +65,22 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		if !ok {
 			continue
 		}
+
 		if _, ok := hashes[common.BytesToHash(hash)]; !ok {
 			t.Errorf("state entry not reported %x", it.Key())
 		}
+
 		seenCodes[common.BytesToHash(hash)] = struct{}{}
 	}
 	it.Release()
 
-	// Cross check the iterated hashes and the database/nodepool content
+	// Cross-check the iterated hashes and the database/nodepool content
 	for hash := range hashes {
 		_, ok := seenNodes[hash]
 		if !ok {
 			_, ok = seenCodes[hash]
 		}
+
 		if !ok {
 			t.Errorf("failed to retrieve reported node %x", hash)
 		}
@@ -89,5 +95,6 @@ func isTrieNode(scheme string, key, val []byte) (bool, common.Hash) {
 			return true, common.BytesToHash(key)
 		}
 	}
+
 	return false, common.Hash{}
 }

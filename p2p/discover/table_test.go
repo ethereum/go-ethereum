@@ -398,6 +398,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 
 func TestNodesPush(t *testing.T) {
 	t.Parallel()
+
 	var target enode.ID
 	n1 := nodeAtDistance(target, 255, intIP(1))
 	n2 := nodeAtDistance(target, 254, intIP(2))
@@ -417,6 +418,7 @@ func TestNodesPush(t *testing.T) {
 		for _, n := range nodes {
 			list.push(n, 3)
 		}
+
 		if !slicesEqual(list.entries, perm[0], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
@@ -428,6 +430,7 @@ func TestNodesPush(t *testing.T) {
 		for _, n := range nodes {
 			list.push(n, 2)
 		}
+
 		if !slicesEqual(list.entries, perm[0][:2], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
@@ -442,11 +445,13 @@ func slicesEqual[T any](s1, s2 []T, check func(e1, e2 T) bool) bool {
 	if len(s1) != len(s2) {
 		return false
 	}
+
 	for i := range s1 {
 		if !check(s1[i], s2[i]) {
 			return false
 		}
 	}
+
 	return true
 }
 

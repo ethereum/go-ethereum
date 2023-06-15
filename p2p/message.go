@@ -243,6 +243,7 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	if int(msg.Size) != len(contentEnc) {
 		return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
 	}
+
 	actualContent, err := io.ReadAll(msg.Payload)
 	if err != nil {
 		return err

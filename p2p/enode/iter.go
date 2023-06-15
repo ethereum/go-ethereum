@@ -213,6 +213,7 @@ func (m *FairMix) Next() bool {
 		if source.timeout >= 0 {
 			timer := time.NewTimer(source.timeout)
 			timeout = timer.C
+
 			defer timer.Stop()
 		}
 

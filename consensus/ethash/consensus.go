@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 // Ethash proof-of-work protocol constants.
@@ -317,6 +316,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if chain.Config().IsShanghai(header.Time) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
+
 	if chain.Config().IsCancun(header.Time) {
 		return fmt.Errorf("ethash does not support cancun fork")
 	}
@@ -646,6 +646,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
+
 	if header.WithdrawalsHash != nil {
 		panic("withdrawal hash set on ethash")
 	}

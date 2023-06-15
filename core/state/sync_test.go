@@ -105,11 +105,13 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if v, _ := db.Get(root[:]); v == nil {
 		return nil // Consider a non existent state consistent.
 	}
-	trie, err := trie.New(trie.StateTrieID(root), trie.NewDatabase(db))
+
+	t, err := trie.New(trie.StateTrieID(root), trie.NewDatabase(db))
+
 	if err != nil {
 		return err
 	}
-	it := trie.NodeIterator(nil)
+	it := t.NodeIterator(nil)
 	for it.Next(true) {
 	}
 	return it.Error()
@@ -135,6 +137,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 func TestEmptyStateSync(t *testing.T) {
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
 	sync := NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, db.Scheme())
+
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 		t.Errorf("content requested for empty state: %v, %v, %v", nodes, paths, codes)
 	}
@@ -175,6 +178,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 	if commit {
 		srcDb.TrieDB().Commit(srcRoot, false)
 	}
+
 	srcTrie, _ := trie.New(trie.StateTrieID(srcRoot), srcDb.TrieDB())
 
 	// Create a destination state and sync with the scheduler
@@ -186,6 +190,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 		codeElements []stateElement
 	)
 	paths, nodes, codes := sched.Missing(count)
+
 	for i := 0; i < len(paths); i++ {
 		nodeElements = append(nodeElements, stateElement{
 			path:     paths[i],
@@ -193,23 +198,28 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 			syncPath: trie.NewSyncPath([]byte(paths[i])),
 		})
 	}
+
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{
 			code: codes[i],
 		})
 	}
+
 	for len(nodeElements)+len(codeElements) > 0 {
 		var (
 			nodeResults = make([]trie.NodeSyncResult, len(nodeElements))
 			codeResults = make([]trie.CodeSyncResult, len(codeElements))
 		)
+
 		for i, element := range codeElements {
 			data, err := srcDb.ContractCode(common.Hash{}, element.code)
 			if err != nil {
 				t.Fatalf("failed to retrieve contract bytecode for hash %x", element.code)
 			}
+
 			codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
 		}
+
 		for i, node := range nodeElements {
 			if bypath {
 				if len(node.syncPath) == 1 {
@@ -217,6 +227,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[0], err)
 					}
+
 					nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 				} else {
 					var acc types.StateAccount
@@ -242,11 +253,13 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 			}
 		}
+
 		for _, result := range codeResults {
 			if err := sched.ProcessCode(result); err != nil {
 				t.Errorf("failed to process result %v", err)
 			}
 		}
+
 		for _, result := range nodeResults {
 			if err := sched.ProcessNode(result); err != nil {
 				t.Errorf("failed to process result %v", err)
@@ -260,6 +273,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 
 		paths, nodes, codes = sched.Missing(count)
 		nodeElements = nodeElements[:0]
+
 		for i := 0; i < len(paths); i++ {
 			nodeElements = append(nodeElements, stateElement{
 				path:     paths[i],
@@ -267,7 +281,9 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				syncPath: trie.NewSyncPath([]byte(paths[i])),
 			})
 		}
+
 		codeElements = codeElements[:0]
+
 		for i := 0; i < len(codes); i++ {
 			codeElements = append(codeElements, stateElement{
 				code: codes[i],
@@ -292,7 +308,9 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 		nodeElements []stateElement
 		codeElements []stateElement
 	)
+
 	paths, nodes, codes := sched.Missing(0)
+
 	for i := 0; i < len(paths); i++ {
 		nodeElements = append(nodeElements, stateElement{
 			path:     paths[i],
@@ -300,15 +318,19 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 			syncPath: trie.NewSyncPath([]byte(paths[i])),
 		})
 	}
+
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{
 			code: codes[i],
 		})
 	}
+
 	for len(nodeElements)+len(codeElements) > 0 {
 		// Sync only half of the scheduled nodes
 		var nodeProcessed int
+
 		var codeProcessed int
+
 		if len(codeElements) > 0 {
 			codeResults := make([]trie.CodeSyncResult, len(codeElements)/2+1)
 			for i, element := range codeElements[:len(codeResults)] {
@@ -316,15 +338,19 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to retrieve contract bytecode for %x", element.code)
 				}
+
 				codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
 			}
+
 			for _, result := range codeResults {
 				if err := sched.ProcessCode(result); err != nil {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
+
 			codeProcessed = len(codeResults)
 		}
+
 		if len(nodeElements) > 0 {
 			nodeResults := make([]trie.NodeSyncResult, len(nodeElements)/2+1)
 			for i, element := range nodeElements[:len(nodeResults)] {
@@ -332,13 +358,16 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to retrieve contract bytecode for %x", element.code)
 				}
+
 				nodeResults[i] = trie.NodeSyncResult{Path: element.path, Data: data}
 			}
+
 			for _, result := range nodeResults {
 				if err := sched.ProcessNode(result); err != nil {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
+
 			nodeProcessed = len(nodeResults)
 		}
 		batch := dstDb.NewBatch()
@@ -349,6 +378,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 
 		paths, nodes, codes = sched.Missing(0)
 		nodeElements = nodeElements[nodeProcessed:]
+
 		for i := 0; i < len(paths); i++ {
 			nodeElements = append(nodeElements, stateElement{
 				path:     paths[i],
@@ -356,7 +386,9 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 				syncPath: trie.NewSyncPath([]byte(paths[i])),
 			})
 		}
+
 		codeElements = codeElements[codeProcessed:]
+
 		for i := 0; i < len(codes); i++ {
 			codeElements = append(codeElements, stateElement{
 				code: codes[i],
@@ -384,6 +416,7 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 	nodeQueue := make(map[string]stateElement)
 	codeQueue := make(map[common.Hash]struct{})
 	paths, nodes, codes := sched.Missing(count)
+
 	for i, path := range paths {
 		nodeQueue[path] = stateElement{
 			path:     path,
@@ -391,35 +424,44 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 			syncPath: trie.NewSyncPath([]byte(path)),
 		}
 	}
+
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
+
 	for len(nodeQueue)+len(codeQueue) > 0 {
 		// Fetch all the queued nodes in a random order
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
+
 			for hash := range codeQueue {
 				data, err := srcDb.ContractCode(common.Hash{}, hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
+
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
 			}
+
 			for _, result := range results {
 				if err := sched.ProcessCode(result); err != nil {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
 		}
+
 		if len(nodeQueue) > 0 {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue))
+
 			for path, element := range nodeQueue {
 				data, err := srcDb.TrieDB().Node(element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x %v %v", element.hash, []byte(element.path), element.path)
 				}
+
 				results = append(results, trie.NodeSyncResult{Path: path, Data: data})
 			}
+
 			for _, result := range results {
 				if err := sched.ProcessNode(result); err != nil {
 					t.Fatalf("failed to process result %v", err)
@@ -436,6 +478,7 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 		nodeQueue = make(map[string]stateElement)
 		codeQueue = make(map[common.Hash]struct{})
 		paths, nodes, codes := sched.Missing(count)
+
 		for i, path := range paths {
 			nodeQueue[path] = stateElement{
 				path:     path,
@@ -443,11 +486,12 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 				syncPath: trie.NewSyncPath([]byte(path)),
 			}
 		}
+
 		for _, hash := range codes {
 			codeQueue[hash] = struct{}{}
 		}
 	}
-	// Cross check that the two states are in sync
+	// Cross-check that the two states are in sync
 	checkStateAccounts(t, dstDb, srcRoot, srcAccounts)
 }
 
@@ -464,6 +508,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	nodeQueue := make(map[string]stateElement)
 	codeQueue := make(map[common.Hash]struct{})
 	paths, nodes, codes := sched.Missing(0)
+
 	for i, path := range paths {
 		nodeQueue[path] = stateElement{
 			path:     path,
@@ -471,13 +516,16 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			syncPath: trie.NewSyncPath([]byte(path)),
 		}
 	}
+
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
+
 	for len(nodeQueue)+len(codeQueue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue)/2+1)
+
 			for hash := range codeQueue {
 				delete(codeQueue, hash)
 
@@ -485,24 +533,29 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
+
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
 
 				if len(results) >= cap(results) {
 					break
 				}
 			}
+
 			for _, result := range results {
 				if err := sched.ProcessCode(result); err != nil {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
 		}
+
 		if len(nodeQueue) > 0 {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue)/2+1)
+
 			for path, element := range nodeQueue {
 				delete(nodeQueue, path)
 
 				data, err := srcDb.TrieDB().Node(element.hash)
+
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}
@@ -533,11 +586,12 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 				syncPath: trie.NewSyncPath([]byte(path)),
 			}
 		}
+
 		for _, hash := range codes {
 			codeQueue[hash] = struct{}{}
 		}
 	}
-	// Cross check that the two states are in sync
+	// Cross-check that the two states are in sync
 	checkStateAccounts(t, dstDb, srcRoot, srcAccounts)
 }
 
@@ -554,8 +608,9 @@ func TestIncompleteStateSync(t *testing.T) {
 			isCode[crypto.Keccak256Hash(acc.code)] = struct{}{}
 		}
 	}
+
 	isCode[types.EmptyCodeHash] = struct{}{}
-	checkTrieConsistency(db, srcRoot)
+	_ = checkTrieConsistency(db, srcRoot)
 
 	// Create a destination state and sync with the scheduler
 	dstDb := rawdb.NewMemoryDatabase()
@@ -566,9 +621,11 @@ func TestIncompleteStateSync(t *testing.T) {
 		addedPaths  []string
 		addedHashes []common.Hash
 	)
+
 	nodeQueue := make(map[string]stateElement)
 	codeQueue := make(map[common.Hash]struct{})
 	paths, nodes, codes := sched.Missing(1)
+
 	for i, path := range paths {
 		nodeQueue[path] = stateElement{
 			path:     path,
@@ -576,18 +633,22 @@ func TestIncompleteStateSync(t *testing.T) {
 			syncPath: trie.NewSyncPath([]byte(path)),
 		}
 	}
+
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
+
 	for len(nodeQueue)+len(codeQueue) > 0 {
 		// Fetch a batch of state nodes
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
+
 			for hash := range codeQueue {
 				data, err := srcDb.ContractCode(common.Hash{}, hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
+
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
 				addedCodes = append(addedCodes, hash)
 			}
@@ -598,20 +659,25 @@ func TestIncompleteStateSync(t *testing.T) {
 				}
 			}
 		}
+
 		var nodehashes []common.Hash
+
 		if len(nodeQueue) > 0 {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue))
+
 			for path, element := range nodeQueue {
 				data, err := srcDb.TrieDB().Node(element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}
+
 				results = append(results, trie.NodeSyncResult{Path: path, Data: data})
 
 				if element.hash != srcRoot {
 					addedPaths = append(addedPaths, element.path)
 					addedHashes = append(addedHashes, element.hash)
 				}
+
 				nodehashes = append(nodehashes, element.hash)
 			}
 			// Process each of the state nodes
@@ -638,6 +704,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		nodeQueue = make(map[string]stateElement)
 		codeQueue = make(map[common.Hash]struct{})
 		paths, nodes, codes := sched.Missing(1)
+
 		for i, path := range paths {
 			nodeQueue[path] = stateElement{
 				path:     path,
@@ -645,6 +712,7 @@ func TestIncompleteStateSync(t *testing.T) {
 				syncPath: trie.NewSyncPath([]byte(path)),
 			}
 		}
+
 		for _, hash := range codes {
 			codeQueue[hash] = struct{}{}
 		}
@@ -653,23 +721,31 @@ func TestIncompleteStateSync(t *testing.T) {
 	for _, node := range addedCodes {
 		val := rawdb.ReadCode(dstDb, node)
 		rawdb.DeleteCode(dstDb, node)
+
 		if err := checkStateConsistency(dstDb, srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %x", node)
 		}
+
 		rawdb.WriteCode(dstDb, node, val)
 	}
+
 	scheme := srcDb.TrieDB().Scheme()
+
 	for i, path := range addedPaths {
 		owner, inner := trie.ResolvePath([]byte(path))
 		hash := addedHashes[i]
 		val := rawdb.ReadTrieNode(dstDb, owner, inner, hash, scheme)
+
 		if val == nil {
 			t.Error("missing trie node")
 		}
+
 		rawdb.DeleteTrieNode(dstDb, owner, inner, hash, scheme)
+
 		if err := checkStateConsistency(dstDb, srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %v", path)
 		}
+
 		rawdb.WriteTrieNode(dstDb, owner, inner, hash, val, scheme)
 	}
 }
