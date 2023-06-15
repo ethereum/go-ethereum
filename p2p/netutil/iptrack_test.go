@@ -123,8 +123,8 @@ func TestIPTrackerForceGC(t *testing.T) {
 	for i := 0; i < 5*max; i++ {
 		e1 := make([]byte, 4)
 		e2 := make([]byte, 4)
-		crand.Read(e1)
-		crand.Read(e2)
+		_, _ = crand.Read(e1)
+		_, _ = crand.Read(e2)
 		it.AddStatement(string(e1), string(e2))
 		it.AddContact(string(e1))
 		clock.Run(rate)

@@ -167,7 +167,7 @@ func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorR
 	b.wrote = true // can only write once
 
 	if len(b.resp) > 0 {
-		conn.writeJSON(ctx, b.resp, isErrorResponse)
+		_ = conn.writeJSON(ctx, b.resp, isErrorResponse)
 	}
 }
 
@@ -177,7 +177,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	if len(msgs) == 0 {
 		h.startCallProc(func(cp *callProc) {
 			resp := errorMessage(&invalidRequestError{"empty batch"})
-			h.conn.writeJSON(cp.ctx, resp, true)
+			_ = h.conn.writeJSON(cp.ctx, resp, true)
 		})
 		return
 	}
@@ -258,7 +258,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 				cancel()
 				responded.Do(func() {
 					resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
-					h.conn.writeJSON(cp.ctx, resp, true)
+					_ = h.conn.writeJSON(cp.ctx, resp, true)
 				})
 			})
 		}
@@ -270,11 +270,11 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
 			responded.Do(func() {
-				h.conn.writeJSON(cp.ctx, answer, false)
+				_ = h.conn.writeJSON(cp.ctx, answer, false)
 			})
 		}
 		for _, n := range cp.notifiers {
-			n.activate()
+			_ = n.activate()
 		}
 	})
 }

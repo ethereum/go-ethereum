@@ -667,7 +667,7 @@ func (c *Client) read(codec ServerCodec) {
 		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {
 			msg := errorMessage(&parseError{err.Error()})
-			codec.writeJSON(context.Background(), msg, true)
+			_ = codec.writeJSON(context.Background(), msg, true)
 		}
 		if err != nil {
 			c.readErr <- err

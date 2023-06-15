@@ -27,7 +27,10 @@ import (
 // Some of these test cases were adapted
 // from https://github.com/hashicorp/golang-lru/blob/master/simplelru/lru_test.go
 
+// nolint:gocognit
 func TestBasicLRU(t *testing.T) {
+	t.Parallel()
+
 	cache := NewBasicLRU[int, int](128)
 
 	for i := 0; i < 256; i++ {
@@ -210,9 +213,9 @@ func BenchmarkLRU(b *testing.B) {
 
 	for i := range keys {
 		b := make([]byte, 32)
-		crand.Read(b)
+		_, _ = crand.Read(b)
 		keys[i] = string(b)
-		crand.Read(b)
+		_, _ = crand.Read(b)
 		values[i] = b
 	}
 

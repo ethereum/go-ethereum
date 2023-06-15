@@ -179,7 +179,7 @@ func TestMixedcaseAddressMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	json.Unmarshal(blob, &output)
+	_ = json.Unmarshal(blob, &output)
 
 	if output != input {
 		t.Fatal("Failed to marshal/unmarshal MixedcaseAddress object")

@@ -399,7 +399,7 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			defer db.Close()
 
 			for i := 0; i < len(keys); i++ {
-				db.Put(keys[i], vals[i])
+				_ = db.Put(keys[i], vals[i])
 			}
 		}
 		b.Run("WriteSorted", func(b *testing.B) {
@@ -417,13 +417,13 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			defer db.Close()
 
 			for i := 0; i < len(keys); i++ {
-				db.Put(keys[i], vals[i])
+				_ = db.Put(keys[i], vals[i])
 			}
 			b.ResetTimer()
 			b.ReportAllocs()
 
 			for i := 0; i < len(keys); i++ {
-				db.Get(keys[i])
+				_, _ = db.Get(keys[i])
 			}
 		}
 		b.Run("ReadSorted", func(b *testing.B) {
@@ -441,7 +441,7 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			defer db.Close()
 
 			for i := 0; i < len(keys); i++ {
-				db.Put(keys[i], vals[i])
+				_ = db.Put(keys[i], vals[i])
 			}
 			b.ResetTimer()
 			b.ReportAllocs()
@@ -470,9 +470,9 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 
 			batch := db.NewBatch()
 			for i := 0; i < len(keys); i++ {
-				batch.Put(keys[i], vals[i])
+				_ = batch.Put(keys[i], vals[i])
 			}
-			batch.Write()
+			_ = batch.Write()
 		}
 		b.Run("BenchWriteSorted", func(b *testing.B) {
 			benchBatchWrite(b, sKeys, sVals)
@@ -504,8 +504,8 @@ func randBytes(length int) []byte {
 }
 
 func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
-	var keys [][]byte
-	var vals [][]byte
+	keys := make([][]byte, 0, ksize)
+	vals := make([][]byte, 0, vsize)
 
 	for i := 0; i < size; i += 1 {
 		keys = append(keys, randBytes(ksize))

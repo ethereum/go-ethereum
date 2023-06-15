@@ -95,7 +95,7 @@ func TestPrettyUint256(t *testing.T) {
 
 	for _, tt := range tests {
 		v := new(uint256.Int)
-		v.SetFromDecimal(tt.int)
+		_ = v.SetFromDecimal(tt.int)
 
 		if have := formatLogfmtUint256(v); have != tt.s {
 			t.Errorf("invalid output %s, want %s", have, tt.s)

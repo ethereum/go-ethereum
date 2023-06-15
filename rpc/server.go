@@ -156,7 +156,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	if err != nil {
 		if err != io.EOF {
 			resp := errorMessage(&invalidMessageError{"parse error"})
-			codec.writeJSON(ctx, resp, true)
+			_ = codec.writeJSON(ctx, resp, true)
 		}
 		return
 	}

@@ -61,7 +61,7 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 	// to the caller.
 	if uint16(extport) != res.MappedExternalPort {
 		// Destroy the mapping in NAT device.
-		n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
+		_, _ = n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
 		return fmt.Errorf("port %d already mapped to another address (%s)", extport, protocol)
 	}
 

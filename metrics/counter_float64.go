@@ -58,7 +58,7 @@ func NewRegisteredCounterFloat64(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	r.Register(name, c)
+	_ = r.Register(name, c)
 
 	return c
 }
@@ -73,7 +73,7 @@ func NewRegisteredCounterFloat64Forced(name string, r Registry) CounterFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	r.Register(name, c)
+	_ = r.Register(name, c)
 
 	return c
 }
@@ -109,6 +109,7 @@ type NilCounterFloat64 struct{}
 func (NilCounterFloat64) Clear() {}
 
 // Count is a no-op.
+// nolint:goconst
 func (NilCounterFloat64) Count() float64 { return 0.0 }
 
 // Dec is a no-op.

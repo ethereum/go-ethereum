@@ -73,11 +73,13 @@ func TestCounterFloat64Dec2(t *testing.T) {
 	}
 }
 
+// nolint:goconst
 func TestCounterFloat64Inc1(t *testing.T) {
 	t.Parallel()
 
 	c := NewCounterFloat64()
 	c.Inc(1.0)
+
 	if count := c.Count(); count != 1.0 {
 		t.Errorf("c.Count(): 1.0 != %v\n", count)
 	}
@@ -117,11 +119,13 @@ func TestCounterFloat64Zero(t *testing.T) {
 	}
 }
 
+// nolint:goconst
 func TestGetOrRegisterCounterFloat64(t *testing.T) {
 	t.Parallel()
 
 	r := NewRegistry()
 	NewRegisteredCounterFloat64("foo", r).Inc(47.0)
+
 	if c := GetOrRegisterCounterFloat64("foo", r); c.Count() != 47.0 {
 		t.Fatal(c)
 	}
