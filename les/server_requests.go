@@ -429,6 +429,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 					p.bumpInvalid()
 					continue
 				}
+
 				trie, err = statedb.OpenStorageTrie(root, common.BytesToHash(request.AccKey), account.Root)
 				if trie == nil || err != nil {
 					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
@@ -517,12 +518,14 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 			hash := tx.Hash()
 			stats[i] = txStatus(backend, hash)
+
 			if stats[i].Status == txpool.TxStatusUnknown {
 				addFn := backend.TxPool().AddRemotes
 				// Add txs synchronously for testing purpose
 				if backend.AddTxsSync() {
 					addFn = backend.TxPool().AddRemotesSync
 				}
+
 				if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
 					stats[i].Error = errs[0].Error()
 					continue

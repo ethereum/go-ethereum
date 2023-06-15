@@ -170,16 +170,20 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 	if err == nil && expectedError == "" {
 		return nil
 	}
+
 	if err == nil && expectedError != "" {
 		return fmt.Errorf("expected error %q, got no error", expectedError)
 	}
+
 	if err != nil && expectedError == "" {
 		return fmt.Errorf("unexpected error: %w", err)
 	}
+
 	if err != nil && expectedError != "" {
 		// Ignore expected errors (TODO MariusVanDerWijden check error string)
 		return nil
 	}
+
 	return nil
 }
 
@@ -252,20 +256,24 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
+
 	if t.json.Env.Difficulty != nil {
 		context.Difficulty = new(big.Int).Set(t.json.Env.Difficulty)
 	}
+
 	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
 	}
+
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
 	_, err = core.ApplyMessage(evm, msg, gaspool, nil)
+
 	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
@@ -279,6 +287,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	statedb.Commit(config.IsEIP158(block.Number()))
 	// And _now_ get the state root
 	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
+
 	return snaps, statedb, root, err
 }
 

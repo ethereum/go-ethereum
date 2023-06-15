@@ -329,6 +329,7 @@ func initializeSecrets(c *cli.Context) error {
 		return fmt.Errorf("failed to read enough random")
 	}
 	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+
 	if c.Bool(utils.LightKDFFlag.Name) {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
@@ -385,6 +386,7 @@ func attestFile(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
+
 	configDir := ctx.String(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
@@ -401,15 +403,18 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, core.UIClientAPI, error
 	if err := initialize(c); err != nil {
 		return nil, nil, err
 	}
+
 	var (
 		ui                        = core.NewCommandlineUI()
 		pwStorage storage.Storage = &storage.NoStorage{}
 		ksLoc                     = c.String(keystoreFlag.Name)
 		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
 	)
+
 	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
 	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
 	internalApi := core.NewUIServerAPI(api)
+
 	return internalApi, ui, nil
 }
 
@@ -432,6 +437,7 @@ func setCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
+
 	configDir := ctx.String(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
@@ -460,6 +466,7 @@ func removeCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
+
 	configDir := ctx.String(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
@@ -501,10 +508,13 @@ func newAccount(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	addr, err := internalApi.New(context.Background())
+
 	if err == nil {
 		fmt.Printf("Generated account %v\n", addr.String())
 	}
+
 	return err
 }
 
@@ -513,17 +523,23 @@ func listAccounts(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	accs, err := internalApi.ListAccounts(context.Background())
+
 	if err != nil {
 		return err
 	}
+
 	if len(accs) == 0 {
 		fmt.Println("\nThe keystore is empty.")
 	}
+
 	fmt.Println()
+
 	for _, account := range accs {
 		fmt.Printf("%v (%v)\n", account.Address, account.URL)
 	}
+
 	return err
 }
 
@@ -532,18 +548,25 @@ func listWallets(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	wallets := internalApi.ListWallets()
+
 	if len(wallets) == 0 {
 		fmt.Println("\nThere are no wallets.")
 	}
+
 	fmt.Println()
+
 	for i, wallet := range wallets {
 		fmt.Printf("- Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
+
 		for j, acc := range wallet.Accounts {
 			fmt.Printf("  -Account %d: %v (%v)\n", j, acc.Address, acc.URL)
 		}
+
 		fmt.Println()
 	}
+
 	return nil
 }
 
@@ -552,14 +575,19 @@ func accountImport(c *cli.Context) error {
 	if c.Args().Len() != 1 {
 		return errors.New("<keyfile> must be given as first argument.")
 	}
+
 	internalApi, ui, err := initInternalApi(c)
+
 	if err != nil {
 		return err
 	}
+
 	pKey, err := crypto.LoadECDSA(c.Args().First())
+
 	if err != nil {
 		return err
 	}
+
 	readPw := func(prompt string) (string, error) {
 		resp, err := ui.OnInputRequired(core.UserInputRequest{
 			Title:      "Password",
@@ -569,23 +597,31 @@ func accountImport(c *cli.Context) error {
 		if err != nil {
 			return "", err
 		}
+
 		return resp.Text, nil
 	}
 	first, err := readPw("Please enter a password for the imported account")
+
 	if err != nil {
 		return err
 	}
+
 	second, err := readPw("Please repeat the password you just entered")
+
 	if err != nil {
 		return err
 	}
+
 	if first != second {
 		return errors.New("Passwords do not match")
 	}
+
 	acc, err := internalApi.ImportRawKey(hex.EncodeToString(crypto.FromECDSA(pKey)), first)
+
 	if err != nil {
 		return err
 	}
+
 	ui.ShowInfo(fmt.Sprintf(`Key imported:
   Address %v
   Keystore file: %v
@@ -595,6 +631,7 @@ access to the key and all associated funds!
 
 Make sure to backup keystore and passwords in a safe location.`,
 		acc.Address, acc.URL.Path))
+
 	return nil
 }
 
@@ -630,6 +667,7 @@ func signer(c *cli.Context) error {
 	var (
 		ui core.UIClientAPI
 	)
+
 	if c.Bool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
 		ui = core.NewStdIOUI()
@@ -650,6 +688,7 @@ func signer(c *cli.Context) error {
 		api       core.ExternalAPI
 		pwStorage storage.Storage = &storage.NoStorage{}
 	)
+
 	configDir := c.String(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
@@ -727,6 +766,7 @@ func signer(c *cli.Context) error {
 			Service:   api,
 		},
 	}
+
 	if c.Bool(utils.HTTPEnabledFlag.Name) {
 		vhosts := utils.SplitAndTrim(c.String(utils.HTTPVirtualHostsFlag.Name))
 		cors := utils.SplitAndTrim(c.String(utils.HTTPCORSDomainFlag.Name))
@@ -756,6 +796,7 @@ func signer(c *cli.Context) error {
 			log.Info("HTTP endpoint closed", "url", extapiURL)
 		}()
 	}
+
 	if !c.Bool(utils.IPCDisabledFlag.Name) {
 		givenPath := c.String(utils.IPCPathFlag.Name)
 		ipcapiURL = ipcEndpoint(filepath.Join(givenPath, "clef.ipc"), configDir)
@@ -769,6 +810,7 @@ func signer(c *cli.Context) error {
 			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
 	}
+
 	if c.Bool(testFlag.Name) {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
@@ -816,6 +858,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		file      string
 		configDir = ctx.String(configdirFlag.Name)
 	)
+
 	if ctx.IsSet(signerSecretFlag.Name) {
 		file = ctx.String(signerSecretFlag.Name)
 	} else {
@@ -824,6 +867,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	if err := checkFile(file); err != nil {
 		return nil, err
 	}
+
 	cipherKey, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -1215,5 +1259,6 @@ These data types are defined in the channel between clef and the UI`)
 	for _, elem := range output {
 		fmt.Println(elem)
 	}
+
 	return nil
 }

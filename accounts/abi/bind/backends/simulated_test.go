@@ -1349,6 +1349,7 @@ func TestCommitReturnValue(t *testing.T) {
 
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
+
 	defer sim.Close()
 
 	startBlockHeight := sim.blockchain.CurrentBlock().Number.Uint64()
@@ -1380,6 +1381,7 @@ func TestCommitReturnValue(t *testing.T) {
 	if h2 == h2fork {
 		t.Error("The block in the fork and the original block are the same block!")
 	}
+
 	if sim.blockchain.GetHeader(h2fork, startBlockHeight+2) == nil {
 		t.Error("Could not retrieve the just created block (side-chain)")
 	}
@@ -1392,6 +1394,7 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
+
 	defer sim.Close()
 
 	sim.Commit() // h1

@@ -63,14 +63,17 @@ func main() {
 func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
 	names := flag.Names()
 	set := make(map[string]struct{}, len(names))
+
 	for _, name := range names {
 		set[name] = struct{}{}
 	}
+
 	for _, fn := range ctx.FlagNames() {
 		if _, ok := set[fn]; ok {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -79,6 +82,7 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 	if ctx.NArg() < 1 {
 		exit("missing node as command-line argument")
 	}
+
 	n, err := parseNode(ctx.Args().First())
 	if err != nil {
 		exit(err)

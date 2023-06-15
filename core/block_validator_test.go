@@ -98,6 +98,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			addr   = crypto.PubkeyToAddress(key.PublicKey)
 			config = *params.AllCliqueProtocolChanges
 		)
+
 		engine = beacon.New(clique.New(params.AllCliqueProtocolChanges.Clique, rawdb.NewMemoryDatabase()))
 		gspec = &Genesis{
 			Config:    &config,
@@ -112,6 +113,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 
 		td := 0
 		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+
 		for i, block := range blocks {
 			header := block.Header()
 			if i > 0 {
@@ -127,6 +129,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			// calculate td
 			td += int(block.Difficulty().Uint64())
 		}
+
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
 		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, nil)
@@ -221,6 +224,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		headers = append(headers, block.Header())
 		seals = append(seals, true)
 	}
+
 	_, results := engine.VerifyHeaders(chain, headers, seals)
 	for i := 0; i < len(headers); i++ {
 		select {

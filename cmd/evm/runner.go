@@ -128,6 +128,7 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig *core.Genesis
 		preimages     = ctx.Bool(DumpFlag.Name)
 	)
+
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.Bool(DebugFlag.Name) {
@@ -136,6 +137,7 @@ func runCmd(ctx *cli.Context) error {
 	} else {
 		debugLogger = logger.NewStructLogger(logconfig)
 	}
+
 	if ctx.String(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.String(GenesisFlag.Name))
 		genesisConfig = gen
@@ -149,6 +151,7 @@ func runCmd(ctx *cli.Context) error {
 		statedb, _ = state.New(common.Hash{}, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}
+
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
@@ -159,6 +162,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var code []byte
+
 	codeFileFlag := ctx.String(CodeFileFlag.Name)
 	codeFlag := ctx.String(CodeFlag.Name)
 
@@ -202,6 +206,7 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(bin)
 	}
+
 	initialGas := ctx.Uint64(GasFlag.Name)
 	if genesisConfig.GasLimit != 0 {
 		initialGas = genesisConfig.GasLimit
@@ -241,6 +246,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var hexInput []byte
+
 	if inputFileFlag := ctx.String(InputFileFlag.Name); inputFileFlag != "" {
 		var err error
 		if hexInput, err = os.ReadFile(inputFileFlag); err != nil {
@@ -250,14 +256,18 @@ func runCmd(ctx *cli.Context) error {
 	} else {
 		hexInput = []byte(ctx.String(InputFlag.Name))
 	}
+
 	hexInput = bytes.TrimSpace(hexInput)
+
 	if len(hexInput)%2 != 0 {
 		fmt.Println("input length must be even")
 		os.Exit(1)
 	}
+
 	input := common.FromHex(string(hexInput))
 
 	var execFunc func() ([]byte, uint64, error)
+
 	if ctx.Bool(CreateFlag.Name) {
 		input = append(code, input...)
 		execFunc = func() ([]byte, uint64, error) {

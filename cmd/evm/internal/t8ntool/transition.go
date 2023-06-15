@@ -265,8 +265,10 @@ func Transition(ctx *cli.Context) error {
 	if chainConfig.IsShanghai(prestate.Env.Number) && prestate.Env.Withdrawals == nil {
 		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
 	}
+
 	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
 	env := prestate.Env
+
 	if isMerged {
 		// post-merge:
 		// - random must be supplied
@@ -277,6 +279,7 @@ func Transition(ctx *cli.Context) error {
 		case env.Difficulty != nil && env.Difficulty.BitLen() != 0:
 			return NewError(ErrorConfig, errors.New("post-merge difficulty must be zero (or omitted) in env"))
 		}
+
 		prestate.Env.Difficulty = nil
 	} else if env.Difficulty == nil {
 		// pre-merge:

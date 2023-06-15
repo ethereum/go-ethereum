@@ -400,6 +400,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time,
 	if res.ignored > 0 {
 		context = append(context, []interface{}{"ignored", res.ignored}...)
 	}
+
 	log.Debug("Imported new block headers", context...)
 	return res.status, err
 }
@@ -531,6 +532,7 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 		if !ok {
 			break
 		}
+
 		rlpData, _ := rlp.EncodeToBytes(header)
 		headers = append(headers, rlpData)
 		hash = header.ParentHash
@@ -607,12 +609,15 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		batch      = hc.chainDb.NewBatch()
 		origin     = true
 	)
+
 	done := func(header *types.Header) bool {
 		if headTime > 0 {
 			return header.Time <= headTime
 		}
+
 		return header.Number.Uint64() <= headBlock
 	}
+
 	for hdr := hc.CurrentHeader(); hdr != nil && !done(hdr); hdr = hc.CurrentHeader() {
 		num := hdr.Number.Uint64()
 

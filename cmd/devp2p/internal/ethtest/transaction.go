@@ -115,6 +115,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 			if len(txHashes) != len(msg.Sizes) {
 				return fmt.Errorf("invalid msg size lengths: hashes: %v sizes: %v", len(txHashes), len(msg.Sizes))
 			}
+
 			if len(txHashes) != len(msg.Types) {
 				return fmt.Errorf("invalid msg type lengths: hashes: %v types: %v", len(txHashes), len(msg.Types))
 			}
@@ -124,11 +125,13 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 					continue
 				}
 			}
+
 			for index, gotHash := range txHashes {
 				if gotHash == tx.Hash() {
 					if msg.Sizes[index] != uint32(tx.Size()) {
 						return fmt.Errorf("invalid tx size: got %v want %v", msg.Sizes[index], tx.Size())
 					}
+
 					if msg.Types[index] != tx.Type() {
 						return fmt.Errorf("invalid tx type: got %v want %v", msg.Types[index], tx.Type())
 					}
@@ -136,6 +139,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 					return nil
 				}
 			}
+
 			return fmt.Errorf("missing transaction announcement: got %v missing %v", txHashes, tx.Hash())
 
 		default:
@@ -165,6 +169,7 @@ func (s *Suite) sendMaliciousTxs(t *utesting.T) error {
 
 	for i, tx := range badTxs {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
+
 		if err = sendMaliciousTx(s, tx); err != nil {
 			return fmt.Errorf("malicious tx test failed:\ntx: %v\nerror: %v", tx, err)
 		}

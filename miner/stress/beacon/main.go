@@ -128,9 +128,11 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	// Inject the signer key and start sealing with it
 	stack.AccountManager().AddBackend(keystore.NewPlaintextKeyStore("beacon-stress"))
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)
+
 	if len(ks) == 0 {
 		panic("Keystore is not available")
 	}
+
 	store := ks[0].(*keystore.KeyStore)
 	if _, err := store.NewAccount(""); err != nil {
 		panic(err)
@@ -154,6 +156,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if timestamp <= parentTimestamp {
 		timestamp = parentTimestamp + 1
 	}
+
 	payloadAttribute := engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		Random:                common.Hash{},
@@ -168,6 +171,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if err != nil {
 		return nil, err
 	}
+
 	time.Sleep(time.Second * 5) // give enough time for block creation
 	return n.api.GetPayloadV1(*payload.PayloadID)
 }
@@ -205,10 +209,12 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed engine.Executab
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
+
 	block, err := engine.ExecutableDataToBlock(ed)
 	if err != nil {
 		return err
 	}
+
 	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.ParentHash(),
 		SafeBlockHash:      common.Hash{},
@@ -366,6 +372,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
+
 			block, _ := engine.ExecutableDataToBlock(*ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)

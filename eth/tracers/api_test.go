@@ -149,14 +149,17 @@ func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reex
 	if err != nil {
 		return nil, nil, errStateNotFound
 	}
+
 	if b.refHook != nil {
 		b.refHook()
 	}
+
 	release := func() {
 		if b.relHook != nil {
 			b.relHook()
 		}
 	}
+
 	return statedb, release, nil
 }
 
@@ -165,6 +168,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, nil, errBlockNotFound
 	}
+
 	statedb, release, err := b.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, errStateNotFound
@@ -181,6 +185,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		if idx == txIndex {
 			return msg, blockContext, statedb, release, nil
 		}
+
 		vmenv := vm.NewEVM(blockContext, txContext, statedb, b.chainConfig, vm.Config{})
 		// nolint : contextcheck
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
@@ -188,6 +193,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		}
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
 
@@ -218,6 +224,7 @@ func TestTraceCall(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	})
+
 	defer backend.teardown()
 	api := NewAPI(backend)
 	var testSuite = []struct {
@@ -301,6 +308,7 @@ func TestTraceCall(t *testing.T) {
 		{"pc":1,"op":"STOP","gas":24946982,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
 		},
 	}
+
 	for i, testspec := range testSuite {
 		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
 		if testspec.expectErr != nil {
@@ -353,16 +361,20 @@ func TestTraceTransaction(t *testing.T) {
 		b.AddTx(tx)
 		target = tx.Hash()
 	})
+
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
 	result, err := api.TraceTransaction(context.Background(), target, nil)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
+
 	var have *logger.ExecutionResult
+
 	if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
 		t.Errorf("failed to unmarshal result %v", err)
 	}
+
 	if !reflect.DeepEqual(have, &logger.ExecutionResult{
 		Gas:         params.TxGas,
 		Failed:      false,
@@ -401,6 +413,7 @@ func TestTraceBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	})
+
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
 
@@ -569,6 +582,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	})
+
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
 	randomAccounts := newAccounts(3)
@@ -930,6 +944,7 @@ func TestTraceChain(t *testing.T) {
 		rel   atomic.Uint32 // total rels has made
 		nonce uint64
 	)
+
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
@@ -945,6 +960,7 @@ func TestTraceChain(t *testing.T) {
 	api := NewAPI(backend)
 
 	single := `{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}`
+
 	var cases = []struct {
 		start  uint64
 		end    uint64
@@ -953,6 +969,7 @@ func TestTraceChain(t *testing.T) {
 		{0, 50, nil},  // the entire chain range, blocks [1, 50]
 		{10, 20, nil}, // the middle chain range, blocks [11, 20]
 	}
+
 	for _, c := range cases {
 		ref.Store(0)
 		rel.Store(0)
@@ -966,9 +983,11 @@ func TestTraceChain(t *testing.T) {
 			if next != uint64(result.Block) {
 				t.Error("Unexpected tracing block")
 			}
+
 			if len(result.Traces) != int(next) {
 				t.Error("Unexpected tracing result")
 			}
+
 			for _, trace := range result.Traces {
 				// nolint : errchkjson
 				blob, _ := json.Marshal(trace)
@@ -976,8 +995,10 @@ func TestTraceChain(t *testing.T) {
 					t.Error("Unexpected tracing result")
 				}
 			}
+
 			next += 1
 		}
+
 		if next != c.end+1 {
 			t.Error("Missing tracing block")
 		}

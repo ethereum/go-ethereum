@@ -36,6 +36,7 @@ func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
 	db := rawdb.NewMemoryDatabase()
+
 	if _, err := block.Commit(db, trie.NewDatabase(db)); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
@@ -222,6 +223,8 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 		}
 		hash, _ = alloc.deriveHash()
 	)
+
+	// nolint : errchkjson
 	blob, _ := json.Marshal(alloc)
 	rawdb.WriteGenesisStateSpec(db, hash, blob)
 

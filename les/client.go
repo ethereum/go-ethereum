@@ -94,19 +94,25 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var overrides core.ChainOverrides
+
 	if config.OverrideShanghai != nil {
 		overrides.OverrideShanghai = config.OverrideShanghai
 	}
+
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, trie.NewDatabase(chainDb), config.Genesis, &overrides)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
+
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
+
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
 		log.Info(line)
 	}
+
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
@@ -177,6 +183,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
+
 		if compat.RewindToTime > 0 {
 			leth.blockchain.SetHeadWithTimestamp(compat.RewindToTime)
 		} else {

@@ -254,6 +254,7 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header,
 	for i, body := range *p {
 		txset[i], uncleset[i], withdrawalset[i] = body.Transactions, body.Uncles, body.Withdrawals
 	}
+
 	return txset, uncleset, withdrawalset
 }
 

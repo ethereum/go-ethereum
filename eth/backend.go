@@ -140,6 +140,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
@@ -147,6 +148,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	ethashConfig := config.Ethash
 	ethashConfig.NotifyFull = config.Miner.NotifyFull
 	cliqueConfig, err := core.LoadCliqueConfig(chainDb, config.Genesis)
+
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +182,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
+
 	ethereum.APIBackend.gpo = gasprice.NewOracle(ethereum.APIBackend, gpoParams)
 
 	// Override the chain config with provided settings.
@@ -199,6 +202,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// END: Bor changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
+
 	var dbVer = "<nil>"
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
@@ -259,6 +263,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
+
 	ethereum.txPool = txpool.NewTxPool(config.TxPool, ethereum.blockchain.Config(), ethereum.blockchain)
 
 	// Permit the downloader to use the trie cache allowance during fast sync
@@ -267,6 +272,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[ethereum.blockchain.Genesis().Hash()]
 	}
+
 	if ethereum.handler, err = newHandler(&handlerConfig{
 		Database:       chainDb,
 		Chain:          ethereum.blockchain,
@@ -294,6 +300,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ethereum.snapDialCandidates, err = dnsclient.NewIterator(ethereum.config.SnapDiscoveryURLs...)
 	if err != nil {
 		return nil, err

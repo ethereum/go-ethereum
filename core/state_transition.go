@@ -77,6 +77,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	} else {
 		gas = params.TxGas
 	}
+
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
@@ -108,6 +109,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
 			}
+
 			gas += lenWords * params.InitCodeWordGas
 		}
 	}
@@ -165,8 +167,10 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	if baseFee != nil {
 		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
 	}
+
 	var err error
 	msg.From, err = types.Sender(s, tx)
+
 	return msg, err
 }
 
@@ -239,6 +243,7 @@ func (st *StateTransition) to() common.Address {
 	if st.msg == nil || st.msg.To == nil /* contract creation */ {
 		return common.Address{}
 	}
+
 	return *st.msg.To
 }
 
@@ -246,17 +251,21 @@ func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval = mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := mgval
+
 	if st.msg.GasFeeCap != nil {
 		balanceCheck = new(big.Int).SetUint64(st.msg.GasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
+
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
+
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
+
 	st.gasRemaining += st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
@@ -296,10 +305,12 @@ func (st *StateTransition) preCheck() error {
 				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 					msg.From.Hex(), l)
 			}
+
 			if l := msg.GasTipCap.BitLen(); l > 256 {
 				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
 					msg.From.Hex(), l)
 			}
+
 			if msg.GasFeeCap.Cmp(msg.GasTipCap) < 0 {
 				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
 					msg.From.Hex(), msg.GasTipCap, msg.GasFeeCap)
@@ -327,7 +338,9 @@ func (st *StateTransition) preCheck() error {
 // nil evm execution result.
 func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*ExecutionResult, error) {
 	input1 := st.state.GetBalance(st.msg.From)
+
 	var input2 *big.Int
+
 	if !st.noFeeBurnAndTip {
 		input2 = st.state.GetBalance(st.evm.Context.Coinbase)
 	}
@@ -348,6 +361,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 
 	if tracer := st.evm.Config.Tracer; tracer != nil {
 		tracer.CaptureTxStart(st.initialGas)
+
 		defer func() {
 			tracer.CaptureTxEnd(st.gasRemaining)
 		}()
@@ -365,9 +379,11 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	if err != nil {
 		return nil, err
 	}
+
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
+
 	st.gasRemaining -= gas
 
 	// Check clause 6
@@ -406,7 +422,9 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		// After EIP-3529: refunds are capped to gasUsed / 5
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
+
 	effectiveTip := msg.GasPrice
+
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
@@ -430,12 +448,15 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	if rules.IsLondon {
 		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
 		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
+
 		if !st.noFeeBurnAndTip {
 			st.state.AddBalance(burntContractAddress, burnAmount)
 		}
 	}
+
 	if !st.noFeeBurnAndTip {
 		st.state.AddBalance(st.evm.Context.Coinbase, amount)
+
 		output1 := new(big.Int).SetBytes(input1.Bytes())
 		output2 := new(big.Int).SetBytes(input2.Bytes())
 
@@ -472,6 +493,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}
+
 	st.gasRemaining += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.

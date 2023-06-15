@@ -157,6 +157,7 @@ func (i *bbInput) ToBlock() *types.Block {
 	if header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
+
 	return types.NewBlockWithHeader(header).WithBody(i.Txs, i.Ommers).WithWithdrawals(i.Withdrawals)
 }
 
@@ -317,11 +318,13 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		}
 		inputData.OmmersRlp = ommers
 	}
+
 	if withdrawalsStr != stdinSelector && withdrawalsStr != "" {
 		var withdrawals []*types.Withdrawal
 		if err := readFile(withdrawalsStr, "withdrawals", &withdrawals); err != nil {
 			return nil, err
 		}
+
 		inputData.Withdrawals = withdrawals
 	}
 	if txsStr != stdinSelector {
@@ -367,6 +370,7 @@ func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 		Rlp  hexutil.Bytes `json:"rlp"`
 		Hash common.Hash   `json:"hash"`
 	}
+
 	enc := blockInfo{
 		Rlp:  raw,
 		Hash: block.Hash(),

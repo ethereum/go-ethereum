@@ -129,6 +129,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
+
 	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
@@ -188,45 +189,59 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
+
 	if ctx.IsSet(utils.MetricsEnabledFlag.Name) {
 		cfg.Metrics.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsEnabledExpensiveFlag.Name) {
 		cfg.Metrics.EnabledExpensive = ctx.Bool(utils.MetricsEnabledExpensiveFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
 		cfg.Metrics.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsPortFlag.Name) {
 		cfg.Metrics.Port = ctx.Int(utils.MetricsPortFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsEnableInfluxDBFlag.Name) {
 		cfg.Metrics.EnableInfluxDB = ctx.Bool(utils.MetricsEnableInfluxDBFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
 		cfg.Metrics.InfluxDBEndpoint = ctx.String(utils.MetricsInfluxDBEndpointFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
 		cfg.Metrics.InfluxDBDatabase = ctx.String(utils.MetricsInfluxDBDatabaseFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
 		cfg.Metrics.InfluxDBUsername = ctx.String(utils.MetricsInfluxDBUsernameFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
 		cfg.Metrics.InfluxDBPassword = ctx.String(utils.MetricsInfluxDBPasswordFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBTagsFlag.Name) {
 		cfg.Metrics.InfluxDBTags = ctx.String(utils.MetricsInfluxDBTagsFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
 		cfg.Metrics.EnableInfluxDBV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBTokenFlag.Name) {
 		cfg.Metrics.InfluxDBToken = ctx.String(utils.MetricsInfluxDBTokenFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBBucketFlag.Name) {
 		cfg.Metrics.InfluxDBBucket = ctx.String(utils.MetricsInfluxDBBucketFlag.Name)
 	}
+
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
 	}

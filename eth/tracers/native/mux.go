@@ -44,13 +44,16 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, er
 			return nil, err
 		}
 	}
+
 	objects := make([]tracers.Tracer, 0, len(config))
 	names := make([]string, 0, len(config))
+
 	for k, v := range config {
 		t, err := tracers.DefaultDirectory.New(k, ctx, v)
 		if err != nil {
 			return nil, err
 		}
+
 		objects = append(objects, t)
 		names = append(names, k)
 	}
@@ -116,17 +119,22 @@ func (t *muxTracer) CaptureTxEnd(restGas uint64) {
 // GetResult returns an empty json object.
 func (t *muxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)
+
 	for i, tt := range t.tracers {
 		r, err := tt.GetResult()
 		if err != nil {
 			return nil, err
 		}
+
 		resObject[t.names[i]] = r
 	}
+
 	res, err := json.Marshal(resObject)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return res, nil
 }
 

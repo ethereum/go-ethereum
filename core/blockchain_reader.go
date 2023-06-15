@@ -138,6 +138,7 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
+
 	if !bc.HasHeader(hash, number) {
 		return false
 	}

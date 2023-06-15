@@ -66,6 +66,7 @@ func getCheckpoint(ctx *cli.Context, client *rpc.Client) *params.TrustedCheckpoi
 
 	if ctx.IsSet(indexFlag.Name) {
 		var result [3]string
+
 		index := uint64(ctx.Int64(indexFlag.Name))
 		if err := client.Call(&result, "les_getCheckpoint", index); err != nil {
 			utils.Fatalf("Failed to get local checkpoint %v, please ensure the les API is exposed", err)

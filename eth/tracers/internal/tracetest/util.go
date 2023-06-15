@@ -68,5 +68,6 @@ func camel(str string) string {
 	for i := 1; i < len(pieces); i++ {
 		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
 	}
+
 	return strings.Join(pieces, "")
 }

@@ -80,6 +80,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads engine.ForkchoiceStateV1, pay
 			// TODO (MariusVanDerWijden) trigger sync
 			return engine.STATUS_SYNCING, nil
 		}
+
 		return engine.STATUS_INVALID, err
 	}
 	// If the finalized block is set, check if it is in our blockchain
@@ -136,11 +137,13 @@ func (api *ConsensusAPI) ExecutePayloadV1(params engine.ExecutableData) (engine.
 		merger.ReachTTD()
 	}
 	hash := block.Hash()
+
 	return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
 }
 
 func (api *ConsensusAPI) validForkChoiceResponse() engine.ForkChoiceResponse {
 	currentHash := api.les.BlockChain().CurrentHeader().Hash()
+
 	return engine.ForkChoiceResponse{
 		PayloadStatus: engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &currentHash},
 	}
@@ -181,6 +184,7 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 	if newHeadHeader == nil {
 		return errors.New("unknown header")
 	}
+
 	if err := api.les.BlockChain().SetCanonical(newHeadHeader); err != nil {
 		return err
 	}
@@ -195,6 +199,7 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 // the configuration of the node.
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.TransitionConfigurationV1) (*engine.TransitionConfigurationV1, error) {
 	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
+
 	if config.TerminalTotalDifficulty == nil {
 		return nil, errors.New("invalid terminal total difficulty")
 	}
@@ -213,6 +218,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 				TerminalBlockNumber:     config.TerminalBlockNumber,
 			}, nil
 		}
+
 		return nil, fmt.Errorf("invalid terminal block hash")
 	}
 

@@ -497,6 +497,7 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 		req.codeTasks[hash] = t
 		delete(s.codeTasks, hash)
 	}
+
 	for path, t := range s.trieTasks {
 		// Stop when we've gathered enough requests
 		if len(nodes)+len(codes) == n {
@@ -513,6 +514,7 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 		paths = append(paths, t.path)
 
 		req.trieTasks[path] = t
+
 		delete(s.trieTasks, path)
 	}
 	req.nItems = uint16(len(nodes) + len(codes))
@@ -551,6 +553,7 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()
+
 	for path, task := range req.trieTasks {
 		// If the node did deliver something, missing items may be due to a protocol
 		// limit or a previous timeout + delayed delivery. Both cases should permit
@@ -602,19 +605,25 @@ func (s *stateSync) processNodeData(nodeTasks map[string]*trieTask, codeTasks ma
 			Hash: hash,
 			Data: blob,
 		})
+
 		delete(codeTasks, hash)
+
 		return hash, err
 	}
+
 	for path, task := range nodeTasks {
 		if task.hash == hash {
 			err := s.sched.ProcessNode(trie.NodeSyncResult{
 				Path: path,
 				Data: blob,
 			})
+
 			delete(nodeTasks, path)
+
 			return hash, err
 		}
 	}
+
 	return common.Hash{}, trie.ErrNotRequested
 }
 

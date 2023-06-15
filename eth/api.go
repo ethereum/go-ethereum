@@ -267,6 +267,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		_, stateDb := api.eth.miner.Pending()
 		return stateDb.RawDump(opts), nil
 	}
+
 	var header *types.Header
 	if blockNr == rpc.LatestBlockNumber {
 		header = api.eth.blockchain.CurrentBlock()
@@ -281,9 +282,11 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		}
 		header = block.Header()
 	}
+
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
+
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return state.Dump{}, err
@@ -419,10 +422,13 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, 
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
+
 	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
+
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
+
 	defer release()
 
 	st, err := statedb.StorageTrie(contractAddress)
@@ -523,6 +529,7 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if err != nil {
 		return nil, err
 	}
+
 	newTrie, err := trie.NewStateTrie(trie.StateTrieID(endBlock.Root()), triedb)
 	if err != nil {
 		return nil, err
@@ -599,6 +606,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
+
 	return 0, errors.New("no state found")
 }
 
@@ -609,6 +617,8 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	if err != nil {
 		return err
 	}
+
 	api.eth.blockchain.SetTrieFlushInterval(t)
+
 	return nil
 }

@@ -387,10 +387,12 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 		for i, body := range res.BlockBodiesPacket {
 			txsHashes[i] = types.DeriveSha(types.Transactions(body.Transactions), hasher)
 			uncleHashes[i] = types.CalcUncleHash(body.Uncles)
+
 			if body.Withdrawals != nil {
 				withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
 			}
 		}
+
 		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes}
 	}
 	return peer.dispatchResponse(&Response{
@@ -440,6 +442,7 @@ func handleNewPooledTransactionHashes66(backend Backend, msg Decoder, peer *Peer
 	if !backend.AcceptTxs() {
 		return nil
 	}
+
 	ann := new(NewPooledTransactionHashesPacket66)
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
@@ -457,10 +460,13 @@ func handleNewPooledTransactionHashes68(backend Backend, msg Decoder, peer *Peer
 	if !backend.AcceptTxs() {
 		return nil
 	}
+
 	ann := new(NewPooledTransactionHashesPacket68)
+
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+
 	if len(ann.Hashes) != len(ann.Types) || len(ann.Hashes) != len(ann.Sizes) {
 		return fmt.Errorf("%w: message %v: invalid len of fields: %v %v %v", errDecode, msg, len(ann.Hashes), len(ann.Types), len(ann.Sizes))
 	}
@@ -468,6 +474,7 @@ func handleNewPooledTransactionHashes68(backend Backend, msg Decoder, peer *Peer
 	for _, hash := range ann.Hashes {
 		peer.markTransaction(hash)
 	}
+
 	return backend.Handle(peer, ann)
 }
 

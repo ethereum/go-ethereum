@@ -53,6 +53,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timer     *time.Timer
 		cancel    context.CancelFunc
 	)
+
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 
@@ -88,6 +89,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
+
 	timer.Stop()
 	responded.Do(func() {
 		responseJSON, err := json.Marshal(response)

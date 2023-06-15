@@ -236,6 +236,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 	}
 	fmt.Println("Testing your password against all of them...")
 	var match *accounts.Account
+
 	for i, a := range err.Matches {
 		if e := ks.Unlock(a, auth); e == nil {
 			match = &err.Matches[i]
@@ -302,9 +303,11 @@ func accountUpdate(ctx *cli.Context) error {
 	}
 	stack, _ := makeConfigNode(ctx)
 	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
+
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
+
 	ks := backends[0].(*keystore.KeyStore)
 
 	for _, addr := range ctx.Args().Slice() {
@@ -321,6 +324,7 @@ func importWallet(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
 		utils.Fatalf("keyfile must be given as the only argument")
 	}
+
 	keyfile := ctx.Args().First()
 	keyJSON, err := os.ReadFile(keyfile)
 	if err != nil {
@@ -334,6 +338,7 @@ func importWallet(ctx *cli.Context) error {
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
+
 	ks := backends[0].(*keystore.KeyStore)
 	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
@@ -347,6 +352,7 @@ func accountImport(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
 		utils.Fatalf("keyfile must be given as the only argument")
 	}
+
 	keyfile := ctx.Args().First()
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
@@ -359,6 +365,7 @@ func accountImport(ctx *cli.Context) error {
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
+
 	ks := backends[0].(*keystore.KeyStore)
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {

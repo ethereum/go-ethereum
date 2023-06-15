@@ -71,27 +71,37 @@ type Genesis struct {
 
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	var genesis Genesis
+
 	stored := rawdb.ReadCanonicalHash(db, 0)
+
 	if (stored == common.Hash{}) {
 		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
 	}
+
 	blob := rawdb.ReadGenesisStateSpec(db, stored)
+
 	if blob == nil {
 		return nil, fmt.Errorf("genesis state missing from db")
 	}
+
 	if len(blob) != 0 {
 		if err := genesis.Alloc.UnmarshalJSON(blob); err != nil {
 			return nil, fmt.Errorf("could not unmarshal genesis state json: %s", err)
 		}
 	}
+
 	genesis.Config = rawdb.ReadChainConfig(db, stored)
+
 	if genesis.Config == nil {
 		return nil, fmt.Errorf("genesis config missing from db")
 	}
+
 	genesisBlock := rawdb.ReadBlock(db, stored, 0)
+
 	if genesisBlock == nil {
 		return nil, fmt.Errorf("genesis block missing from db")
 	}
+
 	genesisHeader := genesisBlock.Header()
 	genesis.Nonce = genesisHeader.Nonce.Uint64()
 	genesis.Timestamp = genesisHeader.Time
@@ -136,6 +146,7 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
+
 	return statedb.Commit(false)
 }
 
@@ -147,14 +158,17 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	if err != nil {
 		return err
 	}
+
 	for addr, account := range *ga {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
+
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
 	}
+
 	root, err := statedb.Commit(false)
 	if err != nil {
 		return err
@@ -170,6 +184,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	if err != nil {
 		return err
 	}
+
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
 	return nil
 }
@@ -178,6 +193,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 // hash and commits it into the provided trie database.
 func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
 	var alloc GenesisAlloc
+
 	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
@@ -206,6 +222,7 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 			return errors.New("not found")
 		}
 	}
+
 	return alloc.flush(db, triedb, blockhash)
 }
 
@@ -295,6 +312,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
+
 	applyOverrides := func(config *params.ChainConfig) {
 		if config != nil {
 			// TODO marcello double check
@@ -312,10 +330,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		} else {
 			log.Info("Writing custom genesis block")
 		}
+
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+
 		applyOverrides(genesis.Config)
 		return genesis.Config, block.Hash(), nil
 	}
@@ -331,10 +351,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
+
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, hash, err
 		}
+
 		applyOverrides(genesis.Config)
 		return genesis.Config, block.Hash(), nil
 	}
@@ -357,6 +379,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
+
+	// nolint:errchkjson
 	storedData, _ := json.Marshal(storedcfg)
 	// Special case: if a private network is being used (no genesis and also no
 	// mainnet hash in the database), we must not apply the `configOrDefault`
@@ -373,7 +397,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if head == nil {
 		return newcfg, stored, fmt.Errorf("missing head header")
 	}
+
 	compatErr := storedcfg.CheckCompatible(newcfg, head.Number.Uint64(), head.Time)
+
 	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
 		return newcfg, stored, compatErr
 	}
@@ -413,6 +439,7 @@ func LoadCliqueConfig(db ethdb.Database, genesis *Genesis) (*params.CliqueConfig
 		if stored != (common.Hash{}) && genesis.ToBlock().Hash() != stored {
 			return nil, &GenesisMismatchError{stored, genesis.ToBlock().Hash()}
 		}
+
 		return genesis.Config.Clique, nil
 	}
 	// There is no stored chain config and no new config provided,
@@ -478,11 +505,14 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
+
 	var withdrawals []*types.Withdrawal
+
 	if g.Config != nil && g.Config.IsShanghai(g.Timestamp) {
 		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
+
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
 }
 
@@ -500,6 +530,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
+
 	if config.Clique != nil && len(block.Extra()) < 32+crypto.SignatureLength {
 		return nil, errors.New("can't start clique chain without signers")
 	}

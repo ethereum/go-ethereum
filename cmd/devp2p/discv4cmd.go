@@ -282,18 +282,25 @@ func parseExtAddr(spec string) (ip net.IP, port int, ok bool) {
 	if ip != nil {
 		return ip, 0, true
 	}
+
 	host, portstr, err := net.SplitHostPort(spec)
+
 	if err != nil {
 		return nil, 0, false
 	}
+
 	ip = net.ParseIP(host)
+
 	if ip == nil {
 		return nil, 0, false
 	}
+
 	port, err = strconv.Atoi(portstr)
+
 	if err != nil {
 		return nil, 0, false
 	}
+
 	return ip, port, true
 }
 
@@ -326,7 +333,9 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 		if !ok {
 			exit(fmt.Errorf("-%s: invalid external address %q", extAddrFlag.Name, extAddr))
 		}
+
 		ln.SetStaticIP(ip)
+
 		if port != 0 {
 			ln.SetFallbackUDP(port)
 		}

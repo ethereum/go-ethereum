@@ -49,6 +49,7 @@ func TestAccountListEmpty(t *testing.T) {
 
 func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+
 	var want = `
 Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
 Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}/keystore/aaa
@@ -122,12 +123,14 @@ func TestAccountHelp(t *testing.T) {
 
 	geth := runGeth(t, "account", "-h")
 	geth.WaitExit()
+
 	if have, want := geth.ExitStatus(), 0; have != want {
 		t.Errorf("exit error, have %d want %d", have, want)
 	}
 
 	geth = runGeth(t, "account", "import", "-h")
 	geth.WaitExit()
+
 	if have, want := geth.ExitStatus(), 0; have != want {
 		t.Errorf("exit error, have %d want %d", have, want)
 	}
@@ -136,13 +139,16 @@ func TestAccountHelp(t *testing.T) {
 func importAccountWithExpect(t *testing.T, key string, expected string) {
 	dir := t.TempDir()
 	keyfile := filepath.Join(dir, "key.prv")
+
 	if err := os.WriteFile(keyfile, []byte(key), 0600); err != nil {
 		t.Error(err)
 	}
 	passwordFile := filepath.Join(dir, "password.txt")
+
 	if err := os.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
 		t.Error(err)
 	}
+
 	geth := runGeth(t, "--lightkdf", "account", "import", "-password", passwordFile, keyfile)
 	defer geth.ExpectExit()
 	geth.Expect(expected)

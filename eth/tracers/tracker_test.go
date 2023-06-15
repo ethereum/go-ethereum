@@ -54,11 +54,13 @@ func TestTracker(t *testing.T) {
 			expHead: 6,
 		},
 	}
+
 	for _, c := range cases {
 		tracker := newStateTracker(c.limit, 0)
 		for _, call := range c.calls {
 			tracker.releaseState(call, func() {})
 		}
+
 		tracker.lock.RLock()
 		head := tracker.oldest
 		tracker.lock.RUnlock()
@@ -105,13 +107,16 @@ func TestTracker(t *testing.T) {
 			expHead: 5,
 		},
 	}
+
 	tracker := newStateTracker(5, 0) // limit = 5, oldest = 0
+
 	for _, call := range calls {
 		tracker.releaseState(call.number, nil)
 		tracker.lock.RLock()
 		if !reflect.DeepEqual(tracker.used, call.expUsed) {
 			t.Fatalf("Unexpected used array")
 		}
+
 		if tracker.oldest != call.expHead {
 			t.Fatalf("Unexpected head")
 		}

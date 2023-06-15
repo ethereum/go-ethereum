@@ -66,6 +66,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	// Execute all the transaction contained within the block concurrently

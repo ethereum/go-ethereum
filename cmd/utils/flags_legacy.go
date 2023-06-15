@@ -54,5 +54,6 @@ func showDeprecated(*cli.Context) error {
 		fmt.Println(flag.String())
 	}
 	fmt.Println()
+
 	return nil
 }

@@ -133,18 +133,23 @@ func TestMemCopying(t *testing.T) {
 		mem := vm.NewMemory()
 		mem.Resize(uint64(tc.memsize))
 		cpy, err := GetMemoryCopyPadded(mem, tc.offset, tc.size)
+
 		if want := tc.wantErr; want != "" {
 			if err == nil {
 				t.Fatalf("test %d: want '%v' have no error", i, want)
 			}
+
 			if have := err.Error(); want != have {
 				t.Fatalf("test %d: want '%v' have '%v'", i, want, have)
 			}
+
 			continue
 		}
+
 		if err != nil {
 			t.Fatalf("test %d: unexpected error: %v", i, err)
 		}
+
 		if want, have := tc.wantSize, len(cpy); have != want {
 			t.Fatalf("test %d: want %v have %v", i, want, have)
 		}

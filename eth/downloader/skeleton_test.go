@@ -58,6 +58,7 @@ func (hf *hookedBackfiller) suspend() *types.Header {
 	if hf.suspendHook != nil {
 		return hf.suspendHook()
 	}
+
 	return nil // we don't really care about header cleanups for now
 }
 
@@ -161,6 +162,7 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 			}
 		}
 	}
+
 	p.served.Add(uint64(len(headers)))
 
 	hashes := make([]common.Hash, len(headers))
@@ -487,6 +489,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		skeleton.Sync(tt.head, nil, true)
 
 		<-wait
+
 		if err := skeleton.Sync(tt.extend, nil, false); err != tt.err {
 			t.Errorf("test %d: extension failure mismatch: have %v, want %v", i, err, tt.err)
 		}
@@ -530,6 +533,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 	for i := 0; i < len(chain)/2; i++ { // Fork at block #5000
 		sidechain = append(sidechain, chain[i])
 	}
+
 	for i := len(chain) / 2; i < len(chain); i++ {
 		sidechain = append(sidechain, &types.Header{
 			ParentHash: sidechain[i-1].Hash(),
@@ -824,6 +828,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Create a backfiller if we need to run more advanced tests
 		filler := newHookedBackfiller()
+
 		if tt.fill {
 			var filled *types.Header
 
@@ -892,18 +897,23 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			t.Error(err)
 			continue
 		}
+
 		if !tt.unpredictable {
 			var served uint64
 			for _, peer := range tt.peers {
 				served += peer.served.Load()
 			}
+
 			if served != tt.midserve {
 				t.Errorf("test %d, mid state: served headers mismatch: have %d, want %d", i, served, tt.midserve)
 			}
+
 			var drops uint64
+
 			for _, peer := range tt.peers {
 				drops += peer.dropped.Load()
 			}
+
 			if drops != tt.middrop {
 				t.Errorf("test %d, mid state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
 			}
@@ -934,6 +944,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			return nil
 		}
 		waitStart = time.Now()
+
 		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < 2*time.Second; waitTime = waitTime * 2 {
 			time.Sleep(waitTime)
 			// Check the post-init end state if it matches the required results
@@ -952,19 +963,25 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			for _, peer := range tt.peers {
 				served += peer.served.Load()
 			}
+
 			if tt.newPeer != nil {
 				served += tt.newPeer.served.Load()
 			}
+
 			if served != tt.endserve {
 				t.Errorf("test %d, end state: served headers mismatch: have %d, want %d", i, served, tt.endserve)
 			}
+
 			drops := uint64(0)
+
 			for _, peer := range tt.peers {
 				drops += peer.dropped.Load()
 			}
+
 			if tt.newPeer != nil {
 				drops += tt.newPeer.dropped.Load()
 			}
+
 			if drops != tt.enddrop {
 				t.Errorf("test %d, end state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
 			}

@@ -364,6 +364,7 @@ func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccou
 	if err != nil {
 		return types.StateAccount{}, err
 	}
+
 	blob, err := trie.Get(hash[:])
 	if err != nil {
 		return types.StateAccount{}, err
@@ -392,6 +393,7 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	if root == (common.Hash{}) {
 		return nil
 	}
+
 	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
 	return trie
 }

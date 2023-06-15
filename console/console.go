@@ -182,6 +182,7 @@ func (c *Console) initWeb3(bridge *bridge) error {
 	if err := c.jsre.Compile("bignumber.js", deps.BigNumberJS); err != nil {
 		return fmt.Errorf("bignumber.js: %v", err)
 	}
+
 	if err := c.jsre.Compile("web3.js", deps.Web3JS); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
@@ -208,6 +209,7 @@ func (c *Console) initExtensions() error {
 	if err != nil {
 		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == methodNotFound {
 			log.Warn("Server does not support method rpc_modules, using default API list.")
+
 			apis = defaultAPIs
 		} else {
 			return err
@@ -260,6 +262,7 @@ func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	if personal == nil || c.prompter == nil {
 		return
 	}
+
 	log.Warn("Enabling deprecated personal namespace")
 	jeth := vm.NewObject()
 	vm.Set("jeth", jeth)

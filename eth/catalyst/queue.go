@@ -97,10 +97,12 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 		if item == nil {
 			return false
 		}
+
 		if item.id == id {
 			return true
 		}
 	}
+
 	return false
 }
 

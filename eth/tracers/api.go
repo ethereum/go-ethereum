@@ -288,15 +288,18 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
+
 	sub := notifier.CreateSubscription()
 
 	// nolint : contextcheck
 	resCh := api.traceChain(from, to, config, notifier.Closed())
+
 	go func() {
 		for result := range resCh {
 			notifier.Notify(sub.ID, result)
 		}
 	}()
+
 	return sub, nil
 }
 
@@ -350,6 +353,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					txs = txs[:len(txs)-1]
 					stateSyncPresent = false
 				}
+
 				for i, tx := range task.block.Transactions() {
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
 					txctx := &Context{
@@ -421,6 +425,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			default:
 				log.Info("Chain tracing finished", "start", start.NumberU64(), "end", end.NumberU64(), "transactions", traced, "elapsed", time.Since(begin))
 			}
+
 			close(resCh)
 		}()
 		// Feed all the blocks both into the tracer, as well as fast process concurrently
@@ -442,6 +447,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				failed = err
 				break
 			}
+
 			next, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
@@ -460,10 +466,12 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// limit, the trie database will be reconstructed from scratch only
 			// if the relevant state is available in disk.
 			var preferDisk bool
+
 			if statedb != nil {
 				s1, s2 := statedb.Database().TrieDB().Size()
 				preferDisk = s1+s2 > defaultTracechainMemLimit
 			}
+
 			statedb, release, err = api.backend.StateAtBlock(ctx, block, reexec, statedb, false, preferDisk)
 			if err != nil {
 				failed = err
@@ -495,6 +503,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			next = start.NumberU64() + 1
 			done = make(map[uint64]*blockTraceResult)
 		)
+
 		for res := range resCh {
 			// Queue up next received result
 			result := &blockTraceResult{
@@ -518,6 +527,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			}
 		}
 	}()
+
 	return retCh
 }
 
@@ -636,10 +646,12 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	var (
@@ -660,6 +672,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			txContext = core.NewEVMTxContext(msg)
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
+
 		statedb.SetTxContext(tx.Hash(), i)
 		//nolint: nestif
 		if stateSyncPresent && i == len(txs)-1 {
@@ -758,6 +771,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	// create and add empty mvHashMap in statedb as StateAtBlock does not have mvHashmap in it.
@@ -778,6 +792,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if threads > len(txs) {
 		threads = len(txs)
 	}
+
 	jobs := make(chan *txTraceTask, threads)
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -982,10 +997,12 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	// Retrieve the tracing configurations, or use default values
@@ -1040,6 +1057,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			if !canon {
 				prefix = fmt.Sprintf("%valt-", prefix)
 			}
+
 			dump, err = os.CreateTemp(os.TempDir(), prefix)
 			if err != nil {
 				return nil, err
@@ -1143,10 +1161,12 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if err != nil {
 		return nil, err
 	}
+
 	msg, vmctx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, int(index), reexec)
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	txctx := &Context{
@@ -1190,18 +1210,22 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
+
 	defer release()
 
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+
 	// Apply the customization rules if required.
 	if config != nil {
 		if err := config.StateOverrides.Apply(statedb); err != nil {
 			return nil, err
 		}
+
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
@@ -1238,6 +1262,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 		timeout   = defaultTraceTimeout
 		txContext = core.NewEVMTxContext(message)
 	)
+
 	if config == nil {
 		config = &TraceConfig{}
 	}
@@ -1249,6 +1274,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 			return nil, err
 		}
 	}
+
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
 
 	// Define a meaningful timeout of a single transaction trace
@@ -1257,15 +1283,19 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 			return nil, err
 		}
 	}
+
 	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+
 	go func() {
 		<-deadlineCtx.Done()
+
 		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
 			tracer.Stop(errors.New("execution timeout"))
 			// Stop evm execution. Note cancellation is not necessarily immediate.
 			vmenv.Cancel()
 		}
 	}()
+
 	defer cancel()
 
 	// Call Prepare to clear out the statedb access list
@@ -1287,6 +1317,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}
 	}
+
 	return tracer.GetResult()
 }
 
@@ -1314,30 +1345,37 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		chainConfigCopy.BerlinBlock = block
 		canon = false
 	}
+
 	if block := override.LondonBlock; block != nil {
 		chainConfigCopy.LondonBlock = block
 		canon = false
 	}
+
 	if block := override.ArrowGlacierBlock; block != nil {
 		chainConfigCopy.ArrowGlacierBlock = block
 		canon = false
 	}
+
 	if block := override.GrayGlacierBlock; block != nil {
 		chainConfigCopy.GrayGlacierBlock = block
 		canon = false
 	}
+
 	if block := override.MergeNetsplitBlock; block != nil {
 		chainConfigCopy.MergeNetsplitBlock = block
 		canon = false
 	}
+
 	if timestamp := override.ShanghaiTime; timestamp != nil {
 		chainConfigCopy.ShanghaiTime = timestamp
 		canon = false
 	}
+
 	if timestamp := override.CancunTime; timestamp != nil {
 		chainConfigCopy.CancunTime = timestamp
 		canon = false
 	}
+
 	if timestamp := override.PragueTime; timestamp != nil {
 		chainConfigCopy.PragueTime = timestamp
 		canon = false

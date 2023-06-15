@@ -371,6 +371,7 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 	if errors.Is(err, ErrMergeTransition) {
 		return err // This is an expected fault, don't keep printing it in a spin-loop
 	}
+
 	log.Warn("Synchronisation failed, retrying", "err", err)
 	return err
 }
@@ -524,9 +525,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			}
 		}
 	}
-		// If no pivot block was returned, the head is below the min full block
-		// threshold (i.e. new chain). In that case we won't really fast sync
-		// anyway, but still need a valid pivot block to avoid some code hitting
+	// If no pivot block was returned, the head is below the min full block
+	// threshold (i.e. new chain). In that case we won't really fast sync
+	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
 	if mode == SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
@@ -568,6 +569,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
 		}
 	}
+
 	d.committed.Store(true)
 	if mode == SnapSync && pivot.Number.Uint64() != 0 {
 		d.committed.Store(false)
@@ -1677,6 +1679,7 @@ func (d *Downloader) processSnapSyncContent() error {
 		if d.chainInsertHook != nil {
 			d.chainInsertHook(results)
 		}
+
 		d.reportSnapSyncProgress(false)
 
 		// If we haven't downloaded the pivot block yet, check pivot staleness
@@ -1821,6 +1824,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if err := d.blockchain.SnapSyncCommitHead(block.Hash()); err != nil {
 		return err
 	}
+
 	d.committed.Store(true)
 	return nil
 }
@@ -1859,17 +1863,22 @@ func (d *Downloader) readHeaderRange(last *types.Header, count int) []*types.Hea
 		current = last
 		headers []*types.Header
 	)
+
 	for {
 		parent := d.lightchain.GetHeaderByHash(current.ParentHash)
 		if parent == nil {
 			break // The chain is not continuous, or the chain is exhausted
 		}
+
 		headers = append(headers, parent)
+
 		if len(headers) >= count {
 			break
 		}
+
 		current = parent
 	}
+
 	return headers
 }
 
@@ -1889,15 +1898,20 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		bodyBytes, _    = d.stateDB.AncientSize(rawdb.ChainFreezerBodiesTable)
 		receiptBytes, _ = d.stateDB.AncientSize(rawdb.ChainFreezerReceiptTable)
 	)
+
 	syncedBytes := common.StorageSize(headerBytes + bodyBytes + receiptBytes)
+
 	if syncedBytes == 0 {
 		return
 	}
+
 	var (
 		header = d.blockchain.CurrentHeader()
 		block  = d.blockchain.CurrentSnapBlock()
 	)
+
 	syncedBlocks := block.Number.Uint64() - d.syncStartBlock
+
 	if syncedBlocks == 0 {
 		return
 	}
@@ -1907,12 +1921,14 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		// We're going to cheat for non-merged networks, but that's fine
 		latest = d.pivotHeader
 	}
+
 	if latest == nil {
 		// This should really never happen, but add some defensive code for now.
 		// TODO(karalabe): Remove it eventually if we don't see it blow.
 		log.Error("Nil latest block in sync progress report")
 		return
 	}
+
 	var (
 		left = latest.Number.Uint64() - block.Number.Uint64()
 		eta  = time.Since(d.syncStartTime) / time.Duration(syncedBlocks) * time.Duration(left)
@@ -1922,6 +1938,8 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		bodies   = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(block.Number.Uint64()), common.StorageSize(bodyBytes).TerminalString())
 		receipts = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(block.Number.Uint64()), common.StorageSize(receiptBytes).TerminalString())
 	)
+
 	log.Info("Syncing: chain download in progress", "synced", progress, "chain", syncedBytes, "headers", headers, "bodies", bodies, "receipts", receipts, "eta", common.PrettyDuration(eta))
+
 	d.syncLogTime = time.Now()
 }

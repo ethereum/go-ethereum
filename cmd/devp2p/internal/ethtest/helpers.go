@@ -208,14 +208,18 @@ loop:
 // node, and one for receiving messages from the node.
 func (s *Suite) createSendAndRecvConns() (*Conn, *Conn, error) {
 	sendConn, err := s.dial()
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial failed: %v", err)
 	}
+
 	recvConn, err := s.dial()
+
 	if err != nil {
 		sendConn.Close()
 		return nil, nil, fmt.Errorf("dial failed: %v", err)
 	}
+
 	return sendConn, recvConn, nil
 }
 
@@ -235,10 +239,12 @@ func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
 			if err != nil {
 				return errorf("could not get headers for inbound header request: %v", err)
 			}
+
 			resp := &BlockHeaders{
 				RequestId:          msg.ReqID(),
 				BlockHeadersPacket: eth.BlockHeadersPacket(headers),
 			}
+
 			if err := c.Write(resp); err != nil {
 				return errorf("could not write to connection: %v", err)
 			}
@@ -246,6 +252,7 @@ func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
 			return msg
 		}
 	}
+
 	return errorf("no message received within %v", timeout)
 }
 
@@ -263,10 +270,13 @@ func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, reqID uint
 	// wait for response
 	msg := c.waitForResponse(chain, timeout, request.RequestId)
 	resp, ok := msg.(*BlockHeaders)
+
 	if !ok {
 		return nil, fmt.Errorf("unexpected message received: %s", pretty.Sdump(msg))
 	}
+
 	headers := []*types.Header(resp.BlockHeadersPacket)
+
 	return headers, nil
 }
 
@@ -591,21 +601,26 @@ func (s *Suite) hashAnnounce() error {
 	// Announcement sent, now wait for a header request
 	msg := sendConn.Read()
 	blockHeaderReq, ok := msg.(*GetBlockHeaders)
+
 	if !ok {
 		return fmt.Errorf("unexpected %s", pretty.Sdump(msg))
 	}
+
 	if blockHeaderReq.Amount != 1 {
 		return fmt.Errorf("unexpected number of block headers requested: %v", blockHeaderReq.Amount)
 	}
+
 	if blockHeaderReq.Origin.Hash != announcement.Hash {
 		return fmt.Errorf("unexpected block header requested. Announced:\n %v\n Remote request:\n%v",
 			pretty.Sdump(announcement),
 			pretty.Sdump(blockHeaderReq))
 	}
+
 	err = sendConn.Write(&BlockHeaders{
 		RequestId:          blockHeaderReq.ReqID(),
 		BlockHeadersPacket: eth.BlockHeadersPacket{nextBlock.Header()},
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}

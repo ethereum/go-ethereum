@@ -286,6 +286,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				_, exp := timeouts.Peek()
 				timeout.Reset(time.Until(time.Unix(0, -exp)))
 			}
+
 			delete(ordering, req)
 
 			// New timeout potentially set if there are more requests pending,

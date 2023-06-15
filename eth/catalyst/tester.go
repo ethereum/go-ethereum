@@ -47,12 +47,14 @@ func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, block *type
 		closed: make(chan struct{}),
 	}
 	stack.RegisterLifecycle(cl)
+
 	return cl, nil
 }
 
 // Start launches the beacon sync with provided sync target.
 func (tester *FullSyncTester) Start() error {
 	tester.wg.Add(1)
+
 	go func() {
 		defer tester.wg.Done()
 
@@ -85,6 +87,7 @@ func (tester *FullSyncTester) Start() error {
 			}
 		}
 	}()
+
 	return nil
 }
 
@@ -93,5 +96,6 @@ func (tester *FullSyncTester) Start() error {
 func (tester *FullSyncTester) Stop() error {
 	close(tester.closed)
 	tester.wg.Wait()
+
 	return nil
 }

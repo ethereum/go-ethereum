@@ -77,9 +77,11 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 			childC := child.ComputeCommitment().Bytes()
 
 			childS, err := resolver(childC[:])
+
 			if bytes.Equal(childC[:], zero[:]) {
 				continue
 			}
+
 			if err != nil {
 				return fmt.Errorf("could not find child %x in db: %w", childC, err)
 			}
@@ -88,18 +90,19 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 			if err != nil {
 				return fmt.Errorf("decode error child %x in db: %w", child.ComputeCommitment().Bytes(), err)
 			}
+
 			if err := checkChildren(childN, resolver); err != nil {
 				return fmt.Errorf("%x%w", i, err) // write the path to the erroring node
 			}
 		}
 	case *verkle.LeafNode:
 		// sanity check: ensure at least one value is non-zero
-
 		for i := 0; i < verkle.NodeWidth; i++ {
 			if len(node.Value(i)) != 0 {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("Both balance and nonce are 0")
 	case verkle.Empty:
 		// nothing to do
@@ -116,24 +119,29 @@ func verifyVerkle(ctx *cli.Context) error {
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
+
 	if headBlock == nil {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
+
 	if ctx.NArg() > 1 {
 		log.Error("Too many arguments given")
 		return errors.New("too many arguments")
 	}
+
 	var (
 		rootC common.Hash
 		err   error
 	)
+
 	if ctx.NArg() == 1 {
 		rootC, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "error", err)
 			return err
 		}
+
 		log.Info("Rebuilding the tree", "root", rootC)
 	} else {
 		rootC = headBlock.Root()
@@ -144,7 +152,9 @@ func verifyVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+
 	if err != nil {
 		return err
 	}
@@ -155,6 +165,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	}
 
 	log.Info("Tree was rebuilt from the database")
+
 	return nil
 }
 
@@ -163,27 +174,34 @@ func expandVerkle(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+
 	var (
 		rootC   common.Hash
 		keylist [][]byte
 		err     error
 	)
+
 	if ctx.NArg() >= 2 {
 		rootC, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "error", err)
 			return err
 		}
+
 		keylist = make([][]byte, 0, ctx.Args().Len()-1)
+
 		args := ctx.Args().Slice()
 		for i := range args[1:] {
 			key, err := hex.DecodeString(args[i+1])
 			log.Info("decoded key", "arg", args[i+1], "key", key)
+
 			if err != nil {
 				return fmt.Errorf("error decoding key #%d: %w", i+1, err)
 			}
+
 			keylist = append(keylist, key)
 		}
+
 		log.Info("Rebuilding the tree", "root", rootC)
 	} else {
 		return fmt.Errorf("usage: %s root key1 [key 2...]", ctx.App.Name)
@@ -193,7 +211,9 @@ func expandVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+
 	if err != nil {
 		return err
 	}
@@ -208,5 +228,6 @@ func expandVerkle(ctx *cli.Context) error {
 	} else {
 		log.Info("Tree was dumped to file", "file", "dump.dot")
 	}
+
 	return nil
 }

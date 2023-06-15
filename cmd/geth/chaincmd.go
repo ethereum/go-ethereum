@@ -195,6 +195,7 @@ func initGenesis(ctx *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
+
 		triedb := trie.NewDatabaseWithConfig(chaindb, &trie.Config{
 			Preimages: ctx.Bool(utils.CachePreimagesFlag.Name),
 		})
@@ -215,32 +216,41 @@ func dumpGenesis(ctx *cli.Context) error {
 		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
 			utils.Fatalf("could not encode genesis: %s", err)
 		}
+
 		return nil
 	}
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		db, err := stack.OpenDatabase(name, 0, 0, "", true)
+
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return err
 			}
+
 			continue
 		}
+
 		genesis, err := core.ReadGenesis(db)
+
 		if err != nil {
 			utils.Fatalf("failed to read genesis: %s", err)
 		}
+
 		db.Close()
 
 		if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
 			utils.Fatalf("could not encode stored genesis: %s", err)
 		}
+
 		return nil
 	}
+
 	if ctx.IsSet(utils.DataDirFlag.Name) {
 		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
 	}
+
 	utils.Fatalf("no network preset provided.  no exisiting genesis in the default datadir")
 	return nil
 }
@@ -337,6 +347,7 @@ func exportChain(ctx *cli.Context) error {
 
 	var err error
 	fp := ctx.Args().First()
+
 	if ctx.Args().Len() < 3 {
 		err = utils.ExportChain(chain, fp)
 	} else {
@@ -465,6 +476,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	config := &trie.Config{
 		Preimages: true, // always enable preimage lookup
 	}

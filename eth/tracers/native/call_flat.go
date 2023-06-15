@@ -133,7 +133,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 	if err != nil {
 		return nil, err
 	}
+
 	t, ok := tracer.(*callTracer)
+
 	if !ok {
 		return nil, errors.New("internal error: embedded tracer has wrong type")
 	}
@@ -185,6 +187,7 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if t.config.IncludePrecompiles {
 		return
 	}
+
 	var (
 		// call has been nested in parent
 		parent = t.tracer.callstack[len(t.tracer.callstack)-1]
@@ -192,6 +195,7 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 		typ    = call.Type
 		to     = call.To
 	)
+
 	if typ == vm.CALL || typ == vm.STATICCALL {
 		if t.isPrecompiled(*to) {
 			t.tracer.callstack[len(t.tracer.callstack)-1].Calls = parent.Calls[:len(parent.Calls)-1]
@@ -222,6 +226,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return res, t.reason
 }
 
@@ -237,11 +242,14 @@ func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
 	var frame *flatCallFrame
+
+	// nolint:exhaustive
 	switch input.Type {
 	case vm.CREATE, vm.CREATE2:
 		frame = newFlatCreate(input)
@@ -257,6 +265,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	frame.Error = input.Error
 	frame.Subtraces = len(input.Calls)
 	fillCallFrameFromContext(frame, ctx)
+
 	if convertErrs {
 		convertErrorToParity(frame)
 	}
@@ -268,14 +277,17 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	}
 
 	output = append(output, *frame)
+
 	if len(input.Calls) > 0 {
 		for i, childCall := range input.Calls {
 			childAddr := childTraceAddress(traceAddress, i)
 			childCallCopy := childCall
 			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
+
 			if err != nil {
 				return nil, err
 			}
+
 			output = append(output, flat...)
 		}
 	}
@@ -343,15 +355,19 @@ func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
 	if ctx == nil {
 		return
 	}
+
 	if ctx.BlockHash != (common.Hash{}) {
 		callFrame.BlockHash = &ctx.BlockHash
 	}
+
 	if ctx.BlockNumber != nil {
 		callFrame.BlockNumber = ctx.BlockNumber.Uint64()
 	}
+
 	if ctx.TxHash != (common.Hash{}) {
 		callFrame.TransactionHash = &ctx.TxHash
 	}
+
 	callFrame.TransactionPosition = uint64(ctx.TxIndex)
 }
 
@@ -375,5 +391,6 @@ func childTraceAddress(a []int, i int) []int {
 	child := make([]int, 0, len(a)+1)
 	child = append(child, a...)
 	child = append(child, i)
+
 	return child
 }

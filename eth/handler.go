@@ -163,7 +163,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable snap sync.
 		fullBlock, snapBlock := h.chain.CurrentBlock(), h.chain.CurrentSnapBlock()
+
 		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
+			log.Warn("Preventing switching sync mode from full sync to snap sync")
+
 			// Note: Ideally this should never happen with bor, but to be extra
 			// preventive we won't allow it to roll over to snap sync until
 			// we have it working
@@ -171,8 +174,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			// TODO(snap): Uncomment when we have snap sync working
 			// h.snapSync = uint32(1)
 			// log.Warn("Switch sync mode from full sync to snap sync")
-
-			log.Warn("Preventing switching sync mode from full sync to snap sync")
 		}
 	} else {
 		if h.chain.CurrentBlock().Number.Uint64() > 0 {
@@ -348,6 +349,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		number  = head.Number.Uint64()
 		td      = h.chain.GetTd(hash, number)
 	)
+
 	forkID := forkid.NewID(h.chain.Config(), genesis.Hash(), number, head.Time)
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
@@ -464,6 +466,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		if err != nil {
 			return err
 		}
+
 		go func(number uint64, hash common.Hash, req *eth.Request) {
 			// Ensure the request gets cancelled in case of error/drop
 			defer req.Close()

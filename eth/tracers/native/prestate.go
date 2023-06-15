@@ -79,6 +79,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 			return nil, err
 		}
 	}
+
 	return &prestateTracer{
 		pre:     state{},
 		post:    state{},
@@ -151,6 +152,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
+
 		if op == vm.SELFDESTRUCT {
 			t.deleted[caller] = true
 		}
@@ -188,6 +190,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		if _, ok := t.deleted[addr]; ok {
 			continue
 		}
+
 		modified := false
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr)
@@ -198,10 +201,12 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 			modified = true
 			postAccount.Balance = newBalance
 		}
+
 		if newNonce != t.pre[addr].Nonce {
 			modified = true
 			postAccount.Nonce = newNonce
 		}
+
 		if !bytes.Equal(newCode, t.pre[addr].Code) {
 			modified = true
 			postAccount.Code = newCode
@@ -245,7 +250,9 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	var res []byte
+
 	var err error
+
 	if t.config.DiffMode {
 		res, err = json.Marshal(struct {
 			Post state `json:"post"`
@@ -288,5 +295,6 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 	if _, ok := t.pre[addr].Storage[key]; ok {
 		return
 	}
+
 	t.pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
 }

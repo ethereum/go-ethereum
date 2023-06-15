@@ -124,6 +124,7 @@ func (b *SimulatedBackend) Commit() common.Hash {
 	if _, err := b.blockchain.InsertChain([]*types.Block{b.pendingBlock}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
+
 	blockHash := b.pendingBlock.Hash()
 
 	// Using the last inserted block here makes it possible to build on a side
@@ -669,6 +670,8 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	//nolint:contextcheck
 	return core.ApplyMessage(vmEnv, msg, gasPool, context.Background())
 }
 
@@ -873,6 +876,7 @@ func (fb *filterBackend) GetBody(ctx context.Context, hash common.Hash, number r
 	if body := fb.bc.GetBody(hash); body != nil {
 		return body, nil
 	}
+
 	return nil, errors.New("block body not found")
 }
 

@@ -74,24 +74,32 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
+
 	if number == rpc.FinalizedBlockNumber {
 		if !b.eth.Merger().TDDReached() {
 			return nil, errors.New("'finalized' tag not supported on pre-merge network")
 		}
+
 		block := b.eth.blockchain.CurrentFinalBlock()
+
 		if block != nil {
 			return block, nil
 		}
+
 		return nil, errors.New("finalized block not found")
 	}
+
 	if number == rpc.SafeBlockNumber {
 		if !b.eth.Merger().TDDReached() {
 			return nil, errors.New("'safe' tag not supported on pre-merge network")
 		}
+
 		block := b.eth.blockchain.CurrentSafeBlock()
+
 		if block != nil {
 			return block, nil
 		}
+
 		return nil, errors.New("safe block not found")
 	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
@@ -129,18 +137,24 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		header := b.eth.blockchain.CurrentBlock()
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
+
 	if number == rpc.FinalizedBlockNumber {
 		if !b.eth.Merger().TDDReached() {
 			return nil, errors.New("'finalized' tag not supported on pre-merge network")
 		}
+
 		header := b.eth.blockchain.CurrentFinalBlock()
+
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
+
 	if number == rpc.SafeBlockNumber {
 		if !b.eth.Merger().TDDReached() {
 			return nil, errors.New("'safe' tag not supported on pre-merge network")
 		}
+
 		header := b.eth.blockchain.CurrentSafeBlock()
+
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
@@ -155,9 +169,11 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 	if number < 0 || hash == (common.Hash{}) {
 		return nil, errors.New("invalid arguments; expect hash and no special block numbers")
 	}
+
 	if body := b.eth.blockchain.GetBody(hash); body != nil {
 		return body, nil
 	}
+
 	return nil, errors.New("block body not found")
 }
 
@@ -246,6 +262,7 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, msg *core.Message, state *st
 	}
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+
 	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), state.Error, nil
 }
 

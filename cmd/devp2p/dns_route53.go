@@ -279,6 +279,7 @@ func makeDeletionChanges(records map[string]recordSet, keep map[string]string) [
 		if _, ok := keep[path]; ok {
 			continue
 		}
+
 		log.Debug(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
 		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
@@ -345,6 +346,7 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
+
 	log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID)
 	for page := 0; ; page++ {
 		log.Debug("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)

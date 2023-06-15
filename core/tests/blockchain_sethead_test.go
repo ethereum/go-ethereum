@@ -1984,10 +1984,12 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
+
 	chain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
+
 	defer chain.Stop()
 
 	// If sidechain blocks are needed, make a light chain and import it
@@ -2000,6 +2002,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
+
 	canonblocks, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
@@ -2052,9 +2055,11 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := chain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
+
 	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != tt.expHeadFastBlock {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, tt.expHeadFastBlock)
 	}
+
 	if head := chain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}

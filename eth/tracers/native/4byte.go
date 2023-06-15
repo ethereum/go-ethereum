@@ -59,6 +59,7 @@ func newFourByteTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer,
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}
+
 	return t, nil
 }
 

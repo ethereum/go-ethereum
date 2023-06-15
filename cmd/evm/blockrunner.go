@@ -48,14 +48,18 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	var tests map[string]tests.BlockTest
+
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
+
 	for i, test := range tests {
 		if err := test.Run(false); err != nil {
 			return fmt.Errorf("test %v: %w", i, err)
 		}
 	}
+
 	return nil
 }

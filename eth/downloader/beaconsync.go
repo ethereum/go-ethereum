@@ -271,6 +271,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 	var head *types.Header
+
 	_, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
@@ -280,11 +281,13 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 	// and it should only happen when there are less than 64 post-merge
 	// blocks in the network.
 	var localHeaders []*types.Header
+
 	if from < tail.Number.Uint64() {
 		count := tail.Number.Uint64() - from
 		if count > uint64(fsMinFullBlocks) {
 			return fmt.Errorf("invalid origin (%d) of beacon sync (%d)", from, tail.Number)
 		}
+
 		localHeaders = d.readHeaderRange(tail, int(count))
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
@@ -305,6 +308,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
 
 				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
+
 				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
 					if number < tail.Number.Uint64() {
 						dist := tail.Number.Uint64() - number
@@ -320,6 +324,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 				if d.pivotHeader == nil {
 					log.Error("Pivot header is not found", "number", number)
 					d.pivotLock.Unlock()
+
 					return errNoPivotHeader
 				}
 				// Write out the pivot into the database so a rollback beyond
@@ -350,6 +355,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			if header == nil {
 				return fmt.Errorf("missing beacon header %d", from)
 			}
+
 			headers = append(headers, header)
 			hashes = append(hashes, headers[i].Hash())
 			from++

@@ -58,6 +58,7 @@ func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*ty
 	totalDifficulty := new(big.Int).Set(params.GenesisDifficulty)
 
 	var preHeaders []*types.Header
+
 	for _, b := range preBLocks {
 		totalDifficulty.Add(totalDifficulty, b.Difficulty())
 		preHeaders = append(preHeaders, b.Header())
@@ -109,6 +110,7 @@ func TestExecutePayloadV1(t *testing.T) {
 	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("Failed to update head %v", err)
 	}
+
 	block := postBlocks[0]
 
 	fakeBlock := types.NewBlock(&types.Header{
@@ -153,6 +155,7 @@ func TestExecutePayloadV1(t *testing.T) {
 	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
 		t.Fatal("Unexpected chain head update")
 	}
+
 	fcState = engine.ForkchoiceStateV1{
 		HeadBlockHash:      fakeBlock.Hash(),
 		SafeBlockHash:      common.Hash{},

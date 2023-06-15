@@ -292,6 +292,7 @@ func testGetCode(t *testing.T, protocol int) {
 
 	var codereqs []*CodeReq
 	var codes [][]byte
+
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
@@ -367,6 +368,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 	// Collect the hashes to request, and the response to expect
 	var receipts []types.Receipts
 	var hashes []common.Hash
+
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		block := bc.GetBlockByNumber(i)
 
@@ -404,6 +406,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	proofsV2 := light.NewNodeSet()
 
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
+
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		trie, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
@@ -664,6 +667,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 
 	// check if their status is included now
 	block1hash := rawdb.ReadCanonicalHash(server.db, 1)
+
 	test(tx1, false, light.TxStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
 
 	test(tx2, false, light.TxStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})

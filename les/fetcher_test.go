@@ -173,6 +173,7 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 			}
 		}
 	)
+
 	for i := 0; i < 4; i++ {
 		s, n, teardown := newTestServerPeer(t, int(2*config.ChtSize+config.ChtConfirms), protocol, waitIndexers)
 

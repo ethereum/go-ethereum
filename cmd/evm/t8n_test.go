@@ -420,6 +420,7 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, "--input.ommers")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inWithdrawals; opt != "" {
 		out = append(out, "--input.withdrawals")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))

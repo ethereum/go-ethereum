@@ -1037,6 +1037,7 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.Bool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
+
 		if ctx.Bool(SepoliaFlag.Name) {
 			return filepath.Join(path, "sepolia")
 		}
@@ -1140,6 +1141,7 @@ func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
 		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
 	}
+
 	if ctx.IsSet(DiscoveryPortFlag.Name) {
 		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscoveryPortFlag.Name))
 	}
@@ -1209,6 +1211,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(HTTPPathPrefixFlag.Name) {
 		cfg.HTTPPathPrefix = ctx.String(HTTPPathPrefixFlag.Name)
 	}
+
 	if ctx.IsSet(AllowUnprotectedTxs.Name) {
 		cfg.AllowUnprotectedTxs = ctx.Bool(AllowUnprotectedTxs.Name)
 	}
@@ -1220,6 +1223,7 @@ func setGraphQL(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(GraphQLCORSDomainFlag.Name) {
 		cfg.GraphQLCors = SplitAndTrim(ctx.String(GraphQLCORSDomainFlag.Name))
 	}
+
 	if ctx.IsSet(GraphQLVirtualHostsFlag.Name) {
 		cfg.GraphQLVirtualHosts = SplitAndTrim(ctx.String(GraphQLVirtualHostsFlag.Name))
 	}
@@ -1234,6 +1238,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 			cfg.WSHost = ctx.String(WSListenAddrFlag.Name)
 		}
 	}
+
 	if ctx.IsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.Int(WSPortFlag.Name)
 	}
@@ -1268,31 +1273,40 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(LightServeFlag.Name) {
 		cfg.LightServ = ctx.Int(LightServeFlag.Name)
 	}
+
 	if ctx.IsSet(LightIngressFlag.Name) {
 		cfg.LightIngress = ctx.Int(LightIngressFlag.Name)
 	}
+
 	if ctx.IsSet(LightEgressFlag.Name) {
 		cfg.LightEgress = ctx.Int(LightEgressFlag.Name)
 	}
+
 	if ctx.IsSet(LightMaxPeersFlag.Name) {
 		cfg.LightPeers = ctx.Int(LightMaxPeersFlag.Name)
 	}
+
 	if ctx.IsSet(UltraLightServersFlag.Name) {
 		cfg.UltraLightServers = strings.Split(ctx.String(UltraLightServersFlag.Name), ",")
 	}
+
 	if ctx.IsSet(UltraLightFractionFlag.Name) {
 		cfg.UltraLightFraction = ctx.Int(UltraLightFractionFlag.Name)
 	}
+
 	if cfg.UltraLightFraction <= 0 && cfg.UltraLightFraction > 100 {
 		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", ethconfig.Defaults.UltraLightFraction)
 		cfg.UltraLightFraction = ethconfig.Defaults.UltraLightFraction
 	}
+
 	if ctx.IsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.Bool(UltraLightOnlyAnnounceFlag.Name)
 	}
+
 	if ctx.IsSet(LightNoPruneFlag.Name) {
 		cfg.LightNoPrune = ctx.Bool(LightNoPruneFlag.Name)
 	}
+
 	if ctx.IsSet(LightNoSyncServeFlag.Name) {
 		cfg.LightNoSyncServe = ctx.Bool(LightNoSyncServeFlag.Name)
 	}
@@ -1355,15 +1369,20 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	if !ctx.IsSet(MinerEtherbaseFlag.Name) {
 		return
 	}
+
 	addr := ctx.String(MinerEtherbaseFlag.Name)
+
 	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
 		addr = addr[2:]
 	}
+
 	b, err := hex.DecodeString(addr)
+
 	if err != nil || len(b) != common.AddressLength {
 		Fatalf("-%s: invalid etherbase address %q", MinerEtherbaseFlag.Name, addr)
 		return
 	}
+
 	cfg.Miner.Etherbase = common.BytesToAddress(b)
 }
 
@@ -1373,6 +1392,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 	if path == "" {
 		return nil
 	}
+
 	text, err := os.ReadFile(path)
 	if err != nil {
 		Fatalf("Failed to read password file: %v", err)
@@ -1426,6 +1446,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.Int(MaxPendingPeersFlag.Name)
 	}
+
 	if ctx.IsSet(NoDiscoverFlag.Name) || lightClient {
 		cfg.NoDiscovery = true
 	}
@@ -1434,6 +1455,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	// unless it is explicitly disabled with --nodiscover note that explicitly specifying
 	// --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
 	forceV5Discovery := (lightClient || lightServer) && !ctx.Bool(NoDiscoverFlag.Name)
+
 	if ctx.IsSet(DiscoveryV5Flag.Name) {
 		cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
 	} else if forceV5Discovery {
@@ -1484,26 +1506,33 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.String(KeyStoreDirFlag.Name)
 	}
+
 	if ctx.IsSet(DeveloperFlag.Name) {
 		cfg.UseLightweightKDF = true
 	}
+
 	if ctx.IsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.Bool(LightKDFFlag.Name)
 	}
+
 	if ctx.IsSet(NoUSBFlag.Name) || cfg.NoUSB {
 		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")
 	}
+
 	if ctx.IsSet(USBFlag.Name) {
 		cfg.USB = ctx.Bool(USBFlag.Name)
 	}
+
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.Bool(InsecureUnlockAllowedFlag.Name)
 	}
+
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
 		if dbEngine != "leveldb" && dbEngine != "pebble" {
 			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
 		}
+
 		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
 		cfg.DBEngine = dbEngine
 	}
@@ -1517,10 +1546,12 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	}
 	// Sanity check that the smartcard path is valid
 	fi, err := os.Stat(path)
+
 	if err != nil {
 		log.Info("Smartcard socket not found, disabling", "err", err)
 		return
 	}
+
 	if fi.Mode()&os.ModeType != os.ModeSocket {
 		log.Error("Invalid smartcard daemon path", "path", path, "type", fi.Mode().String())
 		return
@@ -1548,15 +1579,19 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	if light {
 		*cfg = ethconfig.LightClientGPO
 	}
+
 	if ctx.IsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.Int(GpoBlocksFlag.Name)
 	}
+
 	if ctx.IsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.Int(GpoPercentileFlag.Name)
 	}
+
 	if ctx.IsSet(GpoMaxGasPriceFlag.Name) {
 		cfg.MaxPrice = big.NewInt(ctx.Int64(GpoMaxGasPriceFlag.Name))
 	}
+
 	if ctx.IsSet(GpoIgnoreGasPriceFlag.Name) {
 		cfg.IgnorePrice = big.NewInt(ctx.Int64(GpoIgnoreGasPriceFlag.Name))
 	}
@@ -1573,33 +1608,43 @@ func setTxPool(ctx *cli.Context, cfg *txpool.Config) {
 			}
 		}
 	}
+
 	if ctx.IsSet(TxPoolNoLocalsFlag.Name) {
 		cfg.NoLocals = ctx.Bool(TxPoolNoLocalsFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolJournalFlag.Name) {
 		cfg.Journal = ctx.String(TxPoolJournalFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolRejournalFlag.Name) {
 		cfg.Rejournal = ctx.Duration(TxPoolRejournalFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolPriceLimitFlag.Name) {
 		cfg.PriceLimit = ctx.Uint64(TxPoolPriceLimitFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolPriceBumpFlag.Name) {
 		cfg.PriceBump = ctx.Uint64(TxPoolPriceBumpFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolAccountSlotsFlag.Name) {
 		cfg.AccountSlots = ctx.Uint64(TxPoolAccountSlotsFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolGlobalSlotsFlag.Name) {
 		cfg.GlobalSlots = ctx.Uint64(TxPoolGlobalSlotsFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolAccountQueueFlag.Name) {
 		cfg.AccountQueue = ctx.Uint64(TxPoolAccountQueueFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolGlobalQueueFlag.Name) {
 		cfg.GlobalQueue = ctx.Uint64(TxPoolGlobalQueueFlag.Name)
 	}
+
 	if ctx.IsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.Duration(TxPoolLifetimeFlag.Name)
 	}
@@ -1609,24 +1654,31 @@ func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(EthashCacheDirFlag.Name) {
 		cfg.Ethash.CacheDir = ctx.String(EthashCacheDirFlag.Name)
 	}
+
 	if ctx.IsSet(EthashDatasetDirFlag.Name) {
 		cfg.Ethash.DatasetDir = ctx.String(EthashDatasetDirFlag.Name)
 	}
+
 	if ctx.IsSet(EthashCachesInMemoryFlag.Name) {
 		cfg.Ethash.CachesInMem = ctx.Int(EthashCachesInMemoryFlag.Name)
 	}
+
 	if ctx.IsSet(EthashCachesOnDiskFlag.Name) {
 		cfg.Ethash.CachesOnDisk = ctx.Int(EthashCachesOnDiskFlag.Name)
 	}
+
 	if ctx.IsSet(EthashCachesLockMmapFlag.Name) {
 		cfg.Ethash.CachesLockMmap = ctx.Bool(EthashCachesLockMmapFlag.Name)
 	}
+
 	if ctx.IsSet(EthashDatasetsInMemoryFlag.Name) {
 		cfg.Ethash.DatasetsInMem = ctx.Int(EthashDatasetsInMemoryFlag.Name)
 	}
+
 	if ctx.IsSet(EthashDatasetsOnDiskFlag.Name) {
 		cfg.Ethash.DatasetsOnDisk = ctx.Int(EthashDatasetsOnDiskFlag.Name)
 	}
+
 	if ctx.IsSet(EthashDatasetsLockMmapFlag.Name) {
 		cfg.Ethash.DatasetsLockMmap = ctx.Bool(EthashDatasetsLockMmapFlag.Name)
 	}
@@ -1636,22 +1688,29 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.String(MinerNotifyFlag.Name), ",")
 	}
+
 	cfg.NotifyFull = ctx.Bool(MinerNotifyFullFlag.Name)
+
 	if ctx.IsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
 	}
+
 	if ctx.IsSet(MinerGasLimitFlag.Name) {
 		cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
 	}
+
 	if ctx.IsSet(MinerGasPriceFlag.Name) {
 		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
+
 	if ctx.IsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.Recommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
 	}
+
 	if ctx.IsSet(MinerNoVerifyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerifyFlag.Name)
 	}
+
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
 	}
@@ -1662,12 +1721,15 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	if requiredBlocks == "" {
 		if ctx.IsSet(LegacyWhitelistFlag.Name) {
 			log.Warn("The flag --whitelist is deprecated and will be removed, please use --eth.requiredblocks")
+
 			requiredBlocks = ctx.String(LegacyWhitelistFlag.Name)
 		} else {
 			return
 		}
 	}
+
 	cfg.RequiredBlocks = make(map[uint64]common.Hash)
+
 	for _, entry := range strings.Split(requiredBlocks, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
@@ -1681,6 +1743,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
 			Fatalf("Invalid required block hash %s: %v", parts[1], err)
 		}
+
 		cfg.RequiredBlocks[number] = hash
 	}
 }
@@ -1736,9 +1799,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		ctx.Set(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
+
 	if ctx.IsSet(LightServeFlag.Name) && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
 		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
 	}
+
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.String(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
@@ -1755,6 +1820,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			mem.Total = 2 * 1024 * 1024 * 1024
 		}
 		allowance := int(mem.Total / 1024 / 1024 / 3)
+
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
 			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
@@ -1770,13 +1836,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
+
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
 	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 	}
+
 	cfg.DatabaseHandles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
+
 	if ctx.IsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.String(AncientFlag.Name)
 	}
@@ -1784,39 +1854,50 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
+
 	if ctx.IsSet(GCModeFlag.Name) {
 		cfg.NoPruning = ctx.String(GCModeFlag.Name) == "archive"
 	}
+
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
 	}
 	// Read the value from the flag no matter if it's set or not.
 	cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
+
 	if cfg.NoPruning && !cfg.Preimages {
 		cfg.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
+
 	if ctx.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
+
 	if ctx.IsSet(CacheTrieJournalFlag.Name) {
 		cfg.TrieCleanCacheJournal = ctx.String(CacheTrieJournalFlag.Name)
 	}
+
 	if ctx.IsSet(CacheTrieRejournalFlag.Name) {
 		cfg.TrieCleanCacheRejournal = ctx.Duration(CacheTrieRejournalFlag.Name)
 	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cfg.TrieDirtyCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
+
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
+
 	if !ctx.Bool(SnapshotFlag.Name) {
 		// If snap-sync is requested, this flag is also required
 		if cfg.SyncMode == downloader.SnapSync {
@@ -1826,9 +1907,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.SnapshotCache = 0 // Disabled
 		}
 	}
+
 	if ctx.IsSet(DocRootFlag.Name) {
 		cfg.DocRoot = ctx.String(DocRootFlag.Name)
 	}
+
 	if ctx.IsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.Bool(VMEnableDebugFlag.Name)
@@ -1842,12 +1925,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	} else {
 		log.Info("Global gas cap disabled")
 	}
+
 	if ctx.IsSet(RPCGlobalEVMTimeoutFlag.Name) {
 		cfg.RPCEVMTimeout = ctx.Duration(RPCGlobalEVMTimeoutFlag.Name)
 	}
+
 	if ctx.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.Float64(RPCGlobalTxFeeCapFlag.Name)
 	}
+
 	if ctx.IsSet(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
 	} else if ctx.IsSet(DNSDiscoveryFlag.Name) {
@@ -1902,6 +1988,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 			ks = keystores[0].(*keystore.KeyStore)
 		}
+
 		if ks == nil {
 			Fatalf("Keystore is not available")
 		}
@@ -1929,6 +2016,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 		// Create a new developer genesis block or reuse existing one
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.Int(DeveloperPeriodFlag.Name)), ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
+
 		if ctx.IsSet(DataDirFlag.Name) {
 			// If datadir doesn't exist we need to open db in write-mode
 			// so leveldb can create files.
@@ -1944,6 +2032,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			}
 			chaindb.Close()
 		}
+
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
@@ -1980,6 +2069,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
+
 		if err := lescatalyst.Register(stack, backend); err != nil {
 			Fatalf("Failed to register the Engine API service: %v", err)
 		}
@@ -1995,6 +2085,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
+
 	if err := ethcatalyst.Register(stack, backend); err != nil {
 		Fatalf("Failed to register the Engine API service: %v", err)
 	}
@@ -2023,10 +2114,12 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
+
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient, ethconfig.Defaults.BorLogs),
 	}})
+
 	return filterSystem
 }
 
@@ -2036,11 +2129,15 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
 	if err != nil {
 		Fatalf("Failed to read block file: %v", err)
 	}
+
 	rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
+
 	if err != nil {
 		Fatalf("Failed to decode block blob: %v", err)
 	}
+
 	var block types.Block
+
 	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
 		Fatalf("Failed to decode block: %v", err)
 	}
@@ -2135,13 +2232,16 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		err     error
 		chainDb ethdb.Database
 	)
+
 	switch {
 	case ctx.IsSet(RemoteDBFlag.Name):
 		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
 		client, err := DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
+
 		if err != nil {
 			break
 		}
+
 		chainDb = remotedb.New(client)
 	case ctx.String(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
@@ -2161,6 +2261,7 @@ func IsNetworkPreset(ctx *cli.Context) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -2168,23 +2269,30 @@ func DialRPCWithHeaders(endpoint string, headers []string) (*rpc.Client, error) 
 	if endpoint == "" {
 		return nil, errors.New("endpoint must be specified")
 	}
+
 	if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
 		// Backwards compatibility with geth < 1.5 which required
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
+
 	var opts []rpc.ClientOption
+
 	if len(headers) > 0 {
 		var customHeaders = make(http.Header)
+
 		for _, h := range headers {
 			kv := strings.Split(h, ":")
 			if len(kv) != 2 {
 				return nil, fmt.Errorf("invalid http header directive: %q", h)
 			}
+
 			customHeaders.Add(kv[0], kv[1])
 		}
+
 		opts = append(opts, rpc.WithHeaders(customHeaders))
 	}
+
 	return rpc.DialOptions(context.Background(), endpoint, opts...)
 }
 
@@ -2209,18 +2317,23 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, readonly)
 	)
+
 	config, _, err := core.SetupGenesisBlock(chainDb, trie.NewDatabase(chainDb), gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}
+
 	cliqueConfig, err := core.LoadCliqueConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}
+
 	ethashConfig := ethconfig.Defaults.Ethash
+
 	if ctx.Bool(FakePoWFlag.Name) {
 		ethashConfig.PowMode = ethash.ModeFake
 	}
+
 	configs := &ethconfig.Config{
 		Genesis:             gspec,
 		HeimdallURL:         ctx.String(HeimdallURLFlag.Name),
@@ -2232,6 +2345,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	_ = CreateBorEthereum(configs)
 	engine := ethconfig.CreateConsensusEngine(stack, config, configs, &ethashConfig, cliqueConfig, nil, false, chainDb, nil)
+
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -2248,6 +2362,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		cache.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
+
 	if !ctx.Bool(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
 	}
@@ -2259,9 +2374,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
+
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 
 	// Disable transaction indexing/unindexing by default.

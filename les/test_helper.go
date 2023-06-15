@@ -489,6 +489,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		head    = client.handler.backend.blockchain.CurrentHeader()
 		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
+
 	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
@@ -553,6 +554,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		head    = server.handler.blockchain.CurrentHeader()
 		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
+
 	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
 

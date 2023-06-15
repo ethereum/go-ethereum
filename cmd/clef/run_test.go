@@ -50,6 +50,7 @@ func TestMain(m *testing.M) {
 	if reexec.Init() {
 		return
 	}
+
 	os.Exit(m.Run())
 }
 
@@ -63,9 +64,11 @@ func runClef(t *testing.T, args ...string) *testproc {
 	if err != nil {
 		return nil
 	}
+
 	t.Cleanup(func() {
 		os.RemoveAll(ddir)
 	})
+
 	return runWithKeystore(t, ddir, args...)
 }
 
@@ -81,6 +84,7 @@ func runWithKeystore(t *testing.T, keystore string, args ...string) *testproc {
 	// Boot "clef". This actually runs the test binary but the TestMain
 	// function will prevent any tests from running.
 	tt.Run(registeredName, args...)
+
 	return tt
 }
 

@@ -1984,10 +1984,12 @@ func TestIssue23496(t *testing.T) {
 			SnapshotWait:   true,
 		}
 	)
+
 	chain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
+
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 4, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
@@ -1997,14 +1999,17 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
+
 	err = chain.StateCache().TrieDB().Commit(blocks[0].Root(), true)
 	if err != nil {
 		t.Fatal("on trieDB.Commit", err)
 	}
+
 	// Insert block B2 and commit the snapshot into disk
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
+
 	if err := chain.Snaps().Cap(blocks[1].Root(), 0); err != nil {
 		t.Fatalf("Failed to flatten snapshots: %v", err)
 	}
@@ -2035,20 +2040,24 @@ func TestIssue23496(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+
 	defer db.Close()
 
 	chain, err = core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	defer chain.Stop()
 
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
+
 	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
+
 	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(1) {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(1))
 	}
@@ -2057,12 +2066,15 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
+
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
+
 	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
+
 	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}

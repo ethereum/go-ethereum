@@ -291,9 +291,11 @@ func checkStateContent(ctx *cli.Context) error {
 		prefix []byte
 		start  []byte
 	)
+
 	if ctx.NArg() > 1 {
 		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
 	}
+
 	if ctx.NArg() > 0 {
 		if d, err := hexutil.Decode(ctx.Args().First()); err != nil {
 			return fmt.Errorf("failed to hex-decode 'start': %v", err)
@@ -301,11 +303,13 @@ func checkStateContent(ctx *cli.Context) error {
 			start = d
 		}
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
+
 	var (
 		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
 		hasher    = crypto.NewKeccakState()
@@ -315,28 +319,37 @@ func checkStateContent(ctx *cli.Context) error {
 		startTime = time.Now()
 		lastLog   = time.Now()
 	)
+
 	for it.Next() {
 		count++
+
 		k := it.Key()
 		v := it.Value()
+
 		hasher.Reset()
 		hasher.Write(v)
 		hasher.Read(got)
+
 		if !bytes.Equal(k, got) {
 			errs++
+
 			fmt.Printf("Error at %#x\n", k)
 			fmt.Printf("  Hash:  %#x\n", got)
 			fmt.Printf("  Data:  %#x\n", v)
 		}
+
 		if time.Since(lastLog) > 8*time.Second {
 			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", common.PrettyDuration(time.Since(startTime)))
 			lastLog = time.Now()
 		}
 	}
+
 	if err := it.Error(); err != nil {
 		return err
 	}
+
 	log.Info("Iterated the state content", "errors", errs, "items", count)
+
 	return nil
 }
 
@@ -454,6 +467,7 @@ func dbPut(ctx *cli.Context) error {
 		data  []byte
 		err   error
 	)
+
 	key, err = common.ParseHexOrString(ctx.Args().Get(0))
 	if err != nil {
 		log.Info("Could not decode the key", "error", err)
@@ -490,30 +504,36 @@ func dbDumpTrie(ctx *cli.Context) error {
 		max     = int64(-1)
 		err     error
 	)
+
 	if state, err = hexutil.Decode(ctx.Args().Get(0)); err != nil {
 		log.Info("Could not decode the state root", "error", err)
 		return err
 	}
+
 	if account, err = hexutil.Decode(ctx.Args().Get(1)); err != nil {
 		log.Info("Could not decode the account hash", "error", err)
 		return err
 	}
+
 	if storage, err = hexutil.Decode(ctx.Args().Get(2)); err != nil {
 		log.Info("Could not decode the storage trie root", "error", err)
 		return err
 	}
+
 	if ctx.NArg() > 3 {
 		if start, err = hexutil.Decode(ctx.Args().Get(3)); err != nil {
 			log.Info("Could not decode the seek position", "error", err)
 			return err
 		}
 	}
+
 	if ctx.NArg() > 4 {
 		if max, err = strconv.ParseInt(ctx.Args().Get(4), 10, 64); err != nil {
 			log.Info("Could not decode the max count", "error", err)
 			return err
 		}
 	}
+
 	id := trie.StorageTrieID(common.BytesToHash(state), common.BytesToHash(account), common.BytesToHash(storage))
 	theTrie, err := trie.New(id, trie.NewDatabase(db))
 	if err != nil {
@@ -536,16 +556,21 @@ func freezerInspect(ctx *cli.Context) error {
 	if ctx.NArg() < 4 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	var (
 		freezer = ctx.Args().Get(0)
 		table   = ctx.Args().Get(1)
 	)
+
 	start, err := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+
 	if err != nil {
 		log.Info("Could not read start-param", "err", err)
 		return err
 	}
+
 	end, err := strconv.ParseInt(ctx.Args().Get(3), 10, 64)
+
 	if err != nil {
 		log.Info("Could not read count param", "err", err)
 		return err
@@ -553,6 +578,7 @@ func freezerInspect(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	ancient := stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name))
 	stack.Close()
+
 	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end)
 }
 
@@ -694,6 +720,7 @@ func showMetaData(ctx *cli.Context) error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
 	}
+
 	data := rawdb.ReadChainMetadata(db)
 	data = append(data, []string{"frozen", fmt.Sprintf("%d items", ancients)})
 	data = append(data, []string{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))})

@@ -147,6 +147,7 @@ func getMessage(ctx *cli.Context, msgarg int) []byte {
 		if ctx.NArg() > msgarg {
 			utils.Fatalf("Can't use --msgfile and message argument at the same time.")
 		}
+
 		msg, err := os.ReadFile(file)
 		if err != nil {
 			utils.Fatalf("Can't read message file: %v", err)
@@ -155,6 +156,7 @@ func getMessage(ctx *cli.Context, msgarg int) []byte {
 	} else if ctx.NArg() == msgarg+1 {
 		return []byte(ctx.Args().Get(msgarg))
 	}
+
 	utils.Fatalf("Invalid number of arguments: want %d, got %d", msgarg+1, ctx.NArg())
 	return nil
 }

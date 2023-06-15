@@ -63,6 +63,7 @@ func TestBuildSchema(t *testing.T) {
 func TestGraphQLBlockSerialization(t *testing.T) {
 	stack := createNode(t)
 	defer stack.Close()
+
 	genesis := &core.Genesis{
 		Config:     params.AllEthashProtocolChanges,
 		GasLimit:   11500000,
@@ -156,6 +157,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
+
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
@@ -178,8 +180,10 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		funds   = big.NewInt(1000000000000000)
 		dad     = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 	)
+
 	stack := createNode(t)
 	defer stack.Close()
+
 	genesis := &core.Genesis{
 		Config:     params.AllEthashProtocolChanges,
 		GasLimit:   11500000,
@@ -240,6 +244,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
+
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
@@ -266,6 +271,7 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
+
 	resp.Body.Close()
 	// make sure the request is not handled successfully
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -296,9 +302,11 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		signer = types.LatestSigner(genesis.Config)
 		stack  = createNode(t)
 	)
+
 	defer stack.Close()
 
 	var tx *types.Transaction
+
 	handler, chain := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
@@ -354,13 +362,17 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		},
 	} {
 		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}
+
 		have, err := json.Marshal(res.Data)
+
 		if err != nil {
 			t.Fatalf("failed to encode graphql response for testcase #%d: %s", i, err)
 		}
+
 		if string(have) != tt.want {
 			t.Errorf("response unmatch for testcase #%d.\nExpected:\n%s\nGot:\n%s\n", i, tt.want, have)
 		}
@@ -380,6 +392,7 @@ func createNode(t *testing.T) *node.Node {
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)
 	}
+
 	return stack
 }
 
@@ -416,5 +429,6 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}
+
 	return handler, chain
 }

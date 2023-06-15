@@ -61,6 +61,7 @@ func getChain() *core.BlockChain {
 		}
 		ga[common.BytesToAddress(a)] = acc
 	}
+
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  ga,

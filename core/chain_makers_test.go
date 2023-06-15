@@ -122,18 +122,22 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		withdrawalIndex uint64
 		head            = blockchain.CurrentBlock().Number.Uint64()
 	)
+
 	for i := 0; i < int(head); i++ {
 		block := blockchain.GetBlockByNumber(uint64(i))
 		if block == nil {
 			t.Fatalf("block %d not found", i)
 		}
+
 		if len(block.Withdrawals()) == 0 {
 			continue
 		}
+
 		for j := 0; j < len(block.Withdrawals()); j++ {
 			if block.Withdrawals()[j].Index != withdrawalIndex {
 				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, withdrawalIndex)
 			}
+
 			withdrawalIndex += 1
 		}
 	}

@@ -131,6 +131,7 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 		} else if freeSpace < 2*freeDiskSpaceCritical {
 			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical), "path", path)
 		}
+
 		time.Sleep(30 * time.Second)
 	}
 }

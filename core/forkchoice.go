@@ -103,6 +103,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := false
 	externNum, localNum := extern.Number.Uint64(), current.Number.Uint64()
+
 	if externNum < localNum {
 		reorg = true
 	} else if externNum == localNum {

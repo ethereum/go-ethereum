@@ -79,7 +79,9 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 	if err != nil {
 		return fmt.Errorf("failed to read testcase: %v", err)
 	}
+
 	test := new(flatCallTracerTest)
+
 	if err := json.Unmarshal(blob, test); err != nil {
 		return fmt.Errorf("failed to parse testcase: %v", err)
 	}
@@ -88,6 +90,7 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
 		return fmt.Errorf("failed to parse testcase input: %v", err)
 	}
+
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
 	origin, _ := signer.Sender(tx)
 	txContext := vm.TxContext{
@@ -110,12 +113,14 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 	if err != nil {
 		return fmt.Errorf("failed to create call tracer: %v", err)
 	}
+
 	evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 
 	msg, err := core.TransactionToMessage(tx, signer, nil)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
+
 	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 
 	if _, err = st.TransitionDb(context.Background()); err != nil {
@@ -127,10 +132,13 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 	if err != nil {
 		return fmt.Errorf("failed to retrieve trace result: %v", err)
 	}
+
 	ret := make([]flatCallTrace, 0)
+
 	if err := json.Unmarshal(res, &ret); err != nil {
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
+
 	if !jsonEqualFlat(ret, test.Result) {
 		tb.Logf("tracer name: %s", tracerName)
 
@@ -148,6 +156,7 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 
 		tb.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 	}
+
 	return nil
 }
 
@@ -165,10 +174,12 @@ func testFlatCallTracer(t *testing.T, tracerName string, dirPath string) {
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
 		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -186,16 +197,19 @@ func testFlatCallTracer(t *testing.T, tracerName string, dirPath string) {
 func jsonEqualFlat(x, y interface{}) bool {
 	xTrace := new([]flatCallTrace)
 	yTrace := new([]flatCallTrace)
+
 	if xj, err := json.Marshal(x); err == nil {
 		json.Unmarshal(xj, xTrace)
 	} else {
 		return false
 	}
+
 	if yj, err := json.Marshal(y); err == nil {
 		json.Unmarshal(yj, yTrace)
 	} else {
 		return false
 	}
+
 	return reflect.DeepEqual(xTrace, yTrace)
 }
 

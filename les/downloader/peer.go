@@ -414,6 +414,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
 	}
+
 	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
@@ -426,6 +427,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
 	}
+
 	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
@@ -438,6 +440,7 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
 	}
+
 	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
@@ -450,6 +453,7 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
 	}
+
 	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 

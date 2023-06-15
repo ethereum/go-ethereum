@@ -45,8 +45,11 @@ func TestEthSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+
 	for _, test := range suite.EthTests() {
+		test := test
 		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
 			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
 				t.Fatal()

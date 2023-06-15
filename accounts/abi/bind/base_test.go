@@ -199,9 +199,11 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 
 	var received map[string]interface{}
 	err := bc.UnpackLogIntoMap(received, "received", mockLog)
+
 	if err == nil {
 		t.Error("unpacking anonymous event is not supported")
 	}
+
 	if err.Error() != "no event signature" {
 		t.Errorf("expected error 'no event signature', got '%s'", err)
 	}
@@ -384,6 +386,7 @@ func TestCall(t *testing.T) {
 	t.Parallel()
 
 	var method, methodWithArg = "something", "somethingArrrrg"
+
 	tests := []struct {
 		name, method string
 		opts         *bind.CallOpts
@@ -482,6 +485,7 @@ func TestCall(t *testing.T) {
 		results: &[]interface{}{0},
 		wantErr: true,
 	}}
+
 	for _, test := range tests {
 		bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
 			Methods: map[string]abi.Method{
@@ -496,15 +500,19 @@ func TestCall(t *testing.T) {
 			},
 		}, test.mc, nil, nil)
 		err := bc.Call(test.opts, test.results, test.method)
+
 		if test.wantErr || test.wantErrExact != nil {
 			if err == nil {
 				t.Fatalf("%q expected error", test.name)
 			}
+
 			if test.wantErrExact != nil && !errors.Is(err, test.wantErrExact) {
 				t.Fatalf("%q expected error %q but got %q", test.name, test.wantErrExact, err)
 			}
+
 			continue
 		}
+
 		if err != nil {
 			t.Fatalf("%q unexpected error: %v", test.name, err)
 		}

@@ -207,6 +207,7 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
+
 	snapconfig := snapshot.Config{
 		CacheSize:  256,
 		Recovery:   false,
@@ -235,6 +236,7 @@ func verifyState(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Verified the state", "root", root)
+
 	return snapshot.CheckDanglingStorage(chaindb)
 }
 
@@ -300,6 +302,7 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
+
 		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -316,6 +319,7 @@ func traverseState(ctx *cli.Context) error {
 				return storageIter.Err
 			}
 		}
+
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
@@ -398,9 +402,11 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
 			}
+
 			hasher.Reset()
 			hasher.Write(blob)
 			hasher.Read(got)
+
 			if !bytes.Equal(got, node.Bytes()) {
 				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
 				return errors.New("invalid account node")
@@ -415,6 +421,7 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
+
 			if acc.Root != types.EmptyRootHash {
 				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
 				storageTrie, err := trie.NewStateTrie(id, triedb)
@@ -435,9 +442,11 @@ func traverseRawState(ctx *cli.Context) error {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
 						}
+
 						hasher.Reset()
 						hasher.Write(blob)
 						hasher.Read(got)
+
 						if !bytes.Equal(got, node.Bytes()) {
 							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
 							return errors.New("invalid storage node")
@@ -453,6 +462,7 @@ func traverseRawState(ctx *cli.Context) error {
 					return storageIter.Error()
 				}
 			}
+
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
@@ -490,6 +500,7 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	snapConfig := snapshot.Config{
 		CacheSize:  256,
 		Recovery:   false,
@@ -528,6 +539,7 @@ func dumpState(ctx *cli.Context) error {
 			CodeHash:  account.CodeHash,
 			SecureKey: accIt.Hash().Bytes(),
 		}
+
 		if !conf.SkipCode && !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.CodeHash))
 		}
@@ -564,10 +576,12 @@ func checkAccount(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return errors.New("need <address|hash> arg")
 	}
+
 	var (
 		hash common.Hash
 		addr common.Address
 	)
+
 	switch arg := ctx.Args().First(); len(arg) {
 	case 40, 42:
 		addr = common.HexToAddress(arg)
@@ -577,15 +591,22 @@ func checkAccount(ctx *cli.Context) error {
 	default:
 		return errors.New("malformed address or hash")
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()
+
 	start := time.Now()
+
 	log.Info("Checking difflayer journal", "address", addr, "hash", hash)
+
 	if err := snapshot.CheckJournalAccount(chaindb, hash); err != nil {
 		return err
 	}
+
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }

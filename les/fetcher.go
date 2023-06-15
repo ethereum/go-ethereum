@@ -272,6 +272,7 @@ func (f *lightFetcher) mainloop() {
 		localHead = f.chain.CurrentHeader()
 		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number.Uint64())
 	)
+
 	defer requestTimer.Stop()
 	sub := f.chain.SubscribeChainHeadEvent(headCh)
 	defer sub.Unsubscribe()
@@ -460,6 +461,7 @@ func (f *lightFetcher) mainloop() {
 					}
 					untrusted = append(untrusted, hash)
 					head = f.chain.GetHeader(head.ParentHash, number-1)
+
 					if head == nil {
 						break // all the synced headers will be dropped
 					}

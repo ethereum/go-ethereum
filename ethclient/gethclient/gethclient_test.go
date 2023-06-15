@@ -61,7 +61,9 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
+
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
+
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, false, config.BorLogs),
@@ -237,11 +239,14 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if len(result.StorageProof) != 1 {
 		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
 	}
+
 	proof := result.StorageProof[0]
 	slotValue, _ := ethcl.StorageAt(context.Background(), testAddr, testSlot, nil)
+
 	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
 		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
 	}
+
 	if proof.Key != testSlot.String() {
 		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
 	}
@@ -337,10 +342,13 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	signedTx, err := tx.WithSignature(signer, signature)
+
 	if err != nil {
 		t.Fatal(err)
 	}

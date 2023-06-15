@@ -381,6 +381,7 @@ func writeTreeMetadata(directory string, def *dnsDefinition) {
 		exit(err)
 	}
 	metaFile, _ := treeDefinitionFiles(directory)
+
 	if err := os.WriteFile(metaFile, metaJSON, 0644); err != nil {
 		exit(err)
 	}
@@ -410,6 +411,7 @@ func writeTXTJSON(file string, txt map[string]string) {
 		fmt.Println()
 		return
 	}
+
 	if err := os.WriteFile(file, txtJSON, 0644); err != nil {
 		exit(err)
 	}

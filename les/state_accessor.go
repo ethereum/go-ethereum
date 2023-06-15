@@ -49,6 +49,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
+
 	statedb, release, err := leth.stateAtBlock(ctx, parent, reexec)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
@@ -63,6 +64,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
 		blockContext := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
+
 		statedb.SetTxContext(tx.Hash(), idx)
 		if idx == txIndex {
 			return msg, blockContext, statedb, release, nil
@@ -77,5 +79,6 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

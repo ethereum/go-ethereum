@@ -173,6 +173,7 @@ func genUncles(i int, gen *BlockGen) {
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
 	var db ethdb.Database
+
 	var err error
 	if !disk {
 		db = rawdb.NewMemoryDatabase()
@@ -264,6 +265,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 		if n == 0 {
 			rawdb.WriteChainConfig(db, hash, params.AllEthashProtocolChanges)
 		}
+
 		rawdb.WriteHeadHeaderHash(db, hash)
 
 		if full || n == 0 {
@@ -307,6 +309,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
+
 		chain, err := NewBlockChain(db, &cacheConfig, nil, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)

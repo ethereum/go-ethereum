@@ -197,13 +197,16 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get expected headers for request 1: %v", err)
 	}
+
 	expected2, err := s.chain.GetHeaders(req2)
 	if err != nil {
 		t.Fatalf("failed to get expected headers for request 2: %v", err)
 	}
+
 	if !headersMatch(expected1, headers1.BlockHeadersPacket) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected1, headers1)
 	}
+
 	if !headersMatch(expected2, headers2.BlockHeadersPacket) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected2, headers2)
 	}
@@ -245,6 +248,7 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	if err = conn.Write(request1); err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
+
 	if err = conn.Write(request2); err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
@@ -266,13 +270,16 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
 	}
+
 	expected2, err := s.chain.GetHeaders(request2)
 	if err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
 	}
+
 	if !headersMatch(expected1, headers1.BlockHeadersPacket) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected1, headers1)
 	}
+
 	if !headersMatch(expected2, headers2.BlockHeadersPacket) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected2, headers2)
 	}
@@ -299,6 +306,7 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get block headers: %v", err)
 	}
+
 	expected, err := s.chain.GetHeaders(req)
 	if err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
@@ -336,8 +344,10 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	if !ok {
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
+
 	bodies := resp.BlockBodiesPacket
 	t.Logf("received %d block bodies", len(bodies))
+
 	if len(bodies) != len(req.GetBlockBodiesPacket) {
 		t.Fatalf("wrong bodies in response: expected %d bodies, "+
 			"got %d", len(req.GetBlockBodiesPacket), len(bodies))
@@ -372,6 +382,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 
 	for i, blockAnnouncement := range blocks[0:3] {
 		t.Logf("Testing malicious announcement: %v\n", i)
+
 		conn, err := s.dial()
 		if err != nil {
 			t.Fatalf("dial failed: %v", err)
@@ -480,10 +491,12 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	for _, hash := range hashMap {
 		hashes = append(hashes, hash)
 	}
+
 	getTxReq := &GetPooledTransactions{
 		RequestId:                   1234,
 		GetPooledTransactionsPacket: hashes,
 	}
+
 	if err = conn.Write(getTxReq); err != nil {
 		t.Fatalf("could not write to conn: %v", err)
 	}
@@ -514,9 +527,11 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to generate transactions: %v", err)
 	}
+
 	hashes := make([]common.Hash, len(txs))
 	types := make([]byte, len(txs))
 	sizes := make([]uint32, len(txs))
+
 	for i, tx := range txs {
 		hashes[i] = tx.Hash()
 		types[i] = tx.Type()
@@ -534,10 +549,13 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	}
 
 	var ann Message = NewPooledTransactionHashes{Types: types, Sizes: sizes, Hashes: hashes}
+
 	if conn.negotiatedProtoVersion < eth.ETH68 {
 		ann = NewPooledTransactionHashes66(hashes)
 	}
+
 	err = conn.Write(ann)
+
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}

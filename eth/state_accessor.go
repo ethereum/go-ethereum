@@ -72,6 +72,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		// function to deref it.
 		if statedb, err = eth.blockchain.StateAt(block.Root()); err == nil {
 			statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
+
 			return statedb, func() {
 				statedb.Database().TrieDB().Dereference(block.Root())
 			}, nil
@@ -188,6 +189,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		nodes, imgs := database.TrieDB().Size()
 		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	}
+
 	return statedb, func() { database.TrieDB().Dereference(block.Root()) }, nil
 }
 
@@ -224,6 +226,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
 		statedb.SetTxContext(tx.Hash(), idx)
+		// nolint : contextcheck
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), nil); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
@@ -231,5 +234,6 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

@@ -99,6 +99,7 @@ func abigen(c *cli.Context) error {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
 	var lang bind.Lang
+
 	switch c.String(langFlag.Name) {
 	case "go":
 		lang = bind.LangGo
@@ -120,6 +121,7 @@ func abigen(c *cli.Context) error {
 			abi []byte
 			err error
 		)
+
 		input := c.String(abiFlag.Name)
 		if input == "-" {
 			abi, err = io.ReadAll(os.Stdin)
@@ -132,6 +134,7 @@ func abigen(c *cli.Context) error {
 		abis = append(abis, string(abi))
 
 		var bin []byte
+
 		if binFile := c.String(binFlag.Name); binFile != "" {
 			if bin, err = os.ReadFile(binFile); err != nil {
 				utils.Fatalf("Failed to read input bytecode: %v", err)
@@ -225,6 +228,7 @@ func abigen(c *cli.Context) error {
 		fmt.Printf("%s\n", code)
 		return nil
 	}
+
 	if err := os.WriteFile(c.String(outFlag.Name), []byte(code), 0600); err != nil {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}

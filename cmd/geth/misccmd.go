@@ -131,9 +131,11 @@ func printVersion(ctx *cli.Context) error {
 
 	fmt.Println(strings.Title(clientIdentifier))
 	fmt.Println("Version:", params.VersionWithMeta)
+
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
 	}
+
 	if git.Date != "" {
 		fmt.Println("Git Commit Date:", git.Date)
 	}

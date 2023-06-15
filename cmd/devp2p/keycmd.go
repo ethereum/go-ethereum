@@ -102,7 +102,9 @@ func keyToID(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Println(n.ID())
+
 	return nil
 }
 
@@ -111,7 +113,9 @@ func keyToURL(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Println(n.URLv4())
+
 	return nil
 }
 
@@ -120,7 +124,9 @@ func keyToRecord(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Println(n.String())
+
 	return nil
 }
 
@@ -141,16 +147,20 @@ func makeRecord(ctx *cli.Context) (*enode.Node, error) {
 	}
 
 	var r enr.Record
+
 	if host != "" {
 		ip := net.ParseIP(host)
 		if ip == nil {
 			return nil, fmt.Errorf("invalid IP address %q", host)
 		}
+
 		r.Set(enr.IP(ip))
 	}
+
 	if udp != 0 {
 		r.Set(enr.UDP(udp))
 	}
+
 	if tcp != 0 {
 		r.Set(enr.TCP(tcp))
 	}
@@ -158,5 +168,6 @@ func makeRecord(ctx *cli.Context) (*enode.Node, error) {
 	if err := enode.SignV4(&r, key); err != nil {
 		return nil, err
 	}
+
 	return enode.New(enode.ValidSchemes, &r)
 }

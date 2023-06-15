@@ -111,9 +111,11 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
+
 	for _, block := range bs {
 		chain.StateCache().TrieDB().Commit(block.Root(), false)
 	}
+
 	txconfig := txpool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
@@ -430,6 +432,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
+
 				bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
 			}
 		}
@@ -524,6 +527,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 		GetNodeDataPacket: hashes,
 	})
 	msg, err := peer.app.ReadMsg()
+
 	if !drop {
 		if err != nil {
 			t.Fatalf("failed to read node data response: %v", err)
@@ -558,6 +562,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 
 	// Sanity check whether all state matches.
 	accounts := []common.Address{testAddr, acc1Addr, acc2Addr}
+
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		root := backend.chain.GetBlockByNumber(i).Root()
 		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
@@ -640,6 +645,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		hashes   []common.Hash
 		receipts [][]*types.Receipt
 	)
+
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 

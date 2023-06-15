@@ -429,6 +429,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 				continue
 			}
 		}
+
 		send = from
 	}
 	// Merge all the skipped batches back

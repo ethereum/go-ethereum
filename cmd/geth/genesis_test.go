@@ -101,6 +101,7 @@ func TestCustomBackend(t *testing.T) {
 	if strconv.IntSize != 64 {
 		t.Skip("Custom backends are only available on 64-bit platform")
 	}
+
 	genesis := `{
 		"alloc"      : {},
 		"coinbase"   : "0x0000000000000000000000000000000000000000",
@@ -113,13 +114,16 @@ func TestCustomBackend(t *testing.T) {
 			"timestamp"  : "0x00",
 			"config"     : {}
 	}`
+
 	type backendTest struct {
 		initArgs   []string
 		initExpect string
 		execArgs   []string
 		execExpect string
 	}
+
 	testfunc := func(t *testing.T, tt backendTest) error {
+		t.Helper()
 		// Create a temporary data directory to use and inspect later
 		datadir := t.TempDir()
 
@@ -143,8 +147,10 @@ func TestCustomBackend(t *testing.T) {
 			geth.ExpectRegexp(tt.execExpect)
 			geth.ExpectExit()
 		}
+
 		return nil
 	}
+
 	for i, tt := range []backendTest{
 		{ // When not specified, it should default to leveldb
 			execArgs:   []string{"--db.engine", "leveldb"},

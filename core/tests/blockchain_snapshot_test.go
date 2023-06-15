@@ -84,10 +84,12 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 		// will happen during the block insertion.
 		cacheConfig = core.DefaultCacheConfig
 	)
+
 	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
+
 	genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, basic.chainBlocks, func(i int, b *core.BlockGen) {})
 
 	// Insert the blocks with configured settings.
@@ -326,6 +328,7 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 	}
+
 	newchain, err := core.NewBlockChain(snaptest.db, cacheConfig, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
@@ -401,6 +404,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	newBlocks, _ := core.GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.newBlocks, func(i int, b *core.BlockGen) {})
 	newchain.InsertChain(newBlocks)
 	newchain.Stop()
@@ -422,6 +426,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	defer newchain.Stop()
 	snaptest.verify(t, newchain, blocks)
 }

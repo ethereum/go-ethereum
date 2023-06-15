@@ -697,6 +697,7 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	}
 	// Initiate a block propagation across the peers
 	time.Sleep(100 * time.Millisecond)
+
 	header := source.chain.CurrentBlock()
 	source.handler.BroadcastBlock(source.chain.GetBlock(header.Hash(), header.Number.Uint64()), true)
 
@@ -784,8 +785,10 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 
 	malformedUncles := head
 	malformedUncles.UncleHash[0]++
+
 	malformedTransactions := head
 	malformedTransactions.TxHash[0]++
+
 	malformedEverything := head
 	malformedEverything.UncleHash[0]++
 	malformedEverything.TxHash[0]++

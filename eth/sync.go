@@ -286,6 +286,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 			atomic.StoreUint32(&h.acceptTxs, 1)
 		}
 	}
+
 	if head.Number.Uint64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify

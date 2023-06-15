@@ -248,9 +248,11 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
+
 		evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 		snap := statedb.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+
 		if _, err = st.TransitionDb(context.Background()); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
@@ -281,11 +283,13 @@ func TestInternals(t *testing.T) {
 			GasLimit:    uint64(6000000),
 		}
 	)
+
 	mkTracer := func(name string, cfg json.RawMessage) tracers.Tracer {
 		tr, err := tracers.DefaultDirectory.New(name, nil, cfg)
 		if err != nil {
 			t.Fatalf("failed to create call tracer: %v", err)
 		}
+
 		return tr
 	}
 
@@ -368,6 +372,7 @@ func TestInternals(t *testing.T) {
 			SkipAccountChecks: false,
 		}
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
+
 		if _, err := st.TransitionDb(context.Background()); err != nil {
 			t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 		}
@@ -376,6 +381,7 @@ func TestInternals(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %v: failed to retrieve trace result: %v", tc.name, err)
 		}
+
 		if string(res) != tc.want {
 			t.Fatalf("test %v: trace mismatch\n have: %v\n want: %v\n", tc.name, string(res), tc.want)
 		}

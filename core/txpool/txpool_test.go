@@ -4705,15 +4705,18 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	defer pool.Stop()
 	b.ReportAllocs()
 	batches := make(types.Transactions, b.N)
+
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.GenerateKey()
 		account := crypto.PubkeyToAddress(key.PublicKey)
 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+
 		tx := transaction(uint64(0), 100000, key)
 		batches[i] = tx
 	}
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
+
 	for _, tx := range batches {
 		pool.AddRemotesSync([]*types.Transaction{tx})
 	}

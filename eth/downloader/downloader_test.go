@@ -69,9 +69,11 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	if err != nil {
 		panic(err)
 	}
+
 	t.Cleanup(func() {
 		db.Close()
 	})
+
 	gspec := &core.Genesis{
 		Config:  params.TestChainConfig,
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
@@ -440,9 +442,11 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 	if hs := int(tester.chain.CurrentHeader().Number.Uint64()) + 1; hs != headers {
 		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, headers)
 	}
+
 	if bs := int(tester.chain.CurrentBlock().Number.Uint64()) + 1; bs != blocks {
 		t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, blocks)
 	}
+
 	if rs := int(tester.chain.CurrentSnapBlock().Number.Uint64()) + 1; rs != receipts {
 		t.Fatalf("synchronised receipts mismatch: have %v, want %v", rs, receipts)
 	}
@@ -517,6 +521,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Wrap the importer to allow stepping
 	var blocked atomic.Uint32
+
 	proceed := make(chan struct{})
 	tester.downloader.chainInsertHook = func(results []*fetchResult) {
 		blocked.Store(uint32(len(results)))
@@ -984,9 +989,11 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 			receiptsNeeded++
 		}
 	}
+
 	if int(bodiesHave.Load()) != bodiesNeeded {
 		t.Errorf("body retrieval count mismatch: have %v, want %v", bodiesHave.Load(), bodiesNeeded)
 	}
+
 	if int(receiptsHave.Load()) != receiptsNeeded {
 		t.Errorf("receipt retrieval count mismatch: have %v, want %v", receiptsHave.Load(), receiptsNeeded)
 	}
@@ -1790,6 +1797,7 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 		{name: "Beacon sync with long local chain", local: blockCacheMaxItems - 15 - fsMinFullBlocks/2},
 		{name: "Beacon sync with full local chain", local: blockCacheMaxItems - 15 - 1},
 	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

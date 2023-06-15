@@ -366,6 +366,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	if linked {
 		s.filler.resume()
 	}
+
 	defer func() {
 		if filled := s.filler.suspend(); filled != nil {
 			// If something was filled, try to delete stale sync helpers. If
@@ -1013,14 +1014,16 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 						context = append(context, fmt.Sprintf("stale_next_%d", i+1))
 						context = append(context, s.progress.Subchains[i+1].Next)
 					}
+
 					log.Error("Cleaning spurious beacon sync leftovers", context...)
-					s.progress.Subchains = s.progress.Subchains[:1]
 
 					// Note, here we didn't actually delete the headers at all,
 					// just the metadata. We could implement a cleanup mechanism,
 					// but further modifying corrupted state is kind of asking
 					// for it. Unless there's a good enough reason to risk it,
 					// better to live with the small database junk.
+
+					s.progress.Subchains = s.progress.Subchains[:1]
 				}
 			}
 			break
@@ -1116,6 +1119,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		end   = number                       // delete until the requested threshold
 		batch = s.db.NewBatch()
 	)
+
 	s.progress.Subchains[0].Tail = number
 	s.progress.Subchains[0].Next = filled.ParentHash
 
@@ -1132,6 +1136,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	}
 	// Execute the trimming and the potential rewiring of the progress
 	s.saveSyncStatus(batch)
+
 	for n := start; n < end; n++ {
 		// If the batch grew too big, flush it and continue with a new batch.
 		// The catch is that the sync metadata needs to reflect the actually
@@ -1148,17 +1153,21 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write beacon trim data", "err", err)
 			}
+
 			batch.Reset()
 
 			s.progress.Subchains[0].Tail = tmpTail
 			s.progress.Subchains[0].Next = tmpNext
 			s.saveSyncStatus(batch)
 		}
+
 		rawdb.DeleteSkeletonHeader(batch, n)
 	}
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write beacon trim data", "err", err)
 	}
+
 	return nil
 }
 
@@ -1187,19 +1196,23 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, final *type
 		return nil, nil, nil, err
 	}
 	head = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head)
+
 	if head == nil {
 		return nil, nil, nil, fmt.Errorf("head skeleton header %d is missing", progress.Subchains[0].Head)
 	}
 	tail = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Tail)
+
 	if tail == nil {
 		return nil, nil, nil, fmt.Errorf("tail skeleton header %d is missing", progress.Subchains[0].Tail)
 	}
+
 	if progress.Finalized != nil && tail.Number.Uint64() <= *progress.Finalized && *progress.Finalized <= head.Number.Uint64() {
 		final = rawdb.ReadSkeletonHeader(s.db, *progress.Finalized)
 		if final == nil {
 			return nil, nil, nil, fmt.Errorf("finalized skeleton header %d is missing", *progress.Finalized)
 		}
 	}
+
 	return head, tail, final, nil
 }
 

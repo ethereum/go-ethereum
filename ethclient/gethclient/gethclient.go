@@ -190,10 +190,12 @@ func toBlockNumArg(number *big.Int) string {
 	if number.Cmp(pending) == 0 {
 		return "pending"
 	}
+
 	finalized := big.NewInt(int64(rpc.FinalizedBlockNumber))
 	if number.Cmp(finalized) == 0 {
 		return "finalized"
 	}
+
 	safe := big.NewInt(int64(rpc.SafeBlockNumber))
 	if number.Cmp(safe) == 0 {
 		return "safe"
@@ -258,11 +260,14 @@ func (a OverrideAccount) MarshalJSON() ([]byte, error) {
 		Balance:   (*hexutil.Big)(a.Balance),
 		StateDiff: a.StateDiff,
 	}
+
 	if a.Code != nil {
 		output.Code = hexutil.Encode(a.Code)
 	}
+
 	if a.State != nil {
 		output.State = a.State
 	}
+
 	return json.Marshal(output)
 }

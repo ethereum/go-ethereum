@@ -37,6 +37,7 @@ type stateTracker struct {
 // the number of the first state that will be used.
 func newStateTracker(limit int, oldest uint64) *stateTracker {
 	lock := new(sync.RWMutex)
+
 	return &stateTracker{
 		limit:  limit,
 		oldest: oldest,
@@ -61,12 +62,15 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 	// it to the next state which is not used up.
 	if number == t.oldest {
 		var count int
+
 		for _, used := range t.used {
 			if !used {
 				break
 			}
+
 			count += 1
 		}
+
 		t.oldest += uint64(count)
 		copy(t.used, t.used[count:])
 
@@ -77,6 +81,7 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 		// Fire the signal to all waiters that oldest marker is updated.
 		t.cond.Broadcast()
 	}
+
 	t.releases = append(t.releases, release)
 }
 
@@ -88,6 +93,7 @@ func (t *stateTracker) callReleases() {
 	for _, release := range t.releases {
 		release()
 	}
+
 	t.releases = t.releases[:0]
 }
 
@@ -100,10 +106,12 @@ func (t *stateTracker) wait(number uint64) error {
 		if number < t.oldest {
 			return fmt.Errorf("invalid state number %d head %d", number, t.oldest)
 		}
+
 		if number < t.oldest+uint64(t.limit) {
 			// number is now within limit, wait over
 			return nil
 		}
+
 		t.cond.Wait()
 	}
 }

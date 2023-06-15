@@ -180,6 +180,7 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 			if result[index].Status != txpool.TxStatusUnknown {
 				continue
 			}
+
 			if status.Status == txpool.TxStatusUnknown {
 				continue
 			}

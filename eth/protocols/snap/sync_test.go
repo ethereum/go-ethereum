@@ -1510,6 +1510,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		trie, _ := trie.New(id, db)
 		storageTries[common.BytesToHash(key)] = trie
 	}
+
 	return db.Scheme(), accTrie, entries, storageTries, storageEntries
 }
 
@@ -1537,6 +1538,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 			stNodes   *trie.NodeSet
 			stEntries entrySlice
 		)
+
 		if boundary {
 			stRoot, stNodes, stEntries = makeBoundaryStorageTrie(common.BytesToHash(key), slots, db)
 		} else {
@@ -1572,15 +1574,19 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 	if err != nil {
 		panic(err)
 	}
+
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
 		id := trie.StorageTrieID(root, common.BytesToHash(key), storageRoots[common.BytesToHash(key)])
+
 		trie, err := trie.New(id, db)
 		if err != nil {
 			panic(err)
 		}
+
 		storageTries[common.BytesToHash(key)] = trie
 	}
+
 	return db.Scheme(), accTrie, entries, storageTries, storageEntries
 }
 
@@ -1603,7 +1609,9 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
+
 	root, nodes := trie.Commit(false)
+
 	return root, nodes, entries
 }
 
@@ -1654,12 +1662,15 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
+
 	root, nodes := trie.Commit(false)
+
 	return root, nodes, entries
 }
 
 func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
+
 	triedb := trie.NewDatabase(rawdb.NewDatabase(db))
 	accTrie, err := trie.New(trie.StateTrieID(root), triedb)
 	if err != nil {
@@ -1678,6 +1689,7 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
 		accounts++
+
 		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIt.Key), acc.Root)
 			storeTrie, err := trie.NewStateTrie(id, triedb)
@@ -1716,6 +1728,7 @@ func TestSyncAccountPerformance(t *testing.T) {
 			})
 		}
 	)
+
 	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100)
 
 	mkSource := func(name string) *testPeer {

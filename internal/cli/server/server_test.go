@@ -53,6 +53,7 @@ func TestServer_DeveloperMode(t *testing.T) {
 	for i = 0; i < 3; i++ {
 		// We expect the node to mine blocks every `config.Developer.Period` time period
 		time.Sleep(time.Duration(config.Developer.Period) * time.Second)
+
 		currBlock := server.backend.BlockChain().CurrentBlock().Number.Int64()
 		expected := blockNumber + i + 1
 		if res := assert.Equal(t, currBlock, expected); res == false {

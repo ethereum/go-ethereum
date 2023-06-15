@@ -47,6 +47,7 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 			nopruning:   true,
 		}
 		_, c, teardown := newClientServerEnv(t, netconfig)
+
 		return c, teardown
 	}
 

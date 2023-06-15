@@ -72,17 +72,23 @@ func (f *callFrame) processOutput(output []byte, err error) {
 		f.Output = output
 		return
 	}
+
 	f.Error = err.Error()
+
 	if f.Type == vm.CREATE || f.Type == vm.CREATE2 {
 		f.To = nil
 	}
+
 	if !errors.Is(err, vm.ErrExecutionReverted) || len(output) == 0 {
 		return
 	}
+
 	f.Output = output
+
 	if len(output) < 4 {
 		return
 	}
+
 	if unpacked, err := abi.UnpackRevert(output); err == nil {
 		f.RevertReason = unpacked
 	}
@@ -164,6 +170,8 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	if t.interrupt.Load() {
 		return
 	}
+
+	// nolint : exhaustive
 	switch op {
 	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
 		size := int(op - vm.LOG0)
@@ -175,6 +183,7 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 		mStart := stackData[len(stackData)-1]
 		mSize := stackData[len(stackData)-2]
 		topics := make([]common.Hash, size)
+
 		for i := 0; i < size; i++ {
 			topic := stackData[len(stackData)-2-(i+1)]
 			topics[i] = common.Hash(topic.Bytes32())
@@ -273,6 +282,7 @@ func clearFailedLogs(cf *callFrame, parentFailed bool) {
 	if failed {
 		cf.Logs = nil
 	}
+
 	for i := range cf.Calls {
 		clearFailedLogs(&cf.Calls[i], failed)
 	}

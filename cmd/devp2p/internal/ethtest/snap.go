@@ -357,6 +357,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 	for i := 1; i <= 65; i++ {
 		accPaths = append(accPaths, pathTo(i))
 	}
+
 	empty := types.EmptyCodeHash
 	for i, tc := range []trieNodesTest{
 		{

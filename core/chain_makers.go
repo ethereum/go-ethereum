@@ -99,11 +99,14 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
+
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
 	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig, nil)
+
 	if err != nil {
 		panic(err)
 	}
+
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 }
@@ -226,6 +229,7 @@ func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) uint64 {
 	cpy := *w
 	cpy.Index = b.nextWithdrawalIndex()
 	b.withdrawals = append(b.withdrawals, &cpy)
+
 	return cpy.Index
 }
 
@@ -234,10 +238,12 @@ func (b *BlockGen) nextWithdrawalIndex() uint64 {
 	if len(b.withdrawals) != 0 {
 		return b.withdrawals[len(b.withdrawals)-1].Index + 1
 	}
+
 	for i := b.i - 1; i >= 0; i-- {
 		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
 			return wd[len(wd)-1].Index + 1
 		}
+
 		if i == 0 {
 			// Correctly set the index if no parent had withdrawals.
 			if wd := b.parent.Withdrawals(); len(wd) != 0 {
@@ -245,6 +251,7 @@ func (b *BlockGen) nextWithdrawalIndex() uint64 {
 			}
 		}
 	}
+
 	return 0
 }
 
@@ -334,6 +341,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
+
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
@@ -360,10 +368,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	_, err := genesis.Commit(db, trie.NewDatabase(db))
+
 	if err != nil {
 		panic(err)
 	}
+
 	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
+
 	return db, blocks, receipts
 }
 
@@ -412,9 +423,11 @@ func makeHeaderChain(chainConfig *params.ChainConfig, parent *types.Header, n in
 func makeHeaderChainWithGenesis(genesis *Genesis, n int, engine consensus.Engine, seed int) (ethdb.Database, []*types.Header) {
 	db, blocks := makeBlockChainWithGenesis(genesis, n, engine, seed)
 	headers := make([]*types.Header, len(blocks))
+
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
+
 	return db, headers
 }
 
@@ -423,6 +436,7 @@ func makeBlockChain(chainConfig *params.ChainConfig, parent *types.Block, n int,
 	blocks, _ := GenerateChain(chainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
+
 	return blocks
 }
 
@@ -431,6 +445,7 @@ func makeBlockChainWithGenesis(genesis *Genesis, n int, engine consensus.Engine,
 	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
+
 	return db, blocks
 }
 

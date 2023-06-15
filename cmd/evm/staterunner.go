@@ -103,6 +103,7 @@ func stateTestCmd(ctx *cli.Context) error {
 			if s != nil {
 				root := s.IntermediateRoot(false)
 				result.Root = &root
+
 				if ctx.Bool(MachineFlag.Name) {
 					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 				}
@@ -110,6 +111,7 @@ func stateTestCmd(ctx *cli.Context) error {
 			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
+
 				if ctx.Bool(DumpFlag.Name) && s != nil {
 					dump := s.RawDump(nil)
 					result.State = &dump

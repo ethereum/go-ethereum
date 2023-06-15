@@ -436,6 +436,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 				continue
 			}
 		}
+
 		send = from
 	}
 	// Merge all the skipped batches back
@@ -783,6 +784,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		if uncleListHashes[index] != header.UncleHash {
 			return errInvalidBody
 		}
+
 		if header.WithdrawalsHash == nil {
 			// nil hash means that withdrawals should not be present in body
 			if withdrawalLists[index] != nil {

@@ -22,6 +22,7 @@ func newNameFilter(patterns ...string) (*nameFilter, error) {
 			return nil, err
 		}
 	}
+
 	return f, nil
 }
 
@@ -40,7 +41,9 @@ func (f *nameFilter) add(pattern string) error {
 		f.files[file] = true
 		return nil
 	}
+
 	f.fulls[pattern] = true
+
 	return nil
 }
 

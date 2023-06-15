@@ -78,6 +78,7 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 		doneCh       = make(chan enode.Iterator, len(c.iters))
 		liveIters    = len(c.iters)
 	)
+
 	if nthreads < 1 {
 		nthreads = 1
 	}
@@ -86,6 +87,7 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 	for _, it := range c.iters {
 		go c.runIterator(doneCh, it)
 	}
+
 	var (
 		added   uint64
 		updated uint64
@@ -94,10 +96,13 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 		removed uint64
 		wg      sync.WaitGroup
 	)
+
 	wg.Add(nthreads)
+
 	for i := 0; i < nthreads; i++ {
 		go func() {
 			defer wg.Done()
+
 			for {
 				select {
 				case n := <-c.ch:
@@ -183,6 +188,7 @@ func (c *crawler) updateNode(n *enode.Node) int {
 	// Request the node record.
 	status := nodeUpdated
 	node.LastCheck = truncNow()
+
 	if nn, err := c.disc.RequestENR(n); err != nil {
 		if node.Score == 0 {
 			// Node doesn't implement EIP-868.
@@ -206,10 +212,13 @@ func (c *crawler) updateNode(n *enode.Node) int {
 	if node.Score <= 0 {
 		log.Debug("Removing node", "id", n.ID())
 		delete(c.output, n.ID())
+
 		return nodeRemoved
 	}
+
 	log.Debug("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
 	c.output[n.ID()] = node
+
 	return status
 }
 
