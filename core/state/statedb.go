@@ -1124,6 +1124,13 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	s.transientStorage = newTransientStorage()
 }
 
+// PrepareLegacy sets the current transaction hash and index which are
+// used when the EVM emits new state logs.
+func (s *StateDB) PrepareLegacy(thash common.Hash, ti int) {
+	s.thash = thash
+	s.txIndex = ti
+}
+
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
