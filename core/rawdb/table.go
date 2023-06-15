@@ -141,6 +141,7 @@ func (t *table) Delete(key []byte) error {
 func (t *table) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	innerPrefix := append([]byte(t.prefix), prefix...)
 	iter := t.db.NewIterator(innerPrefix, start)
+
 	return &tableIterator{
 		iter:   iter,
 		prefix: t.prefix,
@@ -290,6 +291,7 @@ func (iter *tableIterator) Key() []byte {
 	if key == nil {
 		return nil
 	}
+
 	return key[len(iter.prefix):]
 }
 

@@ -33,11 +33,14 @@ func TestRoundtrip(t *testing.T) {
 		"0xc780c0c1c0825208",
 	} {
 		var out strings.Builder
+
 		err := rlpToText(bytes.NewReader(common.FromHex(want)), &out)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		text := out.String()
+
 		rlpBytes, err := textToRlp(strings.NewReader(text))
 		if err != nil {
 			t.Errorf("test %d: error %v", i, err)
@@ -56,6 +59,7 @@ func TestTextToRlp(t *testing.T) {
 		text string
 		want string
 	}
+
 	cases := []tc{
 		{
 			text: `[
@@ -75,6 +79,7 @@ func TestTextToRlp(t *testing.T) {
 			t.Errorf("test %d: error %v", i, err)
 			continue
 		}
+
 		if hexutil.Encode(have) != tc.want {
 			t.Errorf("test %d:\nhave %v\nwant %v", i, hexutil.Encode(have), tc.want)
 		}

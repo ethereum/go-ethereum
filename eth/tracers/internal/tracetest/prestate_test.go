@@ -93,6 +93,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
+
 			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
@@ -116,15 +117,19 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
+
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
+
 			evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
+
 			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
+
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if _, err = st.TransitionDb(context.Background()); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
@@ -140,13 +145,16 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				// This is a tweak to make it deterministic. Can be removed when
 				// we remove the legacy tracer.
 				var x prestateTrace
+
 				json.Unmarshal(res, &x)
 				res, _ = json.Marshal(x)
 			}
+
 			want, err := json.Marshal(test.Result)
 			if err != nil {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
+
 			if string(want) != string(res) {
 				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}

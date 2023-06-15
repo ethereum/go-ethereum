@@ -117,13 +117,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run ethereum.Ethereum in light sync mode, use les.LightEthereum")
 	}
+
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
+
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
+
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -131,8 +134,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		} else {
 			config.TrieCleanCache += config.TrieDirtyCache
 		}
+
 		config.TrieDirtyCache = 0
 	}
+
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
 	// Assemble the Ethereum object
@@ -178,6 +183,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 		config.TxPool.AllowUnprotectedTxs = true
 	}
+
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
@@ -207,6 +213,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
+
 	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
@@ -216,9 +223,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			if bcVersion != nil { // only print warning on upgrade, not on init
 				log.Warn("Upgrade blockchain database version", "from", dbVer, "to", core.BlockChainVersion)
 			}
+
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording:      config.EnablePreimageRecording,
@@ -252,6 +261,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ethereum.engine.VerifyHeader(ethereum.blockchain, ethereum.blockchain.CurrentHeader(), true) // TODO think on it
 
 	// BOR changes
@@ -268,6 +278,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
+
 	checkpoint := config.Checkpoint
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[ethereum.blockchain.Genesis().Hash()]
@@ -296,6 +307,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Setup DNS discovery iterators.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
+
 	ethereum.ethDialCandidates, err = dnsclient.NewIterator(ethereum.config.EthDiscoveryURLs...)
 	if err != nil {
 		return nil, err
@@ -330,10 +342,12 @@ func makeExtraData(extra []byte) []byte {
 			runtime.GOOS,
 		})
 	}
+
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
 		extra = nil
 	}
+
 	return extra
 }
 
@@ -393,6 +407,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
 	}
+
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
@@ -411,6 +426,7 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 	s.lock.RLock()
 	etherbase := s.etherbase
 	s.lock.RUnlock()
+
 	if author == etherbase {
 		return true
 	}
@@ -421,6 +437,7 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -447,6 +464,7 @@ func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	if _, ok := s.engine.(*clique.Clique); ok {
 		return false
 	}
+
 	return s.isLocalBlock(header)
 }
 
@@ -467,11 +485,14 @@ func (s *Ethereum) StartMining(threads int) error {
 	type threaded interface {
 		SetThreads(threads int)
 	}
+
 	if th, ok := s.engine.(threaded); ok {
 		log.Info("Updated mining threads", "threads", threads)
+
 		if threads == 0 {
 			threads = -1 // Disable the miner from within
 		}
+
 		th.SetThreads(threads)
 	}
 	// If the miner was not running, initialize it
@@ -499,6 +520,7 @@ func (s *Ethereum) StartMining(threads int) error {
 					cli = c
 				}
 			}
+
 			if cli != nil {
 				wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
@@ -538,6 +560,7 @@ func (s *Ethereum) StopMining() {
 	type threaded interface {
 		SetThreads(threads int)
 	}
+
 	if th, ok := s.engine.(threaded); ok {
 		th.SetThreads(-1)
 	}
@@ -598,10 +621,12 @@ func (s *Ethereum) Start() error {
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
+
 	if s.config.LightServ > 0 {
 		if s.config.LightPeers >= s.p2pServer.MaxPeers {
 			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
 		}
+
 		maxPeers -= s.config.LightPeers
 	}
 

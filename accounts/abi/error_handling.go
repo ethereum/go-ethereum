@@ -40,6 +40,7 @@ func formatSliceString(kind reflect.Kind, sliceSize int) string {
 	if sliceSize == -1 {
 		return fmt.Sprintf("[]%v", kind)
 	}
+
 	return fmt.Sprintf("[%d]%v", sliceSize, kind)
 }
 
@@ -63,6 +64,7 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 	if val.Type().Elem().Kind() != t.Elem.GetType().Kind() {
 		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), val.Type())
 	}
+
 	return nil
 }
 

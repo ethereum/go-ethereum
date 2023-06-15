@@ -269,6 +269,7 @@ func init() {
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
 		prompt.Stdin.Close() // Resets terminal mode.
+
 		return nil
 	}
 }
@@ -361,11 +362,13 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
+
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
 
 	startNode(ctx, stack, backend, false)
 	stack.Wait()
+
 	return nil
 }
 
@@ -390,6 +393,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	if err != nil {
 		utils.Fatalf("Failed to attach to self: %v", err)
 	}
+
 	ethClient := ethclient.NewClient(rpcClient)
 
 	go func() {
@@ -414,6 +418,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 				if event.Wallet.URL().Scheme == "ledger" {
 					derivationPaths = append(derivationPaths, accounts.LegacyLedgerBaseDerivationPath)
 				}
+
 				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
 
 				event.Wallet.SelfDerive(derivationPaths, ethClient)
@@ -431,15 +436,18 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 		go func() {
 			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
 			defer sub.Unsubscribe()
+
 			for {
 				event := <-sub.Chan()
 				if event == nil {
 					continue
 				}
+
 				done, ok := event.Data.(downloader.DoneEvent)
 				if !ok {
 					continue
 				}
+
 				if timestamp := time.Unix(int64(done.Latest.Time), 0); time.Since(timestamp) < 10*time.Minute {
 					log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
 						"age", common.PrettyAge(timestamp))
@@ -455,6 +463,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 		if ctx.String(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
+
 		ethBackend, ok := backend.(*eth.EthAPIBackend)
 		if !ok {
 			utils.Fatalf("Ethereum service not running")
@@ -499,6 +508,7 @@ func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 
 	ks := backends[0].(*keystore.KeyStore)
 	passwords := utils.MakePasswordList(ctx)
+
 	for i, account := range unlocks {
 		unlockAccount(ks, account, i, passwords)
 	}

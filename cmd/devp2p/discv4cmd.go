@@ -143,19 +143,24 @@ var discoveryNodeFlags = []cli.Flag{
 
 func discv4Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	disc := startV4(ctx)
 	defer disc.Close()
 
 	start := time.Now()
+
 	if err := disc.Ping(n); err != nil {
 		return fmt.Errorf("node didn't respond: %v", err)
 	}
+
 	fmt.Printf("node responded to ping (RTT %v).\n", time.Since(start))
+
 	return nil
 }
 
 func discv4RequestRecord(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	disc := startV4(ctx)
 	defer disc.Close()
 
@@ -163,16 +168,20 @@ func discv4RequestRecord(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("can't retrieve record: %v", err)
 	}
+
 	fmt.Println(respN.String())
+
 	return nil
 }
 
 func discv4Resolve(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	disc := startV4(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Resolve(n).String())
+
 	return nil
 }
 
@@ -180,19 +189,23 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
+
 	nodesFile := ctx.Args().Get(0)
 	inputSet := make(nodeSet)
+
 	if common.FileExist(nodesFile) {
 		inputSet = loadNodesJSON(nodesFile)
 	}
 
 	// Add extra nodes from command line arguments.
 	var nodeargs []*enode.Node
+
 	for i := 1; i < ctx.NArg(); i++ {
 		n, err := parseNode(ctx.Args().Get(i))
 		if err != nil {
 			exit(err)
 		}
+
 		nodeargs = append(nodeargs, n)
 	}
 
@@ -203,6 +216,7 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 	c.revalidateInterval = 0
 	output := c.run(0, 1)
 	writeNodesJSON(nodesFile, output)
+
 	return nil
 }
 
@@ -210,8 +224,11 @@ func discv4Crawl(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
+
 	nodesFile := ctx.Args().First()
+
 	var inputSet nodeSet
+
 	if common.FileExist(nodesFile) {
 		inputSet = loadNodesJSON(nodesFile)
 	}
@@ -222,6 +239,7 @@ func discv4Crawl(ctx *cli.Context) error {
 	c.revalidateInterval = 10 * time.Minute
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
+
 	return nil
 }
 
@@ -231,9 +249,11 @@ func discv4Test(ctx *cli.Context) error {
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
 		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
+
 	v4test.Remote = ctx.String(remoteEnodeFlag.Name)
 	v4test.Listen1 = ctx.String(testListen1Flag.Name)
 	v4test.Listen2 = ctx.String(testListen2Flag.Name)
+
 	return runTests(ctx, v4test.AllTests)
 }
 
@@ -241,10 +261,12 @@ func discv4Test(ctx *cli.Context) error {
 func startV4(ctx *cli.Context) *discover.UDPv4 {
 	ln, config := makeDiscoveryConfig(ctx)
 	socket := listen(ctx, ln)
+
 	disc, err := discover.ListenV4(socket, ln, config)
 	if err != nil {
 		exit(err)
 	}
+
 	return disc
 }
 
@@ -256,6 +278,7 @@ func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
 		if err != nil {
 			exit(fmt.Errorf("-%s: %v", nodekeyFlag.Name, err))
 		}
+
 		cfg.PrivateKey = key
 	} else {
 		cfg.PrivateKey, _ = crypto.GenerateKey()
@@ -266,15 +289,19 @@ func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
 		if err != nil {
 			exit(err)
 		}
+
 		cfg.Bootnodes = bn
 	}
 
 	dbpath := ctx.String(nodedbFlag.Name)
+
 	db, err := enode.OpenDB(dbpath)
 	if err != nil {
 		exit(err)
 	}
+
 	ln := enode.NewLocalNode(db, cfg.PrivateKey)
+
 	return ln, cfg
 }
 
@@ -310,6 +337,7 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 	if addr == "" {
 		addr = "0.0.0.0:0"
 	}
+
 	socket, err := net.ListenPacket("udp4", addr)
 	if err != nil {
 		exit(err)
@@ -317,12 +345,14 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 
 	// Configure UDP endpoint in ENR from listener address.
 	usocket := socket.(*net.UDPConn)
+
 	uaddr := socket.LocalAddr().(*net.UDPAddr)
 	if uaddr.IP.IsUnspecified() {
 		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
 	} else {
 		ln.SetFallbackIP(uaddr.IP)
 	}
+
 	ln.SetFallbackUDP(uaddr.Port)
 
 	// If an ENR endpoint is set explicitly on the command-line, override
@@ -347,20 +377,26 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 
 func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
 	s := params.RinkebyBootnodes
+
 	if ctx.IsSet(bootnodesFlag.Name) {
 		input := ctx.String(bootnodesFlag.Name)
 		if input == "" {
 			return nil, nil
 		}
+
 		s = strings.Split(input, ",")
 	}
+
 	nodes := make([]*enode.Node, len(s))
+
 	var err error
+
 	for i, record := range s {
 		nodes[i], err = parseNode(record)
 		if err != nil {
 			return nil, fmt.Errorf("invalid bootstrap node: %v", err)
 		}
 	}
+
 	return nodes, nil
 }

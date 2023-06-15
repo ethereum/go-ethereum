@@ -86,6 +86,7 @@ type StandardEWMA struct {
 func (a *StandardEWMA) Rate() float64 {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
+
 	return a.rate * float64(time.Second)
 }
 
@@ -100,8 +101,10 @@ func (a *StandardEWMA) Tick() {
 	count := a.uncounted.Load()
 	a.uncounted.Add(-count)
 	instantRate := float64(count) / float64(5*time.Second)
+
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
+
 	if a.init {
 		a.rate += a.alpha * (instantRate - a.rate)
 	} else {

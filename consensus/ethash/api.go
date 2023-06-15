@@ -80,7 +80,9 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 	case <-api.ethash.remote.exitCh:
 		return false
 	}
+
 	err := <-errc
+
 	return err == nil
 }
 
@@ -104,6 +106,7 @@ func (api *API) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
 
 	// Block until hash rate submitted successfully.
 	<-done
+
 	return true
 }
 

@@ -62,6 +62,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideShanghai        *uint64                        `toml:",omitempty"`
 	}
+
 	var enc Config
 	enc.Genesis = c.Genesis
 	enc.NetworkId = c.NetworkId
@@ -106,6 +107,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideShanghai = c.OverrideShanghai
+
 	return &enc, nil
 }
 
@@ -156,133 +158,176 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideShanghai        *uint64                        `toml:",omitempty"`
 	}
+
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
 		return err
 	}
+
 	if dec.Genesis != nil {
 		c.Genesis = dec.Genesis
 	}
+
 	if dec.NetworkId != nil {
 		c.NetworkId = *dec.NetworkId
 	}
+
 	if dec.SyncMode != nil {
 		c.SyncMode = *dec.SyncMode
 	}
+
 	if dec.EthDiscoveryURLs != nil {
 		c.EthDiscoveryURLs = dec.EthDiscoveryURLs
 	}
+
 	if dec.SnapDiscoveryURLs != nil {
 		c.SnapDiscoveryURLs = dec.SnapDiscoveryURLs
 	}
+
 	if dec.NoPruning != nil {
 		c.NoPruning = *dec.NoPruning
 	}
+
 	if dec.NoPrefetch != nil {
 		c.NoPrefetch = *dec.NoPrefetch
 	}
+
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
 	}
+
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks
 	}
+
 	if dec.LightServ != nil {
 		c.LightServ = *dec.LightServ
 	}
+
 	if dec.LightIngress != nil {
 		c.LightIngress = *dec.LightIngress
 	}
+
 	if dec.LightEgress != nil {
 		c.LightEgress = *dec.LightEgress
 	}
+
 	if dec.LightPeers != nil {
 		c.LightPeers = *dec.LightPeers
 	}
+
 	if dec.LightNoPrune != nil {
 		c.LightNoPrune = *dec.LightNoPrune
 	}
+
 	if dec.LightNoSyncServe != nil {
 		c.LightNoSyncServe = *dec.LightNoSyncServe
 	}
+
 	if dec.SyncFromCheckpoint != nil {
 		c.SyncFromCheckpoint = *dec.SyncFromCheckpoint
 	}
+
 	if dec.UltraLightServers != nil {
 		c.UltraLightServers = dec.UltraLightServers
 	}
+
 	if dec.UltraLightFraction != nil {
 		c.UltraLightFraction = *dec.UltraLightFraction
 	}
+
 	if dec.UltraLightOnlyAnnounce != nil {
 		c.UltraLightOnlyAnnounce = *dec.UltraLightOnlyAnnounce
 	}
+
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck
 	}
+
 	if dec.DatabaseHandles != nil {
 		c.DatabaseHandles = *dec.DatabaseHandles
 	}
+
 	if dec.DatabaseCache != nil {
 		c.DatabaseCache = *dec.DatabaseCache
 	}
+
 	if dec.DatabaseFreezer != nil {
 		c.DatabaseFreezer = *dec.DatabaseFreezer
 	}
+
 	if dec.TrieCleanCache != nil {
 		c.TrieCleanCache = *dec.TrieCleanCache
 	}
+
 	if dec.TrieCleanCacheJournal != nil {
 		c.TrieCleanCacheJournal = *dec.TrieCleanCacheJournal
 	}
+
 	if dec.TrieCleanCacheRejournal != nil {
 		c.TrieCleanCacheRejournal = *dec.TrieCleanCacheRejournal
 	}
+
 	if dec.TrieDirtyCache != nil {
 		c.TrieDirtyCache = *dec.TrieDirtyCache
 	}
+
 	if dec.TrieTimeout != nil {
 		c.TrieTimeout = *dec.TrieTimeout
 	}
+
 	if dec.SnapshotCache != nil {
 		c.SnapshotCache = *dec.SnapshotCache
 	}
+
 	if dec.Preimages != nil {
 		c.Preimages = *dec.Preimages
 	}
+
 	if dec.FilterLogCacheSize != nil {
 		c.FilterLogCacheSize = *dec.FilterLogCacheSize
 	}
+
 	if dec.Miner != nil {
 		c.Miner = *dec.Miner
 	}
+
 	if dec.Ethash != nil {
 		c.Ethash = *dec.Ethash
 	}
+
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
 	}
+
 	if dec.GPO != nil {
 		c.GPO = *dec.GPO
 	}
+
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
 	}
+
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
 	}
+
 	if dec.RPCGasCap != nil {
 		c.RPCGasCap = *dec.RPCGasCap
 	}
+
 	if dec.RPCEVMTimeout != nil {
 		c.RPCEVMTimeout = *dec.RPCEVMTimeout
 	}
+
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
 	}
+
 	if dec.Checkpoint != nil {
 		c.Checkpoint = dec.Checkpoint
 	}
+
 	if dec.CheckpointOracle != nil {
 		c.CheckpointOracle = dec.CheckpointOracle
 	}
@@ -290,5 +335,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.OverrideShanghai != nil {
 		c.OverrideShanghai = dec.OverrideShanghai
 	}
+
 	return nil
 }

@@ -98,6 +98,7 @@ func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	} else {
 		d.nonLevel0Comp.Add(1)
 	}
+
 	d.activeComp++
 }
 
@@ -107,6 +108,7 @@ func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 	} else if d.activeComp == 0 {
 		panic("should not happen")
 	}
+
 	d.activeComp--
 }
 

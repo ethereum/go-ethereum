@@ -84,6 +84,7 @@ func TestIteratorHold(t *testing.T) {
 		if !bytes.Equal(it.Value(), []byte(content[order[idx]])) {
 			t.Errorf("item %d: value mismatch: have %s, want %s", idx, string(it.Value()), content[order[idx]])
 		}
+
 		idx++
 	}
 
@@ -143,6 +144,7 @@ func TestReopenIterator(t *testing.T) {
 	checkVal(ctx.account, idx)
 
 	ctx.reopenIterator(snapAccount)
+
 	idx++
 
 	ctx.account.Next()
@@ -151,6 +153,7 @@ func TestReopenIterator(t *testing.T) {
 	// reopen twice
 	ctx.reopenIterator(snapAccount)
 	ctx.reopenIterator(snapAccount)
+
 	idx++
 
 	ctx.account.Next()
@@ -160,6 +163,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.account.Next()
 	ctx.account.Hold()
 	ctx.reopenIterator(snapAccount)
+
 	idx++
 
 	ctx.account.Next()
@@ -170,6 +174,7 @@ func TestReopenIterator(t *testing.T) {
 	ctx.account.Hold()
 	ctx.reopenIterator(snapAccount)
 	ctx.reopenIterator(snapAccount)
+
 	idx++
 
 	ctx.account.Next()

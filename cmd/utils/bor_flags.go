@@ -69,16 +69,19 @@ var (
 
 func getGenesis(genesisPath string) (*core.Genesis, error) {
 	log.Info("Reading genesis at ", "file", genesisPath)
+
 	file, err := os.Open(genesisPath)
 	if err != nil {
 		return nil, err
 	}
+
 	defer file.Close()
 
 	genesis := new(core.Genesis)
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		return nil, err
 	}
+
 	return genesis, nil
 }
 
@@ -104,6 +107,7 @@ func CreateBorEthereum(cfg *ethconfig.Config) *eth.Ethereum {
 	if err != nil {
 		Fatalf("Failed to create node: %v", err)
 	}
+
 	ethereum, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register Ethereum protocol: %v", err)
@@ -113,6 +117,7 @@ func CreateBorEthereum(cfg *ethconfig.Config) *eth.Ethereum {
 	if err = stack.Start(); err != nil {
 		Fatalf("Failed to start stack: %v", err)
 	}
+
 	_, err = stack.Attach()
 	if err != nil {
 		Fatalf("Failed to attach to node: %v", err)

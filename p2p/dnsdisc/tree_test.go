@@ -54,6 +54,7 @@ func TestParseRoot(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
+
 		if err != test.err {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
@@ -131,6 +132,7 @@ func TestParseEntry(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
+
 		if err != test.err {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
@@ -140,10 +142,12 @@ func TestParseEntry(t *testing.T) {
 func TestMakeTree(t *testing.T) {
 	keys := testKeys(50)
 	nodes := testNodes(keys)
+
 	tree, err := MakeTree(2, nodes, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	txt := tree.ToTXT("")
 	if len(txt) < len(nodes)+1 {
 		t.Fatal("too few TXT records in output")

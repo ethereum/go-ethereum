@@ -46,6 +46,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 				return err
 			}
 		}
+
 		var obj types.StateAccount
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
 			return err
@@ -53,8 +54,10 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 
 		syncer.AddSubTrie(obj.Root, path, parent, parentPath, onSlot)
 		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
+
 		return nil
 	}
 	syncer = trie.NewSync(root, database, onAccount, scheme)
+
 	return syncer
 }

@@ -35,5 +35,6 @@ func DialInProc(handler *Server) *Client {
 
 		return NewCodec(p2), nil
 	})
+
 	return c
 }

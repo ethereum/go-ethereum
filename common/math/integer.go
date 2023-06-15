@@ -59,7 +59,9 @@ func (i *HexOrDecimal64) UnmarshalText(input []byte) error {
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
+
 	*i = HexOrDecimal64(int)
+
 	return nil
 }
 
@@ -74,11 +76,14 @@ func ParseUint64(s string) (uint64, bool) {
 	if s == "" {
 		return 0, true
 	}
+
 	if len(s) >= 2 && (s[:2] == "0x" || s[:2] == "0X") {
 		v, err := strconv.ParseUint(s[2:], 16, 64)
 		return v, err == nil
 	}
+
 	v, err := strconv.ParseUint(s, 10, 64)
+
 	return v, err == nil
 }
 
@@ -88,6 +93,7 @@ func MustParseUint64(s string) uint64 {
 	if !ok {
 		panic("invalid unsigned 64 bit integer: " + s)
 	}
+
 	return v
 }
 

@@ -62,6 +62,7 @@ func waitWatcherStart(ks *KeyStore) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -76,9 +77,11 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 			default:
 				return fmt.Errorf("wasn't notified of new accounts")
 			}
+
 			return nil
 		}
 	}
+
 	return fmt.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
 }
 
@@ -89,6 +92,7 @@ func TestWatchNewFile(t *testing.T) {
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
+
 	if !waitWatcherStart(ks) {
 		t.Fatal("keystore watcher didn't start in time")
 	}
@@ -115,6 +119,7 @@ func TestWatchNoDir(t *testing.T) {
 	// Create ks but not the directory that it watches.
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watchnodir-test-%d-%d", os.Getpid(), rand.Int()))
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
+
 	list := ks.Accounts()
 	if len(list) > 0 {
 		t.Error("initial account list not empty:", list)
@@ -126,6 +131,7 @@ func TestWatchNoDir(t *testing.T) {
 	// Create the directory and copy a key file into it.
 	os.MkdirAll(dir, 0700)
 	defer os.RemoveAll(dir)
+
 	file := filepath.Join(dir, "aaa")
 	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
 		t.Fatal(err)
@@ -134,6 +140,7 @@ func TestWatchNoDir(t *testing.T) {
 	// ks should see the account.
 	wantAccounts := []accounts.Account{cachetestAccounts[0]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+
 	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
 		list = ks.Accounts()
 		if reflect.DeepEqual(list, wantAccounts) {
@@ -143,8 +150,10 @@ func TestWatchNoDir(t *testing.T) {
 			default:
 				t.Fatalf("wasn't notified of new accounts")
 			}
+
 			return
 		}
+
 		time.Sleep(d)
 	}
 	t.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
@@ -152,6 +161,7 @@ func TestWatchNoDir(t *testing.T) {
 
 func TestCacheInitialReload(t *testing.T) {
 	cache, _ := newAccountCache(cachetestDir)
+
 	accounts := cache.accounts()
 	if !reflect.DeepEqual(accounts, cachetestAccounts) {
 		t.Fatalf("got initial accounts: %swant %s", spew.Sdump(accounts), spew.Sdump(cachetestAccounts))
@@ -203,15 +213,18 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	wantAccounts := make([]accounts.Account, len(accs))
 	copy(wantAccounts, accs)
 	sort.Sort(accountsByURL(wantAccounts))
+
 	list := cache.accounts()
 	if !reflect.DeepEqual(list, wantAccounts) {
 		t.Fatalf("got accounts: %s\nwant %s", spew.Sdump(accs), spew.Sdump(wantAccounts))
 	}
+
 	for _, a := range accs {
 		if !cache.hasAddress(a.Address) {
 			t.Errorf("expected hasAccount(%x) to return true", a.Address)
 		}
 	}
+
 	if cache.hasAddress(common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e")) {
 		t.Errorf("expected hasAccount(%x) to return false", common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e"))
 	}
@@ -229,14 +242,17 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 		wantAccounts[5],
 	}
 	list = cache.accounts()
+
 	if !reflect.DeepEqual(list, wantAccountsAfterDelete) {
 		t.Fatalf("got accounts after delete: %s\nwant %s", spew.Sdump(list), spew.Sdump(wantAccountsAfterDelete))
 	}
+
 	for _, a := range wantAccountsAfterDelete {
 		if !cache.hasAddress(a.Address) {
 			t.Errorf("expected hasAccount(%x) to return true", a.Address)
 		}
 	}
+
 	if cache.hasAddress(wantAccounts[0].Address) {
 		t.Errorf("expected hasAccount(%x) to return false", wantAccounts[0].Address)
 	}
@@ -273,6 +289,7 @@ func TestCacheFind(t *testing.T) {
 		Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
 		URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "something")},
 	}
+
 	tests := []struct {
 		Query      accounts.Account
 		WantResult accounts.Account
@@ -308,6 +325,7 @@ func TestCacheFind(t *testing.T) {
 			t.Errorf("test %d: error mismatch for query %v\ngot %q\nwant %q", i, test.Query, err, test.WantError)
 			continue
 		}
+
 		if a != test.WantResult {
 			t.Errorf("test %d: result mismatch for query %v\ngot %v\nwant %v", i, test.Query, a, test.WantResult)
 			continue
@@ -328,6 +346,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	if len(list) > 0 {
 		t.Error("initial account list not empty:", list)
 	}
+
 	if !waitWatcherStart(ks) {
 		t.Fatal("keystore watcher didn't start in time")
 	}
@@ -344,6 +363,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	// ks should see the account.
 	wantAccounts := []accounts.Account{cachetestAccounts[0]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+
 	if err := waitForAccounts(wantAccounts, ks); err != nil {
 		t.Error(err)
 		return
@@ -356,11 +376,14 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+
 	wantAccounts = []accounts.Account{cachetestAccounts[1]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+
 	if err := waitForAccounts(wantAccounts, ks); err != nil {
 		t.Errorf("First replacement failed")
 		t.Error(err)
+
 		return
 	}
 
@@ -372,11 +395,14 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+
 	wantAccounts = []accounts.Account{cachetestAccounts[2]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+
 	if err := waitForAccounts(wantAccounts, ks); err != nil {
 		t.Errorf("Second replacement failed")
 		t.Error(err)
+
 		return
 	}
 
@@ -388,9 +414,11 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+
 	if err := waitForAccounts([]accounts.Account{}, ks); err != nil {
 		t.Errorf("Emptying account file failed")
 		t.Error(err)
+
 		return
 	}
 }
@@ -401,5 +429,6 @@ func forceCopyFile(dst, src string) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(dst, data, 0644)
 }

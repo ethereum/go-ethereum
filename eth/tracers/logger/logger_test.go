@@ -59,17 +59,23 @@ func TestStoreCapture(t *testing.T) {
 		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: logger})
 		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
+
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
+
 	var index common.Hash
+
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
+
 	_, err := env.Interpreter().PreRun(contract, []byte{}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(logger.storage[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(),
 			len(logger.storage[contract.Address()]))
 	}
+
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.storage[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
@@ -105,6 +111,7 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if have, want := string(blob), tt.want; have != want {
 				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
 			}

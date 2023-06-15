@@ -108,6 +108,7 @@ func TestSizeConstrainedCacheOverflow(t *testing.T) {
 		k := mkKey(i)
 		v := fmt.Sprintf("value-%04d", i)
 		lru.Add(k, []byte(v))
+
 		if have, want := lru.size, uint64(10); have != want {
 			t.Fatalf("size wrong, have %d want %d", have, want)
 		}

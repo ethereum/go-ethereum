@@ -36,6 +36,7 @@ func (h header) MarshalJSON() ([]byte, error) {
 		BaseFee         *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash *common.Hash          `json:"withdrawalsRoot" rlp:"optional"`
 	}
+
 	var enc header
 	enc.ParentHash = h.ParentHash
 	enc.OmmerHash = h.OmmerHash
@@ -54,6 +55,7 @@ func (h header) MarshalJSON() ([]byte, error) {
 	enc.Nonce = h.Nonce
 	enc.BaseFee = (*math.HexOrDecimal256)(h.BaseFee)
 	enc.WithdrawalsHash = h.WithdrawalsHash
+
 	return json.Marshal(&enc)
 }
 
@@ -78,64 +80,84 @@ func (h *header) UnmarshalJSON(input []byte) error {
 		BaseFee         *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash *common.Hash          `json:"withdrawalsRoot" rlp:"optional"`
 	}
+
 	var dec header
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.ParentHash != nil {
 		h.ParentHash = *dec.ParentHash
 	}
+
 	if dec.OmmerHash != nil {
 		h.OmmerHash = dec.OmmerHash
 	}
+
 	if dec.Coinbase != nil {
 		h.Coinbase = dec.Coinbase
 	}
+
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for header")
 	}
+
 	h.Root = *dec.Root
 	if dec.TxHash != nil {
 		h.TxHash = dec.TxHash
 	}
+
 	if dec.ReceiptHash != nil {
 		h.ReceiptHash = dec.ReceiptHash
 	}
+
 	if dec.Bloom != nil {
 		h.Bloom = *dec.Bloom
 	}
+
 	if dec.Difficulty != nil {
 		h.Difficulty = (*big.Int)(dec.Difficulty)
 	}
+
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for header")
 	}
+
 	h.Number = (*big.Int)(dec.Number)
+
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for header")
 	}
+
 	h.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed != nil {
 		h.GasUsed = uint64(*dec.GasUsed)
 	}
+
 	if dec.Time == nil {
 		return errors.New("missing required field 'timestamp' for header")
 	}
+
 	h.Time = uint64(*dec.Time)
 	if dec.Extra != nil {
 		h.Extra = *dec.Extra
 	}
+
 	if dec.MixDigest != nil {
 		h.MixDigest = *dec.MixDigest
 	}
+
 	if dec.Nonce != nil {
 		h.Nonce = dec.Nonce
 	}
+
 	if dec.BaseFee != nil {
 		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}
+
 	if dec.WithdrawalsHash != nil {
 		h.WithdrawalsHash = dec.WithdrawalsHash
 	}
+
 	return nil
 }

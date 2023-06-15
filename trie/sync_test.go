@@ -36,6 +36,7 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
+
 	for i := byte(0); i < 255; i++ {
 		// Map the same data under multiple keys
 		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
@@ -61,6 +62,7 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 	}
 	// Re-create the trie based on the new state
 	trie, _ = NewStateTrie(TrieID(root), triedb)
+
 	return triedb, trie, content
 }
 
@@ -72,9 +74,11 @@ func checkTrieContents(t *testing.T, db *Database, root []byte, content map[stri
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
+
 	if err := checkTrieConsistency(db, common.BytesToHash(root)); err != nil {
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
+
 	for key, val := range content {
 		if have := trie.MustGet([]byte(key)); !bytes.Equal(have, val) {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
@@ -89,9 +93,11 @@ func checkTrieConsistency(db *Database, root common.Hash) error {
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
+
 	it := trie.NodeIterator(nil)
 	for it.Next(true) {
 	}
+
 	return it.Error()
 }
 
@@ -137,6 +143,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool) {
 	// The code requests are ignored here since there is no code
 	// at the testing trie.
 	paths, nodes, _ := sched.Missing(count)
+
 	var elements []trieElement
 
 	for i := 0; i < len(paths); i++ {
@@ -165,18 +172,22 @@ func testIterativeSync(t *testing.T, count int, bypath bool) {
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for path %x: %v", element.path, err)
 				}
+
 				results[i] = NodeSyncResult{element.path, data}
 			}
 		}
+
 		for _, result := range results {
 			if err := sched.ProcessNode(result); err != nil {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, _ = sched.Missing(count)
@@ -209,6 +220,7 @@ func TestIterativeDelayedSync(t *testing.T) {
 	// The code requests are ignored here since there is no code
 	// at the testing trie.
 	paths, nodes, _ := sched.Missing(10000)
+
 	var elements []trieElement
 
 	for i := 0; i < len(paths); i++ {
@@ -230,15 +242,18 @@ func TestIterativeDelayedSync(t *testing.T) {
 
 			results[i] = NodeSyncResult{element.path, data}
 		}
+
 		for _, result := range results {
 			if err := sched.ProcessNode(result); err != nil {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, _ = sched.Missing(10000)
@@ -283,6 +298,7 @@ func testIterativeRandomSync(t *testing.T, count int) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		}
 	}
+
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
 		results := make([]NodeSyncResult, 0, len(queue))
@@ -301,10 +317,12 @@ func testIterativeRandomSync(t *testing.T, count int) {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, _ = sched.Missing(count)
@@ -345,6 +363,7 @@ func TestIterativeRandomDelayedSync(t *testing.T) {
 			syncPath: NewSyncPath([]byte(path)),
 		}
 	}
+
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]NodeSyncResult, 0, len(queue)/2+1)
@@ -367,11 +386,14 @@ func TestIterativeRandomDelayedSync(t *testing.T) {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
+
 		for _, result := range results {
 			delete(queue, result.Path)
 		}
@@ -404,6 +426,7 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 	// The code requests are ignored here since there is no code
 	// at the testing trie.
 	paths, nodes, _ := sched.Missing(0)
+
 	var elements []trieElement
 
 	for i := 0; i < len(paths); i++ {
@@ -413,6 +436,7 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+
 	requested := make(map[common.Hash]struct{})
 
 	for len(elements) > 0 {
@@ -432,15 +456,18 @@ func TestDuplicateAvoidanceSync(t *testing.T) {
 
 			results[i] = NodeSyncResult{element.path, data}
 		}
+
 		for _, result := range results {
 			if err := sched.ProcessNode(result); err != nil {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, _ = sched.Missing(0)
@@ -477,6 +504,7 @@ func TestIncompleteSync(t *testing.T) {
 		elements []trieElement
 		root     = srcTrie.Hash()
 	)
+
 	paths, nodes, _ := sched.Missing(1)
 
 	for i := 0; i < len(paths); i++ {
@@ -505,10 +533,12 @@ func TestIncompleteSync(t *testing.T) {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		for _, result := range results {
@@ -541,6 +571,7 @@ func TestIncompleteSync(t *testing.T) {
 		if err := checkTrieConsistency(triedb, root); err == nil {
 			t.Fatalf("trie inconsistency not caught, missing: %x", hash)
 		}
+
 		diskdb.Put(hash.Bytes(), value)
 	}
 }
@@ -586,15 +617,18 @@ func TestSyncOrdering(t *testing.T) {
 
 			results[i] = NodeSyncResult{element.path, data}
 		}
+
 		for _, result := range results {
 			if err := sched.ProcessNode(result); err != nil {
 				t.Fatalf("failed to process result %v", err)
 			}
 		}
+
 		batch := diskdb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, _ = sched.Missing(1)
@@ -620,6 +654,7 @@ func TestSyncOrdering(t *testing.T) {
 			// must always be single items. 2-tuples should be tested in state.
 			t.Errorf("Invalid request tuples: len(%v) or len(%v) > 1", reqs[i], reqs[i+1])
 		}
+
 		if bytes.Compare(compactToHex(reqs[i][0]), compactToHex(reqs[i+1][0])) > 0 {
 			t.Errorf("Invalid request order: %v before %v", compactToHex(reqs[i][0]), compactToHex(reqs[i+1][0]))
 		}

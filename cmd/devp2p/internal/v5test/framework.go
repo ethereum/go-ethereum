@@ -77,10 +77,12 @@ func newConn(dest *enode.Node, log logger) *conn {
 	if err != nil {
 		panic(err)
 	}
+
 	db, err := enode.OpenDB("")
 	if err != nil {
 		panic(err)
 	}
+
 	ln := enode.NewLocalNode(db, key)
 
 	return &conn{
@@ -103,7 +105,9 @@ func (tc *conn) listen(ip string) net.PacketConn {
 	if err != nil {
 		panic(err)
 	}
+
 	tc.listeners = append(tc.listeners, l)
+
 	return l
 }
 
@@ -112,6 +116,7 @@ func (tc *conn) close() {
 	for _, l := range tc.listeners {
 		l.Close()
 	}
+
 	tc.localNode.Database().Close()
 }
 
@@ -120,6 +125,7 @@ func (tc *conn) nextReqID() []byte {
 	id := make([]byte, 4)
 	tc.idCounter++
 	binary.BigEndian.PutUint32(id, tc.idCounter)
+
 	return id
 }
 
@@ -132,8 +138,10 @@ func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 		if resp.Nonce != reqnonce {
 			return readErrorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])
 		}
+
 		resp.Node = tc.remote
 		tc.write(c, req, resp)
+
 		return tc.read(c)
 	default:
 		return resp
@@ -149,6 +157,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 		total    uint8
 		results  []*enode.Node
 	)
+
 	for n := 1; n > 0; {
 		switch resp := tc.read(c).(type) {
 		case *v5wire.Whoareyou:
@@ -182,6 +191,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 				first = false
 			} else {
 				n--
+
 				if resp.RespCount != total {
 					return nil, fmt.Errorf("invalid NODES response count %d (!= %d)", resp.RespCount, total)
 				}
@@ -191,11 +201,13 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			if err != nil {
 				return nil, fmt.Errorf("invalid node in NODES response: %v", err)
 			}
+
 			results = append(results, nodes...)
 		default:
 			return nil, fmt.Errorf("expected NODES, got %v", resp)
 		}
 	}
+
 	return results, nil
 }
 
@@ -205,29 +217,36 @@ func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoar
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))
 	}
+
 	if _, err := c.WriteTo(packet, tc.remoteAddr); err != nil {
 		tc.logf("Can't send %s: %v", p.Name(), err)
 	} else {
 		tc.logf(">> %s", p.Name())
 	}
+
 	return nonce
 }
 
 // read waits for an incoming packet on the given connection.
 func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 	buf := make([]byte, 1280)
+
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
 		return &readError{err}
 	}
+
 	n, fromAddr, err := c.ReadFrom(buf)
 	if err != nil {
 		return &readError{err}
 	}
+
 	_, _, p, err := tc.codec.Decode(buf[:n], fromAddr.String())
 	if err != nil {
 		return &readError{err}
 	}
+
 	tc.logf("<< %s", p.Name())
+
 	return p
 }
 
@@ -244,13 +263,16 @@ func laddr(c net.PacketConn) *net.UDPAddr {
 
 func checkRecords(records []*enr.Record) ([]*enode.Node, error) {
 	nodes := make([]*enode.Node, len(records))
+
 	for i := range records {
 		n, err := enode.New(enode.ValidSchemes, records[i])
 		if err != nil {
 			return nil, err
 		}
+
 		nodes[i] = n
 	}
+
 	return nodes, nil
 }
 
@@ -260,5 +282,6 @@ func containsUint(ints []uint, x uint) bool {
 			return true
 		}
 	}
+
 	return false
 }

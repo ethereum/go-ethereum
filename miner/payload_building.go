@@ -51,8 +51,11 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	hasher.Write(args.Random[:])
 	hasher.Write(args.FeeRecipient[:])
 	rlp.Encode(hasher, args.Withdrawals)
+
 	var out engine.PayloadID
+
 	copy(out[:], hasher.Sum(nil)[:8])
+
 	return out
 }
 
@@ -80,6 +83,7 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
+
 	return payload
 }
 
@@ -105,6 +109,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther,
 			"root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
 	}
+
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
 
@@ -119,9 +124,11 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
+
 	if payload.full != nil {
 		return engine.BlockToExecutableData(payload.full, payload.fullFees)
 	}
+
 	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
@@ -148,6 +155,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 		}
 		payload.cond.Wait()
 	}
+
 	return engine.BlockToExecutableData(payload.full, payload.fullFees)
 }
 
@@ -181,9 +189,11 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			case <-timer.C:
 				start := time.Now()
 				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
+
 				if err == nil {
 					payload.update(block, fees, time.Since(start))
 				}
+
 				timer.Reset(w.recommit)
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
@@ -194,5 +204,6 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			}
 		}
 	}()
+
 	return payload, nil
 }

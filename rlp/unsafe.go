@@ -31,5 +31,6 @@ func byteArrayBytes(v reflect.Value, length int) []byte {
 	hdr.Data = v.UnsafeAddr()
 	hdr.Cap = length
 	hdr.Len = length
+
 	return s
 }

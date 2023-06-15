@@ -50,12 +50,15 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	} else {
 		beneficiary = *author
 	}
+
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
+
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
+
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -100,6 +103,7 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 		if len(cache) == 0 {
 			cache = append(cache, ref.ParentHash)
 		}
+
 		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
 			return cache[idx]
 		}
@@ -112,13 +116,16 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 			if header == nil {
 				break
 			}
+
 			cache = append(cache, header.ParentHash)
 			lastKnownHash = header.ParentHash
 			lastKnownNumber = header.Number.Uint64() - 1
+
 			if n == lastKnownNumber {
 				return lastKnownHash
 			}
 		}
+
 		return common.Hash{}
 	}
 }

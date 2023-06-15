@@ -166,6 +166,7 @@ func TestToFilterArg(t *testing.T) {
 			if (testCase.err == nil) != (err == nil) {
 				t.Fatalf("expected error %v but got %v", testCase.err, err)
 			}
+
 			if testCase.err != nil {
 				if testCase.err.Error() != err.Error() {
 					t.Fatalf("expected error %v but got %v", testCase.err, err)
@@ -237,6 +238,7 @@ func generateTestChain() []*types.Block {
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
+
 		if i == 1 {
 			// Test transactions are included in block #2.
 			g.AddTx(testTx1)
@@ -244,56 +246,58 @@ func generateTestChain() []*types.Block {
 		}
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, generate)
+
 	return append([]*types.Block{genesis.ToBlock()}, blocks...)
 }
 
 func TestEthClient(t *testing.T) {
 	t.Skip("bor due to burn contract")
-
 	// backend, chain := newTestBackend(t)
 	// client, _ := backend.Attach()
 	// defer backend.Close()
 	// defer client.Close()
-
-	// tests := map[string]struct {
-	// 	test func(t *testing.T)
-	// }{
-	// 	"Header": {
-	// 		func(t *testing.T) { testHeader(t, chain, client) },
-	// 	},
-	// 	"BalanceAt": {
-	// 		func(t *testing.T) { testBalanceAt(t, client) },
-	// 	},
-	// 	"TxInBlockInterrupted": {
-	// 		func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
-	// 	},
-	// 	"ChainID": {
-	// 		func(t *testing.T) { testChainID(t, client) },
-	// 	},
-	// 	"GetBlock": {
-	// 		func(t *testing.T) { testGetBlock(t, client) },
-	// 	},
-	// 	"StatusFunctions": {
-	// 		func(t *testing.T) { testStatusFunctions(t, client) },
-	// 	},
-	// 	"CallContract": {
-	// 		func(t *testing.T) { testCallContract(t, client) },
-	// 	},
-	// 	"CallContractAtHash": {
-	// 		func(t *testing.T) { testCallContractAtHash(t, client) },
-	// 	},
-	// 	"AtFunctions": {
-	// 		func(t *testing.T) { testAtFunctions(t, client) },
-	// 	},
-	// 	"TransactionSender": {
-	// 		func(t *testing.T) { testTransactionSender(t, client) },
-	// 	},
-	// }
-
+	//
+	//	tests := map[string]struct {
+	//		test func(t *testing.T)
+	//	}{
+	//
+	//		"Header": {
+	//			func(t *testing.T) { testHeader(t, chain, client) },
+	//		},
+	//		"BalanceAt": {
+	//			func(t *testing.T) { testBalanceAt(t, client) },
+	//		},
+	//		"TxInBlockInterrupted": {
+	//			func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
+	//		},
+	//		"ChainID": {
+	//			func(t *testing.T) { testChainID(t, client) },
+	//		},
+	//		"GetBlock": {
+	//			func(t *testing.T) { testGetBlock(t, client) },
+	//		},
+	//		"StatusFunctions": {
+	//			func(t *testing.T) { testStatusFunctions(t, client) },
+	//		},
+	//		"CallContract": {
+	//			func(t *testing.T) { testCallContract(t, client) },
+	//		},
+	//		"CallContractAtHash": {
+	//			func(t *testing.T) { testCallContractAtHash(t, client) },
+	//		},
+	//		"AtFunctions": {
+	//			func(t *testing.T) { testAtFunctions(t, client) },
+	//		},
+	//		"TransactionSender": {
+	//			func(t *testing.T) { testTransactionSender(t, client) },
+	//		},
+	//	}
+	//
 	// t.Parallel()
-	// for name, tt := range tests {
-	// 	t.Run(name, tt.test)
-	// }
+	//
+	//	for name, tt := range tests {
+	//		t.Run(name, tt.test)
+	//	}
 }
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
@@ -319,6 +323,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			ec := NewClient(client)
+
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -326,9 +331,11 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
+
 			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
 			}
@@ -368,6 +375,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			ec := NewClient(client)
+
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -375,6 +383,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 			if tt.wantErr != nil && (err == nil || err.Error() != tt.wantErr.Error()) {
 				t.Fatalf("BalanceAt(%x, %v) error = %q, want %q", tt.account, tt.block, err, tt.wantErr)
 			}
+
 			if got.Cmp(tt.want) != 0 {
 				t.Fatalf("BalanceAt(%x, %v) = %v, want %v", tt.account, tt.block, got, tt.want)
 			}
@@ -394,10 +403,12 @@ func testTransactionInBlockInterrupted(t *testing.T, client *rpc.Client) {
 	// Test tx in block interrupted.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+
 	tx, err := ec.TransactionInBlock(ctx, block.Hash(), 0)
 	if tx != nil {
 		t.Fatal("transaction should be nil")
 	}
+
 	if err == nil || err == ethereum.NotFound {
 		t.Fatal("error should not be nil/notfound")
 	}
@@ -410,10 +421,12 @@ func testTransactionInBlockInterrupted(t *testing.T, client *rpc.Client) {
 
 func testChainID(t *testing.T, client *rpc.Client) {
 	ec := NewClient(client)
+
 	id, err := ec.ChainID(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if id == nil || id.Cmp(params.AllEthashProtocolChanges.ChainID) != 0 {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
 	}
@@ -427,6 +440,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if blockNumber != 2 {
 		t.Fatalf("BlockNumber returned wrong number: %d", blockNumber)
 	}
@@ -435,6 +449,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if block.NumberU64() != blockNumber {
 		t.Fatalf("BlockByNumber returned wrong block: want %d got %d", blockNumber, block.NumberU64())
 	}
@@ -443,6 +458,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if block.Hash() != blockH.Hash() {
 		t.Fatalf("BlockByHash returned wrong block: want %v got %v", block.Hash().Hex(), blockH.Hash().Hex())
 	}
@@ -451,6 +467,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if block.Header().Hash() != header.Hash() {
 		t.Fatalf("HeaderByNumber returned wrong header: want %v got %v", block.Header().Hash().Hex(), header.Hash().Hex())
 	}
@@ -459,6 +476,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if block.Header().Hash() != headerH.Hash() {
 		t.Fatalf("HeaderByHash returned wrong header: want %v got %v", block.Header().Hash().Hex(), headerH.Hash().Hex())
 	}
@@ -472,6 +490,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if progress != nil {
 		t.Fatalf("unexpected progress: %v", progress)
 	}
@@ -481,6 +500,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if networkID.Cmp(big.NewInt(0)) != 0 {
 		t.Fatalf("unexpected networkID: %v", networkID)
 	}
@@ -490,6 +510,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if gasPrice.Cmp(big.NewInt(1000000000)) != 0 {
 		t.Fatalf("unexpected gas price: %v", gasPrice)
 	}
@@ -499,6 +520,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
 	}
@@ -508,6 +530,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	want := &ethereum.FeeHistory{
 		OldestBlock: big.NewInt(2),
 		Reward: [][]*big.Int{
@@ -537,13 +560,16 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 		Gas:   21000,
 		Value: big.NewInt(1),
 	}
+
 	gas, err := ec.EstimateGas(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if gas != 21000 {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
+
 	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
 	if err != nil {
 		t.Fatalf("BlockByNumber error: %v", err)
@@ -564,10 +590,12 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		Gas:   21000,
 		Value: big.NewInt(1),
 	}
+
 	gas, err := ec.EstimateGas(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if gas != 21000 {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
@@ -593,6 +621,7 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if pending != 1 {
 		t.Fatalf("unexpected pending, wanted 1 got: %v", pending)
 	}
@@ -601,10 +630,12 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	penBalance, err := ec.PendingBalanceAt(context.Background(), testAddr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if balance.Cmp(penBalance) == 0 {
 		t.Fatalf("unexpected balance: %v %v", balance, penBalance)
 	}
@@ -613,10 +644,12 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	penNonce, err := ec.PendingNonceAt(context.Background(), testAddr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if penNonce != nonce+1 {
 		t.Fatalf("unexpected nonce: %v %v", nonce, penNonce)
 	}
@@ -625,10 +658,12 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	penStorage, err := ec.PendingStorageAt(context.Background(), testAddr, common.Hash{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if !bytes.Equal(storage, penStorage) {
 		t.Fatalf("unexpected storage: %v %v", storage, penStorage)
 	}
@@ -637,10 +672,12 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	penCode, err := ec.PendingCodeAt(context.Background(), testAddr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if !bytes.Equal(code, penCode) {
 		t.Fatalf("unexpected code: %v %v", code, penCode)
 	}
@@ -655,10 +692,12 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal("can't get block 1:", err)
 	}
+
 	tx1, err := ec.TransactionInBlock(ctx, block2.Hash(), 0)
 	if err != nil {
 		t.Fatal("can't get tx:", err)
 	}
+
 	if tx1.Hash() != testTx1.Hash() {
 		t.Fatalf("wrong tx hash %v, want %v", tx1.Hash(), testTx1.Hash())
 	}
@@ -667,10 +706,12 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	// TransactionSender. Ensure the server is not asked by canceling the context here.
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
+
 	sender1, err := ec.TransactionSender(canceledCtx, tx1, block2.Hash(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if sender1 != testAddr {
 		t.Fatal("wrong sender:", sender1)
 	}
@@ -681,6 +722,7 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if sender2 != testAddr {
 		t.Fatal("wrong sender:", sender2)
 	}
@@ -691,12 +733,14 @@ func sendTransaction(ec *Client) error {
 	if err != nil {
 		return err
 	}
+
 	nonce, err := ec.PendingNonceAt(context.Background(), testAddr)
 	if err != nil {
 		return err
 	}
 
 	signer := types.LatestSignerForChainID(chainID)
+
 	tx, err := types.SignNewTx(testKey, signer, &types.LegacyTx{
 		Nonce:    nonce,
 		To:       &common.Address{2},
@@ -707,5 +751,6 @@ func sendTransaction(ec *Client) error {
 	if err != nil {
 		return err
 	}
+
 	return ec.SendTransaction(context.Background(), tx)
 }

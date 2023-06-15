@@ -68,6 +68,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
+
 	return p
 }
 
@@ -86,6 +87,7 @@ func (p *triePrefetcher) close() {
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
 				}
+
 				p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
 			} else {
 				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
@@ -95,6 +97,7 @@ func (p *triePrefetcher) close() {
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
 				}
+
 				p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
 			}
 		}
@@ -129,14 +132,17 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 			if fetch == nil {
 				continue
 			}
+
 			copy.fetches[root] = p.db.CopyTrie(fetch)
 		}
+
 		return copy
 	}
 	// Otherwise we're copying an active fetcher, retrieve the current states
 	for id, fetcher := range p.fetchers {
 		copy.fetches[id] = fetcher.peek()
 	}
+
 	return copy
 }
 
@@ -148,11 +154,13 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	}
 	// Active fetcher, schedule the retrievals
 	id := p.trieID(owner, root)
+
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
 		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
+
 	fetcher.schedule(keys)
 }
 
@@ -167,6 +175,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 			p.deliveryMissMeter.Mark(1)
 			return nil
 		}
+
 		return p.db.CopyTrie(trie)
 	}
 	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
@@ -184,6 +193,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
+
 	return trie
 }
 
@@ -241,6 +251,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		seen:  make(map[string]struct{}),
 	}
 	go sf.loop()
+
 	return sf
 }
 
@@ -272,6 +283,7 @@ func (sf *subfetcher) peek() Trie {
 		if sf.trie == nil {
 			return nil
 		}
+
 		return sf.db.CopyTrie(sf.trie)
 	}
 }
@@ -308,6 +320,7 @@ func (sf *subfetcher) loop() {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return
 		}
+
 		sf.trie = trie
 	}
 	// Trie opened successfully, keep prefetching items
@@ -328,6 +341,7 @@ func (sf *subfetcher) loop() {
 					sf.lock.Lock()
 					sf.tasks = append(sf.tasks, tasks[i:]...)
 					sf.lock.Unlock()
+
 					return
 
 				case ch := <-sf.copy:
@@ -344,6 +358,7 @@ func (sf *subfetcher) loop() {
 						} else {
 							sf.trie.GetStorage(sf.addr, task)
 						}
+
 						sf.seen[string(task)] = struct{}{}
 					}
 				}

@@ -143,18 +143,22 @@ func (cfg dialConfig) withDefaults() dialConfig {
 	if cfg.maxActiveDials == 0 {
 		cfg.maxActiveDials = defaultMaxPendingPeers
 	}
+
 	if cfg.log == nil {
 		cfg.log = log.Root()
 	}
+
 	if cfg.clock == nil {
 		cfg.clock = mclock.System{}
 	}
+
 	if cfg.rand == nil {
 		seedb := make([]byte, 8)
 		crand.Read(seedb)
 		seed := int64(binary.BigEndian.Uint64(seedb))
 		cfg.rand = mrand.New(mrand.NewSource(seed))
 	}
+
 	return cfg
 }
 
@@ -177,8 +181,10 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.wg.Add(2)
+
 	go d.readNodes(it)
 	go d.loop(it)
+
 	return d
 }
 
@@ -307,9 +313,11 @@ loop:
 	}
 
 	d.historyTimer.Stop()
+
 	for range d.dialing {
 		<-d.doneCh
 	}
+
 	d.wg.Done()
 }
 
@@ -334,9 +342,11 @@ func (d *dialScheduler) logStats() {
 	if d.lastStatsLog.Add(dialStatsLogInterval) > now {
 		return
 	}
+
 	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
 		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
 	}
+
 	d.doneSinceLastLog = 0
 	d.lastStatsLog = now
 }
@@ -355,6 +365,7 @@ func (d *dialScheduler) rearmHistoryTimer() {
 func (d *dialScheduler) expireHistory() {
 	d.history.expire(d.clock.Now(), func(hkey string) {
 		var id enode.ID
+
 		copy(id[:], hkey)
 		d.updateStaticPool(id)
 	})
@@ -367,7 +378,9 @@ func (d *dialScheduler) freeDialSlots() int {
 	if slots > d.maxActiveDials {
 		slots = d.maxActiveDials
 	}
+
 	free := slots - len(d.dialing)
+
 	return free
 }
 
@@ -376,24 +389,30 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if n.ID() == d.self {
 		return errSelf
 	}
+
 	if n.IP() != nil && n.TCP() == 0 {
 		// This check can trigger if a non-TCP node is found
 		// by discovery. If there is no IP, the node is a static
 		// node and the actual endpoint will be resolved later in dialTask.
 		return errNoPort
 	}
+
 	if _, ok := d.dialing[n.ID()]; ok {
 		return errAlreadyDialing
 	}
+
 	if _, ok := d.peers[n.ID()]; ok {
 		return errAlreadyConnected
 	}
+
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
 		return errNetRestrict
 	}
+
 	if d.history.contains(string(n.ID().Bytes())) {
 		return errRecentlyDialed
 	}
+
 	return nil
 }
 
@@ -405,6 +424,7 @@ func (d *dialScheduler) startStaticDials(n int) (started int) {
 		d.startDial(task)
 		d.removeFromStaticPool(idx)
 	}
+
 	return started
 }
 
@@ -420,6 +440,7 @@ func (d *dialScheduler) addToStaticPool(task *dialTask) {
 	if task.staticPoolIndex >= 0 {
 		panic("attempt to add task to staticPool twice")
 	}
+
 	d.staticPool = append(d.staticPool, task)
 	task.staticPoolIndex = len(d.staticPool) - 1
 }
@@ -442,6 +463,7 @@ func (d *dialScheduler) startDial(task *dialTask) {
 	hkey := string(task.dest.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[task.dest.ID()] = task
+
 	go func() {
 		task.run(d)
 		d.doneCh <- task
@@ -497,26 +519,33 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 	if d.resolver == nil {
 		return false
 	}
+
 	if t.resolveDelay == 0 {
 		t.resolveDelay = initialResolveDelay
 	}
+
 	if t.lastResolved > 0 && time.Duration(d.clock.Now()-t.lastResolved) < t.resolveDelay {
 		return false
 	}
+
 	resolved := d.resolver.Resolve(t.dest)
 	t.lastResolved = d.clock.Now()
+
 	if resolved == nil {
 		t.resolveDelay *= 2
 		if t.resolveDelay > maxResolveDelay {
 			t.resolveDelay = maxResolveDelay
 		}
+
 		d.log.Debug("Resolving node failed", "id", t.dest.ID(), "newdelay", t.resolveDelay)
+
 		return false
 	}
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
 	d.log.Debug("Resolved node", "id", t.dest.ID(), "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
+
 	return true
 }
 
@@ -527,7 +556,9 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
 		return &dialError{err}
 	}
+
 	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
+
 	return d.setupFunc(mfd, t.flags, dest)
 }
 
@@ -540,5 +571,6 @@ func cleanupDialErr(err error) error {
 	if netErr, ok := err.(*net.OpError); ok && netErr.Op == "dial" {
 		return netErr.Err
 	}
+
 	return err
 }

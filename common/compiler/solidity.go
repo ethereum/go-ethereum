@@ -64,6 +64,7 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 	}
 	// Compilation succeeded, assemble and return the contracts.
 	contracts := make(map[string]*Contract)
+
 	for name, info := range output.Contracts {
 		// Parse the individual compilation results.
 		var abi, userdoc, devdoc interface{}
@@ -98,6 +99,7 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 			},
 		}
 	}
+
 	return contracts, nil
 }
 
@@ -130,5 +132,6 @@ func parseCombinedJSONV8(combinedJSON []byte, source string, languageVersion str
 			},
 		}
 	}
+
 	return contracts, nil
 }

@@ -153,11 +153,13 @@ func getMessage(ctx *cli.Context, msgarg int) []byte {
 		if err != nil {
 			utils.Fatalf("Can't read message file: %v", err)
 		}
+
 		return msg
 	} else if ctx.NArg() == msgarg+1 {
 		return []byte(ctx.Args().Get(msgarg))
 	}
 
 	utils.Fatalf("Invalid number of arguments: want %d, got %d", msgarg+1, ctx.NArg())
+
 	return nil
 }

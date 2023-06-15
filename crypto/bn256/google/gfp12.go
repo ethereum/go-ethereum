@@ -34,18 +34,21 @@ func (e *gfP12) Put(pool *bnPool) {
 func (e *gfP12) Set(a *gfP12) *gfP12 {
 	e.x.Set(a.x)
 	e.y.Set(a.y)
+
 	return e
 }
 
 func (e *gfP12) SetZero() *gfP12 {
 	e.x.SetZero()
 	e.y.SetZero()
+
 	return e
 }
 
 func (e *gfP12) SetOne() *gfP12 {
 	e.x.SetZero()
 	e.y.SetOne()
+
 	return e
 }
 
@@ -67,12 +70,14 @@ func (e *gfP12) IsOne() bool {
 func (e *gfP12) Conjugate(a *gfP12) *gfP12 {
 	e.x.Negative(a.x)
 	e.y.Set(a.y)
+
 	return a
 }
 
 func (e *gfP12) Negative(a *gfP12) *gfP12 {
 	e.x.Negative(a.x)
 	e.y.Negative(a.y)
+
 	return e
 }
 
@@ -81,6 +86,7 @@ func (e *gfP12) Frobenius(a *gfP12, pool *bnPool) *gfP12 {
 	e.x.Frobenius(a.x, pool)
 	e.y.Frobenius(a.y, pool)
 	e.x.MulScalar(e.x, xiToPMinus1Over6, pool)
+
 	return e
 }
 
@@ -89,18 +95,21 @@ func (e *gfP12) FrobeniusP2(a *gfP12, pool *bnPool) *gfP12 {
 	e.x.FrobeniusP2(a.x)
 	e.x.MulGFP(e.x, xiToPSquaredMinus1Over6)
 	e.y.FrobeniusP2(a.y)
+
 	return e
 }
 
 func (e *gfP12) Add(a, b *gfP12) *gfP12 {
 	e.x.Add(a.x, b.x)
 	e.y.Add(a.y, b.y)
+
 	return e
 }
 
 func (e *gfP12) Sub(a, b *gfP12) *gfP12 {
 	e.x.Sub(a.x, b.x)
 	e.y.Sub(a.y, b.y)
+
 	return e
 }
 
@@ -121,22 +130,26 @@ func (e *gfP12) Mul(a, b *gfP12, pool *bnPool) *gfP12 {
 	tx.Put(pool)
 	ty.Put(pool)
 	t.Put(pool)
+
 	return e
 }
 
 func (e *gfP12) MulScalar(a *gfP12, b *gfP6, pool *bnPool) *gfP12 {
 	e.x.Mul(e.x, b, pool)
 	e.y.Mul(e.y, b, pool)
+
 	return e
 }
 
 func (c *gfP12) Exp(a *gfP12, power *big.Int, pool *bnPool) *gfP12 {
 	sum := newGFp12(pool)
 	sum.SetOne()
+
 	t := newGFp12(pool)
 
 	for i := power.BitLen() - 1; i >= 0; i-- {
 		t.Square(sum, pool)
+
 		if power.Bit(i) != 0 {
 			sum.Mul(t, a, pool)
 		} else {
@@ -160,6 +173,7 @@ func (e *gfP12) Square(a *gfP12, pool *bnPool) *gfP12 {
 	t := newGFp6(pool)
 	t.MulTau(a.x, pool)
 	t.Add(a.y, t)
+
 	ty := newGFp6(pool)
 	ty.Add(a.x, a.y)
 	ty.Mul(ty, t, pool)

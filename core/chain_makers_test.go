@@ -82,6 +82,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
 		gen.AddTx(tx)
+
 		if i == 1 {
 			gen.AddWithdrawal(&types.Withdrawal{
 				Validator: 42,
@@ -94,6 +95,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 				Amount:    1,
 			})
 		}
+
 		if i == 3 {
 			gen.AddWithdrawal(&types.Withdrawal{
 				Validator: 42,

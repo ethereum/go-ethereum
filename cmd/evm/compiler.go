@@ -41,6 +41,7 @@ func compileCmd(ctx *cli.Context) error {
 	}
 
 	fn := ctx.Args().First()
+
 	src, err := os.ReadFile(fn)
 	if err != nil {
 		return err
@@ -50,6 +51,8 @@ func compileCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Println(bin)
+
 	return nil
 }

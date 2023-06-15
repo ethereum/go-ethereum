@@ -81,6 +81,7 @@ func TestHDPathParsing(t *testing.T) {
 
 func testDerive(t *testing.T, next func() DerivationPath, expected []string) {
 	t.Helper()
+
 	for i, want := range expected {
 		if have := next(); fmt.Sprintf("%v", have) != want {
 			t.Errorf("step %d, have %v, want %v", i, have, want)

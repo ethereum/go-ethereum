@@ -69,6 +69,7 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 	kh.Reset()
 	kh.Write(data)
 	kh.Read(h[:])
+
 	return h
 }
 
@@ -76,10 +77,13 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
 	d := NewKeccakState()
+
 	for _, b := range data {
 		d.Write(b)
 	}
+
 	d.Read(b)
+
 	return b
 }
 
@@ -90,7 +94,9 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	for _, b := range data {
 		d.Write(b)
 	}
+
 	d.Read(h[:])
+
 	return h
 }
 
@@ -100,6 +106,7 @@ func Keccak512(data ...[]byte) []byte {
 	for _, b := range data {
 		d.Write(b)
 	}
+
 	return d.Sum(nil)
 }
 
@@ -134,9 +141,11 @@ func ToECDSAUnsafe(d []byte) *ecdsa.PrivateKey {
 func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 	priv := new(ecdsa.PrivateKey)
 	priv.PublicKey.Curve = S256()
+
 	if strict && 8*len(d) != priv.Params().BitSize {
 		return nil, fmt.Errorf("invalid length, need %d bits", priv.Params().BitSize)
 	}
+
 	priv.D = new(big.Int).SetBytes(d)
 
 	// The priv.D must < N
@@ -152,6 +161,7 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 	if priv.PublicKey.X == nil {
 		return nil, errors.New("invalid private key")
 	}
+
 	return priv, nil
 }
 
@@ -160,6 +170,7 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 	if priv == nil {
 		return nil
 	}
+
 	return math.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
 }
 
@@ -169,6 +180,7 @@ func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
 	if x == nil {
 		return nil, errInvalidPubkey
 	}
+
 	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
@@ -176,6 +188,7 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
+
 	return elliptic.Marshal(S256(), pub.X, pub.Y)
 }
 
@@ -187,6 +200,7 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	} else if err != nil {
 		return nil, errors.New("invalid hex data for private key")
 	}
+
 	return ToECDSA(b)
 }
 
@@ -200,12 +214,14 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 
 	r := bufio.NewReader(fd)
 	buf := make([]byte, 64)
+
 	n, err := readASCII(buf, r)
 	if err != nil {
 		return nil, err
 	} else if n != len(buf) {
 		return nil, fmt.Errorf("key file too short, want 64 hex characters")
 	}
+
 	if err := checkKeyFileEnd(r); err != nil {
 		return nil, err
 	}
@@ -218,6 +234,7 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
 	for ; n < len(buf); n++ {
 		buf[n], err = r.ReadByte()
+
 		switch {
 		case err == io.EOF || buf[n] < '!':
 			return n, nil
@@ -225,6 +242,7 @@ func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
 			return n, err
 		}
 	}
+
 	return n, nil
 }
 
@@ -232,6 +250,7 @@ func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
 func checkKeyFileEnd(r *bufio.Reader) error {
 	for i := 0; ; i++ {
 		b, err := r.ReadByte()
+
 		switch {
 		case err == io.EOF:
 			return nil

@@ -122,10 +122,12 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
+
 	*ga = make(GenesisAlloc)
 	for addr, a := range m {
 		(*ga)[common.Address(addr)] = a
 	}
+
 	return nil
 }
 
@@ -134,14 +136,17 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
+
 	statedb, err := state.New(common.Hash{}, db, nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
+
 	for addr, account := range *ga {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
+
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
@@ -186,6 +191,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	}
 
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
+
 	return nil
 }
 
@@ -206,6 +212,7 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 		// - supported networks(mainnet, testnets), recover with defined allocations
 		// - private network, can't recover
 		var genesis *Genesis
+
 		switch blockhash {
 		case params.MainnetGenesisHash:
 			genesis = DefaultGenesisBlock()
@@ -216,6 +223,7 @@ func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash comm
 		case params.SepoliaGenesisHash:
 			genesis = DefaultSepoliaGenesisBlock()
 		}
+
 		if genesis != nil {
 			alloc = genesis.Alloc
 		} else {
@@ -265,10 +273,12 @@ func (h *storageJSON) UnmarshalText(text []byte) error {
 	if len(text) > 64 {
 		return fmt.Errorf("too many hex characters in storage key/value %q", text)
 	}
+
 	offset := len(h) - len(text)/2 // pad on the left
 	if _, err := hex.Decode(h[offset:], text); err != nil {
 		return fmt.Errorf("invalid hex storage key/value %q", text)
 	}
+
 	return nil
 }
 
@@ -326,6 +336,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
+
 			genesis = DefaultGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
@@ -337,6 +348,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		}
 
 		applyOverrides(genesis.Config)
+
 		return genesis.Config, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
@@ -358,6 +370,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		}
 
 		applyOverrides(genesis.Config)
+
 		return genesis.Config, block.Hash(), nil
 	}
 	// Check whether the genesis block is already written.
@@ -370,13 +383,16 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
 	applyOverrides(newcfg)
+
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
+
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
+
 		return newcfg, stored, nil
 	}
 
@@ -408,6 +424,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}
+
 	return newcfg, stored, nil
 }
 
@@ -478,6 +495,7 @@ func (g *Genesis) ToBlock() *types.Block {
 	if err != nil {
 		panic(err)
 	}
+
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -495,9 +513,11 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
+
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
 		head.Difficulty = params.GenesisDifficulty
 	}
+
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
@@ -523,10 +543,12 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
+
 	config := g.Config
 	if config == nil {
 		config = params.AllEthashProtocolChanges
 	}
+
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
@@ -540,6 +562,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	if err := g.Alloc.flush(db, triedb, block.Hash()); err != nil {
 		return nil, err
 	}
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
@@ -548,6 +571,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
+
 	return block, nil
 }
 
@@ -560,6 +584,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 	if err != nil {
 		panic(err)
 	}
+
 	return block
 }
 
@@ -643,9 +668,11 @@ func DefaultBorMainnetGenesisBlock() *Genesis {
 func DefaultKilnGenesisBlock() *Genesis {
 	g := new(Genesis)
 	reader := strings.NewReader(KilnAllocData)
+
 	if err := json.NewDecoder(reader).Decode(g); err != nil {
 		panic(err)
 	}
+
 	return g
 }
 
@@ -685,10 +712,12 @@ func decodePrealloc(data string) GenesisAlloc {
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
+
 	ga := make(GenesisAlloc, len(p))
 	for _, account := range p {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
+
 	return ga
 }
 
@@ -697,12 +726,15 @@ func readPrealloc(filename string) GenesisAlloc {
 	if err != nil {
 		panic(fmt.Sprintf("Could not open genesis preallocation for %s: %v", filename, err))
 	}
+
 	defer f.Close()
 	decoder := json.NewDecoder(f)
 	ga := make(GenesisAlloc)
+
 	err = decoder.Decode(&ga)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
 	}
+
 	return ga
 }

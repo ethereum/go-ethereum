@@ -105,10 +105,13 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	if blckNum > math.MaxInt64 {
 		return fmt.Errorf("block number larger than int64")
 	}
+
 	*bn = BlockNumber(blckNum)
+
 	return nil
 }
 
@@ -144,30 +147,39 @@ type BlockNumberOrHash struct {
 
 func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	type erased BlockNumberOrHash
+
 	e := erased{}
 	err := json.Unmarshal(data, &e)
+
 	if err == nil {
 		if e.BlockNumber != nil && e.BlockHash != nil {
 			return fmt.Errorf("cannot specify both BlockHash and BlockNumber, choose one or the other")
 		}
+
 		bnh.BlockNumber = e.BlockNumber
 		bnh.BlockHash = e.BlockHash
 		bnh.RequireCanonical = e.RequireCanonical
+
 		return nil
 	}
+
 	var input string
+
 	err = json.Unmarshal(data, &input)
 	if err != nil {
 		return err
 	}
+
 	switch input {
 	case "earliest":
 		bn := EarliestBlockNumber
 		bnh.BlockNumber = &bn
+
 		return nil
 	case "latest":
 		bn := LatestBlockNumber
 		bnh.BlockNumber = &bn
+
 		return nil
 	case "pending":
 		bn := PendingBlockNumber
@@ -187,22 +199,28 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	default:
 		if len(input) == 66 {
 			hash := common.Hash{}
+
 			err := hash.UnmarshalText([]byte(input))
 			if err != nil {
 				return err
 			}
+
 			bnh.BlockHash = &hash
+
 			return nil
 		} else {
 			blckNum, err := hexutil.DecodeUint64(input)
 			if err != nil {
 				return err
 			}
+
 			if blckNum > math.MaxInt64 {
 				return fmt.Errorf("blocknumber too high")
 			}
+
 			bn := BlockNumber(blckNum)
 			bnh.BlockNumber = &bn
+
 			return nil
 		}
 	}
@@ -212,6 +230,7 @@ func (bnh *BlockNumberOrHash) Number() (BlockNumber, bool) {
 	if bnh.BlockNumber != nil {
 		return *bnh.BlockNumber, true
 	}
+
 	return BlockNumber(0), false
 }
 
@@ -219,9 +238,11 @@ func (bnh *BlockNumberOrHash) String() string {
 	if bnh.BlockNumber != nil {
 		return strconv.Itoa(int(*bnh.BlockNumber))
 	}
+
 	if bnh.BlockHash != nil {
 		return bnh.BlockHash.String()
 	}
+
 	return "nil"
 }
 
@@ -229,6 +250,7 @@ func (bnh *BlockNumberOrHash) Hash() (common.Hash, bool) {
 	if bnh.BlockHash != nil {
 		return *bnh.BlockHash, true
 	}
+
 	return common.Hash{}, false
 }
 
@@ -262,9 +284,12 @@ func (dh *DecimalOrHex) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		value, err = hexutil.DecodeUint64(input)
 	}
+
 	if err != nil {
 		return err
 	}
+
 	*dh = DecimalOrHex(value)
+
 	return nil
 }

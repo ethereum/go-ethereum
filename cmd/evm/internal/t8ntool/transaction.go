@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urfave/cli/v2"
 	"math/big"
 	"os"
 	"strings"
@@ -49,17 +50,22 @@ func (r *result) MarshalJSON() ([]byte, error) {
 		Hash         *common.Hash    `json:"hash,omitempty"`
 		IntrinsicGas hexutil.Uint64  `json:"intrinsicGas,omitempty"`
 	}
+
 	var out xx
 	if r.Error != nil {
 		out.Error = r.Error.Error()
 	}
+
 	if r.Address != (common.Address{}) {
 		out.Address = &r.Address
 	}
+
 	if r.Hash != (common.Hash{}) {
 		out.Hash = &r.Hash
 	}
+
 	out.IntrinsicGas = hexutil.Uint64(r.IntrinsicGas)
+
 	return json.Marshal(out)
 }
 
@@ -87,7 +93,9 @@ func Transaction(ctx *cli.Context) error {
 	}
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
+
 	var body hexutil.Bytes
+
 	if txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
@@ -101,7 +109,9 @@ func Transaction(ctx *cli.Context) error {
 		if err != nil {
 			return NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
 		}
+
 		defer inFile.Close()
+
 		decoder := json.NewDecoder(inFile)
 		if strings.HasSuffix(txStr, ".rlp") {
 			if err := decoder.Decode(&body); err != nil {
@@ -111,6 +121,7 @@ func Transaction(ctx *cli.Context) error {
 			return NewError(ErrorIO, errors.New("only rlp supported"))
 		}
 	}
+
 	signer := types.MakeSigner(chainConfig, new(big.Int))
 	// We now have the transactions in 'body', which is supposed to be an
 	// rlp list of transactions
@@ -118,21 +129,27 @@ func Transaction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	var results []result
+
 	for it.Next() {
 		if err := it.Err(); err != nil {
 			return NewError(ErrorIO, err)
 		}
+
 		var tx types.Transaction
+
 		err := rlp.DecodeBytes(it.Value(), &tx)
 		if err != nil {
 			results = append(results, result{Error: err})
 			continue
 		}
+
 		r := result{Hash: tx.Hash()}
 		if sender, err := types.Sender(signer, &tx); err != nil {
 			r.Error = err
 			results = append(results, r)
+
 			continue
 		} else {
 			r.Address = sender
@@ -142,12 +159,14 @@ func Transaction(ctx *cli.Context) error {
 			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(0)); err != nil {
 			r.Error = err
 			results = append(results, r)
+
 			continue
 		} else {
 			r.IntrinsicGas = gas
 			if tx.Gas() < gas {
 				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
 				results = append(results, r)
+
 				continue
 			}
 		}
@@ -175,9 +194,12 @@ func Transaction(ctx *cli.Context) error {
 		if chainConfig.IsShanghai(0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 			r.Error = errors.New("max initcode size exceeded")
 		}
+
 		results = append(results, r)
 	}
+
 	out, err := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
+
 	return err
 }

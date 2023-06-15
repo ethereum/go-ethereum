@@ -102,6 +102,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 
 		return nil, errors.New("safe block not found")
 	}
+
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 }
 
@@ -109,16 +110,20 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.HeaderByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
+
 		return header, nil
 	}
+
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -157,6 +162,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
+
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }
 
@@ -181,20 +187,25 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
+
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
+
 		return block, nil
 	}
+
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -213,10 +224,13 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
+
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+
 	return stateDb, header, err
 }
 
@@ -224,20 +238,26 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err := b.HeaderByHash(ctx, hash)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
+
 		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+
 		return stateDb, header, err
 	}
+
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -253,6 +273,7 @@ func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if header := b.eth.blockchain.GetHeaderByHash(hash); header != nil {
 		return b.eth.blockchain.GetTd(hash, header.Number.Uint64())
 	}
+
 	return nil
 }
 
@@ -260,6 +281,7 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, msg *core.Message, state *st
 	if vmConfig == nil {
 		vmConfig = b.eth.blockchain.GetVMConfig()
 	}
+
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
 
@@ -303,10 +325,13 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	pending := b.eth.txPool.Pending(context.Background(), false)
+
 	var txs types.Transactions
+
 	for _, batch := range pending {
 		txs = append(txs, batch...)
 	}
+
 	return txs, nil
 }
 

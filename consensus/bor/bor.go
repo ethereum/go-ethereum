@@ -513,7 +513,6 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 // nolint: gocognit
 func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
-
 	signer := common.BytesToAddress(c.authorizedSigner.Load().signer.Bytes())
 	if c.devFakeAuthor && signer.String() != "0x0000000000000000000000000000000000000000" {
 		log.Info("👨‍💻Using DevFakeAuthor", "signer", signer)

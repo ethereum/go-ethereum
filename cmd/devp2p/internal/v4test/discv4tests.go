@@ -92,16 +92,19 @@ func (te *testenv) checkPingPong(pingHash []byte) error {
 		pings int
 		pongs int
 	)
+
 	for i := 0; i < 2; i++ {
 		reply, _, err := te.read(te.l1)
 		if err != nil {
 			return err
 		}
+
 		switch reply.Kind() {
 		case v4wire.PongPacket:
 			if err := te.checkPong(reply, pingHash); err != nil {
 				return err
 			}
+
 			pongs++
 		case v4wire.PingPacket:
 			pings++
@@ -109,9 +112,11 @@ func (te *testenv) checkPingPong(pingHash []byte) error {
 			return fmt.Errorf("expected PING or PONG, got %v %v", reply.Name(), reply)
 		}
 	}
+
 	if pongs == 1 && pings == 1 {
 		return nil
 	}
+
 	return fmt.Errorf("expected 1 PING  (got %d) and 1 PONG (got %d)", pings, pongs)
 }
 
@@ -121,19 +126,24 @@ func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 	if reply == nil {
 		return fmt.Errorf("expected PONG reply, got nil")
 	}
+
 	if reply.Kind() != v4wire.PongPacket {
 		return fmt.Errorf("expected PONG reply, got %v %v", reply.Name(), reply)
 	}
+
 	pong := reply.(*v4wire.Pong)
 	if !bytes.Equal(pong.ReplyTok, pingHash) {
 		return fmt.Errorf("PONG reply token mismatch: got %x, want %x", pong.ReplyTok, pingHash)
 	}
+
 	if want := te.localEndpoint(te.l1); !want.IP.Equal(pong.To.IP) || want.UDP != pong.To.UDP {
 		return fmt.Errorf("PONG 'to' endpoint mismatch: got %+v, want %+v", pong.To, want)
 	}
+
 	if v4wire.Expired(pong.Expiration) {
 		return fmt.Errorf("PONG is expired (%v)", pong.Expiration)
 	}
+
 	return nil
 }
 
@@ -143,6 +153,7 @@ func PingWrongTo(t *utesting.T) {
 	defer te.close()
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
+
 	pingHash := te.send(te.l1, &v4wire.Ping{
 		Version:    4,
 		From:       te.localEndpoint(te.l1),
@@ -208,6 +219,7 @@ func PingExtraDataWrongFrom(t *utesting.T) {
 		JunkData1:  42,
 		JunkData2:  []byte{9, 8, 7, 6, 5, 4, 3, 2, 1},
 	}
+
 	pingHash := te.send(te.l1, &req)
 	if err := te.checkPingPong(pingHash); err != nil {
 		t.Fatal(err)
@@ -304,9 +316,11 @@ func FindnodeWithoutEndpointProof(t *utesting.T) {
 			// No response, all good
 			break
 		}
+
 		if reply.Kind() == v4wire.PingPacket {
 			continue // A ping is ok, just ignore it
 		}
+
 		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
 	}
 }
@@ -326,6 +340,7 @@ func BasicFindnode(t *utesting.T) {
 	if err != nil {
 		t.Fatal("read find nodes", err)
 	}
+
 	if reply.Kind() != v4wire.NeighborsPacket {
 		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
@@ -363,9 +378,11 @@ func UnsolicitedNeighbors(t *utesting.T) {
 	if err != nil {
 		t.Fatal("read find nodes", err)
 	}
+
 	if reply.Kind() != v4wire.NeighborsPacket {
 		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
 	}
+
 	nodes := reply.(*v4wire.Neighbors).Nodes
 	if contains(nodes, encFakeKey) {
 		t.Fatal("neighbors response contains node from earlier unsolicited neighbors response")
@@ -408,6 +425,7 @@ func bond(t *utesting.T, te *testenv) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		switch req.(type) {
 		case *v4wire.Ping:
 			te.send(te.l1, &v4wire.Pong{
@@ -415,11 +433,13 @@ func bond(t *utesting.T, te *testenv) {
 				ReplyTok:   hash,
 				Expiration: futureExpiration(),
 			})
+
 			gotPing = true
 		case *v4wire.Pong:
 			if err := te.checkPong(req, pingHash); err != nil {
 				t.Fatal(err)
 			}
+
 			gotPong = true
 		}
 	}
@@ -450,6 +470,7 @@ func FindnodeAmplificationInvalidPongHash(t *utesting.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		switch req.(type) {
 		case *v4wire.Ping:
 			// Send PONG from this node ID, but with invalid ReplyTok.
@@ -458,6 +479,7 @@ func FindnodeAmplificationInvalidPongHash(t *utesting.T) {
 				ReplyTok:   make([]byte, macSize),
 				Expiration: futureExpiration(),
 			})
+
 			gotPing = true
 		case *v4wire.Pong:
 			gotPong = true

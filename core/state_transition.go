@@ -56,6 +56,7 @@ func (result *ExecutionResult) Return() []byte {
 	if result.Err != nil {
 		return nil
 	}
+
 	return common.CopyBytes(result.ReturnData)
 }
 
@@ -65,6 +66,7 @@ func (result *ExecutionResult) Revert() []byte {
 	if result.Err != vm.ErrExecutionReverted {
 		return nil
 	}
+
 	return common.CopyBytes(result.ReturnData)
 }
 
@@ -83,6 +85,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
+
 		for _, byt := range data {
 			if byt != 0 {
 				nz++
@@ -93,15 +96,18 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
+
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
 			return 0, ErrGasUintOverflow
 		}
+
 		gas += nz * nonZeroGas
 
 		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
+
 		gas += z * params.TxDataZeroGas
 
 		if isContractCreation && isEIP3860 {
@@ -113,10 +119,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			gas += lenWords * params.InitCodeWordGas
 		}
 	}
+
 	if accessList != nil {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
+
 	return gas, nil
 }
 
@@ -270,6 +278,7 @@ func (st *StateTransition) buyGas() error {
 
 	st.initialGas = st.msg.GasLimit
 	st.state.SubBalance(st.msg.From, mgval)
+
 	return nil
 }
 
@@ -323,6 +332,7 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
+
 	return st.buyGas()
 }
 
@@ -406,6 +416,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
+
 	if contractCreation {
 		// nolint : contextcheck
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)

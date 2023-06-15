@@ -39,7 +39,9 @@ type BlockNonce [8]byte
 // EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
 	var n BlockNonce
+
 	binary.BigEndian.PutUint64(n[:], i)
+
 	return n
 }
 
@@ -127,6 +129,7 @@ func (h *Header) Size() common.StorageSize {
 	if h.BaseFee != nil {
 		baseFeeBits = h.BaseFee.BitLen()
 	}
+
 	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
 }
 
@@ -138,19 +141,23 @@ func (h *Header) SanityCheck() error {
 	if h.Number != nil && !h.Number.IsUint64() {
 		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
 	}
+
 	if h.Difficulty != nil {
 		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
 			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
 		}
 	}
+
 	if eLen := len(h.Extra); eLen > 100*1024 {
 		return fmt.Errorf("too large block extradata: size %d", eLen)
 	}
+
 	if h.BaseFee != nil {
 		if bfLen := h.BaseFee.BitLen(); bfLen > 256 {
 			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
 		}
 	}
+
 	return nil
 }
 
@@ -160,6 +167,7 @@ func (h *Header) EmptyBody() bool {
 	if h.WithdrawalsHash == nil {
 		return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
 	}
+
 	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
 }
 
@@ -232,6 +240,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	} else {
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
+
 		for i := range uncles {
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
@@ -276,16 +285,20 @@ func CopyHeader(h *Header) *Header {
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
 	}
+
 	if cpy.Number = new(big.Int); h.Number != nil {
 		cpy.Number.Set(h.Number)
 	}
+
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
+
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+
 	if h.WithdrawalsHash != nil {
 		cpy.WithdrawalsHash = new(common.Hash)
 		*cpy.WithdrawalsHash = *h.WithdrawalsHash
@@ -299,18 +312,23 @@ func CopyHeader(h *Header) *Header {
 			copy(cpy.TxDependency[i], dep)
 		}
 	}
+
 	return &cpy
 }
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
+
 	_, size, _ := s.Kind()
+
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
+
 	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
 	b.size.Store(rlp.ListSize(size))
+
 	return nil
 }
 
@@ -335,6 +353,7 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 			return transaction
 		}
 	}
+
 	return nil
 }
 
@@ -361,6 +380,7 @@ func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
 		return nil
 	}
+
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
@@ -379,9 +399,11 @@ func (b *Block) Size() uint64 {
 	if size := b.size.Load(); size != nil {
 		return size.(uint64)
 	}
+
 	c := writeCounter(0)
 	rlp.Encode(&c, b)
 	b.size.Store(uint64(c))
+
 	return uint64(c)
 }
 
@@ -402,6 +424,7 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	if len(uncles) == 0 {
 		return EmptyUncleHash
 	}
+
 	return rlpHash(uncles)
 }
 
@@ -426,9 +449,11 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 		uncles:       make([]*Header, len(uncles)),
 	}
 	copy(block.transactions, transactions)
+
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}
+
 	return block
 }
 
@@ -438,6 +463,7 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		b.withdrawals = make([]*Withdrawal, len(withdrawals))
 		copy(b.withdrawals, withdrawals)
 	}
+
 	return b
 }
 
@@ -447,8 +473,10 @@ func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
+
 	v := b.header.Hash()
 	b.hash.Store(v)
+
 	return v
 }
 
@@ -462,12 +490,15 @@ func HeaderParentHashFromRLP(header []byte) common.Hash {
 	if err != nil {
 		return common.Hash{}
 	}
+
 	parentHash, _, err := rlp.SplitString(listContent)
 	if err != nil {
 		return common.Hash{}
 	}
+
 	if len(parentHash) != 32 {
 		return common.Hash{}
 	}
+
 	return common.BytesToHash(parentHash)
 }

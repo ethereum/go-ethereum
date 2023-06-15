@@ -39,7 +39,9 @@ func TestFreezerModify(t *testing.T) {
 
 	// Create test data.
 	var valuesRaw [][]byte
+
 	var valuesRLP []*big.Int
+
 	for x := 0; x < 100; x++ {
 		v := getChunk(256, x)
 		valuesRaw = append(valuesRaw, v)
@@ -49,6 +51,7 @@ func TestFreezerModify(t *testing.T) {
 	}
 
 	tables := map[string]bool{"raw": true, "rlp": false}
+
 	f, _ := newFreezerForTesting(t, tables)
 	defer f.Close()
 
@@ -58,10 +61,12 @@ func TestFreezerModify(t *testing.T) {
 			if err := op.AppendRaw("raw", uint64(i), valuesRaw[i]); err != nil {
 				return err
 			}
+
 			if err := op.Append("rlp", uint64(i), valuesRLP[i]); err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -76,13 +81,16 @@ func TestFreezerModify(t *testing.T) {
 	// Read back test data.
 	checkAncientCount(t, f, "raw", uint64(len(valuesRaw)))
 	checkAncientCount(t, f, "rlp", uint64(len(valuesRLP)))
+
 	for i := range valuesRaw {
 		v, _ := f.Ancient("raw", uint64(i))
 		if !bytes.Equal(v, valuesRaw[i]) {
 			t.Fatalf("wrong raw value at %d: %x", i, v)
 		}
+
 		ivEnc, _ := f.Ancient("rlp", uint64(i))
 		want, _ := rlp.EncodeToBytes(valuesRLP[i])
+
 		if !bytes.Equal(ivEnc, want) {
 			t.Fatalf("wrong RLP value at %d: %x", i, ivEnc)
 		}
@@ -103,20 +111,25 @@ func TestFreezerModifyRollback(t *testing.T) {
 		require.NoError(t, op.AppendRaw("test", 0, make([]byte, 2048)))
 		require.NoError(t, op.AppendRaw("test", 1, make([]byte, 2048)))
 		require.NoError(t, op.AppendRaw("test", 2, make([]byte, 2048)))
+
 		return theError
 	})
+
 	if err != theError {
 		t.Errorf("ModifyAncients returned wrong error %q", err)
 	}
+
 	checkAncientCount(t, f, "test", 0)
 	f.Close()
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]bool{"test": true}
+
 	f2, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
+
 	defer f2.Close()
 	checkAncientCount(t, f2, "test", 0)
 }
@@ -134,26 +147,31 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 		written        = make(chan uint64, numReaders*6)
 		wg             sync.WaitGroup
 	)
+
 	wg.Add(numReaders + 1)
 
 	// Launch the writer. It appends 10000 items in batches.
 	go func() {
 		defer wg.Done()
 		defer close(written)
+
 		for item := uint64(0); item < 10000; item += writeBatchSize {
 			_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(0); i < writeBatchSize; i++ {
 					item := item + i
 					value := getChunk(32, int(item))
+
 					if err := op.AppendRaw("test", item, value); err != nil {
 						return err
 					}
 				}
+
 				return nil
 			})
 			if err != nil {
 				panic(err)
 			}
+
 			for i := 0; i < numReaders; i++ {
 				written <- item + writeBatchSize
 			}
@@ -165,13 +183,16 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		go func() {
 			defer wg.Done()
+
 			for frozen := range written {
 				for rc := 0; rc < 80; rc++ {
 					num := uint64(rand.Intn(int(frozen)))
 					value, err := f.Ancient("test", num)
+
 					if err != nil {
 						panic(fmt.Errorf("error reading %d (frozen %d): %v", num, frozen, err))
 					}
+
 					if !bytes.Equal(value, getChunk(32, int(num))) {
 						panic(fmt.Errorf("wrong value at %d", num))
 					}
@@ -195,17 +216,20 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
+
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for i := uint64(0); i < 100; i++ {
 				if err := op.AppendRaw("test", i, item); err != nil {
 					return err
 				}
 			}
+
 			return nil
 		})
 		if err != nil {
 			t.Fatal("modify failed:", err)
 		}
+
 		checkAncientCount(t, f, "test", 100)
 
 		// Now append 100 more items and truncate concurrently.
@@ -214,7 +238,9 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			truncateErr error
 			modifyErr   error
 		)
+
 		wg.Add(3)
+
 		go func() {
 			_, modifyErr = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(100); i < 200; i++ {
@@ -222,12 +248,15 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 						return err
 					}
 				}
+
 				return nil
 			})
+
 			wg.Done()
 		}()
 		go func() {
 			truncateErr = f.TruncateHead(10)
+
 			wg.Done()
 		}()
 		go func() {
@@ -242,9 +271,11 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if truncateErr != nil {
 			t.Fatal("concurrent truncate failed:", err)
 		}
+
 		if !(errors.Is(modifyErr, nil) || errors.Is(modifyErr, errOutOrderInsertion)) {
 			t.Fatal("wrong error from concurrent modify:", modifyErr)
 		}
+
 		checkAncientCount(t, f, "test", 10)
 	}
 }
@@ -258,21 +289,27 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
+
 	var item = make([]byte, 1024)
+
 	aBatch := f.tables["a"].newBatch()
 	require.NoError(t, aBatch.AppendRaw(0, item))
 	require.NoError(t, aBatch.AppendRaw(1, item))
 	require.NoError(t, aBatch.AppendRaw(2, item))
 	require.NoError(t, aBatch.commit())
+
 	bBatch := f.tables["b"].newBatch()
 	require.NoError(t, bBatch.AppendRaw(0, item))
 	require.NoError(t, bBatch.commit())
+
 	if f.tables["a"].items.Load() != 3 {
 		t.Fatalf("unexpected number of items in table")
 	}
+
 	if f.tables["b"].items.Load() != 1 {
 		t.Fatalf("unexpected number of items in table")
 	}
+
 	require.NoError(t, f.Close())
 
 	// Re-openening as readonly should fail when validating
@@ -293,6 +330,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]bool) (*Freezer, strin
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
+
 	return f, dir
 }
 
@@ -310,6 +348,7 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 		if ok, _ := f.HasAncient(kind, index); !ok {
 			t.Errorf("HasAncient(%q, %d) returned false unexpectedly", kind, index)
 		}
+
 		if _, err := f.Ancient(kind, index); err != nil {
 			t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 		}
@@ -320,6 +359,7 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	if ok, _ := f.HasAncient(kind, index); ok {
 		t.Errorf("HasAncient(%q, %d) returned true unexpectedly", kind, index)
 	}
+
 	if _, err := f.Ancient(kind, index); err == nil {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != errOutOfBounds {
@@ -346,35 +386,45 @@ func TestRenameWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	f2, err := os.Create(path.Join(dir1, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	f3, err := os.Create(path.Join(dir2, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := f.Write(data); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := f2.Write(data2); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := f3.Write(data3); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := f2.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := f3.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Rename(f.Name(), path.Join(dir2, fname)); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Rename(f2.Name(), path.Join(dir2, fname2)); err != nil {
 		t.Fatal(err)
 	}
@@ -384,12 +434,15 @@ func TestRenameWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer f.Close()
 	defer os.Remove(f.Name())
+
 	buf := make([]byte, dataLen)
 	if _, err := f.Read(buf); err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(buf, data) {
 		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
@@ -398,11 +451,14 @@ func TestRenameWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer f.Close()
 	defer os.Remove(f.Name())
+
 	if _, err := f.Read(buf); err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(buf, data2) {
 		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
@@ -410,6 +466,7 @@ func TestRenameWindows(t *testing.T) {
 
 func TestFreezerCloseSync(t *testing.T) {
 	t.Parallel()
+
 	f, _ := newFreezerForTesting(t, map[string]bool{"a": true, "b": true})
 	defer f.Close()
 
@@ -423,6 +480,7 @@ func TestFreezerCloseSync(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := f.Sync(); err == nil {
 		t.Fatalf("want error, have nil")
 	} else if have, want := err.Error(), "[closed closed]"; have != want {

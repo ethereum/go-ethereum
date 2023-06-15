@@ -52,10 +52,12 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 		Error      string            `json:"error,omitempty"`
 		GasUsed    hexutil.Uint64    `json:"gasUsed"`
 	}
+
 	var result accessListResult
 	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
 		return nil, 0, "", err
 	}
+
 	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
 }
 
@@ -112,6 +114,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 			Proof: st.Proof,
 		})
 	}
+
 	result := AccountResult{
 		Address:      res.Address,
 		AccountProof: res.AccountProof,
@@ -121,6 +124,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		StorageHash:  res.StorageHash,
 		StorageProof: storageResults,
 	}
+
 	return &result, err
 }
 
@@ -140,6 +144,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 		ctx, &hex, "eth_call", toCallArg(msg),
 		toBlockNumArg(blockNumber), overrides,
 	)
+
 	return hex, err
 }
 
@@ -147,6 +152,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 	var result debug.GCStats
 	err := ec.c.CallContext(ctx, &result, "debug_gcStats")
+
 	return &result, err
 }
 
@@ -154,6 +160,7 @@ func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 func (ec *Client) MemStats(ctx context.Context) (*runtime.MemStats, error) {
 	var result runtime.MemStats
 	err := ec.c.CallContext(ctx, &result, "debug_memStats")
+
 	return &result, err
 }
 
@@ -168,6 +175,7 @@ func (ec *Client) SetHead(ctx context.Context, number *big.Int) error {
 func (ec *Client) GetNodeInfo(ctx context.Context) (*p2p.NodeInfo, error) {
 	var result p2p.NodeInfo
 	err := ec.c.CallContext(ctx, &result, "admin_nodeInfo")
+
 	return &result, err
 }
 
@@ -200,6 +208,7 @@ func toBlockNumArg(number *big.Int) string {
 	if number.Cmp(safe) == 0 {
 		return "safe"
 	}
+
 	return hexutil.EncodeBig(number)
 }
 
@@ -211,15 +220,19 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	if len(msg.Data) > 0 {
 		arg["data"] = hexutil.Bytes(msg.Data)
 	}
+
 	if msg.Value != nil {
 		arg["value"] = (*hexutil.Big)(msg.Value)
 	}
+
 	if msg.Gas != 0 {
 		arg["gas"] = hexutil.Uint64(msg.Gas)
 	}
+
 	if msg.GasPrice != nil {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
 	}
+
 	return arg
 }
 

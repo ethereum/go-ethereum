@@ -50,6 +50,7 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)
 		return nil
 	}
+
 	return &entry.BlockIndex
 }
 
@@ -100,21 +101,26 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
 	}
+
 	blockHash := ReadCanonicalHash(db, *blockNumber)
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
+
 	body := ReadBody(db, blockHash, *blockNumber)
 	if body == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
+
 	for txIndex, tx := range body.Transactions {
 		if tx.Hash() == hash {
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
+
 	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
+
 	return nil, common.Hash{}, 0, 0
 }
 
@@ -126,6 +132,7 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
 	}
+
 	blockHash := ReadCanonicalHash(db, *blockNumber)
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
@@ -137,7 +144,9 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
 		}
 	}
+
 	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
+
 	return nil, common.Hash{}, 0, 0
 }
 
@@ -159,6 +168,7 @@ func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head comm
 // given section range and bit index.
 func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 	start, end := bloomBitsKey(bit, from, common.Hash{}), bloomBitsKey(bit, to, common.Hash{})
+
 	it := db.NewIterator(nil, start)
 	defer it.Release()
 
@@ -166,11 +176,14 @@ func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 		if bytes.Compare(it.Key(), end) >= 0 {
 			break
 		}
+
 		if len(it.Key()) != len(bloomBitsPrefix)+2+8+32 {
 			continue
 		}
+
 		db.Delete(it.Key())
 	}
+
 	if it.Error() != nil {
 		log.Crit("Failed to delete bloom bits", "err", it.Error())
 	}

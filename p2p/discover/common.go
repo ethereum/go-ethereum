@@ -61,12 +61,15 @@ func (cfg Config) withDefaults() Config {
 	if cfg.Log == nil {
 		cfg.Log = log.Root()
 	}
+
 	if cfg.ValidSchemes == nil {
 		cfg.ValidSchemes = enode.ValidSchemes
 	}
+
 	if cfg.Clock == nil {
 		cfg.Clock = mclock.System{}
 	}
+
 	return cfg
 }
 
@@ -86,5 +89,6 @@ func min(x, y int) int {
 	if x > y {
 		return y
 	}
+
 	return x
 }

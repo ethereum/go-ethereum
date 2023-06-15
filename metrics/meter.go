@@ -27,6 +27,7 @@ func GetOrRegisterMeter(name string, r Registry) Meter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewMeter).(Meter)
 }
 
@@ -38,6 +39,7 @@ func GetOrRegisterMeterForced(name string, r Registry) Meter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewMeterForced).(Meter)
 }
 
@@ -47,14 +49,18 @@ func NewMeter() Meter {
 	if !Enabled {
 		return NilMeter{}
 	}
+
 	m := newStandardMeter()
+
 	arbiter.Lock()
 	defer arbiter.Unlock()
+
 	arbiter.meters[m] = struct{}{}
 	if !arbiter.started {
 		arbiter.started = true
 		go arbiter.tick()
 	}
+
 	return m
 }
 
@@ -63,13 +69,16 @@ func NewMeter() Meter {
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.
 func NewMeterForced() Meter {
 	m := newStandardMeter()
+
 	arbiter.Lock()
 	defer arbiter.Unlock()
+
 	arbiter.meters[m] = struct{}{}
 	if !arbiter.started {
 		arbiter.started = true
 		go arbiter.tick()
 	}
+
 	return m
 }
 
@@ -79,10 +88,13 @@ func NewMeterForced() Meter {
 // allow for garbage collection.
 func NewRegisteredMeter(name string, r Registry) Meter {
 	c := NewMeter()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -92,10 +104,13 @@ func NewRegisteredMeter(name string, r Registry) Meter {
 // allow for garbage collection.
 func NewRegisteredMeterForced(name string, r Registry) Meter {
 	c := NewMeterForced()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -198,6 +213,7 @@ func (m *StandardMeter) Count() int64 {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.updateMeter()
+
 	return m.snapshot.count
 }
 
@@ -210,6 +226,7 @@ func (m *StandardMeter) Mark(n int64) {
 func (m *StandardMeter) Rate1() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate1
 }
 
@@ -217,6 +234,7 @@ func (m *StandardMeter) Rate1() float64 {
 func (m *StandardMeter) Rate5() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate5
 }
 
@@ -224,6 +242,7 @@ func (m *StandardMeter) Rate5() float64 {
 func (m *StandardMeter) Rate15() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate15
 }
 
@@ -231,6 +250,7 @@ func (m *StandardMeter) Rate15() float64 {
 func (m *StandardMeter) RateMean() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rateMean
 }
 
@@ -246,6 +266,7 @@ func (m *StandardMeter) Snapshot() Meter {
 	}
 	snapshot.temp.Store(m.snapshot.temp.Load())
 	m.lock.RUnlock()
+
 	return &snapshot
 }
 
@@ -298,6 +319,7 @@ func (ma *meterArbiter) tick() {
 func (ma *meterArbiter) tickMeters() {
 	ma.RLock()
 	defer ma.RUnlock()
+
 	for meter := range ma.meters {
 		meter.tick()
 	}

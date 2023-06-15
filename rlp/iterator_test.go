@@ -37,22 +37,28 @@ func TestIterator(t *testing.T) {
 	if !it.Next() {
 		t.Fatal("expected two elems, got zero")
 	}
+
 	txs := it.Value()
 	// Check that uncles exist
 	if !it.Next() {
 		t.Fatal("expected two elems, got one")
 	}
+
 	txit, err := NewListIterator(txs)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var i = 0
+
 	for txit.Next() {
 		if txit.err != nil {
 			t.Fatal(txit.err)
 		}
+
 		i++
 	}
+
 	if exp := 2; i != exp {
 		t.Errorf("count wrong, expected %d got %d", i, exp)
 	}

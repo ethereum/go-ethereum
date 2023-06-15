@@ -35,6 +35,7 @@ func TestResetFreezer(t *testing.T) {
 		{1, bytes.Repeat([]byte{1}, 2048)},
 		{2, bytes.Repeat([]byte{2}, 2048)},
 	}
+
 	f, _ := NewResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
 	defer f.Close()
 
@@ -42,8 +43,10 @@ func TestResetFreezer(t *testing.T) {
 		for _, item := range items {
 			op.AppendRaw("test", item.id, item.blob)
 		}
+
 		return nil
 	})
+
 	for _, item := range items {
 		blob, _ := f.Ancient("test", item.id)
 		if !bytes.Equal(blob, item.blob) {
@@ -53,10 +56,12 @@ func TestResetFreezer(t *testing.T) {
 
 	// Reset freezer
 	f.Reset()
+
 	count, _ := f.Ancients()
 	if count != 0 {
 		t.Fatal("Failed to reset freezer")
 	}
+
 	for _, item := range items {
 		blob, _ := f.Ancient("test", item.id)
 		if len(blob) != 0 {
@@ -69,8 +74,10 @@ func TestResetFreezer(t *testing.T) {
 		for _, item := range items {
 			op.AppendRaw("test", item.id, item.blob)
 		}
+
 		return nil
 	})
+
 	for _, item := range items {
 		blob, _ := f.Ancient("test", item.id)
 		if !bytes.Equal(blob, item.blob) {
@@ -96,6 +103,7 @@ func TestFreezerCleanup(t *testing.T) {
 		for _, item := range items {
 			op.AppendRaw("test", item.id, item.blob)
 		}
+
 		return nil
 	})
 	f.Close()

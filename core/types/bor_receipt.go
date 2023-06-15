@@ -25,6 +25,7 @@ var (
 func BorReceiptKey(number uint64, hash common.Hash) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
+
 	return append(append(borReceiptPrefix, enc...), hash.Bytes()...)
 }
 
@@ -65,6 +66,7 @@ func DeriveFieldsForBorReceipt(receipt *Receipt, hash common.Hash, number uint64
 		receipt.Logs[j].Index = uint(logIndex)
 		logIndex++
 	}
+
 	return nil
 }
 

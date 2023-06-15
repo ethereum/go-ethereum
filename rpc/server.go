@@ -69,6 +69,7 @@ func NewServer(executionPoolSize uint64, executionPoolRequesttimeout time.Durati
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
 	server.RegisterName(MetadataApi, rpcService)
+
 	return server
 }
 
@@ -158,6 +159,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 			resp := errorMessage(&invalidMessageError{"parse error"})
 			_ = codec.writeJSON(ctx, resp, true)
 		}
+
 		return
 	}
 
@@ -208,6 +210,7 @@ func (s *RPCService) Modules() map[string]string {
 	for name := range s.server.services.services {
 		modules[name] = "1.0"
 	}
+
 	return modules
 }
 

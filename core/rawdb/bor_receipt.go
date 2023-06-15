@@ -105,6 +105,7 @@ func ReadBorReceipt(db ethdb.Reader, hash common.Hash, number uint64, config *pa
 		log.Error("Failed to derive bor receipt fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}
+
 	return borReceipt
 }
 
@@ -185,6 +186,7 @@ func ReadBorTxLookupEntry(db ethdb.Reader, txHash common.Hash) *uint64 {
 	}
 
 	number := new(big.Int).SetBytes(data).Uint64()
+
 	return &number
 }
 

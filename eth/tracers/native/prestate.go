@@ -141,10 +141,12 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	if t.interrupt.Load() {
 		return
 	}
+
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
 	caller := scope.Contract.Address()
+
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
@@ -224,6 +226,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 				delete(t.pre[addr].Storage, key)
 			} else {
 				modified = true
+
 				if newVal != (common.Hash{}) {
 					postAccount.Storage[key] = newVal
 				}
@@ -261,9 +264,11 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	} else {
 		res, err = json.Marshal(t.pre)
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return json.RawMessage(res), t.reason
 }
 

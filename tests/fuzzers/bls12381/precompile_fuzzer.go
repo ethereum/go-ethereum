@@ -67,6 +67,7 @@ func checkInput(id byte, inputLen int) bool {
 	case blsMapG2:
 		return inputLen == 128
 	}
+
 	panic("programmer error")
 }
 
@@ -83,6 +84,7 @@ func fuzz(id byte, data []byte) int {
 	// Even on bad input, it should not crash, so we still test the gas calc
 	precompile := vm.PrecompiledContractsBLS[common.BytesToAddress([]byte{id})]
 	gas := precompile.RequiredGas(data)
+
 	if !checkInput(id, len(data)) {
 		return 0
 	}
@@ -90,14 +92,18 @@ func fuzz(id byte, data []byte) int {
 	if gas > 25*1000*1000 {
 		return 0
 	}
+
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
 	_, err := precompile.Run(cpy)
+
 	if !bytes.Equal(cpy, data) {
 		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}
+
 	if err != nil {
 		return 0
 	}
+
 	return 1
 }

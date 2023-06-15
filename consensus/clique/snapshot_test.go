@@ -53,7 +53,9 @@ func (ap *testerAccountPool) checkpoint(header *types.Header, signers []string) 
 	for i, signer := range signers {
 		auths[i] = ap.address(signer)
 	}
+
 	sort.Sort(signersAscending(auths))
+
 	for i, auth := range auths {
 		copy(header.Extra[extraVanity+i*common.AddressLength:], auth.Bytes())
 	}
@@ -395,6 +397,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 	for j, signer := range tt.signers {
 		signers[j] = accounts.address(signer)
 	}
+
 	for j := 0; j < len(signers); j++ {
 		for k := j + 1; k < len(signers); k++ {
 			if bytes.Compare(signers[j][:], signers[k][:]) > 0 {
@@ -425,8 +428,10 @@ func (tt *cliqueTest) run(t *testing.T) {
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, len(tt.votes), func(j int, gen *core.BlockGen) {
 		// Cast the vote contained in this block
 		gen.SetCoinbase(accounts.address(tt.votes[j].voted))
+
 		if tt.votes[j].auth {
 			var nonce types.BlockNonce
+
 			copy(nonce[:], nonceAuthVote)
 			gen.SetNonce(nonce)
 		}
@@ -438,11 +443,13 @@ func (tt *cliqueTest) run(t *testing.T) {
 		if j > 0 {
 			header.ParentHash = blocks[j-1].Hash()
 		}
+
 		header.Extra = make([]byte, extraVanity+extraSeal)
 		if auths := tt.votes[j].checkpoint; auths != nil {
 			header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 			accounts.checkpoint(header, auths)
 		}
+
 		header.Difficulty = diffInTurn // Ignored, we just need a valid number
 
 		// Generate the signature, embed it into the header and the block
@@ -451,10 +458,12 @@ func (tt *cliqueTest) run(t *testing.T) {
 	}
 	// Split the blocks up into individual import batches (cornercase testing)
 	batches := [][]*types.Block{nil}
+
 	for j, block := range blocks {
 		if tt.votes[j].newbatch {
 			batches = append(batches, nil)
 		}
+
 		batches[len(batches)-1] = append(batches[len(batches)-1], block)
 	}
 	// Pass all the headers through clique and ensure tallying succeeds
@@ -470,9 +479,11 @@ func (tt *cliqueTest) run(t *testing.T) {
 			break
 		}
 	}
+
 	if _, err = chain.InsertChain(batches[len(batches)-1]); err != tt.failure {
 		t.Errorf("failure mismatch: have %v, want %v", err, tt.failure)
 	}
+
 	if tt.failure != nil {
 		return
 	}
@@ -489,6 +500,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 	for j, signer := range tt.results {
 		signers[j] = accounts.address(signer)
 	}
+
 	for j := 0; j < len(signers); j++ {
 		for k := j + 1; k < len(signers); k++ {
 			if bytes.Compare(signers[j][:], signers[k][:]) > 0 {
@@ -496,10 +508,12 @@ func (tt *cliqueTest) run(t *testing.T) {
 			}
 		}
 	}
+
 	result := snap.signers()
 	if len(result) != len(signers) {
 		t.Fatalf("signers mismatch: have %x, want %x", result, signers)
 	}
+
 	for j := 0; j < len(result); j++ {
 		if !bytes.Equal(result[j][:], signers[j][:]) {
 			t.Fatalf("signer %d: signer mismatch: have %x, want %x", j, result[j], signers[j])

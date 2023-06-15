@@ -54,6 +54,7 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
 	it.asked[tab.self().ID()] = true
+
 	return it
 }
 
@@ -78,6 +79,7 @@ func (it *lookup) advance() bool {
 					it.replyBuffer = append(it.replyBuffer, n)
 				}
 			}
+
 			it.queries--
 			if len(it.replyBuffer) > 0 {
 				return true
@@ -86,14 +88,17 @@ func (it *lookup) advance() bool {
 			it.shutdown()
 		}
 	}
+
 	return false
 }
 
 func (it *lookup) shutdown() {
 	for it.queries > 0 {
 		<-it.replyCh
+
 		it.queries--
 	}
+
 	it.queryfunc = nil
 	it.replyBuffer = nil
 }
@@ -112,8 +117,10 @@ func (it *lookup) startQueries() bool {
 		if len(closest.entries) == 0 {
 			it.slowdown()
 		}
+
 		it.queries = 1
 		it.replyCh <- closest.entries
+
 		return true
 	}
 
@@ -123,6 +130,7 @@ func (it *lookup) startQueries() bool {
 		if !it.asked[n.ID()] {
 			it.asked[n.ID()] = true
 			it.queries++
+
 			go it.query(n, it.replyCh)
 		}
 	}
@@ -155,8 +163,10 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 		dropped := false
 		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
 			dropped = true
+
 			it.tab.delete(n)
 		}
+
 		it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "failcount", fails, "dropped", dropped, "err", err)
 	} else if fails > 0 {
 		// Reset failure counter because it counts _consecutive_ failures.
@@ -193,6 +203,7 @@ func (it *lookupIterator) Node() *enode.Node {
 	if len(it.buffer) == 0 {
 		return nil
 	}
+
 	return unwrapNode(it.buffer[0])
 }
 
@@ -207,18 +218,23 @@ func (it *lookupIterator) Next() bool {
 		if it.ctx.Err() != nil {
 			it.lookup = nil
 			it.buffer = nil
+
 			return false
 		}
+
 		if it.lookup == nil {
 			it.lookup = it.nextLookup(it.ctx)
 			continue
 		}
+
 		if !it.lookup.advance() {
 			it.lookup = nil
 			continue
 		}
+
 		it.buffer = it.lookup.replyBuffer
 	}
+
 	return true
 }
 

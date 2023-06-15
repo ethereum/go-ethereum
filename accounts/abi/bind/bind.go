@@ -92,6 +92,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		// isLib is the map used to flag each encountered library as such
 		isLib = make(map[string]struct{})
 	)
+
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
 		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
@@ -103,6 +104,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			if unicode.IsSpace(r) {
 				return -1
 			}
+
 			return r
 		}, abis[i])
 
@@ -139,28 +141,35 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			if !original.IsConstant() {
 				identifiers = transactIdentifiers
 			}
+
 			if identifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
+
 			identifiers[normalizedName] = true
 
 			normalized.Name = normalizedName
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
+
 			for j, input := range normalized.Inputs {
 				if input.Name == "" || isKeyWord(input.Name) {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
+
 				if hasStruct(input.Type) {
 					bindStructType[lang](input.Type, structs)
 				}
 			}
+
 			normalized.Outputs = make([]abi.Argument, len(original.Outputs))
 			copy(normalized.Outputs, original.Outputs)
+
 			for j, output := range normalized.Outputs {
 				if output.Name != "" {
 					normalized.Outputs[j].Name = capitalise(output.Name)
 				}
+
 				if hasStruct(output.Type) {
 					bindStructType[lang](output.Type, structs)
 				}
@@ -172,6 +181,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			}
 		}
+
 		for _, original := range evmABI.Events {
 			// Skip anonymous events as they don't support explicit filtering
 			if original.Anonymous {
@@ -185,12 +195,14 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			if eventIdentifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
+
 			eventIdentifiers[normalizedName] = true
 			normalized.Name = normalizedName
 
 			used := make(map[string]bool)
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
+
 			for j, input := range normalized.Inputs {
 				if input.Name == "" || isKeyWord(input.Name) {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
@@ -202,8 +214,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 						used[capitalise(normalized.Inputs[j].Name)] = true
 						break
 					}
+
 					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, index)
 				}
+
 				if hasStruct(input.Type) {
 					bindStructType[lang](input.Type, structs)
 				}
@@ -215,9 +229,11 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		if evmABI.HasFallback() {
 			fallback = &tmplMethod{Original: evmABI.Fallback}
 		}
+
 		if evmABI.HasReceive() {
 			receive = &tmplMethod{Original: evmABI.Receive}
 		}
+
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
@@ -241,6 +257,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			if err != nil {
 				log.Error("Could not search for pattern", "pattern", pattern, "contract", contracts[types[i]], "err", err)
 			}
+
 			if matched {
 				contracts[types[i]].Libraries[pattern] = name
 				// keep track that this type is a library
@@ -271,6 +288,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
+
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
@@ -281,6 +299,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		if err != nil {
 			return "", fmt.Errorf("%v\n%s", err, buffer)
 		}
+
 		return string(code), nil
 	}
 	// For all others just return as is for now
@@ -304,6 +323,7 @@ func bindBasicTypeGo(kind abi.Type) string {
 		case "8", "16", "32", "64":
 			return fmt.Sprintf("%sint%s", parts[1], parts[2])
 		}
+
 		return "*big.Int"
 	case abi.FixedBytesTy:
 		return fmt.Sprintf("[%d]byte", kind.Size)
@@ -353,6 +373,7 @@ func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	if bound == "string" || bound == "[]byte" {
 		bound = "common.Hash"
 	}
+
 	return bound
 }
 
@@ -378,26 +399,32 @@ func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 		if s, exist := structs[id]; exist {
 			return s.Name
 		}
+
 		var (
 			names  = make(map[string]bool)
 			fields []*tmplField
 		)
+
 		for i, elem := range kind.TupleElems {
 			name := capitalise(kind.TupleRawNames[i])
 			name = abi.ResolveNameConflict(name, func(s string) bool { return names[s] })
 			names[name] = true
+
 			fields = append(fields, &tmplField{Type: bindStructTypeGo(*elem, structs), Name: name, SolKind: *elem})
 		}
+
 		name := kind.TupleRawName
 		if name == "" {
 			name = fmt.Sprintf("Struct%d", len(structs))
 		}
+
 		name = capitalise(name)
 
 		structs[id] = &tmplStruct{
 			Name:   name,
 			Fields: fields,
 		}
+
 		return name
 	case abi.ArrayTy:
 		return fmt.Sprintf("[%d]", kind.Size) + bindStructTypeGo(*kind.Elem, structs)
@@ -420,6 +447,7 @@ func alias(aliases map[string]string, n string) string {
 	if alias, exist := aliases[n]; exist {
 		return alias
 	}
+
 	return n
 }
 
@@ -439,6 +467,7 @@ func decapitalise(input string) string {
 	}
 
 	goForm := abi.ToCamelCase(input)
+
 	return strings.ToLower(goForm[:1]) + goForm[1:]
 }
 
@@ -448,7 +477,9 @@ func structured(args abi.Arguments) bool {
 	if len(args) < 2 {
 		return false
 	}
+
 	exists := make(map[string]bool)
+
 	for _, out := range args {
 		// If the name is anonymous, we can't organize into a struct
 		if out.Name == "" {
@@ -460,8 +491,10 @@ func structured(args abi.Arguments) bool {
 		if field == "" || exists[field] {
 			return false
 		}
+
 		exists[field] = true
 	}
+
 	return true
 }
 

@@ -36,6 +36,7 @@ func (d PrettyDuration) String() string {
 	if match := prettyDurationRe.FindString(label); len(match) > 4 {
 		label = strings.Replace(label, match, match[:4], 1)
 	}
+
 	return label
 }
 
@@ -78,5 +79,6 @@ func (t PrettyAge) String() string {
 			}
 		}
 	}
+
 	return result
 }

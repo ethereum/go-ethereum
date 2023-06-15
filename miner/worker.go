@@ -135,6 +135,7 @@ func (env *environment) copy() *environment {
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
 	}
+
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
 		cpy.gasPool = &gasPool
@@ -143,10 +144,12 @@ func (env *environment) copy() *environment {
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
+
 	cpy.uncles = make(map[common.Hash]*types.Header)
 	for hash, uncle := range env.uncles {
 		cpy.uncles[hash] = uncle
 	}
+
 	return cpy
 }
 
@@ -156,6 +159,7 @@ func (env *environment) unclelist() []*types.Header {
 	for _, uncle := range env.uncles {
 		uncles = append(uncles, uncle)
 	}
+
 	return uncles
 }
 
@@ -166,6 +170,7 @@ func (env *environment) discard() {
 	if env.state == nil {
 		return
 	}
+
 	env.state.StopPrefetcher()
 }
 
@@ -358,6 +363,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+
 	worker.recommit = recommit
 
 	// Sanitize the timeout config for creating payload.
@@ -366,9 +372,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing new payload timeout to default", "provided", newpayloadTimeout, "updated", DefaultConfig.NewPayloadTimeout)
 		newpayloadTimeout = DefaultConfig.NewPayloadTimeout
 	}
+
 	if newpayloadTimeout < time.Millisecond*100 {
 		log.Warn("Low payload timeout may cause high amount of non-full blocks", "provided", newpayloadTimeout, "default", DefaultConfig.NewPayloadTimeout)
 	}
+
 	worker.newpayloadTimeout = newpayloadTimeout
 
 	ctx := tracing.WithTracer(context.Background(), otel.GetTracerProvider().Tracer("MinerWorker"))
@@ -384,6 +392,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	if init {
 		worker.startCh <- struct{}{}
 	}
+
 	return worker
 }
 
@@ -398,6 +407,7 @@ func (w *worker) setEtherbase(addr common.Address) {
 func (w *worker) etherbase() common.Address {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
 	return w.coinbase
 }
 
@@ -437,9 +447,11 @@ func (w *worker) pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
+
 	if w.snapshotState == nil {
 		return nil, nil
 	}
+
 	return w.snapshotBlock, w.snapshotState.Copy()
 }
 
@@ -448,6 +460,7 @@ func (w *worker) pendingBlock() *types.Block {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
+
 	return w.snapshotBlock
 }
 
@@ -456,6 +469,7 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
+
 	return w.snapshotBlock, w.snapshotReceipts
 }
 
@@ -510,6 +524,7 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 //nolint:gocognit
 func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 	defer w.wg.Done()
+
 	var (
 		interrupt   *atomic.Int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
@@ -529,6 +544,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 		if interrupt != nil {
 			interrupt.Store(s)
 		}
+
 		interrupt = new(atomic.Int32)
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp, ctx: ctx}:
@@ -556,12 +572,16 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 		select {
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().Number.Uint64())
+
 			timestamp = time.Now().Unix()
+
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
+
 			timestamp = time.Now().Unix()
+
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
@@ -573,6 +593,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 					timer.Reset(recommit)
 					continue
 				}
+
 				commit(true, commitInterruptResubmit)
 			}
 
@@ -582,6 +603,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 				log.Warn("Sanitizing miner recommit interval", "provided", interval, "updated", minRecommitInterval)
 				interval = minRecommitInterval
 			}
+
 			log.Info("Miner recommit interval update", "from", minRecommit, "to", interval)
 			minRecommit, recommit = interval, interval
 
@@ -649,6 +671,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
 				continue
 			}
+
 			if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
 				continue
 			}
@@ -677,6 +700,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 					delete(w.localUncles, hash)
 				}
 			}
+
 			for hash, uncle := range w.remoteUncles {
 				if uncle.NumberU64()+staleThreshold <= chainHead.Number.Uint64() {
 					delete(w.remoteUncles, hash)
@@ -694,11 +718,14 @@ func (w *worker) mainLoop(ctx context.Context) {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
+
 				txs := make(map[common.Address]types.Transactions)
+
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
+
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
@@ -718,6 +745,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 					w.commitWork(ctx, nil, true, time.Now().Unix())
 				}
 			}
+
 			w.newTxs.Add(int32(len(ev.Txs)))
 
 		// System stopped
@@ -737,6 +765,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 // push them to consensus engine.
 func (w *worker) taskLoop() {
 	defer w.wg.Done()
+
 	var (
 		stopCh chan struct{}
 		prev   common.Hash
@@ -749,6 +778,7 @@ func (w *worker) taskLoop() {
 			stopCh = nil
 		}
 	}
+
 	for {
 		select {
 		case task := <-w.taskCh:
@@ -762,11 +792,13 @@ func (w *worker) taskLoop() {
 			}
 			// Interrupt previous sealing operation
 			interrupt()
+
 			stopCh, prev = make(chan struct{}), sealHash
 
 			if w.skipSealHook != nil && w.skipSealHook(task) {
 				continue
 			}
+
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
@@ -788,6 +820,7 @@ func (w *worker) taskLoop() {
 // and flush relative data to the database.
 func (w *worker) resultLoop() {
 	defer w.wg.Done()
+
 	for {
 		select {
 		case block := <-w.resultCh:
@@ -804,6 +837,7 @@ func (w *worker) resultLoop() {
 			if oldBlock != nil {
 				oldBlockAuthor, _ := w.chain.Engine().Author(oldBlock.Header())
 				newBlockAuthor, _ := w.chain.Engine().Author(block.Header())
+
 				if oldBlockAuthor == newBlockAuthor {
 					log.Info("same block ", "height", block.NumberU64())
 					continue
@@ -814,9 +848,11 @@ func (w *worker) resultLoop() {
 				sealhash = w.engine.SealHash(block.Header())
 				hash     = block.Hash()
 			)
+
 			w.pendingMu.RLock()
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
+
 			if !exist {
 				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
 				continue
@@ -827,6 +863,7 @@ func (w *worker) resultLoop() {
 				logs     []*types.Log
 				err      error
 			)
+
 			tracing.Exec(task.ctx, "", "resultLoop", func(ctx context.Context, span trace.Span) {
 				for i, taskReceipt := range task.receipts {
 					receipt := new(types.Receipt)
@@ -841,12 +878,14 @@ func (w *worker) resultLoop() {
 					// Update the block hash in all logs since it is now available and not when the
 					// receipt/log of individual transactions were created.
 					receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
+
 					for i, taskLog := range taskReceipt.Logs {
 						log := new(types.Log)
 						receipt.Logs[i] = log
 						*log = *taskLog
 						log.BlockHash = hash
 					}
+
 					logs = append(logs, receipt.Logs...)
 				}
 				// Commit block and state to database.
@@ -869,6 +908,7 @@ func (w *worker) resultLoop() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -898,6 +938,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	if err != nil {
 		return nil, err
 	}
+
 	state.StartPrefetcher("miner")
 
 	// Note the passed coinbase may be different with header.Coinbase.
@@ -915,11 +956,13 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		for _, uncle := range ancestor.Uncles() {
 			env.family.Add(uncle.Hash())
 		}
+
 		env.family.Add(ancestor.Hash())
 		env.ancestors.Add(ancestor.Hash())
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+
 	return env, nil
 }
 
@@ -928,20 +971,26 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if w.isTTDReached(env.header) {
 		return errors.New("ignore uncle for beacon block")
 	}
+
 	hash := uncle.Hash()
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
+
 	if env.header.ParentHash == uncle.ParentHash {
 		return errors.New("uncle is sibling")
 	}
+
 	if !env.ancestors.Contains(uncle.ParentHash) {
 		return errors.New("uncle's parent unknown")
 	}
+
 	if env.family.Contains(hash) {
 		return errors.New("uncle already included")
 	}
+
 	env.uncles[hash] = uncle
+
 	return nil
 }
 
@@ -969,12 +1018,15 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 
 	// nolint : staticcheck
 	interruptCtx = vm.SetCurrentTxOnContext(interruptCtx, tx.Hash())
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
+
 		return nil, err
 	}
+
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 
@@ -987,6 +1039,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
+
 	var coalescedLogs []*types.Log
 
 	var depsMVReadList [][]blockstm.ReadDescriptor
@@ -1194,11 +1247,11 @@ mainloop:
 			env.header.TxDependency = nil
 		}
 	}
+
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
 		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
@@ -1207,8 +1260,10 @@ mainloop:
 			cpy[i] = new(types.Log)
 			*cpy[i] = *l
 		}
+
 		w.pendingLogsFeed.Send(cpy)
 	}
+
 	return nil
 }
 
@@ -1233,11 +1288,13 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 
 	// Find the parent block for sealing task
 	parent := w.chain.CurrentBlock()
+
 	if genParams.parentHash != (common.Hash{}) {
 		block := w.chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
 			return nil, fmt.Errorf("missing parent")
 		}
+
 		parent = block.Header()
 	}
 	// Sanity check the timestamp correctness, recap the timestamp
@@ -1247,6 +1304,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time, timestamp)
 		}
+
 		timestamp = parent.Time + 1
 	}
 	// Construct the sealing block header.
@@ -1268,6 +1326,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFeeUint(w.chainConfig, parent).ToBig()
+
 		if !w.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * w.chainConfig.ElasticityMultiplier()
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
@@ -1281,6 +1340,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		default:
 			log.Error("Failed to prepare header for sealing", "err", err)
 		}
+
 		return nil, err
 	}
 	// Could potentially happen if starting to mine in an odd state.
@@ -1298,6 +1358,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 				if len(env.uncles) == 2 {
 					break
 				}
+
 				if err := w.commitUncle(env, uncle.Header()); err != nil {
 					log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
 				} else {
@@ -1309,6 +1370,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		commitUncles(w.localUncles)
 		commitUncles(w.remoteUncles)
 	}
+
 	return env, nil
 }
 
@@ -1457,7 +1519,6 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	}
 
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
-
 		prePendingTime := time.Now()
 
 		pending := w.eth.TxPool().Pending(ctx, true)
@@ -1468,6 +1529,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		for _, account := range w.eth.TxPool().Locals() {
 			if txs := remoteTxs[account]; len(txs) > 0 {
 				delete(remoteTxs, account)
+
 				localTxs[account] = txs
 			}
 		}
@@ -1557,6 +1619,7 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) (*typ
 
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)
+
 		timer := time.AfterFunc(w.newpayloadTimeout, func() {
 			interrupt.Store(commitInterruptTimeout)
 		})
@@ -1567,10 +1630,12 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) (*typ
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
+
 	block, err := w.engine.FinalizeAndAssemble(ctx, w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts, params.withdrawals)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return block, totalFees(block, work.receipts), nil
 }
 
@@ -1594,6 +1659,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 				return
 			}
 		}
+
 		work, err = w.prepareWork(&generateParams{
 			timestamp: uint64(timestamp),
 			coinbase:  coinbase,
@@ -1634,6 +1700,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	}
 	// Fill pending transactions from the txpool into the block.
 	err = w.fillTransactions(ctx, interrupt, work, interruptCtx)
+
 	switch {
 	case err == nil:
 		// The entire block is filled, decrease resubmit interval in case
@@ -1644,6 +1711,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		// Notify resubmit loop to increase resubmitting interval if the
 		// interruption is due to frequent commits.
 		gaslimit := work.header.GasLimit
+
 		ratio := float64(gaslimit-work.gasPool.Gas()) / float64(gaslimit)
 		if ratio < 0.1 {
 			ratio = 0.1
@@ -1669,6 +1737,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	if w.current != nil {
 		w.current.discard()
 	}
+
 	w.current = work
 }
 
@@ -1742,9 +1811,11 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 			}
 		}
 	}
+
 	if update {
 		w.updateSnapshot(env)
 	}
+
 	return nil
 }
 
@@ -1774,6 +1845,7 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 		if result.err != nil {
 			return nil, nil, result.err
 		}
+
 		return result.block, result.fees, nil
 	case <-w.exitCh:
 		return nil, nil, errors.New("miner closed")
@@ -1790,10 +1862,12 @@ func (w *worker) isTTDReached(header *types.Header) bool {
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	result := make([]*types.Receipt, len(receipts))
+
 	for i, l := range receipts {
 		cpy := *l
 		result[i] = &cpy
 	}
+
 	return result
 }
 
@@ -1808,10 +1882,12 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 // totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
 func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	feesWei := new(big.Int)
+
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
+
 	return feesWei
 }
 

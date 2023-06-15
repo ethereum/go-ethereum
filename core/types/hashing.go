@@ -43,6 +43,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 	sha.Reset()
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
+
 	return h
 }
 
@@ -55,6 +56,7 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
+
 	return h
 }
 
@@ -102,15 +104,18 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 		value := encodeForDerive(list, i, valueBuf)
 		hasher.Update(indexBuf, value)
 	}
+
 	if list.Len() > 0 {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
 		value := encodeForDerive(list, 0, valueBuf)
 		hasher.Update(indexBuf, value)
 	}
+
 	for i := 0x80; i < list.Len(); i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
 		hasher.Update(indexBuf, value)
 	}
+
 	return hasher.Hash()
 }

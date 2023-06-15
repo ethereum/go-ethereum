@@ -68,6 +68,7 @@ func (q *receiptQueue) unreserve(peer string) int {
 	} else {
 		log.Debug("Receipt delivery stalling", "peer", peer)
 	}
+
 	return fails
 }
 
@@ -75,13 +76,16 @@ func (q *receiptQueue) unreserve(peer string) int {
 // one and sending it to the remote peer for fulfillment.
 func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {
 	peer.log.Trace("Requesting new batch of receipts", "count", len(req.Headers), "from", req.Headers[0].Number)
+
 	if q.receiptFetchHook != nil {
 		q.receiptFetchHook(req.Headers)
 	}
+
 	hashes := make([]common.Hash, 0, len(req.Headers))
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
 	}
+
 	return peer.peer.RequestReceipts(hashes, resCh)
 }
 
@@ -92,6 +96,7 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)
+
 	switch {
 	case err == nil && len(receipts) == 0:
 		peer.log.Trace("Requested receipts delivered")
@@ -100,5 +105,6 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 	default:
 		peer.log.Debug("Failed to deliver retrieved receipts", "err", err)
 	}
+
 	return accepted, err
 }

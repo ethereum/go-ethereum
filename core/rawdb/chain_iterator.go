@@ -38,22 +38,26 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	if err != nil || frozen == 0 {
 		return
 	}
+
 	var (
 		batch  = db.NewBatch()
 		start  = time.Now()
 		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
 		hash   common.Hash
 	)
+
 	for i := uint64(0); i < frozen; {
 		// We read 100K hashes at a time, for a total of 3.2M
 		count := uint64(100_000)
 		if i+count > frozen {
 			count = frozen - i
 		}
+
 		data, err := db.AncientRange(ChainFreezerHashTable, i, count, 32*count)
 		if err != nil {
 			log.Crit("Failed to init database from freezer", "err", err)
 		}
+
 		for j, h := range data {
 			number := i + uint64(j)
 			hash = common.BytesToHash(h)
@@ -63,9 +67,11 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write data to db", "err", err)
 				}
+
 				batch.Reset()
 			}
 		}
+
 		i += uint64(len(data))
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
@@ -73,9 +79,11 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 			logged = time.Now()
 		}
 	}
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write data to db", "err", err)
 	}
+
 	batch.Reset()
 
 	WriteHeadHeaderHash(db, hash)
@@ -98,13 +106,16 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		number uint64
 		rlp    rlp.RawValue
 	}
+
 	if to == from {
 		return nil
 	}
+
 	threads := to - from
 	if cpus := runtime.NumCPU(); threads > uint64(cpus) {
 		threads = uint64(cpus)
 	}
+
 	var (
 		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
 		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
@@ -115,7 +126,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		if reverse {
 			n, end = to-1, from-1
 		}
+
 		defer close(rlpCh)
+
 		for n != end {
 			data := ReadCanonicalBodyRLP(db, n)
 			// Feed the block to the aggregator, or abort on interrupt
@@ -124,6 +137,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 			case <-interrupt:
 				return
 			}
+
 			if reverse {
 				n--
 			} else {
@@ -133,7 +147,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 	}
 	// process runs in parallel
 	var nThreadsAlive atomic.Int32
+
 	nThreadsAlive.Store(int32(threads))
+
 	process := func() {
 		defer func() {
 			// Last processor closes the result channel
@@ -141,16 +157,19 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 				close(hashesCh)
 			}
 		}()
+
 		for data := range rlpCh {
 			var body types.Body
 			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
 				log.Warn("Failed to decode block body", "block", data.number, "error", err)
 				return
 			}
+
 			var hashes []common.Hash
 			for _, tx := range body.Transactions {
 				hashes = append(hashes, tx.Hash())
 			}
+
 			result := &blockTxHashes{
 				hashes: hashes,
 				number: data.number,
@@ -163,10 +182,13 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 			}
 		}
 	}
+
 	go lookup() // start the sequential db accessor
+
 	for i := 0; i < int(threads); i++ {
 		go process()
 	}
+
 	return hashesCh
 }
 
@@ -183,6 +205,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	if from >= to {
 		return
 	}
+
 	var (
 		hashesCh = iterateTransactions(db, from, to, true, interrupt)
 		batch    = db.NewBatch()
@@ -196,11 +219,13 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		// for stats reporting
 		blocks, txs = 0, 0
 	)
+
 	for chanDelivery := range hashesCh {
 		// Push the delivery into the queue and process contiguous ranges.
 		// Since we iterate in reverse, so lower numbers have lower prio, and
 		// we can use the number directly as prio marker
 		queue.Push(chanDelivery, int64(chanDelivery.number))
+
 		for !queue.Empty() {
 			// If the next available item is gapped, return
 			if _, priority := queue.Peek(); priority != int64(lastNum-1) {
@@ -214,15 +239,18 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			delivery := queue.PopItem()
 			lastNum = delivery.number
 			WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
+
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				WriteTxIndexTail(batch, lastNum) // Also write the tail here
+
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
+
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
@@ -236,6 +264,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	// that the last batch is empty because nothing to index, but the tail has to
 	// be flushed anyway.
 	WriteTxIndexTail(batch, lastNum)
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed writing batch to db", "error", err)
 		return
@@ -275,6 +304,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	if from >= to {
 		return
 	}
+
 	var (
 		hashesCh = iterateTransactions(db, from, to, false, interrupt)
 		batch    = db.NewBatch()
@@ -291,6 +321,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	for delivery := range hashesCh {
 		// Push the delivery into the queue and process contiguous ranges.
 		queue.Push(delivery, -int64(delivery.number))
+
 		for !queue.Empty() {
 			// If the next available item is gapped, return
 			if _, priority := queue.Peek(); -priority != int64(nextNum) {
@@ -300,6 +331,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			if hook != nil && !hook(nextNum) {
 				break
 			}
+
 			delivery := queue.PopItem()
 			nextNum = delivery.number + 1
 			DeleteTxLookupEntries(batch, delivery.hashes)
@@ -311,10 +343,12 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			// often than that.
 			if blocks%1000 == 0 {
 				WriteTxIndexTail(batch, nextNum)
+
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
+
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
@@ -328,6 +362,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// that the last batch is empty because nothing to unindex, but the tail has to
 	// be flushed anyway.
 	WriteTxIndexTail(batch, nextNum)
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed writing batch to db", "error", err)
 		return

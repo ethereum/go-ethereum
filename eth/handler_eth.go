@@ -46,6 +46,7 @@ func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 	if p := h.peers.peer(id.String()); p != nil {
 		return p.info()
 	}
+
 	return nil
 }
 
@@ -100,15 +101,18 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
 		unknownNumbers = make([]uint64, 0, len(numbers))
 	)
+
 	for i := 0; i < len(hashes); i++ {
 		if !h.chain.HasBlock(hashes[i], numbers[i]) {
 			unknownHashes = append(unknownHashes, hashes[i])
 			unknownNumbers = append(unknownNumbers, numbers[i])
 		}
 	}
+
 	for i := 0; i < len(unknownHashes); i++ {
 		h.blockFetcher.Notify(peer.ID(), unknownHashes[i], unknownNumbers[i], time.Now(), peer.RequestOneHeader, peer.RequestBodies)
 	}
+
 	return nil
 }
 
@@ -137,5 +141,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}
+
 	return nil
 }

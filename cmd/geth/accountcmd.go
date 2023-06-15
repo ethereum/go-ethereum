@@ -191,13 +191,17 @@ nodes.
 
 func accountList(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
+
 	var index int
+
 	for _, wallet := range stack.AccountManager().Wallets() {
 		for _, account := range wallet.Accounts() {
 			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
+
 			index++
 		}
 	}
+
 	return nil
 }
 
@@ -207,18 +211,22 @@ func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []str
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
+
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
 		password := utils.GetPassPhraseWithList(prompt, false, i, passwords)
+
 		err = ks.Unlock(account, password)
 		if err == nil {
 			log.Info("Unlocked account", "address", account.Address.Hex())
 			return account, password
 		}
+
 		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
 			log.Info("Unlocked account", "address", account.Address.Hex())
 			return ambiguousAddrRecovery(ks, err, password), password
 		}
+
 		if err != keystore.ErrDecrypt {
 			// No need to prompt again if the error is not decryption-related.
 			break
@@ -232,10 +240,13 @@ func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []str
 
 func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
 	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
+
 	for _, a := range err.Matches {
 		fmt.Println("  ", a.URL)
 	}
+
 	fmt.Println("Testing your password against all of them...")
+
 	var match *accounts.Account
 
 	for i, a := range err.Matches {
@@ -244,17 +255,21 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 			break
 		}
 	}
+
 	if match == nil {
 		utils.Fatalf("None of the listed files could be unlocked.")
 		return accounts.Account{}
 	}
+
 	fmt.Printf("Your password unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
+
 	for _, a := range err.Matches {
 		if a != *match {
 			fmt.Println("  ", a.URL)
 		}
 	}
+
 	return *match
 }
 
@@ -267,13 +282,17 @@ func accountCreate(ctx *cli.Context) error {
 			utils.Fatalf("%v", err)
 		}
 	}
+
 	utils.SetNodeConfig(ctx, &cfg.Node)
+
 	keydir, err := cfg.Node.KeyDirConfig()
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
 	}
+
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
+
 	if cfg.Node.UseLightweightKDF {
 		scryptN = keystore.LightScryptN
 		scryptP = keystore.LightScryptP
@@ -286,6 +305,7 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
+
 	fmt.Printf("\nYour new key was generated\n\n")
 	fmt.Printf("Public address of the key:   %s\n", account.Address.Hex())
 	fmt.Printf("Path of the secret key file: %s\n\n", account.URL.Path)
@@ -293,6 +313,7 @@ func accountCreate(ctx *cli.Context) error {
 	fmt.Printf("- You must NEVER share the secret key with anyone! The key controls access to your funds!\n")
 	fmt.Printf("- You must BACKUP your key file! Without the key, it's impossible to access account funds!\n")
 	fmt.Printf("- You must REMEMBER your password! Without the password, it's impossible to decrypt the key!\n\n")
+
 	return nil
 }
 
@@ -302,6 +323,7 @@ func accountUpdate(ctx *cli.Context) error {
 	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
 
@@ -314,10 +336,12 @@ func accountUpdate(ctx *cli.Context) error {
 	for _, addr := range ctx.Args().Slice() {
 		account, oldPassword := unlockAccount(ks, addr, 0, nil)
 		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
+
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {
 			utils.Fatalf("Could not update the account: %v", err)
 		}
 	}
+
 	return nil
 }
 
@@ -327,6 +351,7 @@ func importWallet(ctx *cli.Context) error {
 	}
 
 	keyfile := ctx.Args().First()
+
 	keyJSON, err := os.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
@@ -341,11 +366,14 @@ func importWallet(ctx *cli.Context) error {
 	}
 
 	ks := backends[0].(*keystore.KeyStore)
+
 	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
+
 	fmt.Printf("Address: {%x}\n", acct.Address)
+
 	return nil
 }
 
@@ -355,10 +383,12 @@ func accountImport(ctx *cli.Context) error {
 	}
 
 	keyfile := ctx.Args().First()
+
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	passphrase := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
@@ -368,10 +398,13 @@ func accountImport(ctx *cli.Context) error {
 	}
 
 	ks := backends[0].(*keystore.KeyStore)
+
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
+
 	fmt.Printf("Address: {%x}\n", acct.Address)
+
 	return nil
 }

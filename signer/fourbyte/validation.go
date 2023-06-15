@@ -38,10 +38,12 @@ func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArg
 	}
 	// Place data on 'data', and nil 'input'
 	var data []byte
+
 	if tx.Input != nil {
 		tx.Data = tx.Input
 		tx.Input = nil
 	}
+
 	if tx.Data != nil {
 		data = *tx.Data
 	}
@@ -64,15 +66,18 @@ func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArg
 		if selector != nil {
 			messages.Warn("Transaction will create a contract, but method selector supplied, indicating an intent to call a method")
 		}
+
 		return messages, nil
 	}
 	// Not a contract creation, validate as a plain transaction
 	if !tx.To.ValidChecksum() {
 		messages.Warn("Invalid checksum on recipient address")
 	}
+
 	if bytes.Equal(tx.To.Address().Bytes(), common.Address{}.Bytes()) {
 		messages.Crit("Transaction recipient is the zero address")
 	}
+
 	switch {
 	case tx.GasPrice == nil && tx.MaxFeePerGas == nil:
 		messages.Crit("Neither 'gasPrice' nor 'maxFeePerGas' specified.")
@@ -85,6 +90,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArg
 	}
 	// Semantic fields validated, try to make heads or tails of the call data
 	db.ValidateCallData(selector, data, messages)
+
 	return messages, nil
 }
 
@@ -100,6 +106,7 @@ func (db *Database) ValidateCallData(selector *string, data []byte, messages *ap
 		messages.Warn("Transaction data is not valid ABI (missing the 4 byte call prefix)")
 		return
 	}
+
 	if n := len(data) - 4; n%32 != 0 {
 		messages.Warn(fmt.Sprintf("Transaction data is not valid ABI (length should be a multiple of 32 (was %d))", n))
 	}
@@ -111,6 +118,7 @@ func (db *Database) ValidateCallData(selector *string, data []byte, messages *ap
 			messages.Info(fmt.Sprintf("Transaction invokes the following method: %q", info.String()))
 			db.AddSelector(*selector, data[:4])
 		}
+
 		return
 	}
 	// No method selector was provided, check the database for embedded ones
@@ -119,6 +127,7 @@ func (db *Database) ValidateCallData(selector *string, data []byte, messages *ap
 		messages.Warn(fmt.Sprintf("Transaction contains data, but the ABI signature could not be found: %v", err))
 		return
 	}
+
 	if info, err := verifySelector(embedded, data); err != nil {
 		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be verified: %v", err))
 	} else {

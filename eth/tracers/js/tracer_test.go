@@ -68,6 +68,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 		value           = big.NewInt(0)
 		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
+
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	if contractCode != nil {
@@ -80,9 +81,11 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
 	// Rest gas assumes no refund
 	tracer.CaptureTxEnd(contract.Gas)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return tracer.GetResult()
 }
 
@@ -99,6 +102,7 @@ func TestTracer(t *testing.T) {
 		if err != nil {
 			return nil, err.Error() // Stringify to allow comparison without nil checks
 		}
+
 		return ret, ""
 	}
 	for i, tt := range []struct {
@@ -165,10 +169,12 @@ func TestTracer(t *testing.T) {
 
 func TestHalt(t *testing.T) {
 	timeout := errors.New("stahp")
+
 	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	go func() {
 		time.Sleep(1 * time.Second)
 		tracer.Stop(timeout)
@@ -189,8 +195,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
+
 	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
 	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
+
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
 	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
@@ -214,10 +222,12 @@ func TestNoStepExec(t *testing.T) {
 		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
 		tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
 		tracer.CaptureEnd(nil, 0, nil)
+
 		ret, err := tracer.GetResult()
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		return ret
 	}
 	for i, tt := range []struct {
@@ -241,26 +251,31 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
 	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
+
 	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blockCtx := vm.BlockContext{BlockNumber: big.NewInt(150)}
+
 	res, err := runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
+
 	if string(res) != "false" {
 		t.Errorf("tracer should not consider blake2f as precompile in byzantium")
 	}
 
 	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
+
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
+
 	if string(res) != "true" {
 		t.Errorf("tracer should consider blake2f as precompile in istanbul")
 	}
@@ -280,6 +295,7 @@ func TestEnterExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
@@ -290,6 +306,7 @@ func TestEnterExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := `{"enters":1,"exits":1,"enterGas":1000,"gasUsed":400}`
 	if string(have) != want {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)

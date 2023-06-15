@@ -61,6 +61,7 @@ func TestParseEthstatsURL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		node, pass, host := parts[0], parts[1], parts[2]
 
 		// unquote because the value provided will be used as a CLI flag value, so unescaped quotes will be removed
@@ -72,9 +73,11 @@ func TestParseEthstatsURL(t *testing.T) {
 		if node != c.node {
 			t.Errorf("case=%d mismatch node value, got: %v ,want: %v", i, node, c.node)
 		}
+
 		if pass != c.pass {
 			t.Errorf("case=%d mismatch pass value, got: %v ,want: %v", i, pass, c.pass)
 		}
+
 		if host != c.host {
 			t.Errorf("case=%d mismatch host value, got: %v ,want: %v", i, host, c.host)
 		}

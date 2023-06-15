@@ -57,12 +57,14 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if err != nil {
 		return nil, err
 	}
+
 	cf := chainFreezer{
 		Freezer: freezer,
 		quit:    make(chan struct{}),
 		trigger: make(chan chan struct{}),
 	}
 	cf.threshold.Store(params.FullImmutabilityThreshold)
+
 	return &cf, nil
 }
 
@@ -74,6 +76,7 @@ func (f *chainFreezer) Close() error {
 		close(f.quit)
 	}
 	f.wg.Wait()
+
 	return f.Freezer.Close()
 }
 
@@ -89,6 +92,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		triggered chan struct{} // Used in tests
 		nfdb      = &nofreezedb{KeyValueStore: db}
 	)
+
 	timer := time.NewTimer(freezerRecheckInterval)
 	defer timer.Stop()
 
@@ -99,6 +103,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			return
 		default:
 		}
+
 		if backoff {
 			// If we were doing a manual trigger, notify it
 			if triggered != nil {
@@ -108,6 +113,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			select {
 			case <-timer.C:
 				backoff = false
+
 				timer.Reset(freezerRecheckInterval)
 			case triggered = <-f.trigger:
 				backoff = false
@@ -119,32 +125,45 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		hash := ReadHeadBlockHash(nfdb)
 		if hash == (common.Hash{}) {
 			log.Debug("Current full block hash unavailable") // new chain, empty database
+
 			backoff = true
+
 			continue
 		}
+
 		number := ReadHeaderNumber(nfdb, hash)
 		threshold := f.threshold.Load()
 		frozen := f.frozen.Load()
+
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
+
 			backoff = true
+
 			continue
 
 		case *number < threshold:
 			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", threshold)
+
 			backoff = true
+
 			continue
 
 		case *number-threshold <= frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", frozen)
+
 			backoff = true
+
 			continue
 		}
+
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
+
 			backoff = true
+
 			continue
 		}
 
@@ -154,13 +173,17 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			first, _ = f.Ancients()
 			limit    = *number - threshold
 		)
+
 		if limit-first > freezerBatchLimit {
 			limit = first + freezerBatchLimit
 		}
+
 		ancients, err := f.freezeRange(nfdb, first, limit)
 		if err != nil {
 			log.Error("Error in block freeze operation", "err", err)
+
 			backoff = true
+
 			continue
 		}
 
@@ -171,6 +194,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out all data from the active database
 		batch := db.NewBatch()
+
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
@@ -178,13 +202,16 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				DeleteCanonicalHash(batch, first+uint64(i))
 			}
 		}
+
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen canonical blocks", "err", err)
 		}
+
 		batch.Reset()
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
+
 		frozen = f.frozen.Load() // Needs reload after during freezeRange
 		for number := first; number < frozen; number++ {
 			// Always keep the genesis block in active database
@@ -196,20 +223,26 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				}
 			}
 		}
+
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen side blocks", "err", err)
 		}
+
 		batch.Reset()
 
 		// Step into the future and delete and dangling side chains
 		if frozen > 0 {
 			tip := frozen
+
 			for len(dangling) > 0 {
 				drop := make(map[common.Hash]struct{})
+
 				for _, hash := range dangling {
 					log.Debug("Dangling parent from Freezer", "number", tip-1, "hash", hash)
+
 					drop[hash] = struct{}{}
 				}
+
 				children := ReadAllHashes(db, tip)
 				for i := 0; i < len(children); i++ {
 					// Dig up the child and ensure it's dangling
@@ -218,18 +251,22 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 						log.Error("Missing dangling header", "number", tip, "hash", children[i])
 						continue
 					}
+
 					if _, ok := drop[child.ParentHash]; !ok {
 						children = append(children[:i], children[i+1:]...)
 						i--
+
 						continue
 					}
 					// Delete all block data associated with the child
 					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
 					DeleteBlock(batch, children[i], tip)
 				}
+
 				dangling = children
 				tip++
 			}
+
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to delete dangling side blocks", "err", err)
 			}
@@ -242,6 +279,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
+
 		log.Debug("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
@@ -262,18 +300,22 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if hash == (common.Hash{}) {
 				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
 			}
+
 			header := ReadHeaderRLP(nfdb, hash, number)
 			if len(header) == 0 {
 				return fmt.Errorf("block header missing, can't freeze block %d", number)
 			}
+
 			body := ReadBodyRLP(nfdb, hash, number)
 			if len(body) == 0 {
 				return fmt.Errorf("block body missing, can't freeze block %d", number)
 			}
+
 			receipts := ReadReceiptsRLP(nfdb, hash, number)
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
+
 			td := ReadTdRLP(nfdb, hash, number)
 			if len(td) == 0 {
 				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
@@ -283,21 +325,26 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
 			}
+
 			if err := op.AppendRaw(ChainFreezerHeaderTable, number, header); err != nil {
 				return fmt.Errorf("can't write header to Freezer: %v", err)
 			}
+
 			if err := op.AppendRaw(ChainFreezerBodiesTable, number, body); err != nil {
 				return fmt.Errorf("can't write body to Freezer: %v", err)
 			}
+
 			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
+
 			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 
 			hashes = append(hashes, hash)
 		}
+
 		return nil
 	})
 

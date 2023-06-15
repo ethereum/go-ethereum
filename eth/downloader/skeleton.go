@@ -231,6 +231,7 @@ func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler back
 		terminated: make(chan struct{}),
 	}
 	go sk.startup()
+
 	return sk
 }
 
@@ -269,6 +270,7 @@ func (s *skeleton) startup() {
 				// higher layers request termination. There's no fancy explicit error
 				// signalling as the sync loop should never terminate (TM).
 				newhead, err := s.sync(head)
+
 				switch {
 				case err == errSyncLinked:
 					// Sync cycle linked up to the genesis block. Tear down the loop
@@ -298,6 +300,7 @@ func (s *skeleton) startup() {
 					// error. Abort and wait until Geth requests a termination.
 					errc := <-s.terminate
 					errc <- err
+
 					return
 				}
 			}
@@ -314,6 +317,7 @@ func (s *skeleton) Terminate() error {
 
 	// Wait for full shutdown (not necessary, but cleaner)
 	<-s.terminated
+
 	return err
 }
 
@@ -325,6 +329,7 @@ func (s *skeleton) Terminate() error {
 // fed header. What the syncer does with it is the syncer's problem.
 func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) error {
 	log.Trace("New skeleton head announced", "number", head.Number, "hash", head.Hash(), "force", force)
+
 	errc := make(chan error)
 
 	select {
@@ -385,6 +390,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		requestFails = make(chan *headerRequest)
 		responses    = make(chan *headerResponse)
 	)
+
 	cancel := make(chan struct{})
 	defer close(cancel)
 
@@ -410,6 +416,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	if s.syncStarting != nil {
 		s.syncStarting()
 	}
+
 	for {
 		// Something happened, try to assign new tasks to any idle peers
 		if !linked {
@@ -423,6 +430,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			peerid := event.peer.id
 			if event.join {
 				log.Debug("Joining skeleton peer", "id", peerid)
+
 				s.idles[peerid] = event.peer
 			} else {
 				log.Debug("Leaving skeleton peer", "id", peerid)
@@ -449,6 +457,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 					return event.header, errSyncReorged
 				}
 				event.errc <- errReorgDenied
+
 				continue
 			}
 			event.errc <- nil // head extension accepted
@@ -475,6 +484,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 				log.Debug("Beacon sync linked to local chain")
 				return nil, errSyncLinked
 			}
+
 			if merged {
 				log.Debug("Beacon sync merged subchains")
 				return nil, errSyncMerged
@@ -508,12 +518,15 @@ func (s *skeleton) initSync(head *types.Header) {
 				Tail: number,
 				Next: head.ParentHash,
 			}
+
 			for len(s.progress.Subchains) > 0 {
 				// If the last chain is above the new head, delete altogether
 				lastchain := s.progress.Subchains[0]
 				if lastchain.Tail >= headchain.Tail {
 					log.Debug("Dropping skeleton subchain", "head", lastchain.Head, "tail", lastchain.Tail)
+
 					s.progress.Subchains = s.progress.Subchains[1:]
+
 					continue
 				}
 				// Otherwise truncate the last chain if needed and abort trimming
@@ -521,11 +534,13 @@ func (s *skeleton) initSync(head *types.Header) {
 					log.Debug("Trimming skeleton subchain", "oldhead", lastchain.Head, "newhead", headchain.Tail-1, "tail", lastchain.Tail)
 					lastchain.Head = headchain.Tail - 1
 				}
+
 				break
 			}
 			// If the last subchain can be extended, we're lucky. Otherwise, create
 			// a new subchain sync task.
 			var extended bool
+
 			if n := len(s.progress.Subchains); n > 0 {
 				lastchain := s.progress.Subchains[0]
 				if lastchain.Head == headchain.Tail-1 {
@@ -537,8 +552,10 @@ func (s *skeleton) initSync(head *types.Header) {
 					}
 				}
 			}
+
 			if !extended {
 				log.Debug("Created new skeleton subchain", "head", number, "tail", number)
+
 				s.progress.Subchains = append([]*subchain{headchain}, s.progress.Subchains...)
 			}
 			// Update the database with the new sync stats and insert the new
@@ -554,6 +571,7 @@ func (s *skeleton) initSync(head *types.Header) {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write skeleton sync status", "err", err)
 			}
+
 			return
 		}
 	}
@@ -577,6 +595,7 @@ func (s *skeleton) initSync(head *types.Header) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write initial skeleton sync status", "err", err)
 	}
+
 	log.Debug("Created initial skeleton subchain", "head", number, "tail", number)
 }
 
@@ -586,6 +605,7 @@ func (s *skeleton) saveSyncStatus(db ethdb.KeyValueWriter) {
 	if err != nil {
 		panic(err) // This can only fail during implementation
 	}
+
 	rawdb.WriteSkeletonSyncStatus(db, status)
 }
 
@@ -621,18 +641,23 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 		if force {
 			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "head", lastchain.Head, "newHead", number)
 		}
+
 		return true
 	}
+
 	if lastchain.Head+1 < number {
 		if force {
 			log.Warn("Beacon chain gapped", "head", lastchain.Head, "newHead", number)
 		}
+
 		return true
 	}
+
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		if force {
 			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
 		}
+
 		return true
 	}
 	// New header seems to be in the last subchain range. Unwind any extra headers
@@ -643,12 +668,15 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 	batch := s.db.NewBatch()
 
 	rawdb.WriteSkeletonHeader(batch, head)
+
 	lastchain.Head = number
+
 	s.saveSyncStatus(batch)
 
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton sync status", "err", err)
 	}
+
 	return false
 }
 
@@ -660,13 +688,16 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 		caps:  make([]int, 0, len(s.idles)),
 	}
 	targetTTL := s.peers.rates.TargetTimeout()
+
 	for _, peer := range s.idles {
 		idlers.peers = append(idlers.peers, peer)
 		idlers.caps = append(idlers.caps, s.peers.rates.Capacity(peer.id, eth.BlockHeadersMsg, targetTTL))
 	}
+
 	if len(idlers.peers) == 0 {
 		return
 	}
+
 	sort.Sort(idlers)
 
 	// Find header regions not yet downloading and fill them
@@ -691,14 +722,17 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
+
 		for {
 			reqid = uint64(rand.Int63())
 			if reqid == 0 {
 				continue
 			}
+
 			if _, ok := s.requests[reqid]; ok {
 				continue
 			}
+
 			break
 		}
 		// Generate the network query and send it to the peer
@@ -737,13 +771,17 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 	if req.head < requestHeaders {
 		requestCount = int(req.head)
 	}
+
 	peer.log.Trace("Fetching skeleton headers", "from", req.head, "count", requestCount)
+
 	netreq, err := peer.peer.RequestHeadersByNumber(req.head, requestCount, 0, true, resCh)
 	if err != nil {
 		peer.log.Trace("Failed to request headers", "err", err)
 		s.scheduleRevertRequest(req)
+
 		return
 	}
+
 	defer netreq.Close()
 
 	// Wait until the response arrives, the request is cancelled or times out
@@ -788,24 +826,28 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 			// No headers were delivered, reject the response and reschedule
 			peer.log.Debug("No headers delivered")
 			res.Done <- errors.New("no headers delivered")
+
 			s.scheduleRevertRequest(req)
 
 		case headers[0].Number.Uint64() != req.head:
 			// Header batch anchored at non-requested number
 			peer.log.Debug("Invalid header response head", "have", headers[0].Number, "want", req.head)
 			res.Done <- errors.New("invalid header batch anchor")
+
 			s.scheduleRevertRequest(req)
 
 		case req.head >= requestHeaders && len(headers) != requestHeaders:
 			// Invalid number of non-genesis headers delivered, reject the response and reschedule
 			peer.log.Debug("Invalid non-genesis header count", "have", len(headers), "want", requestHeaders)
 			res.Done <- errors.New("not enough non-genesis headers delivered")
+
 			s.scheduleRevertRequest(req)
 
 		case req.head < requestHeaders && uint64(len(headers)) != req.head:
 			// Invalid number of genesis headers delivered, reject the response and reschedule
 			peer.log.Debug("Invalid genesis header count", "have", len(headers), "want", headers[0].Number.Uint64())
 			res.Done <- errors.New("not enough genesis headers delivered")
+
 			s.scheduleRevertRequest(req)
 
 		default:
@@ -815,7 +857,9 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 				if headers[i].ParentHash != headers[i+1].Hash() {
 					peer.log.Debug("Invalid hash progression", "index", i, "wantparenthash", headers[i].ParentHash, "haveparenthash", headers[i+1].Hash())
 					res.Done <- errors.New("invalid hash progression")
+
 					s.scheduleRevertRequest(req)
+
 					return
 				}
 			}
@@ -905,6 +949,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 		res.peer.log.Error("Unexpected header packet")
 		return false, false
 	}
+
 	delete(s.requests, res.reqid)
 
 	// Insert the delivered headers into the scratch space independent of the
@@ -918,6 +963,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	}
 	// Try to consume any head headers, validating the boundary conditions
 	batch := s.db.NewBatch()
+
 	for s.scratchSpace[0] != nil {
 		// Next batch of headers available, cross-reference with the subchain
 		// we are extending and either accept or discard
@@ -937,16 +983,19 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			}
 			s.drop(s.scratchOwners[0])
 			s.scratchOwners[0] = ""
+
 			break
 		}
 		// Scratch delivery matches required subchain, deliver the batch of
 		// headers and push the subchain forward
 		var consumed int
+
 		for _, header := range s.scratchSpace[:requestHeaders] {
 			if header != nil { // nil when the genesis is reached
 				consumed++
 
 				rawdb.WriteSkeletonHeader(batch, header)
+
 				s.pulled++
 
 				s.progress.Subchains[0].Tail--
@@ -970,6 +1019,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				}
 			}
 		}
+
 		head := s.progress.Subchains[0].Head
 		tail := s.progress.Subchains[0].Tail
 		next := s.progress.Subchains[0].Next
@@ -1026,10 +1076,12 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 					s.progress.Subchains = s.progress.Subchains[:1]
 				}
 			}
+
 			break
 		}
 		// Batch of headers consumed, shift the download window forward
 		copy(s.scratchSpace, s.scratchSpace[requestHeaders:])
+
 		for i := 0; i < requestHeaders; i++ {
 			s.scratchSpace[scratchHeaders-i-1] = nil
 		}
@@ -1052,17 +1104,21 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			if s.progress.Subchains[1].Tail >= s.progress.Subchains[0].Tail {
 				// Fully overwritten, get rid of the subchain as a whole
 				log.Debug("Previous subchain fully overwritten", "head", head, "tail", tail, "next", next)
+
 				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
+
 				continue
 			} else {
 				// Partially overwritten, trim the head to the overwritten size
 				log.Debug("Previous subchain partially overwritten", "head", head, "tail", tail, "next", next)
+
 				s.progress.Subchains[1].Head = s.progress.Subchains[0].Tail - 1
 			}
 			// If the old subchain is an extension of the new one, merge the two
 			// and let the skeleton syncer restart (to clean internal state)
 			if rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[1].Head).Hash() == s.progress.Subchains[0].Next {
 				log.Debug("Previous subchain merged", "head", head, "tail", tail, "next", next)
+
 				s.progress.Subchains[0].Tail = s.progress.Subchains[1].Tail
 				s.progress.Subchains[0].Next = s.progress.Subchains[1].Next
 
@@ -1078,6 +1134,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 		}
 	}
 	s.saveSyncStatus(batch)
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton headers and progress", "err", err)
 	}
@@ -1086,6 +1143,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	if linked {
 		left = 0
 	}
+
 	if time.Since(s.logged) > 8*time.Second || left == 0 {
 		s.logged = time.Now()
 
@@ -1096,6 +1154,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			log.Info("Syncing beacon headers", "downloaded", s.pulled, "left", left, "eta", common.PrettyDuration(eta))
 		}
 	}
+
 	return linked, merged
 }
 
@@ -1191,15 +1250,18 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, final *type
 	if len(status) == 0 {
 		return nil, nil, nil, errors.New("beacon sync not yet started")
 	}
+
 	progress := new(skeletonProgress)
 	if err := json.Unmarshal(status, progress); err != nil {
 		return nil, nil, nil, err
 	}
+
 	head = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head)
 
 	if head == nil {
 		return nil, nil, nil, fmt.Errorf("head skeleton header %d is missing", progress.Subchains[0].Head)
 	}
+
 	tail = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Tail)
 
 	if tail == nil {

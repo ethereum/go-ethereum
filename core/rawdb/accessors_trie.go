@@ -61,6 +61,7 @@ func (h *nodeHasher) hashData(data []byte) (n common.Hash) {
 	h.sha.Reset()
 	h.sha.Write(data)
 	h.sha.Read(n[:])
+
 	return n
 }
 
@@ -71,8 +72,10 @@ func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) ([]byte, common.H
 	if err != nil {
 		return nil, common.Hash{}
 	}
+
 	hasher := newNodeHasher()
 	defer returnHasherToPool(hasher)
+
 	return data, hasher.hashData(data)
 }
 
@@ -83,8 +86,10 @@ func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) 
 	if err != nil {
 		return false
 	}
+
 	hasher := newNodeHasher()
 	defer returnHasherToPool(hasher)
+
 	return hasher.hashData(data) == hash
 }
 
@@ -109,8 +114,10 @@ func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path 
 	if err != nil {
 		return nil, common.Hash{}
 	}
+
 	hasher := newNodeHasher()
 	defer returnHasherToPool(hasher)
+
 	return data, hasher.hashData(data)
 }
 
@@ -121,8 +128,10 @@ func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path [
 	if err != nil {
 		return false
 	}
+
 	hasher := newNodeHasher()
 	defer returnHasherToPool(hasher)
+
 	return hasher.hashData(data) == hash
 }
 
@@ -147,6 +156,7 @@ func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	if err != nil {
 		return nil
 	}
+
 	return data
 }
 
@@ -180,6 +190,7 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 		if owner == (common.Hash{}) {
 			return HasAccountTrieNode(db, path, hash)
 		}
+
 		return HasStorageTrieNode(db, owner, path, hash)
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
@@ -203,14 +214,17 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 			blob  []byte
 			nHash common.Hash
 		)
+
 		if owner == (common.Hash{}) {
 			blob, nHash = ReadAccountTrieNode(db, path)
 		} else {
 			blob, nHash = ReadStorageTrieNode(db, owner, path)
 		}
+
 		if nHash != hash {
 			return nil
 		}
+
 		return blob
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))

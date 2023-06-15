@@ -147,6 +147,7 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 	if p.serve != nil {
 		headers = p.serve(origin)
 	}
+
 	if headers == nil {
 		headers = make([]*types.Header, 0, amount)
 		if len(p.headers) > int(origin) { // Don't serve headers if we're missing the origin
@@ -158,6 +159,7 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 				if header == nil {
 					continue
 				}
+
 				headers = append(headers, header)
 			}
 		}
@@ -180,13 +182,16 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 		Time: 1,
 		Done: make(chan error),
 	}
+
 	go func() {
 		sink <- res
+
 		if err := <-res.Done; err != nil {
 			log.Warn("Skeleton test peer response rejected", "err", err)
 			p.dropped.Add(1)
 		}
 	}()
+
 	return req, nil
 }
 
@@ -216,6 +221,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 		block49B = &types.Header{Number: big.NewInt(49), Extra: []byte("B")}
 		block50  = &types.Header{Number: big.NewInt(50), ParentHash: block49.Hash()}
 	)
+
 	tests := []struct {
 		headers  []*types.Header // Database content (beside the genesis)
 		oldstate []*subchain     // Old sync state with various interrupted subchains
@@ -360,9 +366,11 @@ func TestSkeletonSyncInit(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 
 		rawdb.WriteHeader(db, genesis)
+
 		for _, header := range tt.headers {
 			rawdb.WriteSkeletonHeader(db, header)
 		}
+
 		if tt.oldstate != nil {
 			blob, _ := json.Marshal(&skeletonProgress{Subchains: tt.oldstate})
 			rawdb.WriteSkeletonSyncStatus(db, blob)
@@ -379,16 +387,19 @@ func TestSkeletonSyncInit(t *testing.T) {
 
 		// Ensure the correct resulting sync status
 		var progress skeletonProgress
+
 		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
 
 		if len(progress.Subchains) != len(tt.newstate) {
 			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
 			continue
 		}
+
 		for j := 0; j < len(progress.Subchains); j++ {
 			if progress.Subchains[j].Head != tt.newstate[j].Head {
 				t.Errorf("test %d: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.newstate[j].Head)
 			}
+
 			if progress.Subchains[j].Tail != tt.newstate[j].Tail {
 				t.Errorf("test %d: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.newstate[j].Tail)
 			}
@@ -407,6 +418,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		block50  = &types.Header{Number: big.NewInt(50), ParentHash: block49.Hash()}
 		block51  = &types.Header{Number: big.NewInt(51), ParentHash: block50.Hash()}
 	)
+
 	tests := []struct {
 		head     *types.Header // New head header to announce to reorg to
 		extend   *types.Header // New head header to announce to extend with
@@ -493,20 +505,24 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		if err := skeleton.Sync(tt.extend, nil, false); err != tt.err {
 			t.Errorf("test %d: extension failure mismatch: have %v, want %v", i, err, tt.err)
 		}
+
 		skeleton.Terminate()
 
 		// Ensure the correct resulting sync status
 		var progress skeletonProgress
+
 		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
 
 		if len(progress.Subchains) != len(tt.newstate) {
 			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
 			continue
 		}
+
 		for j := 0; j < len(progress.Subchains); j++ {
 			if progress.Subchains[j].Head != tt.newstate[j].Head {
 				t.Errorf("test %d: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.newstate[j].Head)
 			}
+
 			if progress.Subchains[j].Tail != tt.newstate[j].Tail {
 				t.Errorf("test %d: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.newstate[j].Tail)
 			}
@@ -518,7 +534,6 @@ func TestSkeletonSyncExtend(t *testing.T) {
 // peers without duplicates or other strange side effects.
 func TestSkeletonSyncRetrievals(t *testing.T) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
 	// Since skeleton headers don't need to be meaningful, beyond a parent hash
 	// progression, create a long fake chain to test with.
 	chain := []*types.Header{{Number: big.NewInt(0)}}
@@ -541,6 +556,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			Extra:      []byte("B"), // force a different hash
 		})
 	}
+
 	tests := []struct {
 		fill          bool // Whether to run a real backfiller in this test case
 		unpredictable bool // Whether to ignore drops/serves due to uncertain packet assignments
@@ -823,7 +839,9 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			if p := peerset.Peer(peer); p != nil {
 				p.peer.(*skeletonTestPeer).dropped.Add(1)
 			}
+
 			peerset.Unregister(peer)
+
 			dropped[peer]++
 		}
 		// Create a backfiller if we need to run more advanced tests
@@ -873,14 +891,17 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			if len(progress.Subchains) != len(tt.midstate) {
 				return fmt.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
 			}
+
 			for j := 0; j < len(progress.Subchains); j++ {
 				if progress.Subchains[j].Head != tt.midstate[j].Head {
 					return fmt.Errorf("test %d, mid state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.midstate[j].Head)
 				}
+
 				if progress.Subchains[j].Tail != tt.midstate[j].Tail {
 					return fmt.Errorf("test %d, mid state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.midstate[j].Tail)
 				}
 			}
+
 			return nil
 		}
 
@@ -889,10 +910,12 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			time.Sleep(waitTime)
 			// Check the post-init end state if it matches the required results
 			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
 			if err := check(); err == nil {
 				break
 			}
 		}
+
 		if err := check(); err != nil {
 			t.Error(err)
 			continue
@@ -922,6 +945,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		if tt.newHead != nil {
 			skeleton.Sync(tt.newHead, nil, true)
 		}
+
 		if tt.newPeer != nil {
 			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH66, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
 				t.Errorf("test %d: failed to register new peer: %v", i, err)
@@ -933,14 +957,17 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			if len(progress.Subchains) != len(tt.endstate) {
 				return fmt.Errorf("test %d, end state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.endstate))
 			}
+
 			for j := 0; j < len(progress.Subchains); j++ {
 				if progress.Subchains[j].Head != tt.endstate[j].Head {
 					return fmt.Errorf("test %d, end state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.endstate[j].Head)
 				}
+
 				if progress.Subchains[j].Tail != tt.endstate[j].Tail {
 					return fmt.Errorf("test %d, end state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.endstate[j].Tail)
 				}
 			}
+
 			return nil
 		}
 		waitStart = time.Now()
@@ -949,10 +976,12 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			time.Sleep(waitTime)
 			// Check the post-init end state if it matches the required results
 			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
 			if err := check(); err == nil {
 				break
 			}
 		}
+
 		if err := check(); err != nil {
 			t.Error(err)
 			continue

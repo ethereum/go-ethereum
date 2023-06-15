@@ -67,6 +67,7 @@ func main() {
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
+
 	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := makeMiner(genesis)
@@ -90,15 +91,18 @@ func main() {
 
 	// Iterate over all the nodes and start mining
 	time.Sleep(3 * time.Second)
+
 	for _, node := range nodes {
 		if err := node.StartMining(1); err != nil {
 			panic(err)
 		}
 	}
+
 	time.Sleep(3 * time.Second)
 
 	// Start injecting transactions from the faucets like crazy
 	nonces := make([]uint64, len(faucets))
+
 	for {
 		// Stop when interrupted.
 		select {
@@ -106,6 +110,7 @@ func main() {
 			for _, node := range stacks {
 				node.Close()
 			}
+
 			return
 		default:
 		}
@@ -119,9 +124,11 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
 		if err := backend.TxPool().AddLocal(tx); err != nil {
 			panic(err)
 		}
+
 		nonces[index]++
 
 		// Wait if we're too saturated
@@ -146,6 +153,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		}
 	}
+
 	return genesis
 }
 
@@ -169,6 +177,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
@@ -190,5 +199,6 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	}
 
 	err = stack.Start()
+
 	return stack, ethBackend, err
 }

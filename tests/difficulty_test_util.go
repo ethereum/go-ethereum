@@ -64,5 +64,6 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 			test.ParentTimestamp, test.ParentDifficulty, test.UncleHash,
 			test.CurrentTimestamp, test.CurrentBlockNumber, actual, exp)
 	}
+
 	return nil
 }

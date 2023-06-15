@@ -19,6 +19,7 @@ func GetOrRegisterCounter(name string, r Registry) Counter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewCounter).(Counter)
 }
 
@@ -30,6 +31,7 @@ func GetOrRegisterCounterForced(name string, r Registry) Counter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewCounterForced).(Counter)
 }
 
@@ -51,10 +53,13 @@ func NewCounterForced() Counter {
 // NewRegisteredCounter constructs and registers a new StandardCounter.
 func NewRegisteredCounter(name string, r Registry) Counter {
 	c := NewCounter()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -64,10 +69,13 @@ func NewRegisteredCounter(name string, r Registry) Counter {
 // allow for garbage collection.
 func NewRegisteredCounterForced(name string, r Registry) Counter {
 	c := NewCounterForced()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 

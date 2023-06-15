@@ -111,20 +111,26 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 					t.Errorf("test %d: prefix=%q more items than expected: checking idx=%d (key %q), expecting len=%d", i, tt.prefix, idx, it.Key(), len(tt.order))
 					break
 				}
+
 				if !bytes.Equal(it.Key(), []byte(tt.order[idx])) {
 					t.Errorf("test %d: item %d: key mismatch: have %s, want %s", i, idx, string(it.Key()), tt.order[idx])
 				}
+
 				if !bytes.Equal(it.Value(), []byte(tt.content[tt.order[idx]])) {
 					t.Errorf("test %d: item %d: value mismatch: have %s, want %s", i, idx, string(it.Value()), tt.content[tt.order[idx]])
 				}
+
 				idx++
 			}
+
 			if err := it.Error(); err != nil {
 				t.Errorf("test %d: iteration failed: %v", i, err)
 			}
+
 			if idx != len(tt.order) {
 				t.Errorf("test %d: iteration terminated prematurely: have %d, want %d", i, idx, len(tt.order))
 			}
+
 			db.Close()
 		}
 	})
@@ -145,9 +151,11 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		{
 			it := db.NewIterator(nil, nil)
 			got, want := iterateKeys(it), keys
+
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
+
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("Iterator: got: %s; want: %s", got, want)
 			}
@@ -156,9 +164,11 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		{
 			it := db.NewIterator([]byte("1"), nil)
 			got, want := iterateKeys(it), []string{"1", "10", "11", "12"}
+
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
+
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("IteratorWith(1,nil): got: %s; want: %s", got, want)
 			}
@@ -167,9 +177,11 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		{
 			it := db.NewIterator([]byte("5"), nil)
 			got, want := iterateKeys(it), []string{}
+
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
+
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("IteratorWith(5,nil): got: %s; want: %s", got, want)
 			}
@@ -178,9 +190,11 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		{
 			it := db.NewIterator(nil, []byte("2"))
 			got, want := iterateKeys(it), []string{"2", "20", "21", "22", "3", "4", "6"}
+
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
+
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("IteratorWith(nil,2): got: %s; want: %s", got, want)
 			}
@@ -189,9 +203,11 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		{
 			it := db.NewIterator(nil, []byte("5"))
 			got, want := iterateKeys(it), []string{"6"}
+
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
+
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("IteratorWith(nil,5): got: %s; want: %s", got, want)
 			}
@@ -293,6 +309,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		want := []string{"1", "2", "3", "4"}
 		b := db.NewBatch()
+
 		for _, k := range want {
 			if err := b.Put([]byte(k), nil); err != nil {
 				t.Fatal(err)
@@ -324,15 +341,18 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		for k, v := range initial {
 			db.Put([]byte(k), []byte(v))
 		}
+
 		snapshot, err := db.NewSnapshot()
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		for k, v := range initial {
 			got, err := snapshot.Get([]byte(k))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if !bytes.Equal(got, []byte(v)) {
 				t.Fatalf("Unexpected value want: %v, got %v", v, got)
 			}
@@ -345,30 +365,37 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			insert = map[string]string{"k5": "v5-b"}
 			delete = map[string]string{"k2": ""}
 		)
+
 		for k, v := range update {
 			db.Put([]byte(k), []byte(v))
 		}
+
 		for k, v := range insert {
 			db.Put([]byte(k), []byte(v))
 		}
+
 		for k := range delete {
 			db.Delete([]byte(k))
 		}
+
 		for k, v := range initial {
 			got, err := snapshot.Get([]byte(k))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if !bytes.Equal(got, []byte(v)) {
 				t.Fatalf("Unexpected value want: %v, got %v", v, got)
 			}
 		}
+
 		for k := range insert {
 			got, err := snapshot.Get([]byte(k))
 			if err == nil || len(got) != 0 {
 				t.Fatal("Unexpected value")
 			}
 		}
+
 		for k := range delete {
 			got, err := snapshot.Get([]byte(k))
 			if err != nil || len(got) == 0 {
@@ -402,6 +429,7 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 				_ = db.Put(keys[i], vals[i])
 			}
 		}
+
 		b.Run("WriteSorted", func(b *testing.B) {
 			benchWrite(b, sKeys, sVals)
 		})
@@ -426,6 +454,7 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 				_, _ = db.Get(keys[i])
 			}
 		}
+
 		b.Run("ReadSorted", func(b *testing.B) {
 			benchRead(b, sKeys, sVals)
 		})
@@ -451,6 +480,7 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			}
 			it.Release()
 		}
+
 		b.Run("IterationSorted", func(b *testing.B) {
 			benchIteration(b, sKeys, sVals)
 		})
@@ -472,8 +502,10 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			for i := 0; i < len(keys); i++ {
 				_ = batch.Put(keys[i], vals[i])
 			}
+
 			_ = batch.Write()
 		}
+
 		b.Run("BenchWriteSorted", func(b *testing.B) {
 			benchBatchWrite(b, sKeys, sVals)
 		})
@@ -490,6 +522,7 @@ func iterateKeys(it ethdb.Iterator) []string {
 	}
 	sort.Strings(keys)
 	it.Release()
+
 	return keys
 }
 

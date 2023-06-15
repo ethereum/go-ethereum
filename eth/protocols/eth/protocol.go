@@ -109,9 +109,11 @@ func (p *NewBlockHashesPacket) Unpack() ([]common.Hash, []uint64) {
 		hashes  = make([]common.Hash, len(*p))
 		numbers = make([]uint64, len(*p))
 	)
+
 	for i, body := range *p {
 		hashes[i], numbers[i] = body.Hash, body.Number
 	}
+
 	return hashes, numbers
 }
 
@@ -144,9 +146,11 @@ func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
 	if hn.Hash == (common.Hash{}) {
 		return rlp.Encode(w, hn.Number)
 	}
+
 	if hn.Number != 0 {
 		return fmt.Errorf("both origin hash (%x) and number (%d) provided", hn.Hash, hn.Number)
 	}
+
 	return rlp.Encode(w, hn.Hash)
 }
 
@@ -154,6 +158,7 @@ func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
 // into either a block hash or a block number.
 func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	_, size, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err
@@ -203,6 +208,7 @@ func (request *NewBlockPacket) sanityCheck() error {
 	if tdlen := request.TD.BitLen(); tdlen > 100 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
+
 	return nil
 }
 
@@ -251,6 +257,7 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header,
 		uncleset      = make([][]*types.Header, len(*p))
 		withdrawalset = make([][]*types.Withdrawal, len(*p))
 	)
+
 	for i, body := range *p {
 		txset[i], uncleset[i], withdrawalset[i] = body.Transactions, body.Uncles, body.Withdrawals
 	}

@@ -51,14 +51,17 @@ func NewXOF(size uint32, key []byte) (XOF, error) {
 	if len(key) > Size {
 		return nil, errKeySize
 	}
+
 	if size == magicUnknownOutputLength {
 		// 2^32-1 indicates an unknown number of bytes and thus isn't a
 		// valid length.
 		return nil, errors.New("blake2b: XOF length too large")
 	}
+
 	if size == OutputLengthUnknown {
 		size = magicUnknownOutputLength
 	}
+
 	x := &xof{
 		d: digest{
 			size:   Size,
@@ -68,6 +71,7 @@ func NewXOF(size uint32, key []byte) (XOF, error) {
 	}
 	copy(x.d.key[:], key)
 	x.Reset()
+
 	return x, nil
 }
 
@@ -85,6 +89,7 @@ func (x *xof) Write(p []byte) (n int, err error) {
 	if x.readMode {
 		panic("blake2b: write to XOF after read")
 	}
+
 	return x.d.Write(p)
 }
 
@@ -106,6 +111,7 @@ func (x *xof) Reset() {
 	if x.remaining == magicUnknownOutputLength {
 		x.remaining = maxOutputLength
 	}
+
 	x.offset, x.nodeOffset = 0, 0
 	x.readMode = false
 }
@@ -131,8 +137,10 @@ func (x *xof) Read(p []byte) (n int, err error) {
 		if n < blockRemaining {
 			x.offset += copy(p, x.block[x.offset:])
 			x.remaining -= uint64(n)
+
 			return
 		}
+
 		copy(p, x.block[x.offset:])
 		p = p[blockRemaining:]
 		x.offset = 0
@@ -141,6 +149,7 @@ func (x *xof) Read(p []byte) (n int, err error) {
 
 	for len(p) >= Size {
 		binary.LittleEndian.PutUint32(x.cfg[8:], x.nodeOffset)
+
 		x.nodeOffset++
 
 		x.d.initConfig(&x.cfg)
@@ -156,7 +165,9 @@ func (x *xof) Read(p []byte) (n int, err error) {
 		if x.remaining < uint64(Size) {
 			x.cfg[0] = byte(x.remaining)
 		}
+
 		binary.LittleEndian.PutUint32(x.cfg[8:], x.nodeOffset)
+
 		x.nodeOffset++
 
 		x.d.initConfig(&x.cfg)
@@ -166,6 +177,7 @@ func (x *xof) Read(p []byte) (n int, err error) {
 		x.offset = copy(p, x.block[:todo])
 		x.remaining -= uint64(todo)
 	}
+
 	return
 }
 

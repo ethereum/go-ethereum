@@ -53,6 +53,7 @@ func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
 	config.LondonBlock = big.NewInt(5)
 	config.Bor.DelhiBlock = big.NewInt(8)
+
 	return config
 }
 
@@ -96,10 +97,12 @@ func TestBlockGasLimits(t *testing.T) {
 			BaseFee:  initial,
 			Number:   big.NewInt(tc.pNum + 1),
 		}
+
 		err := VerifyEip1559Header(config(), parent, header)
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
 		}
+
 		if !tc.ok && err == nil {
 			t.Errorf("test %d: Expected invalid header", i)
 		}

@@ -78,6 +78,7 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	trie := &Trie{
 		owner:  id.Owner,
 		reader: reader,
@@ -89,8 +90,10 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		trie.root = rootnode
 	}
+
 	return trie, nil
 }
 
@@ -113,6 +116,7 @@ func (t *Trie) MustGet(key []byte) []byte {
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.Get", "err", err)
 	}
+
 	return res
 }
 
@@ -126,6 +130,7 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 	if err == nil && didResolve {
 		t.root = newroot
 	}
+
 	return value, err
 }
 
@@ -146,6 +151,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 			n = n.copy()
 			n.Val = newnode
 		}
+
 		return value, n, didResolve, err
 	case *fullNode:
 		value, newnode, didResolve, err = t.get(n.Children[key[pos]], key, pos+1)
@@ -153,6 +159,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 			n = n.copy()
 			n.Children[key[pos]] = newnode
 		}
+
 		return value, n, didResolve, err
 	case hashNode:
 		child, err := t.resolveAndTrack(n, key[:pos])
@@ -161,6 +168,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		}
 
 		value, newnode, _, err := t.get(child, key, pos)
+
 		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
@@ -188,9 +196,11 @@ func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
 	if err != nil {
 		return nil, resolved, err
 	}
+
 	if resolved > 0 {
 		t.root = newroot
 	}
+
 	if item == nil {
 		return nil, resolved, nil
 	}
@@ -214,11 +224,13 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		} else {
 			hash, _ = origNode.cache()
 		}
+
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
 
 		blob, err := t.reader.nodeBlob(path, common.BytesToHash(hash))
+
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -238,6 +250,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 			n = n.copy()
 			n.Val = newnode
 		}
+
 		return item, n, resolved, err
 
 	case *fullNode:
@@ -246,6 +259,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 			n = n.copy()
 			n.Children[path[pos]] = newnode
 		}
+
 		return item, n, resolved, err
 
 	case hashNode:
@@ -255,6 +269,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		}
 
 		item, newnode, resolved, err := t.getNode(child, path, pos)
+
 		return item, newnode, resolved + 1, err
 
 	default:
@@ -285,20 +300,24 @@ func (t *Trie) Update(key, value []byte) error {
 
 func (t *Trie) update(key, value []byte) error {
 	t.unhashed++
+
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
 		if err != nil {
 			return err
 		}
+
 		t.root = n
 	} else {
 		_, n, err := t.delete(t.root, nil, k)
 		if err != nil {
 			return err
 		}
+
 		t.root = n
 	}
+
 	return nil
 }
 
@@ -307,8 +326,10 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
 		}
+
 		return true, value, nil
 	}
+
 	switch n := n.(type) {
 	case *shortNode:
 		matchlen := prefixLen(key, n.Key)
@@ -319,15 +340,19 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			if !dirty || err != nil {
 				return false, n, err
 			}
+
 			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		branch := &fullNode{flags: t.newFlag()}
+
 		var err error
+
 		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 		if err != nil {
 			return false, nil, err
 		}
+
 		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
 		if err != nil {
 			return false, nil, err
@@ -349,9 +374,11 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if !dirty || err != nil {
 			return false, n, err
 		}
+
 		n = n.copy()
 		n.flags = t.newFlag()
 		n.Children[key[0]] = nn
+
 		return true, n, nil
 
 	case nil:
@@ -370,10 +397,12 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if err != nil {
 			return false, nil, err
 		}
+
 		dirty, nn, err := t.insert(rn, prefix, key, value)
 		if !dirty || err != nil {
 			return false, rn, err
 		}
+
 		return true, nn, nil
 
 	default:
@@ -396,11 +425,14 @@ func (t *Trie) MustDelete(key []byte) {
 func (t *Trie) Delete(key []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
+
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
 		return err
 	}
+
 	t.root = n
+
 	return nil
 }
 
@@ -414,6 +446,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if matchlen < len(n.Key) {
 			return false, n, nil // don't replace n on mismatch
 		}
+
 		if matchlen == len(key) {
 			// The matched short node is deleted entirely and track
 			// it in the deletion set. The same the valueNode doesn't
@@ -430,6 +463,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if !dirty || err != nil {
 			return false, n, err
 		}
+
 		switch child := child.(type) {
 		case *shortNode:
 			// The child shortNode is merged into its parent, track
@@ -452,6 +486,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if !dirty || err != nil {
 			return false, n, err
 		}
+
 		n = n.copy()
 		n.flags = t.newFlag()
 		n.Children[key[0]] = nn
@@ -474,6 +509,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// value that is left in n or -2 if n contains at least two
 		// values.
 		pos := -1
+
 		for i, cld := range &n.Children {
 			if cld != nil {
 				if pos == -1 {
@@ -484,6 +520,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				}
 			}
 		}
+
 		if pos >= 0 {
 			if pos != 16 {
 				// If the remaining entry is a short node, it replaces
@@ -496,6 +533,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				if err != nil {
 					return false, nil, err
 				}
+
 				if cnode, ok := cnode.(*shortNode); ok {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
@@ -503,6 +541,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					t.tracer.onDelete(append(prefix, byte(pos)))
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
+
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
 				}
 			}
@@ -527,10 +566,12 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if err != nil {
 			return false, nil, err
 		}
+
 		dirty, nn, err := t.delete(rn, prefix, key)
 		if !dirty || err != nil {
 			return false, rn, err
 		}
+
 		return true, nn, nil
 
 	default:
@@ -542,6 +583,7 @@ func concat(s1 []byte, s2 ...byte) []byte {
 	r := make([]byte, len(s1)+len(s2))
 	copy(r, s1)
 	copy(r[len(s1):], s2)
+
 	return r
 }
 
@@ -549,6 +591,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	if n, ok := n.(hashNode); ok {
 		return t.resolveAndTrack(n, prefix)
 	}
+
 	return n, nil
 }
 
@@ -572,6 +615,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 func (t *Trie) Hash() common.Hash {
 	hash, cached := t.hashRoot()
 	t.root = cached
+
 	return common.BytesToHash(hash.(hashNode))
 }
 
@@ -623,6 +667,7 @@ func (t *Trie) hashRoot() (node, node) {
 
 		t.unhashed = 0
 	}()
+
 	hashed, cached := h.hash(t.root, true)
 
 	return hashed, cached

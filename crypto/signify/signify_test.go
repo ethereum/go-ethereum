@@ -37,6 +37,7 @@ func TestSignify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -69,6 +70,7 @@ func TestSignify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !valid {
 		t.Fatal("invalid signature")
 	}
@@ -79,6 +81,7 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -102,6 +105,7 @@ func TestSignifyTrustedCommentTooManyLinesLF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -125,6 +129,7 @@ func TestSignifyTrustedCommentEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 

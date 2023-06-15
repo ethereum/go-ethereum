@@ -39,6 +39,7 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 			utils.Fatalf("Failed to read password file '%s': %v",
 				passphraseFile, err)
 		}
+
 		return strings.TrimRight(string(content), "\r\n")
 	}
 
@@ -53,5 +54,6 @@ func mustPrintJSON(jsonObject interface{}) {
 	if err != nil {
 		utils.Fatalf("Failed to marshal JSON object: %v", err)
 	}
+
 	fmt.Println(string(str))
 }

@@ -442,6 +442,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 					w.commitWork(ctx, nil, true, time.Now().Unix())
 				}
 			}
+
 			w.newTxs.Add(int32(len(ev.Txs)))
 			// System stopped
 		case <-w.exitCh:
@@ -618,7 +619,6 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 	}
 
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
-
 		prePendingTime := time.Now()
 
 		pending := w.eth.TxPool().Pending(ctx, true)
@@ -629,6 +629,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		for _, account := range w.eth.TxPool().Locals() {
 			if txs := remoteTxs[account]; len(txs) > 0 {
 				delete(remoteTxs, account)
+
 				localTxs[account] = txs
 			}
 		}

@@ -72,6 +72,7 @@ func (db *Database) Close() error {
 	defer db.lock.Unlock()
 
 	db.db = nil
+
 	return nil
 }
 
@@ -83,7 +84,9 @@ func (db *Database) Has(key []byte) (bool, error) {
 	if db.db == nil {
 		return false, errMemorydbClosed
 	}
+
 	_, ok := db.db[string(key)]
+
 	return ok, nil
 }
 
@@ -95,9 +98,11 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if db.db == nil {
 		return nil, errMemorydbClosed
 	}
+
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
+
 	return nil, errMemorydbNotFound
 }
 
@@ -109,7 +114,9 @@ func (db *Database) Put(key []byte, value []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
+
 	db.db[string(key)] = common.CopyBytes(value)
+
 	return nil
 }
 
@@ -121,7 +128,9 @@ func (db *Database) Delete(key []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
+
 	delete(db.db, string(key))
+
 	return nil
 }
 
@@ -159,15 +168,18 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		if !strings.HasPrefix(key, pr) {
 			continue
 		}
+
 		if key >= st {
 			keys = append(keys, key)
 		}
 	}
 	// Sort the items and retrieve the associated values
 	sort.Strings(keys)
+
 	for _, key := range keys {
 		values = append(values, db.db[key])
 	}
+
 	return &iterator{
 		index:  -1,
 		keys:   keys,
@@ -224,6 +236,7 @@ type batch struct {
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
 	b.size += len(key) + len(value)
+
 	return nil
 }
 
@@ -231,6 +244,7 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
 	b.size += len(key)
+
 	return nil
 }
 
@@ -249,8 +263,10 @@ func (b *batch) Write() error {
 			delete(b.db.db, string(keyvalue.key))
 			continue
 		}
+
 		b.db.db[string(keyvalue.key)] = keyvalue.value
 	}
+
 	return nil
 }
 
@@ -267,12 +283,15 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			if err := w.Delete(keyvalue.key); err != nil {
 				return err
 			}
+
 			continue
 		}
+
 		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -350,6 +369,7 @@ func newSnapshot(db *Database) *snapshot {
 	for key, val := range db.db {
 		copied[key] = common.CopyBytes(val)
 	}
+
 	return &snapshot{db: copied}
 }
 
@@ -362,7 +382,9 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 	if snap.db == nil {
 		return false, errSnapshotReleased
 	}
+
 	_, ok := snap.db[string(key)]
+
 	return ok, nil
 }
 
@@ -375,9 +397,11 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if snap.db == nil {
 		return nil, errSnapshotReleased
 	}
+
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
+
 	return nil, errMemorydbNotFound
 }
 

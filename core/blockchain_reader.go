@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -99,16 +100,19 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if cached, ok := bc.bodyCache.Get(hash); ok {
 		return cached
 	}
+
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
+
 	body := rawdb.ReadBody(bc.db, hash, *number)
 	if body == nil {
 		return nil
 	}
 	// Cache the found body for next time and return
 	bc.bodyCache.Add(hash, body)
+
 	return body
 }
 
@@ -119,16 +123,19 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
 		return cached
 	}
+
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
+
 	body := rawdb.ReadBodyRLP(bc.db, hash, *number)
 	if len(body) == 0 {
 		return nil
 	}
 	// Cache the found body for next time and return
 	bc.bodyRLPCache.Add(hash, body)
+
 	return body
 }
 
@@ -141,6 +148,7 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasHeader(hash, number) {
 		return false
 	}
+
 	return rawdb.HasBody(bc.db, hash, number)
 }
 
@@ -149,9 +157,11 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasBlock(hash, number) {
 		return false
 	}
+
 	if bc.receiptsCache.Contains(hash) {
 		return true
 	}
+
 	return rawdb.HasReceipts(bc.db, hash, number)
 }
 
@@ -162,12 +172,14 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block
 	}
+
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
 		return nil
 	}
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
+
 	return block
 }
 
@@ -177,6 +189,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	if number == nil {
 		return nil
 	}
+
 	return bc.GetBlock(hash, *number)
 }
 
@@ -187,6 +200,7 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	if hash == (common.Hash{}) {
 		return nil
 	}
+
 	return bc.GetBlock(hash, number)
 }
 
@@ -197,15 +211,18 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	if number == nil {
 		return nil
 	}
+
 	for i := 0; i < n; i++ {
 		block := bc.GetBlock(hash, *number)
 		if block == nil {
 			break
 		}
+
 		blocks = append(blocks, block)
 		hash = block.ParentHash()
 		*number--
 	}
+
 	return
 }
 
@@ -214,15 +231,19 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
+
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
+
 	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
+
 	bc.receiptsCache.Add(hash, receipts)
+
 	return receipts
 }
 
@@ -234,6 +255,7 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 		uncles = append(uncles, block.Uncles()...)
 		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
+
 	return uncles
 }
 
@@ -258,12 +280,15 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 	if lookup, exist := bc.txLookupCache.Get(hash); exist {
 		return lookup
 	}
+
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
 		return nil
 	}
+
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 	bc.txLookupCache.Add(hash, lookup)
+
 	return lookup
 }
 
@@ -287,6 +312,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
+
 	return bc.HasState(block.Root())
 }
 
@@ -311,6 +337,7 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 	type codeReader interface {
 		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
 	}
+
 	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
 }
 

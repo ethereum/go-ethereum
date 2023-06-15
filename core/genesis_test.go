@@ -53,6 +53,7 @@ func TestSetupGenesis(t *testing.T) {
 		}
 		oldcustomg = customg
 	)
+
 	oldcustomg.Config = &params.ChainConfig{HomesteadBlock: big.NewInt(2)}
 	tests := []struct {
 		name       string
@@ -149,9 +150,11 @@ func TestSetupGenesis(t *testing.T) {
 			spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
 			t.Errorf("%s: returned error %#v, want %#v", test.name, spew.NewFormatter(err), spew.NewFormatter(test.wantErr))
 		}
+
 		if !reflect.DeepEqual(config, test.wantConfig) {
 			t.Errorf("%s:\nreturned %v\nwant     %v", test.name, config, test.wantConfig)
 		}
+
 		if hash != test.wantHash {
 			t.Errorf("%s: returned hash %s, want %s", test.name, hash.Hex(), test.wantHash.Hex())
 		} else if err == nil {
@@ -229,18 +232,22 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 	rawdb.WriteGenesisStateSpec(db, hash, blob)
 
 	var reload GenesisAlloc
+
 	err := reload.UnmarshalJSON(rawdb.ReadGenesisStateSpec(db, hash))
 	if err != nil {
 		t.Fatalf("Failed to load genesis state %v", err)
 	}
+
 	if len(reload) != len(*alloc) {
 		t.Fatal("Unexpected genesis allocation")
 	}
+
 	for addr, account := range reload {
 		want, ok := (*alloc)[addr]
 		if !ok {
 			t.Fatal("Account is not found")
 		}
+
 		if !reflect.DeepEqual(want, account) {
 			t.Fatal("Unexpected account")
 		}

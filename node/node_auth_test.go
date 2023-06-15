@@ -49,6 +49,7 @@ type authTest struct {
 
 func (at *authTest) Run(t *testing.T) {
 	ctx := context.Background()
+
 	cl, err := rpc.DialOptions(ctx, at.endpoint, rpc.WithHTTPAuth(at.prov))
 	if at.expectDialFail {
 		if err == nil {
@@ -57,11 +58,13 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
+
 	if err != nil {
 		t.Fatalf("failed to dial rpc endpoint: %v", err)
 	}
 
 	var x string
+
 	err = cl.CallContext(ctx, &x, "engine_helloWorld")
 	if at.expectCall1Fail {
 		if err == nil {
@@ -70,9 +73,11 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
+
 	if err != nil {
 		t.Fatalf("failed to call rpc endpoint: %v", err)
 	}
+
 	if x != "hello engine" {
 		t.Fatalf("method was silent but did not return expected value: %q", x)
 	}
@@ -85,9 +90,11 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
+
 	if err != nil {
 		t.Fatalf("failed to call rpc endpoint: %v", err)
 	}
+
 	if x != "hello eth" {
 		t.Fatalf("method was silent but did not return expected value: %q", x)
 	}
@@ -119,6 +126,7 @@ func TestAuthEndpoints(t *testing.T) {
 		WSModules:   []string{"eth", "engine"},
 		HTTPModules: []string{"eth", "engine"},
 	}
+
 	node, err := New(conf)
 	if err != nil {
 		t.Fatalf("could not create a new node: %v", err)
@@ -140,6 +148,7 @@ func TestAuthEndpoints(t *testing.T) {
 			Authenticated: true,
 		},
 	})
+
 	if err := node.Start(); err != nil {
 		t.Fatalf("failed to start test node: %v", err)
 	}
@@ -149,15 +158,18 @@ func TestAuthEndpoints(t *testing.T) {
 	if a, b := node.WSEndpoint(), node.WSAuthEndpoint(); a == b {
 		t.Fatalf("expected ws and auth-ws endpoints to be different, got: %q and %q", a, b)
 	}
+
 	if a, b := node.HTTPEndpoint(), node.HTTPAuthEndpoint(); a == b {
 		t.Fatalf("expected http and auth-http endpoints to be different, got: %q and %q", a, b)
 	}
 
 	goodAuth := NewJWTAuth(secret)
+
 	var otherSecret [32]byte
 	if _, err := crand.Read(otherSecret[:]); err != nil {
 		t.Fatalf("failed to create jwt secret: %v", err)
 	}
+
 	badAuth := NewJWTAuth(otherSecret)
 
 	notTooLong := time.Second * 57
@@ -207,22 +219,27 @@ func noneAuth(secret [32]byte) rpc.HTTPAuth {
 		token := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now()},
 		})
+
 		s, err := token.SignedString(secret[:])
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
+
 		header.Set("Authorization", "Bearer "+s)
+
 		return nil
 	}
 }
 
 func changingAuth(provs ...rpc.HTTPAuth) rpc.HTTPAuth {
 	i := 0
+
 	return func(header http.Header) error {
 		i += 1
 		if i > len(provs) {
 			i = len(provs)
 		}
+
 		return provs[i-1](header)
 	}
 }
@@ -232,11 +249,14 @@ func offsetTimeAuth(secret [32]byte, offset time.Duration) rpc.HTTPAuth {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now().Add(offset)},
 		})
+
 		s, err := token.SignedString(secret[:])
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
+
 		header.Set("Authorization", "Bearer "+s)
+
 		return nil
 	}
 }

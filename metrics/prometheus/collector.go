@@ -68,7 +68,9 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	ps := m.Percentiles(pv)
 
 	var sum float64 = 0
+
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
+
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
 		sum += ps[i]
@@ -88,9 +90,11 @@ func (c *collector) addTimer(name string, m metrics.Timer) {
 	ps := m.Percentiles(pv)
 	c.writeCounter(name, m.Count())
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
+
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
 	}
+
 	c.buff.WriteRune('\n')
 }
 
@@ -98,8 +102,10 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 	if len(m.Values()) <= 0 {
 		return
 	}
+
 	ps := m.Percentiles([]float64{50, 95, 99})
 	val := m.Values()
+
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	c.writeSummaryPercentile(name, "0.50", ps[0])
 	c.writeSummaryPercentile(name, "0.95", ps[1])

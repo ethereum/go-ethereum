@@ -18,22 +18,27 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.TxHash[:])
 	w.WriteBytes(obj.ReceiptHash[:])
 	w.WriteBytes(obj.Bloom[:])
+
 	if obj.Difficulty == nil {
 		w.Write(rlp.EmptyString)
 	} else {
 		if obj.Difficulty.Sign() == -1 {
 			return rlp.ErrNegativeBigInt
 		}
+
 		w.WriteBigInt(obj.Difficulty)
 	}
+
 	if obj.Number == nil {
 		w.Write(rlp.EmptyString)
 	} else {
 		if obj.Number.Sign() == -1 {
 			return rlp.ErrNegativeBigInt
 		}
+
 		w.WriteBigInt(obj.Number)
 	}
+
 	w.WriteUint64(obj.GasLimit)
 	w.WriteUint64(obj.GasUsed)
 	w.WriteUint64(obj.Time)
@@ -43,6 +48,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	_tmp1 := obj.BaseFee != nil
 	_tmp2 := obj.WithdrawalsHash != nil
 	_tmp3 := len(obj.TxDependency) > 0
+
 	if _tmp1 || _tmp2 || _tmp3 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
@@ -50,9 +56,11 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			if obj.BaseFee.Sign() == -1 {
 				return rlp.ErrNegativeBigInt
 			}
+
 			w.WriteBigInt(obj.BaseFee)
 		}
 	}
+
 	if _tmp2 {
 		if obj.WithdrawalsHash == nil {
 			w.Write([]byte{0x80})
@@ -60,17 +68,24 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBytes(obj.WithdrawalsHash[:])
 		}
 	}
+
 	if _tmp3 {
 		_tmp3 := w.List()
+
 		for _, _tmp4 := range obj.TxDependency {
 			_tmp5 := w.List()
+
 			for _, _tmp6 := range _tmp4 {
 				w.WriteUint64(_tmp6)
 			}
+
 			w.ListEnd(_tmp5)
 		}
+
 		w.ListEnd(_tmp3)
 	}
+
 	w.ListEnd(_tmp0)
+
 	return w.Flush()
 }

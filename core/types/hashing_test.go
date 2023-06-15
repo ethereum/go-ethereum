@@ -38,16 +38,20 @@ func TestDeriveSha(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for len(txs) < 1000 {
 		exp := types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
 		got := types.DeriveSha(txs, trie.NewStackTrie(nil))
+
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("%d txs: got %x exp %x", len(txs), got, exp)
 		}
+
 		newTxs, err := genTxs(uint64(len(txs) + 1))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		txs = append(txs, newTxs...)
 	}
 }
@@ -64,11 +68,14 @@ func TestEIP2718DeriveSha(t *testing.T) {
 		},
 	} {
 		d := &hashToHumanReadable{}
+
 		var t1, t2 types.Transaction
+
 		rlp.DecodeBytes(common.FromHex(tc.rlpData), &t1)
 		rlp.DecodeBytes(common.FromHex(tc.rlpData), &t2)
 		txs := types.Transactions{&t1, &t2}
 		types.DeriveSha(txs, d)
+
 		if tc.exp != string(d.data) {
 			t.Fatalf("Want\n%v\nhave:\n%v", tc.exp, string(d.data))
 		}
@@ -80,11 +87,15 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	var exp common.Hash
+
 	var got common.Hash
+
 	b.Run("std_trie", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
+
 		for i := 0; i < b.N; i++ {
 			exp = types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
 		}
@@ -93,10 +104,12 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	b.Run("stack_trie", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
+
 		for i := 0; i < b.N; i++ {
 			got = types.DeriveSha(txs, trie.NewStackTrie(nil))
 		}
 	})
+
 	if got != exp {
 		b.Errorf("got %x exp %x", got, exp)
 	}
@@ -109,6 +122,7 @@ func TestFuzzDeriveSha(t *testing.T) {
 		seed := rndSeed + i
 		exp := types.DeriveSha(newDummy(i), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
 		got := types.DeriveSha(newDummy(i), trie.NewStackTrie(nil))
+
 		if !bytes.Equal(got[:], exp[:]) {
 			printList(newDummy(seed))
 			t.Fatalf("seed %d: got %x exp %x", seed, got, exp)
@@ -119,6 +133,7 @@ func TestFuzzDeriveSha(t *testing.T) {
 // TestDerivableList contains testcases found via fuzzing
 func TestDerivableList(t *testing.T) {
 	type tcase []string
+
 	tcs := []tcase{
 		{
 			"0xc041",
@@ -137,6 +152,7 @@ func TestDerivableList(t *testing.T) {
 	for i, tc := range tcs[1:] {
 		exp := types.DeriveSha(flatList(tc), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
 		got := types.DeriveSha(flatList(tc), trie.NewStackTrie(nil))
+
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("case %d: got %x exp %x", i, got, exp)
 		}
@@ -148,21 +164,28 @@ func genTxs(num uint64) (types.Transactions, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var addr = crypto.PubkeyToAddress(key.PublicKey)
+
 	newTx := func(i uint64) (*types.Transaction, error) {
 		signer := types.NewEIP155Signer(big.NewInt(18))
 		utx := types.NewTransaction(i, addr, new(big.Int), 0, new(big.Int).SetUint64(10000000), nil)
 		tx, err := types.SignTx(utx, signer, key)
+
 		return tx, err
 	}
+
 	var txs types.Transactions
+
 	for i := uint64(0); i < num; i++ {
 		tx, err := newTx(i)
 		if err != nil {
 			return nil, err
 		}
+
 		txs = append(txs, tx)
 	}
+
 	return txs, nil
 }
 
@@ -177,6 +200,7 @@ func newDummy(seed int) *dummyDerivableList {
 	// don't use lists longer than 4K items
 	d.len = int(src.Int63() & 0x0FFF)
 	d.seed = seed
+
 	return d
 }
 
@@ -194,8 +218,10 @@ func (d *dummyDerivableList) EncodeIndex(i int, w *bytes.Buffer) {
 func printList(l types.DerivableList) {
 	fmt.Printf("list length: %d\n", l.Len())
 	fmt.Printf("{\n")
+
 	for i := 0; i < l.Len(); i++ {
 		var buf bytes.Buffer
+
 		l.EncodeIndex(i, &buf)
 		fmt.Printf("\"%#x\",\n", buf.Bytes())
 	}

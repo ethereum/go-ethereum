@@ -72,6 +72,7 @@ func NewSyncPath(path []byte) SyncPath {
 	if len(path) < 64 {
 		return SyncPath{hexToCompact(path)}
 	}
+
 	return SyncPath{hexToKeybytes(path[:64]), hexToCompact(path[64:])}
 }
 
@@ -177,6 +178,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		fetches:  make(map[int]int),
 	}
 	ts.AddSubTrie(root, nil, common.Hash{}, nil, callback)
+
 	return ts
 }
 
@@ -210,6 +212,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
+
 		ancestor.deps++
 		req.parent = ancestor
 	}
@@ -225,6 +228,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 	if hash == types.EmptyCodeHash {
 		return
 	}
+
 	if s.membatch.hasCode(hash) {
 		return
 	}
@@ -247,6 +251,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
+
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
@@ -263,6 +268,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 		nodeHashes []common.Hash
 		codeHashes []common.Hash
 	)
+
 	for !s.queue.Empty() && (max == 0 || len(nodeHashes)+len(codeHashes) < max) {
 		// Retrieve the next item in line
 		item, prio := s.queue.Peek()
@@ -274,6 +280,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 		}
 		// Item is allowed to be scheduled, add it to the task list
 		s.queue.Pop()
+
 		s.fetches[depth]++
 
 		switch item := item.(type) {
@@ -350,10 +357,12 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 		s.commitNodeRequest(req)
 	} else {
 		req.deps += len(requests)
+
 		for _, child := range requests {
 			s.scheduleNodeRequest(child)
 		}
 	}
+
 	return nil
 }
 
@@ -371,6 +380,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	}
 	// Drop the membatch data and return
 	s.membatch = newSyncMemBatch()
+
 	return nil
 }
 
@@ -460,6 +470,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		missing = make(chan *nodeRequest, len(children))
 		pending sync.WaitGroup
 	)
+
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
@@ -522,6 +533,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			done = true
 		}
 	}
+
 	return requests, nil
 }
 
@@ -537,6 +549,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	// which eventually is written to db.
 	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.nodeReqs, string(req.path))
+
 	s.fetches[len(req.path)]--
 
 	// Check parent for completion
@@ -560,6 +573,7 @@ func (s *Sync) commitCodeRequest(req *codeRequest) error {
 	s.membatch.codes[req.hash] = req.data
 	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.codeReqs, req.hash)
+
 	s.fetches[len(req.path)]--
 
 	// Check all parents for completion
@@ -571,6 +585,7 @@ func (s *Sync) commitCodeRequest(req *codeRequest) error {
 			}
 		}
 	}
+
 	return nil
 }
 

@@ -39,6 +39,7 @@ func parseNodeStr(nodeStr string) (enode.ID, error) {
 	if id, err := enode.ParseID(nodeStr); err == nil {
 		return id, nil
 	}
+
 	if node, err := enode.Parse(enode.ValidSchemes, nodeStr); err == nil {
 		return node.ID(), nil
 	} else {
@@ -63,9 +64,11 @@ func (api *PrivateClientAPI) Distribution(nodeStr string, normalized bool) (RtDi
 	if !normalized {
 		expFactor = utils.ExpFactor(api.vt.StatsExpirer().LogOffset(mclock.Now()))
 	}
+
 	if nodeStr == "" {
 		return api.vt.RtStats().Distribution(normalized, expFactor), nil
 	}
+
 	if id, err := parseNodeStr(nodeStr); err == nil {
 		return api.vt.GetNode(id).RtStats().Distribution(normalized, expFactor), nil
 	} else {
@@ -84,6 +87,7 @@ func (api *PrivateClientAPI) Timeout(nodeStr string, failRate float64) (float64,
 	if nodeStr == "" {
 		return float64(api.vt.RtStats().Timeout(failRate)) / float64(time.Second), nil
 	}
+
 	if id, err := parseNodeStr(nodeStr); err == nil {
 		return float64(api.vt.GetNode(id).RtStats().Timeout(failRate)) / float64(time.Second), nil
 	} else {
@@ -96,9 +100,11 @@ func (api *PrivateClientAPI) Timeout(nodeStr string, failRate float64) (float64,
 func (api *PrivateClientAPI) Value(nodeStr string, timeout float64) (float64, error) {
 	wt := TimeoutWeights(time.Duration(timeout * float64(time.Second)))
 	expFactor := utils.ExpFactor(api.vt.StatsExpirer().LogOffset(mclock.Now()))
+
 	if nodeStr == "" {
 		return api.vt.RtStats().Value(wt, expFactor), nil
 	}
+
 	if id, err := parseNodeStr(nodeStr); err == nil {
 		return api.vt.GetNode(id).RtStats().Value(wt, expFactor), nil
 	} else {

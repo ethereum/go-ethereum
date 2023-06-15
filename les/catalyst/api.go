@@ -40,6 +40,7 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 			Authenticated: true,
 		},
 	})
+
 	return nil
 }
 
@@ -53,6 +54,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Catalyst started without valid total difficulty")
 	}
+
 	return &ConsensusAPI{les: les}
 }
 
@@ -75,6 +77,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads engine.ForkchoiceStateV1, pay
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
+
 	if err := api.checkTerminalTotalDifficulty(heads.HeadBlockHash); err != nil {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.HeadBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
@@ -94,9 +97,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads engine.ForkchoiceStateV1, pay
 	if err := api.setCanonical(heads.HeadBlockHash); err != nil {
 		return engine.STATUS_INVALID, err
 	}
+
 	if payloadAttributes != nil {
 		return engine.STATUS_INVALID, errors.New("not supported")
 	}
+
 	return api.validForkChoiceResponse(), nil
 }
 
@@ -111,6 +116,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params engine.ExecutableData) (engine.
 	if err != nil {
 		return api.invalid(), err
 	}
+
 	if !api.les.BlockChain().HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		/*
 			TODO (MariusVanDerWijden) reenable once sync is merged
@@ -121,21 +127,27 @@ func (api *ConsensusAPI) ExecutePayloadV1(params engine.ExecutableData) (engine.
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
 		return engine.PayloadStatusV1{Status: engine.SYNCING, LatestValidHash: nil}, nil
 	}
+
 	parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 	if parent == nil {
 		return api.invalid(), fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
+
 	td := api.les.BlockChain().GetTd(parent.Hash(), block.NumberU64()-1)
 	ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
+
 	if td.Cmp(ttd) < 0 {
 		return api.invalid(), fmt.Errorf("can not execute payload on top of block with low td got: %v threshold %v", td, ttd)
 	}
+
 	if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 		return api.invalid(), err
 	}
+
 	if merger := api.les.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
+
 	hash := block.Hash()
 
 	return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
@@ -165,10 +177,12 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	if header == nil {
 		return errors.New("unknown header")
 	}
+
 	td := api.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 	if td != nil && td.Cmp(api.les.BlockChain().Config().TerminalTotalDifficulty) < 0 {
 		return errors.New("invalid ttd")
 	}
+
 	return nil
 }
 
@@ -180,6 +194,7 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 	if headHeader.Hash() == newHead {
 		return nil
 	}
+
 	newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 	if newHeadHeader == nil {
 		return errors.New("unknown header")
@@ -192,6 +207,7 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 	if merger := api.les.Merger(); !merger.PoSFinalized() {
 		merger.FinalizePoS()
 	}
+
 	return nil
 }
 

@@ -50,6 +50,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 		Config:  &proConf,
 	}
+
 	proBc, _ := NewBlockChain(proDb, nil, progspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	defer proBc.Stop()
 
@@ -62,12 +63,14 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 		Config:  &conConf,
 	}
+
 	conBc, _ := NewBlockChain(conDb, nil, congspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	defer conBc.Stop()
 
 	if _, err := proBc.InsertChain(prefix); err != nil {
 		t.Fatalf("pro-fork: failed to import chain prefix: %v", err)
 	}
+
 	if _, err := conBc.InsertChain(prefix); err != nil {
 		t.Fatalf("con-fork: failed to import chain prefix: %v", err)
 	}
@@ -80,6 +83,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
+
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
@@ -106,6 +110,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
+
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
@@ -134,6 +139,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
+
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}

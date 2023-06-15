@@ -53,6 +53,7 @@ func (s *InstrumentedService) Start() error {
 	if s.startHook != nil {
 		s.startHook()
 	}
+
 	return s.start
 }
 
@@ -60,6 +61,7 @@ func (s *InstrumentedService) Stop() error {
 	if s.stopHook != nil {
 		s.stopHook()
 	}
+
 	return s.stop
 }
 
@@ -71,6 +73,7 @@ func NewFullService(stack *Node) (*FullService, error) {
 	stack.RegisterProtocols(fs.Protocols())
 	stack.RegisterAPIs(fs.APIs())
 	stack.RegisterLifecycle(fs)
+
 	return fs, nil
 }
 

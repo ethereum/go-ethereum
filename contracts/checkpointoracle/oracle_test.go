@@ -76,6 +76,7 @@ func validateOperation(t *testing.T, c *contract.CheckpointOracle, backend *back
 		sink   = make(chan *contract.CheckpointOracleNewCheckpointVote)
 		sub, _ = c.WatchNewCheckpointVote(nil, sink, nil)
 	)
+
 	defer func() {
 		// Close all subscribers
 		sub.Unsubscribe()
@@ -84,6 +85,7 @@ func validateOperation(t *testing.T, c *contract.CheckpointOracle, backend *back
 
 	// flush pending block
 	backend.Commit()
+
 	if err := assert(sink); err != nil {
 		t.Errorf("operation {%s} failed, err %s", opName, err)
 	}
@@ -93,26 +95,35 @@ func validateOperation(t *testing.T, c *contract.CheckpointOracle, backend *back
 // fired by contract backend.
 func validateEvents(target int, sink interface{}) (bool, []reflect.Value) {
 	chanval := reflect.ValueOf(sink)
+
 	chantyp := chanval.Type()
 	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.RecvDir == 0 {
 		return false, nil
 	}
+
 	count := 0
+
 	var recv []reflect.Value
+
 	timeout := time.After(1 * time.Second)
 	cases := []reflect.SelectCase{{Chan: chanval, Dir: reflect.SelectRecv}, {Chan: reflect.ValueOf(timeout), Dir: reflect.SelectRecv}}
+
 	for {
 		chose, v, _ := reflect.Select(cases)
 		if chose == 1 {
 			// Not enough event received
 			return false, nil
 		}
+
 		count += 1
+
 		recv = append(recv, v)
+
 		if count == target {
 			break
 		}
 	}
+
 	done := time.After(50 * time.Millisecond)
 	cases = cases[:1]
 	cases = append(cases, reflect.SelectCase{Chan: reflect.ValueOf(done), Dir: reflect.SelectRecv})
@@ -137,6 +148,7 @@ func signCheckpoint(addr common.Address, privateKey *ecdsa.PrivateKey, index uin
 	data := append([]byte{0x19, 0x00}, append(addr.Bytes(), append(buf, hash.Bytes()...)...)...)
 	sig, _ := crypto.Sign(crypto.Keccak256(data), privateKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+
 	return sig
 }
 
@@ -145,12 +157,16 @@ func assertSignature(addr common.Address, index uint64, hash [32]byte, r, s [32]
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, index)
 	data := append([]byte{0x19, 0x00}, append(addr.Bytes(), append(buf, hash[:]...)...)...)
+
 	pubkey, err := crypto.Ecrecover(crypto.Keccak256(data), append(r[:], append(s[:], v-27)...))
 	if err != nil {
 		return false
 	}
+
 	var signer common.Address
+
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
 	return bytes.Equal(signer.Bytes(), expect.Bytes())
 }
 
@@ -167,6 +183,7 @@ func (a Accounts) Less(i, j int) bool { return bytes.Compare(a[i].addr.Bytes(), 
 func TestCheckpointRegister(t *testing.T) {
 	// Initialize test accounts
 	var accounts Accounts
+
 	for i := 0; i < 3; i++ {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -191,12 +208,14 @@ func TestCheckpointRegister(t *testing.T) {
 	if err != nil {
 		t.Error("Failed to deploy registrar contract", err)
 	}
+
 	contractBackend.Commit()
 
 	// getRecent returns block height and hash of the head parent.
 	getRecent := func() (*big.Int, common.Hash) {
 		parentNumber := new(big.Int).Sub(contractBackend.Blockchain().CurrentHeader().Number, big.NewInt(1))
 		parentHash := contractBackend.Blockchain().CurrentHeader().ParentHash
+
 		return parentNumber, parentHash
 	}
 	// collectSig generates specified number signatures.
@@ -206,10 +225,12 @@ func TestCheckpointRegister(t *testing.T) {
 			if unauthorized != nil {
 				sig = signCheckpoint(contractAddr, unauthorized, index, hash)
 			}
+
 			r = append(r, common.BytesToHash(sig[:32]))
 			s = append(s, common.BytesToHash(sig[32:64]))
 			v = append(v, sig[64])
 		}
+
 		return v, r, s
 	}
 	// insertEmptyBlocks inserts a batch of empty blocks to blockchain.
@@ -225,15 +246,19 @@ func TestCheckpointRegister(t *testing.T) {
 		if err != nil {
 			return err
 		}
+
 		if lindex != index {
 			return errors.New("latest checkpoint index mismatch")
 		}
+
 		if !bytes.Equal(lhash[:], hash[:]) {
 			return errors.New("latest checkpoint hash mismatch")
 		}
+
 		if lheight.Cmp(height) != 0 {
 			return errors.New("latest checkpoint height mismatch")
 		}
+
 		return nil
 	}
 
@@ -293,7 +318,9 @@ func TestCheckpointRegister(t *testing.T) {
 				}
 			}
 		}
+
 		number, _ := getRecent()
+
 		return assert(0, checkpoint0.Hash(), number.Add(number, big.NewInt(1)))
 	}, "test valid checkpoint registration")
 
@@ -316,7 +343,9 @@ func TestCheckpointRegister(t *testing.T) {
 				}
 			}
 		}
+
 		number, _ := getRecent()
+
 		return assert(2, checkpoint2.Hash(), number.Add(number, big.NewInt(1)))
 	}, "test uncontinuous checkpoint registration")
 

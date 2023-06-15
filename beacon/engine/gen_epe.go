@@ -18,9 +18,11 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 		BlockValue       *hexutil.Big    `json:"blockValue"  gencodec:"required"`
 	}
+
 	var enc ExecutionPayloadEnvelope
 	enc.ExecutionPayload = e.ExecutionPayload
 	enc.BlockValue = (*hexutil.Big)(e.BlockValue)
+
 	return json.Marshal(&enc)
 }
 
@@ -30,17 +32,23 @@ func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
 		ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 		BlockValue       *hexutil.Big    `json:"blockValue"  gencodec:"required"`
 	}
+
 	var dec ExecutionPayloadEnvelope
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.ExecutionPayload == nil {
 		return errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
 	}
+
 	e.ExecutionPayload = dec.ExecutionPayload
+
 	if dec.BlockValue == nil {
 		return errors.New("missing required field 'blockValue' for ExecutionPayloadEnvelope")
 	}
+
 	e.BlockValue = (*big.Int)(dec.BlockValue)
+
 	return nil
 }

@@ -31,6 +31,7 @@ const testSectionSize = 4096
 // Tests that wildcard filter rules (nil) can be specified and are handled well.
 func TestMatcherWildcards(t *testing.T) {
 	t.Parallel()
+
 	matcher := NewMatcher(testSectionSize, [][][]byte{
 		{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
 		{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
@@ -44,12 +45,15 @@ func TestMatcherWildcards(t *testing.T) {
 	if len(matcher.filters) != 3 {
 		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)
 	}
+
 	if len(matcher.filters[0]) != 2 {
 		t.Fatalf("address clause size mismatch: have %d, want %d", len(matcher.filters[0]), 2)
 	}
+
 	if len(matcher.filters[1]) != 2 {
 		t.Fatalf("combo topic clause size mismatch: have %d, want %d", len(matcher.filters[1]), 2)
 	}
+
 	if len(matcher.filters[2]) != 1 {
 		t.Fatalf("singletone topic clause size mismatch: have %d, want %d", len(matcher.filters[2]), 1)
 	}
@@ -75,6 +79,7 @@ func TestMatcherIntermittent(t *testing.T) {
 // Tests the matcher pipeline on random input to hopefully catch anomalies.
 func TestMatcherRandom(t *testing.T) {
 	t.Parallel()
+
 	for i := 0; i < 10; i++ {
 		testMatcherBothModes(t, makeRandomIndexes([]int{1}, 50), 0, 10000, 0)
 		testMatcherBothModes(t, makeRandomIndexes([]int{3}, 50), 0, 10000, 0)
@@ -119,6 +124,7 @@ func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {
 			}
 		}
 	}
+
 	return res
 }
 
@@ -170,6 +176,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	if err != nil {
 		t.Fatalf("failed to stat matcher session: %v", err)
 	}
+
 	startRetrievers(session, quit, &requested, maxReqCount)
 
 	// Iterate over all the blocks and verify that the pipeline produces the correct matches
@@ -180,6 +187,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 				t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected #%v, results channel closed", filter, blocks, intermittent, i)
 				return 0
 			}
+
 			if match != i {
 				t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected #%v, got #%v", filter, blocks, intermittent, i, match)
 			}
@@ -195,6 +203,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 				if err != nil {
 					t.Fatalf("failed to stat matcher session: %v", err)
 				}
+
 				startRetrievers(session, quit, &requested, maxReqCount)
 			}
 		}
@@ -258,11 +267,13 @@ func generateBitset(bit uint, section uint64) []byte {
 		for b := 0; b < 8; b++ {
 			blockIdx := section*testSectionSize + uint64(i*8+b)
 			bitset[i] += bitset[i]
+
 			if (blockIdx % uint64(bit)) == 0 {
 				bitset[i]++
 			}
 		}
 	}
+
 	return bitset
 }
 
@@ -272,6 +283,7 @@ func expMatch1(filter bloomIndexes, i uint64) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -281,6 +293,7 @@ func expMatch2(filter []bloomIndexes, i uint64) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -290,5 +303,6 @@ func expMatch3(filter [][]bloomIndexes, i uint64) bool {
 			return false
 		}
 	}
+
 	return true
 }

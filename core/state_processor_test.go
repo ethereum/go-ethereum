@@ -65,10 +65,12 @@ func TestStateProcessorErrors(t *testing.T) {
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
 	)
+
 	var makeTx = func(key *ecdsa.PrivateKey, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, key)
 		return tx
 	}
+
 	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			Nonce:     nonce,
@@ -110,10 +112,13 @@ func TestStateProcessorErrors(t *testing.T) {
 			}
 			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		)
+
 		defer blockchain.Stop()
+
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
+
 		for i, tt := range []struct {
 			txs  []*types.Transaction
 			want string
@@ -214,10 +219,12 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 		} {
 			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
 			}
+
 			if have, want := err.Error(), tt.want; have != want {
 				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
@@ -251,6 +258,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
+
 		defer blockchain.Stop()
 		defer parallelBlockchain.Stop()
 
@@ -267,10 +275,12 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			} {
 				block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+
 				_, err := bc.InsertChain(types.Blocks{block})
 				if err == nil {
 					t.Fatal("block imported without errors")
 				}
+
 				if have, want := err.Error(), tt.want; have != want {
 					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 				}
@@ -295,6 +305,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
+
 		defer blockchain.Stop()
 		defer parallelBlockchain.Stop()
 
@@ -311,10 +322,12 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			} {
 				block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+
 				_, err := bc.InsertChain(types.Blocks{block})
 				if err == nil {
 					t.Fatal("block imported without errors")
 				}
+
 				if have, want := err.Error(), tt.want; have != want {
 					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 				}
@@ -361,11 +374,11 @@ func TestStateProcessorErrors(t *testing.T) {
 			tooBigInitCode        = [params.MaxInitCodeSize + 1]byte{}
 			smallInitCode         = [320]byte{}
 		)
+
 		defer blockchain.Stop()
 		defer parallelBlockchain.Stop()
 
 		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-
 			for i, tt := range []struct {
 				txs  []*types.Transaction
 				want string
@@ -384,10 +397,12 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			} {
 				block := GenerateBadBlock(genesis, beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
+
 				_, err := bc.InsertChain(types.Blocks{block})
 				if err == nil {
 					t.Fatal("block imported without errors")
 				}
+
 				if have, want := err.Error(), tt.want; have != want {
 					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 				}
@@ -427,26 +442,32 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	if config.IsShanghai(header.Time) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
+
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
 	hasher := sha3.NewLegacyKeccak256()
 	hasher.Write(header.Number.Bytes())
+
 	var cumulativeGas uint64
+
 	for _, tx := range txs {
 		txh := tx.Hash()
 		hasher.Write(txh[:])
+
 		receipt := types.NewReceipt(nil, false, cumulativeGas+tx.Gas())
 		receipt.TxHash = tx.Hash()
 		receipt.GasUsed = tx.Gas()
 		receipts = append(receipts, receipt)
 		cumulativeGas += tx.Gas()
 	}
+
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	// TODO marcello double check
 	if config.IsShanghai(header.Time) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
 	}
+
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

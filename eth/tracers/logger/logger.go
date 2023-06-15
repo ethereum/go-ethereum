@@ -43,6 +43,7 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
+
 	return cpy
 }
 
@@ -97,6 +98,7 @@ func (s *StructLog) ErrorString() string {
 	if s.Err != nil {
 		return s.Err.Error()
 	}
+
 	return ""
 }
 
@@ -128,6 +130,7 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	if cfg != nil {
 		logger.cfg = *cfg
 	}
+
 	return logger
 }
 
@@ -174,6 +177,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 			stck[i] = item
 		}
 	}
+
 	stackData := stack.Data()
 	stackLen := len(stackData)
 	// Copy a snapshot of the current storage to a new container
@@ -190,6 +194,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 				value   = l.env.StateDB.GetState(contract.Address(), address)
 			)
+
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		} else if op == vm.SSTORE && stackLen >= 2 {
@@ -198,10 +203,12 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				value   = common.Hash(stackData[stackLen-2].Bytes32())
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 			)
+
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		}
 	}
+
 	var rdata []byte
 	if l.cfg.EnableReturnData {
 		rdata = make([]byte, len(rData))
@@ -221,8 +228,10 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.output = output
 	l.err = err
+
 	if l.cfg.Debug {
 		fmt.Printf("%#x\n", output)
+
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
@@ -284,31 +293,39 @@ func (l *StructLogger) Output() []byte { return l.output }
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
 		fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
+
 		if log.Err != nil {
 			fmt.Fprintf(writer, " ERROR: %v", log.Err)
 		}
+
 		fmt.Fprintln(writer)
 
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
+
 			for i := len(log.Stack) - 1; i >= 0; i-- {
 				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
+
 		if len(log.Memory) > 0 {
 			fmt.Fprintln(writer, "Memory:")
 			fmt.Fprint(writer, hex.Dump(log.Memory))
 		}
+
 		if len(log.Storage) > 0 {
 			fmt.Fprintln(writer, "Storage:")
+
 			for h, item := range log.Storage {
 				fmt.Fprintf(writer, "%x: %x\n", h, item)
 			}
 		}
+
 		if len(log.ReturnData) > 0 {
 			fmt.Fprintln(writer, "ReturnData:")
 			fmt.Fprint(writer, hex.Dump(log.ReturnData))
 		}
+
 		fmt.Fprintln(writer)
 	}
 }
@@ -340,6 +357,7 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
+
 	return l
 }
 
@@ -364,6 +382,7 @@ func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
+
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
@@ -372,11 +391,14 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 		for _, elem := range stack.Data() {
 			a = append(a, elem.Hex())
 		}
+
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
 	}
+
 	fmt.Fprintf(t.out, "%10v |", t.env.StateDB.GetRefund())
 	fmt.Fprintln(t.out, "")
+
 	if err != nil {
 		fmt.Fprintf(t.out, "Error: %v\n", err)
 	}

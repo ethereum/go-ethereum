@@ -41,6 +41,7 @@ func (n *pmp) ExternalIP() (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return response.ExternalIPAddress[:], nil
 }
 
@@ -80,6 +81,7 @@ func discoverPMP() Interface {
 	// run external address lookups on all potential gateways
 	gws := potentialGateways()
 	found := make(chan *pmp, len(gws))
+
 	for i := range gws {
 		gw := gws[i]
 		go func() {
@@ -96,6 +98,7 @@ func discoverPMP() Interface {
 	// any responses after a very short timeout.
 	timeout := time.NewTimer(1 * time.Second)
 	defer timeout.Stop()
+
 	for range gws {
 		select {
 		case c := <-found:
@@ -106,6 +109,7 @@ func discoverPMP() Interface {
 			return nil
 		}
 	}
+
 	return nil
 }
 
@@ -116,11 +120,13 @@ func potentialGateways() (gws []net.IP) {
 	if err != nil {
 		return nil
 	}
+
 	for _, iface := range ifaces {
 		ifaddrs, err := iface.Addrs()
 		if err != nil {
 			return gws
 		}
+
 		for _, addr := range ifaddrs {
 			if x, ok := addr.(*net.IPNet); ok {
 				if x.IP.IsPrivate() {
@@ -133,5 +139,6 @@ func potentialGateways() (gws []net.IP) {
 			}
 		}
 	}
+
 	return gws
 }

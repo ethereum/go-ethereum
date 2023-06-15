@@ -30,6 +30,7 @@ import (
 // MakeTopics converts a filter query argument list into a filter topic set.
 func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 	topics := make([][]common.Hash, len(query))
+
 	for i, filter := range query {
 		for _, rule := range filter {
 			var topic common.Hash
@@ -81,9 +82,9 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 				//
 				// We only convert stringS and bytes to hash, still need to deal with
 				// array(both fixed-size and dynamic-size) and struct.
-
 				// Attempt to generate the topic from funky types
 				val := reflect.ValueOf(rule)
+
 				switch {
 				// static byte array
 				case val.Kind() == reflect.Array && reflect.TypeOf(rule).Elem().Kind() == reflect.Uint8:
@@ -92,9 +93,11 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 					return nil, fmt.Errorf("unsupported indexed type: %T", rule)
 				}
 			}
+
 			topics[i] = append(topics[i], topic)
 		}
 	}
+
 	return topics, nil
 }
 
@@ -105,9 +108,11 @@ func genIntType(rule int64, size uint) []byte {
 		// extended to common.HashLength bytes.
 		topic = [common.HashLength]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}
 	}
+
 	for i := uint(0); i < size; i++ {
 		topic[common.HashLength-i-1] = byte(rule >> (i * 8))
 	}
+
 	return topic[:]
 }
 
@@ -143,7 +148,9 @@ func parseTopicWithSetter(fields Arguments, topics []common.Hash, setter func(Ar
 		if !arg.Indexed {
 			return errors.New("non-indexed field in topic reconstruction")
 		}
+
 		var reconstr interface{}
+
 		switch arg.Type.T {
 		case TupleTy:
 			return errors.New("tuple type in topic reconstruction")
@@ -155,11 +162,14 @@ func parseTopicWithSetter(fields Arguments, topics []common.Hash, setter func(Ar
 			if garbage := binary.BigEndian.Uint64(topics[i][0:8]); garbage != 0 {
 				return fmt.Errorf("bind: got improperly encoded function type, got %v", topics[i].Bytes())
 			}
+
 			var tmp [24]byte
+
 			copy(tmp[:], topics[i][8:32])
 			reconstr = tmp
 		default:
 			var err error
+
 			reconstr, err = toGoType(0, arg.Type, topics[i].Bytes())
 			if err != nil {
 				return err

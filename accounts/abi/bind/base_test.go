@@ -214,6 +214,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hash := crypto.Keccak256Hash(sliceBytes)
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(string[],address,uint256,bytes)")),
@@ -239,6 +240,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hash := crypto.Keccak256Hash(arrBytes)
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(address[2],address,uint256,bytes)")),
@@ -265,7 +267,9 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	hash := crypto.Keccak256Hash([]byte("mockFunction(address,uint)"))
 	functionSelector := hash[:4]
 	functionTyBytes := append(addrBytes, functionSelector...)
+
 	var functionTy [24]byte
+
 	copy(functionTy[:], functionTyBytes[0:24])
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(function,address,uint256,bytes)")),
@@ -361,6 +365,7 @@ func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]in
 	if len(received) != len(expected) {
 		t.Fatalf("unpacked map length %v not equal expected length of %v", len(received), len(expected))
 	}
+
 	for name, elem := range expected {
 		if !reflect.DeepEqual(elem, received[name]) {
 			t.Errorf("field %v does not match expected, want %v, got %v", name, elem, received[name])

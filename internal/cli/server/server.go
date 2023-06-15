@@ -220,6 +220,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 					cli = c
 				}
 			}
+
 			if cli != nil {
 				wallet, err := accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
@@ -228,6 +229,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 				}
 
 				cli.Authorize(eb, wallet.SignData)
+
 				authorized = true
 			}
 
@@ -240,6 +242,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 				}
 
 				bor.Authorize(eb, wallet.SignData)
+
 				authorized = true
 			}
 		}
@@ -349,6 +352,7 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, cfg.Database, cfg.Username, cfg.Password, "geth.", tags)
 		}
+
 		if v2Enabled {
 			log.Info("Enabling metrics export to InfluxDB (v2)")
 
@@ -360,7 +364,6 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	if config.PrometheusAddr != "" {
-
 		prometheusMux := http.NewServeMux()
 
 		prometheusMux.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
@@ -377,7 +380,6 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 		}()
 
 		log.Info("Enabling metrics export to prometheus", "path", fmt.Sprintf("http://%s/debug/metrics/prometheus", config.PrometheusAddr))
-
 	}
 
 	if config.OpenCollectorEndpoint != "" {
@@ -475,6 +477,7 @@ func setupLogger(logLevel string, loggingInfo LoggingConfig) {
 		if usecolor {
 			output = colorable.NewColorableStderr()
 		}
+
 		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
 	}
 

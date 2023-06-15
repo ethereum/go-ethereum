@@ -30,9 +30,11 @@ func FromHex(s string) []byte {
 	if has0xPrefix(s) {
 		s = s[2:]
 	}
+
 	if len(s)%2 == 1 {
 		s = "0" + s
 	}
+
 	return Hex2Bytes(s)
 }
 
@@ -41,6 +43,7 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
 		return nil
 	}
+
 	copiedBytes = make([]byte, len(b))
 	copy(copiedBytes, b)
 
@@ -62,11 +65,13 @@ func isHex(str string) bool {
 	if len(str)%2 != 0 {
 		return false
 	}
+
 	for _, c := range []byte(str) {
 		if !isHexCharacter(c) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -87,11 +92,14 @@ func Hex2BytesFixed(str string, flen int) []byte {
 	if len(h) == flen {
 		return h
 	}
+
 	if len(h) > flen {
 		return h[len(h)-flen:]
 	}
+
 	hh := make([]byte, flen)
 	copy(hh[flen-len(h):flen], h)
+
 	return hh
 }
 
@@ -137,6 +145,7 @@ func TrimLeftZeroes(s []byte) []byte {
 			break
 		}
 	}
+
 	return s[idx:]
 }
 
@@ -148,5 +157,6 @@ func TrimRightZeroes(s []byte) []byte {
 			break
 		}
 	}
+
 	return s[:idx]
 }

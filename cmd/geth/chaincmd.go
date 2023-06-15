@@ -173,14 +173,17 @@ func initGenesis(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
 		utils.Fatalf("need genesis.json file as the only argument")
 	}
+
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("invalid path to genesis file")
 	}
+
 	file, err := os.Open(genesisPath)
 	if err != nil {
 		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
+
 	defer file.Close()
 
 	genesis := new(core.Genesis)
@@ -200,13 +203,16 @@ func initGenesis(ctx *cli.Context) error {
 		triedb := trie.NewDatabaseWithConfig(chaindb, &trie.Config{
 			Preimages: ctx.Bool(utils.CachePreimagesFlag.Name),
 		})
+
 		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
+
 		chaindb.Close()
 		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
+
 	return nil
 }
 
@@ -253,6 +259,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	}
 
 	utils.Fatalf("no network preset provided.  no exisiting genesis in the default datadir")
+
 	return nil
 }
 
@@ -273,16 +280,21 @@ func importChain(ctx *cli.Context) error {
 
 	// Start periodically gathering memory profiles
 	var peakMemAlloc, peakMemSys uint64
+
 	go func() {
 		stats := new(runtime.MemStats)
+
 		for {
 			runtime.ReadMemStats(stats)
+
 			if atomic.LoadUint64(&peakMemAlloc) < stats.Alloc {
 				atomic.StoreUint64(&peakMemAlloc, stats.Alloc)
 			}
+
 			if atomic.LoadUint64(&peakMemSys) < stats.Sys {
 				atomic.StoreUint64(&peakMemSys, stats.Sys)
 			}
+
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -304,6 +316,7 @@ func importChain(ctx *cli.Context) error {
 			}
 		}
 	}
+
 	chain.Stop()
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
@@ -325,13 +338,17 @@ func importChain(ctx *cli.Context) error {
 
 	// Compact the entire database to more accurately measure disk io and print the stats
 	start = time.Now()
+
 	fmt.Println("Compacting entire database...")
+
 	if err := db.Compact(nil, nil); err != nil {
 		utils.Fatalf("Compaction failed: %v", err)
 	}
+
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
 	showLeveldbStats(db)
+
 	return importErr
 }
 
@@ -347,6 +364,7 @@ func exportChain(ctx *cli.Context) error {
 	start := time.Now()
 
 	var err error
+
 	fp := ctx.Args().First()
 
 	if ctx.Args().Len() < 3 {
@@ -355,22 +373,28 @@ func exportChain(ctx *cli.Context) error {
 		// This can be improved to allow for numbers larger than 9223372036854775807
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
 		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+
 		if ferr != nil || lerr != nil {
 			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 		}
+
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
+
 		if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 		}
+
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
 
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
+
 	fmt.Printf("Export done in %v\n", time.Since(start))
+
 	return nil
 }
 
@@ -389,7 +413,9 @@ func importPreimages(ctx *cli.Context) error {
 	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
+
 	fmt.Printf("Import done in %v\n", time.Since(start))
+
 	return nil
 }
 
@@ -398,6 +424,7 @@ func exportPreimages(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -407,16 +434,21 @@ func exportPreimages(ctx *cli.Context) error {
 	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
+
 	fmt.Printf("Export done in %v\n", time.Since(start))
+
 	return nil
 }
 
 func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
 	db := utils.MakeChainDatabase(ctx, stack, true)
+
 	var header *types.Header
+
 	if ctx.NArg() > 1 {
 		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
 	}
+
 	if ctx.NArg() == 1 {
 		arg := ctx.Args().First()
 		if hashish(arg) {
@@ -431,6 +463,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 			if err != nil {
 				return nil, nil, common.Hash{}, err
 			}
+
 			if hash := rawdb.ReadCanonicalHash(db, number); hash != (common.Hash{}) {
 				header = rawdb.ReadHeader(db, hash, number)
 			} else {
@@ -441,11 +474,15 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		// Use latest
 		header = rawdb.ReadHeadHeader(db)
 	}
+
 	if header == nil {
 		return nil, nil, common.Hash{}, errors.New("no head block found")
 	}
+
 	startArg := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
+
 	var start common.Hash
+
 	switch len(startArg) {
 	case 0: // common.Hash
 	case 32:
@@ -456,6 +493,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 	default:
 		return nil, nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
 	}
+
 	var conf = &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
 		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
@@ -463,9 +501,11 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		Start:             start.Bytes(),
 		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
 	}
+
 	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
 		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
 		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
+
 	return conf, db, header.Root, nil
 }
 
@@ -481,10 +521,12 @@ func dump(ctx *cli.Context) error {
 	config := &trie.Config{
 		Preimages: true, // always enable preimage lookup
 	}
+
 	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
 	if err != nil {
 		return err
 	}
+
 	if ctx.Bool(utils.IterativeOutputFlag.Name) {
 		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
 	} else {
@@ -493,8 +535,10 @@ func dump(ctx *cli.Context) error {
 				" otherwise the accounts will overwrite each other in the resulting mapping.")
 			return fmt.Errorf("incompatible options")
 		}
+
 		fmt.Println(string(state.Dump(conf)))
 	}
+
 	return nil
 }
 

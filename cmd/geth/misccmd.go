@@ -103,10 +103,12 @@ func makecache(ctx *cli.Context) error {
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: geth makecache <block number> <outputdir>`)
 	}
+
 	block, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		utils.Fatalf("Invalid block number: %v", err)
 	}
+
 	ethash.MakeCache(block, args[1])
 
 	return nil
@@ -118,10 +120,12 @@ func makedag(ctx *cli.Context) error {
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
 	}
+
 	block, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		utils.Fatalf("Invalid block number: %v", err)
 	}
+
 	ethash.MakeDataset(block, args[1])
 
 	return nil
@@ -140,11 +144,13 @@ func printVersion(ctx *cli.Context) error {
 	if git.Date != "" {
 		fmt.Println("Git Commit Date:", git.Date)
 	}
+
 	fmt.Println("Architecture:", runtime.GOARCH)
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
 	return nil
 }
 
@@ -161,5 +167,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with geth. If not, see <http://www.gnu.org/licenses/>.`)
+
 	return nil
 }

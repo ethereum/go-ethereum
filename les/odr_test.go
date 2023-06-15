@@ -53,10 +53,13 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	} else {
 		block, _ = lc.GetBlockByHash(ctx, bhash)
 	}
+
 	if block == nil {
 		return nil
 	}
+
 	rlp, _ := rlp.EncodeToBytes(block)
+
 	return rlp
 }
 
@@ -66,6 +69,7 @@ func TestOdrGetReceiptsLes4(t *testing.T) { testOdr(t, 4, 1, true, odrGetReceipt
 
 func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
+
 	if bc != nil {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
 			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
@@ -75,10 +79,13 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 			receipts, _ = light.GetBlockReceipts(ctx, lc.Odr(), bhash, *number)
 		}
 	}
+
 	if receipts == nil {
 		return nil
 	}
+
 	rlp, _ := rlp.EncodeToBytes(receipts)
+
 	return rlp
 }
 
@@ -95,6 +102,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 		st  *state.StateDB
 		err error
 	)
+
 	for _, addr := range acc {
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
@@ -103,12 +111,14 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 			header := lc.GetHeaderByHash(bhash)
 			st = light.NewState(ctx, header, lc.Odr())
 		}
+
 		if err == nil {
 			bal := st.GetBalance(addr)
 			rlp, _ := rlp.EncodeToBytes(bal)
 			res = append(res, rlp...)
 		}
 	}
+
 	return res
 }
 
@@ -120,8 +130,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
 	var res []byte
+
 	for i := 0; i < 3; i++ {
 		data[35] = byte(i)
+
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
 			statedb, err := state.New(header.Root, bc.StateCache(), nil)
@@ -178,6 +190,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			}
 		}
 	}
+
 	return res
 }
 
@@ -187,6 +200,7 @@ func TestOdrTxStatusLes4(t *testing.T) { testOdr(t, 4, 1, false, odrTxStatus) }
 
 func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var txs types.Transactions
+
 	if bc != nil {
 		block := bc.GetBlockByHash(bhash)
 		txs = block.Transactions()
@@ -194,8 +208,10 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 		if block, _ := lc.GetBlockByHash(ctx, bhash); block != nil {
 			btxs := block.Transactions()
 			txs = make(types.Transactions, len(btxs))
+
 			for i, tx := range btxs {
 				var err error
+
 				txs[i], _, _, _, err = light.GetTransaction(ctx, lc.Odr(), tx.Hash())
 				if err != nil {
 					return nil
@@ -203,7 +219,9 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 			}
 		}
 	}
+
 	rlp, _ := rlp.EncodeToBytes(txs)
+
 	return rlp
 }
 
@@ -216,6 +234,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		connect:   true,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -240,13 +259,16 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 			// for travis to make the action.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			b2 := fn(ctx, client.db, client.handler.backend.chainConfig, nil, client.handler.backend.blockchain, bhash)
+
 			cancel()
 
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
+
 			if exp && !eq {
 				t.Fatalf("odr mismatch: have %x, want %x", b2, b1)
 			}
+
 			if !exp && eq {
 				t.Fatalf("unexpected odr match")
 			}
@@ -284,6 +306,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 			nopruning: true,
 		}
 	)
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -303,6 +326,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		if block == nil {
 			t.Fatalf("Failed to retrieve block %d", number)
 		}
+
 		for index, tx := range block.Transactions() {
 			txs[tx.Hash()] = tx
 			blockNumbers[tx.Hash()] = number
@@ -328,19 +352,24 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		if err != nil {
 			return err
 		}
+
 		if msg.Code != GetTxStatusMsg {
 			return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, GetTxStatusMsg)
 		}
+
 		var r GetTxStatusPacket
 		if err := msg.Decode(&r); err != nil {
 			return err
 		}
+
 		stats := make([]light.TxStatus, len(r.Hashes))
+
 		for i, hash := range r.Hashes {
 			number, exist := blockNumbers[hash]
 			if !exist {
 				continue // Filter out unknown transactions
 			}
+
 			min := uint64(blocks) - txLookup
 			if txLookup != txIndexUnlimited && (txLookup == txIndexDisabled || number < min) {
 				continue // Filter out unindexed transactions
@@ -353,9 +382,11 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 				Index:      intraIndex[hash],
 			}
 		}
+
 		data, _ := rlp.EncodeToBytes(stats)
 		reply := &reply{peer.app, TxStatusMsg, r.ReqID, data}
 		reply.send(testBufLimit)
+
 		return nil
 	}
 
@@ -408,11 +439,13 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 			results:   []light.TxStatus{{}, {}},
 		},
 	}
+
 	for _, testspec := range testspecs {
 		// Create a bunch of server peers with different tx history
 		var (
 			closeFns []func()
 		)
+
 		for i := 0; i < testspec.peers; i++ {
 			peer, closePeer, _ := client.newRawPeer(t, fmt.Sprintf("server-%d", i), protocol, testspec.txLookups[i])
 			closeFns = append(closeFns, closePeer)
@@ -426,6 +459,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		// Send out the GetTxStatus requests, compare the result with
 		// expected value.
 		r := &light.TxStatusRequest{Hashes: testspec.txs}
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
@@ -451,5 +485,6 @@ func randomHash() common.Hash {
 	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
 		panic(err)
 	}
+
 	return hash
 }

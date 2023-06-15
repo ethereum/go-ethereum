@@ -38,6 +38,7 @@ func newFreezerBatch(f *Freezer) *freezerBatch {
 	for kind, table := range f.tables {
 		batch.tables[kind] = table.newBatch()
 	}
+
 	return batch
 }
 
@@ -67,6 +68,7 @@ func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 		if item < math.MaxUint64 && tb.curItem != item {
 			return 0, 0, fmt.Errorf("table %s is at item %d, want %d", name, tb.curItem, item)
 		}
+
 		item = tb.curItem
 	}
 
@@ -75,8 +77,10 @@ func (batch *freezerBatch) commit() (item uint64, writeSize int64, err error) {
 		if err := tb.commit(); err != nil {
 			return 0, 0, err
 		}
+
 		writeSize += tb.totalBytes
 	}
+
 	return item, writeSize, nil
 }
 
@@ -98,7 +102,9 @@ func (t *freezerTable) newBatch() *freezerTableBatch {
 	if !t.noCompression {
 		batch.sb = new(snappyBuffer)
 	}
+
 	batch.reset()
+
 	return batch
 }
 
@@ -120,13 +126,16 @@ func (batch *freezerTableBatch) Append(item uint64, data interface{}) error {
 
 	// Encode the item.
 	batch.encBuffer.Reset()
+
 	if err := rlp.Encode(&batch.encBuffer, data); err != nil {
 		return err
 	}
+
 	encItem := batch.encBuffer.data
 	if batch.sb != nil {
 		encItem = batch.sb.compress(encItem)
 	}
+
 	return batch.appendItem(encItem)
 }
 
@@ -142,6 +151,7 @@ func (batch *freezerTableBatch) AppendRaw(item uint64, blob []byte) error {
 	if batch.sb != nil {
 		encItem = batch.sb.compress(blob)
 	}
+
 	return batch.appendItem(encItem)
 }
 
@@ -149,14 +159,17 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 	// Check if item fits into current data file.
 	itemSize := int64(len(data))
 	itemOffset := batch.t.headBytes + int64(len(batch.dataBuffer))
+
 	if itemOffset+itemSize > int64(batch.t.maxFileSize) {
 		// It doesn't fit, go to next file first.
 		if err := batch.commit(); err != nil {
 			return err
 		}
+
 		if err := batch.t.advanceHead(); err != nil {
 			return err
 		}
+
 		itemOffset = 0
 	}
 
@@ -177,6 +190,7 @@ func (batch *freezerTableBatch) maybeCommit() error {
 	if len(batch.dataBuffer) > freezerBatchBufferLimit {
 		return batch.commit()
 	}
+
 	return nil
 }
 
@@ -187,6 +201,7 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
+
 	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
@@ -195,6 +210,7 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
+
 	indexSize := int64(len(batch.indexBuffer))
 	batch.indexBuffer = batch.indexBuffer[:0]
 
@@ -205,6 +221,7 @@ func (batch *freezerTableBatch) commit() error {
 	// Update metrics.
 	batch.t.sizeGauge.Inc(dataSize + indexSize)
 	batch.t.writeMeter.Mark(dataSize + indexSize)
+
 	return nil
 }
 
@@ -225,10 +242,12 @@ func (s *snappyBuffer) compress(data []byte) []byte {
 		if cap(s.dst) < n {
 			s.dst = make([]byte, n)
 		}
+
 		s.dst = s.dst[:n]
 	}
 
 	s.dst = snappy.Encode(s.dst, data)
+
 	return s.dst
 }
 

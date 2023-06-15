@@ -68,36 +68,44 @@ var (
 
 func rlpxPing(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return err
 	}
+
 	conn := rlpx.NewConn(fd, n.Pubkey())
 	ourKey, _ := crypto.GenerateKey()
+
 	_, err = conn.Handshake(ourKey)
 	if err != nil {
 		return err
 	}
+
 	code, data, _, err := conn.Read()
 	if err != nil {
 		return err
 	}
+
 	switch code {
 	case 0:
 		var h ethtest.Hello
 		if err := rlp.DecodeBytes(data, &h); err != nil {
 			return fmt.Errorf("invalid handshake: %v", err)
 		}
+
 		fmt.Printf("%+v\n", h)
 	case 1:
 		var msg []p2p.DiscReason
 		if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
 			return fmt.Errorf("invalid disconnect message")
 		}
+
 		return fmt.Errorf("received disconnect message: %v", msg[0])
 	default:
 		return fmt.Errorf("invalid message code %d, expected handshake (code zero)", code)
 	}
+
 	return nil
 }
 
@@ -125,5 +133,6 @@ func rlpxSnapTest(ctx *cli.Context) error {
 	if err != nil {
 		exit(err)
 	}
+
 	return runTests(ctx, suite.SnapTests())
 }

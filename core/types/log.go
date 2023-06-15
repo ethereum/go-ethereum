@@ -80,9 +80,11 @@ func (l *Log) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements rlp.Decoder.
 func (l *Log) DecodeRLP(s *rlp.Stream) error {
 	var dec rlpLog
+
 	err := s.Decode(&dec)
 	if err == nil {
 		l.Address, l.Topics, l.Data = dec.Address, dec.Topics, dec.Data
 	}
+
 	return err
 }

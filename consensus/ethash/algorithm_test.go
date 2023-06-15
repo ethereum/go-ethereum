@@ -48,6 +48,7 @@ func TestSizeCalculations(t *testing.T) {
 			t.Errorf("cache %d: cache size mismatch: have %d, want %d", epoch, size, want)
 		}
 	}
+
 	for epoch, want := range datasetSizes {
 		if size := calcDatasetSize(epoch); size != want {
 			t.Errorf("dataset %d: dataset size mismatch: have %d, want %d", epoch, size, want)
@@ -682,13 +683,16 @@ func TestHashimoto(t *testing.T) {
 	if !bytes.Equal(digest, wantDigest) {
 		t.Errorf("light hashimoto digest mismatch: have %x, want %x", digest, wantDigest)
 	}
+
 	if !bytes.Equal(result, wantResult) {
 		t.Errorf("light hashimoto result mismatch: have %x, want %x", result, wantResult)
 	}
+
 	digest, result = hashimotoFull(dataset, hash, nonce)
 	if !bytes.Equal(digest, wantDigest) {
 		t.Errorf("full hashimoto digest mismatch: have %x, want %x", digest, wantDigest)
 	}
+
 	if !bytes.Equal(result, wantResult) {
 		t.Errorf("full hashimoto result mismatch: have %x, want %x", result, wantResult)
 	}
@@ -727,6 +731,7 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		pend.Add(1)
+
 		go func(idx int) {
 			defer pend.Done()
 
@@ -734,8 +739,10 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 				CacheDir:     cachedir,
 				CachesOnDisk: 1,
 			}
+
 			ethash := New(config, nil, false)
 			defer ethash.Close()
+
 			if err := ethash.verifySeal(nil, block.Header(), false); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
 			}
@@ -758,6 +765,7 @@ func BenchmarkSmallDatasetGeneration(b *testing.B) {
 	generateCache(cache, 0, make([]byte, 32))
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		dataset := make([]uint32, 32*65536/4)
 		generateDataset(dataset, 0, cache)
@@ -772,6 +780,7 @@ func BenchmarkHashimotoLight(b *testing.B) {
 	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		hashimotoLight(datasetSize(1), cache, hash, 0)
 	}
@@ -788,6 +797,7 @@ func BenchmarkHashimotoFullSmall(b *testing.B) {
 	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		hashimotoFull(dataset, hash, 0)
 	}
@@ -799,8 +809,11 @@ func benchmarkHashimotoFullMmap(b *testing.B, name string, lock bool) {
 
 		d := &dataset{epoch: 0}
 		d.generate(tmpdir, 1, lock, false)
+
 		var hash [common.HashLength]byte
+
 		b.ResetTimer()
+
 		for i := 0; i < b.N; i++ {
 			binary.PutVarint(hash[:], int64(i))
 			hashimotoFull(d.dataset, hash[:], 0)

@@ -34,9 +34,12 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		tests  = allTransactionTypes(common.Address{0xde, 0xad}, config)
 	)
+
 	t.Parallel()
+
 	for i, tt := range tests {
 		var tx2 types.Transaction
+
 		tx, err := types.SignNewTx(key, signer, tt)
 		if err != nil {
 			t.Fatalf("test %d: signing failed: %v", i, err)

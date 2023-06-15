@@ -66,10 +66,12 @@ func stateTestCmd(ctx *cli.Context) error {
 		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
 		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
 	}
+
 	var (
 		tracer   vm.EVMLogger
 		debugger *logger.StructLogger
 	)
+
 	switch {
 	case ctx.Bool(MachineFlag.Name):
 		tracer = logger.NewJSONLogger(config, os.Stderr)
@@ -86,6 +88,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	var tests map[string]tests.StateTest
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
@@ -95,6 +98,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		Tracer: tracer,
 	}
 	results := make([]StatetestResult, 0, len(tests))
+
 	for key, test := range tests {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
@@ -109,6 +113,7 @@ func stateTestCmd(ctx *cli.Context) error {
 					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 				}
 			}
+
 			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
@@ -130,7 +135,9 @@ func stateTestCmd(ctx *cli.Context) error {
 			}
 		}
 	}
+
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
+
 	return nil
 }

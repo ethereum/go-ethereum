@@ -66,6 +66,7 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 
 	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool)
 	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool)
+
 	defer emptyPeerEth.Close()
 	defer fullPeerEth.Close()
 
@@ -97,6 +98,7 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	if err := empty.handler.doSync(op); err != nil {
 		t.Fatal("sync failed:", err)
 	}
+
 	if atomic.LoadUint32(&empty.handler.snapSync) == 1 {
 		t.Fatalf("snap sync not disabled after successful synchronisation")
 	}

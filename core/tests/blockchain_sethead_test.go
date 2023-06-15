@@ -57,21 +57,26 @@ func (tt *rewindTest) dump(crash bool) string {
 	buffer := new(strings.Builder)
 
 	fmt.Fprint(buffer, "Chain:\n  G")
+
 	for i := 0; i < tt.canonicalBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
 	fmt.Fprint(buffer, " (HEAD)\n")
+
 	if tt.sidechainBlocks > 0 {
 		fmt.Fprintf(buffer, "  └")
+
 		for i := 0; i < tt.sidechainBlocks; i++ {
 			fmt.Fprintf(buffer, "->S%d", i+1)
 		}
 		fmt.Fprintf(buffer, "\n")
 	}
+
 	fmt.Fprintf(buffer, "\n")
 
 	if tt.canonicalBlocks > int(tt.freezeThreshold) {
 		fmt.Fprint(buffer, "Frozen:\n  G")
+
 		for i := 0; i < tt.canonicalBlocks-int(tt.freezeThreshold); i++ {
 			fmt.Fprintf(buffer, "->C%d", i+1)
 		}
@@ -79,10 +84,13 @@ func (tt *rewindTest) dump(crash bool) string {
 	} else {
 		fmt.Fprintf(buffer, "Frozen: none\n")
 	}
+
 	fmt.Fprintf(buffer, "Commit: G")
+
 	if tt.commitBlock > 0 {
 		fmt.Fprintf(buffer, ", C%d", tt.commitBlock)
 	}
+
 	fmt.Fprint(buffer, "\n")
 
 	if tt.pivotBlock == nil {
@@ -90,31 +98,38 @@ func (tt *rewindTest) dump(crash bool) string {
 	} else {
 		fmt.Fprintf(buffer, "Pivot : C%d\n", *tt.pivotBlock)
 	}
+
 	if crash {
 		fmt.Fprintf(buffer, "\nCRASH\n\n")
 	} else {
 		fmt.Fprintf(buffer, "\nSetHead(%d)\n\n", tt.setheadBlock)
 	}
+
 	fmt.Fprintf(buffer, "------------------------------\n\n")
 
 	if tt.expFrozen > 0 {
 		fmt.Fprint(buffer, "Expected in freezer:\n  G")
+
 		for i := 0; i < tt.expFrozen-1; i++ {
 			fmt.Fprintf(buffer, "->C%d", i+1)
 		}
 		fmt.Fprintf(buffer, "\n\n")
 	}
+
 	if tt.expFrozen > 0 {
 		if tt.expFrozen >= tt.expCanonicalBlocks {
 			fmt.Fprintf(buffer, "Expected in leveldb: none\n")
 		} else {
 			fmt.Fprintf(buffer, "Expected in leveldb:\n  C%d)", tt.expFrozen-1)
+
 			for i := tt.expFrozen - 1; i < tt.expCanonicalBlocks; i++ {
 				fmt.Fprintf(buffer, "->C%d", i+1)
 			}
 			fmt.Fprint(buffer, "\n")
+
 			if tt.expSidechainBlocks > tt.expFrozen {
 				fmt.Fprintf(buffer, "  └")
+
 				for i := tt.expFrozen - 1; i < tt.expSidechainBlocks; i++ {
 					fmt.Fprintf(buffer, "->S%d", i+1)
 				}
@@ -123,26 +138,32 @@ func (tt *rewindTest) dump(crash bool) string {
 		}
 	} else {
 		fmt.Fprint(buffer, "Expected in leveldb:\n  G")
+
 		for i := tt.expFrozen; i < tt.expCanonicalBlocks; i++ {
 			fmt.Fprintf(buffer, "->C%d", i+1)
 		}
 		fmt.Fprint(buffer, "\n")
+
 		if tt.expSidechainBlocks > tt.expFrozen {
 			fmt.Fprintf(buffer, "  └")
+
 			for i := tt.expFrozen; i < tt.expSidechainBlocks; i++ {
 				fmt.Fprintf(buffer, "->S%d", i+1)
 			}
 			fmt.Fprintf(buffer, "\n")
 		}
 	}
+
 	fmt.Fprintf(buffer, "\n")
 	fmt.Fprintf(buffer, "Expected head header    : C%d\n", tt.expHeadHeader)
 	fmt.Fprintf(buffer, "Expected head fast block: C%d\n", tt.expHeadFastBlock)
+
 	if tt.expHeadBlock == 0 {
 		fmt.Fprintf(buffer, "Expected head block     : G\n")
 	} else {
 		fmt.Fprintf(buffer, "Expected head block     : C%d\n", tt.expHeadBlock)
 	}
+
 	return buffer.String()
 }
 
@@ -1953,7 +1974,6 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	// It's hard to follow the test case, visualize the input
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(false))
-
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
@@ -1980,6 +2000,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			SnapshotLimit:  0, // Disable snapshot
 		}
 	)
+
 	if snapshots {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
@@ -2010,6 +2031,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	if _, err := chain.InsertChain(canonblocks[:tt.commitBlock]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
+
 	if tt.commitBlock > 0 {
 		err = chain.StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true)
 		if err != nil {
@@ -2022,6 +2044,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			}
 		}
 	}
+
 	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
@@ -2029,6 +2052,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	for _, block := range sideblocks {
 		chain.StateCache().TrieDB().Dereference(block.Root())
 	}
+
 	for _, block := range canonblocks {
 		chain.StateCache().TrieDB().Dereference(block.Root())
 	}
@@ -2037,6 +2061,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		Freeze(threshold uint64) error
 		Ancients() (uint64, error)
 	}
+
 	db.(freezer).Freeze(tt.freezeThreshold)
 
 	// Set the simulated pivot block
@@ -2063,6 +2088,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := chain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
+
 	if frozen, err := db.(freezer).Ancients(); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
 	} else if int(frozen) != tt.expFrozen {
@@ -2078,47 +2104,58 @@ func verifyNoGaps(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 	t.Helper()
 
 	var end uint64
+
 	for i := uint64(0); i <= uint64(len(inserted)); i++ {
 		header := chain.GetHeaderByNumber(i)
 		if header == nil && end == 0 {
 			end = i
 		}
+
 		if header != nil && end > 0 {
 			if canonical {
 				t.Errorf("Canonical header gap between #%d-#%d", end, i-1)
 			} else {
 				t.Errorf("Sidechain header gap between #%d-#%d", end, i-1)
 			}
+
 			end = 0 // Reset for further gap detection
 		}
 	}
+
 	end = 0
+
 	for i := uint64(0); i <= uint64(len(inserted)); i++ {
 		block := chain.GetBlockByNumber(i)
 		if block == nil && end == 0 {
 			end = i
 		}
+
 		if block != nil && end > 0 {
 			if canonical {
 				t.Errorf("Canonical block gap between #%d-#%d", end, i-1)
 			} else {
 				t.Errorf("Sidechain block gap between #%d-#%d", end, i-1)
 			}
+
 			end = 0 // Reset for further gap detection
 		}
 	}
+
 	end = 0
+
 	for i := uint64(1); i <= uint64(len(inserted)); i++ {
 		receipts := chain.GetReceiptsByHash(inserted[i-1].Hash())
 		if receipts == nil && end == 0 {
 			end = i
 		}
+
 		if receipts != nil && end > 0 {
 			if canonical {
 				t.Errorf("Canonical receipt gap between #%d-#%d", end, i-1)
 			} else {
 				t.Errorf("Sidechain receipt gap between #%d-#%d", end, i-1)
 			}
+
 			end = 0 // Reset for further gap detection
 		}
 	}
@@ -2140,6 +2177,7 @@ func verifyCutoff(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 					t.Errorf("Sidechain header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
+
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block == nil {
 				if canonical {
 					t.Errorf("Canonical block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
@@ -2147,6 +2185,7 @@ func verifyCutoff(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 					t.Errorf("Sidechain block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
+
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts == nil {
 				if canonical {
 					t.Errorf("Canonical receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
@@ -2162,6 +2201,7 @@ func verifyCutoff(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 					t.Errorf("Sidechain header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
+
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block != nil {
 				if canonical {
 					t.Errorf("Canonical block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
@@ -2169,6 +2209,7 @@ func verifyCutoff(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 					t.Errorf("Sidechain block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
+
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts != nil {
 				if canonical {
 					t.Errorf("Canonical receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)

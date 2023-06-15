@@ -189,13 +189,16 @@ func TestSetFeeDefaults(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	for i, test := range tests {
 		if test.isLondon {
 			b.activateLondon()
 		} else {
 			b.deactivateLondon()
 		}
+
 		got := test.in
+
 		err := got.setFeeDefaults(ctx, b)
 		if err != nil && err.Error() == test.err.Error() {
 			// Test threw expected error.
@@ -203,6 +206,7 @@ func TestSetFeeDefaults(t *testing.T) {
 		} else if err != nil {
 			t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
 		}
+
 		if !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("test %d (%s): did not fill defaults as expected: (got: %v, want: %v)", i, test.name, got, test.want)
 		}
@@ -231,6 +235,7 @@ func newBackendMock() *backendMock {
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(1000),
 	}
+
 	return &backendMock{
 		current: &types.Header{
 			Difficulty: big.NewInt(10000000000),

@@ -51,6 +51,7 @@ func (c *Chain) TD() *big.Int {
 	for _, block := range c.blocks[:c.Len()] {
 		sum.Add(sum, block.Difficulty())
 	}
+
 	return sum
 }
 
@@ -61,9 +62,11 @@ func (c *Chain) TotalDifficultyAt(height int) *big.Int {
 	if height >= c.Len() {
 		return sum
 	}
+
 	for _, block := range c.blocks[:height+1] {
 		sum.Add(sum, block.Difficulty())
 	}
+
 	return sum
 }
 
@@ -71,6 +74,7 @@ func (c *Chain) RootAt(height int) common.Hash {
 	if height < c.Len() {
 		return c.blocks[height].Root()
 	}
+
 	return common.Hash{}
 }
 
@@ -85,6 +89,7 @@ func (c *Chain) Shorten(height int) *Chain {
 	copy(blocks, c.blocks[:height])
 
 	config := *c.chainConfig
+
 	return &Chain{
 		blocks:      blocks,
 		chainConfig: &config,
@@ -103,6 +108,7 @@ func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	}
 
 	headers := make([]*types.Header, req.Amount)
+
 	var blockNumber uint64
 
 	// range over blocks to check if our chain has the requested header
@@ -112,6 +118,7 @@ func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 			blockNumber = block.Number().Uint64()
 		}
 	}
+
 	if headers[0] == nil {
 		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
 	}
@@ -149,6 +156,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	}
 
 	c := &Chain{genesis: gen, blocks: blocks, chainConfig: gen.Config}
+
 	return c, nil
 }
 
@@ -157,10 +165,12 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 	if err != nil {
 		return core.Genesis{}, err
 	}
+
 	var gen core.Genesis
 	if err := json.Unmarshal(chainConfig, &gen); err != nil {
 		return core.Genesis{}, err
 	}
+
 	return gen, nil
 }
 
@@ -170,16 +180,21 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 	if err != nil {
 		return nil, err
 	}
+
 	defer fh.Close()
+
 	var reader io.Reader = fh
 	if strings.HasSuffix(chainfile, ".gz") {
 		if reader, err = gzip.NewReader(reader); err != nil {
 			return nil, err
 		}
 	}
+
 	stream := rlp.NewStream(reader, 0)
+
 	var blocks = make([]*types.Block, 1)
 	blocks[0] = gblock
+
 	for i := 0; ; i++ {
 		var b types.Block
 		if err := stream.Decode(&b); err == io.EOF {
@@ -187,10 +202,13 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 		} else if err != nil {
 			return nil, fmt.Errorf("at block index %d: %v", i, err)
 		}
+
 		if b.NumberU64() != uint64(i+1) {
 			return nil, fmt.Errorf("block at index %d has wrong number %d", i, b.NumberU64())
 		}
+
 		blocks = append(blocks, &b)
 	}
+
 	return blocks, nil
 }

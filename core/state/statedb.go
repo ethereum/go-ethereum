@@ -144,6 +144,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	sdb := &StateDB{
 		db:                   db,
 		trie:                 tr,
@@ -167,6 +168,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
 	}
+
 	return sdb, nil
 }
 
@@ -176,6 +178,7 @@ func NewWithMVHashmap(root common.Hash, db Database, snaps *snapshot.Tree, mvhm 
 	} else {
 		sdb.mvHashmap = mvhm
 		sdb.dep = -1
+
 		return sdb, nil
 	}
 }
@@ -371,6 +374,7 @@ func (s *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 			continue
 		} else {
 			addr := path.GetAddress()
+
 			switch path.GetSubpath() {
 			case BalancePath:
 				s.SetBalance(addr, sr.GetBalance(addr))
@@ -453,6 +457,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
+
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
@@ -497,6 +502,7 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 		l.BlockNumber = blockNumber
 		l.BlockHash = blockHash
 	}
+
 	return logs
 }
 
@@ -505,6 +511,7 @@ func (s *StateDB) Logs() []*types.Log {
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)
 	}
+
 	return logs
 }
 
@@ -512,6 +519,7 @@ func (s *StateDB) Logs() []*types.Log {
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := s.preimages[hash]; !ok {
 		s.journal.append(addPreimageChange{hash: hash})
+
 		pi := make([]byte, len(preimage))
 		copy(pi, preimage)
 		s.preimages[hash] = pi
@@ -533,9 +541,11 @@ func (s *StateDB) AddRefund(gas uint64) {
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
 	s.journal.append(refundChange{prev: s.refund})
+
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
+
 	s.refund -= gas
 }
 
@@ -606,6 +616,7 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 		if stateObject != nil {
 			return stateObject.Code(s.db)
 		}
+
 		return nil
 	})
 }
@@ -616,6 +627,7 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 		if stateObject != nil {
 			return stateObject.CodeSize(s.db)
 		}
+
 		return 0
 	})
 }
@@ -626,6 +638,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 		if stateObject == nil {
 			return common.Hash{}
 		}
+
 		return common.BytesToHash(stateObject.CodeHash())
 	})
 }
@@ -637,6 +650,7 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 		if stateObject != nil {
 			return stateObject.GetState(s.db, hash)
 		}
+
 		return common.Hash{}
 	})
 }
@@ -650,6 +664,7 @@ func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
 func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
 	var proof proofList
 	err := s.trie.Prove(addrHash[:], 0, &proof)
+
 	return proof, err
 }
 
@@ -659,6 +674,7 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 	if err != nil {
 		return nil, err
 	}
+
 	if trie == nil {
 		return nil, errors.New("storage trie for requested address does not exist")
 	}
@@ -680,6 +696,7 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 		if stateObject != nil {
 			return stateObject.GetCommittedState(s.db, hash)
 		}
+
 		return common.Hash{}
 	})
 }
@@ -698,11 +715,13 @@ func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
 		//nolint:nilnil
 		return nil, nil
 	}
+
 	cpy := stateObject.deepCopy(s)
 
 	if _, err := cpy.updateTrie(s.db); err != nil {
 		return nil, err
 	}
+
 	return cpy.getTrie(s.db)
 }
 
@@ -712,6 +731,7 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 		if stateObject != nil {
 			return stateObject.suicided
 		}
+
 		return false
 	})
 }
@@ -903,6 +923,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 		return obj
 	}
+
 	return nil
 }
 
@@ -918,16 +939,20 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 		// If no live objects are available, attempt to use snapshots
 		var data *types.StateAccount
+
 		if s.snap != nil { // nolint
 			start := time.Now()
 			acc, err := s.snap.Account(crypto.HashData(crypto.NewKeccakState(), addr.Bytes()))
+
 			if metrics.EnabledExpensive {
 				s.SnapshotAccountReads += time.Since(start)
 			}
+
 			if err == nil {
 				if acc == nil {
 					return nil
 				}
+
 				data = &types.StateAccount{
 					Nonce:    acc.Nonce,
 					Balance:  acc.Balance,
@@ -937,6 +962,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				if len(data.CodeHash) == 0 {
 					data.CodeHash = types.EmptyCodeHash.Bytes()
 				}
+
 				if data.Root == (common.Hash{}) {
 					data.Root = types.EmptyRootHash
 				}
@@ -945,15 +971,19 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		// If snapshot unavailable or reading from it failed, load from the database
 		if data == nil {
 			start := time.Now()
+
 			var err error
 			data, err = s.trie.GetAccount(addr)
+
 			if metrics.EnabledExpensive {
 				s.AccountReads += time.Since(start)
 			}
+
 			if err != nil {
 				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 				return nil
 			}
+
 			if data == nil {
 				return nil
 			}
@@ -961,6 +991,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		// Insert into the live set
 		obj := newObject(s, addr, *data)
 		s.setStateObject(obj)
+
 		return obj
 	})
 }
@@ -975,6 +1006,7 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
 	}
+
 	return stateObject
 }
 
@@ -1012,18 +1044,23 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 			s.stateObjectsDestruct[prev.address] = struct{}{}
 		}
 	}
+
 	newobj = newObject(s, addr, types.StateAccount{})
+
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
+
 	s.setStateObject(newobj)
 
 	MVWrite(s, blockstm.NewAddressKey(addr))
+
 	if prev != nil && !prev.deleted {
 		return newobj, prev
 	}
+
 	return newobj, nil
 }
 
@@ -1065,6 +1102,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 			if !cb(key, value) {
 				return nil
 			}
+
 			continue
 		}
 
@@ -1073,11 +1111,13 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 			if err != nil {
 				return err
 			}
+
 			if !cb(key, common.BytesToHash(content)) {
 				return nil
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -1125,26 +1165,32 @@ func (s *StateDB) Copy() *StateDB {
 		if _, exist := state.stateObjects[addr]; !exist {
 			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
 		}
+
 		state.stateObjectsPending[addr] = struct{}{}
 	}
+
 	for addr := range s.stateObjectsDirty {
 		if _, exist := state.stateObjects[addr]; !exist {
 			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
 		}
+
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	// Deep copy the destruction flag.
 	for addr := range s.stateObjectsDestruct {
 		state.stateObjectsDestruct[addr] = struct{}{}
 	}
+
 	for hash, logs := range s.logs {
 		cpy := make([]*types.Log, len(logs))
 		for i, l := range logs {
 			cpy[i] = new(types.Log)
 			*cpy[i] = *l
 		}
+
 		state.logs[hash] = cpy
 	}
+
 	for hash, preimage := range s.preimages {
 		state.preimages[hash] = preimage
 	}
@@ -1163,6 +1209,7 @@ func (s *StateDB) Copy() *StateDB {
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
 	}
+
 	if s.snaps != nil {
 		// In order for the miner to be able to use and make additions
 		// to the snapshot tree, we need to copy that as well.
@@ -1176,12 +1223,15 @@ func (s *StateDB) Copy() *StateDB {
 		for k, v := range s.snapAccounts {
 			state.snapAccounts[k] = v
 		}
+
 		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+
 		for k, v := range s.snapStorage {
 			temp := make(map[common.Hash][]byte)
 			for kk, vv := range v {
 				temp[kk] = vv
 			}
+
 			state.snapStorage[k] = temp
 		}
 	}
@@ -1189,6 +1239,7 @@ func (s *StateDB) Copy() *StateDB {
 	if s.mvHashmap != nil {
 		state.mvHashmap = s.mvHashmap
 	}
+
 	return state
 }
 
@@ -1197,6 +1248,7 @@ func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
 	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+
 	return id
 }
 
@@ -1209,6 +1261,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
 		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
 	}
+
 	snapshot := s.validRevisions[idx].journalIndex
 
 	// Replay the journal to undo changes and remove invalidated snapshots
@@ -1226,6 +1279,7 @@ func (s *StateDB) GetRefund() uint64 {
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
+
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -1237,6 +1291,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// Thus, we can safely ignore it here
 			continue
 		}
+
 		if obj.suicided || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
 
@@ -1255,6 +1310,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		} else {
 			obj.finalise(true) // Prefetch slots in the background
 		}
+
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
 
@@ -1263,6 +1319,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		// the commit-phase will be a lot faster
 		addressesToPrefetch = append(addressesToPrefetch, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
+
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
 		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
 	}
@@ -1309,7 +1366,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.trie = trie
 		}
 	}
+
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; obj.deleted {
 			s.deleteStateObject(obj)
@@ -1318,11 +1377,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
 		}
+
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
+
 	if prefetcher != nil {
 		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
 	}
+
 	if len(s.stateObjectsPending) > 0 {
 		s.stateObjectsPending = make(map[common.Address]struct{})
 	}
@@ -1330,6 +1392,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
+
 	return s.trie.Hash()
 }
 
@@ -1368,6 +1431,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		nodes                   = trie.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
 	)
+
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
@@ -1398,9 +1462,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// and in path-based-scheme some technical challenges are still unsolved.
 		// Although it won't affect the correctness but please fix it TODO(rjl493456442).
 	}
+
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
+
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)
@@ -1421,6 +1487,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 	}
+
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
 
@@ -1432,6 +1499,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 		storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
 		storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
+
 		s.AccountUpdated, s.AccountDeleted = 0, 0
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}
@@ -1553,6 +1621,7 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 		// Better safe than sorry, though
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
+
 	if slotMod {
 		s.journal.append(accessListAddSlotChange{
 			address: &addr,

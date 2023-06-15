@@ -60,8 +60,10 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		if len(b.txs) > 0 {
 			panic("coinbase must be set before adding transactions")
 		}
+
 		panic("coinbase can only be set once")
 	}
+
 	b.header.Coinbase = addr
 	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
 }
@@ -134,10 +136,12 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	b.addTx(bc, vm.Config{}, tx)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
+
 	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, nil)
 	if err != nil {
 		panic(err)
 	}
+
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 }
@@ -193,6 +197,7 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 	if !b.statedb.Exist(addr) {
 		panic("account does not exist")
 	}
+
 	return b.statedb.GetNonce(addr)
 }
 
@@ -202,12 +207,14 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	h.Time = b.header.Time
 
 	var parent *types.Header
+
 	for i := b.i - 1; i >= 0; i-- {
 		if b.chain[i].Hash() == h.ParentHash {
 			parent = b.chain[i].Header()
 			break
 		}
 	}
+
 	chainreader := &fakeChainReader{config: b.config}
 	h.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, parent)
 
@@ -215,11 +222,13 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	h.GasLimit = parent.GasLimit
 	if b.config.IsLondon(h.Number) {
 		h.BaseFee = misc.CalcBaseFee(b.config, parent)
+
 		if !b.config.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * b.config.ElasticityMultiplier()
 			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
+
 	b.uncles = append(b.uncles, h)
 }
 
@@ -262,9 +271,11 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 	if index >= b.i {
 		panic(fmt.Errorf("block index %d out of range (%d,%d)", index, -1, b.i))
 	}
+
 	if index == -1 {
 		return b.parent
 	}
+
 	return b.chain[index]
 }
 
@@ -276,6 +287,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time <= b.parent.Header().Time {
 		panic("block time out of range")
 	}
+
 	chainreader := &fakeChainReader{config: b.config}
 	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
 }
@@ -296,6 +308,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	if config == nil {
 		config = params.TestChainConfig
 	}
+
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
@@ -323,6 +336,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				}
 			}
 		}
+
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
@@ -330,6 +344,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if gen != nil {
 			gen(i, b)
 		}
+
 		if b.engine != nil {
 			block, err := b.engine.FinalizeAndAssemble(context.Background(), chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
 			if err != nil {
@@ -345,20 +360,25 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
+
 			return block, b.receipts
 		}
+
 		return nil, nil
 	}
+
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
 		if err != nil {
 			panic(err)
 		}
+
 		block, receipt := genblock(i, parent, statedb)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
 	}
+
 	return blocks, receipts
 }
 
@@ -385,6 +405,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
+
 	header := &types.Header{
 		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
@@ -401,11 +422,13 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	}
 	if chain.Config().IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
+
 		if !chain.Config().IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * chain.Config().ElasticityMultiplier()
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
+
 	return header
 }
 
@@ -413,9 +436,11 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 func makeHeaderChain(chainConfig *params.ChainConfig, parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
 	blocks := makeBlockChain(chainConfig, types.NewBlockWithHeader(parent), n, engine, db, seed)
 	headers := make([]*types.Header, len(blocks))
+
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
+
 	return headers
 }
 
@@ -454,6 +479,7 @@ func makeFakeNonEmptyBlockChain(parent *types.Block, n int, engine consensus.Eng
 	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
 		addr := common.Address{0: byte(seed), 19: byte(i)}
 		b.SetCoinbase(addr)
+
 		for j := 0; j < numTx; j++ {
 			b.txs = append(b.txs, types.NewTransaction(0, addr, big.NewInt(1000), params.TxGas, nil, nil))
 		}

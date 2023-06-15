@@ -35,10 +35,13 @@ func pricedValuedTransaction(nonce uint64, value int64, gaslimit uint64, gaspric
 
 func count(t *testing.T, pool *TxPool) (pending int, queued int) {
 	t.Helper()
+
 	pending, queued = pool.stats()
+
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+
 	return pending, queued
 }
 
@@ -47,6 +50,7 @@ func fillPool(tb testing.TB, pool *TxPool) {
 	// Create a number of test accounts, fund them and make transactions
 	executableTxs := types.Transactions{}
 	nonExecutableTxs := types.Transactions{}
+
 	for i := 0; i < 384; i++ {
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(10000000000))
@@ -64,6 +68,7 @@ func fillPool(tb testing.TB, pool *TxPool) {
 	if have, want := pending, slots; have != want {
 		tb.Fatalf("have %d, want %d", have, want)
 	}
+
 	if have, want := queued, 0; have != want {
 		tb.Fatalf("have %d, want %d", have, want)
 	}
@@ -83,6 +88,7 @@ func TestTransactionFutureAttack(t *testing.T) {
 	config := testTxPoolConfig
 	config.GlobalQueue = 100
 	config.GlobalSlots = 100
+
 	pool := NewTxPool(config, eip1559Config, blockchain)
 	defer pool.Stop()
 	fillPool(t, pool)
@@ -91,16 +97,19 @@ func TestTransactionFutureAttack(t *testing.T) {
 	{
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
+
 		futureTxs := types.Transactions{}
 		for j := 0; j < int(pool.config.GlobalSlots+pool.config.GlobalQueue); j++ {
 			futureTxs = append(futureTxs, pricedTransaction(1000+uint64(j), 100000, big.NewInt(500), key))
 		}
+
 		for i := 0; i < 5; i++ {
 			pool.AddRemotesSync(futureTxs)
 			newPending, newQueued := count(t, pool)
 			t.Logf("pending: %d queued: %d, all: %d\n", newPending, newQueued, pool.all.Slots())
 		}
 	}
+
 	newPending, _ := pool.Stats()
 	// Pending should not have been touched
 	if have, want := newPending, pending; have < want {
@@ -116,6 +125,7 @@ func TestTransactionFuture1559(t *testing.T) {
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(1000000, statedb, new(event.Feed))
+
 	pool := NewTxPool(testTxPoolConfig, eip1559Config, blockchain)
 	defer pool.Stop()
 
@@ -127,12 +137,14 @@ func TestTransactionFuture1559(t *testing.T) {
 	{
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
+
 		futureTxs := types.Transactions{}
 		for j := 0; j < int(pool.config.GlobalSlots+pool.config.GlobalQueue); j++ {
 			futureTxs = append(futureTxs, dynamicFeeTx(1000+uint64(j), 100000, big.NewInt(200), big.NewInt(101), key))
 		}
 		pool.AddRemotesSync(futureTxs)
 	}
+
 	newPending, _ := pool.Stats()
 	// Pending should not have been touched
 	if have, want := newPending, pending; have != want {
@@ -148,6 +160,7 @@ func TestTransactionZAttack(t *testing.T) {
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(1000000, statedb, new(event.Feed))
+
 	pool := NewTxPool(testTxPoolConfig, eip1559Config, blockchain)
 	defer pool.Stop()
 	// Create a number of test accounts, fund them and make transactions
@@ -155,7 +168,9 @@ func TestTransactionZAttack(t *testing.T) {
 
 	countInvalidPending := func() int {
 		t.Helper()
+
 		var ivpendingNum int
+
 		pendingtxs, _ := pool.Content()
 		for account, txs := range pendingtxs {
 			cur_balance := new(big.Int).Set(pool.currentState.GetBalance(account))
@@ -167,9 +182,11 @@ func TestTransactionZAttack(t *testing.T) {
 				}
 			}
 		}
+
 		if err := validatePoolInternals(pool); err != nil {
 			t.Fatalf("pool internal state corrupted: %v", err)
 		}
+
 		return ivpendingNum
 	}
 	ivPending := countInvalidPending()
@@ -188,6 +205,7 @@ func TestTransactionZAttack(t *testing.T) {
 	{
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
+
 		for j := 0; j < int(pool.config.GlobalSlots); j++ {
 			overDraftTxs = append(overDraftTxs, pricedValuedTransaction(uint64(j), 600000000000, 21000, big.NewInt(500), key))
 		}
@@ -200,6 +218,7 @@ func TestTransactionZAttack(t *testing.T) {
 
 	newPending, newQueued := count(t, pool)
 	newIvPending := countInvalidPending()
+
 	t.Logf("pool.all.Slots(): %d\n", pool.all.Slots())
 	t.Logf("pending: %d queued: %d, all: %d\n", newPending, newQueued, pool.all.Slots())
 	t.Logf("invalid pending: %d\n", newIvPending)
@@ -218,18 +237,21 @@ func BenchmarkFutureAttack(b *testing.B) {
 	config := testTxPoolConfig
 	config.GlobalQueue = 100
 	config.GlobalSlots = 100
+
 	pool := NewTxPool(config, eip1559Config, blockchain)
 	defer pool.Stop()
 	fillPool(b, pool)
 
 	key, _ := crypto.GenerateKey()
 	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000))
+
 	futureTxs := types.Transactions{}
 
 	for n := 0; n < b.N; n++ {
 		futureTxs = append(futureTxs, pricedTransaction(1000+uint64(n), 100000, big.NewInt(500), key))
 	}
 	b.ResetTimer()
+
 	for i := 0; i < 5; i++ {
 		pool.AddRemotesSync(futureTxs)
 	}

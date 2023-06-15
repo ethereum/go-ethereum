@@ -58,8 +58,10 @@ func TestPeerSubscription(t *testing.T) {
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}
+
 		sort.Strings(given)
 		sort.Strings(expect)
+
 		if !reflect.DeepEqual(given, expect) {
 			t.Fatalf("all peer ids mismatch, want %v, given %v", expect, given)
 		}
@@ -76,6 +78,7 @@ func TestPeerSubscription(t *testing.T) {
 		case <-time.NewTimer(10 * time.Millisecond).C:
 		}
 	}
+
 	checkIds([]string{})
 
 	sub := newTestServerPeerSub()
@@ -83,6 +86,7 @@ func TestPeerSubscription(t *testing.T) {
 
 	// Generate a random id and create the peer
 	var id enode.ID
+
 	rand.Read(id[:])
 	peer := newServerPeer(2, NetworkId, false, p2p.NewPeer(id, "name", nil), nil)
 	peers.register(peer)
@@ -109,6 +113,7 @@ func TestHandshake(t *testing.T) {
 
 	// Generate a random id and create the peer
 	var id enode.ID
+
 	rand.Read(id[:])
 
 	peer1 := newClientPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), net)

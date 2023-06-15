@@ -1037,6 +1037,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	// RequiredBlocks
 	{
 		n.RequiredBlocks = map[uint64]common.Hash{}
+
 		for k, v := range c.RequiredBlocks {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
@@ -1125,6 +1126,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.NoPruning = true
 		if !n.Preimages {
 			n.Preimages = true
+
 			log.Info("Enabling recording of key preimages since archive mode is used")
 		}
 	default:
@@ -1441,12 +1443,14 @@ func MakeDatabaseHandles(max int) (int, error) {
 
 func parseBootnodes(urls []string) ([]*enode.Node, error) {
 	dst := []*enode.Node{}
+
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				return nil, fmt.Errorf("invalid bootstrap url '%s': %v", url, err)
 			}
+
 			dst = append(dst, node)
 		}
 	}

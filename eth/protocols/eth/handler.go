@@ -96,6 +96,7 @@ type TxPool interface {
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
 func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2p.Protocol {
 	protocols := make([]p2p.Protocol, len(ProtocolVersions))
+
 	for i, version := range ProtocolVersions {
 		version := version // Closure
 
@@ -121,6 +122,7 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 			DialCandidates: dnsdisc,
 		}
 	}
+
 	return protocols
 }
 
@@ -221,9 +223,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 	if err != nil {
 		return err
 	}
+
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
+
 	defer msg.Discard()
 
 	var handlers = eth66
@@ -247,8 +251,10 @@ func handleMessage(backend Backend, peer *Peer) error {
 			metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(start).Microseconds())
 		}(time.Now())
 	}
+
 	if handler := handlers[msg.Code]; handler != nil {
 		return handler(backend, msg, peer)
 	}
+
 	return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)
 }

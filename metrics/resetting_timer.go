@@ -27,16 +27,20 @@ func GetOrRegisterResettingTimer(name string, r Registry) ResettingTimer {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewResettingTimer).(ResettingTimer)
 }
 
 // NewRegisteredResettingTimer constructs and registers a new StandardResettingTimer.
 func NewRegisteredResettingTimer(name string, r Registry) ResettingTimer {
 	c := NewResettingTimer()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -45,6 +49,7 @@ func NewResettingTimer() ResettingTimer {
 	if !Enabled {
 		return NilResettingTimer{}
 	}
+
 	return &StandardResettingTimer{
 		values: make([]int64, 0, InitialResettingTimerSliceCap),
 	}
@@ -120,6 +125,7 @@ func (t *StandardResettingTimer) Mean() float64 {
 // Record the duration of the execution of the given function.
 func (t *StandardResettingTimer) Time(f func()) {
 	ts := time.Now()
+
 	f()
 	t.Update(time.Since(ts))
 }
@@ -195,6 +201,7 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 
 		cumulativeValues := make([]int64, count)
 		cumulativeValues[0] = min
+
 		for i := 1; i < count; i++ {
 			cumulativeValues[i] = t.values[i] + cumulativeValues[i-1]
 		}
@@ -217,6 +224,7 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 				if pct >= 0 && indexOfPerc > 0 {
 					indexOfPerc -= 1 // index offset=0
 				}
+
 				thresholdBoundary = t.values[indexOfPerc]
 			}
 

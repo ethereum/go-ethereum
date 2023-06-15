@@ -83,6 +83,7 @@ func (f *DirectoryFlag) Apply(set *flag.FlagSet) error {
 	eachName(f, func(name string) {
 		set.Var(&f.Value, f.Name, f.Usage)
 	})
+
 	return nil
 }
 
@@ -109,6 +110,7 @@ func (f *DirectoryFlag) GetDefaultText() string {
 	if f.DefaultText != "" {
 		return f.DefaultText
 	}
+
 	return f.GetValue()
 }
 
@@ -126,7 +128,9 @@ func (v textMarshalerVal) String() string {
 	if v.v == nil {
 		return ""
 	}
+
 	text, _ := v.v.MarshalText()
+
 	return string(text)
 }
 
@@ -169,6 +173,7 @@ func (f *TextMarshalerFlag) Apply(set *flag.FlagSet) error {
 	eachName(f, func(name string) {
 		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
 	})
+
 	return nil
 }
 
@@ -195,6 +200,7 @@ func (f *TextMarshalerFlag) GetValue() string {
 	if err != nil {
 		return "(ERR: " + err.Error() + ")"
 	}
+
 	return string(t)
 }
 
@@ -202,6 +208,7 @@ func (f *TextMarshalerFlag) GetDefaultText() string {
 	if f.DefaultText != "" {
 		return f.DefaultText
 	}
+
 	return f.GetValue()
 }
 
@@ -211,6 +218,7 @@ func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
 	if val == nil {
 		return nil
 	}
+
 	return val.(textMarshalerVal).v
 }
 
@@ -278,6 +286,7 @@ func (f *BigFlag) GetDefaultText() string {
 	if f.DefaultText != "" {
 		return f.DefaultText
 	}
+
 	return f.GetValue()
 }
 
@@ -288,6 +297,7 @@ func (b *bigValue) String() string {
 	if b == nil {
 		return ""
 	}
+
 	return (*big.Int)(b).String()
 }
 
@@ -296,7 +306,9 @@ func (b *bigValue) Set(s string) error {
 	if !ok {
 		return errors.New("invalid integer syntax")
 	}
+
 	*b = (bigValue)(*intVal)
+
 	return nil
 }
 
@@ -306,6 +318,7 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 	if val == nil {
 		return nil
 	}
+
 	return (*big.Int)(val.(*bigValue))
 }
 
@@ -319,11 +332,13 @@ func expandPath(p string) string {
 	if strings.HasPrefix(p, `\\.\pipe`) {
 		return p
 	}
+
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := HomeDir(); home != "" {
 			p = home + p[1:]
 		}
 	}
+
 	return filepath.Clean(os.ExpandEnv(p))
 }
 
@@ -331,9 +346,11 @@ func HomeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
+
 	if usr, err := user.Current(); err == nil {
 		return usr.HomeDir
 	}
+
 	return ""
 }
 

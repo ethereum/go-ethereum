@@ -32,6 +32,7 @@ func ReadCPUStats(stats *CPUStats) {
 		log.Error("Could not read cpu stats", "err", err)
 		return
 	}
+
 	if len(timeStats) == 0 {
 		log.Error("Empty cpu stats")
 		return

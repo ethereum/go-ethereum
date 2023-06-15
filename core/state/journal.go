@@ -70,6 +70,7 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 			}
 		}
 	}
+
 	j.entries = j.entries[:snapshot]
 }
 
@@ -248,6 +249,7 @@ func (ch addLogChange) revert(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
+
 	s.logSize--
 }
 

@@ -42,18 +42,23 @@ func parseToken(unescapedSelector string, isIdent bool) (string, string, error) 
 	if len(unescapedSelector) == 0 {
 		return "", "", fmt.Errorf("empty token")
 	}
+
 	firstChar := unescapedSelector[0]
 	position := 1
+
 	if !(isAlpha(firstChar) || (isIdent && isIdentifierSymbol(firstChar))) {
 		return "", "", fmt.Errorf("invalid token start: %c", firstChar)
 	}
+
 	for position < len(unescapedSelector) {
 		char := unescapedSelector[position]
 		if !(isAlpha(char) || isDigit(char) || (isIdent && isIdentifierSymbol(char))) {
 			break
 		}
+
 		position++
 	}
+
 	return unescapedSelector[:position], unescapedSelector[position:], nil
 }
 
@@ -70,16 +75,20 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	for len(rest) > 0 && rest[0] == '[' {
 		parsedType = parsedType + string(rest[0])
 		rest = rest[1:]
+
 		for len(rest) > 0 && isDigit(rest[0]) {
 			parsedType = parsedType + string(rest[0])
 			rest = rest[1:]
 		}
+
 		if len(rest) == 0 || rest[0] != ']' {
 			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", unescapedSelector[0])
 		}
+
 		parsedType = parsedType + string(rest[0])
 		rest = rest[1:]
 	}
+
 	return parsedType, rest, nil
 }
 
@@ -87,18 +96,23 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if len(unescapedSelector) == 0 || unescapedSelector[0] != '(' {
 		return nil, "", fmt.Errorf("expected '(', got %c", unescapedSelector[0])
 	}
+
 	parsedType, rest, err := parseType(unescapedSelector[1:])
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to parse type: %v", err)
 	}
+
 	result := []interface{}{parsedType}
+
 	for len(rest) > 0 && rest[0] != ')' {
 		parsedType, rest, err = parseType(rest[1:])
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to parse type: %v", err)
 		}
+
 		result = append(result, parsedType)
 	}
+
 	if len(rest) == 0 || rest[0] != ')' {
 		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
 	}
@@ -106,6 +120,7 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
 		return append(result, "[]"), rest[3:], nil
 	}
+
 	return result, rest[1:], nil
 }
 
@@ -113,6 +128,7 @@ func parseType(unescapedSelector string) (interface{}, string, error) {
 	if len(unescapedSelector) == 0 {
 		return nil, "", fmt.Errorf("empty type")
 	}
+
 	if unescapedSelector[0] == '(' {
 		return parseCompositeType(unescapedSelector)
 	} else {
@@ -122,6 +138,7 @@ func parseType(unescapedSelector string) (interface{}, string, error) {
 
 func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 	arguments := make([]ArgumentMarshaling, 0)
+
 	for i, arg := range args {
 		// generate dummy name to avoid unmarshal issues
 		name := fmt.Sprintf("name%d", i)
@@ -134,15 +151,18 @@ func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 			}
 			// nolint:goconst
 			tupleType := "tuple"
+
 			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
 				subArgs = subArgs[:len(subArgs)-1]
 				tupleType = "tuple[]"
 			}
+
 			arguments = append(arguments, ArgumentMarshaling{name, tupleType, tupleType, subArgs, false})
 		} else {
 			return nil, fmt.Errorf("failed to assemble args: unexpected type %T", arg)
 		}
 	}
+
 	return arguments, nil
 }
 
@@ -155,7 +175,9 @@ func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
 	if err != nil {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': %v", unescapedSelector, err)
 	}
+
 	args := []interface{}{}
+
 	if len(rest) >= 2 && rest[0] == '(' && rest[1] == ')' {
 		rest = rest[2:]
 	} else {
@@ -164,6 +186,7 @@ func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
 			return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': %v", unescapedSelector, err)
 		}
 	}
+
 	if len(rest) > 0 {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': unexpected string '%s'", unescapedSelector, rest)
 	}

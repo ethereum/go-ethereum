@@ -51,15 +51,19 @@ func TestDefaults(t *testing.T) {
 	if cfg.GasLimit == 0 {
 		t.Error("didn't expect gaslimit to be zero")
 	}
+
 	if cfg.GasPrice == nil {
 		t.Error("expected time to be non nil")
 	}
+
 	if cfg.Value == nil {
 		t.Error("expected time to be non nil")
 	}
+
 	if cfg.GetHashFn == nil {
 		t.Error("expected time to be non nil")
 	}
+
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
@@ -139,16 +143,19 @@ func BenchmarkCall(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	creceived, err := abi.Pack("confirmReceived")
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	refund, err := abi.Pack("refund")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < 400; j++ {
 			Execute(code, cpurchase, nil)
@@ -189,6 +196,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 	}
 	// Warm up the intpools and stuff
 	bench.ResetTimer()
+
 	for i := 0; i < bench.N; i++ {
 		Call(receiver, []byte{}, &runtimeConfig)
 	}
@@ -223,6 +231,7 @@ func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 		Difficulty: big.NewInt(0),
 		GasLimit:   100000,
 	}
+
 	return &header
 }
 
@@ -294,6 +303,7 @@ func TestBlockhash(t *testing.T) {
 	// The method call to 'test()'
 	input := common.Hex2Bytes("f8a8fd6d")
 	chain := &dummyChain{}
+
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
 		BlockNumber: new(big.Int).Set(header.Number),
@@ -301,6 +311,7 @@ func TestBlockhash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+
 	if len(ret) != 96 {
 		t.Fatalf("expected returndata to be 96 bytes, got %d", len(ret))
 	}
@@ -308,15 +319,19 @@ func TestBlockhash(t *testing.T) {
 	zero := new(big.Int).SetBytes(ret[0:32])
 	first := new(big.Int).SetBytes(ret[32:64])
 	last := new(big.Int).SetBytes(ret[64:96])
+
 	if zero.BitLen() != 0 {
 		t.Fatalf("expected zeroes, got %x", ret[0:32])
 	}
+
 	if first.Uint64() != 999 {
 		t.Fatalf("second block should be 999, got %d (%x)", first, ret[32:64])
 	}
+
 	if last.Uint64() != 744 {
 		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
 	}
+
 	if exp, got := 255, chain.counter; exp != got {
 		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
 	}
@@ -329,26 +344,32 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	setDefaults(cfg)
 	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	cfg.GasLimit = gas
+
 	if len(tracerCode) > 0 {
 		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		cfg.EVMConfig = vm.Config{
 			Tracer: tracer,
 		}
 	}
+
 	var (
 		destination = common.BytesToAddress([]byte("contract"))
 		vmenv       = NewEnv(cfg)
 		sender      = vm.AccountRef(cfg.Origin)
 	)
+
 	cfg.State.CreateAccount(destination)
+
 	eoa := common.HexToAddress("E0")
 	{
 		cfg.State.CreateAccount(eoa)
 		cfg.State.SetNonce(eoa, 100)
 	}
+
 	reverting := common.HexToAddress("EE")
 	{
 		cfg.State.CreateAccount(reverting)
@@ -368,6 +389,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
+
 		for i := 0; i < b.N; i++ {
 			// nolint: errcheck
 			vmenv.Call(sender, destination, nil, gas, cfg.Value, nil)
@@ -485,18 +507,19 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callRevertingContractWithInput, "call-reverting-100M", "", b)
-
-	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
-	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
+	// benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
+	// benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }
 
 // TestEip2929Cases contains various testcases that are used for
 // EIP-2929 about gas repricings
 func TestEip2929Cases(t *testing.T) {
 	t.Skip("Test only useful for generating documentation")
+
 	id := 1
 	prettyPrint := func(comment string, code []byte) {
 		instrs := make([]string, 0)
+
 		it := asm.NewInstructionIterator(code)
 		for it.Next() {
 			if it.Arg() != nil && 0 < len(it.Arg()) {
@@ -505,8 +528,11 @@ func TestEip2929Cases(t *testing.T) {
 				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
 			}
 		}
+
 		ops := strings.Join(instrs, ", ")
+
 		fmt.Printf("### Case %d\n\n", id)
+
 		id++
 
 		fmt.Printf("%v\n\nBytecode: \n```\n%#x\n```\nOperations: \n```\n%v\n```\n\n",
@@ -670,11 +696,13 @@ func TestColdAccountAccessCost(t *testing.T) {
 				Tracer: tracer,
 			},
 		})
+
 		have := tracer.StructLogs()[tc.step].GasCost
 		if want := tc.want; have != want {
 			for ii, op := range tracer.StructLogs() {
 				t.Logf("%d: %v %d", ii, op.OpName(), op.GasCost)
 			}
+
 			t.Fatalf("tescase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
 		}
 	}
@@ -820,6 +848,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 		byte(vm.SELFDESTRUCT),
 	}
 	main := common.HexToAddress("0xaa")
+
 	for i, jsTracer := range jsTracers {
 		for j, tc := range tests {
 			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -834,6 +863,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			_, _, err = Call(main, nil, &Config{
 				GasLimit: 1000000,
 				State:    statedb,
@@ -843,10 +873,12 @@ func TestRuntimeJSTracer(t *testing.T) {
 			if err != nil {
 				t.Fatal("didn't expect error", err)
 			}
+
 			res, err := tracer.GetResult()
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if have, want := string(res), tc.results[i]; have != want {
 				t.Errorf("wrong result for tracer %d testcase %d, have \n%v\nwant\n%v\n", i, j, have, want)
 			}
@@ -865,10 +897,12 @@ func TestJSTracerCreateTx(t *testing.T) {
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+
 	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_, _, _, err = Create(code, &Config{
 		State: statedb,
 		EVMConfig: vm.Config{
@@ -882,6 +916,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if have, want := string(res), `"0,0"`; have != want {
 		t.Errorf("wrong result for tracer, have \n%v\nwant\n%v\n", have, want)
 	}

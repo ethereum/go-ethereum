@@ -115,6 +115,7 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 	if err != nil {
 		return fmt.Errorf("invalid payload id %q: %w", input, err)
 	}
+
 	return nil
 }
 
@@ -134,18 +135,22 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 	for i, tx := range txs {
 		enc[i], _ = tx.MarshalBinary()
 	}
+
 	return enc
 }
 
 func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
+
 	for i, encTx := range enc {
 		var tx types.Transaction
 		if err := tx.UnmarshalBinary(encTx); err != nil {
 			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
 		}
+
 		txs[i] = &tx
 	}
+
 	return txs, nil
 }
 
@@ -164,9 +169,11 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
+
 	if len(params.LogsBloom) != 256 {
 		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
 	}
@@ -178,10 +185,12 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	// ExecutableData before withdrawals are enabled by marshaling
 	// Withdrawals as the json null value.
 	var withdrawalsRoot *common.Hash
+
 	if params.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+
 	header := &types.Header{
 		ParentHash:      params.ParentHash,
 		UncleHash:       types.EmptyUncleHash,
@@ -200,10 +209,12 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		MixDigest:       params.Random,
 		WithdrawalsHash: withdrawalsRoot,
 	}
+
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
+
 	return block, nil
 }
 
@@ -227,6 +238,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 		ExtraData:     block.Extra(),
 		Withdrawals:   block.Withdrawals(),
 	}
+
 	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
 }
 

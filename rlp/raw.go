@@ -72,6 +72,7 @@ func IntSize(x uint64) int {
 	if x < 0x80 {
 		return 1
 	}
+
 	return 1 + intsize(x)
 }
 
@@ -82,6 +83,7 @@ func Split(b []byte) (k Kind, content, rest []byte, err error) {
 	if err != nil {
 		return 0, nil, b, err
 	}
+
 	return k, b[ts : ts+cs], b[ts+cs:], nil
 }
 
@@ -92,9 +94,11 @@ func SplitString(b []byte) (content, rest []byte, err error) {
 	if err != nil {
 		return nil, b, err
 	}
+
 	if k == List {
 		return nil, b, ErrExpectedString
 	}
+
 	return content, rest, nil
 }
 
@@ -105,6 +109,7 @@ func SplitUint64(b []byte) (x uint64, rest []byte, err error) {
 	if err != nil {
 		return 0, b, err
 	}
+
 	switch {
 	case len(content) == 0:
 		return 0, rest, nil
@@ -112,6 +117,7 @@ func SplitUint64(b []byte) (x uint64, rest []byte, err error) {
 		if content[0] == 0 {
 			return 0, b, ErrCanonInt
 		}
+
 		return uint64(content[0]), rest, nil
 	case len(content) > 8:
 		return 0, b, errUintOverflow
@@ -120,6 +126,7 @@ func SplitUint64(b []byte) (x uint64, rest []byte, err error) {
 		if err != nil {
 			return 0, b, ErrCanonInt
 		}
+
 		return x, rest, nil
 	}
 }
@@ -131,22 +138,27 @@ func SplitList(b []byte) (content, rest []byte, err error) {
 	if err != nil {
 		return nil, b, err
 	}
+
 	if k != List {
 		return nil, b, ErrExpectedList
 	}
+
 	return content, rest, nil
 }
 
 // CountValues counts the number of encoded values in b.
 func CountValues(b []byte) (int, error) {
 	i := 0
+
 	for ; len(b) > 0; i++ {
 		_, tagsize, size, err := readKind(b)
 		if err != nil {
 			return 0, err
 		}
+
 		b = b[tagsize+size:]
 	}
+
 	return i, nil
 }
 
@@ -154,7 +166,9 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 	if len(buf) == 0 {
 		return 0, 0, 0, io.ErrUnexpectedEOF
 	}
+
 	b := buf[0]
+
 	switch {
 	case b < 0x80:
 		k = Byte
@@ -181,6 +195,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 		tagsize = uint64(b-0xF7) + 1
 		contentsize, err = readSize(buf[1:], b-0xF7)
 	}
+
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -188,6 +203,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 	if contentsize > uint64(len(buf))-tagsize {
 		return 0, 0, 0, ErrValueTooLarge
 	}
+
 	return k, tagsize, contentsize, err
 }
 
@@ -195,6 +211,7 @@ func readSize(b []byte, slen byte) (uint64, error) {
 	if int(slen) > len(b) {
 		return 0, io.ErrUnexpectedEOF
 	}
+
 	var s uint64
 	switch slen {
 	case 1:
@@ -219,6 +236,7 @@ func readSize(b []byte, slen byte) (uint64, error) {
 	if s < 56 || b[0] == 0 {
 		return 0, ErrCanonSize
 	}
+
 	return s, nil
 }
 
@@ -229,6 +247,7 @@ func AppendUint64(b []byte, i uint64) []byte {
 	} else if i < 128 {
 		return append(b, byte(i))
 	}
+
 	switch {
 	case i < (1 << 8):
 		return append(b, 0x81, byte(i))

@@ -58,6 +58,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	)
 	// Iterate over and process the individual transactions
 	byzantium := p.config.IsByzantium(block.Number())
+
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && interrupt.Load() {
@@ -70,6 +71,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		}
 
 		statedb.SetTxContext(tx.Hash(), i)
+
 		if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
@@ -92,5 +94,6 @@ func precacheTransaction(msg *Message, config *params.ChainConfig, gaspool *GasP
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
 	_, err := ApplyMessage(evm, msg, gaspool, context.Background())
+
 	return err
 }

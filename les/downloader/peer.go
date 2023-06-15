@@ -135,6 +135,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
 		return errAlreadyFetching
 	}
+
 	p.headerStarted = time.Now()
 
 	// Issue the header retrieval request (absolute upwards without gaps)
@@ -149,6 +150,7 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
 		return errAlreadyFetching
 	}
+
 	p.blockStarted = time.Now()
 
 	go func() {
@@ -157,6 +159,7 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 		for _, header := range request.Headers {
 			hashes = append(hashes, header.Hash())
 		}
+
 		p.peer.RequestBodies(hashes)
 	}()
 
@@ -169,6 +172,7 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
 		return errAlreadyFetching
 	}
+
 	p.receiptStarted = time.Now()
 
 	go func() {
@@ -177,6 +181,7 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 		for _, header := range request.Headers {
 			hashes = append(hashes, header.Hash())
 		}
+
 		p.peer.RequestReceipts(hashes)
 	}()
 
@@ -189,6 +194,7 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	if !atomic.CompareAndSwapInt32(&p.stateIdle, 0, 1) {
 		return errAlreadyFetching
 	}
+
 	p.stateStarted = time.Now()
 
 	go p.peer.RequestNodeData(hashes)
@@ -235,6 +241,7 @@ func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
 	if cap > MaxHeaderFetch {
 		cap = MaxHeaderFetch
 	}
+
 	return cap
 }
 
@@ -245,6 +252,7 @@ func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
 	if cap > MaxBlockFetch {
 		cap = MaxBlockFetch
 	}
+
 	return cap
 }
 
@@ -255,6 +263,7 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	if cap > MaxReceiptFetch {
 		cap = MaxReceiptFetch
 	}
+
 	return cap
 }
 
@@ -265,6 +274,7 @@ func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
 	if cap > MaxStateFetch {
 		cap = MaxStateFetch
 	}
+
 	return cap
 }
 
@@ -281,6 +291,7 @@ func (p *peerConnection) MarkLacking(hash common.Hash) {
 			break
 		}
 	}
+
 	p.lacking[hash] = struct{}{}
 }
 
@@ -291,6 +302,7 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 	defer p.lock.RUnlock()
 
 	_, ok := p.lacking[hash]
+
 	return ok
 }
 
@@ -348,15 +360,18 @@ func (ps *peerSet) Register(p *peerConnection) error {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
+
 	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.MedianRoundTrip())
 	if err := ps.rates.Track(p.id, p.rates); err != nil {
 		ps.lock.Unlock()
 		return err
 	}
+
 	ps.peers[p.id] = p
 	ps.lock.Unlock()
 
 	ps.newPeerFeed.Send(p)
+
 	return nil
 }
 
@@ -364,16 +379,19 @@ func (ps *peerSet) Register(p *peerConnection) error {
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
+
 	p, ok := ps.peers[id]
 	if !ok {
 		ps.lock.Unlock()
 		return errNotRegistered
 	}
+
 	delete(ps.peers, id)
 	ps.rates.Untrack(id)
 	ps.lock.Unlock()
 
 	ps.peerDropFeed.Send(p)
+
 	return nil
 }
 
@@ -402,6 +420,7 @@ func (ps *peerSet) AllPeers() []*peerConnection {
 	for _, p := range ps.peers {
 		list = append(list, p)
 	}
+
 	return list
 }
 
@@ -469,12 +488,14 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol uint, idleCheck func(*peer
 		idle  = make([]*peerConnection, 0, len(ps.peers))
 		tps   = make([]int, 0, len(ps.peers))
 	)
+
 	for _, p := range ps.peers {
 		if p.version >= minProtocol && p.version <= maxProtocol {
 			if idleCheck(p) {
 				idle = append(idle, p)
 				tps = append(tps, capacity(p))
 			}
+
 			total++
 		}
 	}
@@ -482,6 +503,7 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol uint, idleCheck func(*peer
 	// And sort them
 	sortPeers := &peerCapacitySort{idle, tps}
 	sort.Sort(sortPeers)
+
 	return sortPeers.p, total
 }
 

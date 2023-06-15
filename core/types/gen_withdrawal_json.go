@@ -19,11 +19,13 @@ func (w Withdrawal) MarshalJSON() ([]byte, error) {
 		Address   common.Address `json:"address"`
 		Amount    hexutil.Uint64 `json:"amount"`
 	}
+
 	var enc Withdrawal
 	enc.Index = hexutil.Uint64(w.Index)
 	enc.Validator = hexutil.Uint64(w.Validator)
 	enc.Address = w.Address
 	enc.Amount = hexutil.Uint64(w.Amount)
+
 	return json.Marshal(&enc)
 }
 
@@ -35,21 +37,27 @@ func (w *Withdrawal) UnmarshalJSON(input []byte) error {
 		Address   *common.Address `json:"address"`
 		Amount    *hexutil.Uint64 `json:"amount"`
 	}
+
 	var dec Withdrawal
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.Index != nil {
 		w.Index = uint64(*dec.Index)
 	}
+
 	if dec.Validator != nil {
 		w.Validator = uint64(*dec.Validator)
 	}
+
 	if dec.Address != nil {
 		w.Address = *dec.Address
 	}
+
 	if dec.Amount != nil {
 		w.Amount = uint64(*dec.Amount)
 	}
+
 	return nil
 }

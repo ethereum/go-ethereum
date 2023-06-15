@@ -21,11 +21,13 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 		SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	}
+
 	var enc PayloadAttributes
 	enc.Timestamp = hexutil.Uint64(p.Timestamp)
 	enc.Random = p.Random
 	enc.SuggestedFeeRecipient = p.SuggestedFeeRecipient
 	enc.Withdrawals = p.Withdrawals
+
 	return json.Marshal(&enc)
 }
 
@@ -37,24 +39,32 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 		SuggestedFeeRecipient *common.Address     `json:"suggestedFeeRecipient" gencodec:"required"`
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	}
+
 	var dec PayloadAttributes
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.Timestamp == nil {
 		return errors.New("missing required field 'timestamp' for PayloadAttributes")
 	}
+
 	p.Timestamp = uint64(*dec.Timestamp)
+
 	if dec.Random == nil {
 		return errors.New("missing required field 'prevRandao' for PayloadAttributes")
 	}
+
 	p.Random = *dec.Random
+
 	if dec.SuggestedFeeRecipient == nil {
 		return errors.New("missing required field 'suggestedFeeRecipient' for PayloadAttributes")
 	}
+
 	p.SuggestedFeeRecipient = *dec.SuggestedFeeRecipient
 	if dec.Withdrawals != nil {
 		p.Withdrawals = dec.Withdrawals
 	}
+
 	return nil
 }

@@ -45,11 +45,13 @@ func TestHeaderStorage(t *testing.T) {
 	}
 	// Write and verify the header in the database
 	WriteHeader(db, header)
+
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
 	}
+
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
@@ -62,6 +64,7 @@ func TestHeaderStorage(t *testing.T) {
 	}
 	// Delete the header and verify the execution
 	DeleteHeader(db, header.Hash(), header.Number.Uint64())
+
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 	}
@@ -83,11 +86,13 @@ func TestBodyStorage(t *testing.T) {
 	}
 	// Write and verify the body in the database
 	WriteBody(db, hash, 0, body)
+
 	if entry := ReadBody(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(types.Transactions(body.Transactions), newHasher()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
+
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
@@ -100,6 +105,7 @@ func TestBodyStorage(t *testing.T) {
 	}
 	// Delete the body and verify the execution
 	DeleteBody(db, hash, 0)
+
 	if entry := ReadBody(db, hash, 0); entry != nil {
 		t.Fatalf("Deleted body returned: %v", entry)
 	}
@@ -119,24 +125,29 @@ func TestBlockStorage(t *testing.T) {
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
+
 	if entry := ReadHeader(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
+
 	if entry := ReadBody(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the block in the database
 	WriteBlock(db, block)
+
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
 	}
+
 	if entry := ReadHeader(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != block.Header().Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, block.Header())
 	}
+
 	if entry := ReadBody(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions), newHasher()) != types.DeriveSha(block.Transactions(), newHasher()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
@@ -144,12 +155,15 @@ func TestBlockStorage(t *testing.T) {
 	}
 	// Delete the block and verify the execution
 	DeleteBlock(db, block.Hash(), block.NumberU64())
+
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Deleted block returned: %v", entry)
 	}
+
 	if entry := ReadHeader(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 	}
+
 	if entry := ReadBody(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Deleted body returned: %v", entry)
 	}
@@ -166,16 +180,20 @@ func TestPartialBlockStorage(t *testing.T) {
 	})
 	// Store a header and check that it's not recognized as a block
 	WriteHeader(db, block.Header())
+
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
+
 	DeleteHeader(db, block.Hash(), block.NumberU64())
 
 	// Store a body and check that it's not recognized as a block
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
+
 	DeleteBody(db, block.Hash(), block.NumberU64())
 
 	// Store a header and a body separately and check reassembly
@@ -206,6 +224,7 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 	// Write and verify the block in the database
 	WriteBadBlock(db, block)
+
 	if entry := ReadBadBlock(db, block.Hash()); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
@@ -223,6 +242,7 @@ func TestBadBlockStorage(t *testing.T) {
 
 	// Write the block one again, should be filtered out.
 	WriteBadBlock(db, block)
+
 	badBlocks := ReadAllBadBlocks(db)
 	if len(badBlocks) != 2 {
 		t.Fatalf("Failed to load all bad blocks")
@@ -240,10 +260,12 @@ func TestBadBlockStorage(t *testing.T) {
 		})
 		WriteBadBlock(db, block)
 	}
+
 	badBlocks = ReadAllBadBlocks(db)
 	if len(badBlocks) != badBlockToKeep {
 		t.Fatalf("The number of persised bad blocks in incorrect %d", len(badBlocks))
 	}
+
 	for i := 0; i < len(badBlocks)-1; i++ {
 		if badBlocks[i].NumberU64() < badBlocks[i+1].NumberU64() {
 			t.Fatalf("The bad blocks are not sorted #[%d](%d) < #[%d](%d)", i, i+1, badBlocks[i].NumberU64(), badBlocks[i+1].NumberU64())
@@ -252,6 +274,7 @@ func TestBadBlockStorage(t *testing.T) {
 
 	// Delete all bad blocks
 	DeleteBadBlocks(db)
+
 	badBlocks = ReadAllBadBlocks(db)
 	if len(badBlocks) != 0 {
 		t.Fatalf("Failed to delete bad blocks")
@@ -269,6 +292,7 @@ func TestTdStorage(t *testing.T) {
 	}
 	// Write and verify the TD in the database
 	WriteTd(db, hash, 0, td)
+
 	if entry := ReadTd(db, hash, 0); entry == nil {
 		t.Fatalf("Stored TD not found")
 	} else if entry.Cmp(td) != 0 {
@@ -276,6 +300,7 @@ func TestTdStorage(t *testing.T) {
 	}
 	// Delete the TD and verify the execution
 	DeleteTd(db, hash, 0)
+
 	if entry := ReadTd(db, hash, 0); entry != nil {
 		t.Fatalf("Deleted TD returned: %v", entry)
 	}
@@ -292,6 +317,7 @@ func TestCanonicalMappingStorage(t *testing.T) {
 	}
 	// Write and verify the TD in the database
 	WriteCanonicalHash(db, hash, number)
+
 	if entry := ReadCanonicalHash(db, number); entry == (common.Hash{}) {
 		t.Fatalf("Stored canonical mapping not found")
 	} else if entry != hash {
@@ -299,6 +325,7 @@ func TestCanonicalMappingStorage(t *testing.T) {
 	}
 	// Delete the TD and verify the execution
 	DeleteCanonicalHash(db, number)
+
 	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Deleted canonical mapping returned: %v", entry)
 	}
@@ -316,9 +343,11 @@ func TestHeadStorage(t *testing.T) {
 	if entry := ReadHeadHeaderHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non head header entry returned: %v", entry)
 	}
+
 	if entry := ReadHeadBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non head block entry returned: %v", entry)
 	}
+
 	if entry := ReadHeadFastBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non fast head block entry returned: %v", entry)
 	}
@@ -331,9 +360,11 @@ func TestHeadStorage(t *testing.T) {
 	if entry := ReadHeadHeaderHash(db); entry != blockHead.Hash() {
 		t.Fatalf("Head header hash mismatch: have %v, want %v", entry, blockHead.Hash())
 	}
+
 	if entry := ReadHeadBlockHash(db); entry != blockFull.Hash() {
 		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
 	}
+
 	if entry := ReadHeadFastBlockHash(db); entry != blockFast.Hash() {
 		t.Fatalf("Fast head block hash mismatch: have %v, want %v", entry, blockFast.Hash())
 	}
@@ -387,6 +418,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
+
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) == 0 {
 		t.Fatalf("no receipts returned")
 	} else {
@@ -396,6 +428,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	}
 	// Delete the body and ensure that the receipts are no longer returned (metadata can't be recomputed)
 	DeleteBody(db, hash, 0)
+
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); rs != nil {
 		t.Fatalf("receipts returned when body was deleted: %v", rs)
 	}
@@ -407,6 +440,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	WriteBody(db, hash, 0, body)
 
 	DeleteReceipts(db, hash, 0)
+
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("deleted receipts returned: %v", rs)
 	}
@@ -416,19 +450,23 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 	if len(have) != len(want) {
 		return fmt.Errorf("receipts sizes mismatch: have %d, want %d", len(have), len(want))
 	}
+
 	for i := 0; i < len(want); i++ {
 		rlpHave, err := rlp.EncodeToBytes(have[i])
 		if err != nil {
 			return err
 		}
+
 		rlpWant, err := rlp.EncodeToBytes(want[i])
 		if err != nil {
 			return err
 		}
+
 		if !bytes.Equal(rlpHave, rlpWant) {
 			return fmt.Errorf("receipt #%d: receipt mismatch: have %s, want %s", i, hex.EncodeToString(rlpHave), hex.EncodeToString(rlpWant))
 		}
 	}
+
 	return nil
 }
 
@@ -454,12 +492,15 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent header returned")
 	}
+
 	if blob := ReadBodyRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent body returned")
 	}
+
 	if blob := ReadReceiptsRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent receipts returned")
 	}
+
 	if blob := ReadTdRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent td returned")
 	}
@@ -470,12 +511,15 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
 	}
+
 	if blob := ReadBodyRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no body returned")
 	}
+
 	if blob := ReadReceiptsRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no receipts returned")
 	}
+
 	if blob := ReadTdRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no td returned")
 	}
@@ -485,12 +529,15 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadHeaderRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid header returned")
 	}
+
 	if blob := ReadBodyRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid body returned")
 	}
+
 	if blob := ReadReceiptsRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid receipts returned")
 	}
+
 	if blob := ReadTdRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid td returned")
 	}
@@ -511,6 +558,7 @@ func TestCanonicalHashIteration(t *testing.T) {
 	}
 	// Test empty db iteration
 	db := NewMemoryDatabase()
+
 	numbers, _ := ReadAllCanonicalHashes(db, 0, 10, 10)
 	if len(numbers) != 0 {
 		t.Fatalf("No entry should be returned to iterate an empty db")
@@ -520,6 +568,7 @@ func TestCanonicalHashIteration(t *testing.T) {
 		WriteCanonicalHash(db, common.Hash{}, i)
 		WriteTd(db, common.Hash{}, i, big.NewInt(10)) // Write some interferential data
 	}
+
 	for i, c := range cases {
 		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
 		if !reflect.DeepEqual(numbers, c.expect) {
@@ -535,35 +584,45 @@ func TestHashesInRange(t *testing.T) {
 			Number:     big.NewInt(int64(number)),
 			GasLimit:   uint64(seq),
 		}
+
 		return &h
 	}
 	db := NewMemoryDatabase()
 	// For each number, write N versions of that particular number
 	total := 0
+
 	for i := 0; i < 15; i++ {
 		for ii := 0; ii < i; ii++ {
 			WriteHeader(db, mkHeader(i, ii))
+
 			total++
 		}
 	}
+
 	if have, want := len(ReadAllHashesInRange(db, 10, 10)), 10; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashesInRange(db, 10, 9)), 0; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashesInRange(db, 0, 100)), total; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashesInRange(db, 9, 10)), 9+10; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashes(db, 10)), 10; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashes(db, 16)), 0; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
+
 	if have, want := len(ReadAllHashes(db, 1)), 1; have != want {
 		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
 	}
@@ -573,26 +632,32 @@ func TestHashesInRange(t *testing.T) {
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
 	frdir := b.TempDir()
+
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
 		b.Fatalf("failed to create database with ancient backend")
 	}
+
 	defer db.Close()
 
 	// Create the data to insert. The blocks must have consecutive numbers, so we create
 	// all of them ahead of time. However, there is no need to create receipts
 	// individually for each block, just make one batch here and reuse it for all writes.
 	const batchSize = 128
+
 	const blockTxs = 20
 	allBlocks := makeTestBlocks(b.N, blockTxs)
 	batchReceipts := makeTestReceipts(batchSize, blockTxs)
+
 	b.ResetTimer()
 
 	// The benchmark loop writes batches of blocks, but note that the total block count is
 	// b.N. This means the resulting ns/op measurement is the time it takes to write a
 	// single block and its associated data.
 	var td = big.NewInt(55)
+
 	var totalSize int64
+
 	for i := 0; i < b.N; i += batchSize {
 		length := batchSize
 		if i+batchSize > b.N {
@@ -601,10 +666,12 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
+
 		writeSize, err := WriteAncientBlocks(db, blocks, receipts, []types.Receipts{nil}, td)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		totalSize += writeSize
 	}
 
@@ -621,7 +688,9 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 	txs := make([]*types.Transaction, txsPerBlock)
 	for i := 0; i < len(txs); i++ {
 		var err error
+
 		to := common.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+
 		txs[i], err = types.SignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    2,
 			GasPrice: big.NewInt(30000),
@@ -635,6 +704,7 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 
 	// Create the blocks.
 	blocks := make([]*types.Block, nblock)
+
 	for i := 0; i < nblock; i++ {
 		header := &types.Header{
 			Number: big.NewInt(int64(i)),
@@ -643,6 +713,7 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
 		blocks[i].Hash() // pre-cache the block hash
 	}
+
 	return blocks
 }
 
@@ -656,10 +727,12 @@ func makeTestReceipts(n int, nPerBlock int) []types.Receipts {
 			Logs:              make([]*types.Log, 5),
 		}
 	}
+
 	allReceipts := make([]types.Receipts, n)
 	for i := 0; i < n; i++ {
 		allReceipts[i] = receipts
 	}
+
 	return allReceipts
 }
 
@@ -740,12 +813,15 @@ func TestReadLogs(t *testing.T) {
 	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
+
 	if have, want := len(logs), 2; have != want {
 		t.Fatalf("unexpected number of logs returned, have %d want %d", have, want)
 	}
+
 	if have, want := len(logs[0]), 2; have != want {
 		t.Fatalf("unexpected number of logs[0] returned, have %d want %d", have, want)
 	}
+
 	if have, want := len(logs[1]), 2; have != want {
 		t.Fatalf("unexpected number of logs[1] returned, have %d want %d", have, want)
 	}
@@ -756,10 +832,12 @@ func TestReadLogs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			rlpWant, err := rlp.EncodeToBytes(newFullLogRLP(pl))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if !bytes.Equal(rlpHave, rlpWant) {
 				t.Fatalf("receipt #%d: receipt mismatch: have %s, want %s", i, hex.EncodeToString(rlpHave), hex.EncodeToString(rlpWant))
 			}
@@ -818,29 +896,36 @@ func TestDeriveLogFields(t *testing.T) {
 	// Derive log metadata fields
 	number := big.NewInt(1)
 	hash := common.BytesToHash([]byte{0x03, 0x14})
+
 	if err := deriveLogFields(receipts, hash, number.Uint64(), txs); err != nil {
 		t.Fatal(err)
 	}
 
 	// Iterate over all the computed fields and check that they're correct
 	logIndex := uint(0)
+
 	for i := range receipts {
 		for j := range receipts[i].Logs {
 			if receipts[i].Logs[j].BlockNumber != number.Uint64() {
 				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, number.Uint64())
 			}
+
 			if receipts[i].Logs[j].BlockHash != hash {
 				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), hash.String())
 			}
+
 			if receipts[i].Logs[j].TxHash != txs[i].Hash() {
 				t.Errorf("receipts[%d].Logs[%d].TxHash = %s, want %s", i, j, receipts[i].Logs[j].TxHash.String(), txs[i].Hash().String())
 			}
+
 			if receipts[i].Logs[j].TxIndex != uint(i) {
 				t.Errorf("receipts[%d].Logs[%d].TransactionIndex = %d, want %d", i, j, receipts[i].Logs[j].TxIndex, i)
 			}
+
 			if receipts[i].Logs[j].Index != logIndex {
 				t.Errorf("receipts[%d].Logs[%d].Index = %d, want %d", i, j, receipts[i].Logs[j].Index, logIndex)
 			}
+
 			logIndex++
 		}
 	}
@@ -852,8 +937,10 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.Run("ReceiptForStorage", func(b *testing.B) {
 		b.ReportAllocs()
+
 		var r []*types.ReceiptForStorage
 		for i := 0; i < b.N; i++ {
 			if err := rlp.DecodeBytes(buf, &r); err != nil {
@@ -863,6 +950,7 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 	})
 	b.Run("rlpLogs", func(b *testing.B) {
 		b.ReportAllocs()
+
 		var r []*receiptLogs
 		for i := 0; i < b.N; i++ {
 			if err := rlp.DecodeBytes(buf, &r); err != nil {
@@ -883,6 +971,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 	defer db.Close()
 	// Create blocks
 	var chain []*types.Block
+
 	var pHash common.Hash
 	for i := 0; i < 100; i++ {
 		block := types.NewBlockWithHeader(&types.Header{
@@ -896,7 +985,9 @@ func TestHeadersRLPStorage(t *testing.T) {
 		chain = append(chain, block)
 		pHash = block.Hash()
 	}
+
 	var receipts []types.Receipts = make([]types.Receipts, 100)
+
 	var borReceipts []types.Receipts = make([]types.Receipts, 100)
 
 	// Write first half to ancients
@@ -906,16 +997,19 @@ func TestHeadersRLPStorage(t *testing.T) {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
 		WriteBlock(db, chain[i])
 	}
+
 	checkSequence := func(from, amount int) {
 		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))
 		if have, want := len(headersRlp), amount; have != want {
 			t.Fatalf("have %d headers, want %d", have, want)
 		}
+
 		for i, headerRlp := range headersRlp {
 			var header types.Header
 			if err := rlp.DecodeBytes(headerRlp, &header); err != nil {
 				t.Fatal(err)
 			}
+
 			if have, want := header.Number.Uint64(), uint64(from-i); have != want {
 				t.Fatalf("wrong number, have %d want %d", have, want)
 			}

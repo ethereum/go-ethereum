@@ -563,12 +563,14 @@ func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
 	if c.Empty() {
 		return hash == common.Hash{}
 	}
+
 	return c.Hash() == hash
 }
 
 // Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
 func (c *TrustedCheckpoint) Hash() common.Hash {
 	var sectionIndex [8]byte
+
 	binary.BigEndian.PutUint64(sectionIndex[:], c.SectionIndex)
 
 	w := sha3.NewLegacyKeccak256()
@@ -578,7 +580,9 @@ func (c *TrustedCheckpoint) Hash() common.Hash {
 	w.Write(c.BloomRoot[:])
 
 	var h common.Hash
+
 	w.Sum(h[:0])
+
 	return h
 }
 
@@ -777,14 +781,18 @@ func (c *BorConfig) CalculateBurntContract(number uint64) string {
 	for k := range c.BurntContract {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	for i := 0; i < len(keys)-1; i++ {
 		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
 		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
+
 		if number > valUint && number < valUintNext {
 			return c.BurntContract[keys[i]]
 		}
 	}
+
 	return c.BurntContract[keys[len(keys)-1]]
 }
 
@@ -799,6 +807,7 @@ func (c *ChainConfig) Description() string {
 	}
 
 	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
+
 	switch {
 	case c.Ethash != nil:
 		if c.TerminalTotalDifficulty == nil {
@@ -868,6 +877,7 @@ func (c *ChainConfig) Description() string {
 		banner += " - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md\n"
 		banner += fmt.Sprintf(" - Network known to be merged: %v\n", c.TerminalTotalDifficultyPassed)
 		banner += fmt.Sprintf(" - Total terminal difficulty:  %v\n", c.TerminalTotalDifficulty)
+
 		if c.MergeNetsplitBlock != nil {
 			banner += fmt.Sprintf(" - Merge netsplit block:       #%-8v\n", c.MergeNetsplitBlock)
 		}
@@ -969,6 +979,7 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 	if c.TerminalTotalDifficulty == nil {
 		return false
 	}
+
 	return parentTotalDiff.Cmp(c.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(c.TerminalTotalDifficulty) >= 0
 }
 
@@ -997,11 +1008,13 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 	)
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
+
 	for {
 		err := c.checkCompatible(newcfg, bhead, btime)
 		if err == nil || (lasterr != nil && err.RewindToBlock == lasterr.RewindToBlock && err.RewindToTime == lasterr.RewindToTime) {
 			break
 		}
+
 		lasterr = err
 
 		if err.RewindToTime > 0 {
@@ -1010,6 +1023,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 			bhead.SetUint64(err.RewindToBlock)
 		}
 	}
+
 	return lasterr
 }
 
@@ -1022,6 +1036,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		timestamp *uint64  // forks after the merge are scheduled using timestamps
 		optional  bool     // if true, the fork may be nil and next fork is still allowed
 	}
+
 	var lastFork fork
 	for _, cur := range []fork{
 		{name: "homesteadBlock", block: c.HomesteadBlock},
@@ -1077,6 +1092,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
+
 	return nil
 }
 
@@ -1164,6 +1180,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
 		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
 	}
+
 	return nil
 }
 
@@ -1190,6 +1207,7 @@ func isBlockForked(s, head *big.Int) bool {
 	if s == nil || head == nil {
 		return false
 	}
+
 	return s.Cmp(head) <= 0
 }
 
@@ -1197,9 +1215,11 @@ func configBlockEqual(x, y *big.Int) bool {
 	if x == nil {
 		return y == nil
 	}
+
 	if y == nil {
 		return x == nil
 	}
+
 	return x.Cmp(y) == 0
 }
 
@@ -1252,6 +1272,7 @@ type ConfigCompatError struct {
 
 func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatError {
 	var rew *big.Int
+
 	switch {
 	case storedblock == nil:
 		rew = newblock
@@ -1296,6 +1317,7 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 	if rew != nil {
 		err.RewindToTime = *rew - 1
 	}
+
 	return err
 }
 
@@ -1326,6 +1348,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 	if chainID == nil {
 		chainID = new(big.Int)
 	}
+
 	return Rules{
 		ChainID:          new(big.Int).Set(chainID),
 		IsHomestead:      c.IsHomestead(num),

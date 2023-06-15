@@ -90,6 +90,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			req.Close()
 		}
 	}()
+
 	ordering := make(map[*eth.Request]int)
 	timeouts := prque.New[int64, *eth.Request](func(data *eth.Request, index int) {
 		ordering[data] = index
@@ -125,6 +126,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 
 	// Prepare the queue and fetch block parts until the block header fetcher's done
 	finished := false
+
 	for {
 		// Short circuit if we lost all our peers
 		if d.peers.Len() == 0 && !beaconMode {
@@ -141,6 +143,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				idles []*peerConnection
 				caps  []int
 			)
+
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
 				if pending == nil && stale == nil {
@@ -156,6 +159,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 					}
 				}
 			}
+
 			sort.Sort(&peerCapacitySort{idles, caps})
 
 			var (
@@ -163,12 +167,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				throttled  bool
 				queued     = queue.pending()
 			)
+
 			for _, peer := range idles {
 				// Short circuit if throttling activated or there are no more
 				// queued tasks to be retrieved
 				if throttled {
 					break
 				}
+
 				if queued = queue.pending(); queued == 0 {
 					break
 				}
@@ -179,10 +185,13 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				if progress {
 					progressed = true
 				}
+
 				if throttle {
 					throttled = true
+
 					throttleCounter.Inc(1)
 				}
+
 				if request == nil {
 					continue
 				}
@@ -197,12 +206,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 					queue.unreserve(peer.id) // TODO(karalabe): This needs a non-expiration method
 					continue
 				}
+
 				pending[peer.id] = req
 
 				ttl := d.peers.rates.TargetTimeout()
 				ordering[req] = timeouts.Size()
 
 				timeouts.Push(req, -time.Now().Add(ttl).UnixNano())
+
 				if timeouts.Size() == 1 {
 					timeout.Reset(ttl)
 				}
@@ -231,6 +242,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				if _, ok := pending[peerid]; ok {
 					event.peer.log.Error("Pending request exists for joining peer")
 				}
+
 				if _, ok := stales[peerid]; ok {
 					event.peer.log.Error("Stale request exists for joining peer")
 				}
@@ -246,18 +258,22 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 
 				if index, live := ordering[req]; live {
 					timeouts.Remove(index)
+
 					if index == 0 {
 						if !timeout.Stop() {
 							<-timeout.C
 						}
+
 						if timeouts.Size() > 0 {
 							_, exp := timeouts.Peek()
 							timeout.Reset(time.Until(time.Unix(0, -exp)))
 						}
 					}
+
 					delete(ordering, req)
 				}
 			}
+
 			if req, ok := stales[peerid]; ok {
 				delete(stales, peerid)
 				req.Close()
@@ -272,6 +288,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			if now, at := time.Now(), time.Unix(0, -exp); now.Before(at) {
 				log.Error("Timeout triggered but not reached", "left", at.Sub(now))
 				timeout.Reset(at.Sub(now))
+
 				continue
 			}
 			// Stop tracking the timed out request from a timing perspective,
@@ -282,6 +299,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			stales[req.Peer] = req
 
 			timeouts.Pop() // Popping an item will reorder indices in `ordering`, delete after, otherwise will resurrect!
+
 			if timeouts.Size() > 0 {
 				_, exp := timeouts.Peek()
 				timeout.Reset(time.Until(time.Unix(0, -exp)))
@@ -312,6 +330,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				log.Error("Delivery timeout from unknown peer", "peer", req.Peer)
 				continue
 			}
+
 			if fails > 2 {
 				queue.updateCapacity(peer, 0, 0)
 			} else {
@@ -335,15 +354,18 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			index, live := ordering[res.Req]
 			if live {
 				timeouts.Remove(index)
+
 				if index == 0 {
 					if !timeout.Stop() {
 						<-timeout.C
 					}
+
 					if timeouts.Size() > 0 {
 						_, exp := timeouts.Peek()
 						timeout.Reset(time.Until(time.Unix(0, -exp)))
 					}
 				}
+
 				delete(ordering, res.Req)
 			}
 			// Delete the pending request (if it still exists) and mark the peer idle

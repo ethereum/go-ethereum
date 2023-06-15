@@ -36,6 +36,7 @@ func TestVector_ECDH(t *testing.T) {
 		publicKey = hexPubkey(crypto.S256(), "0x039961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231")
 		want      = hexutil.MustDecode("0x033b11a2a1f214567e1537ce5e509ffd9b21373247f2a3ff6841f4976f53165e7e")
 	)
+
 	result := ecdh(staticKey, publicKey)
 	check(t, "shared-secret", result, want)
 }
@@ -46,6 +47,7 @@ func TestVector_KDF(t *testing.T) {
 		cdata  = hexutil.MustDecode("0x000000000000000000000000000000006469736376350001010102030405060708090a0b0c00180102030405060708090a0b0c0d0e0f100000000000000000")
 		net    = newHandshakeTest()
 	)
+
 	defer net.close()
 
 	destKey := &testKeyB.PublicKey
@@ -71,10 +73,12 @@ func TestVector_IDSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Logf("static-key = %#x", key.D)
 	t.Logf("challenge-data = %#x", cdata)
 	t.Logf("ephemeral-pubkey = %#x", ephkey)
 	t.Logf("node-id-B = %#x", destID.Bytes())
+
 	expected := "0x94852a1e2318c4e5e9d422c98eaf19d1d90d876b29cd06ca7cb7546d0fff7b484fe86c09a064fe72bdbef73ba8e9c34df0cd2b53e9d65528c2c7f336d5dfc6e6"
 	check(t, "id-signature", sig, hexutil.MustDecode(expected))
 }
@@ -87,11 +91,14 @@ func TestDeriveKeys(t *testing.T) {
 		n2    = enode.ID{2}
 		cdata = []byte{1, 2, 3, 4}
 	)
+
 	sec1 := deriveKeys(sha256.New, testKeyA, &testKeyB.PublicKey, n1, n2, cdata)
 	sec2 := deriveKeys(sha256.New, testKeyB, &testKeyA.PublicKey, n1, n2, cdata)
+
 	if sec1 == nil || sec2 == nil {
 		t.Fatal("key agreement failed")
 	}
+
 	if !reflect.DeepEqual(sec1, sec2) {
 		t.Fatalf("keys not equal:\n  %+v\n  %+v", sec1, sec2)
 	}
@@ -112,6 +119,7 @@ func hexPrivkey(input string) *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }
 
@@ -120,5 +128,6 @@ func hexPubkey(curve elliptic.Curve, input string) *ecdsa.PublicKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }

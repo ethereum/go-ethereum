@@ -69,6 +69,7 @@ func NewLazyQueue[P constraints.Ordered, V any](setIndex SetIndexCallback[V], pr
 	}
 	q.Reset()
 	q.refresh(clock.Now())
+
 	return q
 }
 
@@ -94,6 +95,7 @@ func (q *LazyQueue[P, V]) refresh(now mclock.AbsTime) {
 	for q.queue[0].Len() != 0 {
 		q.Push(heap.Pop(q.queue[0]).(*item[P, V]).value)
 	}
+
 	q.queue[0], q.queue[1] = q.queue[1], q.queue[0]
 	q.indexOffset = 1 - q.indexOffset
 	q.maxUntil = q.maxUntil.Add(q.period)
@@ -115,11 +117,14 @@ func (q *LazyQueue[P, V]) Pop() (V, P) {
 		resData V
 		resPri  P
 	)
+
 	q.MultiPop(func(data V, priority P) bool {
 		resData = data
 		resPri = priority
+
 		return false
 	})
+
 	return resData, resPri
 }
 
@@ -130,11 +135,14 @@ func (q *LazyQueue[P, V]) peekIndex() int {
 		if q.queue[1].Len() != 0 && q.queue[1].blocks[0][0].priority > q.queue[0].blocks[0][0].priority {
 			return 1
 		}
+
 		return 0
 	}
+
 	if q.queue[1].Len() != 0 {
 		return 1
 	}
+
 	return -1
 }
 
@@ -146,6 +154,7 @@ func (q *LazyQueue[P, V]) MultiPop(callback func(data V, priority P) bool) {
 	for nextIndex != -1 {
 		data := heap.Pop(q.queue[nextIndex]).(*item[P, V]).value
 		heap.Push(q.popQueue, &item[P, V]{data, q.priority(data)})
+
 		nextIndex = q.peekIndex()
 		for q.popQueue.Len() != 0 && (nextIndex == -1 || q.queue[nextIndex].blocks[0][0].priority < q.popQueue.blocks[0][0].priority) {
 			i := heap.Pop(q.popQueue).(*item[P, V])
@@ -153,8 +162,10 @@ func (q *LazyQueue[P, V]) MultiPop(callback func(data V, priority P) bool) {
 				for q.popQueue.Len() != 0 {
 					q.Push(heap.Pop(q.popQueue).(*item[P, V]).value)
 				}
+
 				return
 			}
+
 			nextIndex = q.peekIndex() // re-check because callback is allowed to push items back
 		}
 	}

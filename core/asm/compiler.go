@@ -58,6 +58,7 @@ func NewCompiler(debug bool) *Compiler {
 // position.
 func (c *Compiler) Feed(ch <-chan token) {
 	var prev token
+
 	for i := range ch {
 		switch i.typ {
 		case number:
@@ -65,6 +66,7 @@ func (c *Compiler) Feed(ch <-chan token) {
 			if len(num) == 0 {
 				num = []byte{0}
 			}
+
 			c.pc += len(num)
 		case stringValue:
 			c.pc += len(i.text) - 2
@@ -83,6 +85,7 @@ func (c *Compiler) Feed(ch <-chan token) {
 		c.tokens = append(c.tokens, i)
 		prev = i
 	}
+
 	if c.debug {
 		fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
 	}
@@ -106,6 +109,7 @@ func (c *Compiler) Compile() (string, []error) {
 
 	// turn the binary to hex
 	var bin strings.Builder
+
 	for _, v := range c.binary {
 		switch v := v.(type) {
 		case vm.OpCode:
@@ -123,6 +127,7 @@ func (c *Compiler) Compile() (string, []error) {
 func (c *Compiler) next() token {
 	token := c.tokens[c.pos]
 	c.pos++
+
 	return token
 }
 
@@ -163,7 +168,9 @@ func (c *Compiler) compileNumber(element token) (int, error) {
 	if len(num) == 0 {
 		num = []byte{0}
 	}
+
 	c.pushBin(num)
+
 	return len(num), nil
 }
 
@@ -194,6 +201,7 @@ func (c *Compiler) compileElement(element token) error {
 		}
 		// push the operation
 		c.pushBin(toBinary(element.text))
+
 		return nil
 	} else if isPush(element.text) {
 		// handle pushes. pushes are read from left to right.
@@ -238,6 +246,7 @@ func (c *Compiler) pushBin(v interface{}) {
 	if c.debug {
 		fmt.Printf("%d: %v\n", len(c.binary), v)
 	}
+
 	c.binary = append(c.binary, v)
 }
 

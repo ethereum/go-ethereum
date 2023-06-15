@@ -60,9 +60,11 @@ func (c *curvePoint) IsOnCurve() bool {
 	xxx.Mul(xxx, c.x)
 	yy.Sub(yy, xxx)
 	yy.Sub(yy, curveB)
+
 	if yy.Sign() < 0 || yy.Cmp(P) >= 0 {
 		yy.Mod(yy, P)
 	}
+
 	return yy.Sign() == 0
 }
 
@@ -79,6 +81,7 @@ func (c *curvePoint) Add(a, b *curvePoint, pool *bnPool) {
 		c.Set(b)
 		return
 	}
+
 	if b.IsInfinity() {
 		c.Set(a)
 		return
@@ -91,10 +94,12 @@ func (c *curvePoint) Add(a, b *curvePoint, pool *bnPool) {
 	// where u1 = x1·z2², s1 = y1·z2³ and u1 = x2·z1², s2 = y2·z1³
 	z1z1 := pool.Get().Mul(a.z, a.z)
 	z1z1.Mod(z1z1, P)
+
 	z2z2 := pool.Get().Mul(b.z, b.z)
 	z2z2.Mod(z2z2, P)
 	u1 := pool.Get().Mul(a.x, z2z2)
 	u1.Mod(u1, P)
+
 	u2 := pool.Get().Mul(b.x, z1z1)
 	u2.Mod(u2, P)
 
@@ -127,11 +132,13 @@ func (c *curvePoint) Add(a, b *curvePoint, pool *bnPool) {
 	j.Mod(j, P)
 
 	t.Sub(s2, s1)
+
 	yEqual := t.Sign() == 0
 	if xEqual && yEqual {
 		c.Double(a, pool)
 		return
 	}
+
 	r := pool.Get().Add(t, t)
 
 	v := pool.Get().Mul(u1, i)
@@ -141,6 +148,7 @@ func (c *curvePoint) Add(a, b *curvePoint, pool *bnPool) {
 	t4 := pool.Get().Mul(r, r)
 	t4.Mod(t4, P)
 	t.Add(v, v)
+
 	t6 := pool.Get().Sub(t4, j)
 	c.x.Sub(t6, t)
 
@@ -184,6 +192,7 @@ func (c *curvePoint) Double(a *curvePoint, pool *bnPool) {
 	// See http://hyperelliptic.org/EFD/g1p/auto-code/shortw/jacobian-0/doubling/dbl-2009-l.op3
 	A := pool.Get().Mul(a.x, a.x)
 	A.Mod(A, P)
+
 	B := pool.Get().Mul(a.y, a.y)
 	B.Mod(B, P)
 	C_ := pool.Get().Mul(B, B)
@@ -228,10 +237,12 @@ func (c *curvePoint) Double(a *curvePoint, pool *bnPool) {
 func (c *curvePoint) Mul(a *curvePoint, scalar *big.Int, pool *bnPool) *curvePoint {
 	sum := newCurvePoint(pool)
 	sum.SetInfinity()
+
 	t := newCurvePoint(pool)
 
 	for i := scalar.BitLen(); i >= 0; i-- {
 		t.Double(sum, pool)
+
 		if scalar.Bit(i) != 0 {
 			sum.Add(t, a, pool)
 		} else {
@@ -242,6 +253,7 @@ func (c *curvePoint) Mul(a *curvePoint, scalar *big.Int, pool *bnPool) *curvePoi
 	c.Set(sum)
 	sum.Put(pool)
 	t.Put(pool)
+
 	return c
 }
 
@@ -251,16 +263,20 @@ func (c *curvePoint) MakeAffine(pool *bnPool) *curvePoint {
 	if words := c.z.Bits(); len(words) == 1 && words[0] == 1 {
 		return c
 	}
+
 	if c.IsInfinity() {
 		c.x.SetInt64(0)
 		c.y.SetInt64(1)
 		c.z.SetInt64(0)
 		c.t.SetInt64(0)
+
 		return c
 	}
+
 	zInv := pool.Get().ModInverse(c.z, P)
 	t := pool.Get().Mul(c.y, zInv)
 	t.Mod(t, P)
+
 	zInv2 := pool.Get().Mul(zInv, zInv)
 	zInv2.Mod(zInv2, P)
 	c.y.Mul(t, zInv2)

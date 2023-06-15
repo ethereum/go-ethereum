@@ -53,12 +53,15 @@ func (g *gethrpc) addPeer(peer *gethrpc) {
 	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
+
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
 		g.geth.Fatalf("subscribe %v: %v", g.name, err)
 	}
+
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
+
 	dur := 14 * time.Second
 	timeout := time.After(dur)
 	select {
@@ -76,8 +79,10 @@ func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
 	if g.nodeInfo != nil {
 		return g.nodeInfo
 	}
+
 	g.nodeInfo = &p2p.NodeInfo{}
 	g.callRPC(&g.nodeInfo, "admin_nodeInfo")
+
 	return g.nodeInfo
 }
 
@@ -90,6 +95,7 @@ func ipcEndpoint(ipcPath, datadir string) string {
 		if strings.HasPrefix(ipcPath, `\\.\pipe\`) {
 			return ipcPath
 		}
+
 		return `\\.\pipe\` + ipcPath
 	}
 	// Resolve names into the data directory full paths otherwise
@@ -97,8 +103,10 @@ func ipcEndpoint(ipcPath, datadir string) string {
 		if datadir == "" {
 			return filepath.Join(os.TempDir(), ipcPath)
 		}
+
 		return filepath.Join(datadir, ipcPath)
 	}
+
 	return ipcPath
 }
 
@@ -122,13 +130,16 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 	// We can't know exactly how long geth will take to start, so we try 10
 	// times over a 5 second period.
 	var err error
+
 	for i := 0; i < 10; i++ {
 		time.Sleep(500 * time.Millisecond)
+
 		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
 			return g
 		}
 	}
 	t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+
 	return nil
 }
 
@@ -138,6 +149,7 @@ func initGeth(t *testing.T) string {
 	g := runGeth(t, args...)
 	datadir := g.Datadir
 	g.WaitExit()
+
 	return datadir
 }
 
@@ -145,8 +157,10 @@ func startLightServer(t *testing.T) *gethrpc {
 	datadir := initGeth(t)
 	t.Logf("Importing keys to geth")
 	runGeth(t, "account", "import", "--datadir", datadir, "--password", "./testdata/password.txt", "--lightkdf", "./testdata/key.prv").WaitExit()
+
 	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
 	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--miner.etherbase=0x02f0d131f1f97aef08aec6e3291b957d9efe7105", "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
+
 	return server
 }
 
@@ -165,7 +179,9 @@ func TestPriorityClient(t *testing.T) {
 	freeCli.addPeer(lightServer)
 
 	var peers []*p2p.PeerInfo
+
 	freeCli.callRPC(&peers, "admin_peers")
+
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of client peers == 1, actual: %v", len(peers))
 		return
@@ -181,6 +197,7 @@ func TestPriorityClient(t *testing.T) {
 
 	// Check if priority client is actually syncing and the regular client got kicked out
 	prioCli.callRPC(&peers, "admin_peers")
+
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
@@ -190,15 +207,19 @@ func TestPriorityClient(t *testing.T) {
 		freeCli.getNodeInfo().ID:     freeCli,
 		prioCli.getNodeInfo().ID:     prioCli,
 	}
+
 	time.Sleep(1 * time.Second)
 	lightServer.callRPC(&peers, "admin_peers")
+
 	peersWithNames := make(map[string]string)
 	for _, p := range peers {
 		peersWithNames[nodes[p.ID].name] = p.ID
 	}
+
 	if _, freeClientFound := peersWithNames[freeCli.name]; freeClientFound {
 		t.Error("client is still a peer of lightServer", peersWithNames)
 	}
+
 	if _, prioClientFound := peersWithNames[prioCli.name]; !prioClientFound {
 		t.Error("prio client is not among lightServer peers", peersWithNames)
 	}

@@ -155,11 +155,14 @@ func (t *StateTrie) MustUpdate(key, value []byte) {
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	hk := t.hashKey(key)
+
 	err := t.trie.Update(hk, value)
 	if err != nil {
 		return err
 	}
+
 	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+
 	return nil
 }
 
@@ -239,6 +242,7 @@ func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 
 			t.preimages.insertPreimage(preimages)
 		}
+
 		t.secKeyCache = make(map[string][]byte)
 	}
 	// Commit the trie and return its modified nodeset.
@@ -275,6 +279,7 @@ func (t *StateTrie) hashKey(key []byte) []byte {
 	h.sha.Write(key)
 	h.sha.Read(t.hashKeyBuf[:])
 	returnHasherToPool(h)
+
 	return t.hashKeyBuf[:]
 }
 
@@ -286,5 +291,6 @@ func (t *StateTrie) getSecKeyCache() map[string][]byte {
 		t.secKeyCacheOwner = t
 		t.secKeyCache = make(map[string][]byte)
 	}
+
 	return t.secKeyCache
 }

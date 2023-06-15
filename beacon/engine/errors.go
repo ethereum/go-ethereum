@@ -35,6 +35,7 @@ func (e *EngineAPIError) ErrorData() interface{} {
 	if e.err == nil {
 		return nil
 	}
+
 	return struct {
 		Error string `json:"err"`
 	}{e.err.Error()}

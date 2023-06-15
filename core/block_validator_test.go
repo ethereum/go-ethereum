@@ -41,6 +41,7 @@ func TestHeaderVerification(t *testing.T) {
 		gspec        = &Genesis{Config: params.TestChainConfig}
 		_, blocks, _ = GenerateChainWithGenesis(gspec, ethash.NewFaker(), 8, nil)
 	)
+
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
@@ -76,6 +77,7 @@ func TestHeaderVerification(t *testing.T) {
 			case <-time.After(25 * time.Millisecond):
 			}
 		}
+
 		chain.InsertChain(blocks[i : i+1])
 	}
 }
@@ -92,6 +94,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		engine     consensus.Engine
 		merger     = consensus.NewMerger(rawdb.NewMemoryDatabase())
 	)
+
 	if isClique {
 		var (
 			key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -119,6 +122,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			if i > 0 {
 				header.ParentHash = blocks[i-1].Hash()
 			}
+
 			header.Extra = make([]byte, 32+crypto.SignatureLength)
 			header.Difficulty = big.NewInt(2)
 
@@ -139,10 +143,12 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		engine = beacon.New(ethash.NewFaker())
 		td := int(params.GenesisDifficulty.Uint64())
 		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+
 		for _, block := range blocks {
 			// calculate td
 			td += int(block.Difficulty().Uint64())
 		}
+
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
 		t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
@@ -156,6 +162,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		preHeaders[i] = block.Header()
 		t.Logf("Pre-merge header: %d", block.NumberU64())
 	}
+
 	postHeaders := make([]*types.Header, len(postBlocks))
 	for i, block := range postBlocks {
 		postHeaders[i] = block.Header()
@@ -216,16 +223,19 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		headers []*types.Header
 		seals   []bool
 	)
+
 	for _, block := range preBlocks {
 		headers = append(headers, block.Header())
 		seals = append(seals, true)
 	}
+
 	for _, block := range postBlocks {
 		headers = append(headers, block.Header())
 		seals = append(seals, true)
 	}
 
 	_, results := engine.VerifyHeaders(chain, headers, seals)
+
 	for i := 0; i < len(headers); i++ {
 		select {
 		case result := <-results:
@@ -255,6 +265,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		gspec        = &Genesis{Config: params.TestChainConfig}
 		_, blocks, _ = GenerateChainWithGenesis(gspec, ethash.NewFaker(), 8, nil)
 	)
+
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
 
@@ -282,6 +293,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		}
 		// Wait for all the verification results
 		checks := make(map[int]error)
+
 		for j := 0; j < len(blocks); j++ {
 			select {
 			case result := <-results:
@@ -297,6 +309,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 			if (checks[j] == nil) != want {
 				t.Errorf("test %d.%d: validity mismatch: have %v, want %v", i, j, checks[j], want)
 			}
+
 			if !want {
 				// A few blocks after the first error may pass verification due to concurrent
 				// workers. We don't care about those in this test, just that the correct block
@@ -325,6 +338,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 		gspec        = &Genesis{Config: params.TestChainConfig}
 		_, blocks, _ = GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1024, nil)
 	)
+
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
 
@@ -345,12 +359,14 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 
 	// Deplete the results channel
 	verified := 0
+
 	for depleted := false; !depleted; {
 		select {
 		case result := <-results:
 			if result != nil {
 				t.Errorf("header %d: validation failed: %v", verified, result)
 			}
+
 			verified++
 		case <-time.After(50 * time.Millisecond):
 			depleted = true

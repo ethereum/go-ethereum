@@ -53,6 +53,7 @@ func (txn *noncer) get(addr common.Address) uint64 {
 			txn.nonces[addr] = nonce
 		}
 	}
+
 	return txn.nonces[addr]
 }
 
@@ -76,9 +77,11 @@ func (txn *noncer) setIfLower(addr common.Address, nonce uint64) {
 			txn.nonces[addr] = nonce
 		}
 	}
+
 	if txn.nonces[addr] <= nonce {
 		return
 	}
+
 	txn.nonces[addr] = nonce
 }
 

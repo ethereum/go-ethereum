@@ -17,6 +17,7 @@ func GetOrRegisterGauge(name string, r Registry) Gauge {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewGauge).(Gauge)
 }
 
@@ -32,10 +33,13 @@ func NewGauge() Gauge {
 // NewRegisteredGauge constructs and registers a new StandardGauge.
 func NewRegisteredGauge(name string, r Registry) Gauge {
 	c := NewGauge()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -44,16 +48,20 @@ func NewFunctionalGauge(f func() int64) Gauge {
 	if !Enabled {
 		return NilGauge{}
 	}
+
 	return &FunctionalGauge{value: f}
 }
 
 // NewRegisteredFunctionalGauge constructs and registers a new StandardGauge.
 func NewRegisteredFunctionalGauge(name string, r Registry, f func() int64) Gauge {
 	c := NewFunctionalGauge(f)
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 

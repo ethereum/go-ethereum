@@ -409,6 +409,7 @@ func getStaticTrustedNodes(args []string) {
 		if !checkFileExists(path) {
 			return
 		}
+
 		writeTempStaticJSON(path)
 	}
 }

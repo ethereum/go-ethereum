@@ -38,13 +38,16 @@ func TestEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Logf("Ciphertext %x, nonce %x\n", c, iv)
 
 	p, err := decrypt(key, iv, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Logf("Plaintext %v\n", string(p))
+
 	if !bytes.Equal(plaintext, p) {
 		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(plaintext), string(p))
 	}
@@ -67,14 +70,17 @@ func TestFileStorage(t *testing.T) {
 		key:      []byte("AES256Key-32Characters1234567890"),
 	}
 	stored.writeEncryptedStorage(a)
+
 	read := &AESEncryptedStorage{
 		filename: fmt.Sprintf("%v/vault.json", d),
 		key:      []byte("AES256Key-32Characters1234567890"),
 	}
+
 	creds, err := read.readEncryptedStorage()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for k, v := range a {
 		if v2, exist := creds[k]; !exist {
 			t.Errorf("Missing entry %v", k)
@@ -82,6 +88,7 @@ func TestFileStorage(t *testing.T) {
 			if !bytes.Equal(v.CipherText, v2.CipherText) {
 				t.Errorf("Wrong ciphertext, expected %x got %x", v.CipherText, v2.CipherText)
 			}
+
 			if !bytes.Equal(v.Iv, v2.Iv) {
 				t.Errorf("Wrong iv")
 			}
@@ -103,6 +110,7 @@ func TestEnd2End(t *testing.T) {
 	}
 
 	s1.Put("bazonk", "foobar")
+
 	if v, err := s2.Get("bazonk"); v != "foobar" || err != nil {
 		t.Errorf("Expected bazonk->foobar (nil error), got '%v' (%v error)", v, err)
 	}
@@ -124,17 +132,21 @@ func TestSwappedKeys(t *testing.T) {
 	// Now make a modified copy
 
 	creds := make(map[string]storedCredential)
+
 	raw, err := os.ReadFile(s1.filename)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err = json.Unmarshal(raw, &creds); err != nil {
 		t.Fatal(err)
 	}
+
 	swap := func() {
 		// Turn it into K1:V2, K2:V2
 		v1, v2 := creds["k1"], creds["k2"]
 		creds["k2"], creds["k1"] = v1, v2
+
 		raw, err = json.Marshal(creds)
 		if err != nil {
 			t.Fatal(err)
@@ -145,10 +157,13 @@ func TestSwappedKeys(t *testing.T) {
 		}
 	}
 	swap()
+
 	if v, _ := s1.Get("k1"); v != "" {
 		t.Errorf("swapped value should return empty")
 	}
+
 	swap()
+
 	if v, _ := s1.Get("k1"); v != "v1" {
 		t.Errorf("double-swapped value should work fine")
 	}

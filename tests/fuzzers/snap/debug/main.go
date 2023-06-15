@@ -28,6 +28,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
 		os.Exit(1)
 	}
+
 	crasher := os.Args[1]
 	data, err := os.ReadFile(crasher)
 
@@ -35,5 +36,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
 		os.Exit(1)
 	}
+
 	snap.FuzzTrieNodes(data)
 }

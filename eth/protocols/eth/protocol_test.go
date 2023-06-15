@@ -57,11 +57,13 @@ func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 		} else if err == nil && tt.fail {
 			t.Fatalf("test %d: encode should have failed", i)
 		}
+
 		if !tt.fail {
 			packet := new(GetBlockHeadersPacket)
 			if err := rlp.DecodeBytes(bytes, packet); err != nil {
 				t.Fatalf("test %d: failed to decode packet: %v", i, err)
 			}
+
 			if packet.Origin.Hash != tt.packet.Origin.Hash || packet.Origin.Number != tt.packet.Origin.Number || packet.Amount != tt.packet.Amount ||
 				packet.Skip != tt.packet.Skip || packet.Reverse != tt.packet.Reverse {
 				t.Fatalf("test %d: encode decode mismatch: have %+v, want %+v", i, packet, tt.packet)
@@ -132,6 +134,7 @@ func TestEth66Messages(t *testing.T) {
 
 		err error
 	)
+
 	header = &types.Header{
 		Difficulty: big.NewInt(2222),
 		Number:     big.NewInt(3333),
@@ -147,10 +150,12 @@ func TestEth66Messages(t *testing.T) {
 			"f867098504a817c809830334509435353535353535353535353535353535353535358202d98025a052f8f61201b2b11a78d6e866abc9c3db2ae8631fa656bfe5cb53668255367afba052f8f61201b2b11a78d6e866abc9c3db2ae8631fa656bfe5cb53668255367afb",
 		} {
 			var tx *types.Transaction
+
 			rlpdata := common.FromHex(hexrlp)
 			if err := rlp.DecodeBytes(rlpdata, &tx); err != nil {
 				t.Fatal(err)
 			}
+
 			txs = append(txs, tx)
 			txRlps = append(txRlps, rlpdata)
 		}
@@ -160,6 +165,7 @@ func TestEth66Messages(t *testing.T) {
 		Transactions: txs,
 		Uncles:       []*types.Header{header},
 	}
+
 	blockBodyRlp, err = rlp.EncodeToBytes(blockBody)
 	if err != nil {
 		t.Fatal(err)
@@ -191,10 +197,12 @@ func TestEth66Messages(t *testing.T) {
 				GasUsed:         111111,
 			},
 		}
+
 		rlpData, err := rlp.EncodeToBytes(receipts)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		receiptsRlp = rlpData
 	}
 

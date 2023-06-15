@@ -109,6 +109,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	} else {
 		r.Status = ReceiptStatusSuccessful
 	}
+
 	return r
 }
 
@@ -119,12 +120,15 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	if r.Type == LegacyTxType {
 		return rlp.Encode(w, data)
 	}
+
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
+
 	if err := r.encodeTyped(data, buf); err != nil {
 		return err
 	}
+
 	return rlp.Encode(w, buf.Bytes())
 }
 
@@ -139,9 +143,12 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 	if r.Type == LegacyTxType {
 		return rlp.EncodeToBytes(r)
 	}
+
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+
 	var buf bytes.Buffer
 	err := r.encodeTyped(data, &buf)
+
 	return buf.Bytes(), err
 }
 
@@ -149,6 +156,7 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	kind, _, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err
@@ -158,7 +166,9 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err := s.Decode(&dec); err != nil {
 			return err
 		}
+
 		r.Type = LegacyTxType
+
 		return r.setFromRLP(dec)
 	default:
 		// It's an EIP-2718 typed tx receipt.
@@ -166,6 +176,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
+
 		return r.decodeTyped(b)
 	}
 }
@@ -176,11 +187,14 @@ func (r *Receipt) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy receipt decode the RLP
 		var data receiptRLP
+
 		err := rlp.DecodeBytes(b, &data)
 		if err != nil {
 			return err
 		}
+
 		r.Type = LegacyTxType
+
 		return r.setFromRLP(data)
 	}
 	// It's an EIP2718 typed transaction envelope.
@@ -192,14 +206,18 @@ func (r *Receipt) decodeTyped(b []byte) error {
 	if len(b) <= 1 {
 		return errShortTypedReceipt
 	}
+
 	switch b[0] {
 	case DynamicFeeTxType, AccessListTxType:
 		var data receiptRLP
+
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
 			return err
 		}
+
 		r.Type = b[0]
+
 		return r.setFromRLP(data)
 	default:
 		return ErrTxTypeNotSupported
@@ -222,6 +240,7 @@ func (r *Receipt) setStatus(postStateOrStatus []byte) error {
 	default:
 		return fmt.Errorf("invalid receipt status %x", postStateOrStatus)
 	}
+
 	return nil
 }
 
@@ -230,8 +249,10 @@ func (r *Receipt) statusEncoding() []byte {
 		if r.Status == ReceiptStatusFailed {
 			return receiptStatusFailedRLP
 		}
+
 		return receiptStatusSuccessfulRLP
 	}
+
 	return r.PostState
 }
 
@@ -240,9 +261,11 @@ func (r *Receipt) statusEncoding() []byte {
 func (r *Receipt) Size() common.StorageSize {
 	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
+
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
 	}
+
 	return size
 }
 
@@ -258,13 +281,16 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes((*Receipt)(r).statusEncoding())
 	w.WriteUint64(r.CumulativeGasUsed)
 	logList := w.List()
+
 	for _, log := range r.Logs {
 		if err := rlp.Encode(w, log); err != nil {
 			return err
 		}
 	}
+
 	w.ListEnd(logList)
 	w.ListEnd(outerList)
+
 	return w.Flush()
 }
 
@@ -275,9 +301,11 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&stored); err != nil {
 		return err
 	}
+
 	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
 		return err
 	}
+
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
@@ -295,6 +323,7 @@ func (rs Receipts) Len() int { return len(rs) }
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+
 	switch r.Type {
 	case LegacyTxType:
 		rlp.Encode(w, data)
@@ -317,9 +346,11 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 	signer := MakeSigner(config, new(big.Int).SetUint64(number))
 
 	logIndex := uint(0)
+
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
+
 	for i := 0; i < len(rs); i++ {
 		// The transaction type and hash can be retrieved from the transaction itself
 		rs[i].Type = txs[i].Type()
@@ -358,5 +389,6 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			logIndex++
 		}
 	}
+
 	return nil
 }

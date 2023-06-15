@@ -38,8 +38,10 @@ func insertInList(l []int, v int) []int {
 			// already in list
 			return l
 		}
+
 		a := append(l[:x+1], l[x:]...)
 		a[x] = v
+
 		return a
 	}
 }

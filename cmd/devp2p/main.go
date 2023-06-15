@@ -88,6 +88,7 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 	if err != nil {
 		exit(err)
 	}
+
 	return n
 }
 
@@ -95,6 +96,7 @@ func exit(err interface{}) {
 	if err == nil {
 		os.Exit(0)
 	}
+
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
 }

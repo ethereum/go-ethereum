@@ -63,6 +63,7 @@ func (m *EthereumGetPublicKey) GetAddressN() []uint32 {
 	if m != nil {
 		return m.AddressN
 	}
+
 	return nil
 }
 
@@ -70,6 +71,7 @@ func (m *EthereumGetPublicKey) GetShowDisplay() bool {
 	if m != nil && m.ShowDisplay != nil {
 		return *m.ShowDisplay
 	}
+
 	return false
 }
 
@@ -113,6 +115,7 @@ func (m *EthereumPublicKey) GetNode() *HDNodeType {
 	if m != nil {
 		return m.Node
 	}
+
 	return nil
 }
 
@@ -120,6 +123,7 @@ func (m *EthereumPublicKey) GetXpub() string {
 	if m != nil && m.Xpub != nil {
 		return *m.Xpub
 	}
+
 	return ""
 }
 
@@ -165,6 +169,7 @@ func (m *EthereumGetAddress) GetAddressN() []uint32 {
 	if m != nil {
 		return m.AddressN
 	}
+
 	return nil
 }
 
@@ -172,6 +177,7 @@ func (m *EthereumGetAddress) GetShowDisplay() bool {
 	if m != nil && m.ShowDisplay != nil {
 		return *m.ShowDisplay
 	}
+
 	return false
 }
 
@@ -215,6 +221,7 @@ func (m *EthereumAddress) GetAddressBin() []byte {
 	if m != nil {
 		return m.AddressBin
 	}
+
 	return nil
 }
 
@@ -222,6 +229,7 @@ func (m *EthereumAddress) GetAddressHex() string {
 	if m != nil && m.AddressHex != nil {
 		return *m.AddressHex
 	}
+
 	return ""
 }
 
@@ -278,6 +286,7 @@ func (m *EthereumSignTx) GetAddressN() []uint32 {
 	if m != nil {
 		return m.AddressN
 	}
+
 	return nil
 }
 
@@ -285,6 +294,7 @@ func (m *EthereumSignTx) GetNonce() []byte {
 	if m != nil {
 		return m.Nonce
 	}
+
 	return nil
 }
 
@@ -292,6 +302,7 @@ func (m *EthereumSignTx) GetGasPrice() []byte {
 	if m != nil {
 		return m.GasPrice
 	}
+
 	return nil
 }
 
@@ -299,6 +310,7 @@ func (m *EthereumSignTx) GetGasLimit() []byte {
 	if m != nil {
 		return m.GasLimit
 	}
+
 	return nil
 }
 
@@ -306,6 +318,7 @@ func (m *EthereumSignTx) GetToBin() []byte {
 	if m != nil {
 		return m.ToBin
 	}
+
 	return nil
 }
 
@@ -313,6 +326,7 @@ func (m *EthereumSignTx) GetToHex() string {
 	if m != nil && m.ToHex != nil {
 		return *m.ToHex
 	}
+
 	return ""
 }
 
@@ -320,6 +334,7 @@ func (m *EthereumSignTx) GetValue() []byte {
 	if m != nil {
 		return m.Value
 	}
+
 	return nil
 }
 
@@ -327,6 +342,7 @@ func (m *EthereumSignTx) GetDataInitialChunk() []byte {
 	if m != nil {
 		return m.DataInitialChunk
 	}
+
 	return nil
 }
 
@@ -334,6 +350,7 @@ func (m *EthereumSignTx) GetDataLength() uint32 {
 	if m != nil && m.DataLength != nil {
 		return *m.DataLength
 	}
+
 	return 0
 }
 
@@ -341,6 +358,7 @@ func (m *EthereumSignTx) GetChainId() uint32 {
 	if m != nil && m.ChainId != nil {
 		return *m.ChainId
 	}
+
 	return 0
 }
 
@@ -348,6 +366,7 @@ func (m *EthereumSignTx) GetTxType() uint32 {
 	if m != nil && m.TxType != nil {
 		return *m.TxType
 	}
+
 	return 0
 }
 
@@ -396,6 +415,7 @@ func (m *EthereumTxRequest) GetDataLength() uint32 {
 	if m != nil && m.DataLength != nil {
 		return *m.DataLength
 	}
+
 	return 0
 }
 
@@ -403,6 +423,7 @@ func (m *EthereumTxRequest) GetSignatureV() uint32 {
 	if m != nil && m.SignatureV != nil {
 		return *m.SignatureV
 	}
+
 	return 0
 }
 
@@ -410,6 +431,7 @@ func (m *EthereumTxRequest) GetSignatureR() []byte {
 	if m != nil {
 		return m.SignatureR
 	}
+
 	return nil
 }
 
@@ -417,6 +439,7 @@ func (m *EthereumTxRequest) GetSignatureS() []byte {
 	if m != nil {
 		return m.SignatureS
 	}
+
 	return nil
 }
 
@@ -459,6 +482,7 @@ func (m *EthereumTxAck) GetDataChunk() []byte {
 	if m != nil {
 		return m.DataChunk
 	}
+
 	return nil
 }
 
@@ -504,6 +528,7 @@ func (m *EthereumSignMessage) GetAddressN() []uint32 {
 	if m != nil {
 		return m.AddressN
 	}
+
 	return nil
 }
 
@@ -511,6 +536,7 @@ func (m *EthereumSignMessage) GetMessage() []byte {
 	if m != nil {
 		return m.Message
 	}
+
 	return nil
 }
 
@@ -555,6 +581,7 @@ func (m *EthereumMessageSignature) GetAddressBin() []byte {
 	if m != nil {
 		return m.AddressBin
 	}
+
 	return nil
 }
 
@@ -562,6 +589,7 @@ func (m *EthereumMessageSignature) GetSignature() []byte {
 	if m != nil {
 		return m.Signature
 	}
+
 	return nil
 }
 
@@ -569,6 +597,7 @@ func (m *EthereumMessageSignature) GetAddressHex() string {
 	if m != nil && m.AddressHex != nil {
 		return *m.AddressHex
 	}
+
 	return ""
 }
 
@@ -616,6 +645,7 @@ func (m *EthereumVerifyMessage) GetAddressBin() []byte {
 	if m != nil {
 		return m.AddressBin
 	}
+
 	return nil
 }
 
@@ -623,6 +653,7 @@ func (m *EthereumVerifyMessage) GetSignature() []byte {
 	if m != nil {
 		return m.Signature
 	}
+
 	return nil
 }
 
@@ -630,6 +661,7 @@ func (m *EthereumVerifyMessage) GetMessage() []byte {
 	if m != nil {
 		return m.Message
 	}
+
 	return nil
 }
 
@@ -637,6 +669,7 @@ func (m *EthereumVerifyMessage) GetAddressHex() string {
 	if m != nil && m.AddressHex != nil {
 		return *m.AddressHex
 	}
+
 	return ""
 }
 

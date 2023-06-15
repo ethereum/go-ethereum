@@ -73,6 +73,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
@@ -82,10 +83,12 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 	if err != nil {
 		t.Fatalf("Failed to create peer pair %v", err)
 	}
+
 	importCh := make(chan interface{})
 	c.handler.fetcher.newHeadHook = func(header *types.Header) {
 		importCh <- header
 	}
+
 	for i := uint64(1); i <= s.backend.Blockchain().CurrentHeader().Number.Uint64(); i++ {
 		header := s.backend.Blockchain().GetHeaderByNumber(i)
 		hash, number := header.Hash(), header.Number.Uint64()
@@ -95,6 +98,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 		if p1.cpeer.announceType == announceTypeSigned {
 			announce.sign(s.handler.server.privateKey)
 		}
+
 		p1.cpeer.sendAnnounce(announce)
 		verifyImportEvent(t, importCh, true)
 	}
@@ -111,6 +115,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
@@ -120,6 +125,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	if err != nil {
 		t.Fatalf("Failed to create peer pair %v", err)
 	}
+
 	done := make(chan *types.Header, 1)
 	c.handler.fetcher.newHeadHook = func(header *types.Header) { done <- header }
 
@@ -133,6 +139,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}
+
 	peer.cpeer.sendAnnounce(announce)
 
 	<-done // Wait syncing
@@ -186,12 +193,14 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 			ids = append(ids, n.String())
 		}
 	}
+
 	netconfig := testnetConfig{
 		protocol:    protocol,
 		nopruning:   true,
 		ulcServers:  ids,
 		ulcFraction: 60,
 	}
+
 	_, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 	defer func() {
@@ -217,8 +226,10 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		if err != nil {
 			t.Fatalf("connect server and client failed, err %s", err)
 		}
+
 		cpeers = append(cpeers, cp)
 	}
+
 	newHead := make(chan *types.Header, 1)
 	c.handler.fetcher.newHeadHook = func(header *types.Header) { newHead <- header }
 
@@ -232,15 +243,19 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 				// Sign the announcement if necessary.
 				announce := announceData{hash, number, td, 0, nil}
 				p := cpeers[j]
+
 				if p.announceType == announceTypeSigned {
 					announce.sign(servers[j].handler.server.privateKey)
 				}
+
 				p.sendAnnounce(announce)
 			}
 		}
+
 		if callback != nil {
 			callback()
 		}
+
 		verifyChainHeight(t, c.handler.fetcher, expected)
 	}
 	check([]uint64{1}, 1, func() { <-newHead })                                                                       // Sequential announcements
@@ -258,6 +273,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	s, c, teardown := newClientServerEnv(t, netconfig)
 	defer teardown()
 
@@ -267,6 +283,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	if err != nil {
 		t.Fatalf("Failed to create peer pair %v", err)
 	}
+
 	done := make(chan *types.Header, 1)
 	c.handler.fetcher.newHeadHook = func(header *types.Header) { done <- header }
 
@@ -280,6 +297,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	if peer.cpeer.announceType == announceTypeSigned {
 		announce.sign(s.handler.server.privateKey)
 	}
+
 	peer.cpeer.sendAnnounce(announce)
 	<-done // Wait syncing
 

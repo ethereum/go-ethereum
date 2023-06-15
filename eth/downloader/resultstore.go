@@ -63,7 +63,9 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 	if threshold >= limit {
 		threshold = limit
 	}
+
 	r.throttleThreshold = threshold
+
 	return r.throttleThreshold
 }
 
@@ -81,14 +83,17 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 	defer r.lock.Unlock()
 
 	var index int
+
 	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}
+
 	if item == nil {
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
+
 	return stale, throttled, item, err
 }
 
@@ -101,6 +106,7 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 	defer r.lock.RUnlock()
 
 	res, _, stale, _, err := r.getFetchResult(headerNumber)
+
 	return res, stale, err
 }
 
@@ -115,12 +121,16 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 		err = fmt.Errorf("%w: index allocation went beyond available resultStore space "+
 			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d", errInvalidChain,
 			index, headerNumber, r.resultOffset, len(r.items))
+
 		return nil, index, stale, throttle, err
 	}
+
 	if stale {
 		return nil, index, stale, throttle, nil
 	}
+
 	item = r.items[index]
+
 	return item, index, stale, throttle, nil
 }
 
@@ -133,9 +143,11 @@ func (r *resultStore) HasCompletedItems() bool {
 	if len(r.items) == 0 {
 		return false
 	}
+
 	if item := r.items[0]; item != nil && item.AllDone() {
 		return true
 	}
+
 	return false
 }
 
@@ -147,16 +159,19 @@ func (r *resultStore) countCompleted() int {
 	// We iterate from the already known complete point, and see
 	// if any more has completed since last count
 	index := r.indexIncomplete.Load()
+
 	for ; ; index++ {
 		if index >= int32(len(r.items)) {
 			break
 		}
+
 		result := r.items[index]
 		if result == nil || !result.AllDone() {
 			break
 		}
 	}
 	r.indexIncomplete.Store(index)
+
 	return int(index)
 }
 
@@ -169,11 +184,13 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	if limit > completed {
 		limit = completed
 	}
+
 	results := make([]*fetchResult, limit)
 	copy(results, r.items[:limit])
 
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
+
 	for i := len(r.items) - limit; i < len(r.items); i++ {
 		r.items[i] = nil
 	}

@@ -167,6 +167,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return tr, nil
 }
 
@@ -176,6 +177,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root commo
 	if err != nil {
 		return nil, err
 	}
+
 	return tr, nil
 }
 
@@ -201,8 +203,10 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
+
 		return code, nil
 	}
+
 	return nil, errors.New("not found")
 }
 
@@ -220,8 +224,10 @@ func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]b
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
+
 		return code, nil
 	}
+
 	return nil, errors.New("not found")
 }
 
@@ -230,7 +236,9 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
+
 	code, err := db.ContractCode(addrHash, codeHash)
+
 	return len(code), err
 }
 

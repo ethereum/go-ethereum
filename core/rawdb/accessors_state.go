@@ -35,6 +35,7 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 			log.Crit("Failed to store trie preimage", "err", err)
 		}
 	}
+
 	preimageCounter.Inc(int64(len(preimages)))
 	preimageHitCounter.Inc(int64(len(preimages)))
 }
@@ -47,7 +48,9 @@ func ReadCode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	if len(data) != 0 {
 		return data
 	}
+
 	data, _ = db.Get(hash.Bytes())
+
 	return data
 }
 
@@ -67,7 +70,9 @@ func HasCode(db ethdb.KeyValueReader, hash common.Hash) bool {
 	if ok := HasCodeWithPrefix(db, hash); ok {
 		return true
 	}
+
 	ok, _ := db.Has(hash.Bytes())
+
 	return ok
 }
 

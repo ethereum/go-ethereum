@@ -26,6 +26,7 @@ type ClosableMutex struct {
 func NewClosableMutex() *ClosableMutex {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
+
 	return &ClosableMutex{ch}
 }
 
@@ -60,5 +61,6 @@ func (cm *ClosableMutex) Close() {
 	if !ok {
 		panic("Close of already-closed ClosableMutex")
 	}
+
 	close(cm.ch)
 }

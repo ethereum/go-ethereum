@@ -39,6 +39,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
+
 	return l
 }
 
@@ -69,12 +70,15 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	if l.cfg.EnableMemory {
 		log.Memory = memory.Data()
 	}
+
 	if !l.cfg.DisableStack {
 		log.Stack = stack.Data()
 	}
+
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
 	}
+
 	l.encoder.Encode(log)
 }
 
@@ -85,10 +89,12 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
 		Err     string              `json:"error,omitempty"`
 	}
+
 	var errMsg string
 	if err != nil {
 		errMsg = err.Error()
 	}
+
 	_ = l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 

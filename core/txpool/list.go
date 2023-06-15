@@ -51,6 +51,7 @@ func (h *nonceHeap) Pop() interface{} {
 	x := old[n-1]
 	old[n-1] = 0
 	*h = old[0 : n-1]
+
 	return x
 }
 
@@ -133,6 +134,7 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 	m.cacheMu.Lock()
 	if m.cache != nil {
 		hitCacheCounter.Inc(1)
+
 		m.cache = m.cache[len(removed):]
 	}
 	m.cacheMu.Unlock()
@@ -154,6 +156,7 @@ func (m *sortedMap) Filter(filter func(*types.Transaction) bool) types.Transacti
 	if len(removed) > 0 {
 		m.reheap(false)
 	}
+
 	return removed
 }
 
@@ -202,9 +205,11 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	for nonce, tx := range m.items {
 		if filter(tx) {
 			removed = append(removed, tx)
+
 			delete(m.items, nonce)
 		}
 	}
+
 	if len(removed) > 0 {
 		m.cacheMu.Lock()
 		m.cache = nil
@@ -213,6 +218,7 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 
 		resetCacheGauge.Inc(1)
 	}
+
 	return removed
 }
 
@@ -414,7 +420,6 @@ func (m *sortedMap) Flatten() types.Transactions {
 // transaction with the highest nonce
 func (m *sortedMap) LastElement() *types.Transaction {
 	return m.lastElement()
-
 }
 
 // list is a "list" of transactions belonging to an account, sorted by account
@@ -534,6 +539,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	if len(removed) == 0 {
 		return nil, nil
 	}
+
 	var invalids types.Transactions
 	// If the list was strict, filter anything above the lowest nonce
 	if l.strict {
@@ -584,6 +590,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 
 		return true, txs
 	}
+
 	return true, nil
 }
 
@@ -694,6 +701,7 @@ func (h *priceHeap) Pop() interface{} {
 	x := old[n-1]
 	old[n-1] = nil
 	h.list = old[0 : n-1]
+
 	return x
 }
 
@@ -771,8 +779,10 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 		if l.all.GetRemote(head.Hash()) == nil { // Removed or migrated
 			l.stales.Add(-1)
 			heap.Pop(h)
+
 			continue
 		}
+
 		break
 	}
 	// Check if the transaction is underpriced or not
@@ -791,6 +801,7 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 // Note local transaction won't be considered for eviction.
 func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
+
 	for slots > 0 {
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio || floatingRatio == 0 {
 			// Discard stale transactions if found during cleanup
@@ -822,8 +833,10 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 		for _, tx := range drop {
 			heap.Push(&l.urgent, tx)
 		}
+
 		return nil, false
 	}
+
 	return drop, true
 }
 
@@ -831,7 +844,9 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 func (l *pricedList) Reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
+
 	start := time.Now()
+
 	l.stales.Store(0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
 	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
@@ -847,6 +862,7 @@ func (l *pricedList) Reheap() {
 	// if the floating queue was empty.
 	floatingCount := len(l.urgent.list) * floatingRatio / (urgentRatio + floatingRatio)
 	l.floating.list = make([]*types.Transaction, floatingCount)
+
 	for i := 0; i < floatingCount; i++ {
 		l.floating.list[i] = heap.Pop(&l.urgent).(*types.Transaction)
 	}

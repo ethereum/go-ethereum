@@ -49,6 +49,7 @@ func main() {
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
+
 	flag.Parse()
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
@@ -60,15 +61,18 @@ func main() {
 	if err != nil {
 		utils.Fatalf("-nat: %v", err)
 	}
+
 	switch {
 	case *genKey != "":
 		nodeKey, err = crypto.GenerateKey()
 		if err != nil {
 			utils.Fatalf("could not generate key: %v", err)
 		}
+
 		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
 			utils.Fatalf("%v", err)
 		}
+
 		if !*writeAddr {
 			return
 		}
@@ -103,6 +107,7 @@ func main() {
 	if err != nil {
 		utils.Fatalf("-ResolveUDPAddr: %v", err)
 	}
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		utils.Fatalf("-ListenUDP: %v", err)
@@ -113,6 +118,7 @@ func main() {
 		if !realaddr.IP.IsLoopback() {
 			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
 		}
+
 		if ext, err := natm.ExternalIP(); err == nil {
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
@@ -126,6 +132,7 @@ func main() {
 		PrivateKey:  nodeKey,
 		NetRestrict: restrictList,
 	}
+
 	if *runv5 {
 		if _, err := discover.ListenV5(conn, ln, cfg); err != nil {
 			utils.Fatalf("%v", err)
@@ -143,6 +150,7 @@ func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
 	if addr.IP.IsUnspecified() {
 		addr.IP = net.IP{127, 0, 0, 1}
 	}
+
 	n := enode.NewV4(nodeKey, addr.IP, 0, addr.Port)
 	fmt.Println(n.URLv4())
 	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")

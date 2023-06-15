@@ -45,18 +45,23 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	if number > testHead {
 		return nil, nil
 	}
+
 	if number == rpc.EarliestBlockNumber {
 		number = 0
 	}
+
 	if number == rpc.FinalizedBlockNumber {
 		return b.chain.CurrentFinalBlock(), nil
 	}
+
 	if number == rpc.SafeBlockNumber {
 		return b.chain.CurrentSafeBlock(), nil
 	}
+
 	if number == rpc.LatestBlockNumber {
 		number = testHead
 	}
+
 	if number == rpc.PendingBlockNumber {
 		if b.pending {
 			number = testHead + 1
@@ -64,6 +69,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 			return nil, nil
 		}
 	}
+
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
@@ -71,18 +77,23 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	if number > testHead {
 		return nil, nil
 	}
+
 	if number == rpc.EarliestBlockNumber {
 		number = 0
 	}
+
 	if number == rpc.FinalizedBlockNumber {
 		number = rpc.BlockNumber(b.chain.CurrentFinalBlock().Number.Uint64())
 	}
+
 	if number == rpc.SafeBlockNumber {
 		number = rpc.BlockNumber(b.chain.CurrentSafeBlock().Number.Uint64())
 	}
+
 	if number == rpc.LatestBlockNumber {
 		number = testHead
 	}
+
 	if number == rpc.PendingBlockNumber {
 		if b.pending {
 			number = testHead + 1
@@ -90,6 +101,7 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 			return nil, nil
 		}
 	}
+
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
@@ -102,6 +114,7 @@ func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 		block := b.chain.GetBlockByNumber(testHead + 1)
 		return block, b.chain.GetReceiptsByHash(block.Hash())
 	}
+
 	return nil, nil
 }
 
@@ -130,6 +143,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
+
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
@@ -161,6 +175,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Data:     []byte{},
 			}
 		}
+
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
 	// Construct testing chain
@@ -168,9 +183,11 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
+
 	chain.InsertChain(blocks)
 	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
 	chain.SetSafe(chain.GetBlockByNumber(25).Header())
+
 	return &testBackend{chain: chain, pending: pending}
 }
 
@@ -188,6 +205,7 @@ func TestSuggestTipCap(t *testing.T) {
 		Percentile: 60,
 		Default:    big.NewInt(params.GWei),
 	}
+
 	var cases = []struct {
 		fork   *big.Int // London fork number
 		expect *big.Int // Expected gasprice suggestion
@@ -198,16 +216,20 @@ func TestSuggestTipCap(t *testing.T) {
 		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
 		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
 	}
+
 	for _, c := range cases {
 		backend := newTestBackend(t, c.fork, false)
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
 		got, err := oracle.SuggestTipCap(context.Background())
+
 		backend.teardown()
+
 		if err != nil {
 			t.Fatalf("Failed to retrieve recommended gas price: %v", err)
 		}
+
 		if got.Cmp(c.expect) != 0 {
 			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
 		}

@@ -34,6 +34,7 @@ func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*ty
 	defer queryTicker.Stop()
 
 	logger := log.New("hash", tx.Hash())
+
 	for {
 		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
 		if err == nil {
@@ -61,10 +62,12 @@ func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (
 	if tx.To() != nil {
 		return common.Address{}, errors.New("tx is not contract creation")
 	}
+
 	receipt, err := WaitMined(ctx, b, tx)
 	if err != nil {
 		return common.Address{}, err
 	}
+
 	if receipt.ContractAddress == (common.Address{}) {
 		return common.Address{}, errors.New("zero address")
 	}
@@ -75,5 +78,6 @@ func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (
 	if err == nil && len(code) == 0 {
 		err = ErrNoCodeAfterDeploy
 	}
+
 	return receipt.ContractAddress, err
 }

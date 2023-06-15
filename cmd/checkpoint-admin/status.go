@@ -45,9 +45,11 @@ func status(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	for i, admin := range admins {
 		fmt.Printf("Admin %d => %s\n", i+1, admin.Hex())
 	}
+
 	fmt.Println()
 
 	// Retrieve the latest checkpoint
@@ -55,6 +57,7 @@ func status(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Checkpoint (published at #%d) %d => %s\n", height, index, common.Hash(checkpoint).Hex())
 
 	return nil

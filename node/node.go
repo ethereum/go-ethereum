@@ -80,14 +80,17 @@ func New(conf *Config) (*Node, error) {
 	// Copy config and resolve the datadir so future changes to the current
 	// working directory don't affect the node.
 	confCopy := *conf
+
 	conf = &confCopy
 	if conf.DataDir != "" {
 		absdatadir, err := filepath.Abs(conf.DataDir)
 		if err != nil {
 			return nil, err
 		}
+
 		conf.DataDir = absdatadir
 	}
+
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
@@ -97,9 +100,11 @@ func New(conf *Config) (*Node, error) {
 	if strings.ContainsAny(conf.Name, `/\`) {
 		return nil, errors.New(`Config.Name must not contain '/' or '\'`)
 	}
+
 	if conf.Name == datadirDefaultKeyStore {
 		return nil, errors.New(`Config.Name cannot be "` + datadirDefaultKeyStore + `"`)
 	}
+
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
@@ -124,10 +129,12 @@ func New(conf *Config) (*Node, error) {
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
+
 	keyDir, isEphem, err := getKeyStoreDir(conf)
 	if err != nil {
 		return nil, err
 	}
+
 	node.keyDir = keyDir
 	node.keyDirTemp = isEphem
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
@@ -139,6 +146,7 @@ func New(conf *Config) (*Node, error) {
 	node.server.Config.Name = node.config.NodeName()
 	node.server.Config.Logger = node.log
 	node.config.checkLegacyFiles()
+
 	if node.server.Config.NodeDatabase == "" {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
@@ -147,6 +155,7 @@ func New(conf *Config) (*Node, error) {
 	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
 		return nil, err
 	}
+
 	if err := validatePrefix("WebSocket", conf.WSPathPrefix); err != nil {
 		return nil, err
 	}
@@ -176,6 +185,7 @@ func (n *Node) Start() error {
 		n.lock.Unlock()
 		return ErrNodeStopped
 	}
+
 	n.state = runningState
 	// open networking and RPC endpoints
 	err := n.openEndpoints()
@@ -190,10 +200,12 @@ func (n *Node) Start() error {
 	}
 	// Start all registered lifecycles.
 	var started []Lifecycle
+
 	for _, lifecycle := range lifecycles {
 		if err = lifecycle.Start(); err != nil {
 			break
 		}
+
 		started = append(started, lifecycle)
 	}
 	// Check if any lifecycle failed to start.
@@ -201,6 +213,7 @@ func (n *Node) Start() error {
 		n.stopServices(started)
 		n.doClose(nil)
 	}
+
 	return err
 }
 
@@ -213,6 +226,7 @@ func (n *Node) Close() error {
 	n.lock.Lock()
 	state := n.state
 	n.lock.Unlock()
+
 	switch state {
 	case initializingState:
 		// The node was never started.
@@ -223,6 +237,7 @@ func (n *Node) Close() error {
 		if err := n.stopServices(n.lifecycles); err != nil {
 			errs = append(errs, err)
 		}
+
 		return n.doClose(errs)
 	case closedState:
 		return ErrNodeStopped
@@ -243,6 +258,7 @@ func (n *Node) doClose(errs []error) error {
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
+
 	if n.keyDirTemp {
 		if err := os.RemoveAll(n.keyDir); err != nil {
 			errs = append(errs, err)
@@ -270,6 +286,7 @@ func (n *Node) doClose(errs []error) error {
 func (n *Node) openEndpoints() error {
 	// start networking endpoints
 	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+
 	if err := n.server.Start(); err != nil {
 		return convertFileLockError(err)
 	}
@@ -279,6 +296,7 @@ func (n *Node) openEndpoints() error {
 		n.stopRPC()
 		n.server.Stop()
 	}
+
 	return err
 }
 
@@ -289,6 +307,7 @@ func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -299,6 +318,7 @@ func (n *Node) stopServices(running []Lifecycle) error {
 
 	// Stop running lifecycles in reverse order.
 	failure := &StopError{Services: make(map[reflect.Type]error)}
+
 	for i := len(running) - 1; i >= 0; i-- {
 		if err := running[i].Stop(); err != nil {
 			failure.Services[reflect.TypeOf(running[i])] = err
@@ -311,6 +331,7 @@ func (n *Node) stopServices(running []Lifecycle) error {
 	if len(failure.Services) > 0 {
 		return failure
 	}
+
 	return nil
 }
 
@@ -332,6 +353,7 @@ func (n *Node) openDataDir() error {
 	} else if !locked {
 		return ErrDatadirUsed
 	}
+
 	return nil
 }
 
@@ -359,7 +381,9 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 			log.Info("Loaded JWT secret file", "path", fileName, "crc32", fmt.Sprintf("%#x", crc32.ChecksumIEEE(jwtSecret)))
 			return jwtSecret, nil
 		}
+
 		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
+
 		return nil, errors.New("invalid JWT secret")
 	}
 	// Need to generate one
@@ -370,10 +394,13 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 		log.Info("Generated ephemeral JWT secret", "secret", hexutil.Encode(jwtSecret))
 		return jwtSecret, nil
 	}
+
 	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0600); err != nil {
 		return nil, err
 	}
+
 	log.Info("Generated JWT secret", "path", fileName)
+
 	return jwtSecret, nil
 }
 
@@ -383,6 +410,7 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 func (n *Node) startRPC() error {
 	// Filter out personal api
 	var apis []rpc.API
+
 	for _, api := range n.rpcAPIs {
 		if api.Namespace == "personal" {
 			if n.config.EnablePersonal {
@@ -391,8 +419,10 @@ func (n *Node) startRPC() error {
 				continue
 			}
 		}
+
 		apis = append(apis, api)
 	}
+
 	if err := n.startInProc(apis); err != nil {
 		return err
 	}
@@ -403,6 +433,7 @@ func (n *Node) startRPC() error {
 			return err
 		}
 	}
+
 	var (
 		servers           []*httpServer
 		openAPIs, allAPIs = n.getAPIs()
@@ -412,6 +443,7 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
 		}
+
 		if err := server.enableRPC(openAPIs, httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
@@ -420,7 +452,9 @@ func (n *Node) startRPC() error {
 		}); err != nil {
 			return err
 		}
+
 		servers = append(servers, server)
+
 		return nil
 	}
 
@@ -429,6 +463,7 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
 		}
+
 		if err := server.enableWS(openAPIs, wsConfig{
 			Modules:                     n.config.WSModules,
 			Origins:                     n.config.WSOrigins,
@@ -438,7 +473,9 @@ func (n *Node) startRPC() error {
 		}); err != nil {
 			return err
 		}
+
 		servers = append(servers, server)
+
 		return nil
 	}
 
@@ -448,6 +485,7 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
+
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
@@ -457,12 +495,14 @@ func (n *Node) startRPC() error {
 		}); err != nil {
 			return err
 		}
+
 		servers = append(servers, server)
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
+
 		if err := server.enableWS(allAPIs, wsConfig{
 			Modules:   DefaultAuthModules,
 			Origins:   DefaultAuthOrigins,
@@ -471,7 +511,9 @@ func (n *Node) startRPC() error {
 		}); err != nil {
 			return err
 		}
+
 		servers = append(servers, server)
+
 		return nil
 	}
 
@@ -507,6 +549,7 @@ func (n *Node) startRPC() error {
 		if err != nil {
 			return err
 		}
+
 		if err := initAuth(n.config.AuthPort, jwtSecret); err != nil {
 			return err
 		}
@@ -517,6 +560,7 @@ func (n *Node) startRPC() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -525,9 +569,11 @@ func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
 	if authenticated {
 		httpServer, wsServer = n.httpAuth, n.wsAuth
 	}
+
 	if n.config.HTTPHost == "" || httpServer.port == port {
 		return httpServer
 	}
+
 	return wsServer
 }
 
@@ -547,6 +593,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -568,9 +615,11 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	if n.state != initializingState {
 		panic("can't register lifecycle on running/stopped node")
 	}
+
 	if containsLifecycle(n.lifecycles, lifecycle) {
 		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
 	}
+
 	n.lifecycles = append(n.lifecycles, lifecycle)
 }
 
@@ -582,6 +631,7 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	if n.state != initializingState {
 		panic("can't register protocols on running/stopped node")
 	}
+
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
 
@@ -593,6 +643,7 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	if n.state != initializingState {
 		panic("can't register APIs on running/stopped node")
 	}
+
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
@@ -604,6 +655,7 @@ func (n *Node) getAPIs() (unauthenticated, all []rpc.API) {
 			unauthenticated = append(unauthenticated, api)
 		}
 	}
+
 	return unauthenticated, n.rpcAPIs
 }
 
@@ -636,6 +688,7 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
+
 	return n.inprocHandler, nil
 }
 
@@ -691,6 +744,7 @@ func (n *Node) WSEndpoint() string {
 	if n.http.wsAllowed() {
 		return "ws://" + n.http.listenAddr() + n.http.wsConfig.prefix
 	}
+
 	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.prefix
 }
 
@@ -704,6 +758,7 @@ func (n *Node) WSAuthEndpoint() string {
 	if n.httpAuth.wsAllowed() {
 		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.prefix
 	}
+
 	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
 }
 
@@ -719,12 +774,15 @@ func (n *Node) EventMux() *event.TypeMux {
 func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
+
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
 	var db ethdb.Database
+
 	var err error
+
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
@@ -741,6 +799,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
+
 	return db, err
 }
 
@@ -752,11 +811,15 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
+
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
+
 	var db ethdb.Database
+
 	var err error
+
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
@@ -774,6 +837,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
+
 	return db, err
 }
 
@@ -790,6 +854,7 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 	case !filepath.IsAbs(ancient):
 		ancient = n.ResolvePath(ancient)
 	}
+
 	return ancient
 }
 
@@ -805,6 +870,7 @@ func (db *closeTrackingDB) Close() error {
 	db.n.lock.Lock()
 	delete(db.n.databases, db)
 	db.n.lock.Unlock()
+
 	return db.Database.Close()
 }
 
@@ -812,6 +878,7 @@ func (db *closeTrackingDB) Close() error {
 func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 	wrapper := &closeTrackingDB{db, n}
 	n.databases[wrapper] = struct{}{}
+
 	return wrapper
 }
 
@@ -819,9 +886,11 @@ func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 func (n *Node) closeDatabases() (errors []error) {
 	for db := range n.databases {
 		delete(n.databases, db)
+
 		if err := db.Database.Close(); err != nil {
 			errors = append(errors, err)
 		}
 	}
+
 	return errors
 }

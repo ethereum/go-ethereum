@@ -79,29 +79,37 @@ func TestRuntimeHistogramStats(t *testing.T) {
 
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
+
 			s := runtimeHistogramSnapshot(test.h)
 
 			if v := s.Count(); v != test.Count {
 				t.Errorf("Count() = %v, want %v", v, test.Count)
 			}
+
 			if v := s.Min(); v != test.Min {
 				t.Errorf("Min() = %v, want %v", v, test.Min)
 			}
+
 			if v := s.Max(); v != test.Max {
 				t.Errorf("Max() = %v, want %v", v, test.Max)
 			}
+
 			if v := s.Sum(); v != test.Sum {
 				t.Errorf("Sum() = %v, want %v", v, test.Sum)
 			}
+
 			if v := s.Mean(); !approxEqual(v, test.Mean, 0.0001) {
 				t.Errorf("Mean() = %v, want %v", v, test.Mean)
 			}
+
 			if v := s.Variance(); !approxEqual(v, test.Variance, 0.0001) {
 				t.Errorf("Variance() = %v, want %v", v, test.Variance)
 			}
+
 			if v := s.StdDev(); !approxEqual(v, test.StdDev, 0.0001) {
 				t.Errorf("StdDev() = %v, want %v", v, test.StdDev)
 			}
+
 			ps := []float64{.5, .8, .9, .99, .995}
 			if v := s.Percentiles(ps); !reflect.DeepEqual(v, test.Percentiles) {
 				t.Errorf("Percentiles(%v) = %v, want %v", ps, v, test.Percentiles)

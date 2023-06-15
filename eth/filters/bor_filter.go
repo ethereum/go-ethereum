@@ -56,6 +56,7 @@ func NewBorBlockLogsFilter(backend Backend, borConfig *params.BorConfig, block c
 	// Create a generic filter and convert it into a block filter
 	filter := newBorBlockLogsFilter(backend, borConfig, addresses, topics)
 	filter.block = block
+
 	return filter
 }
 
@@ -80,6 +81,7 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if receipt == nil {
 			return nil, nil
 		}
+
 		return f.borBlockLogs(ctx, receipt)
 	}
 
@@ -88,6 +90,7 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if header == nil {
 		return nil, nil
 	}
+
 	head := header.Number.Uint64()
 
 	if f.begin == -1 {
@@ -130,9 +133,11 @@ func (f *BorBlockLogsFilter) unindexedLogs(ctx context.Context, end uint64) ([]*
 		if err != nil {
 			return logs, err
 		}
+
 		logs = append(logs, found...)
 		sprintLength = f.borConfig.CalculateSprint(uint64(f.begin))
 	}
+
 	return logs, nil
 }
 
@@ -141,6 +146,7 @@ func (f *BorBlockLogsFilter) borBlockLogs(ctx context.Context, receipt *types.Re
 	if bloomFilter(receipt.Bloom, f.addresses, f.topics) {
 		logs = filterLogs(receipt.Logs, nil, nil, f.addresses, f.topics)
 	}
+
 	return logs, nil
 }
 

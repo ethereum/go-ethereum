@@ -167,6 +167,7 @@ func (c *Conn) Read() Message {
 	}
 
 	var msg Message
+
 	switch int(code) {
 	case (Hello{}).Code():
 		msg = new(Hello)
@@ -255,7 +256,9 @@ func (c *Conn) Write(msg Message) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = c.Conn.Write(uint64(msg.Code()), payload)
+
 	return err
 }
 
@@ -263,11 +266,13 @@ func (c *Conn) Write(msg Message) error {
 func (c *Conn) ReadSnap(id uint64) (Message, error) {
 	respId := id + 1
 	start := time.Now()
+
 	for respId != id && time.Since(start) < timeout {
 		code, rawData, _, err := c.Conn.Read()
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)
 		}
+
 		var snpMsg interface{}
 		switch int(code) {
 		case (GetAccountRange{}).Code():
@@ -290,10 +295,13 @@ func (c *Conn) ReadSnap(id uint64) (Message, error) {
 			//return nil, fmt.Errorf("invalid message code: %d", code)
 			continue
 		}
+
 		if err := rlp.DecodeBytes(rawData, snpMsg); err != nil {
 			return nil, fmt.Errorf("could not rlp decode message: %v", err)
 		}
+
 		return snpMsg.(Message), nil
 	}
+
 	return nil, fmt.Errorf("request timed out")
 }

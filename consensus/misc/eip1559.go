@@ -37,6 +37,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	if !config.IsLondon(parent.Number) {
 		parentGasLimit = parent.GasLimit * config.ElasticityMultiplier()
 	}
+
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}
@@ -50,6 +51,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			header.BaseFee, expectedBaseFee, parent.BaseFee, parent.GasUsed)
 	}
+
 	return nil
 }
 

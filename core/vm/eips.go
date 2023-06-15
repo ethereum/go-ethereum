@@ -45,7 +45,9 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 	if !ok {
 		return fmt.Errorf("undefined eip %d", eipNum)
 	}
+
 	enablerFn(jt)
+
 	return nil
 }
 
@@ -58,7 +60,9 @@ func ActivateableEips() []string {
 	for k := range activators {
 		nums = append(nums, fmt.Sprintf("%d", k))
 	}
+
 	sort.Strings(nums)
+
 	return nums
 }
 
@@ -85,6 +89,7 @@ func enable1884(jt *JumpTable) {
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(scope.Contract.Address()))
 	scope.Stack.push(balance)
+
 	return nil, nil
 }
 
@@ -104,6 +109,7 @@ func enable1344(jt *JumpTable) {
 func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
+
 	return nil, nil
 }
 
@@ -220,6 +226,7 @@ func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
+
 	return nil, nil
 }
 

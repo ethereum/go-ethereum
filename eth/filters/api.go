@@ -78,8 +78,10 @@ func NewFilterAPI(system *FilterSystem, lightMode bool, borLogs bool) *FilterAPI
 // that have not been recently used. It is started when the API is created.
 func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	var toUninstall []*Subscription
+
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
+
 	for {
 		<-ticker.C
 		api.filtersMu.Lock()
@@ -87,6 +89,7 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 			select {
 			case <-f.deadline.C:
 				toUninstall = append(toUninstall, f.s)
+
 				delete(api.filters, id)
 			default:
 				continue
@@ -100,6 +103,7 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 		for _, s := range toUninstall {
 			s.Unsubscribe()
 		}
+
 		toUninstall = nil
 	}
 }
@@ -132,6 +136,7 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 				api.filtersMu.Lock()
 				delete(api.filters, pendingTxSub.ID)
 				api.filtersMu.Unlock()
+
 				return
 			}
 		}
@@ -162,6 +167,7 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				latest := api.sys.backend.CurrentHeader()
+
 				for _, tx := range txs {
 					if fullTx != nil && *fullTx {
 						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
@@ -208,6 +214,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 				api.filtersMu.Lock()
 				delete(api.filters, headerSub.ID)
 				api.filtersMu.Unlock()
+
 				return
 			}
 		}
@@ -301,6 +308,7 @@ type FilterCriteria ethereum.FilterQuery
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	logs := make(chan []*types.Log)
+
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
 	if err != nil {
 		return "", err
@@ -323,6 +331,7 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 				api.filtersMu.Lock()
 				delete(api.filters, logsSub.ID)
 				api.filtersMu.Unlock()
+
 				return
 			}
 		}
@@ -338,8 +347,11 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	}
 
 	borConfig := api.chainConfig.Bor
+
 	var filter *Filter
+
 	var borLogsFilter *BorBlockLogsFilter
+
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
 		filter = api.sys.NewBlockFilter(*crit.BlockHash, crit.Addresses, crit.Topics)
@@ -353,6 +365,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if crit.FromBlock != nil {
 			begin = crit.FromBlock.Int64()
 		}
+
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
@@ -388,11 +401,13 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 // UninstallFilter removes the filter with the given filter id.
 func (api *FilterAPI) UninstallFilter(id rpc.ID) bool {
 	api.filtersMu.Lock()
+
 	f, found := api.filters[id]
 	if found {
 		delete(api.filters, id)
 	}
 	api.filtersMu.Unlock()
+
 	if found {
 		f.s.Unsubscribe()
 	}
@@ -431,6 +446,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 		if f.crit.FromBlock != nil {
 			begin = f.crit.FromBlock.Int64()
 		}
+
 		end := rpc.LatestBlockNumber.Int64()
 		if f.crit.ToBlock != nil {
 			end = f.crit.ToBlock.Int64()
@@ -479,12 +495,14 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			// receive timer value and reset timer
 			<-f.deadline.C
 		}
+
 		f.deadline.Reset(api.timeout)
 
 		switch f.typ {
 		case BlocksSubscription:
 			hashes := f.hashes
 			f.hashes = nil
+
 			return returnHashes(hashes), nil
 		case PendingTransactionsSubscription:
 			if f.fullTx {
@@ -492,19 +510,24 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 				for _, tx := range f.txs {
 					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig))
 				}
+
 				f.txs = nil
+
 				return txs, nil
 			} else {
 				hashes := make([]common.Hash, 0, len(f.txs))
 				for _, tx := range f.txs {
 					hashes = append(hashes, tx.Hash())
 				}
+
 				f.txs = nil
+
 				return hashes, nil
 			}
 		case LogsSubscription, MinedAndPendingLogsSubscription:
 			logs := f.logs
 			f.logs = nil
+
 			return returnLogs(logs), nil
 		}
 	}
@@ -518,6 +541,7 @@ func returnHashes(hashes []common.Hash) []common.Hash {
 	if hashes == nil {
 		return []common.Hash{}
 	}
+
 	return hashes
 }
 
@@ -527,6 +551,7 @@ func returnLogs(logs []*types.Log) []*types.Log {
 	if logs == nil {
 		return []*types.Log{}
 	}
+
 	return logs
 }
 
@@ -550,6 +575,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			// BlockHash is mutually exclusive with FromBlock/ToBlock criteria
 			return fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
 		}
+
 		args.BlockHash = raw.BlockHash
 	} else {
 		if raw.FromBlock != nil {
@@ -573,6 +599,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 					if err != nil {
 						return fmt.Errorf("invalid address at index %d: %v", i, err)
 					}
+
 					args.Addresses = append(args.Addresses, addr)
 				} else {
 					return fmt.Errorf("non-string address at index %d", i)
@@ -583,6 +610,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			if err != nil {
 				return fmt.Errorf("invalid address: %v", err)
 			}
+
 			args.Addresses = []common.Address{addr}
 		default:
 			return errors.New("invalid addresses in query")
@@ -593,6 +621,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
 	if len(raw.Topics) > 0 {
 		args.Topics = make([][]common.Hash, len(raw.Topics))
+
 		for i, t := range raw.Topics {
 			switch topic := t.(type) {
 			case nil:
@@ -604,6 +633,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 				if err != nil {
 					return err
 				}
+
 				args.Topics[i] = []common.Hash{top}
 
 			case []interface{}:
@@ -614,11 +644,13 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 						args.Topics[i] = nil
 						break
 					}
+
 					if topic, ok := rawTopic.(string); ok {
 						parsed, err := decodeTopic(topic)
 						if err != nil {
 							return err
 						}
+
 						args.Topics[i] = append(args.Topics[i], parsed)
 					} else {
 						return fmt.Errorf("invalid topic(s)")
@@ -638,6 +670,7 @@ func decodeAddress(s string) (common.Address, error) {
 	if err == nil && len(b) != common.AddressLength {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for address", len(b), common.AddressLength)
 	}
+
 	return common.BytesToAddress(b), err
 }
 
@@ -646,5 +679,6 @@ func decodeTopic(s string) (common.Hash, error) {
 	if err == nil && len(b) != common.HashLength {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
+
 	return common.BytesToHash(b), err
 }

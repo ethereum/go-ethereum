@@ -90,6 +90,7 @@ func splitAndTrim(input string) (ret []string) {
 			ret = append(ret, r)
 		}
 	}
+
 	return ret
 }
 
@@ -159,17 +160,20 @@ func TestWebsocketOrigins(t *testing.T) {
 	}
 	for _, tc := range tests {
 		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)}, nil)
+
 		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
 			if err := wsRequest(t, url, "Origin", origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
 			}
 		}
+
 		for _, origin := range tc.expFail {
 			if err := wsRequest(t, url, "Origin", origin); err == nil {
 				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
 			}
 		}
+
 		srv.stop()
 	}
 }
@@ -250,13 +254,17 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 	if timeouts == nil {
 		timeouts = &rpc.DefaultHTTPTimeouts
 	}
+
 	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), *timeouts, 100)
 	assert.NoError(t, srv.enableRPC(apis(), *conf))
+
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}
+
 	assert.NoError(t, srv.setListenAddr("localhost", 0))
 	assert.NoError(t, srv.start())
+
 	return srv
 }
 
@@ -270,14 +278,17 @@ func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 	if len(extraHeaders)%2 != 0 {
 		panic("odd extraHeaders length")
 	}
+
 	for i := 0; i < len(extraHeaders); i += 2 {
 		key, value := extraHeaders[i], extraHeaders[i+1]
 		headers.Set(key, value)
 	}
+
 	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if conn != nil {
 		conn.Close()
 	}
+
 	return err
 }
 
@@ -286,6 +297,7 @@ func rpcRequest(t *testing.T, url, method string, extraHeaders ...string) *http.
 	t.Helper()
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, method)
+
 	return baseRpcRequest(t, url, body, extraHeaders...)
 }
 
@@ -296,7 +308,9 @@ func batchRpcRequest(t *testing.T, url string, methods []string, extraHeaders ..
 	for i, m := range methods {
 		reqs[i] = fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, m)
 	}
+
 	body := fmt.Sprintf(`[%s]`, strings.Join(reqs, ","))
+
 	return baseRpcRequest(t, url, body, extraHeaders...)
 }
 
@@ -305,10 +319,12 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 
 	// Create the request.
 	body := bytes.NewReader([]byte(bodyStr))
+
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
 	if err != nil {
 		t.Fatal("could not create http request:", err)
 	}
+
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("accept-encoding", "identity")
 
@@ -316,6 +332,7 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	if len(extraHeaders)%2 != 0 {
 		panic("odd extraHeaders length")
 	}
+
 	for i := 0; i < len(extraHeaders); i += 2 {
 		key, value := extraHeaders[i], extraHeaders[i+1]
 		if strings.EqualFold(key, "host") {
@@ -327,11 +344,14 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 
 	// Perform the request.
 	t.Logf("checking RPC/HTTP on %s %v", url, extraHeaders)
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() { resp.Body.Close() })
+
 	return resp
 }
 
@@ -343,11 +363,14 @@ func (testClaim) Valid() error {
 
 func TestJWT(t *testing.T) {
 	var secret = []byte("secret")
+
 	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
 		if method == nil {
 			method = jwt.SigningMethodHS256
 		}
+
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
+
 		return ss
 	}
 	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
@@ -383,6 +406,7 @@ func TestJWT(t *testing.T) {
 		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
 			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
 		}
+
 		token = tokenFn()
 		if resp := rpcRequest(t, htUrl, testMethod, "Authorization", token); resp.StatusCode != 200 {
 			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
@@ -443,7 +467,9 @@ func TestJWT(t *testing.T) {
 			return fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
 		},
 	}
+
 	var resp *http.Response
+
 	for i, tokenFn := range expFail {
 		token := tokenFn()
 		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
@@ -452,10 +478,12 @@ func TestJWT(t *testing.T) {
 
 		token = tokenFn()
 		resp = rpcRequest(t, htUrl, testMethod, "Authorization", token)
+
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
 	}
+
 	defer resp.Body.Close()
 	srv.stop()
 }
@@ -470,6 +498,7 @@ func TestGzipHandler(t *testing.T) {
 		isGzip  bool
 		header  map[string]string
 	}
+
 	tests := []gzipTest{
 		{
 			name: "Write",
@@ -538,37 +567,45 @@ func TestGzipHandler(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+
 			srv := httptest.NewServer(newGzipHandler(test.handler))
 			defer srv.Close()
 
 			cli := &http.Client{
 				Timeout: 10 * time.Second,
 			}
+
 			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 			if err != nil {
 				log.Crit("Can't build request", "url", srv.URL, "err", err)
 			}
+
 			resp, err := cli.Do(req)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			defer resp.Body.Close()
 
 			content, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			wasGzip := resp.Uncompressed
 
 			if string(content) != "response" {
 				t.Fatalf("wrong response content %q", content)
 			}
+
 			if wasGzip != test.isGzip {
 				t.Fatalf("response gzipped == %t, want %t", wasGzip, test.isGzip)
 			}
+
 			if resp.StatusCode != test.status {
 				t.Fatalf("response status == %d, want %d", resp.StatusCode, test.status)
 			}
+
 			for name, expectedValue := range test.header {
 				if v := resp.Header.Get(name); v != expectedValue {
 					t.Fatalf("response header %s == %s, want %s", name, v, expectedValue)
@@ -594,12 +631,15 @@ func TestHTTPWriteTimeout(t *testing.T) {
 	// Send normal request
 	t.Run("message", func(t *testing.T) {
 		t.Parallel()
+
 		resp := rpcRequest(t, url, "test_sleep")
 		defer resp.Body.Close()
+
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if string(body) != timeoutRes {
 			t.Errorf("wrong response. have %s, want %s", string(body), timeoutRes)
 		}
@@ -608,13 +648,17 @@ func TestHTTPWriteTimeout(t *testing.T) {
 	// Batch request
 	t.Run("batch", func(t *testing.T) {
 		t.Parallel()
+
 		want := fmt.Sprintf("[%s,%s,%s]", greetRes, timeoutRes, timeoutRes)
+
 		resp := batchRpcRequest(t, url, []string{"test_greet", "test_sleep", "test_greet"})
 		defer resp.Body.Close()
+
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if string(body) != want {
 			t.Errorf("wrong response. have %s, want %s", string(body), want)
 		}

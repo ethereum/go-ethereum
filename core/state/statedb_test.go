@@ -49,9 +49,11 @@ func TestUpdateLeaks(t *testing.T) {
 		addr := common.BytesToAddress([]byte{i})
 		state.AddBalance(addr, big.NewInt(int64(11*i)))
 		state.SetNonce(addr, uint64(42*i))
+
 		if i%2 == 0 {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
 		}
+
 		if i%3 == 0 {
 			state.SetCode(addr, []byte{i, i, i, i, i})
 		}
@@ -82,10 +84,12 @@ func TestIntermediateLeaks(t *testing.T) {
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
+
 		if i%2 == 0 {
 			state.SetState(addr, common.Hash{i, i, i, 0}, common.Hash{})
 			state.SetState(addr, common.Hash{i, i, i, tweak}, common.Hash{i, i, i, i, tweak})
 		}
+
 		if i%3 == 0 {
 			state.SetCode(addr, []byte{i, i, i, i, i, tweak})
 		}
@@ -127,9 +131,11 @@ func TestIntermediateLeaks(t *testing.T) {
 	for it.Next() {
 		key, fvalue := it.Key(), it.Value()
 		tvalue, err := transDb.Get(key)
+
 		if err != nil {
 			t.Errorf("entry missing from the transition database: %x -> %x", key, fvalue)
 		}
+
 		if !bytes.Equal(fvalue, tvalue) {
 			t.Errorf("value mismatch at key %x: %x in transition database, %x in final database", key, tvalue, fvalue)
 		}
@@ -140,9 +146,11 @@ func TestIntermediateLeaks(t *testing.T) {
 	for it.Next() {
 		key, tvalue := it.Key(), it.Value()
 		fvalue, err := finalDb.Get(key)
+
 		if err != nil {
 			t.Errorf("extra entry in the transition database: %x -> %x", key, it.Value())
 		}
+
 		if !bytes.Equal(fvalue, tvalue) {
 			t.Errorf("value mismatch at key %x: %x in transition database, %x in final database", key, tvalue, fvalue)
 		}
@@ -191,7 +199,9 @@ func TestCopy(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
+
 	wg.Add(3)
+
 	go finalise(&wg, orig)
 	go finalise(&wg, copy)
 	go finalise(&wg, ccopy)
@@ -206,9 +216,11 @@ func TestCopy(t *testing.T) {
 		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
 		}
+
 		if want := big.NewInt(4 * int64(i)); copyObj.Balance().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, copyObj.Balance(), want)
 		}
+
 		if want := big.NewInt(5 * int64(i)); ccopyObj.Balance().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, ccopyObj.Balance(), want)
 		}
@@ -217,6 +229,7 @@ func TestCopy(t *testing.T) {
 
 func TestSnapshotRandom(t *testing.T) {
 	config := &quick.Config{MaxCount: 1000}
+
 	err := quick.Check((*snapshotTest).run, config)
 	if cerr, ok := err.(*quick.CheckError); ok {
 		test := cerr.In[0].(*snapshotTest)
@@ -359,15 +372,20 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 	}
 	action := actions[r.Intn(len(actions))]
+
 	var nameargs []string
+
 	if !action.noAddr {
 		nameargs = append(nameargs, addr.Hex())
 	}
+
 	for i := range action.args {
 		action.args[i] = rand.Int63n(100)
 		nameargs = append(nameargs, fmt.Sprint(action.args[i]))
 	}
+
 	action.name += strings.Join(nameargs, ", ")
+
 	return action
 }
 
@@ -379,6 +397,7 @@ func (*snapshotTest) Generate(r *rand.Rand, size int) reflect.Value {
 	for i := range addrs {
 		addrs[i][0] = byte(i)
 	}
+
 	actions := make([]testAction, size)
 	for i := range actions {
 		addr := addrs[r.Intn(len(addrs))]
@@ -389,25 +408,32 @@ func (*snapshotTest) Generate(r *rand.Rand, size int) reflect.Value {
 	if size > 0 && nsnapshots == 0 {
 		nsnapshots = 1
 	}
+
 	snapshots := make([]int, nsnapshots)
 	snaplen := len(actions) / nsnapshots
+
 	for i := range snapshots {
 		// Try to place the snapshots some number of actions apart from each other.
 		snapshots[i] = (i * snaplen) + r.Intn(snaplen)
 	}
+
 	return reflect.ValueOf(&snapshotTest{addrs, actions, snapshots, nil})
 }
 
 func (test *snapshotTest) String() string {
 	out := new(bytes.Buffer)
+
 	sindex := 0
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
 			fmt.Fprintf(out, "---- snapshot %d ----\n", sindex)
+
 			sindex++
 		}
+
 		fmt.Fprintf(out, "%4d: %s\n", i, action.name)
 	}
+
 	return out.String()
 }
 
@@ -418,11 +444,13 @@ func (test *snapshotTest) run() bool {
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
+
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
 			snapshotRevs[sindex] = state.Snapshot()
 			sindex++
 		}
+
 		action.fn(action, state)
 	}
 	// Revert all snapshots in reverse order. Each revert must yield a state
@@ -432,12 +460,15 @@ func (test *snapshotTest) run() bool {
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkstate)
 		}
+
 		state.RevertToSnapshot(snapshotRevs[sindex])
+
 		if err := test.checkEqual(state, checkstate); err != nil {
 			test.err = fmt.Errorf("state mismatch after revert to snapshot %d\n%v", sindex, err)
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -445,11 +476,13 @@ func (test *snapshotTest) run() bool {
 func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	for _, addr := range test.addrs {
 		var err error
+
 		checkeq := func(op string, a, b interface{}) bool {
 			if err == nil && !reflect.DeepEqual(a, b) {
 				err = fmt.Errorf("got %s(%s) == %v, want %v", op, addr.Hex(), a, b)
 				return false
 			}
+
 			return true
 		}
 		// Check basic accessor methods.
@@ -469,6 +502,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 		}
+
 		if err != nil {
 			return err
 		}
@@ -483,6 +517,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}))
 	}
+
 	return nil
 }
 
@@ -498,7 +533,9 @@ func TestTouchDelete(t *testing.T) {
 	if len(s.state.journal.dirties) != 1 {
 		t.Fatal("expected one dirty state object")
 	}
+
 	s.state.RevertToSnapshot(snapshot)
+
 	if len(s.state.journal.dirties) != 0 {
 		t.Fatal("expected no dirty state object")
 	}
@@ -965,6 +1002,7 @@ func TestCopyOfCopy(t *testing.T) {
 	if got := state.Copy().GetBalance(addr).Uint64(); got != 42 {
 		t.Fatalf("1st copy fail, expected 42, got %v", got)
 	}
+
 	if got := state.Copy().Copy().GetBalance(addr).Uint64(); got != 42 {
 		t.Fatalf("2nd copy fail, expected 42, got %v", got)
 	}
@@ -989,12 +1027,15 @@ func TestCopyCommitCopy(t *testing.T) {
 	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("initial balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := state.GetState(addr, skey); val != sval {
 		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
@@ -1003,26 +1044,33 @@ func TestCopyCommitCopy(t *testing.T) {
 	if balance := copyOne.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("first copy pre-commit balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyOne.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("first copy pre-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyOne.GetState(addr, skey); val != sval {
 		t.Fatalf("first copy pre-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyOne.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("first copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 
 	copyOne.Commit(false)
+
 	if balance := copyOne.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("first copy post-commit balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyOne.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("first copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyOne.GetState(addr, skey); val != sval {
 		t.Fatalf("first copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyOne.GetCommittedState(addr, skey); val != sval {
 		t.Fatalf("first copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
@@ -1031,12 +1079,15 @@ func TestCopyCommitCopy(t *testing.T) {
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("second copy balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyTwo.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("second copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyTwo.GetState(addr, skey); val != sval {
 		t.Fatalf("second copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
 		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
@@ -1061,12 +1112,15 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if balance := state.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("initial balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := state.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := state.GetState(addr, skey); val != sval {
 		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
@@ -1075,12 +1129,15 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if balance := copyOne.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("first copy balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyOne.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("first copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyOne.GetState(addr, skey); val != sval {
 		t.Fatalf("first copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyOne.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("first copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
@@ -1089,25 +1146,33 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("second copy pre-commit balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyTwo.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("second copy pre-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyTwo.GetState(addr, skey); val != sval {
 		t.Fatalf("second copy pre-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
 		t.Fatalf("second copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
+
 	copyTwo.Commit(false)
+
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("second copy post-commit balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyTwo.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("second copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyTwo.GetState(addr, skey); val != sval {
 		t.Fatalf("second copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
 		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
@@ -1116,12 +1181,15 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	if balance := copyThree.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("third copy balance mismatch: have %v, want %v", balance, 42)
 	}
+
 	if code := copyThree.GetCode(addr); !bytes.Equal(code, []byte("hello")) {
 		t.Fatalf("third copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
+
 	if val := copyThree.GetState(addr, skey); val != sval {
 		t.Fatalf("third copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
+
 	if val := copyThree.GetCommittedState(addr, skey); val != sval {
 		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, sval)
 	}
@@ -1169,12 +1237,15 @@ func TestMissingTrieNodes(t *testing.T) {
 	// Create an initial state with a few accounts
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
+
 	var root common.Hash
+
 	state, _ := New(common.Hash{}, db, nil)
 	addr := common.BytesToAddress([]byte("so"))
 	{
 		state.SetBalance(addr, big.NewInt(1))
 		state.SetCode(addr, []byte{1, 2, 3})
+
 		a2 := common.BytesToAddress([]byte("another"))
 		state.SetBalance(a2, big.NewInt(100))
 		state.SetCode(a2, []byte{1, 2, 4})
@@ -1195,6 +1266,7 @@ func TestMissingTrieNodes(t *testing.T) {
 			memDb.Delete(k)
 		}
 	}
+
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {
@@ -1202,6 +1274,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 	// Modify the state
 	state.SetBalance(addr, big.NewInt(2))
+
 	root, err := state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
@@ -1226,7 +1299,9 @@ func TestStateDBAccessList(t *testing.T) {
 		t.Helper()
 		// convert to common.Address form
 		var addresses []common.Address
+
 		var addressMap = make(map[common.Address]struct{})
+
 		for _, astring := range astrings {
 			address := addr(astring)
 			addresses = append(addresses, address)
@@ -1249,10 +1324,13 @@ func TestStateDBAccessList(t *testing.T) {
 		if !state.AddressInAccessList(addr(addrString)) {
 			t.Fatalf("scope missing address/slots %v", addrString)
 		}
+
 		var address = addr(addrString)
 		// convert to common.Hash form
 		var slots []common.Hash
+
 		var slotMap = make(map[common.Hash]struct{})
+
 		for _, slotString := range slotStrings {
 			s := slot(slotString)
 			slots = append(slots, s)
@@ -1284,6 +1362,7 @@ func TestStateDBAccessList(t *testing.T) {
 
 	// Make a copy
 	stateCopy1 := state.Copy()
+
 	if exp, got := 4, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
@@ -1292,6 +1371,7 @@ func TestStateDBAccessList(t *testing.T) {
 	state.AddSlotToAccessList(addr("bb"), slot("01"))
 	state.AddSlotToAccessList(addr("bb"), slot("02"))
 	state.AddAddressToAccessList(addr("aa"))
+
 	if exp, got := 4, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
@@ -1300,6 +1380,7 @@ func TestStateDBAccessList(t *testing.T) {
 	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
 	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
 	state.AddAddressToAccessList(addr("cc"))
+
 	if exp, got := 8, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
@@ -1311,72 +1392,92 @@ func TestStateDBAccessList(t *testing.T) {
 
 	// now start rolling back changes
 	state.journal.revert(state, 7)
+
 	if _, ok := state.SlotInAccessList(addr("cc"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb", "cc")
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 6)
+
 	if state.AddressInAccessList(addr("cc")) {
 		t.Fatalf("addr present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb")
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 5)
+
 	if _, ok := state.SlotInAccessList(addr("aa"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 4)
+
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("03")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
 	state.journal.revert(state, 3)
+
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("02")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01")
 
 	state.journal.revert(state, 2)
+
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
+
 	verifyAddrs("aa", "bb")
 
 	state.journal.revert(state, 1)
+
 	if state.AddressInAccessList(addr("bb")) {
 		t.Fatalf("addr present, expected missing")
 	}
+
 	verifyAddrs("aa")
 
 	state.journal.revert(state, 0)
+
 	if state.AddressInAccessList(addr("aa")) {
 		t.Fatalf("addr present, expected missing")
 	}
+
 	if got, exp := len(state.accessList.addresses), 0; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
+
 	if got, exp := len(state.accessList.slots), 0; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
 	// Check the copy
 	// Make a copy
 	state = stateCopy1
+
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
+
 	if got, exp := len(state.accessList.addresses), 2; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
+
 	if got, exp := len(state.accessList.slots), 1; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}

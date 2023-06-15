@@ -36,10 +36,12 @@ func filledStateDB() *StateDB {
 	state.SetBalance(addr, big.NewInt(42)) // Change the account trie
 	state.SetCode(addr, []byte("hello"))   // Change an external metadata
 	state.SetState(addr, skey, sval)       // Change the storage trie
+
 	for i := 0; i < 100; i++ {
 		sk := common.BigToHash(big.NewInt(int64(i)))
 		state.SetState(addr, sk, sk) // Change the storage trie
 	}
+
 	return state
 }
 
@@ -58,12 +60,16 @@ func TestCopyAndClose(t *testing.T) {
 	cpy.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	cpy.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	c := cpy.trie(common.Hash{}, db.originalRoot)
+
 	prefetcher.close()
+
 	cpy2 := cpy.copy()
 	cpy2.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
 	d := cpy2.trie(common.Hash{}, db.originalRoot)
+
 	cpy.close()
 	cpy2.close()
+
 	if a.Hash() != b.Hash() || a.Hash() != c.Hash() || a.Hash() != d.Hash() {
 		t.Fatalf("Invalid trie, hashes should be equal: %v %v %v %v", a.Hash(), b.Hash(), c.Hash(), d.Hash())
 	}
@@ -77,9 +83,11 @@ func TestUseAfterClose(t *testing.T) {
 	a := prefetcher.trie(common.Hash{}, db.originalRoot)
 	prefetcher.close()
 	b := prefetcher.trie(common.Hash{}, db.originalRoot)
+
 	if a == nil {
 		t.Fatal("Prefetching before close should not return nil")
 	}
+
 	if b != nil {
 		t.Fatal("Trie after close should return nil")
 	}
@@ -93,18 +101,23 @@ func TestCopyClose(t *testing.T) {
 	cpy := prefetcher.copy()
 	a := prefetcher.trie(common.Hash{}, db.originalRoot)
 	b := cpy.trie(common.Hash{}, db.originalRoot)
+
 	prefetcher.close()
 	c := prefetcher.trie(common.Hash{}, db.originalRoot)
 	d := cpy.trie(common.Hash{}, db.originalRoot)
+
 	if a == nil {
 		t.Fatal("Prefetching before close should not return nil")
 	}
+
 	if b == nil {
 		t.Fatal("Copy trie should return nil")
 	}
+
 	if c != nil {
 		t.Fatal("Trie after close should return nil")
 	}
+
 	if d == nil {
 		t.Fatal("Copy trie should not return nil")
 	}

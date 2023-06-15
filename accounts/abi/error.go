@@ -46,6 +46,7 @@ func NewError(name string, inputs Arguments) Error {
 	// and precompute string and sig representation.
 	names := make([]string, len(inputs))
 	types := make([]string, len(inputs))
+
 	for i, input := range inputs {
 		if input.Name == "" {
 			inputs[i] = Argument{
@@ -86,8 +87,10 @@ func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
 	}
+
 	if !bytes.Equal(data[:4], e.ID[:4]) {
 		return "", errors.New("invalid data for unpacking")
 	}
+
 	return e.Inputs.Unpack(data[4:])
 }

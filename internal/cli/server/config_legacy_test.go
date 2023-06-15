@@ -9,7 +9,6 @@ import (
 )
 
 func TestConfigLegacy(t *testing.T) {
-
 	readFile := func(path string) {
 		expectedConfig, err := readLegacyConfig(path)
 		assert.NoError(t, err)

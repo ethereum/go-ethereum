@@ -45,12 +45,14 @@ type Merger struct {
 // NewMerger creates a new Merger which stores its transition status in the provided db.
 func NewMerger(db ethdb.KeyValueStore) *Merger {
 	var status transitionStatus
+
 	blob := rawdb.ReadTransitionStatus(db)
 	if len(blob) != 0 {
 		if err := rlp.DecodeBytes(blob, &status); err != nil {
 			log.Crit("Failed to decode the transition status", "err", err)
 		}
 	}
+
 	return &Merger{
 		db:     db,
 		status: status,
@@ -66,11 +68,14 @@ func (m *Merger) ReachTTD() {
 	if m.status.LeftPoW {
 		return
 	}
+
 	m.status = transitionStatus{LeftPoW: true}
+
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
+
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Left PoW stage")
 }
@@ -84,11 +89,14 @@ func (m *Merger) FinalizePoS() {
 	if m.status.EnteredPoS {
 		return
 	}
+
 	m.status = transitionStatus{LeftPoW: true, EnteredPoS: true}
+
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
+
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Entered PoS stage")
 }

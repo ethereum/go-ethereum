@@ -64,6 +64,7 @@ type Transaction struct {
 func NewTx(inner TxData) *Transaction {
 	tx := new(Transaction)
 	tx.setDecoded(inner.copy(), 0)
+
 	return tx
 }
 
@@ -109,9 +110,11 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
+
 	if err := tx.encodeTyped(buf); err != nil {
 		return err
 	}
+
 	return rlp.Encode(w, buf.Bytes())
 }
 
@@ -128,35 +131,43 @@ func (tx *Transaction) MarshalBinary() ([]byte, error) {
 	if tx.Type() == LegacyTxType {
 		return rlp.EncodeToBytes(tx.inner)
 	}
+
 	var buf bytes.Buffer
 	err := tx.encodeTyped(&buf)
+
 	return buf.Bytes(), err
 }
 
 // DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	kind, size, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err
 	case kind == rlp.List:
 		// It's a legacy transaction.
 		var inner LegacyTx
+
 		err := s.Decode(&inner)
 		if err == nil {
 			tx.setDecoded(&inner, rlp.ListSize(size))
 		}
+
 		return err
 	default:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
+
 		if b, err = s.Bytes(); err != nil {
 			return err
 		}
+
 		inner, err := tx.decodeTyped(b)
 		if err == nil {
 			tx.setDecoded(inner, uint64(len(b)))
 		}
+
 		return err
 	}
 }
@@ -167,11 +178,14 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy transaction.
 		var data LegacyTx
+
 		err := rlp.DecodeBytes(b, &data)
 		if err != nil {
 			return err
 		}
+
 		tx.setDecoded(&data, uint64(len(b)))
+
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
@@ -179,7 +193,9 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
+
 	tx.setDecoded(inner, uint64(len(b)))
+
 	return nil
 }
 
@@ -188,14 +204,17 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	if len(b) <= 1 {
 		return nil, errShortTypedTx
 	}
+
 	switch b[0] {
 	case AccessListTxType:
 		var inner AccessListTx
 		err := rlp.DecodeBytes(b[1:], &inner)
+
 		return &inner, err
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
+
 		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -206,6 +225,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 func (tx *Transaction) setDecoded(inner TxData, size uint64) {
 	tx.inner = inner
 	tx.time = time.Now()
+
 	if size > 0 {
 		tx.size.Store(&size)
 	}
@@ -217,6 +237,7 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 	}
 
 	var plainV byte
+
 	if isProtectedV(v) {
 		chainID := deriveChainId(v).Uint64()
 		plainV = byte(v.Uint64() - 35 - 2*chainID)
@@ -230,6 +251,7 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected boo
 		// must already be equal to the recovery id.
 		plainV = byte(v.Uint64())
 	}
+
 	if !crypto.ValidateSignatureValues(plainV, r, s, false) {
 		return ErrInvalidSig
 	}
@@ -371,11 +393,14 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
+
 	var err error
+
 	gasFeeCap := tx.GasFeeCap()
 	if gasFeeCap.Cmp(baseFee) == -1 {
 		err = ErrGasFeeCapTooLow
 	}
+
 	return math.BigMin(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
 }
 
@@ -391,6 +416,7 @@ func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) 
 	if baseFee == nil {
 		return tx.GasTipCapCmp(other)
 	}
+
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other.EffectiveGasTipValue(baseFee))
 }
 
@@ -399,6 +425,7 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 	if baseFee == nil {
 		return tx.GasTipCapIntCmp(other)
 	}
+
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
 }
 
@@ -489,6 +516,7 @@ func (tx *Transaction) Size() uint64 {
 	if size := tx.size.Load(); size != nil {
 		return *size
 	}
+
 	c := writeCounter(0)
 	rlp.Encode(&c, &tx.inner)
 
@@ -496,7 +524,9 @@ func (tx *Transaction) Size() uint64 {
 	if tx.Type() != LegacyTxType {
 		size += 1 // type byte
 	}
+
 	tx.size.Store(&size)
+
 	return size
 }
 
@@ -507,8 +537,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	if err != nil {
 		return nil, err
 	}
+
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
@@ -589,6 +621,7 @@ func NewTxWithMinerFee(tx *Transaction, baseFee *uint256.Int) (*TxWithMinerFee, 
 	if err != nil {
 		return nil, err
 	}
+
 	return &TxWithMinerFee{
 		tx:       tx,
 		minerFee: minerFee,
@@ -607,6 +640,7 @@ func (s TxByPriceAndTime) Less(i, j int) bool {
 	if cmp == 0 {
 		return s[i].tx.time.Before(s[j].tx.time)
 	}
+
 	return cmp > 0
 }
 func (s TxByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
@@ -621,6 +655,7 @@ func (s *TxByPriceAndTime) Pop() interface{} {
 	x := old[n-1]
 	old[n-1] = nil
 	*s = old[0 : n-1]
+
 	return x
 }
 
@@ -707,6 +742,7 @@ func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	if len(t.heads) == 0 {
 		return nil
 	}
+
 	return t.heads[0].tx
 }
 
@@ -717,9 +753,11 @@ func (t *TransactionsByPriceAndNonce) Shift() {
 		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			heap.Fix(&t.heads, 0)
+
 			return
 		}
 	}
+
 	heap.Pop(&t.heads)
 }
 
@@ -739,6 +777,8 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	if a == nil {
 		return nil
 	}
+
 	cpy := *a
+
 	return &cpy
 }

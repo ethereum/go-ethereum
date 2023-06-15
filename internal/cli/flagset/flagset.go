@@ -38,6 +38,7 @@ func (f *Flagset) Help() string {
 	str := "Options:\n\n"
 
 	items := []string{}
+
 	for _, item := range f.flags {
 		if item.Default != nil {
 			items = append(items, fmt.Sprintf("  -%s\n    %s (default: %v)", item.Name, item.Usage, item.Default))
@@ -152,6 +153,7 @@ func (f *Flagset) StringFlag(b *StringFlag) {
 			Default: b.Default,
 		})
 	}
+
 	f.set.StringVar(b.Value, b.Name, b.Default, b.Usage)
 }
 
@@ -287,6 +289,7 @@ func (f *Flagset) SliceStringFlag(s *SliceStringFlag) {
 			Default: strings.Join(s.Default, ","),
 		})
 	}
+
 	f.set.Var(s, s.Name, s.Usage)
 }
 
@@ -367,6 +370,7 @@ func (f *Flagset) MapStringFlag(m *MapStringFlag) {
 			Default: formatMapString(m.Default),
 		})
 	}
+
 	f.set.Var(m, m.Name, m.Usage)
 }
 

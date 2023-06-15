@@ -41,6 +41,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
 	testPackageRLP, err = testImporter.ImportFrom(pathOfPackageRLP, cwd, 0)
 	if err != nil {
 		panic(fmt.Errorf("can't load package RLP: %v", err))
@@ -55,10 +56,12 @@ func TestOutput(t *testing.T) {
 		t.Run(test, func(t *testing.T) {
 			inputFile := filepath.Join("testdata", test+".in.txt")
 			outputFile := filepath.Join("testdata", test+".out.txt")
+
 			bctx, typ, err := loadTestSource(inputFile, "Test")
 			if err != nil {
 				t.Fatal("error loading test source:", err)
 			}
+
 			output, err := bctx.generate(typ, true, true)
 			if err != nil {
 				t.Fatal("error in generate:", err)
@@ -74,6 +77,7 @@ func TestOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal("error loading expected test output:", err)
 			}
+
 			if !bytes.Equal(output, wantOutput) {
 				t.Fatalf("output mismatch, want: %v got %v", string(wantOutput), string(output))
 			}
@@ -87,11 +91,14 @@ func loadTestSource(file string, typeName string) (*buildContext, *types.Named, 
 	if err != nil {
 		return nil, nil, err
 	}
+
 	f, err := parser.ParseFile(testFset, file, content, 0)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	conf := types.Config{Importer: testImporter}
+
 	pkg, err := conf.Check("test", testFset, []*ast.File{f}, nil)
 	if err != nil {
 		return nil, nil, err
@@ -99,9 +106,11 @@ func loadTestSource(file string, typeName string) (*buildContext, *types.Named, 
 
 	// Find the test struct.
 	bctx := newBuildContext(testPackageRLP)
+
 	typ, err := lookupStructType(pkg.Scope(), typeName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't find type %s: %v", typeName, err)
 	}
+
 	return bctx, typ, nil
 }

@@ -73,6 +73,7 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 		s.err = errCancelStateFetch
 		close(s.done)
 	}
+
 	return s
 }
 
@@ -101,6 +102,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		finished []*stateReq                  // Completed or failed requests
 		timeout  = make(chan *stateReq)       // Timed out active requests
 	)
+
 	log.Trace("State sync starting", "root", s.root)
 
 	defer func() {
@@ -111,11 +113,14 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.peer.SetNodeDataIdle(int(req.nItems), time.Now())
 		}
 	}()
+
 	go s.run()
+
 	defer s.Cancel()
 
 	// Listen for peer departure events to cancel assigned tasks
 	peerDrop := make(chan *peerConnection, 1024)
+
 	peerSub := s.d.peers.SubscribePeerDrops(peerDrop)
 	defer peerSub.Unsubscribe()
 
@@ -125,6 +130,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			deliverReq   *stateReq
 			deliverReqCh chan *stateReq
 		)
+
 		if len(finished) > 0 {
 			deliverReq = finished[0]
 			deliverReqCh = s.deliver
@@ -161,6 +167,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.delivered = time.Now()
 
 			finished = append(finished, req)
+
 			delete(active, pack.PeerId())
 
 		// Handle dropped peer connections:
@@ -176,6 +183,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.delivered = time.Now()
 
 			finished = append(finished, req)
+
 			delete(active, p.id)
 
 		// Handle timed-out requests:
@@ -186,6 +194,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			if active[req.peer.id] != req {
 				continue
 			}
+
 			req.delivered = time.Now()
 			// Move the timed out data back into the download queue
 			finished = append(finished, req)
@@ -221,6 +230,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 // are marked as idle and de facto _are_ idle.
 func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*stateReq, timeout chan *stateReq, peerDrop chan *peerConnection) {
 	log.Trace("State sync spinning down", "active", len(active), "finished", len(finished))
+
 	for len(active) > 0 {
 		var (
 			req    *stateReq
@@ -239,9 +249,11 @@ func (d *Downloader) spindownStateSync(active map[string]*stateReq, finished []*
 		case req = <-timeout:
 			reason = "timeout"
 		}
+
 		if req == nil {
 			continue
 		}
+
 		req.peer.log.Trace("State peer marked idle (spindown)", "req.items", int(req.nItems), "reason", reason)
 		req.timer.Stop()
 		delete(active, req.peer.id)
@@ -317,11 +329,13 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
+
 	if s.d.snapSync {
 		s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
 	} else {
 		s.err = s.loop()
 	}
+
 	close(s.done)
 }
 
@@ -336,6 +350,7 @@ func (s *stateSync) Cancel() error {
 	s.cancelOnce.Do(func() {
 		close(s.cancel)
 	})
+
 	return s.Wait()
 }
 
@@ -348,6 +363,7 @@ func (s *stateSync) Cancel() error {
 func (s *stateSync) loop() (err error) {
 	// Listen for new peer events to assign tasks to them
 	newPeer := make(chan *peerConnection, 1024)
+
 	peerSub := s.d.peers.SubscribeNewPeers(newPeer)
 	defer peerSub.Unsubscribe()
 	defer func() {
@@ -362,6 +378,7 @@ func (s *stateSync) loop() (err error) {
 		if err = s.commit(false); err != nil {
 			return err
 		}
+
 		s.assignTasks()
 		// Tasks assigned, wait for something to happen
 		select {
@@ -377,10 +394,12 @@ func (s *stateSync) loop() (err error) {
 		case req := <-s.deliver:
 			// Response, disconnect or timeout triggered, drop the peer if stalling
 			log.Trace("Received node data response", "peer", req.peer.id, "count", len(req.response), "dropped", req.dropped, "timeout", !req.dropped && req.timedOut())
+
 			if req.nItems <= 2 && !req.dropped && req.timedOut() {
 				// 2 items are the minimum requested, if even that times out, we've no use of
 				// this peer at the moment.
 				log.Warn("Stalling state sync, dropping peer", "peer", req.peer.id)
+
 				if s.d.dropPeer == nil {
 					// The dropPeer method is nil when `--copydb` is used for a local copy.
 					// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
@@ -402,12 +421,14 @@ func (s *stateSync) loop() (err error) {
 			// Process all the received blobs and check for stale delivery
 			delivered, err := s.process(req)
 			req.peer.SetNodeDataIdle(delivered, req.delivered)
+
 			if err != nil {
 				log.Warn("Node data write error", "err", err)
 				return err
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -415,17 +436,22 @@ func (s *stateSync) commit(force bool) error {
 	if !force && s.bytesUncommitted < ethdb.IdealBatchSize {
 		return nil
 	}
+
 	start := time.Now()
+
 	b := s.d.stateDB.NewBatch()
 	if err := s.sched.Commit(b); err != nil {
 		return err
 	}
+
 	if err := b.Write(); err != nil {
 		return fmt.Errorf("DB write error: %v", err)
 	}
+
 	s.updateStats(s.numUncommitted, 0, 0, time.Since(start))
 	s.numUncommitted = 0
 	s.bytesUncommitted = 0
+
 	return nil
 }
 
@@ -467,6 +493,7 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 				attempts: make(map[string]struct{}),
 			}
 		}
+
 		for _, hash := range codes {
 			s.codeTasks[hash] = &codeTask{
 				attempts: make(map[string]struct{}),
@@ -493,8 +520,10 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 		}
 		// Assign the request to this peer
 		t.attempts[req.peer.id] = struct{}{}
+
 		codes = append(codes, hash)
 		req.codeTasks[hash] = t
+
 		delete(s.codeTasks, hash)
 	}
 
@@ -517,7 +546,9 @@ func (s *stateSync) fillTasks(n int, req *stateReq) (nodes []common.Hash, paths 
 
 		delete(s.trieTasks, path)
 	}
+
 	req.nItems = uint16(len(nodes) + len(codes))
+
 	return nodes, paths, codes
 }
 
@@ -569,6 +600,7 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 		// Missing item, place into the retry queue.
 		s.trieTasks[path] = task
 	}
+
 	for hash, task := range req.codeTasks {
 		// If the node did deliver something, missing items may be due to a protocol
 		// limit or a previous timeout + delayed delivery. Both cases should permit
@@ -584,6 +616,7 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 		// Missing item, place into the retry queue.
 		s.codeTasks[hash] = task
 	}
+
 	return successful, nil
 }
 
@@ -596,6 +629,7 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 // be fetched again.
 func (s *stateSync) processNodeData(nodeTasks map[string]*trieTask, codeTasks map[common.Hash]*codeTask, blob []byte) (common.Hash, error) {
 	var hash common.Hash
+
 	s.keccak.Reset()
 	s.keccak.Write(blob)
 	s.keccak.Read(hash[:])

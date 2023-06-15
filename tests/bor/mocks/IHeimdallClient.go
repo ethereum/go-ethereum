@@ -29,6 +29,7 @@ type MockIHeimdallClientMockRecorder struct {
 func NewMockIHeimdallClient(ctrl *gomock.Controller) *MockIHeimdallClient {
 	mock := &MockIHeimdallClient{ctrl: ctrl}
 	mock.recorder = &MockIHeimdallClientMockRecorder{mock}
+
 	return mock
 }
 
@@ -55,6 +56,7 @@ func (m *MockIHeimdallClient) FetchCheckpoint(arg0 context.Context, arg1 int64) 
 	ret := m.ctrl.Call(m, "FetchCheckpoint", arg0, arg1)
 	ret0, _ := ret[0].(*checkpoint.Checkpoint)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -70,6 +72,7 @@ func (m *MockIHeimdallClient) FetchCheckpointCount(arg0 context.Context) (int64,
 	ret := m.ctrl.Call(m, "FetchCheckpointCount", arg0)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -85,6 +88,7 @@ func (m *MockIHeimdallClient) Span(arg0 context.Context, arg1 uint64) (*span.Hei
 	ret := m.ctrl.Call(m, "Span", arg0, arg1)
 	ret0, _ := ret[0].(*span.HeimdallSpan)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -100,6 +104,7 @@ func (m *MockIHeimdallClient) StateSyncEvents(arg0 context.Context, arg1 uint64,
 	ret := m.ctrl.Call(m, "StateSyncEvents", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*clerk.EventRecordWithTime)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 

@@ -62,6 +62,7 @@ func (r *Request) Close() error {
 	if r.peer == nil { // Tests mock out the dispatcher, skip internal cancellation
 		return nil
 	}
+
 	cancelOp := &cancel{
 		id:   r.id,
 		fail: make(chan error),
@@ -71,7 +72,9 @@ func (r *Request) Close() error {
 		if err := <-cancelOp.fail; err != nil {
 			return err
 		}
+
 		close(r.cancel)
+
 		return nil
 	case <-r.peer.term:
 		return errDisconnected

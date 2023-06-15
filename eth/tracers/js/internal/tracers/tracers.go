@@ -36,15 +36,19 @@ func Load() (map[string]string, error) {
 		if err != nil {
 			return err
 		}
+
 		if d.IsDir() {
 			return nil
 		}
+
 		b, err := fs.ReadFile(files, path)
 		if err != nil {
 			return err
 		}
+
 		name := camel(strings.TrimSuffix(path, ".js"))
 		assetTracers[name] = string(b)
+
 		return nil
 	})
 

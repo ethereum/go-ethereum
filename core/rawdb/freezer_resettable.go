@@ -51,13 +51,16 @@ func NewResettableFreezer(datadir string, namespace string, readonly bool, maxTa
 	if err := cleanup(datadir); err != nil {
 		return nil, err
 	}
+
 	opener := func() (*Freezer, error) {
 		return NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
 	}
+
 	freezer, err := opener()
 	if err != nil {
 		return nil, err
 	}
+
 	return &ResettableFreezer{
 		freezer: freezer,
 		opener:  opener,
@@ -76,18 +79,23 @@ func (f *ResettableFreezer) Reset() error {
 	if err := f.freezer.Close(); err != nil {
 		return err
 	}
+
 	tmp := tmpName(f.datadir)
 	if err := os.Rename(f.datadir, tmp); err != nil {
 		return err
 	}
+
 	if err := os.RemoveAll(tmp); err != nil {
 		return err
 	}
+
 	freezer, err := f.opener()
 	if err != nil {
 		return err
 	}
+
 	f.freezer = freezer
+
 	return nil
 }
 
@@ -209,22 +217,27 @@ func cleanup(path string) error {
 	if _, err := os.Lstat(parent); os.IsNotExist(err) {
 		return nil
 	}
+
 	dir, err := os.Open(parent)
 	if err != nil {
 		return err
 	}
+
 	names, err := dir.Readdirnames(0)
 	if err != nil {
 		return err
 	}
+
 	if cerr := dir.Close(); cerr != nil {
 		return cerr
 	}
+
 	for _, name := range names {
 		if name == filepath.Base(path)+tmpSuffix {
 			return os.RemoveAll(filepath.Join(parent, name))
 		}
 	}
+
 	return nil
 }
 

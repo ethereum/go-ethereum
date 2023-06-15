@@ -37,12 +37,14 @@ type Suite struct {
 func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
 	c := newConn(s.Dest, log)
 	l := c.listen(s.Listen1)
+
 	return c, l
 }
 
 func (s *Suite) listen2(log logger) (*conn, net.PacketConn, net.PacketConn) {
 	c := newConn(s.Dest, log)
 	l1, l2 := c.listen(s.Listen1), c.listen(s.Listen2)
+
 	return c, l1, l2
 }
 
@@ -76,9 +78,11 @@ func checkPong(t *utesting.T, pong *v5wire.Pong, ping *v5wire.Ping, c net.Packet
 	if !bytes.Equal(pong.ReqID, ping.ReqID) {
 		t.Fatalf("wrong request ID %x in PONG, want %x", pong.ReqID, ping.ReqID)
 	}
+
 	if !pong.ToIP.Equal(laddr(c).IP) {
 		t.Fatalf("wrong destination IP %v in PONG, want %v", pong.ToIP, laddr(c).IP)
 	}
+
 	if int(pong.ToPort) != laddr(c).Port {
 		t.Fatalf("wrong destination port %v in PONG, want %v", pong.ToPort, laddr(c).Port)
 	}
@@ -112,20 +116,24 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 
 	// Create the session on l1.
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
+
 	resp := conn.reqresp(l1, ping)
 	if resp.Kind() != v5wire.PongMsg {
 		t.Fatal("expected PONG, got", resp)
 	}
+
 	checkPong(t, resp.(*v5wire.Pong), ping, l1)
 
 	// Send on l2. This reuses the session because there is only one codec.
 	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
 	conn.write(l2, ping2, nil)
+
 	switch resp := conn.read(l2).(type) {
 	case *v5wire.Pong:
 		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(l2).IP, laddr(l1).IP)
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for new session as expected")
+
 		resp.Node = s.Dest
 		conn.write(l2, ping2, resp)
 	default:
@@ -143,6 +151,7 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 	// Try on l1 again.
 	ping3 := &v5wire.Ping{ReqID: conn.nextReqID()}
 	conn.write(l1, ping3, nil)
+
 	switch resp := conn.read(l1).(type) {
 	case *v5wire.Pong:
 		t.Fatalf("remote responded to PING from %v for session on IP %v", laddr(l1).IP, laddr(l2).IP)
@@ -163,6 +172,7 @@ func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
 	// First PING triggers challenge.
 	ping := &v5wire.Ping{ReqID: conn.nextReqID()}
 	conn.write(l1, ping, nil)
+
 	switch resp := conn.read(l1).(type) {
 	case *v5wire.Whoareyou:
 		t.Logf("got WHOAREYOU for PING")
@@ -188,11 +198,13 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 	// Non-empty request ID.
 	id := conn.nextReqID()
 	resp := conn.reqresp(l1, &v5wire.TalkRequest{ReqID: id, Protocol: "test-protocol"})
+
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
 		if !bytes.Equal(resp.ReqID, id) {
 			t.Fatalf("wrong request ID %x in TALKRESP, want %x", resp.ReqID, id)
 		}
+
 		if len(resp.Message) > 0 {
 			t.Fatalf("non-empty message %x in TALKRESP", resp.Message)
 		}
@@ -207,6 +219,7 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 		if len(resp.ReqID) > 0 {
 			t.Fatalf("wrong request ID %x in TALKRESP, want empty byte array", resp.ReqID)
 		}
+
 		if len(resp.Message) > 0 {
 			t.Fatalf("non-empty message %x in TALKRESP", resp.Message)
 		}
@@ -224,9 +237,11 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(nodes) != 1 {
 		t.Fatalf("remote returned more than one node for FINDNODE [0]")
 	}
+
 	if nodes[0].ID() != conn.remote.ID() {
 		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
 	}
@@ -238,6 +253,7 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 	// Create bystanders.
 	nodes := make([]*bystander, 5)
 	added := make(chan enode.ID, len(nodes))
+
 	for i := range nodes {
 		nodes[i] = newBystander(t, s, added)
 		defer nodes[i].close()
@@ -246,14 +262,17 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 	// Get them added to the remote table.
 	timeout := 60 * time.Second
 	timeoutCh := time.After(timeout)
+
 	for count := 0; count < len(nodes); {
 		select {
 		case id := <-added:
 			t.Logf("bystander node %v added to remote table", id)
+
 			count++
 		case <-timeoutCh:
 			t.Errorf("remote added %d bystander nodes in %v, need %d to continue", count, timeout, len(nodes))
 			t.Logf("this can happen if the node has a non-empty table from previous runs")
+
 			return
 		}
 	}
@@ -261,10 +280,13 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 
 	// Collect our nodes by distance.
 	var dists []uint
+
 	expect := make(map[enode.ID]*enode.Node)
+
 	for _, bn := range nodes {
 		n := bn.conn.localNode.Node()
 		expect[n.ID()] = n
+
 		d := uint(enode.LogDist(n.ID(), s.Dest.ID()))
 		if !containsUint(dists, d) {
 			dists = append(dists, d)
@@ -274,14 +296,18 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 	// Send FINDNODE for all distances.
 	conn, l1 := s.listen1(t)
 	defer conn.close()
+
 	foundNodes, err := conn.findnode(l1, dists)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Logf("remote returned %d nodes for distance list %v", len(foundNodes), dists)
+
 	for _, n := range foundNodes {
 		delete(expect, n.ID())
 	}
+
 	if len(expect) > 0 {
 		t.Errorf("missing %d nodes in FINDNODE result", len(expect))
 		t.Logf("this can happen if the test is run multiple times in quick succession")
@@ -311,7 +337,9 @@ func newBystander(t *utesting.T, s *Suite, added chan enode.ID) *bystander {
 		addedCh: added,
 	}
 	bn.done.Add(1)
+
 	go bn.loop()
+
 	return bn
 }
 
@@ -334,6 +362,7 @@ func (bn *bystander) loop() {
 		lastPing time.Time
 		wasAdded bool
 	)
+
 	for {
 		// Ping the remote node.
 		if !wasAdded && time.Since(lastPing) > 10*time.Second {
@@ -341,6 +370,7 @@ func (bn *bystander) loop() {
 				ReqID:  bn.conn.nextReqID(),
 				ENRSeq: bn.dest.Seq(),
 			})
+
 			lastPing = time.Now()
 		}
 		// Answer packets.
@@ -352,11 +382,15 @@ func (bn *bystander) loop() {
 				ToIP:   bn.dest.IP(),
 				ToPort: uint16(bn.dest.UDP()),
 			}, nil)
+
 			wasAdded = true
+
 			bn.notifyAdded()
 		case *v5wire.Findnode:
 			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, RespCount: 1}, nil)
+
 			wasAdded = true
+
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
 			bn.conn.write(bn.l, &v5wire.TalkResponse{ReqID: p.ReqID}, nil)

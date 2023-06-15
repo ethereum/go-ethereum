@@ -51,10 +51,12 @@ func (s *Suite) dial() (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	conn := Conn{Conn: rlpx.NewConn(fd, s.Dest.Pubkey())}
 	// do encHandshake
 	conn.ourKey, _ = crypto.GenerateKey()
 	_, err = conn.Handshake(conn.ourKey)
+
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -66,6 +68,7 @@ func (s *Suite) dial() (*Conn, error) {
 		{Name: "eth", Version: 68},
 	}
 	conn.ourHighestProtoVersion = 68
+
 	return &conn, nil
 }
 
@@ -75,8 +78,10 @@ func (s *Suite) dialSnap() (*Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial failed: %v", err)
 	}
+
 	conn.caps = append(conn.caps, p2p.Cap{Name: "snap", Version: 1})
 	conn.ourHighestSnapProtoVersion = 1
+
 	return conn, nil
 }
 
@@ -86,9 +91,11 @@ func (c *Conn) peer(chain *Chain, status *Status) error {
 	if err := c.handshake(); err != nil {
 		return fmt.Errorf("handshake failed: %v", err)
 	}
+
 	if _, err := c.statusExchange(chain, status); err != nil {
 		return fmt.Errorf("status exchange failed: %v", err)
 	}
+
 	return nil
 }
 
@@ -98,6 +105,7 @@ func (c *Conn) handshake() error {
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
+
 	ourHandshake := &Hello{
 		Version: 5,
 		Caps:    c.caps,
@@ -113,7 +121,9 @@ func (c *Conn) handshake() error {
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
+
 		c.negotiateEthProtocol(msg.Caps)
+
 		if c.negotiatedProtoVersion == 0 {
 			return fmt.Errorf("could not negotiate eth protocol (remote caps: %v, local eth version: %v)", msg.Caps, c.ourHighestProtoVersion)
 		}
@@ -121,6 +131,7 @@ func (c *Conn) handshake() error {
 		if c.ourHighestSnapProtoVersion != c.negotiatedSnapProtoVersion {
 			return fmt.Errorf("could not negotiate snap protocol (remote caps: %v, local snap version: %v)", msg.Caps, c.ourHighestSnapProtoVersion)
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("bad handshake: %#v", msg)
@@ -131,7 +142,9 @@ func (c *Conn) handshake() error {
 // advertised capability from peer.
 func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 	var highestEthVersion uint
+
 	var highestSnapVersion uint
+
 	for _, capability := range caps {
 		switch capability.Name {
 		case "eth":
@@ -144,6 +157,7 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 			}
 		}
 	}
+
 	c.negotiatedProtoVersion = highestEthVersion
 	c.negotiatedSnapProtoVersion = highestSnapVersion
 }
@@ -187,6 +201,7 @@ loop:
 	if c.negotiatedProtoVersion == 0 {
 		return nil, fmt.Errorf("eth protocol version must be set in Conn")
 	}
+
 	if status == nil {
 		// default status message
 		status = &Status{
@@ -198,9 +213,11 @@ loop:
 			ForkID:          chain.ForkID(),
 		}
 	}
+
 	if err := c.Write(status); err != nil {
 		return nil, fmt.Errorf("write to connection failed: %v", err)
 	}
+
 	return message, nil
 }
 
@@ -283,9 +300,11 @@ func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, reqID uint
 func (c *Conn) snapRequest(msg Message, id uint64, chain *Chain) (Message, error) {
 	defer c.SetReadDeadline(time.Time{})
 	c.SetReadDeadline(time.Now().Add(5 * time.Second))
+
 	if err := c.Write(msg); err != nil {
 		return nil, fmt.Errorf("could not write to connection: %v", err)
 	}
+
 	return c.ReadSnap(id)
 }
 
@@ -313,11 +332,14 @@ func (s *Suite) sendNextBlock() error {
 	if err != nil {
 		return err
 	}
+
 	defer sendConn.Close()
 	defer recvConn.Close()
+
 	if err = sendConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	if err = recvConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
@@ -337,6 +359,7 @@ func (s *Suite) sendNextBlock() error {
 	}
 	// update test suite chain
 	s.chain.blocks = append(s.chain.blocks, nextBlock)
+
 	return nil
 }
 
@@ -346,6 +369,7 @@ func (s *Suite) testAnnounce(sendConn, receiveConn *Conn, blockAnnouncement *New
 	if err := sendConn.Write(blockAnnouncement); err != nil {
 		return fmt.Errorf("could not write to connection: %v", err)
 	}
+
 	return s.waitAnnounce(receiveConn, blockAnnouncement)
 }
 
@@ -358,15 +382,18 @@ func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 				return fmt.Errorf("wrong header in block announcement: \nexpected %v "+
 					"\ngot %v", blockAnnouncement.Block.Header(), msg.Block.Header())
 			}
+
 			if !reflect.DeepEqual(blockAnnouncement.TD, msg.TD) {
 				return fmt.Errorf("wrong TD in announcement: expected %v, got %v", blockAnnouncement.TD, msg.TD)
 			}
+
 			return nil
 		case *NewBlockHashes:
 			hashes := *msg
 			if blockAnnouncement.Block.Hash() != hashes[0].Hash {
 				return fmt.Errorf("wrong block hash in announcement: expected %v, got %v", blockAnnouncement.Block.Hash(), hashes[0].Hash)
 			}
+
 			return nil
 
 		// ignore tx announcements from previous tests
@@ -398,6 +425,7 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block) error {
 	// node imported the block
 	for {
 		requestID := uint64(54)
+
 		headers, err := conn.headersRequest(req, s.chain, requestID)
 		if err != nil {
 			return fmt.Errorf("GetBlockHeader request failed: %v", err)
@@ -407,9 +435,11 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block) error {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+
 		if !reflect.DeepEqual(block.Header(), headers[0]) {
 			return fmt.Errorf("wrong header returned: wanted %v, got %v", block.Header(), headers[0])
 		}
+
 		return nil
 	}
 }
@@ -419,11 +449,14 @@ func (s *Suite) oldAnnounce() error {
 	if err != nil {
 		return err
 	}
+
 	defer sendConn.Close()
 	defer receiveConn.Close()
+
 	if err := sendConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	if err := receiveConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
@@ -458,6 +491,7 @@ func (s *Suite) oldAnnounce() error {
 	default:
 		return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
+
 	return nil
 }
 
@@ -470,6 +504,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T) error {
 
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&conn.ourKey.PublicKey)[1:]
+
 	handshakes := []*Hello{
 		{
 			Version: 5,
@@ -512,6 +547,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T) error {
 	}
 	for i, handshake := range handshakes {
 		t.Logf("Testing malicious handshake %v\n", i)
+
 		if err := conn.Write(handshake); err != nil {
 			return fmt.Errorf("could not write to connection: %v", err)
 		}
@@ -533,6 +569,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T) error {
 			return fmt.Errorf("dial failed: %v", err)
 		}
 	}
+
 	return nil
 }
 
@@ -540,6 +577,7 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	if err := conn.handshake(); err != nil {
 		return fmt.Errorf("handshake failed: %v", err)
 	}
+
 	status := &Status{
 		ProtocolVersion: uint32(conn.negotiatedProtoVersion),
 		NetworkID:       s.chain.chainConfig.ChainID.Uint64(),
@@ -554,6 +592,7 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	if err != nil {
 		return fmt.Errorf("status exchange failed: %v", err)
 	}
+
 	switch msg := msg.(type) {
 	case *Status:
 	default:
@@ -578,11 +617,14 @@ func (s *Suite) hashAnnounce() error {
 	if err != nil {
 		return fmt.Errorf("failed to create connections: %v", err)
 	}
+
 	defer sendConn.Close()
 	defer recvConn.Close()
+
 	if err := sendConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	if err := recvConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
@@ -592,8 +634,10 @@ func (s *Suite) hashAnnounce() error {
 		Hash   common.Hash // Hash of one particular block being announced
 		Number uint64      // Number of one particular block being announced
 	}
+
 	nextBlock := s.fullChain.blocks[s.chain.Len()]
 	announcement := anno{Hash: nextBlock.Hash(), Number: nextBlock.Number().Uint64()}
+
 	newBlockHash := &NewBlockHashes{announcement}
 	if err := sendConn.Write(newBlockHash); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
@@ -634,6 +678,7 @@ func (s *Suite) hashAnnounce() error {
 		if len(hashes) != 1 {
 			return fmt.Errorf("unexpected new block hash announcement: wanted 1 announcement, got %d", len(hashes))
 		}
+
 		if nextBlock.Hash() != hashes[0].Hash {
 			return fmt.Errorf("unexpected block hash announcement, wanted %v, got %v", nextBlock.Hash(),
 				hashes[0].Hash)
@@ -645,6 +690,7 @@ func (s *Suite) hashAnnounce() error {
 		if len(nextBlockBody.Transactions) != 0 || len(nextBlockBody.Uncles) != 0 {
 			return fmt.Errorf("unexpected non-empty new block propagated: %s", pretty.Sdump(msg))
 		}
+
 		if msg.Block.Hash() != nextBlock.Hash() {
 			return fmt.Errorf("mismatched hash of propagated new block: wanted %v, got %v",
 				nextBlock.Hash(), msg.Block.Hash())
@@ -662,5 +708,6 @@ func (s *Suite) hashAnnounce() error {
 	}
 	// update the chain
 	s.chain.blocks = append(s.chain.blocks, nextBlock)
+
 	return nil
 }

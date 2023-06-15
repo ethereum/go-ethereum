@@ -84,6 +84,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		blocks = 1
 		log.Warn("Sanitizing invalid gasprice oracle sample blocks", "provided", params.Blocks, "updated", blocks)
 	}
+
 	percent := params.Percentile
 	if percent < 0 {
 		percent = 0
@@ -92,11 +93,13 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		percent = 100
 		log.Warn("Sanitizing invalid gasprice oracle sample percentile", "provided", params.Percentile, "updated", percent)
 	}
+
 	maxPrice := params.MaxPrice
 	if maxPrice == nil || maxPrice.Int64() <= 0 {
 		maxPrice = DefaultMaxPrice
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
+
 	ignorePrice := params.IgnorePrice
 	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
 		ignorePrice = DefaultIgnorePrice
@@ -104,11 +107,13 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	} else if ignorePrice.Int64() > 0 {
 		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
 	}
+
 	maxHeaderHistory := params.MaxHeaderHistory
 	if maxHeaderHistory < 1 {
 		maxHeaderHistory = 1
 		log.Warn("Sanitizing invalid gasprice oracle max header history", "provided", params.MaxHeaderHistory, "updated", maxHeaderHistory)
 	}
+
 	maxBlockHistory := params.MaxBlockHistory
 	if maxBlockHistory < 1 {
 		maxBlockHistory = 1
@@ -118,12 +123,14 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
 	backend.SubscribeChainHeadEvent(headEvent)
+
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
 			if ev.Block.ParentHash() != lastHead {
 				cache.Purge()
 			}
+
 			lastHead = ev.Block.Hash()
 		}
 	}()
@@ -144,12 +151,14 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 func (oracle *Oracle) ProcessCache() {
 	headEvent := make(chan core.ChainHeadEvent, 1)
 	oracle.backend.SubscribeChainHeadEvent(headEvent)
+
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
 			if ev.Block.ParentHash() != lastHead {
 				oracle.historyCache.Purge()
 			}
+
 			lastHead = ev.Block.Hash()
 		}
 	}()
@@ -169,9 +178,11 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	oracle.cacheLock.RLock()
 	lastHead, lastPrice := oracle.lastHead, oracle.lastPrice
 	oracle.cacheLock.RUnlock()
+
 	if headHash == lastHead {
 		return new(big.Int).Set(lastPrice), nil
 	}
+
 	oracle.fetchLock.Lock()
 	defer oracle.fetchLock.Unlock()
 
@@ -179,9 +190,11 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	oracle.cacheLock.RLock()
 	lastHead, lastPrice = oracle.lastHead, oracle.lastPrice
 	oracle.cacheLock.RUnlock()
+
 	if headHash == lastHead {
 		return new(big.Int).Set(lastPrice), nil
 	}
+
 	var (
 		sent, exp int
 		number    = head.Number.Uint64()
@@ -189,18 +202,22 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		quit      = make(chan struct{})
 		results   []*big.Int
 	)
+
 	for sent < oracle.checkBlocks && number > 0 {
 		go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+
 		sent++
 		exp++
 		number--
 	}
+
 	for exp > 0 {
 		res := <-result
 		if res.err != nil {
 			close(quit)
 			return new(big.Int).Set(lastPrice), res.err
 		}
+
 		exp--
 		// Nothing returned. There are two special cases here:
 		// - The block is empty
@@ -214,20 +231,26 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		// is 2*checkBlocks.
 		if len(res.values) == 1 && len(results)+1+exp < oracle.checkBlocks*2 && number > 0 {
 			go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+
 			sent++
 			exp++
 			number--
 		}
+
 		results = append(results, res.values...)
 	}
+
 	price := lastPrice
+
 	if len(results) > 0 {
 		sort.Sort(bigIntArray(results))
 		price = results[(len(results)-1)*oracle.percentile/100]
 	}
+
 	if price.Cmp(oracle.maxPrice) > 0 {
 		price = new(big.Int).Set(oracle.maxPrice)
 	}
+
 	oracle.cacheLock.Lock()
 	oracle.lastHead = headHash
 	oracle.lastPrice = price
@@ -262,6 +285,7 @@ func (s *txSorter) Less(i, j int) bool {
 	// accepted into a block with an invalid effective tip.
 	tip1, _ := s.txs[i].EffectiveGasTip(s.baseFee)
 	tip2, _ := s.txs[j].EffectiveGasTip(s.baseFee)
+
 	return tip1.Cmp(tip2) < 0
 }
 
@@ -276,6 +300,7 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 		case result <- results{nil, err}:
 		case <-quit:
 		}
+
 		return
 	}
 	// Sort the transaction by effective tip in ascending sort.
@@ -285,11 +310,13 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 	sort.Sort(sorter)
 
 	var prices []*big.Int
+
 	for _, tx := range sorter.txs {
 		tip, _ := tx.EffectiveGasTip(block.BaseFee())
 		if ignoreUnder != nil && tip.Cmp(ignoreUnder) == -1 {
 			continue
 		}
+
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
 			prices = append(prices, tip)

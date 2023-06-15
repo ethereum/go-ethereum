@@ -142,6 +142,7 @@ func NewTracker(caps map[uint64]float64, rtt time.Duration) *Tracker {
 	if caps == nil {
 		caps = make(map[uint64]float64)
 	}
+
 	return &Tracker{
 		capacity:  caps,
 		roundtrip: rtt,
@@ -192,6 +193,7 @@ func (t *Tracker) Update(kind uint64, elapsed time.Duration, items int) {
 	if elapsed <= 0 {
 		elapsed = 1 // +1 (ns) to ensure non-zero divisor
 	}
+
 	measured := float64(items) / (float64(elapsed) / float64(time.Second))
 
 	t.capacity[kind] = (1-measurementImpact)*(t.capacity[kind]) + measurementImpact*measured
@@ -254,6 +256,7 @@ func (t *Trackers) Track(id string, tracker *Tracker) error {
 	if _, ok := t.trackers[id]; ok {
 		return errors.New("already tracking")
 	}
+
 	t.trackers[id] = tracker
 	t.detune()
 
@@ -268,7 +271,9 @@ func (t *Trackers) Untrack(id string) error {
 	if _, ok := t.trackers[id]; !ok {
 		return errors.New("not tracking")
 	}
+
 	delete(t.trackers, id)
+
 	return nil
 }
 
@@ -288,11 +293,13 @@ func (t *Trackers) MedianRoundTrip() time.Duration {
 func (t *Trackers) medianRoundTrip() time.Duration {
 	// Gather all the currently measured round trip times
 	rtts := make([]float64, 0, len(t.trackers))
+
 	for _, tt := range t.trackers {
 		tt.lock.RLock()
 		rtts = append(rtts, float64(tt.roundtrip))
 		tt.lock.RUnlock()
 	}
+
 	sort.Float64s(rtts)
 
 	var median time.Duration
@@ -310,9 +317,11 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 	if median < rttMinEstimate {
 		median = rttMinEstimate
 	}
+
 	if median > rttMaxEstimate {
 		median = rttMaxEstimate
 	}
+
 	return median
 }
 
@@ -331,6 +340,7 @@ func (t *Trackers) MeanCapacities() map[uint64]float64 {
 // debug logging.
 func (t *Trackers) meanCapacities() map[uint64]float64 {
 	capacities := make(map[uint64]float64)
+
 	for _, tt := range t.trackers {
 		tt.lock.RLock()
 		for key, val := range tt.capacity {
@@ -338,9 +348,11 @@ func (t *Trackers) meanCapacities() map[uint64]float64 {
 		}
 		tt.lock.RUnlock()
 	}
+
 	for key, val := range capacities {
 		capacities[key] = val / float64(len(t.trackers))
 	}
+
 	return capacities
 }
 
@@ -382,6 +394,7 @@ func (t *Trackers) targetTimeout() time.Duration {
 	if timeout > t.OverrideTTLLimit {
 		timeout = t.OverrideTTLLimit
 	}
+
 	return timeout
 }
 
@@ -394,6 +407,7 @@ func (t *Trackers) tune() {
 	t.lock.RLock()
 	dirty := time.Since(t.tuned) > t.roundtrip
 	t.lock.RUnlock()
+
 	if !dirty {
 		return
 	}
@@ -435,6 +449,7 @@ func (t *Trackers) detune() {
 	if t.confidence < rttMinConfidence {
 		t.confidence = rttMinConfidence
 	}
+
 	t.log.Debug("Relaxed msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout())
 }
 
@@ -448,6 +463,7 @@ func (t *Trackers) Capacity(id string, kind uint64, targetRTT time.Duration) int
 	if tracker == nil {
 		return 1 // Unregister race, don't return 0, it's a dangerous number
 	}
+
 	return tracker.Capacity(kind, targetRTT)
 }
 

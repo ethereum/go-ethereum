@@ -83,6 +83,7 @@ func (ds *dataSource) Ended() bool {
 
 func Generate(input []byte) randTest {
 	var allKeys [][]byte
+
 	r := newDataSource(input)
 	genKey := func() []byte {
 		if len(allKeys) < 2 || r.readByte() < 0x0f {
@@ -90,6 +91,7 @@ func Generate(input []byte) randTest {
 			key := make([]byte, r.readByte()%50)
 			r.Read(key)
 			allKeys = append(allKeys, key)
+
 			return key
 		}
 		// use existing key
@@ -108,6 +110,7 @@ func Generate(input []byte) randTest {
 		case opGet, opDelete, opProve:
 			step.key = genKey()
 		}
+
 		steps = append(steps, step)
 		if len(steps) > 500 {
 			break
@@ -132,9 +135,11 @@ func Fuzz(input []byte) int {
 	if len(program) == 0 {
 		return 0
 	}
+
 	if err := runRandTest(program); err != nil {
 		panic(err)
 	}
+
 	return 1
 }
 
@@ -155,6 +160,7 @@ func runRandTest(rt randTest) error {
 		case opGet:
 			v := tr.MustGet(step.key)
 			want := values[string(step.key)]
+
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
@@ -167,17 +173,21 @@ func runRandTest(rt randTest) error {
 					return err
 				}
 			}
+
 			newtr, err := trie.New(trie.TrieID(hash), triedb)
 			if err != nil {
 				return err
 			}
+
 			tr = newtr
 		case opItercheckhash:
 			checktr := trie.NewEmpty(triedb)
 			it := trie.NewIterator(tr.NodeIterator(nil))
+
 			for it.Next() {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
+
 			if tr.Hash() != checktr.Hash() {
 				return fmt.Errorf("hash mismatch in opItercheckhash")
 			}
@@ -189,5 +199,6 @@ func runRandTest(rt randTest) error {
 			return rt[i].err
 		}
 	}
+
 	return nil
 }

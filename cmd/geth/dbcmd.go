@@ -207,12 +207,14 @@ func removeDB(ctx *cli.Context) error {
 	}
 	// Remove the full node ancient database
 	path = config.Eth.DatabaseFreezer
+
 	switch {
 	case path == "":
 		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
 	case !filepath.IsAbs(path):
 		path = config.Node.ResolvePath(path)
 	}
+
 	if common.FileExist(path) {
 		confirmAndRemoveDB(path, "full node ancient database")
 	} else {
@@ -225,6 +227,7 @@ func removeDB(ctx *cli.Context) error {
 	} else {
 		log.Info("Light node database missing", "path", path)
 	}
+
 	return nil
 }
 
@@ -232,6 +235,7 @@ func removeDB(ctx *cli.Context) error {
 // folder if accepted.
 func confirmAndRemoveDB(database string, kind string) {
 	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, database))
+
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
@@ -239,6 +243,7 @@ func confirmAndRemoveDB(database string, kind string) {
 		log.Info("Database deletion skipped", "path", database)
 	default:
 		start := time.Now()
+
 		filepath.Walk(database, func(path string, info os.FileInfo, err error) error {
 			// If we're at the top level folder, recurse into
 			if path == database {
@@ -249,6 +254,7 @@ func confirmAndRemoveDB(database string, kind string) {
 				os.Remove(path)
 				return nil
 			}
+
 			return filepath.SkipDir
 		})
 		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -260,9 +266,11 @@ func inspect(ctx *cli.Context) error {
 		prefix []byte
 		start  []byte
 	)
+
 	if ctx.NArg() > 2 {
 		return fmt.Errorf("max 2 arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	if ctx.NArg() >= 1 {
 		if d, err := hexutil.Decode(ctx.Args().Get(0)); err != nil {
 			return fmt.Errorf("failed to hex-decode 'prefix': %v", err)
@@ -270,6 +278,7 @@ func inspect(ctx *cli.Context) error {
 			prefix = d
 		}
 	}
+
 	if ctx.NArg() >= 2 {
 		if d, err := hexutil.Decode(ctx.Args().Get(1)); err != nil {
 			return fmt.Errorf("failed to hex-decode 'start': %v", err)
@@ -277,6 +286,7 @@ func inspect(ctx *cli.Context) error {
 			start = d
 		}
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -359,6 +369,7 @@ func showLeveldbStats(db ethdb.KeyValueStater) {
 	} else {
 		fmt.Println(stats)
 	}
+
 	if ioStats, err := db.Stat("leveldb.iostats"); err != nil {
 		log.Warn("Failed to read database iostats", "error", err)
 	} else {
@@ -374,6 +385,7 @@ func dbStats(ctx *cli.Context) error {
 	defer db.Close()
 
 	showLeveldbStats(db)
+
 	return nil
 }
 
@@ -388,12 +400,15 @@ func dbCompact(ctx *cli.Context) error {
 	showLeveldbStats(db)
 
 	log.Info("Triggering compaction")
+
 	if err := db.Compact(nil, nil); err != nil {
 		log.Info("Compact err", "error", err)
 		return err
 	}
+
 	log.Info("Stats after compaction")
 	showLeveldbStats(db)
+
 	return nil
 }
 
@@ -402,6 +417,7 @@ func dbGet(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -419,7 +435,9 @@ func dbGet(ctx *cli.Context) error {
 		log.Info("Get operation failed", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
+
 	fmt.Printf("key %#x: %#x\n", key, data)
+
 	return nil
 }
 
@@ -428,6 +446,7 @@ func dbDelete(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -439,14 +458,17 @@ func dbDelete(ctx *cli.Context) error {
 		log.Info("Could not decode the key", "error", err)
 		return err
 	}
+
 	data, err := db.Get(key)
 	if err == nil {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
+
 	if err = db.Delete(key); err != nil {
 		log.Info("Delete operation returned an error", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
+
 	return nil
 }
 
@@ -455,6 +477,7 @@ func dbPut(ctx *cli.Context) error {
 	if ctx.NArg() != 2 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -473,15 +496,18 @@ func dbPut(ctx *cli.Context) error {
 		log.Info("Could not decode the key", "error", err)
 		return err
 	}
+
 	value, err = hexutil.Decode(ctx.Args().Get(1))
 	if err != nil {
 		log.Info("Could not decode the value", "error", err)
 		return err
 	}
+
 	data, err = db.Get(key)
 	if err == nil {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
+
 	return db.Put(key, value)
 }
 
@@ -490,6 +516,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -535,20 +562,26 @@ func dbDumpTrie(ctx *cli.Context) error {
 	}
 
 	id := trie.StorageTrieID(common.BytesToHash(state), common.BytesToHash(account), common.BytesToHash(storage))
+
 	theTrie, err := trie.New(id, trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
+
 	var count int64
+
 	it := trie.NewIterator(theTrie.NodeIterator(start))
 	for it.Next() {
 		if max > 0 && count == max {
 			fmt.Printf("Exiting after %d values\n", count)
 			break
 		}
+
 		fmt.Printf("  %d. key %#x: %#x\n", count, it.Key, it.Value)
+
 		count++
 	}
+
 	return it.Err
 }
 
@@ -575,6 +608,7 @@ func freezerInspect(ctx *cli.Context) error {
 		log.Info("Could not read count param", "err", err)
 		return err
 	}
+
 	stack, _ := makeConfigNode(ctx)
 	ancient := stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name))
 	stack.Close()
@@ -584,6 +618,7 @@ func freezerInspect(ctx *cli.Context) error {
 
 func importLDBdata(ctx *cli.Context) error {
 	start := 0
+
 	switch ctx.NArg() {
 	case 1:
 		break
@@ -592,27 +627,35 @@ func importLDBdata(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("second arg must be an integer: %v", err)
 		}
+
 		start = s
 	default:
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
+
 	var (
 		fName     = ctx.Args().Get(0)
 		stack, _  = makeConfigNode(ctx)
 		interrupt = make(chan os.Signal, 1)
 		stop      = make(chan struct{})
 	)
+
 	defer stack.Close()
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	defer signal.Stop(interrupt)
 	defer close(interrupt)
+
 	go func() {
 		if _, ok := <-interrupt; ok {
 			log.Info("Interrupted during ldb import, stopping at next batch")
 		}
+
 		close(stop)
 	}()
+
 	db := utils.MakeChainDatabase(ctx, stack, false)
+
 	return utils.ImportLDBData(db, fName, int64(start), stop)
 }
 
@@ -627,6 +670,7 @@ func (iter *preimageIterator) Next() (byte, []byte, []byte, bool) {
 			return utils.OpBatchAdd, key, iter.iter.Value(), true
 		}
 	}
+
 	return 0, nil, nil, false
 }
 
@@ -645,18 +689,21 @@ func (iter *snapshotIterator) Next() (byte, []byte, []byte, bool) {
 		iter.init = true
 		return utils.OpBatchDel, rawdb.SnapshotRootKey, nil, true
 	}
+
 	for iter.account.Next() {
 		key := iter.account.Key()
 		if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == (len(rawdb.SnapshotAccountPrefix)+common.HashLength) {
 			return utils.OpBatchAdd, key, iter.account.Value(), true
 		}
 	}
+
 	for iter.storage.Next() {
 		key := iter.storage.Key()
 		if bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == (len(rawdb.SnapshotStoragePrefix)+2*common.HashLength) {
 			return utils.OpBatchAdd, key, iter.storage.Value(), true
 		}
 	}
+
 	return 0, nil, nil, false
 }
 
@@ -685,30 +732,39 @@ func exportChaindata(ctx *cli.Context) error {
 	// Parse the required chain data type, make sure it's supported.
 	kind := ctx.Args().Get(0)
 	kind = strings.ToLower(strings.Trim(kind, " "))
+
 	exporter, ok := chainExporters[kind]
 	if !ok {
 		var kinds []string
 		for kind := range chainExporters {
 			kinds = append(kinds, kind)
 		}
+
 		return fmt.Errorf("invalid data type %s, supported types: %s", kind, strings.Join(kinds, ", "))
 	}
+
 	var (
 		stack, _  = makeConfigNode(ctx)
 		interrupt = make(chan os.Signal, 1)
 		stop      = make(chan struct{})
 	)
+
 	defer stack.Close()
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	defer signal.Stop(interrupt)
 	defer close(interrupt)
+
 	go func() {
 		if _, ok := <-interrupt; ok {
 			log.Info("Interrupted during db export, stopping at next batch")
 		}
+
 		close(stop)
 	}()
+
 	db := utils.MakeChainDatabase(ctx, stack, true)
+
 	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
 }
 
@@ -716,6 +772,7 @@ func showMetaData(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	db := utils.MakeChainDatabase(ctx, stack, true)
+
 	ancients, err := db.Ancients()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error accessing ancients: %v", err)
@@ -724,19 +781,23 @@ func showMetaData(ctx *cli.Context) error {
 	data := rawdb.ReadChainMetadata(db)
 	data = append(data, []string{"frozen", fmt.Sprintf("%d items", ancients)})
 	data = append(data, []string{"snapshotGenerator", snapshot.ParseGeneratorStatus(rawdb.ReadSnapshotGenerator(db))})
+
 	if b := rawdb.ReadHeadBlock(db); b != nil {
 		data = append(data, []string{"headBlock.Hash", fmt.Sprintf("%v", b.Hash())})
 		data = append(data, []string{"headBlock.Root", fmt.Sprintf("%v", b.Root())})
 		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (%#x)", b.Number(), b.Number())})
 	}
+
 	if h := rawdb.ReadHeadHeader(db); h != nil {
 		data = append(data, []string{"headHeader.Hash", fmt.Sprintf("%v", h.Hash())})
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)
 	table.Render()
+
 	return nil
 }

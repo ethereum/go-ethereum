@@ -332,7 +332,9 @@ func AvailableForks() []string {
 	for k := range Forks {
 		availableForks = append(availableForks, k)
 	}
+
 	sort.Strings(availableForks)
+
 	return availableForks
 }
 

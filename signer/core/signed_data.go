@@ -44,15 +44,18 @@ func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, e
 	if err != nil {
 		return nil, err
 	}
+
 	if !res.Approved {
 		return nil, ErrRequestDenied
 	}
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: req.Address.Address()}
+
 	wallet, err := api.am.Find(account)
 	if err != nil {
 		return nil, err
 	}
+
 	pw, err := api.lookupOrQueryPassword(account.Address,
 		"Password for signing",
 		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
@@ -64,9 +67,11 @@ func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, e
 	if err != nil {
 		return nil, err
 	}
+
 	if legacyV {
 		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	}
+
 	return signature, nil
 }
 
@@ -79,11 +84,13 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 	if err != nil {
 		return nil, err
 	}
+
 	signature, err := api.sign(req, transformV)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
 	}
+
 	return signature, nil
 }
 
@@ -98,6 +105,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		req          *SignDataRequest
 		useEthereumV = true // Default to use V = 27 or 28, the legacy Ethereum format
 	)
+
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, useEthereumV, err
@@ -110,6 +118,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
+
 		sighash, msg := SignTextValidator(validatorData)
 		messages := []*apitypes.NameValueType{
 			{
@@ -140,6 +149,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
+
 		header := &types.Header{}
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
@@ -154,6 +164,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
+
 		messages := []*apitypes.NameValueType{
 			{
 				Name:  "Clique header",
@@ -167,6 +178,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 	case apitypes.DataTyped.Mime:
 		// EIP-712 conformant typed data
 		var err error
+
 		req, err = typedDataRequest(data)
 		if err != nil {
 			return nil, useEthereumV, err
@@ -179,8 +191,9 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
+
 		sighash, msg := accounts.TextAndHash(textData)
-				messages := []*apitypes.NameValueType{
+		messages := []*apitypes.NameValueType{
 			{
 				Name:  "message",
 				Typ:   accounts.MimetypeTextPlain,
@@ -189,8 +202,10 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		}
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
 	}
+
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
+
 	return req, useEthereumV, nil
 }
 
@@ -214,8 +229,10 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
 		return
 	}
+
 	rlp = clique.CliqueRLP(header)
 	hash = clique.SealHash(header).Bytes()
+
 	return hash, rlp, err
 }
 
@@ -237,16 +254,20 @@ func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAd
 	if err != nil {
 		return nil, nil, err
 	}
+
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
+
 	if validationMessages != nil {
 		req.Callinfo = validationMessages.Messages
 	}
+
 	signature, err := api.sign(req, true)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, nil, err
 	}
+
 	return signature, req.Hash, nil
 }
 
@@ -257,6 +278,7 @@ func fromHex(data any) ([]byte, error) {
 		binary, err := hexutil.Decode(stringData)
 		return binary, err
 	}
+
 	return nil, fmt.Errorf("wrong type %T", data)
 }
 
@@ -270,18 +292,22 @@ func typedDataRequest(data any) (*SignDataRequest, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if err = json.Unmarshal(jsonData, &typedData); err != nil {
 			return nil, err
 		}
 	}
+
 	messages, err := typedData.Format()
 	if err != nil {
 		return nil, err
 	}
+
 	sighash, rawData, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return nil, err
 	}
+
 	return &SignDataRequest{
 		ContentType: apitypes.DataTyped.Mime,
 		Rawdata:     []byte(rawData),
@@ -306,15 +332,19 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	if len(sig) != 65 {
 		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
 	}
+
 	if sig[64] != 27 && sig[64] != 28 {
 		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 	}
+
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 	hash := accounts.TextHash(data)
+
 	rpk, err := crypto.SigToPub(hash, sig)
 	if err != nil {
 		return common.Address{}, err
 	}
+
 	return crypto.PubkeyToAddress(*rpk), nil
 }
 
@@ -324,20 +354,25 @@ func UnmarshalValidatorData(data interface{}) (apitypes.ValidatorData, error) {
 	if !ok {
 		return apitypes.ValidatorData{}, errors.New("validator input is not a map[string]interface{}")
 	}
+
 	addrBytes, err := fromHex(raw["address"])
 	if err != nil {
 		return apitypes.ValidatorData{}, fmt.Errorf("validator address error: %w", err)
 	}
+
 	if len(addrBytes) == 0 {
 		return apitypes.ValidatorData{}, errors.New("validator address is undefined")
 	}
+
 	messageBytes, err := fromHex(raw["message"])
 	if err != nil {
 		return apitypes.ValidatorData{}, fmt.Errorf("message error: %w", err)
 	}
+
 	if len(messageBytes) == 0 {
 		return apitypes.ValidatorData{}, errors.New("message is undefined")
 	}
+
 	return apitypes.ValidatorData{
 		Address: common.BytesToAddress(addrBytes),
 		Message: messageBytes,

@@ -55,15 +55,16 @@ var VersionWithMetaCommitDetails = func() string {
 
 // ArchiveVersion holds the textual version string used for Geth archives.
 // e.g. "1.8.11-dea1ce05" for stable releases, or
-//
 func ArchiveVersion(gitCommit string) string {
 	vsn := Version
 	if VersionMeta != "stable" {
 		vsn += "-" + VersionMeta
 	}
+
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
 	}
+
 	return vsn
 }
 
@@ -72,8 +73,10 @@ func VersionWithCommit(gitCommit, gitDate string) string {
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
 	}
+
 	if (VersionMeta != "stable") && (gitDate != "") {
 		vsn += "-" + gitDate
 	}
+
 	return vsn
 }

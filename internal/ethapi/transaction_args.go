@@ -60,6 +60,7 @@ func (args *TransactionArgs) from() common.Address {
 	if args.From == nil {
 		return common.Address{}
 	}
+
 	return *args.From
 }
 
@@ -81,6 +82,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
+
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
 	}
@@ -138,6 +140,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	} else {
 		args.ChainID = (*hexutil.Big)(want)
 	}
+
 	return nil
 }
 
@@ -156,6 +159,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
+
 		return nil
 	}
 	// Now attempt to fill in default value depending on whether London is active or not.
@@ -174,8 +178,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		if err != nil {
 			return err
 		}
+
 		args.GasPrice = (*hexutil.Big)(price)
 	}
+
 	return nil
 }
 
@@ -187,6 +193,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 		if err != nil {
 			return err
 		}
+
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 	}
 	// Set maxFeePerGas if it is missing.
@@ -292,6 +299,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+
 	msg := &core.Message{
 		From:              addr,
 		To:                args.To,
@@ -304,6 +312,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		AccessList:        accessList,
 		SkipAccountChecks: true,
 	}
+
 	return msg, nil
 }
 
@@ -318,6 +327,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
+
 		data = &types.DynamicFeeTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),

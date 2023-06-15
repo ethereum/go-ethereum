@@ -52,6 +52,7 @@ func (w *watcher) start() {
 	if w.starting || w.running {
 		return
 	}
+
 	w.starting = true
 	go w.loop()
 }
@@ -68,6 +69,7 @@ func (w *watcher) loop() {
 		w.runEnded = true
 		w.ac.mu.Unlock()
 	}()
+
 	logger := log.New("path", w.ac.keydir)
 
 	// Create new watcher.
@@ -76,7 +78,9 @@ func (w *watcher) loop() {
 		log.Error("Failed to start filesystem watcher", "err", err)
 		return
 	}
+
 	defer watcher.Close()
+
 	if err := watcher.Add(w.ac.keydir); err != nil {
 		logger.Warn("Failed to watch keystore folder", "err", err)
 		return
@@ -102,6 +106,7 @@ func (w *watcher) loop() {
 		<-debounce.C
 	}
 	defer debounce.Stop()
+
 	for {
 		select {
 		case <-w.quit:
@@ -113,6 +118,7 @@ func (w *watcher) loop() {
 			// Trigger the scan (with delay), if not already triggered
 			if !rescanTriggered {
 				debounce.Reset(debounceDuration)
+
 				rescanTriggered = true
 			}
 			// The fsnotify library does provide more granular event-info, it
@@ -123,9 +129,11 @@ func (w *watcher) loop() {
 			if !ok {
 				return
 			}
+
 			log.Info("Filsystem watcher error", "err", err)
 		case <-debounce.C:
 			w.ac.scanAccounts()
+
 			rescanTriggered = false
 		}
 	}

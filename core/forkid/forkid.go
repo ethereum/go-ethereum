@@ -144,8 +144,10 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 		forks                     = append(append([]uint64{}, forksByBlock...), forksByTime...)
 		sums                      = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
+
 	hash := crc32.ChecksumIEEE(genesis[:])
 	sums[0] = checksumToBytes(hash)
+
 	for i, fork := range forks {
 		hash = checksumUpdate(hash, fork)
 		sums[i+1] = checksumToBytes(hash)
@@ -210,6 +212,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 					if forks[j] != id.Next {
 						return ErrRemoteStale
 					}
+
 					return nil
 				}
 			}
@@ -224,7 +227,9 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			// No exact, subset or superset match. We are on differing chains, reject.
 			return ErrLocalIncompatibleOrStale
 		}
+
 		log.Error("Impossible fork ID validation", "id", id)
+
 		return nil // Something's very wrong, accept rather than reject
 	}
 }
@@ -233,14 +238,18 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 // one and a fork block number (equivalent to CRC32(original-blob || fork)).
 func checksumUpdate(hash uint32, fork uint64) uint32 {
 	var blob [8]byte
+
 	binary.BigEndian.PutUint64(blob[:], fork)
+
 	return crc32.Update(hash, crc32.IEEETable, blob[:])
 }
 
 // checksumToBytes converts a uint32 checksum into a [4]byte array.
 func checksumToBytes(hash uint32) [4]byte {
 	var blob [4]byte
+
 	binary.BigEndian.PutUint32(blob[:], hash)
+
 	return blob
 }
 
@@ -256,6 +265,7 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 		forksByBlock []uint64
 		forksByTime  []uint64
 	)
+
 	for i := 0; i < kind.NumField(); i++ {
 		// Fetch the next field and skip non-fork rules
 		field := kind.Field(i)

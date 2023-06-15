@@ -67,7 +67,9 @@ func newStateBloomWithSize(size uint64) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	log.Info("Initialized state bloom", "size", common.StorageSize(float64(bloom.M()/8)))
+
 	return &stateBloom{bloom: bloom}, nil
 }
 
@@ -78,6 +80,7 @@ func NewStateBloomFromDisk(filename string) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &stateBloom{bloom: bloom}, nil
 }
 
@@ -94,10 +97,12 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 	if err != nil {
 		return err
 	}
+
 	if err := f.Sync(); err != nil {
 		f.Close()
 		return err
 	}
+
 	f.Close()
 
 	// Move the temporary file into it's final location
@@ -113,10 +118,14 @@ func (bloom *stateBloom) Put(key []byte, value []byte) error {
 		if !isCode {
 			return errors.New("invalid entry")
 		}
+
 		bloom.bloom.Add(stateBloomHasher(codeKey))
+
 		return nil
 	}
+
 	bloom.bloom.Add(stateBloomHasher(key))
+
 	return nil
 }
 

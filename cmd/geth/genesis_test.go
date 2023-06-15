@@ -73,6 +73,7 @@ var customGenesisTests = []struct {
 // work properly.
 func TestCustomGenesis(t *testing.T) {
 	t.Parallel()
+
 	for i, tt := range customGenesisTests {
 		// Create a temporary data directory to use and inspect later
 		datadir := t.TempDir()
@@ -82,6 +83,7 @@ func TestCustomGenesis(t *testing.T) {
 		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
+
 		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block

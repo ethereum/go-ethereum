@@ -88,7 +88,9 @@ func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 	for _, tx := range txs {
 		p.pool[tx.Hash()] = tx
 	}
+
 	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+
 	return make([]error, len(txs))
 }
 
@@ -98,13 +100,16 @@ func (p *testTxPool) Pending(ctx context.Context, enforceTips bool) map[common.A
 	defer p.lock.RUnlock()
 
 	batches := make(map[common.Address]types.Transactions)
+
 	for _, tx := range p.pool {
 		from, _ := types.Sender(types.HomesteadSigner{}, tx)
 		batches[from] = append(batches[from], tx)
 	}
+
 	for _, batch := range batches {
 		sort.Sort(types.TxByNonce(batch))
 	}
+
 	return batches
 }
 
@@ -144,6 +149,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
+
 	txpool := newTestTxPool()
 
 	handler, _ := newHandler(&handlerConfig{

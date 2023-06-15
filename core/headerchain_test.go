@@ -33,6 +33,7 @@ import (
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 	h := hc.CurrentHeader()
+
 	for {
 		canonHash := rawdb.ReadCanonicalHash(hc.chainDb, h.Number.Uint64())
 		if exp := h.Hash(); canonHash != exp {
@@ -43,11 +44,14 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
 			return fmt.Errorf("Canon TD missing at block %d", h.Number)
 		}
+
 		if h.Number.Uint64() == 0 {
 			break
 		}
+
 		h = hc.GetHeader(h.ParentHash, h.Number.Uint64()-1)
 	}
+
 	return nil
 }
 
@@ -62,6 +66,7 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 	if err := verifyUnbrokenCanonchain(hc); err != nil {
 		t.Fatal(err)
 	}
+
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("unexpected error from InsertHeaderChain: %v", err)
 	}
@@ -73,7 +78,9 @@ func TestHeaderInsertion(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
+
 	gspec.Commit(db, trie.NewDatabase(db))
+
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)

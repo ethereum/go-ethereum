@@ -114,6 +114,7 @@ func (n rawFullNode) fstring(ind string) string { panic("this should never end u
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	eb := rlp.NewEncoderBuffer(w)
 	n.encode(eb)
+
 	return eb.Flush()
 }
 
@@ -156,6 +157,7 @@ func (n *cachedNode) rlp() []byte {
 	if node, ok := n.node.(rawNode); ok {
 		return node
 	}
+
 	return nodeToBytes(n.node)
 }
 
@@ -168,6 +170,7 @@ func (n *cachedNode) obj(hash common.Hash) node {
 		// copy and safe to use unsafe decoder.
 		return mustDecodeNodeUnsafe(hash[:], node)
 	}
+
 	return expandNode(hash[:], n.node)
 }
 
@@ -178,6 +181,7 @@ func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
 	for child := range n.children {
 		onChild(child)
 	}
+
 	if _, ok := n.node.(rawNode); !ok {
 		forGatherChildren(n.node, onChild)
 	}
@@ -217,6 +221,7 @@ func simplifyNode(n node) node {
 				node[i] = simplifyNode(node[i])
 			}
 		}
+
 		return node
 
 	case valueNode, hashNode, rawNode:
@@ -253,6 +258,7 @@ func expandNode(hash hashNode, n node) node {
 				node.Children[i] = expandNode(nil, n[i])
 			}
 		}
+
 		return node
 
 	case valueNode, hashNode:
@@ -282,6 +288,7 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 // for nodes loaded from disk.
 func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 	var cleans *fastcache.Cache
+
 	if config != nil && config.Cache > 0 {
 		if config.Journal == "" {
 			cleans = fastcache.New(config.Cache * 1024 * 1024)
@@ -289,10 +296,12 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
 	}
+
 	var preimage *preimageStore
 	if config != nil && config.Preimages {
 		preimage = newPreimageStore(diskdb)
 	}
+
 	db := &Database{
 		diskdb: diskdb,
 		cleans: cleans,
@@ -301,6 +310,7 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 		}},
 		preimages: preimage,
 	}
+
 	return db
 }
 
@@ -312,6 +322,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 	if _, ok := db.dirties[hash]; ok {
 		return
 	}
+
 	memcacheDirtyWriteMeter.Mark(int64(size))
 
 	// Create the cached entry for this node
@@ -325,6 +336,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 			c.parents++
 		}
 	})
+
 	db.dirties[hash] = entry
 
 	// Update the flush-list endpoints
@@ -333,6 +345,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 	} else {
 		db.dirties[db.newest].flushNext, db.newest = hash, hash
 	}
+
 	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
 }
 
@@ -358,8 +371,10 @@ func (db *Database) node(hash common.Hash) node {
 	if dirty != nil {
 		memcacheDirtyHitMeter.Mark(1)
 		memcacheDirtyReadMeter.Mark(int64(dirty.size))
+
 		return dirty.obj(hash)
 	}
+
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
@@ -367,6 +382,7 @@ func (db *Database) node(hash common.Hash) node {
 	if err != nil || enc == nil {
 		return nil
 	}
+
 	if db.cleans != nil {
 		db.cleans.Set(hash[:], enc)
 		memcacheCleanMissMeter.Mark(1)
@@ -389,6 +405,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
+
 			return enc, nil
 		}
 	}
@@ -400,8 +417,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	if dirty != nil {
 		memcacheDirtyHitMeter.Mark(1)
 		memcacheDirtyReadMeter.Mark(int64(dirty.size))
+
 		return dirty.rlp(), nil
 	}
+
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
@@ -412,8 +431,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
+
 		return enc, nil
 	}
+
 	return nil, errors.New("not found")
 }
 
@@ -425,11 +446,13 @@ func (db *Database) Nodes() []common.Hash {
 	defer db.lock.RUnlock()
 
 	var hashes = make([]common.Hash, 0, len(db.dirties))
+
 	for hash := range db.dirties {
 		if hash != (common.Hash{}) { // Special case for "root" references/nodes
 			hashes = append(hashes, hash)
 		}
 	}
+
 	return hashes
 }
 
@@ -458,7 +481,9 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	} else if _, ok = db.dirties[parent].children[child]; ok && parent != (common.Hash{}) {
 		return
 	}
+
 	node.parents++
+
 	db.dirties[parent].children[child]++
 	if db.dirties[parent].children[child] == 1 {
 		db.childrenSize += common.HashLength + 2 // uint16 counter
@@ -472,6 +497,7 @@ func (db *Database) Dereference(root common.Hash) {
 		log.Error("Attempted to dereference the trie cache meta root")
 		return
 	}
+
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -499,6 +525,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		node.children[child]--
 		if node.children[child] == 0 {
 			delete(node.children, child)
+
 			db.childrenSize -= (common.HashLength + 2) // uint16 counter
 		}
 	}
@@ -515,6 +542,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		// no problem in itself, but don't make maxint parents out of it.
 		node.parents--
 	}
+
 	if node.parents == 0 {
 		// Remove the node from the flush-list
 		switch child {
@@ -533,6 +561,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.dereference(hash, child)
 		})
 		delete(db.dirties, child)
+
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
 			db.childrenSize -= cachedNodeChildrenSize
@@ -579,6 +608,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 				log.Error("Failed to write flush list to disk", "err", err)
 				return err
 			}
+
 			batch.Reset()
 		}
 		// Iterate to the next flush item, or abort if the size cap was achieved. Size
@@ -588,6 +618,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		if node.children != nil {
 			size -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 		}
+
 		oldest = node.flushNext
 	}
 	// Flush out any remainder data from the last batch
@@ -609,9 +640,11 @@ func (db *Database) Cap(limit common.StorageSize) error {
 			db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 		}
 	}
+
 	if db.oldest != (common.Hash{}) {
 		db.dirties[db.oldest].flushPrev = common.Hash{}
 	}
+
 	db.flushnodes += uint64(nodes - len(db.dirties))
 	db.flushsize += storage - db.dirtiesSize
 	db.flushtime += time.Since(start)
@@ -662,9 +695,11 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	// Uncache any leftovers in the last batch
 	db.lock.Lock()
 	defer db.lock.Unlock()
+
 	if err := batch.Replay(uncacher); err != nil {
 		return err
 	}
+
 	batch.Reset()
 
 	// Reset the storage counters and bumped metrics
@@ -676,6 +711,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	if !report {
 		logger = log.Debug
 	}
+
 	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
@@ -693,29 +729,36 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	if !ok {
 		return nil
 	}
+
 	var err error
+
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
 			err = db.commit(child, batch, uncacher)
 		}
 	})
+
 	if err != nil {
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
 	rawdb.WriteLegacyTrieNode(batch, hash, node.rlp())
+
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
+
 		db.lock.Lock()
 		err := batch.Replay(uncacher)
 		batch.Reset()
 		db.lock.Unlock()
+
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -752,6 +795,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	}
 	// Remove the node from the dirty cache
 	delete(c.db.dirties, hash)
+
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
 		c.db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
@@ -761,6 +805,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 		c.db.cleans.Set(hash[:], rlp)
 		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
 	}
+
 	return nil
 }
 
@@ -782,21 +827,26 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	// Note, the storage tries must be flushed before the account trie to
 	// retain the invariant that children go into the dirty cache first.
 	var order []common.Hash
+
 	for owner := range nodes.sets {
 		if owner == (common.Hash{}) {
 			continue
 		}
+
 		order = append(order, owner)
 	}
+
 	if _, ok := nodes.sets[common.Hash{}]; ok {
 		order = append(order, common.Hash{})
 	}
+
 	for _, owner := range order {
 		subset := nodes.sets[owner]
 		subset.forEachWithOrder(func(path string, n *memoryNode) {
 			if n.isDeleted() {
 				return // ignore deletion
 			}
+
 			db.insert(n.hash, int(n.size), n.node)
 		})
 	}
@@ -808,11 +858,13 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err
 			}
+
 			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.parent)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -826,11 +878,14 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
 	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
+
 	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
+
 	var preimageSize common.StorageSize
 	if db.preimages != nil {
 		preimageSize = db.preimages.size()
 	}
+
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, preimageSize
 }
 
@@ -868,15 +923,19 @@ func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
 		return nil
 	}
+
 	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
 
 	start := time.Now()
+
 	err := db.cleans.SaveToFileConcurrent(dir, threads)
 	if err != nil {
 		log.Error("Failed to persist clean trie cache", "error", err)
 		return err
 	}
+
 	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }
 
@@ -912,6 +971,7 @@ func (db *Database) CommitPreimages() error {
 	if db.preimages == nil {
 		return nil
 	}
+
 	return db.preimages.commit(true)
 }
 

@@ -26,6 +26,7 @@ func TestPathExpansion(t *testing.T) {
 	t.Parallel()
 
 	user, _ := user.Current()
+
 	var tests map[string]string
 
 	if runtime.GOOS == "windows" {
@@ -53,6 +54,7 @@ func TestPathExpansion(t *testing.T) {
 	}
 
 	t.Setenv(`DDDXXX`, `/tmp`)
+
 	for test, expected := range tests {
 		got := expandPath(test)
 		if got != expected {

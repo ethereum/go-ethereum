@@ -33,6 +33,7 @@ type MockSpannerMockRecorder struct {
 func NewMockSpanner(ctrl *gomock.Controller) *MockSpanner {
 	mock := &MockSpanner{ctrl: ctrl}
 	mock.recorder = &MockSpannerMockRecorder{mock}
+
 	return mock
 }
 
@@ -46,6 +47,7 @@ func (m *MockSpanner) CommitSpan(arg0 context.Context, arg1 span.HeimdallSpan, a
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CommitSpan", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
+
 	return ret0
 }
 
@@ -61,6 +63,7 @@ func (m *MockSpanner) GetCurrentSpan(arg0 context.Context, arg1 common.Hash) (*s
 	ret := m.ctrl.Call(m, "GetCurrentSpan", arg0, arg1)
 	ret0, _ := ret[0].(*span.Span)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -76,6 +79,7 @@ func (m *MockSpanner) GetCurrentValidatorsByBlockNrOrHash(arg0 context.Context, 
 	ret := m.ctrl.Call(m, "GetCurrentValidatorsByBlockNrOrHash", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*valset.Validator)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -91,6 +95,7 @@ func (m *MockSpanner) GetCurrentValidatorsByHash(arg0 context.Context, arg1 comm
 	ret := m.ctrl.Call(m, "GetCurrentValidatorsByHash", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*valset.Validator)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 

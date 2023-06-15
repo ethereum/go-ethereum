@@ -51,10 +51,12 @@ func newCloudflareClient(ctx *cli.Context) *cloudflareClient {
 	if token == "" {
 		exit(fmt.Errorf("need cloudflare API token to proceed"))
 	}
+
 	api, err := cloudflare.NewWithAPIToken(token)
 	if err != nil {
 		exit(fmt.Errorf("can't create Cloudflare client: %v", err))
 	}
+
 	return &cloudflareClient{
 		API:    api,
 		zoneID: ctx.String(cloudflareZoneIDFlag.Name),
@@ -66,7 +68,9 @@ func (c *cloudflareClient) deploy(name string, t *dnsdisc.Tree) error {
 	if err := c.checkZone(name); err != nil {
 		return err
 	}
+
 	records := t.ToTXT(name)
+
 	return c.uploadRecords(name, records)
 }
 
@@ -74,31 +78,39 @@ func (c *cloudflareClient) deploy(name string, t *dnsdisc.Tree) error {
 func (c *cloudflareClient) checkZone(name string) error {
 	if c.zoneID == "" {
 		log.Info(fmt.Sprintf("Finding CloudFlare zone ID for %s", name))
+
 		id, err := c.ZoneIDByName(name)
 		if err != nil {
 			return err
 		}
+
 		c.zoneID = id
 	}
+
 	log.Info(fmt.Sprintf("Checking Permissions on zone %s", c.zoneID))
+
 	zone, err := c.ZoneDetails(context.Background(), c.zoneID)
 	if err != nil {
 		return err
 	}
+
 	if !strings.HasSuffix(name, "."+zone.Name) {
 		return fmt.Errorf("CloudFlare zone name %q does not match name %q to be deployed", zone.Name, name)
 	}
+
 	needPerms := map[string]bool{"#zone:edit": false, "#zone:read": false}
 	for _, perm := range zone.Permissions {
 		if _, ok := needPerms[perm]; ok {
 			needPerms[perm] = true
 		}
 	}
+
 	for _, ok := range needPerms {
 		if !ok {
 			return fmt.Errorf("wrong permissions on zone %s: %v", c.zoneID, needPerms)
 		}
 	}
+
 	return nil
 }
 
@@ -111,18 +123,23 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	for name, r := range records {
 		lrecords[strings.ToLower(name)] = r
 	}
+
 	records = lrecords
 
 	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s", name))
+
 	entries, err := c.DNSRecords(context.Background(), c.zoneID, cloudflare.DNSRecord{Type: "TXT"})
 	if err != nil {
 		return err
 	}
+
 	existing := make(map[string]cloudflare.DNSRecord)
+
 	for _, entry := range entries {
 		if !strings.HasSuffix(entry.Name, name) {
 			continue
 		}
+
 		existing[strings.ToLower(entry.Name)] = entry
 	}
 
@@ -132,28 +149,35 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	created := 0
 	updated := 0
 	skipped := 0
+
 	for path, val := range records {
 		old, exists := existing[path]
 		if !exists {
 			// Entry is unknown, push a new one to Cloudflare.
 			log.Debug(fmt.Sprintf("Creating %s = %q", path, val))
+
 			created++
+
 			ttl := rootTTL
 			if path != name {
 				ttl = treeNodeTTLCloudflare // Max TTL permitted by Cloudflare
 			}
+
 			record := cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl}
 			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, record)
 		} else if old.Content != val {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
+
 			updated++
 			old.Content = val
 			err = c.UpdateDNSRecord(context.Background(), c.zoneID, old.ID, old)
 		} else {
 			skipped++
+
 			log.Debug(fmt.Sprintf("Skipping %s = %q", path, val))
 		}
+
 		if err != nil {
 			return fmt.Errorf("failed to publish %s: %v", path, err)
 		}
@@ -164,18 +188,22 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	deleted := 0
 
 	log.Info("Deleting stale DNS entries")
+
 	for path, entry := range existing {
 		if _, ok := records[path]; ok {
 			continue
 		}
 		// Stale entry, nuke it.
 		log.Debug(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
+
 		deleted++
+
 		if err := c.DeleteDNSRecord(context.Background(), c.zoneID, entry.ID); err != nil {
 			return fmt.Errorf("failed to delete %s: %v", path, err)
 		}
 	}
 
 	log.Info("Deleted stale DNS entries", "count", deleted)
+
 	return nil
 }

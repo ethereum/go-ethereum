@@ -82,6 +82,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	if err != nil {
 		return nil, err
 	}
+
 	hc := &HeaderChain{
 		config:        config,
 		chainDb:       chainDb,
@@ -93,17 +94,22 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		engine:        engine,
 	}
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
+
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
+
 	hc.currentHeader.Store(hc.genesisHeader)
+
 	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
 	}
+
 	hc.currentHeaderHash = hc.CurrentHeader().Hash()
 	headHeaderGauge.Update(hc.CurrentHeader().Number.Int64())
+
 	return hc, nil
 }
 
@@ -113,10 +119,12 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		return &cached
 	}
+
 	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
 	if number != nil {
 		hc.numberCache.Add(hash, *number)
 	}
+
 	return number
 }
 
@@ -145,6 +153,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 		last  = headers[len(headers)-1]
 		batch = hc.chainDb.NewBatch()
 	)
+
 	if first.ParentHash != hc.currentHeaderHash {
 		// Delete any canonical number assignments above the new head
 		for i := last.Number.Uint64() + 1; ; i++ {
@@ -152,6 +161,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			if hash == (common.Hash{}) {
 				break
 			}
+
 			rawdb.DeleteCanonicalHash(batch, i)
 		}
 		// Overwrite any stale canonical number assignments, going
@@ -162,13 +172,17 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 			headNumber = header.Number.Uint64()
 			headHash   = header.Hash()
 		)
+
 		for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
 			rawdb.WriteCanonicalHash(batch, headHash, headNumber)
+
 			if headNumber == 0 {
 				break // It shouldn't be reached
 			}
+
 			headHash, headNumber = header.ParentHash, header.Number.Uint64()-1
 			header = hc.GetHeader(headHash, headNumber)
+
 			if header == nil {
 				return fmt.Errorf("missing parent %d %x", headNumber, headHash)
 			}
@@ -194,6 +208,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 	hc.currentHeaderHash = last.Hash()
 	hc.currentHeader.Store(types.CopyHeader(last))
 	headHeaderGauge.Update(last.Number.Int64())
+
 	return nil
 }
 
@@ -205,16 +220,19 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	if len(headers) == 0 {
 		return 0, nil
 	}
+
 	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
+
 	var (
 		newTD       = new(big.Int).Set(ptd) // Total difficulty of inserted chain
 		inserted    []rawdb.NumberHash      // Ephemeral lookup of number/hash for the chain
 		parentKnown = true                  // Set to true to force hc.HasHeader check the first iteration
 		batch       = hc.chainDb.NewBatch()
 	)
+
 	for i, header := range headers {
 		var hash common.Hash
 		// The headers have already been validated at this point, so we already
@@ -225,6 +243,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 		} else {
 			hash = header.Hash()
 		}
+
 		number := header.Number.Uint64()
 		newTD.Add(newTD, header.Difficulty)
 
@@ -237,10 +256,12 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
 			rawdb.WriteHeader(batch, header)
+
 			inserted = append(inserted, rawdb.NumberHash{Number: number, Hash: hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
 		}
+
 		parentKnown = alreadyKnown
 	}
 	// Skip the slow disk write of all headers if interrupted.
@@ -252,6 +273,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write headers", "error", err)
 	}
+
 	return len(inserted), nil
 }
 
@@ -267,6 +289,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 	if err != nil {
 		return nil, err
 	}
+
 	var (
 		lastHeader = headers[len(headers)-1]
 		lastHash   = headers[len(headers)-1].Hash()
@@ -285,6 +308,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		if inserted != 0 {
 			result.status = SideStatTy
 		}
+
 		return result, nil
 	}
 
@@ -295,6 +319,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 		if inserted != 0 {
 			result.status = SideStatTy
 		}
+
 		return result, nil
 	}
 
@@ -307,7 +332,9 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 	if err := hc.Reorg(headers); err != nil {
 		return nil, err
 	}
+
 	result.status = CanonStatTy
+
 	return result, nil
 }
 
@@ -343,6 +370,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 			if index >= len(seals) {
 				index = len(seals) - 1
 			}
+
 			seals[index] = true
 		}
 		// Last should always be verified to avoid junk.
@@ -382,6 +410,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time,
 	if hc.procInterrupt() {
 		return 0, errors.New("aborted")
 	}
+
 	res, err := hc.writeHeadersAndSetHead(chain, forker)
 	if err != nil {
 		return 0, err
@@ -397,11 +426,13 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time,
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
 	}
+
 	if res.ignored > 0 {
 		context = append(context, []interface{}{"ignored", res.ignored}...)
 	}
 
 	log.Debug("Imported new block headers", context...)
+
 	return res.status, err
 }
 
@@ -414,33 +445,42 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	if ancestor > number {
 		return common.Hash{}, 0
 	}
+
 	if ancestor == 1 {
 		// in this case it is cheaper to just read the header
 		if header := hc.GetHeader(hash, number); header != nil {
 			return header.ParentHash, number - 1
 		}
+
 		return common.Hash{}, 0
 	}
+
 	for ancestor != 0 {
 		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
 			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
+
 			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
 				number -= ancestor
 				return ancestorHash, number
 			}
 		}
+
 		if *maxNonCanonical == 0 {
 			return common.Hash{}, 0
 		}
+
 		*maxNonCanonical--
 		ancestor--
+
 		header := hc.GetHeader(hash, number)
 		if header == nil {
 			return common.Hash{}, 0
 		}
+
 		hash = header.ParentHash
 		number--
 	}
+
 	return hash, number
 }
 
@@ -451,12 +491,14 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	if cached, ok := hc.tdCache.Get(hash); ok {
 		return cached
 	}
+
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
 		return nil
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
+
 	return td
 }
 
@@ -467,12 +509,14 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header
 	}
+
 	header := rawdb.ReadHeader(hc.chainDb, hash, number)
 	if header == nil {
 		return nil
 	}
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
+
 	return header
 }
 
@@ -483,6 +527,7 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	if number == nil {
 		return nil
 	}
+
 	return hc.GetHeader(hash, *number)
 }
 
@@ -493,6 +538,7 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
+
 	return rawdb.HasHeader(hc.chainDb, hash, number)
 }
 
@@ -503,6 +549,7 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	if hash == (common.Hash{}) {
 		return nil
 	}
+
 	return hc.GetHeader(hash, number)
 }
 
@@ -521,12 +568,14 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 			return nil
 		}
 	}
+
 	var headers []rlp.RawValue
 	// If we have some of the headers in cache already, use that before going to db.
 	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
+
 	for count > 0 {
 		header, ok := hc.headerCache.Get(hash)
 		if !ok {
@@ -543,6 +592,7 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	if count > 0 {
 		headers = append(headers, rawdb.ReadHeaderRange(hc.chainDb, number, count)...)
 	}
+
 	return headers
 }
 
@@ -604,6 +654,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		// startup, so failing hard there is ok.
 		log.Crit("Rejecting genesis rewind via timestamp", "target", headTime, "genesis", hc.genesisHeader.Time)
 	}
+
 	var (
 		parentHash common.Hash
 		batch      = hc.chainDb.NewBatch()
@@ -626,6 +677,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		if parent == nil {
 			parent = hc.genesisHeader
 		}
+
 		parentHash = parent.Hash()
 
 		// Notably, since geth has the possibility for setting the head to a low
@@ -645,22 +697,28 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		}
 		// Update head header then.
 		rawdb.WriteHeadHeaderHash(markerBatch, parentHash)
+
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)
 		}
+
 		hc.currentHeader.Store(parent)
 		hc.currentHeaderHash = parentHash
+
 		headHeaderGauge.Update(parent.Number.Int64())
 
 		// If this is the first iteration, wipe any leftover data upwards too so
 		// we don't end up with dangling daps in the database
 		var nums []uint64
+
 		if origin {
 			for n := num + 1; len(rawdb.ReadAllHashes(hc.chainDb, n)) > 0; n++ {
 				nums = append([]uint64{n}, nums...) // suboptimal, but we don't really expect this path
 			}
+
 			origin = false
 		}
+
 		nums = append(nums, num)
 
 		// Remove the related data from the database on all sidechains
@@ -671,13 +729,16 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 				// No hashes in the database whatsoever, probably frozen already
 				hashes = append(hashes, hdr.Hash())
 			}
+
 			for _, hash := range hashes {
 				if delFn != nil {
 					delFn(batch, hash, num)
 				}
+
 				rawdb.DeleteHeader(batch, hash, num)
 				rawdb.DeleteTd(batch, hash, num)
 			}
+
 			rawdb.DeleteCanonicalHash(batch, num)
 		}
 	}

@@ -49,8 +49,10 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = !l.b.Next()
+
 		return l
 	}
+
 	l := &binaryIterator{
 		a:               dl.AccountIterator(common.Hash{}),
 		b:               parent.initBinaryAccountIterator(),
@@ -58,6 +60,7 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 	}
 	l.aDone = !l.a.Next()
 	l.bDone = !l.b.Next()
+
 	return l
 }
 
@@ -77,6 +80,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 			}
 			l.aDone = !l.a.Next()
 			l.bDone = true
+
 			return l
 		}
 		// The parent is disk layer, don't need to take care "destructed"
@@ -89,6 +93,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = !l.b.Next()
+
 		return l
 	}
 	// If the storage in this layer is already destructed, discard all
@@ -101,8 +106,10 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = true
+
 		return l
 	}
+
 	l := &binaryIterator{
 		a:       a,
 		b:       parent.initBinaryStorageIterator(account),
@@ -110,6 +117,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	}
 	l.aDone = !l.a.Next()
 	l.bDone = !l.b.Next()
+
 	return l
 }
 
@@ -126,23 +134,29 @@ first:
 		it.bDone = !it.b.Next()
 		return true
 	}
+
 	if it.bDone {
 		it.k = it.a.Hash()
 		it.aDone = !it.a.Next()
+
 		return true
 	}
+
 	nextA, nextB := it.a.Hash(), it.b.Hash()
 	if diff := bytes.Compare(nextA[:], nextB[:]); diff < 0 {
 		it.aDone = !it.a.Next()
 		it.k = nextA
+
 		return true
 	} else if diff == 0 {
 		// Now we need to advance one of them
 		it.aDone = !it.a.Next()
 		goto first
 	}
+
 	it.bDone = !it.b.Next()
 	it.k = nextB
+
 	return true
 }
 
@@ -172,6 +186,7 @@ func (it *binaryIterator) Account() []byte {
 		it.fail = err
 		return nil
 	}
+
 	return blob
 }
 
@@ -184,11 +199,13 @@ func (it *binaryIterator) Slot() []byte {
 	if it.accountIterator {
 		return nil
 	}
+
 	blob, err := it.a.(*diffStorageIterator).layer.Storage(it.account, it.k)
 	if err != nil {
 		it.fail = err
 		return nil
 	}
+
 	return blob
 }
 

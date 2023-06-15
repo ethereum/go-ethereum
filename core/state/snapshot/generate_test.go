@@ -130,11 +130,13 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 			if err != nil {
 				return common.Hash{}, err
 			}
+
 			return hash, nil
 		}, newGenerateStats(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if snapRoot != trieRoot {
 		t.Fatalf("snaproot: %#x != trieroot #%x", snapRoot, trieRoot)
 	}
@@ -155,6 +157,7 @@ func newHelper() *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(diskdb)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(common.Hash{}), triedb)
+
 	return &testHelper{
 		diskdb:  diskdb,
 		triedb:  triedb,
@@ -188,6 +191,7 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
 	id := trie.StorageTrieID(stateRoot, owner, common.Hash{})
+
 	stTrie, _ := trie.NewStateTrie(id, t.triedb)
 	for i, k := range keys {
 		stTrie.MustUpdate([]byte(k), []byte(vals[i]))
@@ -202,6 +206,7 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 	if nodes != nil {
 		_ = t.nodes.Merge(nodes)
 	}
+
 	return root.Bytes()
 }
 
@@ -210,6 +215,7 @@ func (t *testHelper) Commit() common.Hash {
 	if nodes != nil {
 		_ = t.nodes.Merge(nodes)
 	}
+
 	_ = t.triedb.Update(t.nodes)
 	_ = t.triedb.Commit(root, false)
 
@@ -219,6 +225,7 @@ func (t *testHelper) Commit() common.Hash {
 func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 	root := t.Commit()
 	snap := generateSnapshot(t.diskdb, t.triedb, 16, root)
+
 	return root, snap
 }
 
@@ -618,6 +625,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 // But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
 func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	accountCheckRange = 3
+
 	if false {
 		enableLogging()
 	}
@@ -657,6 +665,7 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	accountCheckRange = 3
+
 	if false {
 		enableLogging()
 	}
@@ -742,8 +751,11 @@ func TestGenerateWithIncompleteStorage(t *testing.T) {
 		accKey := fmt.Sprintf("acc-%d", i)
 		stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte(accKey)), stKeys, stVals, true)
 		helper.addAccount(accKey, &Account{Balance: big.NewInt(int64(i)), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
+
 		var moddedKeys []string
+
 		var moddedVals []string
+
 		for ii := 0; ii < 8; ii++ {
 			if ii != i {
 				moddedKeys = append(moddedKeys, stKeys[ii])

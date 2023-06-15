@@ -34,6 +34,7 @@ func TestBuildPayload(t *testing.T) {
 		db        = rawdb.NewMemoryDatabase()
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
+
 	w, b, _ := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0, false, 0, 0)
 	defer w.close()
 
@@ -44,24 +45,30 @@ func TestBuildPayload(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
+
 	payload, err := w.buildPayload(args)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
+
 	verify := func(outer *engine.ExecutionPayloadEnvelope, txs int) {
 		payload := outer.ExecutionPayload
 		if payload.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
 		}
+
 		if payload.Random != (common.Hash{}) {
 			t.Fatal("Unexpect random value")
 		}
+
 		if payload.Timestamp != timestamp {
 			t.Fatal("Unexpect timestamp")
 		}
+
 		if payload.FeeRecipient != recipient {
 			t.Fatal("Unexpect fee recipient")
 		}
+
 		if len(payload.Transactions) != txs {
 			t.Fatal("Unexpect transaction set")
 		}
@@ -76,6 +83,7 @@ func TestBuildPayload(t *testing.T) {
 	// result should be unchanged
 	dataOne := payload.Resolve()
 	dataTwo := payload.Resolve()
+
 	if !reflect.DeepEqual(dataOne, dataTwo) {
 		t.Fatal("Unexpected payload data")
 	}
@@ -83,6 +91,7 @@ func TestBuildPayload(t *testing.T) {
 
 func TestPayloadId(t *testing.T) {
 	ids := make(map[string]int)
+
 	for i, tt := range []*BuildPayloadArgs{
 		&BuildPayloadArgs{
 			Parent:       common.Hash{1},
@@ -153,6 +162,7 @@ func TestPayloadId(t *testing.T) {
 		if prev, exists := ids[id]; exists {
 			t.Errorf("ID collision, case %d and case %d: id %v", prev, i, id)
 		}
+
 		ids[id] = i
 	}
 }

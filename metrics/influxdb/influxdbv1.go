@@ -135,10 +135,12 @@ func (r *reporter) send() error {
 
 	r.reg.Each(func(name string, i interface{}) {
 		now := time.Now()
+
 		measurement, fields := readMeter(r.namespace, name, i)
 		if fields == nil {
 			return
 		}
+
 		if p, err := client.NewPoint(measurement, r.tags, fields, now); err == nil {
 			bps.AddPoint(p)
 		}

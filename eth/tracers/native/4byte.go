@@ -70,6 +70,7 @@ func (t *fourByteTracer) isPrecompiled(addr common.Address) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -97,6 +98,7 @@ func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to comm
 	if t.interrupt.Load() {
 		return
 	}
+
 	if len(input) < 4 {
 		return
 	}
@@ -109,6 +111,7 @@ func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to comm
 	if t.isPrecompiled(to) {
 		return
 	}
+
 	t.store(input[0:4], len(input)-4)
 }
 
@@ -119,6 +122,7 @@ func (t *fourByteTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return res, t.reason
 }
 

@@ -47,20 +47,25 @@ func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Add
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
 	var filters [][][]byte
+
 	if len(addresses) > 0 {
 		filter := make([][]byte, len(addresses))
 		for i, address := range addresses {
 			filter[i] = address.Bytes()
 		}
+
 		filters = append(filters, filter)
 	}
+
 	for _, topicList := range topics {
 		filter := make([][]byte, len(topicList))
 		for i, topic := range topicList {
 			filter[i] = topic.Bytes()
 		}
+
 		filters = append(filters, filter)
 	}
+
 	size, _ := sys.backend.BloomStatus()
 
 	// Create a generic filter and convert it into a range filter
@@ -79,6 +84,7 @@ func (sys *FilterSystem) NewBlockFilter(block common.Hash, addresses []common.Ad
 	// Create a generic filter and convert it into a block filter
 	filter := newFilter(sys, addresses, topics)
 	filter.block = &block
+
 	return filter
 }
 
@@ -101,9 +107,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
+
 		return f.blockLogs(ctx, header)
 	}
 	// Short-cut if all we care about is pending logs
@@ -111,6 +119,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if f.end != rpc.PendingBlockNumber.Int64() {
 			return nil, errors.New("invalid block range")
 		}
+
 		return f.pendingLogs()
 	}
 	// Figure out the limits of the filter range
@@ -118,13 +127,16 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if header == nil {
 		return nil, nil
 	}
+
 	var (
 		err     error
 		head    = header.Number.Int64()
 		pending = f.end == rpc.PendingBlockNumber.Int64()
 	)
+
 	resolveSpecial := func(number int64) (int64, error) {
 		var hdr *types.Header
+
 		switch number {
 		case rpc.LatestBlockNumber.Int64():
 			return head, nil
@@ -145,11 +157,13 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		default:
 			return number, nil
 		}
+
 		return hdr.Number.Int64(), nil
 	}
 	if f.begin, err = resolveSpecial(f.begin); err != nil {
 		return nil, err
 	}
+
 	if f.end, err = resolveSpecial(f.end); err != nil {
 		return nil, err
 	}
@@ -159,25 +173,31 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		end            = uint64(f.end)
 		size, sections = f.sys.backend.BloomStatus()
 	)
+
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
 			logs, err = f.indexedLogs(ctx, end)
 		} else {
 			logs, err = f.indexedLogs(ctx, indexed-1)
 		}
+
 		if err != nil {
 			return logs, err
 		}
 	}
+
 	rest, err := f.unindexedLogs(ctx, end)
 	logs = append(logs, rest...)
+
 	if pending {
 		pendingLogs, err := f.pendingLogs()
 		if err != nil {
 			return nil, err
 		}
+
 		logs = append(logs, pendingLogs...)
 	}
+
 	return logs, err
 }
 
@@ -207,8 +227,10 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 				if err == nil {
 					f.begin = int64(end) + 1
 				}
+
 				return logs, err
 			}
+
 			f.begin = int64(number) + 1
 
 			// Retrieve the suggested block and pull any truly matching logs
@@ -216,10 +238,12 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			if header == nil || err != nil {
 				return logs, err
 			}
+
 			found, err := f.checkMatches(ctx, header)
 			if err != nil {
 				return logs, err
 			}
+
 			logs = append(logs, found...)
 
 		case <-ctx.Done():
@@ -237,16 +261,20 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 		if f.begin%10 == 0 && ctx.Err() != nil {
 			return logs, ctx.Err()
 		}
+
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
 			return logs, err
 		}
+
 		found, err := f.blockLogs(ctx, header)
 		if err != nil {
 			return logs, err
 		}
+
 		logs = append(logs, found...)
 	}
+
 	return logs, nil
 }
 
@@ -255,6 +283,7 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.
 	if bloomFilter(header.Bloom, f.addresses, f.topics) {
 		return f.checkMatches(ctx, header)
 	}
+
 	return nil, nil
 }
 
@@ -271,6 +300,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
+
 	logs := filterLogs(cached.logs, nil, nil, f.addresses, f.topics)
 	if len(logs) == 0 {
 		return nil, nil
@@ -284,12 +314,14 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
+
 	for i, log := range logs {
 		// Copy log not to modify cache elements
 		logcopy := *log
 		logcopy.TxHash = body.Transactions[logcopy.TxIndex].Hash()
 		logs[i] = &logcopy
 	}
+
 	return logs, nil
 }
 
@@ -301,8 +333,10 @@ func (f *Filter) pendingLogs() ([]*types.Log, error) {
 		for _, r := range receipts {
 			unfiltered = append(unfiltered, r.Logs...)
 		}
+
 		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics), nil
 	}
+
 	return nil, nil
 }
 
@@ -349,18 +383,21 @@ Logs:
 		}
 		ret = append(ret, log)
 	}
+
 	return ret
 }
 
 func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
 	if len(addresses) > 0 {
 		var included bool
+
 		for _, addr := range addresses {
 			if types.BloomLookup(bloom, addr) {
 				included = true
 				break
 			}
 		}
+
 		if !included {
 			return false
 		}
@@ -368,15 +405,18 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 
 	for _, sub := range topics {
 		included := len(sub) == 0 // empty rule set == wildcard
+
 		for _, topic := range sub {
 			if types.BloomLookup(bloom, topic) {
 				included = true
 				break
 			}
 		}
+
 		if !included {
 			return false
 		}
 	}
+
 	return true
 }

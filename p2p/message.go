@@ -56,6 +56,7 @@ func (msg Msg) Decode(val interface{}) error {
 	if err := s.Decode(val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
 	}
+
 	return nil
 }
 
@@ -101,6 +102,7 @@ func Send(w MsgWriter, msgcode uint64, data interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	return w.WriteMsg(Msg{Code: msgcode, Size: uint32(size), Payload: r})
 }
 
@@ -133,6 +135,7 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 			r.eof <- struct{}{}
 			r.eof = nil
 		}
+
 		return 0, io.EOF
 	}
 
@@ -140,12 +143,15 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 	if int(r.count) < len(buf) {
 		max = int(r.count)
 	}
+
 	n, err := r.wrapped.Read(buf[:max])
 	r.count -= uint32(n)
+
 	if (err != nil || r.count == 0) && r.eof != nil {
 		r.eof <- struct{}{} // tell Peer that msg has been consumed
 		r.eof = nil
 	}
+
 	return n, err
 }
 
@@ -160,6 +166,7 @@ func MsgPipe() (*MsgPipeRW, *MsgPipeRW) {
 		rw1     = &MsgPipeRW{c1, c2, closing, closed}
 		rw2     = &MsgPipeRW{c2, c1, closing, closed}
 	)
+
 	return rw1, rw2
 }
 
@@ -190,10 +197,12 @@ func (p *MsgPipeRW) WriteMsg(msg Msg) error {
 				case <-p.closing:
 				}
 			}
+
 			return nil
 		case <-p.closing:
 		}
 	}
+
 	return ErrPipeClosed
 }
 
@@ -206,6 +215,7 @@ func (p *MsgPipeRW) ReadMsg() (Msg, error) {
 		case <-p.closing:
 		}
 	}
+
 	return Msg{}, ErrPipeClosed
 }
 
@@ -218,7 +228,9 @@ func (p *MsgPipeRW) Close() error {
 		atomic.StoreInt32(p.closed, 1) // avoid overflow
 		return nil
 	}
+
 	close(p.closing)
+
 	return nil
 }
 
@@ -230,16 +242,20 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	if msg.Code != code {
 		return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, code)
 	}
+
 	if content == nil {
 		return msg.Discard()
 	}
+
 	contentEnc, err := rlp.EncodeToBytes(content)
 	if err != nil {
 		panic("content encode error: " + err.Error())
 	}
+
 	if int(msg.Size) != len(contentEnc) {
 		return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
 	}
@@ -248,9 +264,11 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	if !bytes.Equal(actualContent, contentEnc) {
 		return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
 	}
+
 	return nil
 }
 
@@ -286,6 +304,7 @@ func (ev *msgEventer) ReadMsg() (Msg, error) {
 	if err != nil {
 		return msg, err
 	}
+
 	ev.feed.Send(&PeerEvent{
 		Type:          PeerEventTypeMsgRecv,
 		Peer:          ev.peerID,
@@ -295,6 +314,7 @@ func (ev *msgEventer) ReadMsg() (Msg, error) {
 		LocalAddress:  ev.localAddress,
 		RemoteAddress: ev.remoteAddress,
 	})
+
 	return msg, nil
 }
 
@@ -305,6 +325,7 @@ func (ev *msgEventer) WriteMsg(msg Msg) error {
 	if err != nil {
 		return err
 	}
+
 	ev.feed.Send(&PeerEvent{
 		Type:          PeerEventTypeMsgSend,
 		Peer:          ev.peerID,
@@ -314,6 +335,7 @@ func (ev *msgEventer) WriteMsg(msg Msg) error {
 		LocalAddress:  ev.localAddress,
 		RemoteAddress: ev.remoteAddress,
 	})
+
 	return nil
 }
 
@@ -323,5 +345,6 @@ func (ev *msgEventer) Close() error {
 	if v, ok := ev.MsgReadWriter.(io.Closer); ok {
 		return v.Close()
 	}
+
 	return nil
 }

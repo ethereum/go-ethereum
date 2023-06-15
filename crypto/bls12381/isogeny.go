@@ -26,6 +26,7 @@ func isogenyMapG1(x, y *fe) {
 	xDen.set(params[1][degree])
 	yNum.set(params[2][degree])
 	yDen.set(params[3][degree])
+
 	for i := degree - 1; i >= 0; i-- {
 		mul(xNum, xNum, x)
 		mul(xDen, xDen, x)
@@ -57,6 +58,7 @@ func isogenyMapG2(e *fp2, x, y *fe2) {
 	xDen := new(fe2).set(params[1][degree])
 	yNum := new(fe2).set(params[2][degree])
 	yDen := new(fe2).set(params[3][degree])
+
 	for i := degree - 1; i >= 0; i-- {
 		e.mul(xNum, xNum, x)
 		e.mul(xDen, xDen, x)

@@ -81,10 +81,12 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 		if item == nil {
 			return nil // no more items
 		}
+
 		if item.id == id {
 			return item.payload.Resolve()
 		}
 	}
+
 	return nil
 }
 
@@ -149,9 +151,11 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 		if item == nil {
 			return nil // no more items
 		}
+
 		if item.hash == hash {
 			return item.header
 		}
 	}
+
 	return nil
 }

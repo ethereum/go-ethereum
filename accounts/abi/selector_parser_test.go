@@ -26,6 +26,7 @@ import (
 func TestParseSelector(t *testing.T) {
 	mkType := func(types ...interface{}) []ArgumentMarshaling {
 		var result []ArgumentMarshaling
+
 		for i, typeOrComponents := range types {
 			name := fmt.Sprintf("name%d", i)
 			if typeName, ok := typeOrComponents.(string); ok {
@@ -38,8 +39,10 @@ func TestParseSelector(t *testing.T) {
 				log.Fatalf("unexpected type %T", typeOrComponents)
 			}
 		}
+
 		return result
 	}
+
 	tests := []struct {
 		input string
 		name  string
@@ -65,6 +68,7 @@ func TestParseSelector(t *testing.T) {
 		if err != nil {
 			t.Errorf("test %d: failed to parse selector '%v': %v", i, tt.input, err)
 		}
+
 		if selector.Name != tt.name {
 			t.Errorf("test %d: unexpected function name: '%s' != '%s'", i, selector.Name, tt.name)
 		}
@@ -72,6 +76,7 @@ func TestParseSelector(t *testing.T) {
 		if selector.Type != "function" {
 			t.Errorf("test %d: unexpected type: '%s' != '%s'", i, selector.Type, "function")
 		}
+
 		if !reflect.DeepEqual(selector.Inputs, tt.args) {
 			t.Errorf("test %d: unexpected args: '%v' != '%v'", i, selector.Inputs, tt.args)
 		}

@@ -25,9 +25,11 @@ func TestURLParsing(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+
 	if url.Scheme != "https" {
 		t.Errorf("expected: %v, got: %v", "https", url.Scheme)
 	}
+
 	if url.Path != "ethereum.org" {
 		t.Errorf("expected: %v, got: %v", "ethereum.org", url.Path)
 	}
@@ -53,10 +55,12 @@ func TestURLString(t *testing.T) {
 
 func TestURLMarshalJSON(t *testing.T) {
 	url := URL{Scheme: "https", Path: "ethereum.org"}
+
 	json, err := url.MarshalJSON()
 	if err != nil {
 		t.Errorf("unexpcted error: %v", err)
 	}
+
 	if string(json) != "\"https://ethereum.org\"" {
 		t.Errorf("expected: %v, got: %v", "\"https://ethereum.org\"", string(json))
 	}
@@ -64,13 +68,16 @@ func TestURLMarshalJSON(t *testing.T) {
 
 func TestURLUnmarshalJSON(t *testing.T) {
 	url := &URL{}
+
 	err := url.UnmarshalJSON([]byte("\"https://ethereum.org\""))
 	if err != nil {
 		t.Errorf("unexpcted error: %v", err)
 	}
+
 	if url.Scheme != "https" {
 		t.Errorf("expected: %v, got: %v", "https", url.Scheme)
 	}
+
 	if url.Path != "ethereum.org" {
 		t.Errorf("expected: %v, got: %v", "https", url.Path)
 	}

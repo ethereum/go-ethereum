@@ -84,6 +84,7 @@ func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb et
 		closeCh:    make(chan struct{}),
 		synced:     synced,
 	}
+
 	return handler
 }
 
@@ -104,7 +105,9 @@ func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	peer := newClientPeer(int(version), h.server.config.NetworkId, p, newMeteredMsgWriter(rw, int(version)))
 	defer peer.close()
 	h.wg.Add(1)
+
 	defer h.wg.Done()
+
 	return h.handle(peer)
 }
 
@@ -119,6 +122,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		td     = h.blockchain.GetTd(hash, number)
 		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), number, head.Time)
 	)
+
 	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
@@ -128,8 +132,10 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		if err := h.server.serverset.register(p); err != nil {
 			return err
 		}
+
 		_, err := p.rw.ReadMsg()
 		h.server.serverset.unregister(p)
+
 		return err
 	}
 	// Setup flow control mechanism for the peer
@@ -147,11 +153,14 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	if err := h.server.peers.register(p); err != nil {
 		return err
 	}
+
 	if p.balance = h.server.clientPool.Register(p); p.balance == nil {
 		h.server.peers.unregister(p.ID())
 		p.Log().Debug("Client pool already closed")
+
 		return p2p.DiscRequested
 	}
+
 	p.connectedAt = mclock.Now()
 
 	var wg sync.WaitGroup // Wait group used to track all in-flight task routines.
@@ -175,6 +184,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 			return err
 		default:
 		}
+
 		if err := h.handleMsg(p, &wg); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			return err
@@ -196,12 +206,15 @@ func (h *serverHandler) beforeHandle(p *clientPeer, reqID, responseCount uint64,
 		p.fcClient.OneTimeCost(inSizeCost)
 		return nil, 0
 	}
+
 	maxCost := p.fcCosts.getMaxCost(msg.Code, reqCnt)
+
 	accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost)
 	if !accepted {
 		p.freeze()
 		p.Log().Error("Request came too early", "remaining", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
 		p.fcClient.OneTimeCost(inSizeCost)
+
 		return nil, 0
 	}
 	// Create a multi-stage task, estimate the time it takes for the task to
@@ -211,12 +224,15 @@ func (h *serverHandler) beforeHandle(p *clientPeer, reqID, responseCount uint64,
 		factor = 1
 		p.Log().Error("Invalid global cost factor", "factor", factor)
 	}
+
 	maxTime := uint64(float64(maxCost) / factor)
+
 	task := h.server.servingQueue.newTask(p, maxTime, priority)
 	if !task.start() {
 		p.fcClient.RequestProcessed(reqID, responseCount, maxCost, inSizeCost)
 		return nil, 0
 	}
+
 	return task, maxCost
 }
 
@@ -226,6 +242,7 @@ func (h *serverHandler) afterHandle(p *clientPeer, reqID, responseCount uint64, 
 	if reply != nil {
 		task.done()
 	}
+
 	p.responseLock.Lock()
 	defer p.responseLock.Unlock()
 
@@ -233,6 +250,7 @@ func (h *serverHandler) afterHandle(p *clientPeer, reqID, responseCount uint64, 
 	if p.isFrozen() {
 		realCost := h.server.costTracker.realCost(task.servingTime, msg.Size, 0)
 		p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+
 		return
 	}
 	// Positive correction buffer value with real cost.
@@ -240,6 +258,7 @@ func (h *serverHandler) afterHandle(p *clientPeer, reqID, responseCount uint64, 
 	if reply != nil {
 		replySize = reply.size()
 	}
+
 	var realCost uint64
 	if h.server.costTracker.testing {
 		realCost = maxCost // Assign a fake cost for testing purpose
@@ -249,7 +268,9 @@ func (h *serverHandler) afterHandle(p *clientPeer, reqID, responseCount uint64, 
 			realCost = maxCost
 		}
 	}
+
 	bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+
 	if reply != nil {
 		// Feed cost tracker request serving statistic.
 		h.server.costTracker.updateStats(msg.Code, reqCnt, task.servingTime, realCost)
@@ -274,6 +295,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	if err != nil {
 		return err
 	}
+
 	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	// Discard large message which exceeds the limitation.
@@ -289,8 +311,10 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	if !ok {
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		clientErrorMeter.Mark(1)
+
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
+
 	p.Log().Trace("Received " + req.Name)
 
 	// Decode the p2p message, resolve the concrete handler for it.
@@ -299,10 +323,12 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		clientErrorMeter.Mark(1)
 		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
+
 	if metrics.EnabledExpensive {
 		req.InPacketsMeter.Mark(1)
 		req.InTrafficMeter.Mark(int64(msg.Size))
 	}
+
 	p.responseCount++
 	responseCount := p.responseCount
 
@@ -312,7 +338,9 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	if task == nil {
 		return nil
 	}
+
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 
@@ -324,6 +352,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 			if reply != nil {
 				size = reply.size()
 			}
+
 			req.OutPacketsMeter.Mark(1)
 			req.OutTrafficMeter.Mark(int64(size))
 			req.ServingTimeMeter.Update(time.Duration(task.servingTime))
@@ -335,6 +364,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		clientErrorMeter.Mark(1)
 		return errTooManyInvalidRequest
 	}
+
 	return nil
 }
 
@@ -369,10 +399,12 @@ func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccou
 	if err != nil {
 		return types.StateAccount{}, err
 	}
+
 	var acc types.StateAccount
 	if err = rlp.DecodeBytes(blob, &acc); err != nil {
 		return types.StateAccount{}, err
 	}
+
 	return acc, nil
 }
 
@@ -382,6 +414,7 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 		root   common.Hash
 		prefix string
 	)
+
 	switch typ {
 	case htCanonical:
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
@@ -390,11 +423,13 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
 		root, prefix = light.GetBloomTrieRoot(h.chainDb, index, sectionHead), string(rawdb.BloomTrieTablePrefix)
 	}
+
 	if root == (common.Hash{}) {
 		return nil
 	}
 
 	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
+
 	return trie
 }
 
@@ -406,6 +441,7 @@ func (h *serverHandler) broadcastLoop() {
 	defer h.wg.Done()
 
 	headCh := make(chan core.ChainHeadEvent, 10)
+
 	headSub := h.blockchain.SubscribeChainHeadEvent(headCh)
 	defer headSub.Unsubscribe()
 
@@ -413,22 +449,27 @@ func (h *serverHandler) broadcastLoop() {
 		lastHead = h.blockchain.CurrentHeader()
 		lastTd   = common.Big0
 	)
+
 	for {
 		select {
 		case ev := <-headCh:
 			header := ev.Block.Header()
 			hash, number := header.Hash(), header.Number.Uint64()
+
 			td := h.blockchain.GetTd(hash, number)
 			if td == nil || td.Cmp(lastTd) <= 0 {
 				continue
 			}
+
 			var reorg uint64
+
 			if lastHead != nil {
 				// If a setHead has been performed, the common ancestor can be nil.
 				if ancestor := rawdb.FindCommonAncestor(h.chainDb, header, lastHead); ancestor != nil {
 					reorg = lastHead.Number.Uint64() - ancestor.Number.Uint64()
 				}
 			}
+
 			lastHead, lastTd = header, td
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 			h.server.peers.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})

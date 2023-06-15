@@ -73,6 +73,7 @@ func WithHeader(key, value string) ClientOption {
 func WithHeaders(headers http.Header) ClientOption {
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.initHeaders()
+
 		for k, vs := range headers {
 			cfg.httpHeaders[k] = vs
 		}

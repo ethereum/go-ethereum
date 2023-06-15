@@ -113,32 +113,40 @@ func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base
 
 func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
 	var parent *types.Block
+
 	cur := b.chain.CurrentBlock()
 	if cur.Number.Uint64() == 0 {
 		parent = b.chain.Genesis()
 	} else {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 	}
+
 	var err error
+
 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.DB, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
+
 		_, err = rand.Read(addr)
 		if err != nil {
 			return
 		}
+
 		gen.SetCoinbase(common.BytesToAddress(addr))
 	})
+
 	return blocks[0], err
 }
 
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
+
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
 	if creation {
 		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
 		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(TestBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
 	}
+
 	return tx
 }
 
@@ -364,6 +372,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		time.Sleep(100 * time.Millisecond)
 	}
 	w.start() // Start mining!
+
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
@@ -391,11 +400,13 @@ func TestStreamUncleBlock(t *testing.T) {
 			if taskIndex == 2 {
 				have := task.block.Header().UncleHash
 				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
+
 				if have != want {
 					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
 				}
 			}
 			taskCh <- struct{}{}
+
 			taskIndex += 1
 		}
 	}
@@ -450,11 +461,13 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 				if len(task.receipts) != receiptLen {
 					t.Errorf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 				}
+
 				if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
 					t.Errorf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
 				}
 			}
 			taskCh <- struct{}{}
+
 			taskIndex += 1
 		}
 	}
@@ -508,17 +521,20 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	var (
 		progress = make(chan struct{}, 10)
 		result   = make([]float64, 0, 10)
 		index    = 0
 		start    atomic.Bool
 	)
+
 	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
 		// Short circuit if interval checking hasn't started.
 		if !start.Load() {
 			return
 		}
+
 		var wantMinInterval, wantRecommitInterval time.Duration
 
 		switch index {
@@ -541,9 +557,11 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		if minInterval != wantMinInterval {
 			t.Errorf("resubmit min interval mismatch: have %v, want %v ", minInterval, wantMinInterval)
 		}
+
 		if recommitInterval != wantRecommitInterval {
 			t.Errorf("resubmit interval mismatch: have %v, want %v", recommitInterval, wantRecommitInterval)
 		}
+
 		result = append(result, float64(recommitInterval.Nanoseconds()))
 		index += 1
 		progress <- struct{}{}
@@ -619,14 +637,17 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			// is even smaller than parent block's. It's OK.
 			t.Logf("Invalid timestamp, want %d, get %d", timestamp, block.Time())
 		}
+
 		if len(block.Uncles()) != 0 {
 			t.Error("Unexpected uncle block")
 		}
+
 		_, isClique := engine.(*clique.Clique)
 		if !isClique {
 			if len(block.Extra()) != 2 {
 				t.Error("Unexpected extra field")
 			}
+
 			if block.Coinbase() != coinbase {
 				t.Errorf("Unexpected coinbase got %x want %x", block.Coinbase(), coinbase)
 			}
@@ -635,18 +656,22 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 				t.Error("Unexpected coinbase")
 			}
 		}
+
 		if !isClique {
 			if block.MixDigest() != random {
 				t.Error("Unexpected mix digest")
 			}
 		}
+
 		if block.Nonce() != 0 {
 			t.Error("Unexpected block nonce")
 		}
+
 		if block.NumberU64() != number {
 			t.Errorf("Mismatched block number, want %d got %d", number, block.NumberU64())
 		}
 	}
+
 	var cases = []struct {
 		parent       common.Hash
 		coinbase     common.Address
@@ -702,12 +727,14 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
+
 			assertBlock(block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
 
 	// This API should work even when the automatic sealing is enabled
 	w.start()
+
 	for _, c := range cases {
 		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, nil, false)
 		if c.expectErr {
@@ -718,6 +745,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
+
 			assertBlock(block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
@@ -1053,6 +1081,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 				if len(deps[0]) != 0 {
 					b.Fatalf("wrong dependency")
 				}
+
 				for i := 1; i < block.Transactions().Len(); i++ {
 					if deps[i][0] != uint64(i-1) || len(deps[i]) != 1 {
 						b.Fatalf("wrong dependency")

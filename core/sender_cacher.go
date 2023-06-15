@@ -54,6 +54,7 @@ func newTxSenderCacher(threads int) *txSenderCacher {
 	for i := 0; i < threads; i++ {
 		go cacher.cache()
 	}
+
 	return cacher
 }
 
@@ -80,6 +81,7 @@ func (cacher *txSenderCacher) Recover(signer types.Signer, txs []*types.Transact
 	if len(txs) < tasks*4 {
 		tasks = (len(txs) + 3) / 4
 	}
+
 	for i := 0; i < tasks; i++ {
 		cacher.tasks <- &txSenderCacherRequest{
 			signer: signer,
@@ -97,6 +99,7 @@ func (cacher *txSenderCacher) RecoverFromBlocks(signer types.Signer, blocks []*t
 	for _, block := range blocks {
 		count += len(block.Transactions())
 	}
+
 	txs := make([]*types.Transaction, 0, count)
 	for _, block := range blocks {
 		txs = append(txs, block.Transactions()...)

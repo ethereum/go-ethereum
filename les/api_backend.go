@@ -68,9 +68,11 @@ func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.PendingBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
+
 	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
+
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(number))
 }
 
@@ -78,19 +80,24 @@ func (b *LesApiBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.HeaderByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err := b.HeaderByHash(ctx, hash)
 		if err != nil {
 			return nil, err
 		}
+
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
+
 		return header, nil
 	}
+
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -103,6 +110,7 @@ func (b *LesApiBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if header == nil || err != nil {
 		return nil, err
 	}
+
 	return b.BlockByHash(ctx, header.Hash())
 }
 
@@ -114,19 +122,24 @@ func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err := b.BlockByHash(ctx, hash)
 		if err != nil {
 			return nil, err
 		}
+
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(block.NumberU64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
+
 		return block, nil
 	}
+
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -143,9 +156,11 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
+
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }
 
@@ -153,16 +168,20 @@ func (b *LesApiBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
+
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
+
 		return light.NewState(ctx, header, b.eth.odr), header, nil
 	}
+
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
@@ -170,6 +189,7 @@ func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (type
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
 	}
+
 	return nil, nil
 }
 
@@ -181,6 +201,7 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)
 	}
+
 	return nil
 }
 
@@ -188,8 +209,10 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg *core.Message, state *st
 	if vmConfig == nil {
 		vmConfig = new(vm.Config)
 	}
+
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+
 	return vm.NewEVM(context, txContext, state, b.eth.chainConfig, *vmConfig), state.Error, nil
 }
 
@@ -312,7 +335,9 @@ func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0
 	}
+
 	sections, _, _ := b.eth.bloomIndexer.Sections()
+
 	return params.BloomBitsBlocksClient, sections
 }
 

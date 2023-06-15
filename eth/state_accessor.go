@@ -116,13 +116,16 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			if err := ctx.Err(); err != nil {
 				return nil, nil, err
 			}
+
 			if current.NumberU64() == 0 {
 				return nil, nil, errors.New("genesis state is missing")
 			}
+
 			parent := eth.blockchain.GetBlock(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
 				return nil, nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
 			}
+
 			current = parent
 
 			statedb, err = state.New(current.Root(), database, nil)
@@ -130,6 +133,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 				break
 			}
 		}
+
 		if err != nil {
 			switch err.(type) {
 			case *trie.MissingNodeError:
@@ -146,6 +150,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		logged time.Time
 		parent common.Hash
 	)
+
 	for current.NumberU64() < origin {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
@@ -173,6 +178,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
+
 		statedb, err = state.New(root, database, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
@@ -180,11 +186,14 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		// Hold the state reference and also drop the parent state
 		// to prevent accumulating too many nodes in memory.
 		database.TrieDB().Reference(root, common.Hash{})
+
 		if parent != (common.Hash{}) {
 			database.TrieDB().Dereference(parent)
 		}
+
 		parent = root
 	}
+
 	if report {
 		nodes, imgs := database.TrieDB().Size()
 		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
@@ -210,6 +219,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
@@ -219,6 +229,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
+
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {
 			return msg, context, statedb, release, nil

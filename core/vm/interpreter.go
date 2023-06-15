@@ -338,9 +338,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
+
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
@@ -356,6 +358,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 		if err != nil {
 			break
 		}
+
 		pc++
 	}
 
@@ -416,6 +419,7 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 	defer func() {
 		returnStack(stack)
 	}()
+
 	contract.Input = input
 
 	if debug {
@@ -479,9 +483,11 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
+
 		if !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
 		}
+
 		if operation.dynamicGas != nil {
 			// All ops with a dynamic memory usage also has a dynamic gas cost.
 			var memorySize uint64
@@ -505,6 +511,7 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
+
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
@@ -514,11 +521,13 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 
 				logged = true
 			}
+
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
 		} else if debug {
 			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+
 			logged = true
 		}
 		// execute the operation
@@ -526,6 +535,7 @@ func (in *EVMInterpreter) RunWithDelay(contract *Contract, input []byte, readOnl
 		if err != nil {
 			break
 		}
+
 		pc++
 	}
 

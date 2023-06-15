@@ -123,6 +123,7 @@ type (
 // DecodeMessage decodes the message body of a packet.
 func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 	var dec Packet
+
 	switch ptype {
 	case PingMsg:
 		dec = new(Ping)
@@ -139,12 +140,15 @@ func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 	default:
 		return nil, fmt.Errorf("unknown packet type %d", ptype)
 	}
+
 	if err := rlp.DecodeBytes(body, dec); err != nil {
 		return nil, err
 	}
+
 	if dec.RequestID() != nil && len(dec.RequestID()) > 8 {
 		return nil, ErrInvalidReqID
 	}
+
 	return dec, nil
 }
 

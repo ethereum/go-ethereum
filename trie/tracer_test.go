@@ -385,6 +385,7 @@ func diffTries(trieA, trieB *Trie) (map[string][]byte, map[string][]byte, map[st
 			}
 
 			both[path] = blobA
+
 			continue
 		}
 

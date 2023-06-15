@@ -47,11 +47,14 @@ func TestBuildSchema(t *testing.T) {
 	// Copy config
 	conf := node.DefaultConfig
 	conf.DataDir = ddir
+
 	stack, err := node.New(&conf)
 	defer stack.Close()
+
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
+
 	defer stack.Close()
 	// Make sure the schema can be parsed and matched up to the object model.
 	if _, err := newHandler(stack, nil, nil, []string{}, []string{}); err != nil {
@@ -160,12 +163,15 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
+
 		if have := string(bodyBytes); have != tt.want {
 			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
 		}
+
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
@@ -203,6 +209,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	signer := types.LatestSigner(genesis.Config)
 	newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
 		gen.SetCoinbase(common.Address{1})
+
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    uint64(0),
 			To:       &dad,
@@ -248,12 +255,15 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
+
 		if have := string(bodyBytes); have != tt.want {
 			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
 		}
+
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
@@ -264,10 +274,13 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	stack := createNode(t)
 	defer stack.Close()
+
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
+
 	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
+
 	resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", body)
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
@@ -414,6 +427,7 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 		TrieTimeout:             60 * time.Minute,
 		SnapshotCache:           5,
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
@@ -421,12 +435,14 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
 		ethash.NewFaker(), ethBackend.ChainDb(), genBlocks, genfunc)
+
 	_, err = ethBackend.BlockChain().InsertChain(chain)
 	if err != nil {
 		t.Fatalf("could not create import blocks: %v", err)
 	}
 	// Set up handler
 	filterSystem := filters.NewFilterSystem(ethBackend.APIBackend, filters.Config{})
+
 	handler, err := newHandler(stack, ethBackend.APIBackend, filterSystem, []string{}, []string{})
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)

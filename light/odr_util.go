@@ -54,6 +54,7 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	if number >= chts*odr.IndexerConfig().ChtSize {
 		return nil, errNoTrustedCht
 	}
+
 	r := &ChtRequest{
 		ChtRoot:  GetChtRoot(db, chts-1, chtHead),
 		ChtNum:   chts - 1,
@@ -63,6 +64,7 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
+
 	return r.Header, nil
 }
 
@@ -72,6 +74,7 @@ func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (commo
 	if hash != (common.Hash{}) {
 		return hash, nil
 	}
+
 	header, err := GetHeaderByNumber(ctx, odr, number)
 	if err != nil {
 		return common.Hash{}, err
@@ -86,10 +89,12 @@ func GetTd(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64)
 	if td != nil {
 		return td, nil
 	}
+
 	header, err := GetHeaderByNumber(ctx, odr, number)
 	if err != nil {
 		return nil, err
 	}
+
 	if header.Hash() != hash {
 		return nil, errNonCanonicalHash
 	}
@@ -107,13 +112,16 @@ func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number ui
 	if err != nil {
 		return nil, errNoHeader
 	}
+
 	if header.Hash() != hash {
 		return nil, errNonCanonicalHash
 	}
+
 	r := &BlockRequest{Hash: hash, Number: number, Header: header}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
+
 	return r.Rlp, nil
 }
 
@@ -124,10 +132,12 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 	if err != nil {
 		return nil, err
 	}
+
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
 		return nil, err
 	}
+
 	return body, nil
 }
 
@@ -139,6 +149,7 @@ func GetBlock(ctx context.Context, odr OdrBackend, hash common.Hash, number uint
 	if err != nil {
 		return nil, errNoHeader
 	}
+
 	body, err := GetBody(ctx, odr, hash, number)
 	if err != nil {
 		return nil, err
@@ -157,13 +168,16 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		if err != nil {
 			return nil, errNoHeader
 		}
+
 		if header.Hash() != hash {
 			return nil, errNonCanonicalHash
 		}
+
 		r := &ReceiptsRequest{Hash: hash, Number: number, Header: header}
 		if err := odr.Retrieve(ctx, r); err != nil {
 			return nil, err
 		}
+
 		receipts = r.Receipts
 	}
 	// If the receipts are incomplete, fill the derived fields
@@ -172,14 +186,17 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		if err != nil {
 			return nil, err
 		}
+
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.BaseFee(), block.Transactions()); err != nil {
 			return nil, err
 		}
+
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)
 	}
+
 	return receipts, nil
 }
 
@@ -190,10 +207,12 @@ func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number 
 	if err != nil {
 		return nil, err
 	}
+
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
 	}
+
 	return logs, nil
 }
 
@@ -204,11 +223,13 @@ func GetUntrustedBlockLogs(ctx context.Context, odr OdrBackend, header *types.He
 	// Retrieve the potentially incomplete receipts from disk or network
 	hash, number := header.Hash(), header.Number.Uint64()
 	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number)
+
 	if receipts == nil {
 		r := &ReceiptsRequest{Hash: hash, Number: number, Header: header, Untrusted: true}
 		if err := odr.Retrieve(ctx, r); err != nil {
 			return nil, err
 		}
+
 		receipts = r.Receipts
 		// Untrusted receipts won't be stored in the database. Therefore
 		// derived fields computation is unnecessary.
@@ -218,6 +239,7 @@ func GetUntrustedBlockLogs(ctx context.Context, odr OdrBackend, header *types.He
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
 	}
+
 	return logs, nil
 }
 
@@ -230,6 +252,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 		db          = odr.Database()
 		result      = make([][]byte, len(sections))
 	)
+
 	blooms, _, sectionHead := odr.BloomTrieIndexer().Sections()
 	for i, section := range sections {
 		sectionHead := rawdb.ReadCanonicalHash(db, (section+1)*odr.IndexerConfig().BloomSize-1)
@@ -244,6 +267,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 		if section >= blooms {
 			return nil, errNoTrustedBloomTrie
 		}
+
 		reqSections = append(reqSections, section)
 		reqIndex = append(reqIndex, i)
 	}
@@ -262,9 +286,11 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
+
 	for i, idx := range reqIndex {
 		result[idx] = r.BloomBits[i]
 	}
+
 	return result, nil
 }
 
@@ -279,15 +305,18 @@ func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*t
 	if err := odr.RetrieveTxStatus(ctx, r); err != nil || r.Status[0].Status != txpool.TxStatusIncluded {
 		return nil, common.Hash{}, 0, 0, err
 	}
+
 	pos := r.Status[0].Lookup
 	// first ensure that we have the header, otherwise block body retrieval will fail
 	// also verify if this is a canonical block by getting the header by number and checking its hash
 	if header, err := GetHeaderByNumber(ctx, odr, pos.BlockIndex); err != nil || header.Hash() != pos.BlockHash {
 		return nil, common.Hash{}, 0, 0, err
 	}
+
 	body, err := GetBody(ctx, odr, pos.BlockHash, pos.BlockIndex)
 	if err != nil || uint64(len(body.Transactions)) <= pos.Index || body.Transactions[pos.Index].Hash() != txHash {
 		return nil, common.Hash{}, 0, 0, err
 	}
+
 	return body.Transactions[pos.Index], pos.BlockHash, pos.BlockIndex, pos.Index, nil
 }

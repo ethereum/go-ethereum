@@ -41,12 +41,16 @@ func ipcListen(endpoint string) (net.Listener, error) {
 	if err := os.MkdirAll(filepath.Dir(endpoint), 0751); err != nil {
 		return nil, err
 	}
+
 	os.Remove(endpoint)
+
 	l, err := net.Listen("unix", endpoint)
 	if err != nil {
 		return nil, err
 	}
+
 	os.Chmod(endpoint, 0600)
+
 	return l, nil
 }
 

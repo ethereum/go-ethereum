@@ -67,6 +67,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		config.TerminalTotalDifficultyPassed = true
 		engine = beaconConsensus.NewFaker()
 	}
+
 	genesis := &core.Genesis{
 		Config:     &config,
 		Alloc:      core.GenesisAlloc{testAddr: {Balance: testBalance}},
@@ -82,6 +83,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 
 		tx, _ := types.SignTx(types.NewTransaction(testNonce, common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"), big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(&config), testKey)
 		g.AddTx(tx)
+
 		testNonce++
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, n, generate)
@@ -102,15 +104,18 @@ func TestEth2AssembleBlock(t *testing.T) {
 	t.Skip("bor due to burn contract")
 
 	genesis, blocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
 	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
+
 	tx, err := types.SignTx(types.NewTransaction(uint64(10), blocks[9].Coinbase(), big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, testKey)
 	if err != nil {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
+
 	ethservice.TxPool().AddLocal(tx)
 
 	blockParams := engine.PayloadAttributes{
@@ -147,6 +152,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	t.Skip("bor due to burn contract")
 
 	genesis, blocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
 
@@ -167,6 +173,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
@@ -176,6 +183,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
+
 	if resp, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("fork choice updated should not error: %v", err)
 	} else if resp.PayloadStatus.Status != engine.INVALID_TERMINAL_BLOCK.Status {
@@ -245,6 +253,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 	if len(logsCh) != wantNew {
 		t.Fatalf("wrong number of log events: got %d, want %d", len(logsCh), wantNew)
 	}
+
 	if len(rmLogsCh) != wantRemoved {
 		t.Fatalf("wrong number of removed log events: got %d, want %d", len(rmLogsCh), wantRemoved)
 	}
@@ -252,6 +261,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 	for i := 0; i < len(logsCh); i++ {
 		<-logsCh
 	}
+
 	for i := 0; i < len(rmLogsCh); i++ {
 		<-rmLogsCh
 	}
@@ -259,12 +269,15 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 
 func TestInvalidPayloadTimestamp(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
+
 	var (
 		api    = NewConsensusAPI(ethservice)
 		parent = ethservice.BlockChain().CurrentBlock()
 	)
+
 	tests := []struct {
 		time      uint64
 		shouldErr bool
@@ -291,6 +304,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 				SafeBlockHash:      common.Hash{},
 				FinalizedBlockHash: common.Hash{},
 			}
+
 			_, err := api.ForkchoiceUpdatedV1(fcState, &params)
 			if test.shouldErr && err == nil {
 				t.Fatalf("expected error preparing payload with invalid timestamp, err=%v", err)
@@ -305,6 +319,7 @@ func TestEth2NewBlock(t *testing.T) {
 	t.Skip("ETH2 in Bor")
 
 	genesis, preMergeBlocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -318,6 +333,7 @@ func TestEth2NewBlock(t *testing.T) {
 	// The event channels.
 	newLogCh := make(chan []*types.Log, 10)
 	rmLogsCh := make(chan core.RemovedLogsEvent, 10)
+
 	ethservice.BlockChain().SubscribeLogsEvent(newLogCh)
 	ethservice.BlockChain().SubscribeRemovedLogsEvent(rmLogsCh)
 
@@ -338,6 +354,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
+
 		newResp, err := api.NewPayloadV1(*execData)
 
 		switch {
@@ -348,6 +365,7 @@ func TestEth2NewBlock(t *testing.T) {
 		case ethservice.BlockChain().CurrentBlock().Number.Uint64() != block.NumberU64()-1:
 			t.Fatalf("Chain head shouldn't be updated")
 		}
+
 		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
 
 		fcState := engine.ForkchoiceStateV1{
@@ -363,6 +381,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if have, want := ethservice.BlockChain().CurrentBlock().Number.Uint64(), block.NumberU64(); have != want {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
+
 		checkLogEvents(t, newLogCh, rmLogsCh, 1, 0)
 
 		parent = block
@@ -411,6 +430,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != block.NumberU64() {
 			t.Fatalf("Chain head should be updated")
 		}
+
 		parent, head = block, block.NumberU64()
 	}
 }
@@ -476,13 +496,16 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	}
 
 	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
+
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
 	}
+
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
+
 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
@@ -496,8 +519,10 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
+
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()
 		// This EVM code generates a log when the contract is created.
@@ -516,6 +541,7 @@ func TestFullAPI(t *testing.T) {
 
 func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header), withdrawals [][]*types.Withdrawal) []*types.Header {
 	api := NewConsensusAPI(ethservice)
+
 	var blocks []*types.Header
 
 	for i := 0; i < n; i++ {
@@ -555,6 +581,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 		if ethservice.BlockChain().CurrentFinalBlock().Number.Uint64() != payload.Number-1 {
 			t.Fatal("Finalized block should be updated")
 		}
+
 		parent = ethservice.BlockChain().CurrentBlock()
 		blocks = append(blocks, parent)
 	}
@@ -564,6 +591,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 
 func TestExchangeTransitionConfig(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
+
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -574,6 +602,7 @@ func TestExchangeTransitionConfig(t *testing.T) {
 		TerminalBlockHash:       common.Hash{},
 		TerminalBlockNumber:     0,
 	}
+
 	if _, err := api.ExchangeTransitionConfigurationV1(config); err == nil {
 		t.Fatal("expected error on invalid config, invalid ttd")
 	}
@@ -1074,10 +1103,13 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				testErr error
 				errMu   sync.Mutex
 			)
+
 			wg.Add(10)
+
 			for ii := 0; ii < 10; ii++ {
 				go func() {
 					defer wg.Done()
+
 					if newResp, err := api.NewPayloadV1(*execData); err != nil {
 						errMu.Lock()
 						testErr = fmt.Errorf("Failed to insert block: %w", err)
@@ -1090,6 +1122,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				}()
 			}
 			wg.Wait()
+
 			if testErr != nil {
 				t.Fatal(testErr)
 			}
@@ -1116,11 +1149,13 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				testErr error
 				errMu   sync.Mutex
 			)
+
 			wg.Add(10)
 			// Do each FCU 10 times
 			for ii := 0; ii < 10; ii++ {
 				go func() {
 					defer wg.Done()
+
 					if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 						errMu.Lock()
 						testErr = fmt.Errorf("Failed to insert block: %w", err)
@@ -1129,6 +1164,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				}()
 			}
 			wg.Wait()
+
 			if testErr != nil {
 				t.Fatal(testErr)
 			}

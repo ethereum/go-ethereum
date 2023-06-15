@@ -89,12 +89,14 @@ func genkey(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("need key file as argument")
 	}
+
 	file := ctx.Args().Get(0)
 
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		return fmt.Errorf("could not generate key: %v", err)
 	}
+
 	return crypto.SaveECDSA(file, key)
 }
 
@@ -142,6 +144,7 @@ func makeRecord(ctx *cli.Context) (*enode.Node, error) {
 		tcp  = ctx.Int(tcpPortFlag.Name)
 		udp  = ctx.Int(udpPortFlag.Name)
 	)
+
 	key, err := crypto.LoadECDSA(file)
 	if err != nil {
 		return nil, err

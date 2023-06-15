@@ -34,6 +34,7 @@ func (s *Server) ServeListener(l net.Listener) error {
 		} else if err != nil {
 			return err
 		}
+
 		log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
 
 		s.executionPool.Submit(context.Background(), func() error {
@@ -59,6 +60,7 @@ func newClientTransportIPC(endpoint string) reconnectFunc {
 		if err != nil {
 			return nil, err
 		}
+
 		return NewCodec(conn), err
 	}
 }

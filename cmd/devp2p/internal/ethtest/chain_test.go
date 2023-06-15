@@ -129,6 +129,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	genesisFile, err := filepath.Abs("./testdata/genesis.json")
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +197,7 @@ func TestChain_GetHeaders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			assert.Equal(t, headers, tt.expected)
 		})
 	}

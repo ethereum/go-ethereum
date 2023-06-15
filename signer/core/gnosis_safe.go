@@ -56,6 +56,7 @@ func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 	if tx.Data != nil {
 		data = *tx.Data
 	}
+
 	var domainType = []apitypes.Type{{Name: "verifyingContract", Type: "address"}}
 	if tx.ChainId != nil {
 		domainType = append([]apitypes.Type{{Name: "chainId", Type: "uint256"}}, domainType[0])
@@ -95,6 +96,7 @@ func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 			"nonce":          fmt.Sprintf("%d", tx.Nonce.Uint64()),
 		},
 	}
+
 	return gnosisTypedData
 }
 
@@ -113,5 +115,6 @@ func (tx *GnosisSafeTx) ArgsForValidation() *apitypes.SendTxArgs {
 		Input:    nil,
 		ChainID:  (*hexutil.Big)(tx.ChainId),
 	}
+
 	return args
 }

@@ -50,6 +50,7 @@ func TestEthSuite(t *testing.T) {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
+
 			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
 				t.Fatal()
@@ -69,6 +70,7 @@ func TestSnapSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+
 	for _, test := range suite.SnapTests() {
 		t.Run(test.Name, func(t *testing.T) {
 			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
@@ -98,10 +100,12 @@ func runGeth() (*node.Node, error) {
 		stack.Close()
 		return nil, err
 	}
+
 	if err = stack.Start(); err != nil {
 		stack.Close()
 		return nil, err
 	}
+
 	return stack, nil
 }
 
@@ -127,5 +131,6 @@ func setupGeth(stack *node.Node) error {
 	}
 
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
+
 	return err
 }

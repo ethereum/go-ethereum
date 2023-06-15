@@ -62,11 +62,14 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		batch     = diskdb.NewBatch()
 		genMarker = []byte{} // Initialized but empty!
 	)
+
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write initialized state marker", "err", err)
 	}
+
 	base := &diskLayer{
 		diskdb:     diskdb,
 		triedb:     triedb,
@@ -78,6 +81,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	}
 	go base.generate(stats)
 	log.Debug("Start snapshot generation", "root", root)
+
 	return base
 }
 
@@ -95,10 +99,12 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 		entry.Slots = stats.slots
 		entry.Storage = uint64(stats.storage)
 	}
+
 	blob, err := rlp.EncodeToBytes(entry)
 	if err != nil {
 		panic(err) // Cannot happen, here to catch dev errors
 	}
+
 	var logstr string
 	switch {
 	case marker == nil:
@@ -110,6 +116,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
 	}
+
 	log.Debug("Journalled generator progress", "progress", logstr)
 	rawdb.WriteSnapshotGenerator(db, blob)
 }
@@ -137,6 +144,7 @@ func (result *proofResult) last() []byte {
 	if len(result.keys) > 0 {
 		last = result.keys[len(result.keys)-1]
 	}
+
 	return last
 }
 
@@ -149,6 +157,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -170,6 +179,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 		start    = time.Now()
 		min      = append(prefix, origin...)
 	)
+
 	for iter.Next() {
 		// Ensure the iterated item is always equal or larger than the given origin.
 		key := iter.Key()
@@ -189,9 +199,12 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 		// extra element out.
 		if len(keys) == max {
 			iter.Hold()
+
 			diskMore = true
+
 			break
 		}
+
 		keys = append(keys, common.CopyBytes(key[len(prefix):]))
 
 		if valueConvertFn == nil {
@@ -206,6 +219,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 				// Here append the original value to ensure that the number of key and
 				// value are aligned.
 				vals = append(vals, common.CopyBytes(iter.Value()))
+
 				log.Error("Failed to convert account state data", "err", err)
 			} else {
 				vals = append(vals, val)
@@ -218,6 +232,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	} else {
 		snapAccountSnapReadCounter.Inc(time.Since(start).Nanoseconds())
 	}
+
 	defer func(start time.Time) {
 		if kind == "storage" {
 			snapStorageProveCounter.Inc(time.Since(start).Nanoseconds())
@@ -228,11 +243,13 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 
 	// The snap state is exhausted, pass the entire key/val set for verification
 	root := trieId.Root
+
 	if origin == nil && !diskMore {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
 			stackTr.Update(key, vals[i])
 		}
+
 		if gotRoot := stackTr.Hash(); gotRoot != root {
 			return &proofResult{
 				keys:     keys,
@@ -240,6 +257,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 				proofErr: fmt.Errorf("wrong root: have %#x want %#x", gotRoot, root),
 			}, nil
 		}
+
 		return &proofResult{keys: keys, vals: vals}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
@@ -257,8 +275,10 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	if origin == nil {
 		origin = common.Hash{}.Bytes()
 	}
+
 	if err := tr.Prove(origin, 0, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
+
 		return &proofResult{
 			keys:     keys,
 			vals:     vals,
@@ -267,9 +287,11 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 			tr:       tr,
 		}, nil
 	}
+
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
+
 			return &proofResult{
 				keys:     keys,
 				vals:     vals,
@@ -282,6 +304,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	// Verify the snapshot segment with range prover, ensure that all flat states
 	// in this range correspond to merkle trie.
 	cont, err := trie.VerifyRangeProof(root, origin, last, keys, vals, proof)
+
 	return &proofResult{
 			keys:     keys,
 			vals:     vals,
@@ -315,6 +338,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	if err != nil {
 		return false, nil, err
 	}
+
 	last := result.last()
 
 	// Construct contextual logger
@@ -322,6 +346,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}
+
 	logger := log.New(logCtx...)
 
 	// The range prover says the range is correct, skip trie iteration
@@ -338,6 +363,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
+
 	logger.Trace("Detected outdated state range", "last", hexutil.Encode(last), "err", result.proofErr)
 	snapFailedRangeProofMeter.Mark(1)
 
@@ -351,14 +377,17 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		if kind == snapStorage {
 			meter = snapMissallStorageMeter
 		}
+
 		meter.Mark(1)
 	}
 	// We use the snap data to build up a cache which can be used by the
 	// main account trie as a primary lookup when resolving hashes
 	var resolver trie.NodeResolver
+
 	if len(result.keys) > 0 {
 		mdb := rawdb.NewMemoryDatabase()
 		tdb := trie.NewDatabase(mdb)
+
 		snapTrie := trie.NewEmpty(tdb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
@@ -385,6 +414,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 			return false, nil, errMissingTrie
 		}
 	}
+
 	var (
 		trieMore       bool
 		nodeIt         = tr.NodeIterator(origin)
@@ -410,51 +440,66 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 			trieMore = true
 			break
 		}
+
 		count++
 		write := true
 		created++
+
 		for len(kvkeys) > 0 {
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
 				istart := time.Now()
+
 				if err := onState(kvkeys[0], nil, false, true); err != nil {
 					return false, nil, err
 				}
+
 				kvkeys = kvkeys[1:]
 				kvvals = kvvals[1:]
 				deleted++
 				internal += time.Since(istart)
+
 				continue
 			} else if cmp == 0 {
 				// the snapshot key can be overwritten
 				created--
+
 				if write = !bytes.Equal(kvvals[0], iter.Value); write {
 					updated++
 				} else {
 					untouched++
 				}
+
 				kvkeys = kvkeys[1:]
 				kvvals = kvvals[1:]
 			}
+
 			break
 		}
+
 		istart := time.Now()
+
 		if err := onState(iter.Key, iter.Value, write, false); err != nil {
 			return false, nil, err
 		}
+
 		internal += time.Since(istart)
 	}
+
 	if iter.Err != nil {
 		return false, nil, iter.Err
 	}
 	// Delete all stale snapshot states remaining
 	istart := time.Now()
+
 	for _, key := range kvkeys {
 		if err := onState(key, nil, false, true); err != nil {
 			return false, nil, err
 		}
+
 		deleted += 1
 	}
+
 	internal += time.Since(istart)
 
 	// Update metrics for counting trie iteration
@@ -547,6 +592,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		if err := dl.checkAndFlush(ctx, append(account[:], key...)); err != nil {
 			return err
 		}
+
 		return nil
 	}
 	// Loop for re-generating the missing storage slots.
@@ -583,12 +629,14 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		ctx.removeStorageBefore(account)
 
 		start := time.Now()
+
 		if delete {
 			rawdb.DeleteAccountSnapshot(ctx.batch, account)
 			snapWipedAccountMeter.Mark(1)
 			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
 			ctx.removeStorageAt(account)
+
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
@@ -598,12 +646,14 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			Root     common.Hash
 			CodeHash []byte
 		}
+
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(account[:], accMarker) {
 			dataLen := len(val) // Approximate size, saves us a round of RLP-encoding
+
 			if !write {
 				if bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
 					dataLen -= 32
@@ -612,6 +662,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				if acc.Root == types.EmptyRootHash {
 					dataLen -= 32
 				}
+
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
 				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
@@ -645,12 +696,14 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			if accMarker != nil && bytes.Equal(account[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
 			}
+
 			if err := generateStorages(ctx, dl, dl.root, account, acc.Root, storeMarker); err != nil {
 				return err
 			}
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
+
 		return nil
 	}
 	// Always reset the initial account range as 1 whenever recover from the
@@ -661,8 +714,10 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	}
 
 	origin := common.CopyBytes(accMarker)
+
 	for {
 		id := trie.StateTrieID(dl.root)
+
 		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
@@ -676,6 +731,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			ctx.removeStorageLeft()
 			break
 		}
+
 		accountRange = accountCheckRange
 	}
 
@@ -732,6 +788,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 
 		abort = <-dl.genAbort
 		abort <- stats
+
 		return
 	}
 
@@ -759,6 +816,7 @@ func increaseKey(key []byte) []byte {
 			return key
 		}
 	}
+
 	return nil
 }
 

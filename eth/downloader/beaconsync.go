@@ -87,6 +87,7 @@ func (b *beaconBackfiller) resume() {
 		b.lock.Unlock()
 		return
 	}
+
 	b.filling = true
 	b.filled = nil
 	b.started = make(chan struct{})
@@ -132,6 +133,7 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	if !updated || !filling {
 		return
 	}
+
 	log.Error("Downloader sync mode changed mid-run", "old", mode.String(), "new", mode.String())
 	b.suspend()
 	b.resume()
@@ -183,6 +185,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.
 	if err := d.skeleton.Sync(head, final, force); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -203,6 +206,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	default:
 		chainHead = d.lightchain.CurrentHeader()
 	}
+
 	number := chainHead.Number.Uint64()
 
 	// Retrieve the skeleton bounds and ensure they are linked to the local chain
@@ -214,6 +218,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		log.Error("Failed to retrieve beacon bounds", "err", err)
 		return 0, err
 	}
+
 	var linked bool
 	switch d.getMode() {
 	case FullSync:
@@ -223,6 +228,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	default:
 		linked = d.blockchain.HasHeader(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
 	}
+
 	if !linked {
 		// This is a programming error. The chain backfiller was called with a
 		// tail that's not linked to the local chain. Whilst this should never
@@ -242,6 +248,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		log.Warn("Beacon head lower than local chain", "beacon", number, "local", end)
 		end = number
 	}
+
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
@@ -250,6 +257,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		n := h.Number.Uint64()
 
 		var known bool
+
 		switch d.getMode() {
 		case FullSync:
 			known = d.blockchain.HasBlock(h.Hash(), n)
@@ -258,12 +266,15 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		default:
 			known = d.lightchain.HasHeader(h.Hash(), n)
 		}
+
 		if !known {
 			end = check
 			continue
 		}
+
 		start = check
 	}
+
 	return start, nil
 }
 
@@ -291,6 +302,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		localHeaders = d.readHeaderRange(tail, int(count))
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
+
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
 		// sure we're always syncing to all available ones
@@ -340,6 +352,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			headers = make([]*types.Header, 0, maxHeadersProcess)
 			hashes  = make([]common.Hash, 0, maxHeadersProcess)
 		)
+
 		for i := 0; i < maxHeadersProcess && from <= head.Number.Uint64(); i++ {
 			header := d.skeleton.Header(from)
 
@@ -360,6 +373,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			hashes = append(hashes, headers[i].Hash())
 			from++
 		}
+
 		if len(headers) > 0 {
 			log.Trace("Scheduling new beacon headers", "count", len(headers), "from", from-uint64(len(headers)))
 			select {

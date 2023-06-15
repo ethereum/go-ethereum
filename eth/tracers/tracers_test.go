@@ -38,6 +38,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	gas := uint64(1000000) // 1M gas
 	to := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 	signer := types.LatestSignerForChainID(big.NewInt(1337))
+
 	tx, err := types.SignNewTx(key, signer,
 		&types.LegacyTx{
 			Nonce:    1,
@@ -48,6 +49,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	txContext := vm.TxContext{
 		Origin:   from,
 		GasPrice: tx.GasPrice(),
@@ -89,24 +91,30 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableReturnData: false,
 	})
 	evm := vm.NewEVM(blockContext, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
+
 	msg, err := core.TransactionToMessage(tx, signer, nil)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		snap := statedb.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+
 		_, err = st.TransitionDb(context.Background())
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		statedb.RevertToSnapshot(snap)
+
 		if have, want := len(tracer.StructLogs()), 244752; have != want {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}
+
 		tracer.Reset()
 	}
 }

@@ -233,6 +233,7 @@ func main() {
 		if ec, ok := err.(*t8ntool.NumberedError); ok {
 			code = ec.ExitCode()
 		}
+
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(code)
 	}

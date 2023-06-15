@@ -34,6 +34,7 @@ func (api *FilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCriteria) 
 		if crit.FromBlock != nil {
 			begin = crit.FromBlock.Int64()
 		}
+
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
@@ -47,6 +48,7 @@ func (api *FilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCriteria) 
 	if err != nil {
 		return nil, err
 	}
+
 	return returnLogs(logs), err
 }
 

@@ -76,9 +76,11 @@ func TestBytesPadding(t *testing.T) {
 			if err != nil {
 				t.Errorf("test %d: expected no error, got %v", i, err)
 			}
+
 			if len(val) != 32 {
 				t.Errorf("test %d: expected len 32, got %d", i, len(val))
 			}
+
 			if !bytes.Equal(val, test.Output) {
 				t.Errorf("test %d: expected %x, got %x", i, test.Output, val)
 			}
@@ -164,11 +166,14 @@ func TestParseBytes(t *testing.T) {
 			if ok || out != nil {
 				t.Errorf("test %d: expected !ok, got ok = %v with out = %x", i, ok, out)
 			}
+
 			continue
 		}
+
 		if !ok {
 			t.Errorf("test %d: expected ok got !ok", i)
 		}
+
 		if !bytes.Equal(out, tt.exp) {
 			t.Errorf("test %d: expected %x got %x", i, tt.exp, out)
 		}
@@ -191,14 +196,17 @@ func TestParseInteger(t *testing.T) {
 		if tt.exp == nil && res == nil {
 			continue
 		}
+
 		if tt.exp == nil && res != nil {
 			t.Errorf("test %d, got %v, expected nil", i, res)
 			continue
 		}
+
 		if tt.exp != nil && res == nil {
 			t.Errorf("test %d, got '%v', expected %v", i, err, tt.exp)
 			continue
 		}
+
 		if tt.exp.Cmp(res) != 0 {
 			t.Errorf("test %d, got %v expected %v", i, res, tt.exp)
 		}

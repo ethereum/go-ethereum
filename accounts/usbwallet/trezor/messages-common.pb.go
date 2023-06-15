@@ -74,6 +74,7 @@ var Failure_FailureType_value = map[string]int32{
 func (x Failure_FailureType) Enum() *Failure_FailureType {
 	p := new(Failure_FailureType)
 	*p = x
+
 	return p
 }
 
@@ -86,7 +87,9 @@ func (x *Failure_FailureType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = Failure_FailureType(value)
+
 	return nil
 }
 
@@ -155,6 +158,7 @@ var ButtonRequest_ButtonRequestType_value = map[string]int32{
 func (x ButtonRequest_ButtonRequestType) Enum() *ButtonRequest_ButtonRequestType {
 	p := new(ButtonRequest_ButtonRequestType)
 	*p = x
+
 	return p
 }
 
@@ -167,7 +171,9 @@ func (x *ButtonRequest_ButtonRequestType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = ButtonRequest_ButtonRequestType(value)
+
 	return nil
 }
 
@@ -200,6 +206,7 @@ var PinMatrixRequest_PinMatrixRequestType_value = map[string]int32{
 func (x PinMatrixRequest_PinMatrixRequestType) Enum() *PinMatrixRequest_PinMatrixRequestType {
 	p := new(PinMatrixRequest_PinMatrixRequestType)
 	*p = x
+
 	return p
 }
 
@@ -212,7 +219,9 @@ func (x *PinMatrixRequest_PinMatrixRequestType) UnmarshalJSON(data []byte) error
 	if err != nil {
 		return err
 	}
+
 	*x = PinMatrixRequest_PinMatrixRequestType(value)
+
 	return nil
 }
 
@@ -259,6 +268,7 @@ func (m *Success) GetMessage() string {
 	if m != nil && m.Message != nil {
 		return *m.Message
 	}
+
 	return ""
 }
 
@@ -302,6 +312,7 @@ func (m *Failure) GetCode() Failure_FailureType {
 	if m != nil && m.Code != nil {
 		return *m.Code
 	}
+
 	return Failure_Failure_UnexpectedMessage
 }
 
@@ -309,6 +320,7 @@ func (m *Failure) GetMessage() string {
 	if m != nil && m.Message != nil {
 		return *m.Message
 	}
+
 	return ""
 }
 
@@ -353,6 +365,7 @@ func (m *ButtonRequest) GetCode() ButtonRequest_ButtonRequestType {
 	if m != nil && m.Code != nil {
 		return *m.Code
 	}
+
 	return ButtonRequest_ButtonRequest_Other
 }
 
@@ -360,6 +373,7 @@ func (m *ButtonRequest) GetData() string {
 	if m != nil && m.Data != nil {
 		return *m.Data
 	}
+
 	return ""
 }
 
@@ -437,6 +451,7 @@ func (m *PinMatrixRequest) GetType() PinMatrixRequest_PinMatrixRequestType {
 	if m != nil && m.Type != nil {
 		return *m.Type
 	}
+
 	return PinMatrixRequest_PinMatrixRequestType_Current
 }
 
@@ -479,6 +494,7 @@ func (m *PinMatrixAck) GetPin() string {
 	if m != nil && m.Pin != nil {
 		return *m.Pin
 	}
+
 	return ""
 }
 
@@ -522,6 +538,7 @@ func (m *PassphraseRequest) GetOnDevice() bool {
 	if m != nil && m.OnDevice != nil {
 		return *m.OnDevice
 	}
+
 	return false
 }
 
@@ -565,6 +582,7 @@ func (m *PassphraseAck) GetPassphrase() string {
 	if m != nil && m.Passphrase != nil {
 		return *m.Passphrase
 	}
+
 	return ""
 }
 
@@ -572,6 +590,7 @@ func (m *PassphraseAck) GetState() []byte {
 	if m != nil {
 		return m.State
 	}
+
 	return nil
 }
 
@@ -614,6 +633,7 @@ func (m *PassphraseStateRequest) GetState() []byte {
 	if m != nil {
 		return m.State
 	}
+
 	return nil
 }
 
@@ -696,6 +716,7 @@ func (m *HDNodeType) GetDepth() uint32 {
 	if m != nil && m.Depth != nil {
 		return *m.Depth
 	}
+
 	return 0
 }
 
@@ -703,6 +724,7 @@ func (m *HDNodeType) GetFingerprint() uint32 {
 	if m != nil && m.Fingerprint != nil {
 		return *m.Fingerprint
 	}
+
 	return 0
 }
 
@@ -710,6 +732,7 @@ func (m *HDNodeType) GetChildNum() uint32 {
 	if m != nil && m.ChildNum != nil {
 		return *m.ChildNum
 	}
+
 	return 0
 }
 
@@ -717,6 +740,7 @@ func (m *HDNodeType) GetChainCode() []byte {
 	if m != nil {
 		return m.ChainCode
 	}
+
 	return nil
 }
 
@@ -724,6 +748,7 @@ func (m *HDNodeType) GetPrivateKey() []byte {
 	if m != nil {
 		return m.PrivateKey
 	}
+
 	return nil
 }
 
@@ -731,6 +756,7 @@ func (m *HDNodeType) GetPublicKey() []byte {
 	if m != nil {
 		return m.PublicKey
 	}
+
 	return nil
 }
 

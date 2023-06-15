@@ -41,6 +41,7 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 		if offset+size > uint64(len(m.store)) {
 			panic("invalid memory: store empty")
 		}
+
 		copy(m.store[offset:offset+size], value)
 	}
 }

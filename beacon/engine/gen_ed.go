@@ -33,6 +33,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
 		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	}
+
 	var enc ExecutableData
 	enc.ParentHash = e.ParentHash
 	enc.FeeRecipient = e.FeeRecipient
@@ -47,13 +48,16 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.ExtraData = e.ExtraData
 	enc.BaseFeePerGas = (*hexutil.Big)(e.BaseFeePerGas)
 	enc.BlockHash = e.BlockHash
+
 	if e.Transactions != nil {
 		enc.Transactions = make([]hexutil.Bytes, len(e.Transactions))
 		for k, v := range e.Transactions {
 			enc.Transactions[k] = v
 		}
 	}
+
 	enc.Withdrawals = e.Withdrawals
+
 	return json.Marshal(&enc)
 }
 
@@ -76,71 +80,102 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
 		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	}
+
 	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.ParentHash == nil {
 		return errors.New("missing required field 'parentHash' for ExecutableData")
 	}
+
 	e.ParentHash = *dec.ParentHash
+
 	if dec.FeeRecipient == nil {
 		return errors.New("missing required field 'feeRecipient' for ExecutableData")
 	}
+
 	e.FeeRecipient = *dec.FeeRecipient
+
 	if dec.StateRoot == nil {
 		return errors.New("missing required field 'stateRoot' for ExecutableData")
 	}
+
 	e.StateRoot = *dec.StateRoot
+
 	if dec.ReceiptsRoot == nil {
 		return errors.New("missing required field 'receiptsRoot' for ExecutableData")
 	}
+
 	e.ReceiptsRoot = *dec.ReceiptsRoot
+
 	if dec.LogsBloom == nil {
 		return errors.New("missing required field 'logsBloom' for ExecutableData")
 	}
+
 	e.LogsBloom = *dec.LogsBloom
+
 	if dec.Random == nil {
 		return errors.New("missing required field 'prevRandao' for ExecutableData")
 	}
+
 	e.Random = *dec.Random
+
 	if dec.Number == nil {
 		return errors.New("missing required field 'blockNumber' for ExecutableData")
 	}
+
 	e.Number = uint64(*dec.Number)
+
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for ExecutableData")
 	}
+
 	e.GasLimit = uint64(*dec.GasLimit)
+
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for ExecutableData")
 	}
+
 	e.GasUsed = uint64(*dec.GasUsed)
+
 	if dec.Timestamp == nil {
 		return errors.New("missing required field 'timestamp' for ExecutableData")
 	}
+
 	e.Timestamp = uint64(*dec.Timestamp)
+
 	if dec.ExtraData == nil {
 		return errors.New("missing required field 'extraData' for ExecutableData")
 	}
+
 	e.ExtraData = *dec.ExtraData
+
 	if dec.BaseFeePerGas == nil {
 		return errors.New("missing required field 'baseFeePerGas' for ExecutableData")
 	}
+
 	e.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
+
 	if dec.BlockHash == nil {
 		return errors.New("missing required field 'blockHash' for ExecutableData")
 	}
+
 	e.BlockHash = *dec.BlockHash
+
 	if dec.Transactions == nil {
 		return errors.New("missing required field 'transactions' for ExecutableData")
 	}
+
 	e.Transactions = make([][]byte, len(dec.Transactions))
 	for k, v := range dec.Transactions {
 		e.Transactions[k] = v
 	}
+
 	if dec.Withdrawals != nil {
 		e.Withdrawals = dec.Withdrawals
 	}
+
 	return nil
 }

@@ -18,6 +18,7 @@ func GetOrRegisterGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewGaugeFloat64()).(GaugeFloat64)
 }
 
@@ -33,10 +34,13 @@ func NewGaugeFloat64() GaugeFloat64 {
 // NewRegisteredGaugeFloat64 constructs and registers a new StandardGaugeFloat64.
 func NewRegisteredGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	c := NewGaugeFloat64()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -45,16 +49,20 @@ func NewFunctionalGaugeFloat64(f func() float64) GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
 	}
+
 	return &FunctionalGaugeFloat64{value: f}
 }
 
 // NewRegisteredFunctionalGauge constructs and registers a new StandardGauge.
 func NewRegisteredFunctionalGaugeFloat64(name string, r Registry, f func() float64) GaugeFloat64 {
 	c := NewFunctionalGaugeFloat64(f)
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 

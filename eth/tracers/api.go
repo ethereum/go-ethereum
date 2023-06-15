@@ -131,13 +131,16 @@ func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	if err != nil {
 		return nil
 	}
+
 	if header.Hash() == hash {
 		return header
 	}
+
 	header, err = context.api.backend.HeaderByHash(context.ctx, hash)
 	if err != nil {
 		return nil
 	}
+
 	return header
 }
 
@@ -154,9 +157,11 @@ func (api *API) blockByNumber(ctx context.Context, number rpc.BlockNumber) (*typ
 	if err != nil {
 		return nil, err
 	}
+
 	if block == nil {
 		return nil, fmt.Errorf("block #%d not found", number)
 	}
+
 	return block, nil
 }
 
@@ -167,9 +172,11 @@ func (api *API) blockByHash(ctx context.Context, hash common.Hash) (*types.Block
 	if err != nil {
 		return nil, err
 	}
+
 	if block == nil {
 		return nil, fmt.Errorf("block %s not found", hash.Hex())
 	}
+
 	return block, nil
 }
 
@@ -183,9 +190,11 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 	if err != nil {
 		return nil, err
 	}
+
 	if block.Hash() == hash {
 		return block, nil
 	}
+
 	return api.blockByHash(ctx, hash)
 }
 
@@ -276,10 +285,12 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 	if err != nil {
 		return nil, err
 	}
+
 	to, err := api.blockByNumber(ctx, end)
 	if err != nil {
 		return nil, err
 	}
+
 	if from.Number().Cmp(to.Number()) >= 0 {
 		return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", end, start)
 	}
@@ -324,11 +335,14 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	blocks := int(end.NumberU64() - start.NumberU64())
 	threads := runtime.NumCPU()
+
 	if threads > blocks {
 		threads = blocks
 	}
+
 	var (
 		pend    = new(sync.WaitGroup)
 		ctx     = context.Background()
@@ -336,8 +350,10 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		resCh   = make(chan *blockTraceTask, threads)
 		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 	)
+
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
+
 		go func() {
 			defer pend.Done()
 
@@ -377,6 +393,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
+
 						break
 					}
 					// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
@@ -491,6 +508,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				tracker.releaseState(number, release)
 				return
 			}
+
 			traced += uint64(len(txs))
 		}
 	}()
@@ -499,6 +517,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 	retCh := make(chan *blockTraceResult)
 	go func() {
 		defer close(retCh)
+
 		var (
 			next = start.NumberU64() + 1
 			done = make(map[uint64]*blockTraceResult)
@@ -522,7 +541,9 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					// expected behavior to not waste node resources for a non-active user.
 					retCh <- result
 				}
+
 				delete(done, next)
+
 				next++
 			}
 		}
@@ -543,6 +564,7 @@ func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, 
 	if err != nil {
 		return nil, err
 	}
+
 	return api.traceBlock(ctx, block, config)
 }
 
@@ -553,6 +575,7 @@ func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *
 	if err != nil {
 		return nil, err
 	}
+
 	return api.traceBlock(ctx, block, config)
 }
 
@@ -563,6 +586,7 @@ func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *Trac
 	if err := rlp.Decode(bytes.NewReader(blob), block); err != nil {
 		return nil, fmt.Errorf("could not decode block: %v", err)
 	}
+
 	return api.traceBlock(ctx, block, config)
 }
 
@@ -573,6 +597,7 @@ func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *Tra
 	if err != nil {
 		return nil, fmt.Errorf("could not read file: %v", err)
 	}
+
 	return api.TraceBlock(ctx, blob, config)
 }
 
@@ -584,6 +609,7 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 	if block == nil {
 		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
+
 	return api.traceBlock(ctx, block, config)
 }
 
@@ -595,6 +621,7 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 	if err != nil {
 		return nil, err
 	}
+
 	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
@@ -632,16 +659,20 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		// Check in the bad blocks
 		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
 	}
+
 	if block == nil {
 		return nil, fmt.Errorf("block %#x not found", hash)
 	}
+
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
+
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -667,6 +698,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+
 		var (
 			msg, _    = core.TransactionToMessage(tx, signer, block.BaseFee())
 			txContext = core.NewEVMTxContext(msg)
@@ -704,13 +736,13 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 				// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
 				return roots, nil
 			}
-
 		}
 
 		// calling IntermediateRoot will internally call Finalize on the state
 		// so any modifications are written to the trie
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	}
+
 	return roots, nil
 }
 
@@ -722,6 +754,7 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 	if block == nil {
 		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
+
 	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
@@ -732,7 +765,6 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // One thread runs along and executes txs without tracing enabled to generate their prestate.
 // Worker threads take the tasks and the prestate and trace them.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
-
 	if config == nil {
 		config = &TraceConfig{
 			BorTraceEnabled: defaultBorTraceEnabled,
@@ -752,6 +784,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if err != nil {
 		return nil, err
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -788,14 +821,17 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		results               = make([]*txTraceResult, len(txs))
 		pend                  sync.WaitGroup
 	)
+
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
 	}
 
 	jobs := make(chan *txTraceTask, threads)
+
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
+
 		go func() {
 			defer pend.Done()
 			// Fetch and execute the next transaction trace tasks
@@ -822,10 +858,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 				} else {
 					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				}
+
 				if err != nil {
 					results[task.index] = &txTraceResult{Error: err.Error()}
 					continue
 				}
+
 				results[task.index] = &txTraceResult{Result: res}
 			}
 		}()
@@ -949,7 +987,6 @@ txloop:
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	close(jobs)
@@ -986,13 +1023,16 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
 		}
 	}
+
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
+
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -1010,10 +1050,12 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		logConfig logger.Config
 		txHash    common.Hash
 	)
+
 	if config != nil {
 		logConfig = config.Config
 		txHash = config.TxHash
 	}
+
 	logConfig.Debug = true
 
 	// Execute transaction, either tracing all or just the requested one
@@ -1062,6 +1104,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			if err != nil {
 				return nil, err
 			}
+
 			dumps = append(dumps, dump.Name())
 
 			// Swap out the noop logger to the standard tracer
@@ -1087,14 +1130,17 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		} else {
 			// nolint : contextcheck
 			_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background())
+
 			if writer != nil {
 				writer.Flush()
 			}
 		}
+
 		if dump != nil {
 			dump.Close()
 			log.Info("Wrote standard trace", "file", dump.Name())
 		}
+
 		if err != nil {
 			return dumps, err
 		}
@@ -1107,6 +1153,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			break
 		}
 	}
+
 	return dumps, nil
 }
 
@@ -1119,6 +1166,7 @@ func (api *API) containsTx(ctx context.Context, block *types.Block, hash common.
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1146,6 +1194,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 			}, nil
 		}
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -1153,10 +1202,12 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
 	if err != nil {
 		return nil, err
@@ -1175,6 +1226,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		TxIndex:     int(index),
 		TxHash:      hash,
 	}
+
 	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
 }
 
@@ -1187,6 +1239,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		err   error
 		block *types.Block
 	)
+
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err = api.blockByHash(ctx, hash)
 	} else if number, ok := blockNrOrHash.Number(); ok {
@@ -1198,10 +1251,12 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 			// of what the next actual block is likely to contain.
 			return nil, errors.New("tracing on top of pending is not supported")
 		}
+
 		block, err = api.blockByNumber(ctx, number)
 	} else {
 		return nil, errors.New("invalid arguments; neither block nor hash specified")
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -1238,6 +1293,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
+
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
 }
 

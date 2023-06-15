@@ -117,9 +117,11 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		return nil, fmt.Errorf("failed to load bootstrap js: %v", err)
 	}
+
 	return r, nil
 }
 
@@ -142,6 +144,7 @@ func TestListRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	resp, _ := r.ApproveListing(&core.ListRequest{
 		Accounts: accs,
 		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
@@ -167,18 +170,22 @@ func TestSignTxRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	to, err := mixAddr("000000000000000000000000000000000000dead")
 	if err != nil {
 		t.Error(err)
 		return
 	}
+
 	from, err := mixAddr("0000000000000000000000000000000000001337")
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
+
 	t.Logf("to %v", to.Address().String())
+
 	resp, err := r.ApproveTx(&core.SignTxRequest{
 		Transaction: apitypes.SendTxArgs{
 			From: *from,
@@ -189,6 +196,7 @@ func TestSignTxRequest(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	if !resp.Approved {
 		t.Errorf("Expected check to resolve to 'Approve'")
 	}
@@ -247,13 +255,16 @@ func TestForwarding(t *testing.T) {
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
+
 	r, err := NewRuleEvaluator(ui, jsBackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		t.Fatalf("Failed to load bootstrap js: %v", err)
 	}
+
 	r.ApproveSignData(nil)
 	r.ApproveTx(nil)
 	r.ApproveNewAccount(nil)
@@ -287,9 +298,11 @@ func TestMissingFunc(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected missing method to yield error'")
 	}
+
 	if approved {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
+
 	t.Logf("Err %v", err)
 }
 func TestStorage(t *testing.T) {
@@ -320,6 +333,7 @@ func TestStorage(t *testing.T) {
 		return a
 	}
 `
+
 	r, err := initRuleEngine(js)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -331,15 +345,18 @@ func TestStorage(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	retval := v.ToString().String()
 
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	exp := `myvaluea,list[object Object]{"an":"object"}`
 	if retval != exp {
 		t.Errorf("Unexpected data, expected '%v', got '%v'", exp, retval)
 	}
+
 	t.Logf("Err %v", err)
 }
 
@@ -443,6 +460,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 func dummyTxWithV(value uint64) *core.SignTxRequest {
 	v := new(big.Int).SetUint64(value)
 	h := hexutil.Big(*v)
+
 	return dummyTx(h)
 }
 
@@ -451,6 +469,7 @@ func dummySigned(value *big.Int) *types.Transaction {
 	gas := uint64(21000)
 	gasPrice := big.NewInt(2000000)
 	data := make([]byte, 0)
+
 	return types.NewTransaction(3, to, value, gas, gasPrice, data)
 }
 
@@ -466,10 +485,12 @@ func TestLimitWindow(t *testing.T) {
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
 		unsigned := dummyTx(h)
+
 		resp, err := r.ApproveTx(unsigned)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
+
 		if !resp.Approved {
 			t.Errorf("Expected check to resolve to 'Approve'")
 		}
@@ -555,16 +576,20 @@ func TestContextIsCleared(t *testing.T) {
 	}
 	`
 	ui := &dontCallMe{t}
+
 	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage())
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		t.Fatalf("Failed to load bootstrap js: %v", err)
 	}
+
 	tx := dummyTxWithV(0)
 	r1, _ := r.ApproveTx(tx)
 	r2, _ := r.ApproveTx(tx)
+
 	if r1.Approved != r2.Approved {
 		t.Errorf("Expected execution context to be cleared between executions")
 	}
@@ -584,11 +609,13 @@ function ApproveSignData(r){
     }
     // Otherwise goes to manual processing
 }`
+
 	r, err := initRuleEngine(js)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	message := "baz bazonk foo"
 	hash, rawdata := accounts.TextAndHash([]byte(message))
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
@@ -602,6 +629,7 @@ function ApproveSignData(r){
 			Value: message,
 		},
 	}
+
 	resp, err := r.ApproveSignData(&core.SignDataRequest{
 		Address:  *addr,
 		Messages: nvt,
@@ -612,6 +640,7 @@ function ApproveSignData(r){
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
+
 	if !resp.Approved {
 		t.Fatalf("Expected approved")
 	}

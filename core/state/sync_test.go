@@ -47,6 +47,7 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
+
 	for i := byte(0); i < 96; i++ {
 		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
@@ -61,15 +62,19 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
 			acc.code = []byte{i, i, i, i, i}
 		}
+
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
 				hash := crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j})
 				obj.SetState(sdb, hash, hash)
 			}
 		}
+
 		state.updateStateObject(obj)
+
 		accounts = append(accounts, acc)
 	}
+
 	root, _ := state.Commit(false)
 
 	// Return the generated state
@@ -84,16 +89,20 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
+
 	if err := checkStateConsistency(db, root); err != nil {
 		t.Fatalf("inconsistent state trie at %x: %v", root, err)
 	}
+
 	for i, acc := range accounts {
 		if balance := state.GetBalance(acc.address); balance.Cmp(acc.balance) != 0 {
 			t.Errorf("account %d: balance mismatch: have %v, want %v", i, balance, acc.balance)
 		}
+
 		if nonce := state.GetNonce(acc.address); nonce != acc.nonce {
 			t.Errorf("account %d: nonce mismatch: have %v, want %v", i, nonce, acc.nonce)
 		}
+
 		if code := state.GetCode(acc.address); !bytes.Equal(code, acc.code) {
 			t.Errorf("account %d: code mismatch: have %x, want %x", i, code, acc.code)
 		}
@@ -115,6 +124,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	it := t.NodeIterator(nil)
 	for it.Next(true) {
 	}
+
 	return it.Error()
 }
 
@@ -124,13 +134,16 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent.
 	}
+
 	state, err := New(root, NewDatabase(db), nil)
 	if err != nil {
 		return err
 	}
+
 	it := NewNodeIterator(state)
 	for it.Next() {
 	}
+
 	return it.Error
 }
 
@@ -237,15 +250,19 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 					if err := rlp.DecodeBytes(srcTrie.MustGet(node.syncPath[0]), &acc); err != nil {
 						t.Fatalf("failed to decode account on path %x: %v", node.syncPath[0], err)
 					}
+
 					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
+
 					stTrie, err := trie.New(id, srcDb.TrieDB())
 					if err != nil {
 						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
 					}
+
 					data, _, err := stTrie.GetNode(node.syncPath[1])
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[1], err)
 					}
+
 					nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 				}
 			} else {
@@ -253,6 +270,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for key %v", []byte(node.path))
 				}
+
 				nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 			}
 		}
@@ -268,10 +286,12 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				t.Errorf("failed to process result %v", err)
 			}
 		}
+
 		batch := dstDb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, codes = sched.Missing(count)
@@ -374,10 +394,12 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 
 			nodeProcessed = len(nodeResults)
 		}
+
 		batch := dstDb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, codes = sched.Missing(0)
@@ -477,6 +499,7 @@ func testIterativeRandomStateSync(t *testing.T, count int) {
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		nodeQueue = make(map[string]stateElement)
@@ -577,10 +600,12 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 				}
 			}
 		}
+
 		batch := dstDb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		paths, nodes, codes := sched.Missing(0)
@@ -608,6 +633,7 @@ func TestIncompleteStateSync(t *testing.T) {
 
 	// isCodeLookup to save some hashing
 	var isCode = make(map[common.Hash]struct{})
+
 	for _, acc := range srcAccounts {
 		if len(acc.code) > 0 {
 			isCode[crypto.Keccak256Hash(acc.code)] = struct{}{}
@@ -692,10 +718,12 @@ func TestIncompleteStateSync(t *testing.T) {
 				}
 			}
 		}
+
 		batch := dstDb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
 			t.Fatalf("failed to commit data: %v", err)
 		}
+
 		batch.Write()
 
 		for _, root := range nodehashes {

@@ -56,12 +56,15 @@ func (it *Iterator) Next() bool {
 		if it.nodeIt.Leaf() {
 			it.Key = it.nodeIt.LeafKey()
 			it.Value = it.nodeIt.LeafBlob()
+
 			return true
 		}
 	}
+
 	it.Key = nil
 	it.Value = nil
 	it.Err = it.nodeIt.Error()
+
 	return false
 }
 
@@ -167,8 +170,10 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 			err:  errIteratorEnd,
 		}
 	}
+
 	it := &nodeIterator{trie: trie}
 	it.err = it.seek(start)
+
 	return it
 }
 
@@ -180,6 +185,7 @@ func (it *nodeIterator) Hash() common.Hash {
 	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
+
 	return it.stack[len(it.stack)-1].hash
 }
 
@@ -187,6 +193,7 @@ func (it *nodeIterator) Parent() common.Hash {
 	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
+
 	return it.stack[len(it.stack)-1].parent
 }
 
@@ -200,6 +207,7 @@ func (it *nodeIterator) LeafKey() []byte {
 			return hexToKeybytes(it.path)
 		}
 	}
+
 	panic("not at leaf")
 }
 
@@ -209,6 +217,7 @@ func (it *nodeIterator) LeafBlob() []byte {
 			return node
 		}
 	}
+
 	panic("not at leaf")
 }
 
@@ -217,6 +226,7 @@ func (it *nodeIterator) LeafProof() [][]byte {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
 			hasher := newHasher(false)
 			defer returnHasherToPool(hasher)
+
 			proofs := make([][]byte, 0, len(it.stack))
 
 			for i, item := range it.stack[:len(it.stack)-1] {
@@ -226,9 +236,11 @@ func (it *nodeIterator) LeafProof() [][]byte {
 					proofs = append(proofs, nodeToBytes(node))
 				}
 			}
+
 			return proofs
 		}
 	}
+
 	panic("not at leaf")
 }
 
@@ -240,11 +252,13 @@ func (it *nodeIterator) NodeBlob() []byte {
 	if it.Hash() == (common.Hash{}) {
 		return nil // skip the non-standalone node
 	}
+
 	blob, err := it.resolveBlob(it.Hash().Bytes(), it.Path())
 	if err != nil {
 		it.err = err
 		return nil
 	}
+
 	return blob
 }
 
@@ -252,9 +266,11 @@ func (it *nodeIterator) Error() error {
 	if it.err == errIteratorEnd {
 		return nil
 	}
+
 	if seek, ok := it.err.(seekError); ok {
 		return seek.err
 	}
+
 	return it.err
 }
 
@@ -266,6 +282,7 @@ func (it *nodeIterator) Next(descend bool) bool {
 	if it.err == errIteratorEnd {
 		return false
 	}
+
 	if seek, ok := it.err.(seekError); ok {
 		if it.err = it.seek(seek.key); it.err != nil {
 			return false
@@ -274,10 +291,13 @@ func (it *nodeIterator) Next(descend bool) bool {
 	// Otherwise step forward with the iterator and report any errors.
 	state, parentIndex, path, err := it.peek(descend)
 	it.err = err
+
 	if it.err != nil {
 		return false
 	}
+
 	it.push(state, parentIndex, path)
+
 	return true
 }
 
@@ -295,6 +315,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 		} else if bytes.Compare(path, key) >= 0 {
 			return nil
 		}
+
 		it.push(state, parentIndex, path)
 	}
 }
@@ -303,9 +324,11 @@ func (it *nodeIterator) seek(prefix []byte) error {
 func (it *nodeIterator) init() (*nodeIteratorState, error) {
 	root := it.trie.Hash()
 	state := &nodeIteratorState{node: it.trie.root, index: -1}
+
 	if root != types.EmptyRootHash {
 		state.hash = root
 	}
+
 	return state, state.resolve(it, nil)
 }
 
@@ -316,6 +339,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		state, err := it.init()
 		return state, nil, nil, err
 	}
+
 	if !descend {
 		// If we're skipping children, pop the current node first
 		it.pop()
@@ -325,19 +349,23 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
+
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
+
 		state, path, ok := it.nextChild(parent, ancestor)
 		if ok {
 			if err := state.resolve(it, path); err != nil {
 				return parent, &parent.index, path, err
 			}
+
 			return state, &parent.index, path, nil
 		}
 		// No more child nodes, move back up.
 		it.pop()
 	}
+
 	return nil, nil, nil, errIteratorEnd
 }
 
@@ -349,6 +377,7 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 		state, err := it.init()
 		return state, nil, nil, err
 	}
+
 	if !bytes.HasPrefix(seekKey, it.path) {
 		// If we're skipping children, pop the current node first
 		it.pop()
@@ -358,19 +387,23 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
+
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
+
 		state, path, ok := it.nextChildAt(parent, ancestor, seekKey)
 		if ok {
 			if err := state.resolve(it, path); err != nil {
 				return parent, &parent.index, path, err
 			}
+
 			return state, &parent.index, path, nil
 		}
 		// No more child nodes, move back up.
 		it.pop()
 	}
+
 	return nil, nil, nil, errIteratorEnd
 }
 
@@ -410,9 +443,11 @@ func (st *nodeIteratorState) resolve(it *nodeIterator, path []byte) error {
 		if err != nil {
 			return err
 		}
+
 		st.node = resolved
 		st.hash = common.BytesToHash(hash)
 	}
+
 	return nil
 }
 
@@ -422,6 +457,7 @@ func findChild(n *fullNode, index int, path []byte, ancestor common.Hash) (node,
 		state     *nodeIteratorState
 		childPath []byte
 	)
+
 	for ; index < len(n.Children); index++ {
 		if n.Children[index] != nil {
 			child = n.Children[index]
@@ -433,11 +469,14 @@ func findChild(n *fullNode, index int, path []byte, ancestor common.Hash) (node,
 				index:   -1,
 				pathlen: len(path),
 			}
+
 			childPath = append(childPath, path...)
 			childPath = append(childPath, byte(index))
+
 			return child, state, childPath, index
 		}
 	}
+
 	return nil, nil, nil, 0
 }
 
@@ -460,10 +499,13 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Has
 				index:   -1,
 				pathlen: len(it.path),
 			}
+
 			path := append(it.path, node.Key...)
+
 			return state, path, true
 		}
 	}
+
 	return parent, it.path, false
 }
 
@@ -506,16 +548,20 @@ func (it *nodeIterator) nextChildAt(parent *nodeIteratorState, ancestor common.H
 				index:   -1,
 				pathlen: len(it.path),
 			}
+
 			path := append(it.path, n.Key...)
+
 			return state, path, true
 		}
 	}
+
 	return parent, it.path, false
 }
 
 func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []byte) {
 	it.path = path
 	it.stack = append(it.stack, state)
+
 	if parentIndex != nil {
 		*parentIndex++
 	}
@@ -532,17 +578,21 @@ func compareNodes(a, b NodeIterator) int {
 	if cmp := bytes.Compare(a.Path(), b.Path()); cmp != 0 {
 		return cmp
 	}
+
 	if a.Leaf() && !b.Leaf() {
 		return -1
 	} else if b.Leaf() && !a.Leaf() {
 		return 1
 	}
+
 	if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
 		return cmp
 	}
+
 	if a.Leaf() && b.Leaf() {
 		return bytes.Compare(a.LeafBlob(), b.LeafBlob())
 	}
+
 	return 0
 }
 
@@ -561,6 +611,7 @@ func NewDifferenceIterator(a, b NodeIterator) (NodeIterator, *int) {
 		a: a,
 		b: b,
 	}
+
 	return it, &it.count
 }
 
@@ -607,6 +658,7 @@ func (it *differenceIterator) Next(bool) bool {
 	if !it.b.Next(true) {
 		return false
 	}
+
 	it.count++
 
 	if it.eof {
@@ -622,6 +674,7 @@ func (it *differenceIterator) Next(bool) bool {
 				it.eof = true
 				return true
 			}
+
 			it.count++
 		case 1:
 			// b is before a
@@ -632,11 +685,13 @@ func (it *differenceIterator) Next(bool) bool {
 			if !it.b.Next(hasHash) {
 				return false
 			}
+
 			it.count++
 			if !it.a.Next(hasHash) {
 				it.eof = true
 				return true
 			}
+
 			it.count++
 		}
 	}
@@ -646,6 +701,7 @@ func (it *differenceIterator) Error() error {
 	if err := it.a.Error(); err != nil {
 		return err
 	}
+
 	return it.b.Error()
 }
 
@@ -659,6 +715,7 @@ func (h *nodeIteratorHeap) Pop() interface{} {
 	n := len(*h)
 	x := (*h)[n-1]
 	*h = (*h)[0 : n-1]
+
 	return x
 }
 
@@ -676,6 +733,7 @@ func NewUnionIterator(iters []NodeIterator) (NodeIterator, *int) {
 	heap.Init(&h)
 
 	ui := &unionIterator{items: &h}
+
 	return ui, &ui.count
 }
 
@@ -748,10 +806,12 @@ func (it *unionIterator) Next(descend bool) bool {
 			heap.Push(it.items, skipped)
 		}
 	}
+
 	if least.Next(descend) {
 		it.count++
 		heap.Push(it.items, least)
 	}
+
 	return len(*it.items) > 0
 }
 
@@ -761,5 +821,6 @@ func (it *unionIterator) Error() error {
 			return err
 		}
 	}
+
 	return nil
 }

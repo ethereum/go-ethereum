@@ -44,6 +44,7 @@ func runMinimalGeth(t *testing.T, args ...string) *testgeth {
 	allArgs := []string{"--goerli", "--networkid", "1337", "--authrpc.port", "0", "--syncmode=full", "--port", "0",
 		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--cache", "64",
 		"--datadir.minfreedisk", "0"}
+
 	return runGeth(t, append(allArgs, args...)...)
 }
 
@@ -102,6 +103,7 @@ func TestAttachWelcome(t *testing.T) {
 		"--ipcpath", ipc,
 		"--http", "--http.port", httpPort,
 		"--ws", "--ws.port", wsPort)
+
 	t.Run("ipc", func(t *testing.T) {
 		waitForEndpoint(t, ipc, 3*time.Second)
 		testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)

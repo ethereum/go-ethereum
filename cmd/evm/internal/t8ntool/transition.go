@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/urfave/cli/v2"
 	"math/big"
 	"os"
 	"path"
@@ -92,22 +93,27 @@ func Transition(ctx *cli.Context) error {
 		err    error
 		tracer vm.EVMLogger
 	)
+
 	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
+
 	if ctx.Bool(TraceFlag.Name) {
 		if ctx.IsSet(TraceDisableMemoryFlag.Name) && ctx.IsSet(TraceEnableMemoryFlag.Name) {
 			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
 		}
+
 		if ctx.IsSet(TraceDisableReturnDataFlag.Name) && ctx.IsSet(TraceEnableReturnDataFlag.Name) {
 			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
 		}
+
 		if ctx.IsSet(TraceDisableMemoryFlag.Name) {
 			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
 		}
+
 		if ctx.IsSet(TraceDisableReturnDataFlag.Name) {
 			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
 		}
@@ -118,6 +124,7 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name) || ctx.Bool(TraceEnableReturnDataFlag.Name),
 			Debug:            true,
 		}
+
 		var prevFile *os.File
 		// This one closes the last file
 		defer func() {
@@ -125,15 +132,19 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
+
 		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
 			if prevFile != nil {
 				prevFile.Close()
 			}
+
 			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
+
 			prevFile = traceFile
+
 			return logger.NewJSONLogger(logConfig, traceFile), nil
 		}
 	} else {
@@ -160,11 +171,13 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
 		}
 	}
+
 	if allocStr != stdinSelector {
 		if err := readFile(allocStr, "alloc", &inputData.Alloc); err != nil {
 			return err
 		}
 	}
+
 	prestate.Pre = inputData.Alloc
 
 	// Set the block environment
@@ -173,8 +186,10 @@ func Transition(ctx *cli.Context) error {
 		if err := readFile(envStr, "env", &env); err != nil {
 			return err
 		}
+
 		inputData.Env = &env
 	}
+
 	prestate.Env = *inputData.Env
 
 	vmConfig := vm.Config{
@@ -182,6 +197,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
+
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
 		return NewError(ErrorConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
 	} else {
@@ -192,22 +208,27 @@ func Transition(ctx *cli.Context) error {
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
 	var txsWithKeys []*txWithKey
+
 	if txStr != stdinSelector {
 		inFile, err := os.Open(txStr)
 		if err != nil {
 			return NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
 		}
+
 		defer inFile.Close()
 		decoder := json.NewDecoder(inFile)
+
 		if strings.HasSuffix(txStr, ".rlp") {
 			var body hexutil.Bytes
 			if err := decoder.Decode(&body); err != nil {
 				return err
 			}
+
 			var txs types.Transactions
 			if err := rlp.DecodeBytes(body, &txs); err != nil {
 				return err
 			}
+
 			for _, tx := range txs {
 				txsWithKeys = append(txsWithKeys, &txWithKey{
 					key: nil,
@@ -223,10 +244,13 @@ func Transition(ctx *cli.Context) error {
 		if len(inputData.TxRlp) > 0 {
 			// Decode the body of already signed transactions
 			body := common.FromHex(inputData.TxRlp)
+
 			var txs types.Transactions
+
 			if err := rlp.DecodeBytes(body, &txs); err != nil {
 				return err
 			}
+
 			for _, tx := range txs {
 				txsWithKeys = append(txsWithKeys, &txWithKey{
 					key: nil,
@@ -292,6 +316,7 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, fmt.Errorf("currentDifficulty cannot be calculated -- currentTime (%d) needs to be after parent time (%d)",
 				env.Timestamp, env.ParentTimestamp))
 		}
+
 		prestate.Env.Difficulty = calcDifficulty(chainConfig, env.Number, env.Timestamp,
 			env.ParentTimestamp, env.ParentDifficulty, env.ParentUncleHash)
 	}
@@ -300,10 +325,12 @@ func Transition(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
+
 	return dispatchOutput(ctx, baseDir, result, collector, body)
 }
 
@@ -321,10 +348,12 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 		Key       *common.Hash `json:"secretKey"`
 		Protected *bool        `json:"protected"`
 	}
+
 	var data txMetadata
 	if err := json.Unmarshal(input, &data); err != nil {
 		return err
 	}
+
 	if data.Key != nil {
 		k := data.Key.Hex()[2:]
 		if ecdsaKey, err := crypto.HexToECDSA(k); err != nil {
@@ -333,6 +362,7 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 			t.key = ecdsaKey
 		}
 	}
+
 	if data.Protected != nil {
 		t.protected = *data.Protected
 	} else {
@@ -343,7 +373,9 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &tx); err != nil {
 		return err
 	}
+
 	t.tx = &tx
+
 	return nil
 }
 
@@ -361,30 +393,36 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 // and secondly to read them with the standard tx json format
 func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Transactions, error) {
 	var signedTxs []*types.Transaction
+
 	for i, txWithKey := range txs {
 		tx := txWithKey.tx
 		key := txWithKey.key
 		v, r, s := tx.RawSignatureValues()
+
 		if key != nil && v.BitLen()+r.BitLen()+s.BitLen() == 0 {
 			// This transaction needs to be signed
 			var (
 				signed *types.Transaction
 				err    error
 			)
+
 			if txWithKey.protected {
 				signed, err = types.SignTx(tx, signer, key)
 			} else {
 				signed, err = types.SignTx(tx, types.FrontierSigner{}, key)
 			}
+
 			if err != nil {
 				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
 			}
+
 			signedTxs = append(signedTxs, signed)
 		} else {
 			// Already signed
 			signedTxs = append(signedTxs, tx)
 		}
 	}
+
 	return signedTxs, nil
 }
 
@@ -394,6 +432,7 @@ func (g Alloc) OnRoot(common.Hash) {}
 
 func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
+
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
 		storage = make(map[common.Hash]common.Hash)
@@ -401,6 +440,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 			storage[k] = common.HexToHash(v)
 		}
 	}
+
 	genesisAccount := core.GenesisAccount{
 		Code:    dumpAccount.Code,
 		Storage: storage,
@@ -416,11 +456,14 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
+
 	location := path.Join(baseDir, filename)
 	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}
+
 	log.Info("Wrote file", "file", location)
+
 	return nil
 }
 
@@ -429,6 +472,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
+
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
 		switch fName {
 		case "stdout":
@@ -442,32 +486,40 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 				return err
 			}
 		}
+
 		return nil
 	}
 	if err := dispatch(baseDir, ctx.String(OutputAllocFlag.Name), "alloc", alloc); err != nil {
 		return err
 	}
+
 	if err := dispatch(baseDir, ctx.String(OutputResultFlag.Name), "result", result); err != nil {
 		return err
 	}
+
 	if err := dispatch(baseDir, ctx.String(OutputBodyFlag.Name), "body", body); err != nil {
 		return err
 	}
+
 	if len(stdOutObject) > 0 {
 		b, err := json.MarshalIndent(stdOutObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
+
 		os.Stdout.Write(b)
 		os.Stdout.WriteString("\n")
 	}
+
 	if len(stdErrObject) > 0 {
 		b, err := json.MarshalIndent(stdErrObject, "", "  ")
 		if err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 		}
+
 		os.Stderr.Write(b)
 		os.Stderr.WriteString("\n")
 	}
+
 	return nil
 }

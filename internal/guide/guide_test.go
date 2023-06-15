@@ -70,6 +70,7 @@ func TestAccountManagement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}
+
 	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
 	chain := big.NewInt(1)
 
@@ -81,9 +82,11 @@ func TestAccountManagement(t *testing.T) {
 	if err := ks.Unlock(signer, "Signer password"); err != nil {
 		t.Fatalf("Failed to unlock account: %v", err)
 	}
+
 	if _, err := ks.SignTx(signer, tx, chain); err != nil {
 		t.Fatalf("Failed to sign with unlocked account: %v", err)
 	}
+
 	if err := ks.Lock(signer.Address); err != nil {
 		t.Fatalf("Failed to lock account: %v", err)
 	}
@@ -91,6 +94,7 @@ func TestAccountManagement(t *testing.T) {
 	if err := ks.TimedUnlock(signer, "Signer password", time.Second); err != nil {
 		t.Fatalf("Failed to time unlock account: %v", err)
 	}
+
 	if _, err := ks.SignTx(signer, tx, chain); err != nil {
 		t.Fatalf("Failed to sign with time unlocked account: %v", err)
 	}

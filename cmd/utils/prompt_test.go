@@ -28,6 +28,7 @@ func TestGetPassPhraseWithList(t *testing.T) {
 		index        int
 		passwords    []string
 	}
+
 	tests := []struct {
 		name string
 		args args

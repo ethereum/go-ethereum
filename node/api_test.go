@@ -307,15 +307,19 @@ func TestStartRPC(t *testing.T) {
 			handlersAvailable := checkBodyOK(baseURL + "/test")
 			rpcAvailable := checkRPC(baseURL)
 			wsAvailable := checkRPC(strings.Replace(baseURL, "http://", "ws://", 1))
+
 			if reachable != test.wantReachable {
 				t.Errorf("HTTP server is %sreachable, want it %sreachable", not(reachable), not(test.wantReachable))
 			}
+
 			if handlersAvailable != test.wantHandlers {
 				t.Errorf("RegisterHandler handlers %savailable, want them %savailable", not(handlersAvailable), not(test.wantHandlers))
 			}
+
 			if rpcAvailable != test.wantRPC {
 				t.Errorf("HTTP RPC %savailable, want it %savailable", not(rpcAvailable), not(test.wantRPC))
 			}
+
 			if wsAvailable != test.wantWS {
 				t.Errorf("WS RPC %savailable, want it %savailable", not(wsAvailable), not(test.wantWS))
 			}
@@ -329,11 +333,14 @@ func checkReachable(rawurl string) bool {
 	if err != nil {
 		panic(err)
 	}
+
 	conn, err := net.Dial("tcp", u.Host)
 	if err != nil {
 		return false
 	}
+
 	conn.Close()
+
 	return true
 }
 
@@ -348,10 +355,12 @@ func checkBodyOK(url string) bool {
 	if resp.StatusCode != 200 {
 		return false
 	}
+
 	buf := make([]byte, 2)
 	if _, err = io.ReadFull(resp.Body, buf); err != nil {
 		return false
 	}
+
 	return bytes.Equal(buf, []byte("OK"))
 }
 
@@ -364,6 +373,7 @@ func checkRPC(url string) bool {
 	defer c.Close()
 
 	_, err = c.SupportedModules()
+
 	return err == nil
 }
 
@@ -375,5 +385,6 @@ func not(ok bool) string {
 	if ok {
 		return ""
 	}
+
 	return "not "
 }

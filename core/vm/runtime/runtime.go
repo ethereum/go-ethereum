@@ -72,23 +72,29 @@ func setDefaults(cfg *Config) {
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
+
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
 	}
+
 	if cfg.GasPrice == nil {
 		cfg.GasPrice = new(big.Int)
 	}
+
 	if cfg.Value == nil {
 		cfg.Value = new(big.Int)
 	}
+
 	if cfg.BlockNumber == nil {
 		cfg.BlockNumber = new(big.Int)
 	}
+
 	if cfg.GetHashFn == nil {
 		cfg.GetHashFn = func(n uint64) common.Hash {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
+
 	if cfg.BaseFee == nil {
 		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
 	}
@@ -103,11 +109,13 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
+
 	setDefaults(cfg)
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
+
 	var (
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = NewEnv(cfg)
@@ -130,6 +138,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Value,
 		nil,
 	)
+
 	return ret, cfg.State, err
 }
 
@@ -138,11 +147,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
+
 	setDefaults(cfg)
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
+
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
@@ -159,6 +170,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		cfg.GasLimit,
 		cfg.Value,
 	)
+
 	return code, address, leftOverGas, err
 }
 
@@ -190,5 +202,6 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.Value,
 		nil,
 	)
+
 	return ret, leftOverGas, err
 }

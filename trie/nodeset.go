@@ -52,6 +52,7 @@ func (n *memoryNode) rlp() []byte {
 	if node, ok := n.node.(rawNode); ok {
 		return node
 	}
+
 	return nodeToBytes(n.node)
 }
 
@@ -62,6 +63,7 @@ func (n *memoryNode) obj() node {
 	if node, ok := n.node.(rawNode); ok {
 		return mustDecodeNode(n.hash[:], node)
 	}
+
 	return expandNode(n.hash[:], n.node)
 }
 
@@ -125,6 +127,7 @@ func (set *NodeSet) forEachWithOrder(callback func(path string, n *memoryNode)) 
 	}
 	// Bottom-up, longest path first
 	sort.Sort(sort.Reverse(paths))
+
 	for _, path := range paths {
 		callback(path, set.nodes[path])
 	}
@@ -167,7 +170,9 @@ func (set *NodeSet) Hashes() []common.Hash {
 // Summary returns a string-representation of the NodeSet.
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)
+
 	fmt.Fprintf(out, "nodeset owner: %v\n", set.owner)
+
 	if set.nodes != nil {
 		for path, n := range set.nodes {
 			// Deletion
@@ -185,9 +190,11 @@ func (set *NodeSet) Summary() string {
 			fmt.Fprintf(out, "  [*]: %x -> %v prev: %x\n", path, n.hash, origin)
 		}
 	}
+
 	for _, n := range set.leaves {
 		fmt.Fprintf(out, "[leaf]: %v\n", n)
 	}
+
 	return out.String()
 }
 
@@ -205,6 +212,7 @@ func NewMergedNodeSet() *MergedNodeSet {
 func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 	merged := NewMergedNodeSet()
 	merged.Merge(set)
+
 	return merged
 }
 
@@ -215,6 +223,8 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	if present {
 		return fmt.Errorf("duplicate trie for owner %#x", other.owner)
 	}
+
 	set.sets[other.owner] = other
+
 	return nil
 }

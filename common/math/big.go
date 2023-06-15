@@ -48,6 +48,7 @@ type HexOrDecimal256 big.Int
 func NewHexOrDecimal256(x int64) *HexOrDecimal256 {
 	b := big.NewInt(x)
 	h := HexOrDecimal256(*b)
+
 	return &h
 }
 
@@ -69,7 +70,9 @@ func (i *HexOrDecimal256) UnmarshalText(input []byte) error {
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
+
 	*i = HexOrDecimal256(*bigint)
+
 	return nil
 }
 
@@ -78,6 +81,7 @@ func (i *HexOrDecimal256) MarshalText() ([]byte, error) {
 	if i == nil {
 		return []byte("0x0"), nil
 	}
+
 	return []byte(fmt.Sprintf("%#x", (*big.Int)(i))), nil
 }
 
@@ -89,6 +93,7 @@ type Decimal256 big.Int
 func NewDecimal256(x int64) *Decimal256 {
 	b := big.NewInt(x)
 	d := Decimal256(*b)
+
 	return &d
 }
 
@@ -98,7 +103,9 @@ func (i *Decimal256) UnmarshalText(input []byte) error {
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
+
 	*i = Decimal256(*bigint)
+
 	return nil
 }
 
@@ -112,6 +119,7 @@ func (i *Decimal256) String() string {
 	if i == nil {
 		return "0"
 	}
+
 	return fmt.Sprintf("%#d", (*big.Int)(i))
 }
 
@@ -121,16 +129,20 @@ func ParseBig256(s string) (*big.Int, bool) {
 	if s == "" {
 		return new(big.Int), true
 	}
+
 	var bigint *big.Int
+
 	var ok bool
 	if len(s) >= 2 && (s[:2] == "0x" || s[:2] == "0X") {
 		bigint, ok = new(big.Int).SetString(s[2:], 16)
 	} else {
 		bigint, ok = new(big.Int).SetString(s, 10)
 	}
+
 	if ok && bigint.BitLen() > 256 {
 		bigint, ok = nil, false
 	}
+
 	return bigint, ok
 }
 
@@ -140,6 +152,7 @@ func MustParseBig256(s string) *big.Int {
 	if !ok {
 		panic("invalid 256 bit integer: " + s)
 	}
+
 	return v
 }
 
@@ -191,6 +204,7 @@ func FirstBitSet(v *big.Int) int {
 			return i
 		}
 	}
+
 	return v.BitLen()
 }
 
@@ -200,8 +214,10 @@ func PaddedBigBytes(bigint *big.Int, n int) []byte {
 	if bigint.BitLen()/8 >= n {
 		return bigint.Bytes()
 	}
+
 	ret := make([]byte, n)
 	ReadBits(bigint, ret)
+
 	return ret
 }
 
@@ -215,6 +231,7 @@ func bigEndianByteAt(bigint *big.Int, n int) byte {
 	if i >= len(words) {
 		return byte(0)
 	}
+
 	word := words[i]
 	// Offset of the byte
 	shift := 8 * uint(n%wordBytes)
@@ -230,6 +247,7 @@ func Byte(bigint *big.Int, padlength, n int) byte {
 	if n >= padlength {
 		return byte(0)
 	}
+
 	return bigEndianByteAt(bigint, padlength-1-n)
 }
 
@@ -268,6 +286,7 @@ func S256(x *big.Int) *big.Int {
 	if x.Cmp(tt255) < 0 {
 		return x
 	}
+
 	return new(big.Int).Sub(x, tt256)
 }
 
@@ -284,9 +303,12 @@ func Exp(base, exponent *big.Int) *big.Int {
 			if word&1 == 1 {
 				U256(result.Mul(result, base))
 			}
+
 			U256(base.Mul(base, base))
+
 			word >>= 1
 		}
 	}
+
 	return result
 }

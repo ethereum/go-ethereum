@@ -28,11 +28,13 @@ func hexToNibbles(s string) []byte {
 	if len(s) >= 2 && s[0] == '0' && s[1] == 'x' {
 		s = s[2:]
 	}
+
 	var s2 []byte
 	for _, ch := range []byte(s) {
 		s2 = append(s2, '0')
 		s2 = append(s2, ch)
 	}
+
 	return common.Hex2Bytes(string(s2))
 }
 
@@ -47,10 +49,12 @@ func TestRequestSorting(t *testing.T) {
 		data := hexToNibbles(path)
 		return string(data)
 	}
+
 	var (
 		hashes []common.Hash
 		paths  []string
 	)
+
 	for _, x := range []string{
 		"0x9",
 		"0x012345678901234567890123456789010123456789012345678901234567890195",
@@ -66,12 +70,14 @@ func TestRequestSorting(t *testing.T) {
 		paths = append(paths, f(x))
 		hashes = append(hashes, common.Hash{})
 	}
+
 	_, _, syncPaths, pathsets := sortByAccountPath(paths, hashes)
 	{
 		var b = new(bytes.Buffer)
 		for i := 0; i < len(syncPaths); i++ {
 			fmt.Fprintf(b, "\n%d. paths %x", i, syncPaths[i])
 		}
+
 		want := `
 0. paths [0099]
 1. paths [0123456789012345678901234567890101234567890123456789012345678901 00]
@@ -92,6 +98,7 @@ func TestRequestSorting(t *testing.T) {
 		for i := 0; i < len(pathsets); i++ {
 			fmt.Fprintf(b, "\n%d. pathset %x", i, pathsets[i])
 		}
+
 		want := `
 0. pathset [0099]
 1. pathset [0123456789012345678901234567890101234567890123456789012345678901 00 0095 0096 0097 0099 10 11 19]

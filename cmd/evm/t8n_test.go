@@ -36,12 +36,14 @@ func TestMain(m *testing.M) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+
 		os.Exit(0)
 	})
 	// check if we have been reexec'd
 	if reexec.Init() {
 		return
 	}
+
 	os.Exit(m.Run())
 }
 
@@ -63,20 +65,25 @@ func (args *t8nInput) get(base string) []string {
 		out = append(out, "--input.alloc")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inTxs; opt != "" {
 		out = append(out, "--input.txs")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inEnv; opt != "" {
 		out = append(out, "--input.env")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.stFork; opt != "" {
 		out = append(out, "--state.fork", opt)
 	}
+
 	if opt := args.stReward; opt != "" {
 		out = append(out, "--state.reward", opt)
 	}
+
 	return out
 }
 
@@ -92,22 +99,26 @@ func (args *t8nOutput) get() (out []string) {
 	} else {
 		out = append(out, "--output.body", "") // empty means ignore
 	}
+
 	if args.result {
 		out = append(out, "--output.result", "stdout")
 	} else {
 		out = append(out, "--output.result", "")
 	}
+
 	if args.alloc {
 		out = append(out, "--output.alloc", "stdout")
 	} else {
 		out = append(out, "--output.alloc", "")
 	}
+
 	return out
 }
 
 func TestT8n(t *testing.T) {
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+
 	for i, tc := range []struct {
 		base        string
 		input       t8nInput
@@ -264,7 +275,9 @@ func TestT8n(t *testing.T) {
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
 		args = append(args, tc.input.get(tc.base)...)
+
 		var qArgs []string // quoted args for debugging purposes
+
 		for _, arg := range args {
 			if len(arg) == 0 {
 				qArgs = append(qArgs, `""`)
@@ -272,6 +285,7 @@ func TestT8n(t *testing.T) {
 				qArgs = append(qArgs, arg)
 			}
 		}
+
 		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
 		tt.Run("evm-test", args...)
 		// Compare the expected output, if provided
@@ -280,7 +294,9 @@ func TestT8n(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
+
 			have := tt.Output()
+
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
@@ -289,7 +305,9 @@ func TestT8n(t *testing.T) {
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
 			}
 		}
+
 		tt.WaitExit()
+
 		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
 			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
 		}
@@ -307,15 +325,18 @@ func (args *t9nInput) get(base string) []string {
 		out = append(out, "--input.txs")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.stFork; opt != "" {
 		out = append(out, "--state.fork", opt)
 	}
+
 	return out
 }
 
 func TestT9n(t *testing.T) {
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+
 	for i, tc := range []struct {
 		base        string
 		input       t9nInput
@@ -382,8 +403,10 @@ func TestT9n(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
+
 			have := tt.Output()
 			ok, err := cmpJson(have, want)
+
 			switch {
 			case err != nil:
 				t.Logf(string(have))
@@ -392,7 +415,9 @@ func TestT9n(t *testing.T) {
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
 			}
 		}
+
 		tt.WaitExit()
+
 		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
 			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
 		}
@@ -416,6 +441,7 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, "--input.header")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inOmmersRlp; opt != "" {
 		out = append(out, "--input.ommers")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
@@ -425,33 +451,41 @@ func (args *b11rInput) get(base string) []string {
 		out = append(out, "--input.withdrawals")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inTxsRlp; opt != "" {
 		out = append(out, "--input.txs")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.inClique; opt != "" {
 		out = append(out, "--seal.clique")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if args.ethash {
 		out = append(out, "--seal.ethash")
 	}
+
 	if opt := args.ethashMode; opt != "" {
 		out = append(out, "--seal.ethash.mode")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	if opt := args.ethashDir; opt != "" {
 		out = append(out, "--seal.ethash.dir")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
+
 	out = append(out, "--output.block")
 	out = append(out, "stdout")
+
 	return out
 }
 
 func TestB11r(t *testing.T) {
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+
 	for i, tc := range []struct {
 		base        string
 		input       b11rInput
@@ -517,8 +551,10 @@ func TestB11r(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
+
 			have := tt.Output()
 			ok, err := cmpJson(have, want)
+
 			switch {
 			case err != nil:
 				t.Logf(string(have))
@@ -527,7 +563,9 @@ func TestB11r(t *testing.T) {
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
 			}
 		}
+
 		tt.WaitExit()
+
 		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
 			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
 		}
@@ -540,8 +578,10 @@ func cmpJson(a, b []byte) (bool, error) {
 	if err := json.Unmarshal(a, &j); err != nil {
 		return false, err
 	}
+
 	if err := json.Unmarshal(b, &j2); err != nil {
 		return false, err
 	}
+
 	return reflect.DeepEqual(j2, j), nil
 }

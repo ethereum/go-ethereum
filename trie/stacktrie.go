@@ -45,6 +45,7 @@ func stackTrieFromPool(writeFn NodeWriteFunc, owner common.Hash) *StackTrie {
 	st := stPool.Get().(*StackTrie)
 	st.owner = owner
 	st.writeFn = writeFn
+
 	return st
 }
 
@@ -93,6 +94,7 @@ func NewFromBinary(data []byte, writeFn NodeWriteFunc) (*StackTrie, error) {
 	if writeFn != nil {
 		st.setWriter(writeFn)
 	}
+
 	return &st, nil
 }
 
@@ -102,6 +104,7 @@ func (st *StackTrie) MarshalBinary() (data []byte, err error) {
 		b bytes.Buffer
 		w = bufio.NewWriter(&b)
 	)
+
 	if err := gob.NewEncoder(w).Encode(struct {
 		Owner    common.Hash
 		NodeType uint8
@@ -115,19 +118,24 @@ func (st *StackTrie) MarshalBinary() (data []byte, err error) {
 	}); err != nil {
 		return nil, err
 	}
+
 	for _, child := range st.children {
 		if child == nil {
 			w.WriteByte(0)
 			continue
 		}
+
 		w.WriteByte(1)
+
 		if childData, err := child.MarshalBinary(); err != nil {
 			return nil, err
 		} else {
 			w.Write(childData)
 		}
 	}
+
 	w.Flush()
+
 	return b.Bytes(), nil
 }
 
@@ -161,13 +169,16 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 		} else if hasChild[0] == 0 {
 			continue
 		}
+
 		var child StackTrie
 
 		if err := child.unmarshalBinary(r); err != nil {
 			return err
 		}
+
 		st.children[i] = &child
 	}
+
 	return nil
 }
 
@@ -185,6 +196,7 @@ func newLeaf(owner common.Hash, key, val []byte, writeFn NodeWriteFunc) *StackTr
 	st.nodeType = leafNode
 	st.key = append(st.key, key...)
 	st.val = val
+
 	return st
 }
 
@@ -193,6 +205,7 @@ func newExt(owner common.Hash, key []byte, child *StackTrie, writeFn NodeWriteFu
 	st.nodeType = extNode
 	st.key = append(st.key, key...)
 	st.children[0] = child
+
 	return st
 }
 
@@ -208,11 +221,13 @@ const (
 // Update inserts a (key, value) pair into the stack trie.
 func (st *StackTrie) Update(key, value []byte) error {
 	k := keybytesToHex(key)
+
 	if len(value) == 0 {
 		panic("deletion not supported")
 	}
 
 	st.insert(k[:len(k)-1], value, nil)
+
 	return nil
 }
 
@@ -229,9 +244,11 @@ func (st *StackTrie) Reset() {
 	st.writeFn = nil
 	st.key = st.key[:0]
 	st.val = nil
+
 	for i := range st.children {
 		st.children[i] = nil
 	}
+
 	st.nodeType = emptyNode
 }
 
@@ -244,6 +261,7 @@ func (st *StackTrie) getDiffIndex(key []byte) int {
 			return idx
 		}
 	}
+
 	return len(st.key)
 }
 
@@ -260,6 +278,7 @@ func (st *StackTrie) insert(key, value []byte, prefix []byte) {
 				if st.children[i].nodeType != hashedNode {
 					st.children[i].hash(append(prefix, byte(i)))
 				}
+
 				break
 			}
 		}
@@ -305,7 +324,9 @@ func (st *StackTrie) insert(key, value []byte, prefix []byte) {
 			n = st.children[0]
 			n.hash(append(prefix, st.key...))
 		}
+
 		var p *StackTrie
+
 		if diffidx == 0 {
 			// the break is on the first byte, so
 			// the current node is converted into
@@ -349,6 +370,7 @@ func (st *StackTrie) insert(key, value []byte, prefix []byte) {
 		// chunk. In that case, no prefix extnode is necessary.
 		// Otherwise, create that
 		var p *StackTrie
+
 		if diffidx == 0 {
 			// Convert current leaf into a branch
 			st.nodeType = branchNode
@@ -421,10 +443,12 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 		st.val = types.EmptyRootHash.Bytes()
 		st.key = st.key[:0]
 		st.nodeType = hashedNode
+
 		return
 
 	case branchNode:
 		var nodes rawFullNode
+
 		for i, child := range st.children {
 			if child == nil {
 				nodes[i] = nilValueNode
@@ -432,6 +456,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 			}
 
 			child.hashRec(hasher, append(path, byte(i)))
+
 			if len(child.val) < 32 {
 				nodes[i] = rawNode(child.val)
 			} else {
@@ -440,6 +465,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 
 			// Release child back to pool.
 			st.children[i] = nil
+
 			returnToPool(child)
 		}
 
@@ -476,6 +502,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 
 	st.nodeType = hashedNode
 	st.key = st.key[:0]
+
 	if len(encodedNode) < 32 {
 		st.val = common.CopyBytes(encodedNode)
 		return
@@ -495,6 +522,7 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	defer returnHasherToPool(hasher)
 
 	st.hashRec(hasher, nil)
+
 	if len(st.val) == 32 {
 		copy(h[:], st.val)
 		return h
@@ -505,6 +533,7 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	hasher.sha.Reset()
 	hasher.sha.Write(st.val)
 	hasher.sha.Read(h[:])
+
 	return h
 }
 
@@ -519,10 +548,12 @@ func (st *StackTrie) Commit() (h common.Hash, err error) {
 	if st.writeFn == nil {
 		return common.Hash{}, ErrCommitDisabled
 	}
+
 	hasher := newHasher(false)
 	defer returnHasherToPool(hasher)
 
 	st.hashRec(hasher, nil)
+
 	if len(st.val) == 32 {
 		copy(h[:], st.val)
 		return h, nil
@@ -535,5 +566,6 @@ func (st *StackTrie) Commit() (h common.Hash, err error) {
 	hasher.sha.Read(h[:])
 
 	st.writeFn(st.owner, nil, h, st.val)
+
 	return h, nil
 }

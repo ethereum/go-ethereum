@@ -85,6 +85,7 @@ func NewEvent(v interface{}) *Event {
 	default:
 		panic(fmt.Sprintf("invalid event type: %T", v))
 	}
+
 	return event
 }
 
@@ -92,6 +93,7 @@ func NewEvent(v interface{}) *Event {
 func ControlEvent(v interface{}) *Event {
 	event := NewEvent(v)
 	event.Control = true
+
 	return event
 }
 

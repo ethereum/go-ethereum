@@ -64,6 +64,7 @@ type Floater interface {
 func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool, validator ethereum.ChainValidator) *ForkChoice {
 	// Seed a fast but crypto originating random generator
 	r := crand.NewRand()
+
 	return &ForkChoice{
 		chain:     chainReader,
 		rand:      r,
@@ -82,6 +83,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 		localTD  = f.chain.GetTd(current.Hash(), current.Number.Uint64())
 		externTd = f.chain.GetTd(extern.Hash(), extern.Number.Uint64())
 	)
+
 	if localTD == nil || externTd == nil {
 		return false, errors.New("missing td")
 	}
@@ -111,8 +113,10 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 		if f.preserve != nil {
 			currentPreserve, externPreserve = f.preserve(current), f.preserve(extern)
 		}
+
 		reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 	}
+
 	return reorg, nil
 }
 

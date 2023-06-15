@@ -68,6 +68,7 @@ func (q *headerQueue) unreserve(peer string) int {
 	} else {
 		log.Debug("Header delivery stalling", "peer", peer)
 	}
+
 	return fails
 }
 
@@ -85,6 +86,7 @@ func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, 
 	hashes := packet.Meta.([]common.Hash)
 
 	accepted, err := q.queue.DeliverHeaders(peer.id, headers, hashes, q.headerProcCh)
+
 	switch {
 	case err == nil && len(headers) == 0:
 		peer.log.Trace("Requested headers delivered")
@@ -93,5 +95,6 @@ func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, 
 	default:
 		peer.log.Debug("Failed to deliver retrieved headers", "err", err)
 	}
+
 	return accepted, err
 }

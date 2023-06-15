@@ -40,6 +40,7 @@ func (h *snapHandler) PeerInfo(id enode.ID) interface{} {
 			return p.snapExt.info()
 		}
 	}
+
 	return nil
 }
 

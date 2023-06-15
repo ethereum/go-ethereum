@@ -60,11 +60,13 @@ func (r *Requests) Add(service, name string, val interface{}) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
 	*r = append(*r, Request{
 		Service: service,
 		Name:    name,
 		Params:  enc,
 	})
+
 	return len(*r) - 1, nil
 }
 
@@ -73,6 +75,7 @@ func (r Replies) Get(i int, val interface{}) error {
 	if i < 0 || i >= len(r) {
 		return ErrNoReply
 	}
+
 	return rlp.DecodeBytes(r[i], val)
 }
 
@@ -102,6 +105,7 @@ func (i *IntOrInf) BigInt() *big.Int {
 	case IntMinusInf:
 		panic(nil)
 	}
+
 	return &big.Int{} // invalid type decodes to 0 value
 }
 
@@ -113,6 +117,7 @@ func (i *IntOrInf) Inf() int {
 	case IntMinusInf:
 		return -1
 	}
+
 	return 0 // invalid type decodes to 0 value
 }
 
@@ -136,6 +141,7 @@ func (i *IntOrInf) Int64() int64 {
 	case IntMinusInf:
 		return math.MinInt64
 	}
+
 	return 0 // invalid type decodes to 0 value
 }
 

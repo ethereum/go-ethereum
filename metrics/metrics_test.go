@@ -29,6 +29,7 @@ func BenchmarkMetrics(b *testing.B) {
 	t := NewRegisteredTimer("timer", r)
 	RegisterDebugGCStats(r)
 	b.ResetTimer()
+
 	ch := make(chan bool)
 
 	wgD := &sync.WaitGroup{}
@@ -69,6 +70,7 @@ func BenchmarkMetrics(b *testing.B) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(FANOUT)
+
 	for i := 0; i < FANOUT; i++ {
 		go func(i int) {
 			defer wg.Done()

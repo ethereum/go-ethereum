@@ -57,9 +57,9 @@ func main() {
 	var adapter adapters.NodeAdapter
 
 	switch *adapterType {
-
 	case "sim":
 		log.Info("using sim adapter")
+
 		adapter = adapters.NewSimAdapter(services)
 
 	case "exec":
@@ -67,6 +67,7 @@ func main() {
 		if err != nil {
 			log.Crit("error creating temp dir", "err", err)
 		}
+
 		defer os.RemoveAll(tmpdir)
 		log.Info("using exec adapter", "tmpdir", tmpdir)
 		adapter = adapters.NewExecAdapter(tmpdir)
@@ -77,6 +78,7 @@ func main() {
 
 	// start the HTTP API
 	log.Info("starting simulation server on 0.0.0.0:8888...")
+
 	network := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		DefaultService: "ping-pong",
 	})
@@ -140,9 +142,11 @@ func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	log := p.log.New("peer.id", peer.ID())
 
 	errC := make(chan error, 1)
+
 	go func() {
 		for range time.Tick(10 * time.Second) {
 			log.Info("sending ping")
+
 			if err := p2p.Send(rw, pingMsgCode, "PING"); err != nil {
 				errC <- err
 				return
@@ -156,18 +160,23 @@ func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				errC <- err
 				return
 			}
+
 			payload, err := io.ReadAll(msg.Payload)
 			if err != nil {
 				errC <- err
 				return
 			}
+
 			log.Info("received message", "msg.code", msg.Code, "msg.payload", string(payload))
 			atomic.AddInt64(&p.received, 1)
+
 			if msg.Code == pingMsgCode {
 				log.Info("sending pong")
+
 				go p2p.Send(rw, pongMsgCode, "PONG")
 			}
 		}
 	}()
+
 	return <-errC
 }

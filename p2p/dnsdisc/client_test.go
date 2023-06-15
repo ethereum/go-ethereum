@@ -51,6 +51,7 @@ func TestClientSyncTree(t *testing.T) {
 		"H4FHT4B454P6UXFD7JCYQ5PWDY.n": nodes[1],
 		"MHTDO6TMUBRIA2XWG5LUDACK24.n": nodes[2],
 	}
+
 	var (
 		wantNodes = sortByID(parseNodes(nodes))
 		wantLinks = []string{"enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org"}
@@ -89,7 +90,6 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 	// url, _ := tree.Sign(signingKeyForTesting, "n")
 	// fmt.Println(url)
 	// fmt.Printf("%#v\n", tree.ToTXT("n"))
-
 	r := mapResolver{
 		"n":                            "enrtree-root:v1 e=INDMVBZEEQ4ESVYAKGIYU74EAA l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=3 sig=Vl3AmunLur0JZ3sIyJPSH6A3Vvdp4F40jWQeCmkIhmcgwE4VC5U9wpK8C_uL_CMY29fd6FAhspRvq2z_VysTLAA",
 		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
@@ -98,6 +98,7 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	_, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	wantErr := nameError{name: "INDMVBZEEQ4ESVYAKGIYU74EAA.n", err: entryError{typ: "enr", err: errInvalidENR}}
+
 	if err != wantErr {
 		t.Fatalf("expected sync error %q, got %q", wantErr, err)
 	}
@@ -117,6 +118,7 @@ func TestIterator(t *testing.T) {
 		Logger:    testlog.Logger(t, log.LvlTrace),
 		RateLimit: 500,
 	})
+
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)
@@ -128,12 +130,14 @@ func TestIterator(t *testing.T) {
 func TestIteratorCloseWithoutNext(t *testing.T) {
 	tree1, url1 := makeTestTree("t1", nil, nil)
 	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
+
 	it, err := c.NewIterator(url1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	it.Close()
+
 	ok := it.Next()
 	if ok {
 		t.Fatal("Next returned true after Close")
@@ -149,6 +153,7 @@ func TestIteratorClose(t *testing.T) {
 	)
 
 	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
+
 	it, err := c.NewIterator(url1)
 	if err != nil {
 		t.Fatal(err)
@@ -181,6 +186,7 @@ func TestIteratorLinks(t *testing.T) {
 		Logger:    testlog.Logger(t, log.LvlTrace),
 		RateLimit: 500,
 	})
+
 	it, err := c.NewIterator(url2)
 	if err != nil {
 		t.Fatal(err)
@@ -204,8 +210,10 @@ func TestIteratorNodeUpdates(t *testing.T) {
 			RateLimit:       500,
 		})
 	)
+
 	c.clock = clock
 	tree1, url := makeTestTree("n", nodes[:25], nil)
+
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)
@@ -218,6 +226,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
+
 	resolver.clear()
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
@@ -245,8 +254,10 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 			CacheLimit: 1,
 		})
 	)
+
 	c.clock = clock
 	tree1, url := makeTestTree("n", nodes[:25], nil)
+
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)
@@ -259,6 +270,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
+
 	resolver.clear()
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
@@ -280,17 +292,21 @@ func TestIteratorEmptyTree(t *testing.T) {
 			RateLimit:       500,
 		})
 	)
+
 	c.clock = clock
 	tree1, url := makeTestTree("n", nil, nil)
 	tree2, _ := makeTestTree("n", nodes, nil)
+
 	resolver.add(tree1.ToTXT("n"))
 
 	// Start the iterator.
 	node := make(chan *enode.Node, 1)
+
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	go func() {
 		it.Next()
 		node <- it.Node()
@@ -341,6 +357,7 @@ func TestIteratorLinkUpdates(t *testing.T) {
 			RateLimit:       500,
 		})
 	)
+
 	c.clock = clock
 	tree3, url3 := makeTestTree("t3", nodes[20:30], nil)
 	tree2, url2 := makeTestTree("t2", nodes[10:20], nil)
@@ -384,17 +401,21 @@ func checkIterator(t *testing.T, it enode.Iterator, wantNodes []*enode.Node) {
 		maxCalls = len(wantNodes) * 3
 		calls    = 0
 	)
+
 	for _, n := range wantNodes {
 		want[n.ID()] = n
 	}
+
 	for ; len(want) > 0 && calls < maxCalls; calls++ {
 		if !it.Next() {
 			t.Fatalf("Next returned false (call %d)", calls)
 		}
+
 		n := it.Node()
 		delete(want, n.ID())
 	}
 	t.Logf("checkIterator called Next %d times to find %d nodes", calls, len(wantNodes))
+
 	for _, n := range want {
 		t.Errorf("iterator didn't discover node %v", n.ID())
 	}
@@ -417,28 +438,35 @@ func makeTestTree(domain string, nodes []*enode.Node, links []string) (*Tree, st
 // testKeys creates deterministic private keys for testing.
 func testKeys(n int) []*ecdsa.PrivateKey {
 	keys := make([]*ecdsa.PrivateKey, n)
+
 	for i := 0; i < n; i++ {
 		key, err := crypto.GenerateKey()
 		if err != nil {
 			panic("can't generate key: " + err.Error())
 		}
+
 		keys[i] = key
 	}
+
 	return keys
 }
 
 func testNodes(keys []*ecdsa.PrivateKey) []*enode.Node {
 	nodes := make([]*enode.Node, len(keys))
+
 	for i, key := range keys {
 		record := new(enr.Record)
 		record.SetSeq(uint64(i))
 		enode.SignV4(record, key)
+
 		n, err := enode.New(enode.ValidSchemes, record)
 		if err != nil {
 			panic(err)
 		}
+
 		nodes[i] = n
 	}
+
 	return nodes
 }
 
@@ -449,6 +477,7 @@ func newMapResolver(maps ...map[string]string) mapResolver {
 	for _, m := range maps {
 		mr.add(m)
 	}
+
 	return mr
 }
 
@@ -468,6 +497,7 @@ func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, err
 	if record, ok := mr[name]; ok {
 		return []string{record}, nil
 	}
+
 	return nil, errors.New("not found")
 }
 

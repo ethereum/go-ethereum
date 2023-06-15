@@ -43,6 +43,7 @@ func (s Storage) String() (str string) {
 	for key, value := range s {
 		str += fmt.Sprintf("%X : %X\n", key, value)
 	}
+
 	return
 }
 
@@ -51,6 +52,7 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
+
 	return cpy
 }
 
@@ -92,12 +94,15 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
+
 	if data.CodeHash == nil {
 		data.CodeHash = types.EmptyCodeHash.Bytes()
 	}
+
 	if data.Root == (common.Hash{}) {
 		data.Root = types.EmptyRootHash
 	}
+
 	return &stateObject{
 		db:             db,
 		address:        address,
@@ -122,6 +127,7 @@ func (s *stateObject) touch() {
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
+
 	if s.address == ripemd {
 		// Explicitly put it in the dirty-cache, which is otherwise generated from
 		// flattened journals.
@@ -141,6 +147,7 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 			// prefetcher
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
+
 		if s.trie == nil {
 			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
 			if err != nil {
@@ -171,6 +178,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
 	}
+
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
@@ -188,9 +196,11 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		enc []byte
 		err error
 	)
+
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
+
 		if metrics.EnabledExpensive {
 			s.db.SnapshotStorageReads += time.Since(start)
 		}
@@ -206,23 +216,30 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		}
 
 		enc, err = tr.GetStorage(s.address, key.Bytes())
+
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
+
 		if err != nil {
 			s.db.setError(err)
 			return common.Hash{}
 		}
 	}
+
 	var value common.Hash
+
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
 			s.db.setError(err)
 		}
+
 		value.SetBytes(content)
 	}
+
 	s.originStorage[key] = value
+
 	return value
 }
 
@@ -250,6 +267,7 @@ func (s *stateObject) setState(key, value common.Hash) {
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise(prefetch bool) {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
+
 	for key, value := range s.dirtyStorage {
 		s.pendingStorage[key] = value
 		if value != s.originStorage[key] {
@@ -260,6 +278,7 @@ func (s *stateObject) finalise(prefetch bool) {
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}
+
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
@@ -271,6 +290,7 @@ func (s *stateObject) finalise(prefetch bool) {
 func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
+
 	if len(s.pendingStorage) == 0 {
 		return s.trie, nil
 	}
@@ -292,19 +312,23 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	}
 	// Insert all the pending updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
+
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
 			continue
 		}
+
 		s.originStorage[key] = value
 
 		var v []byte
+
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
+
 			s.db.StorageDeleted += 1
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
@@ -313,6 +337,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 				s.db.setError(err)
 				return nil, err
 			}
+
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit
@@ -324,13 +349,17 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			}
+
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if it's deleted
 		}
+
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
+
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
 	}
+
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
@@ -389,8 +418,10 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 		if s.empty() {
 			s.touch()
 		}
+
 		return
 	}
+
 	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
 }
 
@@ -400,6 +431,7 @@ func (s *stateObject) SubBalance(amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
+
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
 }
 
@@ -420,6 +452,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	if s.trie != nil {
 		stateObject.trie = db.db.CopyTrie(s.trie)
 	}
+
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.originStorage = s.originStorage.Copy()
@@ -427,6 +460,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
+
 	return stateObject
 }
 
@@ -448,11 +482,14 @@ func (s *stateObject) Code(db Database) []byte {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
+
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	}
+
 	s.code = code
+
 	return code
 }
 
@@ -467,10 +504,12 @@ func (s *stateObject) CodeSize(db Database) int {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return 0
 	}
+
 	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
 	}
+
 	return size
 }
 

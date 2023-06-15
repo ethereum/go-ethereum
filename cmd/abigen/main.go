@@ -99,6 +99,7 @@ func abigen(c *cli.Context) error {
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
+
 	var lang bind.Lang
 
 	switch c.String(langFlag.Name) {
@@ -116,6 +117,7 @@ func abigen(c *cli.Context) error {
 		libs    = make(map[string]string)
 		aliases = make(map[string]string)
 	)
+
 	if c.String(abiFlag.Name) != "" {
 		// Load up the ABI, optional bytecode and type name from the parameters
 		var (
@@ -129,9 +131,11 @@ func abigen(c *cli.Context) error {
 		} else {
 			abi, err = os.ReadFile(input)
 		}
+
 		if err != nil {
 			utils.Fatalf("Failed to read input ABI: %v", err)
 		}
+
 		abis = append(abis, string(abi))
 
 		var bin []byte
@@ -140,26 +144,31 @@ func abigen(c *cli.Context) error {
 			if bin, err = os.ReadFile(binFile); err != nil {
 				utils.Fatalf("Failed to read input bytecode: %v", err)
 			}
+
 			if strings.Contains(string(bin), "//") {
 				utils.Fatalf("Contract has additional library references, please use other mode(e.g. --combined-json) to catch library infos")
 			}
 		}
+
 		bins = append(bins, string(bin))
 
 		kind := c.String(typeFlag.Name)
 		if kind == "" {
 			kind = c.String(pkgFlag.Name)
 		}
+
 		types = append(types, kind)
 	} else {
 		// Generate the list of types to exclude from binding
 		var exclude *nameFilter
+
 		if c.IsSet(excFlag.Name) {
 			var err error
 			if exclude, err = newNameFilter(strings.Split(c.String(excFlag.Name), ",")...); err != nil {
 				utils.Fatalf("Failed to parse excludes: %v", err)
 			}
 		}
+
 		var contracts map[string]*compiler.Contract
 
 		if c.IsSet(jsonFlag.Name) {
@@ -168,14 +177,17 @@ func abigen(c *cli.Context) error {
 				jsonOutput []byte
 				err        error
 			)
+
 			if input == "-" {
 				jsonOutput, err = io.ReadAll(os.Stdin)
 			} else {
 				jsonOutput, err = os.ReadFile(input)
 			}
+
 			if err != nil {
 				utils.Fatalf("Failed to read combined-json: %v", err)
 			}
+
 			contracts, err = compiler.ParseCombinedJSON(jsonOutput, "", "", "", "")
 			if err != nil {
 				utils.Fatalf("Failed to read contract information from json output: %v", err)
@@ -186,14 +198,17 @@ func abigen(c *cli.Context) error {
 			// fully qualified name is of the form <solFilePath>:<type>
 			nameParts := strings.Split(name, ":")
 			typeName := nameParts[len(nameParts)-1]
+
 			if exclude != nil && exclude.Matches(name) {
 				fmt.Fprintf(os.Stderr, "excluding: %v\n", name)
 				continue
 			}
+
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
 			if err != nil {
 				utils.Fatalf("Failed to parse ABIs from compiler output: %v", err)
 			}
+
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
 			sigs = append(sigs, contract.Hashes)
@@ -214,6 +229,7 @@ func abigen(c *cli.Context) error {
 		//      foo=bar,foo2=bar2
 		//      foo:bar,foo2:bar2
 		re := regexp.MustCompile(`(?:(\w+)[:=](\w+))`)
+
 		submatches := re.FindAllStringSubmatch(c.String(aliasFlag.Name), -1)
 		for _, match := range submatches {
 			aliases[match[1]] = match[2]
@@ -233,6 +249,7 @@ func abigen(c *cli.Context) error {
 	if err := os.WriteFile(c.String(outFlag.Name), []byte(code), 0600); err != nil {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}
+
 	return nil
 }
 

@@ -51,19 +51,23 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 		if reflectValue.Bool() {
 			return math.PaddedBigBytes(common.Big1, 32), nil
 		}
+
 		return math.PaddedBigBytes(common.Big0, 32), nil
 	case BytesTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
+
 		if reflectValue.Type() != reflect.TypeOf([]byte{}) {
 			return []byte{}, errors.New("Bytes type is neither slice nor array")
 		}
+
 		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len()), nil
 	case FixedBytesTy, FunctionTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
+
 		return common.RightPadBytes(reflectValue.Bytes(), 32), nil
 	default:
 		return []byte{}, fmt.Errorf("Could not pack element, unknown type: %v", t.T)

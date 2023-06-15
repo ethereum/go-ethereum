@@ -78,6 +78,7 @@ func (tx *LegacyTx) copy() TxData {
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
+
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
 
@@ -87,15 +88,19 @@ func (tx *LegacyTx) copy() TxData {
 			cpy.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
 		}
 	}
+
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
+
 	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
+
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
+
 	return cpy
 }
 

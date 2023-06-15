@@ -37,7 +37,9 @@ func (s *Suite) TestSnapStatus(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -66,6 +68,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		secondKey      = common.HexToHash("0x09e47cd5056a689e708f22fe1f932709a320518e444f5f7d8d46a3da523d6606")
 		storageRoot    = common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790")
 	)
+
 	for i, tc := range []accRangeTest{
 		// Tests decreasing the number of bytes
 		{4000, root, zero, ffHash, 76, firstKey, common.HexToHash("0xd2669dcf3858e7f1eecb8b5fedbf22fbea3e9433848a75035f79d68422c2dcda")},
@@ -130,6 +133,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 		firstKey  = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 		secondKey = common.HexToHash("0x09e47cd5056a689e708f22fe1f932709a320518e444f5f7d8d46a3da523d6606")
 	)
+
 	for i, tc := range []stRangesTest{
 		{
 			root:     s.chain.RootAt(999),
@@ -316,12 +320,15 @@ func hasTerm(s []byte) bool {
 
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
+
 	var nibbles = make([]byte, l)
 	for i, b := range str {
 		nibbles[i*2] = b / 16
 		nibbles[i*2+1] = b % 16
 	}
+
 	nibbles[l-1] = 16
+
 	return nibbles
 }
 
@@ -331,14 +338,18 @@ func hexToCompact(hex []byte) []byte {
 		terminator = 1
 		hex = hex[:len(hex)-1]
 	}
+
 	buf := make([]byte, len(hex)/2+1)
 	buf[0] = terminator << 5 // the flag byte
+
 	if len(hex)&1 == 1 {
 		buf[0] |= 1 << 4 // odd flag
 		buf[0] |= hex[0] // first nibble is contained in the first byte
 		hex = hex[1:]
 	}
+
 	decodeNibbles(hex, buf[1:])
+
 	return buf
 }
 
@@ -351,9 +362,12 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		hex := keybytesToHex(key)[:length]
 		hex[len(hex)-1] = 0 // remove term flag
 		hKey := hexToCompact(hex)
+
 		return snap.TrieNodePathSet{hKey}
 	}
+
 	var accPaths []snap.TrieNodePathSet
+
 	for i := 1; i <= 65; i++ {
 		accPaths = append(accPaths, pathTo(i))
 	}
@@ -475,7 +489,9 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -487,16 +503,20 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 		Limit:  tc.limit,
 		Bytes:  tc.nBytes,
 	}
+
 	resp, err := conn.snapRequest(req, req.ID, s.chain)
 	if err != nil {
 		return fmt.Errorf("account range request failed: %v", err)
 	}
+
 	var res *snap.AccountRangePacket
+
 	if r, ok := resp.(*AccountRange); !ok {
 		return fmt.Errorf("account range response wrong: %T %v", resp, resp)
 	} else {
 		res = (*snap.AccountRangePacket)(r)
 	}
+
 	if exp, got := tc.expAccounts, len(res.Accounts); exp != got {
 		return fmt.Errorf("expected %d accounts, got %d", exp, got)
 	}
@@ -506,22 +526,27 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 			return fmt.Errorf("accounts not monotonically increasing: #%d [%x] vs #%d [%x]", i-1, res.Accounts[i-1].Hash[:], i, res.Accounts[i].Hash[:])
 		}
 	}
+
 	var (
 		hashes   []common.Hash
 		accounts [][]byte
 		proof    = res.Proof
 	)
+
 	hashes, accounts, err = res.Unpack()
 	if err != nil {
 		return err
 	}
+
 	if len(hashes) == 0 && len(accounts) == 0 && len(proof) == 0 {
 		return nil
 	}
+
 	if len(hashes) > 0 {
 		if exp, got := tc.expFirst, res.Accounts[0].Hash; exp != got {
 			return fmt.Errorf("expected first account %#x, got %#x", exp, got)
 		}
+
 		if exp, got := tc.expLast, res.Accounts[len(res.Accounts)-1].Hash; exp != got {
 			return fmt.Errorf("expected last account %#x, got %#x", exp, got)
 		}
@@ -531,17 +556,21 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	for i, key := range hashes {
 		keys[i] = common.CopyBytes(key[:])
 	}
+
 	nodes := make(light.NodeList, len(proof))
 	for i, node := range proof {
 		nodes[i] = node
 	}
+
 	proofdb := nodes.NodeSet()
 
 	var end []byte
 	if len(keys) > 0 {
 		end = keys[len(keys)-1]
 	}
+
 	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], end, keys, accounts, proofdb)
+
 	return err
 }
 
@@ -550,7 +579,9 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -563,29 +594,36 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 		Limit:    tc.limit,
 		Bytes:    tc.nBytes,
 	}
+
 	resp, err := conn.snapRequest(req, req.ID, s.chain)
 	if err != nil {
 		return fmt.Errorf("account range request failed: %v", err)
 	}
+
 	var res *snap.StorageRangesPacket
+
 	if r, ok := resp.(*StorageRanges); !ok {
 		return fmt.Errorf("account range response wrong: %T %v", resp, resp)
 	} else {
 		res = (*snap.StorageRangesPacket)(r)
 	}
+
 	gotSlots := 0
 	// Ensure the ranges are monotonically increasing
 	for i, slots := range res.Slots {
 		gotSlots += len(slots)
+
 		for j := 1; j < len(slots); j++ {
 			if bytes.Compare(slots[j-1].Hash[:], slots[j].Hash[:]) >= 0 {
 				return fmt.Errorf("storage slots not monotonically increasing for account #%d: #%d [%x] vs #%d [%x]", i, j-1, slots[j-1].Hash[:], j, slots[j].Hash[:])
 			}
 		}
 	}
+
 	if exp, got := tc.expSlots, gotSlots; exp != got {
 		return fmt.Errorf("expected %d slots, got %d", exp, got)
 	}
+
 	return nil
 }
 
@@ -594,7 +632,9 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -604,20 +644,25 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 		Hashes: tc.hashes,
 		Bytes:  tc.nBytes,
 	}
+
 	resp, err := conn.snapRequest(req, req.ID, s.chain)
 	if err != nil {
 		return fmt.Errorf("getBytecodes request failed: %v", err)
 	}
+
 	var res *snap.ByteCodesPacket
+
 	if r, ok := resp.(*ByteCodes); !ok {
 		return fmt.Errorf("bytecodes response wrong: %T %v", resp, resp)
 	} else {
 		res = (*snap.ByteCodesPacket)(r)
 	}
+
 	if exp, got := tc.expHashes, len(res.Codes); exp != got {
 		for i, c := range res.Codes {
 			fmt.Printf("%d. %#x\n", i, c)
 		}
+
 		return fmt.Errorf("expected %d bytecodes, got %d", exp, got)
 	}
 	// Cross reference the requested bytecodes with the response to find gaps
@@ -638,9 +683,11 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 		for j < len(req.Hashes) && !bytes.Equal(hash, req.Hashes[j][:]) {
 			j++
 		}
+
 		if j < len(req.Hashes) {
 			codes[j] = bytecodes[i]
 			j++
+
 			continue
 		}
 		// We've either ran out of hashes, or got unrequested data
@@ -655,7 +702,9 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -666,14 +715,18 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 		Paths: tc.paths,
 		Bytes: tc.nBytes,
 	}
+
 	resp, err := conn.snapRequest(req, req.ID, s.chain)
 	if err != nil {
 		if tc.expReject {
 			return nil
 		}
+
 		return fmt.Errorf("trienodes  request failed: %v", err)
 	}
+
 	var res *snap.TrieNodesPacket
+
 	if r, ok := resp.(*TrieNodes); !ok {
 		return fmt.Errorf("trienodes response wrong: %T %v", resp, resp)
 	} else {
@@ -686,18 +739,22 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 	// that the serving node is missing
 	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
 	hash := make([]byte, 32)
+
 	trienodes := res.Nodes
 	if got, want := len(trienodes), len(tc.expHashes); got != want {
 		return fmt.Errorf("wrong trienode count, got %d, want %d\n", got, want)
 	}
+
 	for i, trienode := range trienodes {
 		hasher.Reset()
 		hasher.Write(trienode)
 		hasher.Read(hash)
+
 		if got, want := hash, tc.expHashes[i]; !bytes.Equal(got, want[:]) {
 			fmt.Printf("hash %d wrong, got %#x, want %#x\n", i, got, want)
 			err = fmt.Errorf("hash %d wrong, got %#x, want %#x", i, got, want)
 		}
 	}
+
 	return err
 }

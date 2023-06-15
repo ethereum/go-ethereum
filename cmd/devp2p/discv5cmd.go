@@ -81,19 +81,23 @@ var (
 
 func discv5Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	disc := startV5(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Ping(n))
+
 	return nil
 }
 
 func discv5Resolve(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	disc := startV5(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Resolve(n))
+
 	return nil
 }
 
@@ -101,8 +105,11 @@ func discv5Crawl(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
+
 	nodesFile := ctx.Args().First()
+
 	var inputSet nodeSet
+
 	if common.FileExist(nodesFile) {
 		inputSet = loadNodesJSON(nodesFile)
 	}
@@ -113,6 +120,7 @@ func discv5Crawl(ctx *cli.Context) error {
 	c.revalidateInterval = 10 * time.Minute
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
+
 	return nil
 }
 
@@ -123,6 +131,7 @@ func discv5Test(ctx *cli.Context) error {
 		Listen1: ctx.String(testListen1Flag.Name),
 		Listen2: ctx.String(testListen2Flag.Name),
 	}
+
 	return runTests(ctx, suite.AllTests())
 }
 
@@ -138,9 +147,11 @@ func discv5Listen(ctx *cli.Context) error {
 func startV5(ctx *cli.Context) *discover.UDPv5 {
 	ln, config := makeDiscoveryConfig(ctx)
 	socket := listen(ctx, ln)
+
 	disc, err := discover.ListenV5(socket, ln, config)
 	if err != nil {
 		exit(err)
 	}
+
 	return disc
 }

@@ -32,5 +32,6 @@ func Fuzz(input []byte) int {
 	if err != nil && len(err.Error()) > 6 && err.Error()[:7] == "invalid" {
 		return 0
 	}
+
 	return 1
 }

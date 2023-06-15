@@ -10,6 +10,7 @@ import (
 
 func TestMain(m *testing.M) {
 	metrics.Enabled = true
+
 	os.Exit(m.Run())
 }
 

@@ -70,10 +70,12 @@ func (c *committer) commit(path []byte, n node) node {
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
+
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
+
 		return collapsed
 	case *fullNode:
 		hashedKids := c.commitChildren(path, cn)
@@ -84,6 +86,7 @@ func (c *committer) commit(path []byte, n node) node {
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
+
 		return collapsed
 	case hashNode:
 		return cn
@@ -96,6 +99,7 @@ func (c *committer) commit(path []byte, n node) node {
 // commitChildren commits the children of the given fullnode
 func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 	var children [17]node
+
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -117,6 +121,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
+
 	return children
 }
 
@@ -137,6 +142,7 @@ func (c *committer) store(path []byte, n node) node {
 		if _, ok := c.nodes.accessList[string(path)]; ok {
 			c.nodes.markDeleted(path)
 		}
+
 		return n
 	}
 	// We have the hash already, estimate the RLP encoding-size of the node.
@@ -163,6 +169,7 @@ func (c *committer) store(path []byte, n node) node {
 			}
 		}
 	}
+
 	return hash
 }
 
@@ -178,6 +185,7 @@ func estimateSize(n node) int {
 	case *fullNode:
 		// A full node contains up to 16 hashes (some nils), and a key
 		s := 3
+
 		for i := 0; i < 16; i++ {
 			if child := n.Children[i]; child != nil {
 				s += estimateSize(child)
@@ -185,6 +193,7 @@ func estimateSize(n node) int {
 				s++
 			}
 		}
+
 		return s
 	case valueNode:
 		return 1 + len(n)

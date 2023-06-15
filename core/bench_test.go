@@ -85,10 +85,12 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 		data := make([]byte, nbytes)
 		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
 		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)))
+
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
+
 		tx, _ := types.SignNewTx(benchRootKey, signer, &types.LegacyTx{
 			Nonce:    gen.TxNonce(benchRootAddr),
 			To:       &toaddr,
@@ -109,6 +111,7 @@ var (
 func init() {
 	ringKeys[0] = benchRootKey
 	ringAddrs[0] = benchRootAddr
+
 	for i := 1; i < len(ringKeys); i++ {
 		ringKeys[i], _ = crypto.GenerateKey()
 		ringAddrs[i] = crypto.PubkeyToAddress(ringKeys[i].PublicKey)
@@ -121,26 +124,33 @@ func init() {
 func genTxRing(naccounts int) func(int, *BlockGen) {
 	from := 0
 	availableFunds := new(big.Int).Set(benchRootFunds)
+
 	return func(i int, gen *BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
+
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
+
 		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)))
+
 		for {
 			gas -= params.TxGas
 			if gas < params.TxGas {
 				break
 			}
+
 			to := (from + 1) % naccounts
 			burn := new(big.Int).SetUint64(params.TxGas)
 			burn.Mul(burn, gen.header.BaseFee)
 			availableFunds.Sub(availableFunds, burn)
+
 			if availableFunds.Cmp(big.NewInt(1)) < 0 {
 				panic("not enough funds")
 			}
+
 			tx, err := types.SignNewTx(ringKeys[from], signer,
 				&types.LegacyTx{
 					Nonce:    gen.TxNonce(ringAddrs[from]),
@@ -152,7 +162,9 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 			if err != nil {
 				panic(err)
 			}
+
 			gen.AddTx(tx)
+
 			from = to
 		}
 	}
@@ -175,14 +187,17 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	var db ethdb.Database
 
 	var err error
+
 	if !disk {
 		db = rawdb.NewMemoryDatabase()
 	} else {
 		dir := b.TempDir()
+
 		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
+
 		defer db.Close()
 	}
 
@@ -200,6 +215,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
+
 	if i, err := chainman.InsertChain(chain); err != nil {
 		b.Fatalf("insert error (block %d): %v\n", i, err)
 	}
@@ -281,9 +297,11 @@ func benchWriteChain(b *testing.B, full bool, count uint64) {
 	for i := 0; i < b.N; i++ {
 		dir := b.TempDir()
 		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
+
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
+
 		makeChainForBench(db, full, count)
 		db.Close()
 	}
@@ -296,8 +314,10 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
+
 	makeChainForBench(db, full, count)
 	db.Close()
+
 	cacheConfig := *DefaultCacheConfig
 	cacheConfig.TrieDirtyDisabled = true
 

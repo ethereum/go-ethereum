@@ -36,13 +36,16 @@ var disasmCommand = &cli.Command{
 
 func disasmCmd(ctx *cli.Context) error {
 	var in string
+
 	switch {
 	case len(ctx.Args().First()) > 0:
 		fn := ctx.Args().First()
+
 		input, err := os.ReadFile(fn)
 		if err != nil {
 			return err
 		}
+
 		in = string(input)
 	case ctx.IsSet(InputFlag.Name):
 		in = ctx.String(InputFlag.Name)
@@ -52,5 +55,6 @@ func disasmCmd(ctx *cli.Context) error {
 
 	code := strings.TrimSpace(in)
 	fmt.Printf("%v\n", code)
+
 	return asm.PrintDisassembled(code)
 }

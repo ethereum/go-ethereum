@@ -41,6 +41,7 @@ func (al AccessList) StorageKeys() int {
 	for _, tuple := range al {
 		sum += len(tuple.StorageKeys)
 	}
+
 	return sum
 }
 
@@ -75,12 +76,15 @@ func (tx *AccessListTx) copy() TxData {
 		S:          new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
+
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
+
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
+
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
 
@@ -90,15 +94,19 @@ func (tx *AccessListTx) copy() TxData {
 			cpy.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
 		}
 	}
+
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
+
 	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
+
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
+
 	return cpy
 }
 

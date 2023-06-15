@@ -76,6 +76,7 @@ func localConsole(ctx *cli.Context) error {
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	startNode(ctx, stack, backend, true)
+
 	defer stack.Close()
 
 	// Attach to the newly started node and create the JavaScript console.
@@ -83,16 +84,19 @@ func localConsole(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to attach to the inproc geth: %v", err)
 	}
+
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
 		DocRoot: ctx.String(utils.JSpathFlag.Name),
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
+
 	console, err := console.New(config)
 	if err != nil {
 		return fmt.Errorf("failed to start the JavaScript console: %v", err)
 	}
+
 	defer console.Stop(false)
 
 	// If only a short execution was requested, evaluate and return.
@@ -111,6 +115,7 @@ func localConsole(ctx *cli.Context) error {
 	// Print the welcome screen and enter interactive mode.
 	console.Welcome()
 	console.Interactive()
+
 	return nil
 }
 
@@ -120,12 +125,14 @@ func remoteConsole(ctx *cli.Context) error {
 	if ctx.Args().Len() > 1 {
 		utils.Fatalf("invalid command-line: too many arguments")
 	}
+
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
 		if ctx.IsSet(utils.DataDirFlag.Name) {
 			path = ctx.String(utils.DataDirFlag.Name)
 		}
+
 		if path != "" {
 			if ctx.Bool(utils.GoerliFlag.Name) {
 				path = filepath.Join(path, "goerli")
@@ -135,8 +142,8 @@ func remoteConsole(ctx *cli.Context) error {
 			} else if ctx.Bool(utils.SepoliaFlag.Name) {
 				path = filepath.Join(path, "sepolia")
 			}
-
 		}
+
 		endpoint = fmt.Sprintf("%s/bor.ipc", path)
 	}
 
@@ -144,16 +151,19 @@ func remoteConsole(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}
+
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
 		DocRoot: ctx.String(utils.JSpathFlag.Name),
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
+
 	console, err := console.New(config)
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
 	}
+
 	defer console.Stop(false)
 
 	if script := ctx.String(utils.ExecFlag.Name); script != "" {
@@ -164,6 +174,7 @@ func remoteConsole(ctx *cli.Context) error {
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
+
 	return nil
 }
 
@@ -178,5 +189,6 @@ func ephemeralConsole(ctx *cli.Context) error {
 
 	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:
 geth --exec "%s" console`, b.String())
+
 	return nil
 }

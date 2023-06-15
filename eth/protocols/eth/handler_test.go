@@ -178,10 +178,12 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 	for i := range unknown {
 		unknown[i] = byte(i)
 	}
+
 	getHashes := func(from, limit uint64) (hashes []common.Hash) {
 		for i := uint64(0); i < limit; i++ {
 			hashes = append(hashes, backend.chain.GetCanonicalHash(from-1-i))
 		}
+
 		return hashes
 	}
 	// Create a batch of tests for various scenarios
@@ -322,6 +324,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			RequestId:             123,
 			GetBlockHeadersPacket: tt.query,
 		})
+
 		if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, &BlockHeadersPacket66{
 			RequestId:          123,
 			BlockHeadersPacket: headers,
@@ -337,6 +340,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 					RequestId:             456,
 					GetBlockHeadersPacket: tt.query,
 				})
+
 				expected := &BlockHeadersPacket66{RequestId: 456, BlockHeadersPacket: headers}
 				if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, expected); err != nil {
 					t.Errorf("test %d by hash: headers mismatch: %v", i, err)
@@ -414,6 +418,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			bodies []*BlockBody
 			seen   = make(map[int64]bool)
 		)
+
 		for j := 0; j < tt.random; j++ {
 			for {
 				num := rand.Int63n(int64(backend.chain.CurrentBlock().Number.Uint64()))
@@ -422,15 +427,19 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 
 					block := backend.chain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
+
 					if len(bodies) < tt.expected {
 						bodies = append(bodies, &BlockBody{Transactions: block.Transactions(), Uncles: block.Uncles(), Withdrawals: block.Withdrawals()})
 					}
+
 					break
 				}
 			}
 		}
+
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
+
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := backend.chain.GetBlockByHash(hash)
 
@@ -443,6 +452,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			RequestId:            123,
 			GetBlockBodiesPacket: hashes,
 		})
+
 		if err := p2p.ExpectMsg(peer.app, BlockBodiesMsg, &BlockBodiesPacket66{
 			RequestId:         123,
 			BlockBodiesPacket: bodies,
@@ -514,6 +524,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 
 	// Collect all state tree hashes.
 	var hashes []common.Hash
+
 	it := backend.db.NewIterator(nil, nil)
 	for it.Next() {
 		if key := it.Key(); len(key) == common.HashLength {
@@ -527,6 +538,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 		RequestId:         123,
 		GetNodeDataPacket: hashes,
 	})
+
 	msg, err := peer.app.ReadMsg()
 
 	if !drop {
@@ -537,11 +549,14 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 		if err != nil {
 			return
 		}
+
 		t.Fatalf("succeeded to read node data response on non-supporting protocol: %v", msg)
 	}
+
 	if msg.Code != NodeDataMsg {
 		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, NodeDataMsg)
 	}
+
 	var res NodeDataPacket66
 	if err := msg.Decode(&res); err != nil {
 		t.Fatalf("failed to decode response node data: %v", err)
@@ -567,6 +582,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		root := backend.chain.GetBlockByNumber(i).Root()
 		reconstructed, _ := state.New(root, state.NewDatabase(reconstructDB), nil)
+
 		for j, acc := range accounts {
 			state, _ := backend.chain.StateAt(root)
 			bw := state.GetBalance(acc)
@@ -575,6 +591,7 @@ func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 			if (bw == nil) != (bh == nil) {
 				t.Errorf("block %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
+
 			if bw != nil && bh != nil && bw.Cmp(bh) != 0 {
 				t.Errorf("block %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
@@ -658,6 +675,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		RequestId:         123,
 		GetReceiptsPacket: hashes,
 	})
+
 	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket66{
 		RequestId:      123,
 		ReceiptsPacket: receipts,

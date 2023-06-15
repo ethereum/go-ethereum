@@ -33,5 +33,6 @@ func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, 
 	if err != nil {
 		return nil, err
 	}
+
 	return NewDatabase(db), nil
 }

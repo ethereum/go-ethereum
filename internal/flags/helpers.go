@@ -38,6 +38,7 @@ func NewApp(usage string) *cli.App {
 		MigrateGlobalFlags(ctx)
 		return nil
 	}
+
 	return app
 }
 
@@ -47,6 +48,7 @@ func Merge(groups ...[]cli.Flag) []cli.Flag {
 	for _, group := range groups {
 		ret = append(ret, group...)
 	}
+
 	return ret
 }
 
@@ -74,7 +76,9 @@ func MigrateGlobalFlags(ctx *cli.Context) {
 			if _, ok := migrationApplied[cmd]; ok {
 				continue
 			}
+
 			migrationApplied[cmd] = struct{}{}
+
 			fn(cmd)
 			iterate(cmd.Subcommands, fn)
 		}
@@ -98,11 +102,13 @@ func doMigrateFlags(ctx *cli.Context) {
 	// Figure out if there are any aliases of commands. If there are, we want
 	// to ignore them when iterating over the flags.
 	var aliases = make(map[string]bool)
+
 	for _, fl := range ctx.Command.Flags {
 		for _, alias := range fl.Names()[1:] {
 			aliases[alias] = true
 		}
 	}
+
 	for _, name := range ctx.FlagNames() {
 		for _, parent := range ctx.Lineage()[1:] {
 			if parent.IsSet(name) {
@@ -123,6 +129,7 @@ func doMigrateFlags(ctx *cli.Context) {
 				} else {
 					ctx.Set(name, parent.String(name))
 				}
+
 				break
 			}
 		}
@@ -142,6 +149,7 @@ func FlagString(f cli.Flag) string {
 
 	needsPlaceholder := df.TakesValue()
 	placeholder := ""
+
 	if needsPlaceholder {
 		placeholder = "value"
 	}
@@ -155,6 +163,7 @@ func FlagString(f cli.Flag) string {
 
 	usage := strings.TrimSpace(df.GetUsage())
 	envHint := strings.TrimSpace(cli.FlagEnvHinter(df.GetEnvVars(), ""))
+
 	if len(envHint) > 0 {
 		usage += " " + envHint
 	}
@@ -169,6 +178,7 @@ func pad(s string, length int) string {
 	if len(s) < length {
 		s += strings.Repeat(" ", length-len(s))
 	}
+
 	return s
 }
 
@@ -185,30 +195,38 @@ func wordWrap(s string, width int) string {
 
 	for {
 		sp := strings.IndexByte(s, ' ')
+
 		var word string
+
 		if sp == -1 {
 			word = s
 		} else {
 			word = s[:sp]
 		}
+
 		wlen := len(word)
+
 		over := lineLength+wlen >= width
 		if over {
 			output.WriteByte('\n')
+
 			lineLength = 0
 		} else {
 			if lineLength != 0 {
 				output.WriteByte(' ')
+
 				lineLength++
 			}
 		}
 
 		output.WriteString(word)
+
 		lineLength += wlen
 
 		if sp == -1 {
 			break
 		}
+
 		s = s[wlen+1:]
 	}
 

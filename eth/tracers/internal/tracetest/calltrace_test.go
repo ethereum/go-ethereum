@@ -96,14 +96,17 @@ func TestCallTracerNativeWithLog(t *testing.T) {
 
 func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 	isLegacy := strings.HasSuffix(dirPath, "_legacy")
+
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
 		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -118,6 +121,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
+
 			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
@@ -141,15 +145,19 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
+
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
+
 			evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
+
 			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
+
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background())
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
@@ -165,13 +173,16 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				// This is a tweak to make it deterministic. Can be removed when
 				// we remove the legacy tracer.
 				var x callTrace
+
 				json.Unmarshal(res, &x)
 				res, _ = json.Marshal(x)
 			}
+
 			want, err := json.Marshal(test.Result)
 			if err != nil {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
+
 			if string(want) != string(res) {
 				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}
@@ -179,10 +190,12 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			type simpleResult struct {
 				GasUsed hexutil.Uint64
 			}
+
 			var topCall simpleResult
 			if err := json.Unmarshal(res, &topCall); err != nil {
 				t.Fatalf("failed to unmarshal top calls gasUsed: %v", err)
 			}
+
 			if uint64(topCall.GasUsed) != vmRet.UsedGas {
 				t.Fatalf("top call has invalid gasUsed. have: %d want: %d", topCall.GasUsed, vmRet.UsedGas)
 			}
@@ -195,20 +208,24 @@ func BenchmarkTracers(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
 			blob, err := os.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
 			}
+
 			test := new(callTracerTest)
 			if err := json.Unmarshal(blob, test); err != nil {
 				b.Fatalf("failed to parse testcase: %v", err)
 			}
+
 			benchTracer("callTracer", test, b)
 		})
 	}
@@ -220,11 +237,14 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
+
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
+
 	msg, err := core.TransactionToMessage(tx, signer, nil)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
+
 	origin, _ := signer.Sender(tx)
 	txContext := vm.TxContext{
 		Origin:   origin,
@@ -243,6 +263,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil)
 		if err != nil {
@@ -256,9 +277,11 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if _, err = st.TransitionDb(context.Background()); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
+
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
 		}
+
 		statedb.RevertToSnapshot(snap)
 	}
 }

@@ -34,6 +34,7 @@ func TestCreation(t *testing.T) {
 		time uint64
 		want ID
 	}
+
 	tests := []struct {
 		config  *params.ChainConfig
 		genesis common.Hash
@@ -377,6 +378,7 @@ func TestEncoding(t *testing.T) {
 			t.Errorf("test %d: failed to encode forkid: %v", i, err)
 			continue
 		}
+
 		if !bytes.Equal(have, tt.want) {
 			t.Errorf("test %d: RLP mismatch: have %x, want %x", i, have, tt.want)
 		}

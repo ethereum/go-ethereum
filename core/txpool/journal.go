@@ -64,9 +64,11 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 		// Skip the parsing if the journal file doesn't exist at all
 		return nil
 	}
+
 	if err != nil {
 		return err
 	}
+
 	defer input.Close()
 
 	// Temporarily discard any journal additions (don't double add on load)
@@ -84,14 +86,17 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 		for _, err := range add(txs) {
 			if err != nil {
 				log.Debug("Failed to add journaled transaction", "err", err)
+
 				dropped++
 			}
 		}
 	}
+
 	var (
 		failure error
 		batch   types.Transactions
 	)
+
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
@@ -99,9 +104,11 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 			if err != io.EOF {
 				failure = err
 			}
+
 			if batch.Len() > 0 {
 				loadBatch(batch)
 			}
+
 			break
 		}
 		// New transaction parsed, queue up for later, import if threshold is reached
@@ -122,9 +129,11 @@ func (journal *journal) insert(tx *types.Transaction) error {
 	if journal.writer == nil {
 		return errNoActiveJournal
 	}
+
 	if err := rlp.Encode(journal.writer, tx); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -136,6 +145,7 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 		if err := journal.writer.Close(); err != nil {
 			return err
 		}
+
 		journal.writer = nil
 	}
 	// Generate a new journal with the contents of the current pool
@@ -143,7 +153,9 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 	if err != nil {
 		return err
 	}
+
 	journaled := 0
+
 	for _, txs := range all {
 		for _, tx := range txs {
 			if err = rlp.Encode(replacement, tx); err != nil {
@@ -151,19 +163,24 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 				return err
 			}
 		}
+
 		journaled += len(txs)
 	}
+
 	replacement.Close()
 
 	// Replace the live journal with the newly generated one
 	if err = os.Rename(journal.path+".new", journal.path); err != nil {
 		return err
 	}
+
 	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
+
 	journal.writer = sink
+
 	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", len(all))
 
 	return nil
@@ -177,5 +194,6 @@ func (journal *journal) close() error {
 		err = journal.writer.Close()
 		journal.writer = nil
 	}
+
 	return err
 }

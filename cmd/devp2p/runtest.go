@@ -62,9 +62,11 @@ func runTests(ctx *cli.Context, tests []utesting.Test) error {
 	if ctx.Bool(testTAPFlag.Name) {
 		run = utesting.RunTAP
 	}
+
 	results := run(tests, os.Stdout)
 	if utesting.CountFailures(results) > 0 {
 		os.Exit(1)
 	}
+
 	return nil
 }

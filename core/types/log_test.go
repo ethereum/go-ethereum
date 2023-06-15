@@ -103,10 +103,12 @@ var unmarshalLogTests = map[string]struct {
 
 func TestUnmarshalLog(t *testing.T) {
 	dumper := spew.ConfigState{DisableMethods: true, Indent: "    "}
+
 	for name, test := range unmarshalLogTests {
 		var log *Log
 		err := json.Unmarshal([]byte(test.input), &log)
 		checkError(t, name, err, test.wantError)
+
 		if test.wantError == nil && err == nil {
 			if !reflect.DeepEqual(log, test.want) {
 				t.Errorf("test %q:\nGOT %sWANT %s", name, dumper.Sdump(log), dumper.Sdump(test.want))
@@ -121,12 +123,15 @@ func checkError(t *testing.T, testname string, got, want error) bool {
 			t.Errorf("test %q: got no error, want %q", testname, want)
 			return false
 		}
+
 		return true
 	}
+
 	if want == nil {
 		t.Errorf("test %q: unexpected error %q", testname, got)
 	} else if got.Error() != want.Error() {
 		t.Errorf("test %q: got error %q, want %q", testname, got, want)
 	}
+
 	return false
 }

@@ -67,6 +67,7 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	for id, n := range input {
 		c.output[id] = n
 	}
+
 	return c
 }
 
@@ -82,8 +83,10 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 	if nthreads < 1 {
 		nthreads = 1
 	}
+
 	defer timeoutTimer.Stop()
 	defer statusTicker.Stop()
+
 	for _, it := range c.iters {
 		go c.runIterator(doneCh, it)
 	}
@@ -152,18 +155,22 @@ loop:
 	}
 
 	close(c.closed)
+
 	for _, it := range c.iters {
 		it.Close()
 	}
+
 	for ; liveIters > 0; liveIters-- {
 		<-doneCh
 	}
 	wg.Wait()
+
 	return c.output
 }
 
 func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	defer func() { done <- it }()
+
 	for it.Next() {
 		select {
 		case c.ch <- it.Node():
@@ -195,20 +202,24 @@ func (c *crawler) updateNode(n *enode.Node) int {
 			log.Debug("Skipping node", "id", n.ID())
 			return nodeSkipIncompat
 		}
+
 		node.Score /= 2
 	} else {
 		node.N = nn
 		node.Seq = nn.Seq()
 		node.Score++
+
 		if node.FirstResponse.IsZero() {
 			node.FirstResponse = node.LastCheck
 			status = nodeAdded
 		}
+
 		node.LastResponse = node.LastCheck
 	}
 	// Store/update node in output set.
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	if node.Score <= 0 {
 		log.Debug("Removing node", "id", n.ID())
 		delete(c.output, n.ID())

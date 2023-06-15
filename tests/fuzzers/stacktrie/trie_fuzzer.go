@@ -44,17 +44,21 @@ func (f *fuzzer) read(size int) []byte {
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
 func (f *fuzzer) readSlice(min, max int) []byte {
 	var a uint16
+
 	binary.Read(f.input, binary.LittleEndian, &a)
 	size := min + int(a)%(max-min)
+
 	out := make([]byte, size)
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
@@ -78,8 +82,10 @@ func (s *spongeDb) Put(key []byte, value []byte) error {
 	if s.debug {
 		fmt.Printf("db.Put %x : %x\n", key, value)
 	}
+
 	s.sponge.Write(key)
 	s.sponge.Write(value)
+
 	return nil
 }
 func (s *spongeDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator { panic("implement me") }
@@ -131,6 +137,7 @@ func Fuzz(data []byte) int {
 		input:     bytes.NewReader(data),
 		exhausted: false,
 	}
+
 	return f.fuzz()
 }
 
@@ -140,6 +147,7 @@ func Debug(data []byte) int {
 		exhausted: false,
 		debugging: true,
 	}
+
 	return f.fuzz()
 }
 
@@ -164,20 +172,27 @@ func (f *fuzzer) fuzz() int {
 	for i := 0; !f.exhausted && i < maxElements; i++ {
 		k := f.read(32)
 		v := f.readSlice(1, 500)
+
 		if f.exhausted {
 			// If it was exhausted while reading, the value may be all zeroes,
 			// thus 'deletion' which is not supported on stacktrie
 			break
 		}
+
 		if _, present := keys[string(k)]; present {
 			// This key is a duplicate, ignore it
 			continue
 		}
+
 		keys[string(k)] = struct{}{}
+
 		vals = append(vals, kv{k: k, v: v})
+
 		trieA.MustUpdate(k, v)
+
 		useful = true
 	}
+
 	if !useful {
 		return 0
 	}
@@ -191,19 +206,25 @@ func (f *fuzzer) fuzz() int {
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)
+
 	for _, kv := range vals {
 		if f.debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
+
 		trieB.MustUpdate(kv.k, kv.v)
 	}
+
 	rootB := trieB.Hash()
 	trieB.Commit()
+
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
 	}
+
 	sumA := spongeA.sponge.Sum(nil)
 	sumB := spongeB.sponge.Sum(nil)
+
 	if !bytes.Equal(sumA, sumB) {
 		panic(fmt.Sprintf("sequence differ: (trie) %x != %x (stacktrie)", sumA, sumB))
 	}
@@ -222,33 +243,43 @@ func (f *fuzzer) fuzz() int {
 		})
 		checked int
 	)
+
 	for _, kv := range vals {
 		trieC.MustUpdate(kv.k, kv.v)
 	}
+
 	rootC, _ := trieC.Commit()
 	if rootA != rootC {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootC))
 	}
+
 	trieA, _ = trie.New(trie.TrieID(rootA), dbA)
+
 	iterA := trieA.NodeIterator(nil)
 	for iterA.Next(true) {
 		if iterA.Hash() == (common.Hash{}) {
 			if _, present := nodeset[string(iterA.Path())]; present {
 				panic("unexpected tiny node")
 			}
+
 			continue
 		}
+
 		nodeBlob, present := nodeset[string(iterA.Path())]
 		if !present {
 			panic("missing node")
 		}
+
 		if !bytes.Equal(nodeBlob, iterA.NodeBlob()) {
 			panic("node blob is not matched")
 		}
+
 		checked += 1
 	}
+
 	if checked != len(nodeset) {
 		panic("node number is not matched")
 	}
+
 	return 1
 }

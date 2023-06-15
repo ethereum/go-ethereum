@@ -90,7 +90,9 @@ func (api *adminAPI) AddPeer(url string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	server.AddPeer(node)
+
 	return true, nil
 }
 
@@ -106,7 +108,9 @@ func (api *adminAPI) RemovePeer(url string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	server.RemovePeer(node)
+
 	return true, nil
 }
 
@@ -117,11 +121,14 @@ func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
 	if server == nil {
 		return false, ErrNodeStopped
 	}
+
 	node, err := enode.Parse(enode.ValidSchemes, url)
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	server.AddTrustedPeer(node)
+
 	return true, nil
 }
 
@@ -133,11 +140,14 @@ func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
 	if server == nil {
 		return false, ErrNodeStopped
 	}
+
 	node, err := enode.Parse(enode.ValidSchemes, url)
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	server.RemoveTrustedPeer(node)
+
 	return true, nil
 }
 
@@ -155,10 +165,12 @@ func (api *adminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) 
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
 	}
+
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
 		events := make(chan *p2p.PeerEvent)
+
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
 
@@ -190,8 +202,10 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 		if api.node.config.HTTPHost != "" {
 			h = api.node.config.HTTPHost
 		}
+
 		host = &h
 	}
+
 	if port == nil {
 		port = &api.node.config.HTTPPort
 	}
@@ -208,12 +222,14 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 			config.CorsAllowedOrigins = append(config.CorsAllowedOrigins, strings.TrimSpace(origin))
 		}
 	}
+
 	if vhosts != nil {
 		config.Vhosts = nil
 		for _, vhost := range strings.Split(*host, ",") {
 			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
 		}
 	}
+
 	if apis != nil {
 		config.Modules = nil
 		for _, m := range strings.Split(*apis, ",") {
@@ -224,12 +240,15 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	if err := api.node.http.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
+
 	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
 		return false, err
 	}
+
 	if err := api.node.http.start(); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -264,8 +283,10 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 		if api.node.config.WSHost != "" {
 			h = api.node.config.WSHost
 		}
+
 		host = &h
 	}
+
 	if port == nil {
 		port = &api.node.config.WSPort
 	}
@@ -282,6 +303,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 			config.Modules = append(config.Modules, strings.TrimSpace(m))
 		}
 	}
+
 	if allowedOrigins != nil {
 		config.Origins = nil
 		for _, origin := range strings.Split(*allowedOrigins, ",") {
@@ -294,14 +316,18 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
+
 	openApis, _ := api.node.getAPIs()
 	if err := server.enableWS(openApis, config); err != nil {
 		return false, err
 	}
+
 	if err := server.start(); err != nil {
 		return false, err
 	}
+
 	api.node.http.log.Info("WebSocket endpoint opened", "url", api.node.WSEndpoint())
+
 	return true, nil
 }
 
@@ -309,6 +335,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 func (api *adminAPI) StopWS() (bool, error) {
 	api.node.http.stopWS()
 	api.node.ws.stop()
+
 	return true, nil
 }
 
@@ -319,6 +346,7 @@ func (api *adminAPI) Peers() ([]*p2p.PeerInfo, error) {
 	if server == nil {
 		return nil, ErrNodeStopped
 	}
+
 	return server.PeersInfo(), nil
 }
 
@@ -329,6 +357,7 @@ func (api *adminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 	if server == nil {
 		return nil, ErrNodeStopped
 	}
+
 	return server.NodeInfo(), nil
 }
 

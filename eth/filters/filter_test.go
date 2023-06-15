@@ -37,6 +37,7 @@ func makeReceipt(addr common.Address) *types.Receipt {
 		{Address: addr},
 	}
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+
 	return receipt
 }
 
@@ -56,7 +57,9 @@ func BenchmarkFilters(b *testing.B) {
 			Config:  params.TestChainConfig,
 		}
 	)
+
 	defer db.Close()
+
 	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
@@ -88,6 +91,7 @@ func BenchmarkFilters(b *testing.B) {
 		rawdb.WriteHeadBlockHash(db, block.Hash())
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
+
 	b.ResetTimer()
 
 	filter := sys.NewRangeFilter(0, -1, []common.Address{addr1, addr2, addr3, addr4}, nil)
@@ -118,6 +122,7 @@ func TestFilters(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
+
 	defer db.Close()
 
 	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
@@ -169,6 +174,7 @@ func TestFilters(t *testing.T) {
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
 	gspec.MustCommit(db)
+
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
@@ -180,6 +186,7 @@ func TestFilters(t *testing.T) {
 	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
 
 	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
@@ -224,16 +231,21 @@ func TestFilters(t *testing.T) {
 		},
 	} {
 		logs, _ := tc.f.Logs(context.Background())
+
 		var haveHashes []common.Hash
+
 		for _, l := range logs {
 			haveHashes = append(haveHashes, l.Topics[0])
 		}
+
 		if have, want := len(haveHashes), len(tc.wantHashes); have != want {
 			t.Fatalf("test %d, have %d logs, want %d", i, have, want)
 		}
+
 		if len(haveHashes) == 0 {
 			continue
 		}
+
 		if !reflect.DeepEqual(tc.wantHashes, haveHashes) {
 			t.Fatalf("test %d, have %v want %v", i, haveHashes, tc.wantHashes)
 		}

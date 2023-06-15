@@ -81,14 +81,18 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
+
 	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
+
 	backend.chain = chain
+
 	return backend
 }
 
@@ -100,6 +104,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
 		return b.chain.CurrentHeader(), nil
 	}
+
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
@@ -111,6 +116,7 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
 		return b.chain.GetBlockByNumber(b.chain.CurrentBlock().Number.Uint64()), nil
 	}
+
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
@@ -173,6 +179,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, errStateNotFound
 	}
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
@@ -181,6 +188,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	for idx, tx := range block.Transactions() {
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
+
 		blockContext := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {
 			return msg, blockContext, statedb, release, nil
@@ -191,6 +199,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
+
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
 
@@ -227,6 +236,7 @@ func TestTraceCall(t *testing.T) {
 
 	defer backend.teardown()
 	api := NewAPI(backend)
+
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        ethapi.TransactionArgs
@@ -316,6 +326,7 @@ func TestTraceCall(t *testing.T) {
 				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
 				continue
 			}
+
 			if !reflect.DeepEqual(err, testspec.expectErr) {
 				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
 			}
@@ -324,14 +335,17 @@ func TestTraceCall(t *testing.T) {
 				t.Errorf("test %d: expect no error, got %v", i, err)
 				continue
 			}
+
 			var have *logger.ExecutionResult
 			if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
 				t.Errorf("test %d: failed to unmarshal result %v", i, err)
 			}
+
 			var want *logger.ExecutionResult
 			if err := json.Unmarshal([]byte(testspec.expect), &want); err != nil {
 				t.Errorf("test %d: failed to unmarshal result %v", i, err)
 			}
+
 			if !reflect.DeepEqual(have, want) {
 				t.Errorf("test %d: result mismatch, want %v, got %v", i, testspec.expect, string(result.(json.RawMessage)))
 			}
@@ -364,6 +378,7 @@ func TestTraceTransaction(t *testing.T) {
 
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
+
 	result, err := api.TraceTransaction(context.Background(), target, nil)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
@@ -450,6 +465,7 @@ func TestTraceBlock(t *testing.T) {
 			want:        `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
 		},
 	}
+
 	for i, tc := range testSuite {
 		result, err := api.TraceBlockByNumber(context.Background(), tc.blockNumber, tc.config)
 		if tc.expectErr != nil {
@@ -457,17 +473,22 @@ func TestTraceBlock(t *testing.T) {
 				t.Errorf("test %d, want error %v", i, tc.expectErr)
 				continue
 			}
+
 			if !reflect.DeepEqual(err, tc.expectErr) {
 				t.Errorf("test %d: error mismatch, want %v, get %v", i, tc.expectErr, err)
 			}
+
 			continue
 		}
+
 		if err != nil {
 			t.Errorf("test %d, want no error, have %v", i, err)
 			continue
 		}
+
 		have, _ := json.Marshal(result)
 		want := tc.want
+
 		if string(have) != want {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, string(have), want)
 		}
@@ -492,7 +513,6 @@ func TestIOdump(t *testing.T) {
 		// Transfer from account[0] to account[1], account[1] to account[2], account[2] to account[3], account[3] to account[4], account[4] to account[0]
 		// value:  1000 wei
 		// fee:    0 wei
-
 		for j := 0; j < 5; j++ {
 			tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[(j+1)%5].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[j].key)
 			b.AddTx(tx)
@@ -588,11 +608,13 @@ func TestTracingWithOverrides(t *testing.T) {
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
 	randomAccounts := newAccounts(3)
+
 	type res struct {
 		Gas         int
 		Failed      bool
 		ReturnValue string
 	}
+
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        ethapi.TransactionArgs
@@ -852,6 +874,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			want: `{"gas":25288,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000055"}`,
 		},
 	}
+
 	for i, tc := range testSuite {
 		result, err := api.TraceCall(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config)
 		if tc.expectErr != nil {
@@ -859,11 +882,14 @@ func TestTracingWithOverrides(t *testing.T) {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
 				continue
 			}
+
 			if !errors.Is(err, tc.expectErr) {
 				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 			}
+
 			continue
 		}
+
 		if err != nil {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
@@ -873,9 +899,11 @@ func TestTracingWithOverrides(t *testing.T) {
 			have res
 			want res
 		)
+
 		resBytes, _ := json.Marshal(result)
 		json.Unmarshal(resBytes, &have)
 		json.Unmarshal([]byte(tc.want), &want)
+
 		if !reflect.DeepEqual(have, want) {
 			t.Logf("result: %v\n", string(resBytes))
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, want)
@@ -901,6 +929,7 @@ func newAccounts(n int) (accounts Accounts) {
 		accounts = append(accounts, Account{key: key, addr: addr})
 	}
 	sort.Sort(accounts)
+
 	return accounts
 }
 
@@ -918,10 +947,12 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 	if len(keys) != len(vals) {
 		panic("invalid input")
 	}
+
 	m := make(map[common.Hash]common.Hash)
 	for i := 0; i < len(keys); i++ {
 		m[keys[i]] = vals[i]
 	}
+
 	return &m
 }
 
@@ -955,6 +986,7 @@ func TestTraceChain(t *testing.T) {
 		for j := 0; j < i+1; j++ {
 			tx, _ := types.SignTx(types.NewTransaction(nonce, accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 			b.AddTx(tx)
+
 			nonce += 1
 		}
 	})

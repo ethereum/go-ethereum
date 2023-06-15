@@ -72,6 +72,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	if strings.Count(t, "[") != strings.Count(t, "]") {
 		return Type{}, fmt.Errorf("invalid arg type in abi")
 	}
+
 	typ.stringKind = t
 
 	// if there are brackets, get ready to go into slice/array mode and
@@ -84,6 +85,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		}
 		// recursively embed the type
 		i := strings.LastIndex(t, "[")
+
 		embeddedType, err := NewType(t[:i], subInternal, components)
 		if err != nil {
 			return Type{}, err
@@ -103,14 +105,17 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			// is an array
 			typ.T = ArrayTy
 			typ.Elem = &embeddedType
+
 			typ.Size, err = strconv.Atoi(intz[0])
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
+
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
+
 		return typ, err
 	}
 	// parse the type and size of the abi-type.
@@ -118,12 +123,15 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	if len(matches) == 0 {
 		return Type{}, fmt.Errorf("invalid type '%v'", t)
 	}
+
 	parsedType := matches[0]
 
 	// varSize is the size of the variable
 	var varSize int
+
 	if len(parsedType[3]) > 0 {
 		var err error
+
 		varSize, err = strconv.Atoi(parsedType[2])
 		if err != nil {
 			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
@@ -157,6 +165,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			if varSize > 32 {
 				return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 			}
+
 			typ.T = FixedBytesTy
 			typ.Size = varSize
 		}
@@ -168,7 +177,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			expression string // canonical parameter expression
 			used       = make(map[string]bool)
 		)
+
 		expression += "("
+
 		for idx, c := range components {
 			cType, err := NewType(c.Type, c.InternalType, c.Components)
 			if err != nil {
@@ -182,6 +193,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			}
 
 			fieldName := ResolveNameConflict(name, func(s string) bool { return used[s] })
+
 			if err != nil {
 				return Type{}, err
 			}
@@ -191,18 +203,22 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			if !isValidFieldName(fieldName) {
 				return Type{}, fmt.Errorf("field %d has invalid name", idx)
 			}
+
 			fields = append(fields, reflect.StructField{
 				Name: fieldName, // reflect.StructOf will panic for any exported field.
 				Type: cType.GetType(),
 				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
+
 			elems = append(elems, &cType)
 			names = append(names, c.Name)
+
 			expression += cType.stringKind
 			if idx != len(components)-1 {
 				expression += ","
 			}
 		}
+
 		expression += ")"
 
 		typ.TupleType = reflect.StructOf(fields)
@@ -291,23 +307,29 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		// calculate offset if any
 		offset := 0
 		offsetReq := isDynamicType(*t.Elem)
+
 		if offsetReq {
 			offset = getTypeSize(*t.Elem) * v.Len()
 		}
+
 		var tail []byte
+
 		for i := 0; i < v.Len(); i++ {
 			val, err := t.Elem.pack(v.Index(i))
 			if err != nil {
 				return nil, err
 			}
+
 			if !offsetReq {
 				ret = append(ret, val...)
 				continue
 			}
+
 			ret = append(ret, packNum(reflect.ValueOf(offset))...)
 			offset += len(val)
 			tail = append(tail, val...)
 		}
+
 		return append(ret, tail...), nil
 	case TupleTy:
 		// (T1,...,Tk) for k >= 0 and any types T1, …, Tk
@@ -328,16 +350,20 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		for _, elem := range t.TupleElems {
 			offset += getTypeSize(*elem)
 		}
+
 		var ret, tail []byte
+
 		for i, elem := range t.TupleElems {
 			field := v.FieldByName(fieldmap[t.TupleRawNames[i]])
 			if !field.IsValid() {
 				return nil, fmt.Errorf("field %s for tuple not found in the given struct", t.TupleRawNames[i])
 			}
+
 			val, err := elem.pack(field)
 			if err != nil {
 				return nil, err
 			}
+
 			if isDynamicType(*elem) {
 				ret = append(ret, packNum(reflect.ValueOf(offset))...)
 				tail = append(tail, val...)
@@ -346,6 +372,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 				ret = append(ret, val...)
 			}
 		}
+
 		return append(ret, tail...), nil
 
 	default:
@@ -373,8 +400,10 @@ func isDynamicType(t Type) bool {
 				return true
 			}
 		}
+
 		return false
 	}
+
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && isDynamicType(*t.Elem))
 }
 
@@ -392,14 +421,17 @@ func getTypeSize(t Type) int {
 		if t.Elem.T == ArrayTy || t.Elem.T == TupleTy {
 			return t.Size * getTypeSize(*t.Elem)
 		}
+
 		return t.Size * 32
 	} else if t.T == TupleTy && !isDynamicType(t) {
 		total := 0
 		for _, elem := range t.TupleElems {
 			total += getTypeSize(*elem)
 		}
+
 		return total
 	}
+
 	return 32
 }
 

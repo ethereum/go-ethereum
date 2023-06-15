@@ -41,8 +41,10 @@ func parse(data []byte) {
 	if err != nil {
 		die(err)
 	}
+
 	messages := apitypes.ValidationMessages{}
 	db.ValidateCallData(nil, data, &messages)
+
 	for _, m := range messages.Messages {
 		fmt.Printf("%v: %v\n", m.Typ, m.Message)
 	}
@@ -56,10 +58,12 @@ func main() {
 	switch {
 	case flag.NArg() == 1:
 		hexdata := flag.Arg(0)
+
 		data, err := hex.DecodeString(strings.TrimPrefix(hexdata, "0x"))
 		if err != nil {
 			die(err)
 		}
+
 		parse(data)
 	default:
 		fmt.Fprintln(os.Stderr, "Error: one argument needed")

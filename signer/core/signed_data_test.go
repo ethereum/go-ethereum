@@ -188,36 +188,44 @@ func TestSignData(t *testing.T) {
 	createAccount(control, api, t)
 	createAccount(control, api, t)
 	control.approveCh <- "1"
+
 	list, err := api.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	a := common.NewMixedcaseAddress(list[0])
 
 	control.approveCh <- "Y"
 	control.inputCh <- "wrongpassword"
+
 	signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
+
 	if err != keystore.ErrDecrypt {
 		t.Errorf("Expected ErrLocked! '%v'", err)
 	}
 	control.approveCh <- "No way"
+
 	signature, err = api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
+
 	if err != core.ErrRequestDenied {
 		t.Errorf("Expected ErrRequestDenied! '%v'", err)
 	}
 	// text/plain
 	control.approveCh <- "Y"
 	control.inputCh <- "a_long_password"
+
 	signature, err = api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
@@ -269,6 +277,7 @@ func TestDomainChainId(t *testing.T) {
 	if _, err := withoutChainID.HashStruct("EIP712Domain", withoutChainID.Domain.Map()); err != nil {
 		t.Errorf("Expected the typedData to encode the domain successfully, got %v", err)
 	}
+
 	withChainID := apitypes.TypedData{
 		Types: apitypes.Types{
 			"EIP712Domain": []apitypes.Type{
@@ -296,6 +305,7 @@ func TestHashStruct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	mainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if mainHash != "0xc52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e" {
 		t.Errorf("Expected different hashStruct result (got %s)", mainHash)
@@ -305,6 +315,7 @@ func TestHashStruct(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	domainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if domainHash != "0xf2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f" {
 		t.Errorf("Expected different domain hashStruct result (got %s)", domainHash)
@@ -335,6 +346,7 @@ func TestEncodeData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2fc71e5fa27ff56c350aa531bc129ebdf613b772b6604664f5d8dbe21b85eb0c8cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
 		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
@@ -343,10 +355,12 @@ func TestEncodeData(t *testing.T) {
 
 func TestFormatter(t *testing.T) {
 	var d apitypes.TypedData
+
 	err := json.Unmarshal([]byte(jsonTypedData), &d)
 	if err != nil {
 		t.Fatalf("unmarshalling failed '%v'", err)
 	}
+
 	formatted, _ := d.Format()
 	for _, item := range formatted {
 		t.Logf("'%v'\n", item.Pprint(0))
@@ -361,12 +375,15 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
 	sighash := crypto.Keccak256(rawData)
+
 	return typedDataHash, sighash, nil
 }
 
@@ -375,27 +392,35 @@ func TestJsonFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
+
 	for i, fInfo := range testfiles {
 		if !strings.HasSuffix(fInfo.Name(), "json") {
 			continue
 		}
+
 		expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
+
 		data, err := os.ReadFile(path.Join("testdata", fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
 		}
+
 		var typedData apitypes.TypedData
+
 		err = json.Unmarshal(data, &typedData)
 		if err != nil {
 			t.Errorf("Test %d, file %v, json unmarshalling failed: %v", i, fInfo.Name(), err)
 			continue
 		}
+
 		_, _, err = sign(typedData)
 		t.Logf("Error %v\n", err)
+
 		if err != nil && !expectedFailure {
 			t.Errorf("Test %d failed, file %v: %v", i, fInfo.Name(), err)
 		}
+
 		if expectedFailure && err == nil {
 			t.Errorf("Test %d succeeded (expected failure), file %v: %v", i, fInfo.Name(), err)
 		}
@@ -406,31 +431,39 @@ func TestJsonFiles(t *testing.T) {
 // crashes or hangs.
 func TestFuzzerFiles(t *testing.T) {
 	corpusdir := path.Join("testdata", "fuzzing")
+
 	testfiles, err := os.ReadDir(corpusdir)
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
+
 	verbose := false
+
 	for i, fInfo := range testfiles {
 		data, err := os.ReadFile(path.Join(corpusdir, fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
 		}
+
 		var typedData apitypes.TypedData
+
 		err = json.Unmarshal(data, &typedData)
 		if err != nil {
 			t.Errorf("Test %d, file %v, json unmarshalling failed: %v", i, fInfo.Name(), err)
 			continue
 		}
+
 		_, err = typedData.EncodeData("EIP712Domain", typedData.Domain.Map(), 1)
 		if verbose && err != nil {
 			t.Logf("%d, EncodeData[1] err: %v\n", i, err)
 		}
+
 		_, err = typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
 		if verbose && err != nil {
 			t.Logf("%d, EncodeData[2] err: %v\n", i, err)
 		}
+
 		typedData.Format()
 	}
 }
@@ -518,14 +551,17 @@ var gnosisTx = `
 // struct without using the gnosis-specific endpoint
 func TestGnosisTypedData(t *testing.T) {
 	var td apitypes.TypedData
+
 	err := json.Unmarshal([]byte(gnosisTypedData), &td)
 	if err != nil {
 		t.Fatalf("unmarshalling failed '%v'", err)
 	}
+
 	_, sighash, err := sign(td)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expSigHash := common.FromHex("0x28bae2bd58d894a1d9b69e5e9fde3570c4b98a6fc5499aefb54fb830137e831f")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
@@ -536,15 +572,19 @@ func TestGnosisTypedData(t *testing.T) {
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomData(t *testing.T) {
 	var tx core.GnosisSafeTx
+
 	err := json.Unmarshal([]byte(gnosisTx), &tx)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var td = tx.ToTypedData()
+
 	_, sighash, err := sign(td)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expSigHash := common.FromHex("0x28bae2bd58d894a1d9b69e5e9fde3570c4b98a6fc5499aefb54fb830137e831f")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
@@ -648,14 +688,17 @@ var gnosisTxWithChainId = `
 
 func TestGnosisTypedDataWithChainId(t *testing.T) {
 	var td apitypes.TypedData
+
 	err := json.Unmarshal([]byte(gnosisTypedDataWithChainId), &td)
 	if err != nil {
 		t.Fatalf("unmarshalling failed '%v'", err)
 	}
+
 	_, sighash, err := sign(td)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expSigHash := common.FromHex("0x6619dab5401503f2735256e12b898e69eb701d6a7e0d07abf1be4bb8aebfba29")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
@@ -666,15 +709,19 @@ func TestGnosisTypedDataWithChainId(t *testing.T) {
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomDataWithChainId(t *testing.T) {
 	var tx core.GnosisSafeTx
+
 	err := json.Unmarshal([]byte(gnosisTxWithChainId), &tx)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var td = tx.ToTypedData()
+
 	_, sighash, err := sign(td)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expSigHash := common.FromHex("0x6619dab5401503f2735256e12b898e69eb701d6a7e0d07abf1be4bb8aebfba29")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
@@ -817,14 +864,17 @@ var complexTypedData = `
 
 func TestComplexTypedData(t *testing.T) {
 	var td apitypes.TypedData
+
 	err := json.Unmarshal([]byte(complexTypedData), &td)
 	if err != nil {
 		t.Fatalf("unmarshalling failed '%v'", err)
 	}
+
 	_, sighash, err := sign(td)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expSigHash := common.FromHex("0x42b1aca82bb6900ff75e90a136de550a58f1a220a071704088eabd5e6ce20446")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)

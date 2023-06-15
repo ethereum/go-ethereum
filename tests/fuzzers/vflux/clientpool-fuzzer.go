@@ -77,15 +77,19 @@ func (p *clientPeer) InactiveAllowance() time.Duration {
 
 func (p *clientPeer) UpdateCapacity(newCap uint64, requested bool) {
 	origin, originTotal := p.capacity, p.fuzzer.activeCap
+
 	p.fuzzer.activeCap -= p.capacity
 	if p.capacity != 0 {
 		p.fuzzer.activeCount--
 	}
+
 	p.capacity = newCap
 	p.fuzzer.activeCap += p.capacity
+
 	if p.capacity != 0 {
 		p.fuzzer.activeCount++
 	}
+
 	doLog("Update capacity", "peer", p.node.ID(), "origin", origin, "cap", newCap, "origintotal", originTotal, "total", p.fuzzer.activeCap, "requested", requested)
 }
 
@@ -93,9 +97,11 @@ func (p *clientPeer) Disconnect() {
 	origin, originTotal := p.capacity, p.fuzzer.activeCap
 	p.fuzzer.disconnectList = append(p.fuzzer.disconnectList, p)
 	p.fuzzer.activeCap -= p.capacity
+
 	if p.capacity != 0 {
 		p.fuzzer.activeCount--
 	}
+
 	p.capacity = 0
 	p.balance = nil
 	doLog("Disconnect", "peer", p.node.ID(), "origin", origin, "origintotal", originTotal, "total", p.fuzzer.activeCap)
@@ -113,6 +119,7 @@ func newFuzzer(input []byte) *fuzzer {
 			timeout: f.randomDelay(),
 		}
 	}
+
 	return f
 }
 
@@ -121,6 +128,7 @@ func (f *fuzzer) read(size int) []byte {
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
@@ -138,13 +146,16 @@ func (f *fuzzer) randomInt(max int) int {
 	if max == 0 {
 		return 0
 	}
+
 	if max <= 256 {
 		return int(f.randomByte()) % max
 	}
+
 	var a uint16
 	if err := binary.Read(f.input, binary.LittleEndian, &a); err != nil {
 		f.exhausted = true
 	}
+
 	return int(a % uint16(max))
 }
 
@@ -156,11 +167,14 @@ func (f *fuzzer) randomTokenAmount(signed bool) int64 {
 		if x <= math.MaxInt64 {
 			return -int64(x)
 		}
+
 		return math.MinInt64
 	}
+
 	if x <= math.MaxInt64 {
 		return int64(x)
 	}
+
 	return math.MaxInt64
 }
 
@@ -169,6 +183,7 @@ func (f *fuzzer) randomDelay() time.Duration {
 	if delay < 128 {
 		return time.Duration(delay) * time.Second
 	}
+
 	return 0
 }
 
@@ -218,19 +233,23 @@ func FuzzClientPool(input []byte) int {
 	if len(input) > 10000 {
 		return -1
 	}
+
 	f := newFuzzer(input)
 	if f.exhausted {
 		return 0
 	}
+
 	clock := &mclock.Simulated{}
 	db := memorydb.New()
 	pool := vfs.NewClientPool(db, 10, f.randomDelay(), clock, func() bool { return true })
 	pool.Start()
+
 	defer pool.Stop()
 
 	count := 0
 	for !f.exhausted && count < 1000 {
 		count++
+
 		switch f.randomInt(11) {
 		case 0:
 			i := int(f.randomByte())
@@ -267,6 +286,7 @@ func FuzzClientPool(input []byte) int {
 				bias      = f.randomDelay()
 				requested = f.randomBool()
 			)
+
 			pool.SetCapacity(f.peers[index].node, reqCap, bias, requested)
 			doLog("Set capacity", "id", f.peers[index].node.ID(), "reqcap", reqCap, "bias", bias, "requested", requested)
 		case 7:
@@ -298,16 +318,20 @@ func FuzzClientPool(input []byte) int {
 				if v.Type < 2 {
 					v.Value = *big.NewInt(f.randomTokenAmount(false))
 				}
+
 				req.AddTokens[i] = v
 			}
+
 			reqEnc, err := rlp.EncodeToBytes(&req)
 			if err != nil {
 				panic(err)
 			}
+
 			p := int(f.randomByte())
 			if p < len(reqEnc) {
 				reqEnc[p] = f.randomByte()
 			}
+
 			pool.Handle(f.peers[f.randomByte()].node.ID(), f.peers[f.randomByte()].freeID, vflux.CapacityQueryName, reqEnc)
 		}
 
@@ -315,19 +339,24 @@ func FuzzClientPool(input []byte) int {
 			pool.Unregister(peer)
 			doLog("Unregister peer", "id", peer.node.ID())
 		}
+
 		f.disconnectList = nil
 		if d := f.randomDelay(); d > 0 {
 			clock.Run(d)
 		}
+
 		doLog("Clientpool stats in fuzzer", "count", f.activeCap, "maxcount", f.maxCount, "cap", f.activeCap, "maxcap", f.maxCap)
 		activeCount, activeCap := pool.Active()
 		doLog("Clientpool stats in pool", "count", activeCount, "cap", activeCap)
+
 		if activeCount != f.activeCount || activeCap != f.activeCap {
 			panic(nil)
 		}
+
 		if f.activeCount > f.maxCount || f.activeCap > f.maxCap {
 			panic(nil)
 		}
 	}
+
 	return 0
 }

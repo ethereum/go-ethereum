@@ -37,18 +37,22 @@ func TestDatadirCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create stack with existing datadir: %v", err)
 	}
+
 	if err := node.Close(); err != nil {
 		t.Fatalf("failed to close node: %v", err)
 	}
 	// Generate a long non-existing datadir path and check that it gets created by a node
 	dir = filepath.Join(dir, "a", "b", "c", "d", "e", "f")
+
 	node, err = New(&Config{DataDir: dir})
 	if err != nil {
 		t.Fatalf("failed to create stack with creatable datadir: %v", err)
 	}
+
 	if err := node.Close(); err != nil {
 		t.Fatalf("failed to close node: %v", err)
 	}
+
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("freshly created datadir not accessible: %v", err)
 	}
@@ -57,12 +61,14 @@ func TestDatadirCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temporary file: %v", err)
 	}
+
 	defer func() {
 		file.Close()
 		os.Remove(file.Name())
 	}()
 
 	dir = filepath.Join(file.Name(), "invalid/path")
+
 	_, err = New(&Config{DataDir: dir})
 	if err == nil {
 		t.Fatalf("protocol stack created with an invalid datadir")
@@ -90,6 +96,7 @@ func TestIPCPathResolution(t *testing.T) {
 		{"data", "geth.ipc", true, `\\.\pipe\geth.ipc`},
 		{"data", `\\.\pipe\geth.ipc`, true, `\\.\pipe\geth.ipc`},
 	}
+
 	for i, test := range tests {
 		// Only run when platform/test match
 		if (runtime.GOOS == "windows") == test.Windows {
@@ -113,8 +120,10 @@ func TestNodeKeyPersistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate one-shot node key: %v", err)
 	}
+
 	config := &Config{Name: "unit-test", DataDir: dir, P2P: p2p.Config{PrivateKey: key}}
 	config.NodeKey()
+
 	if _, err := os.Stat(keyfile); err == nil {
 		t.Fatalf("one-shot node key persisted to data directory")
 	}
@@ -122,12 +131,15 @@ func TestNodeKeyPersistency(t *testing.T) {
 	// Configure a node with no preset key and ensure it is persisted this time
 	config = &Config{Name: "unit-test", DataDir: dir}
 	config.NodeKey()
+
 	if _, err := os.Stat(keyfile); err != nil {
 		t.Fatalf("node key not persisted to data directory: %v", err)
 	}
+
 	if _, err = crypto.LoadECDSA(keyfile); err != nil {
 		t.Fatalf("failed to load freshly persisted node key: %v", err)
 	}
+
 	blob1, err := os.ReadFile(keyfile)
 	if err != nil {
 		t.Fatalf("failed to read freshly persisted node key: %v", err)
@@ -136,10 +148,12 @@ func TestNodeKeyPersistency(t *testing.T) {
 	// Configure a new node and ensure the previously persisted key is loaded
 	config = &Config{Name: "unit-test", DataDir: dir}
 	config.NodeKey()
+
 	blob2, err := os.ReadFile(keyfile)
 	if err != nil {
 		t.Fatalf("failed to read previously persisted node key: %v", err)
 	}
+
 	if !bytes.Equal(blob1, blob2) {
 		t.Fatalf("persisted node key mismatch: have %x, want %x", blob2, blob1)
 	}
@@ -147,6 +161,7 @@ func TestNodeKeyPersistency(t *testing.T) {
 	// Configure ephemeral node and ensure no key is dumped locally
 	config = &Config{Name: "unit-test", DataDir: ""}
 	config.NodeKey()
+
 	if _, err := os.Stat(filepath.Join(".", "unit-test", datadirPrivateKey)); err == nil {
 		t.Fatalf("ephemeral node key persisted to disk")
 	}

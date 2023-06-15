@@ -46,6 +46,7 @@ func newSstack[P constraints.Ordered, V any](setIndex SetIndexCallback[V]) *ssta
 	result.active = make([]*item[P, V], blockSize)
 	result.blocks = [][]*item[P, V]{result.active}
 	result.capacity = blockSize
+
 	return result
 }
 
@@ -61,9 +62,11 @@ func (s *sstack[P, V]) Push(data any) {
 		s.active = s.blocks[s.size/blockSize]
 		s.offset = 0
 	}
+
 	if s.setIndex != nil {
 		s.setIndex(data.(*item[P, V]).value, s.size)
 	}
+
 	s.active[s.offset] = data.(*item[P, V])
 	s.offset++
 	s.size++
@@ -73,15 +76,18 @@ func (s *sstack[P, V]) Push(data any) {
 // Required by heap.Interface.
 func (s *sstack[P, V]) Pop() (res any) {
 	s.size--
+
 	s.offset--
 	if s.offset < 0 {
 		s.offset = blockSize - 1
 		s.active = s.blocks[s.size/blockSize]
 	}
+
 	res, s.active[s.offset] = s.active[s.offset], nil
 	if s.setIndex != nil {
 		s.setIndex(res.(*item[P, V]).value, -1)
 	}
+
 	return
 }
 
@@ -99,11 +105,13 @@ func (s *sstack[P, V]) Less(i, j int) bool {
 // Swaps two elements in the stack. Required by sort.Interface.
 func (s *sstack[P, V]) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
+
 	a, b := s.blocks[jb][jo], s.blocks[ib][io]
 	if s.setIndex != nil {
 		s.setIndex(a.value, i)
 		s.setIndex(b.value, j)
 	}
+
 	s.blocks[ib][io], s.blocks[jb][jo] = a, b
 }
 

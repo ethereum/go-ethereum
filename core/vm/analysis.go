@@ -37,6 +37,7 @@ func (bits bitvec) set1(pos uint64) {
 func (bits bitvec) setN(flag uint16, pos uint64) {
 	a := flag << (pos % 8)
 	bits[pos/8] |= byte(a)
+
 	if b := byte(a >> 8); b != 0 {
 		bits[pos/8+1] = b
 	}
@@ -80,17 +81,20 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		if int8(op) < int8(PUSH1) { // If not PUSH (the int8(op) > int(PUSH32) is always false).
 			continue
 		}
+
 		numbits := op - PUSH1 + 1
 		if numbits >= 8 {
 			for ; numbits >= 16; numbits -= 16 {
 				bits.set16(pc)
 				pc += 16
 			}
+
 			for ; numbits >= 8; numbits -= 8 {
 				bits.set8(pc)
 				pc += 8
 			}
 		}
+
 		switch numbits {
 		case 1:
 			bits.set1(pc)
@@ -115,5 +119,6 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 			pc += 7
 		}
 	}
+
 	return bits
 }

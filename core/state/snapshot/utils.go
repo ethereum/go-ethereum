@@ -91,6 +91,7 @@ func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 				log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accHash), "root", root)
 			}
 		}
+
 		return nil
 	})
 
@@ -126,7 +127,9 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 	// Check storage
 	{
 		it := rawdb.NewKeyLengthIterator(db.NewIterator(append(rawdb.SnapshotStoragePrefix, hash.Bytes()...), nil), 1+2*common.HashLength)
+
 		fmt.Printf("\tStorage:\n")
+
 		for it.Next() {
 			slot := it.Key()[33:]
 			fmt.Printf("\t\t%x: %x\n", slot, it.Value())
@@ -141,29 +144,37 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 		_, b := destructs[hash]
 		_, c := storage[hash]
 		depth++
+
 		if !a && !b && !c {
 			return nil
 		}
+
 		fmt.Printf("Disklayer+%d: Root: %x, parent %x\n", depth, root, pRoot)
+
 		if data, ok := accounts[hash]; ok {
 			account := new(Account)
 			if err := rlp.DecodeBytes(data, account); err != nil {
 				panic(err)
 			}
+
 			fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
 			fmt.Printf("\taccount.balance: %x\n", account.Balance)
 			fmt.Printf("\taccount.root: %x\n", account.Root)
 			fmt.Printf("\taccount.codehash: %x\n", account.CodeHash)
 		}
+
 		if _, ok := destructs[hash]; ok {
 			fmt.Printf("\t Destructed!")
 		}
+
 		if data, ok := storage[hash]; ok {
 			fmt.Printf("\tStorage\n")
+
 			for k, v := range data {
 				fmt.Printf("\t\t%x: %x\n", k, v)
 			}
 		}
+
 		return nil
 	})
 }

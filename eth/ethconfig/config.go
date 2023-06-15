@@ -107,6 +107,7 @@ func init() {
 			home = user.HomeDir
 		}
 	}
+
 	if runtime.GOOS == "darwin" {
 		Defaults.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
 	} else if runtime.GOOS == "windows" {
@@ -268,6 +269,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 			if ethConfig.DevFakeAuthor {
 				log.Warn("Sanitizing DevFakeAuthor", "Use DevFakeAuthor with", "--bor.withoutheimdall")
 			}
+
 			var heimdallClient bor.IHeimdallClient
 			if ethConfig.RunHeimdall && ethConfig.UseHeimdallApp {
 				heimdallClient = heimdallapp.NewHeimdallAppClient()
@@ -289,6 +291,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		case ethash.ModeShared:
 			log.Warn("Ethash used in shared mode")
 		}
+
 		engine = ethash.New(ethash.Config{
 			PowMode:          ethashConfig.PowMode,
 			CacheDir:         stack.ResolvePath(ethashConfig.CacheDir),
@@ -303,5 +306,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
+
 	return beacon.New(engine)
 }

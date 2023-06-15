@@ -48,6 +48,7 @@ func newWithTestJS(t *testing.T, testjs string) *JSRE {
 			t.Fatal("cannot create test.js:", err)
 		}
 	}
+
 	jsre := New(dir, os.Stdout)
 
 	return jsre
@@ -60,18 +61,23 @@ func TestExec(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+
 	val, err := jsre.Run("msg")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+
 	if val.ExportType().Kind() != reflect.String {
 		t.Errorf("expected string value, got %v", val)
 	}
+
 	exp := "testMsg"
 	got := val.ToString().String()
+
 	if exp != got {
 		t.Errorf("expected '%v', got '%v'", exp, got)
 	}
+
 	jsre.Stop(false)
 }
 
@@ -82,19 +88,25 @@ func TestNatto(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+
 	time.Sleep(100 * time.Millisecond)
+
 	val, err := jsre.Run("msg")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+
 	if val.ExportType().Kind() != reflect.String {
 		t.Fatalf("expected string value, got %v", val)
 	}
+
 	exp := "testMsg"
 	got := val.ToString().String()
+
 	if exp != got {
 		t.Fatalf("expected '%v', got '%v'", exp, got)
 	}
+
 	jsre.Stop(false)
 }
 
@@ -117,17 +129,22 @@ func TestLoadScript(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+
 	val, err := jsre.Run("msg")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+
 	if val.ExportType().Kind() != reflect.String {
 		t.Errorf("expected string value, got %v", val)
 	}
+
 	exp := "testMsg"
 	got := val.ToString().String()
+
 	if exp != got {
 		t.Errorf("expected '%v', got '%v'", exp, got)
 	}
+
 	jsre.Stop(false)
 }

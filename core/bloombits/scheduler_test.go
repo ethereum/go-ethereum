@@ -34,11 +34,13 @@ func TestSchedulerMultiClientMultiFetcher(t *testing.T)   { testScheduler(t, 10,
 
 func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 	t.Parallel()
+
 	f := newScheduler(0)
 
 	// Create a batch of handler goroutines that respond to bloom bit requests and
 	// deliver them to the scheduler.
 	var fetchPend sync.WaitGroup
+
 	fetchPend.Add(fetchers)
 	defer fetchPend.Wait()
 
@@ -46,6 +48,7 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 	defer close(fetch)
 
 	var delivered atomic.Uint32
+
 	for i := 0; i < fetchers; i++ {
 		go func() {
 			defer fetchPend.Done()
@@ -69,6 +72,7 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 	quit := make(chan struct{})
 
 	var pend sync.WaitGroup
+
 	pend.Add(clients)
 
 	for i := 0; i < clients; i++ {
@@ -86,7 +90,9 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 				}
 				close(in)
 			}()
+
 			b := new(big.Int)
+
 			for j := 0; j < requests; j++ {
 				bits := <-out
 				if want := b.SetUint64(uint64(j)).Bytes(); !bytes.Equal(bits, want) {

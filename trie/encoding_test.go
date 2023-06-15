@@ -42,6 +42,7 @@ func TestHexCompact(t *testing.T) {
 		if c := hexToCompact(test.hex); !bytes.Equal(c, test.compact) {
 			t.Errorf("hexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
 		}
+
 		if h := compactToHex(test.compact); !bytes.Equal(h, test.hex) {
 			t.Errorf("compactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
 		}
@@ -72,6 +73,7 @@ func TestHexKeybytes(t *testing.T) {
 		if h := keybytesToHex(test.key); !bytes.Equal(h, test.hexOut) {
 			t.Errorf("keybytesToHex(%x) -> %x, want %x", test.key, h, test.hexOut)
 		}
+
 		if k := hexToKeybytes(test.hexIn); !bytes.Equal(k, test.key) {
 			t.Errorf("hexToKeybytes(%x) -> %x, want %x", test.hexIn, k, test.key)
 		}
@@ -87,6 +89,7 @@ func TestHexToCompactInPlace(t *testing.T) {
 		hexBytes, _ := hex.DecodeString(key)
 		exp := hexToCompact(hexBytes)
 		sz := hexToCompactInPlace(hexBytes)
+
 		got := hexBytes[:sz]
 		if !bytes.Equal(exp, got) {
 			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, key, got, exp)

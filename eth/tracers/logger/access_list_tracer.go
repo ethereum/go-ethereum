@@ -84,19 +84,23 @@ func (al accessList) equal(other accessList) bool {
 			}
 		}
 	}
+
 	return true
 }
 
 // accesslist converts the accesslist to a types.AccessList.
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
+
 	for addr, slots := range al {
 		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
+
 		acl = append(acl, tuple)
 	}
+
 	return acl
 }
 
@@ -117,15 +121,19 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	for _, addr := range precompiles {
 		excl[addr] = struct{}{}
 	}
+
 	list := newAccessList()
+
 	for _, al := range acl {
 		if _, ok := excl[al.Address]; !ok {
 			list.addAddress(al.Address)
 		}
+
 		for _, slot := range al.StorageKeys {
 			list.addSlot(al.Address, slot)
 		}
 	}
+
 	return &AccessListTracer{
 		excl: excl,
 		list: list,
@@ -140,16 +148,19 @@ func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
+
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
 		a.list.addSlot(scope.Contract.Address(), slot)
 	}
+
 	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		if _, ok := a.excl[addr]; !ok {
 			a.list.addAddress(addr)
 		}
 	}
+
 	if (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE) && stackLen >= 5 {
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		if _, ok := a.excl[addr]; !ok {

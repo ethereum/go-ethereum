@@ -47,6 +47,7 @@ func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	res := trie.Hash()
 	exp := types.EmptyRootHash
+
 	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
@@ -65,10 +66,12 @@ func TestNull(t *testing.T) {
 
 func TestMissingRoot(t *testing.T) {
 	root := common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33")
+
 	trie, err := New(TrieID(root), NewDatabase(rawdb.NewMemoryDatabase()))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
+
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("New returned wrong error: %v", err)
 	}
@@ -86,35 +89,41 @@ func testMissingNode(t *testing.T, memonly bool) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, nodes := trie.Commit(false)
 	triedb.Update(NewWithNodeSet(nodes))
+
 	if !memonly {
 		triedb.Commit(root, false)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err := trie.Get([]byte("120000"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err = trie.Get([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	err = trie.Delete([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -128,30 +137,35 @@ func testMissingNode(t *testing.T, memonly bool) {
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err = trie.Get([]byte("120000"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err = trie.Get([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	err = trie.Update([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
 
 	trie, _ = New(TrieID(root), triedb)
+
 	err = trie.Delete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
@@ -167,6 +181,7 @@ func TestInsert(t *testing.T) {
 
 	exp := common.HexToHash("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3")
 	root := trie.Hash()
+
 	if root != exp {
 		t.Errorf("case 1: exp %x got %x", exp, root)
 	}
@@ -176,6 +191,7 @@ func TestInsert(t *testing.T) {
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
 	root, _ = trie.Commit(false)
+
 	if root != exp {
 		t.Errorf("case 2: exp %x got %x", exp, root)
 	}
@@ -193,10 +209,12 @@ func TestGet(t *testing.T) {
 		if !bytes.Equal(res, []byte("puppy")) {
 			t.Errorf("expected puppy got %x", res)
 		}
+
 		unknown := getString(trie, "unknown")
 		if unknown != nil {
 			t.Errorf("expected nil got %x", unknown)
 		}
+
 		if i == 1 {
 			return
 		}
@@ -209,6 +227,7 @@ func TestGet(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -229,6 +248,7 @@ func TestDelete(t *testing.T) {
 
 	hash := trie.Hash()
 	exp := common.HexToHash("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+
 	if hash != exp {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -253,6 +273,7 @@ func TestEmptyValues(t *testing.T) {
 
 	hash := trie.Hash()
 	exp := common.HexToHash("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+
 	if hash != exp {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -270,6 +291,7 @@ func TestReplication(t *testing.T) {
 		{"dog", "puppy"},
 		{"somethingveryoddindeedthis is", "myothernodedata"},
 	}
+
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
@@ -282,6 +304,7 @@ func TestReplication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
+
 	for _, kv := range vals {
 		if string(getString(trie2, kv.k)) != kv.v {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
@@ -318,6 +341,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals2 {
 		updateString(trie2, val.k, val.v)
 	}
+
 	if hash := trie2.Hash(); hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
@@ -360,6 +384,7 @@ func TestRandomCases(t *testing.T) {
 		{op: 1, key: common.Hex2Bytes("980c393656413a15c8da01978ed9f89feb80b502f58f2d640e3a2f5f7a99a7018f1b573befd92053ac6f78fca4a87268"), value: common.Hex2Bytes("")}, // step 24
 		{op: 1, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 25
 	}
+
 	runRandTest(rt)
 }
 
@@ -388,12 +413,14 @@ const (
 
 func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	var allKeys [][]byte
+
 	genKey := func() []byte {
 		if len(allKeys) < 2 || r.Intn(100) < 10 {
 			// new key
 			key := make([]byte, r.Intn(50))
 			r.Read(key)
 			allKeys = append(allKeys, key)
+
 			return key
 		}
 		// use existing key
@@ -401,6 +428,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	}
 
 	var steps randTest
+
 	for i := 0; i < size; i++ {
 		step := randTestStep{op: r.Intn(opMax)}
 		switch step.op {
@@ -411,8 +439,10 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 		case opGet, opDelete, opProve:
 			step.key = genKey()
 		}
+
 		steps = append(steps, step)
 	}
+
 	return reflect.ValueOf(steps)
 }
 
@@ -478,10 +508,10 @@ func runRandTest(rt randTest) bool {
 		values   = make(map[string]string) // tracks content of the trie
 		origTrie = NewEmpty(triedb)
 	)
+
 	for i, step := range rt {
 		// fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
 		// 	step.op, step.key, step.value, i)
-
 		switch step.op {
 		case opUpdate:
 			tr.MustUpdate(step.key, step.value)
@@ -492,6 +522,7 @@ func runRandTest(rt randTest) bool {
 		case opGet:
 			v := tr.MustGet(step.key)
 			want := values[string(step.key)]
+
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
@@ -533,14 +564,17 @@ func runRandTest(rt randTest) bool {
 					return false
 				}
 			}
+
 			tr = newtr
 			origTrie = tr.Copy()
 		case opItercheckhash:
 			checktr := NewEmpty(triedb)
 			it := NewIterator(tr.NodeIterator(nil))
+
 			for it.Next() {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
+
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
 			}
@@ -612,6 +646,7 @@ func runRandTest(rt randTest) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -620,6 +655,7 @@ func TestRandom(t *testing.T) {
 		if cerr, ok := err.(*quick.CheckError); ok {
 			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
 		}
+
 		t.Fatal(err)
 	}
 }
@@ -635,6 +671,7 @@ func benchGet(b *testing.B) {
 
 	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(triedb)
+
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
@@ -643,6 +680,7 @@ func benchGet(b *testing.B) {
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		trie.MustGet(k)
 	}
@@ -652,11 +690,14 @@ func benchGet(b *testing.B) {
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	k := make([]byte, 32)
+
 	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
 		trie.MustUpdate(k, k)
 	}
+
 	return trie
 }
 
@@ -682,10 +723,12 @@ func BenchmarkHash(b *testing.B) {
 	// Insert the accounts into the trie and hash it
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	i := 0
+
 	for ; i < len(addresses)/2; i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	trie.Hash()
+
 	for ; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -714,6 +757,7 @@ func benchmarkCommitAfterHash(b *testing.B, collectLeaf bool) {
 	// Make the random benchmark deterministic
 	addresses, accounts := makeAccounts(b.N)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -729,16 +773,19 @@ func TestTinyTrie(t *testing.T) {
 	_, accounts := makeAccounts(5)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
+
 	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
 	}
 
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001338"), accounts[4])
+
 	if exp, root := common.HexToHash("ec63b967e98a5720e7f720482151963982890d82c9093c0d486b7eb8883a66b1"), trie.Hash(); exp != root {
 		t.Errorf("2: got %x, exp %x", root, exp)
 	}
 
 	trie.MustUpdate(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001339"), accounts[4])
+
 	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
@@ -759,6 +806,7 @@ func TestCommitAfterHash(t *testing.T) {
 	// Create a realistic account trie to hash
 	addresses, accounts := makeAccounts(1000)
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -789,6 +837,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		random.Read(data)
 		copy(addresses[i][:], data)
 	}
+
 	accounts = make([][]byte, len(addresses))
 	for i := 0; i < len(accounts); i++ {
 		var (
@@ -807,6 +856,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
 		accounts[i] = data
 	}
+
 	return addresses, accounts
 }
 
@@ -831,9 +881,11 @@ func (s *spongeDb) Put(key []byte, value []byte) error {
 	if len(valbrief) > 8 {
 		valbrief = valbrief[:8]
 	}
+
 	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...], [%d bytes] %x...)\n", s.id, key[:8], len(value), valbrief))
 	s.sponge.Write(key)
 	s.sponge.Write(value)
+
 	return nil
 }
 func (s *spongeDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator { panic("implement me") }
@@ -880,6 +932,7 @@ func TestCommitSequence(t *testing.T) {
 		db.Update(NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
+
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
 			t.Errorf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
 		}
@@ -905,6 +958,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		// Fill the trie with elements
 		for i := 0; i < tc.count; i++ {
 			key := make([]byte, 32)
+
 			var val []byte
 			// 50% short elements, 50% large elements
 			if prng.Intn(2) == 0 {
@@ -912,6 +966,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			} else {
 				val = make([]byte, 1+prng.Intn(4096))
 			}
+
 			prng.Read(key)
 			prng.Read(val)
 			trie.MustUpdate(key, val)
@@ -921,6 +976,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		db.Update(NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
+
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
 			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
 		}
@@ -944,6 +1000,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			// For the stack trie, we need to do inserts in proper order
 			key := make([]byte, 32)
 			binary.BigEndian.PutUint64(key, uint64(i))
+
 			var val []byte
 			// 50% short elements, 50% large elements
 			if prng.Intn(2) == 0 {
@@ -951,6 +1008,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			} else {
 				val = make([]byte, 1+prng.Intn(1024))
 			}
+
 			prng.Read(val)
 			trie.Update(key, val)
 			stTrie.Update(key, val)
@@ -965,19 +1023,25 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to commit stack trie %v", err)
 		}
+
 		if stRoot != root {
 			t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 		}
+
 		if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
 			// Show the journal
 			t.Logf("Expected:")
+
 			for i, v := range s.journal {
 				t.Logf("op %d: %v", i, v)
 			}
+
 			t.Logf("Stacktrie:")
+
 			for i, v := range stackTrieSponge.journal {
 				t.Logf("op %d: %v", i, v)
 			}
+
 			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", count, got, exp)
 		}
 	}
@@ -1013,11 +1077,13 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to commit stack trie %v", err)
 	}
+
 	if stRoot != root {
 		t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 	}
 
 	t.Logf("root: %x\n", stRoot)
+
 	if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
 		t.Fatalf("test, disk write sequence wrong:\ngot %x exp %x\n", got, exp)
 	}
@@ -1030,6 +1096,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 func BenchmarkHashFixedSize(b *testing.B) {
 	b.Run("10", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(20)
 		for i := 0; i < b.N; i++ {
 			benchmarkHashFixedSize(b, acc, add)
@@ -1037,6 +1104,7 @@ func BenchmarkHashFixedSize(b *testing.B) {
 	})
 	b.Run("100", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100)
 		for i := 0; i < b.N; i++ {
 			benchmarkHashFixedSize(b, acc, add)
@@ -1045,6 +1113,7 @@ func BenchmarkHashFixedSize(b *testing.B) {
 
 	b.Run("1K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(1000)
 		for i := 0; i < b.N; i++ {
 			benchmarkHashFixedSize(b, acc, add)
@@ -1052,6 +1121,7 @@ func BenchmarkHashFixedSize(b *testing.B) {
 	})
 	b.Run("10K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(10000)
 		for i := 0; i < b.N; i++ {
 			benchmarkHashFixedSize(b, acc, add)
@@ -1059,6 +1129,7 @@ func BenchmarkHashFixedSize(b *testing.B) {
 	})
 	b.Run("100K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100000)
 		for i := 0; i < b.N; i++ {
 			benchmarkHashFixedSize(b, acc, add)
@@ -1083,6 +1154,7 @@ func benchmarkHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byt
 func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 	b.Run("10", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(20)
 		for i := 0; i < b.N; i++ {
 			benchmarkCommitAfterHashFixedSize(b, acc, add)
@@ -1090,6 +1162,7 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 	})
 	b.Run("100", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100)
 		for i := 0; i < b.N; i++ {
 			benchmarkCommitAfterHashFixedSize(b, acc, add)
@@ -1098,6 +1171,7 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 
 	b.Run("1K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(1000)
 		for i := 0; i < b.N; i++ {
 			benchmarkCommitAfterHashFixedSize(b, acc, add)
@@ -1105,6 +1179,7 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 	})
 	b.Run("10K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(10000)
 		for i := 0; i < b.N; i++ {
 			benchmarkCommitAfterHashFixedSize(b, acc, add)
@@ -1112,6 +1187,7 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 	})
 	b.Run("100K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100000)
 		for i := 0; i < b.N; i++ {
 			benchmarkCommitAfterHashFixedSize(b, acc, add)
@@ -1137,6 +1213,7 @@ func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accou
 func BenchmarkDerefRootFixedSize(b *testing.B) {
 	b.Run("10", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(20)
 		for i := 0; i < b.N; i++ {
 			benchmarkDerefRootFixedSize(b, acc, add)
@@ -1144,6 +1221,7 @@ func BenchmarkDerefRootFixedSize(b *testing.B) {
 	})
 	b.Run("100", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100)
 		for i := 0; i < b.N; i++ {
 			benchmarkDerefRootFixedSize(b, acc, add)
@@ -1152,6 +1230,7 @@ func BenchmarkDerefRootFixedSize(b *testing.B) {
 
 	b.Run("1K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(1000)
 		for i := 0; i < b.N; i++ {
 			benchmarkDerefRootFixedSize(b, acc, add)
@@ -1159,6 +1238,7 @@ func BenchmarkDerefRootFixedSize(b *testing.B) {
 	})
 	b.Run("10K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(10000)
 		for i := 0; i < b.N; i++ {
 			benchmarkDerefRootFixedSize(b, acc, add)
@@ -1166,6 +1246,7 @@ func BenchmarkDerefRootFixedSize(b *testing.B) {
 	})
 	b.Run("100K", func(b *testing.B) {
 		b.StopTimer()
+
 		acc, add := makeAccounts(100000)
 		for i := 0; i < b.N; i++ {
 			benchmarkDerefRootFixedSize(b, acc, add)
@@ -1182,6 +1263,7 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
+
 	h := trie.Hash()
 	_, nodes := trie.Commit(false)
 	triedb.Update(NewWithNodeSet(nodes))
@@ -1209,6 +1291,7 @@ func TestDecodeNode(t *testing.T) {
 		hash  = make([]byte, 20)
 		elems = make([]byte, 20)
 	)
+
 	for i := 0; i < 5000000; i++ {
 		prng.Read(hash)
 		prng.Read(elems)

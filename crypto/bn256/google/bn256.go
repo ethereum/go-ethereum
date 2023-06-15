@@ -40,6 +40,7 @@ type G1 struct {
 // RandomG1 returns x and g₁ˣ where x is a random, non-zero number read from r.
 func RandomG1(r io.Reader) (*big.Int, *G1, error) {
 	var k *big.Int
+
 	var err error
 
 	for {
@@ -47,6 +48,7 @@ func RandomG1(r io.Reader) (*big.Int, *G1, error) {
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if k.Sign() > 0 {
 			break
 		}
@@ -70,7 +72,9 @@ func (e *G1) ScalarBaseMult(k *big.Int) *G1 {
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
+
 	e.p.Mul(curveGen, k, new(bnPool))
+
 	return e
 }
 
@@ -79,7 +83,9 @@ func (e *G1) ScalarMult(a *G1, k *big.Int) *G1 {
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
+
 	e.p.Mul(a.p, k, new(bnPool))
+
 	return e
 }
 
@@ -89,7 +95,9 @@ func (e *G1) Add(a, b *G1) *G1 {
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
+
 	e.p.Add(a.p, b.p, new(bnPool))
+
 	return e
 }
 
@@ -98,7 +106,9 @@ func (e *G1) Neg(a *G1) *G1 {
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
+
 	e.p.Negative(a.p)
+
 	return e
 }
 
@@ -135,11 +145,15 @@ func (e *G1) Unmarshal(m []byte) ([]byte, error) {
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
+
 	e.p.x.SetBytes(m[0*numBytes : 1*numBytes])
+
 	if e.p.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
+
 	e.p.y.SetBytes(m[1*numBytes : 2*numBytes])
+
 	if e.p.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
@@ -157,6 +171,7 @@ func (e *G1) Unmarshal(m []byte) ([]byte, error) {
 			return nil, errors.New("bn256: malformed point")
 		}
 	}
+
 	return m[2*numBytes:], nil
 }
 
@@ -169,6 +184,7 @@ type G2 struct {
 // RandomG1 returns x and g₂ˣ where x is a random, non-zero number read from r.
 func RandomG2(r io.Reader) (*big.Int, *G2, error) {
 	var k *big.Int
+
 	var err error
 
 	for {
@@ -176,6 +192,7 @@ func RandomG2(r io.Reader) (*big.Int, *G2, error) {
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if k.Sign() > 0 {
 			break
 		}
@@ -200,7 +217,9 @@ func (e *G2) ScalarBaseMult(k *big.Int) *G2 {
 	if e.p == nil {
 		e.p = newTwistPoint(nil)
 	}
+
 	e.p.Mul(twistGen, k, new(bnPool))
+
 	return e
 }
 
@@ -209,7 +228,9 @@ func (e *G2) ScalarMult(a *G2, k *big.Int) *G2 {
 	if e.p == nil {
 		e.p = newTwistPoint(nil)
 	}
+
 	e.p.Mul(a.p, k, new(bnPool))
+
 	return e
 }
 
@@ -219,7 +240,9 @@ func (e *G2) Add(a, b *G2) *G2 {
 	if e.p == nil {
 		e.p = newTwistPoint(nil)
 	}
+
 	e.p.Add(a.p, b.p, new(bnPool))
+
 	return e
 }
 
@@ -260,19 +283,27 @@ func (e *G2) Unmarshal(m []byte) ([]byte, error) {
 	if e.p == nil {
 		e.p = newTwistPoint(nil)
 	}
+
 	e.p.x.x.SetBytes(m[0*numBytes : 1*numBytes])
+
 	if e.p.x.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
+
 	e.p.x.y.SetBytes(m[1*numBytes : 2*numBytes])
+
 	if e.p.x.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
+
 	e.p.y.x.SetBytes(m[2*numBytes : 3*numBytes])
+
 	if e.p.y.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
+
 	e.p.y.y.SetBytes(m[3*numBytes : 4*numBytes])
+
 	if e.p.y.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
@@ -293,6 +324,7 @@ func (e *G2) Unmarshal(m []byte) ([]byte, error) {
 			return nil, errors.New("bn256: malformed point")
 		}
 	}
+
 	return m[4*numBytes:], nil
 }
 
@@ -311,7 +343,9 @@ func (e *GT) ScalarMult(a *GT, k *big.Int) *GT {
 	if e.p == nil {
 		e.p = newGFp12(nil)
 	}
+
 	e.p.Exp(a.p, k, new(bnPool))
+
 	return e
 }
 
@@ -320,7 +354,9 @@ func (e *GT) Add(a, b *GT) *GT {
 	if e.p == nil {
 		e.p = newGFp12(nil)
 	}
+
 	e.p.Mul(a.p, b.p, new(bnPool))
+
 	return e
 }
 
@@ -329,7 +365,9 @@ func (e *GT) Neg(a *GT) *GT {
 	if e.p == nil {
 		e.p = newGFp12(nil)
 	}
+
 	e.p.Invert(a.p, new(bnPool))
+
 	return e
 }
 
@@ -416,8 +454,10 @@ func PairingCheck(a []*G1, b []*G2) bool {
 		if a[i].p.IsInfinity() || b[i].p.IsInfinity() {
 			continue
 		}
+
 		acc.Mul(acc, miller(b[i].p, a[i].p, pool), pool)
 	}
+
 	ret := finalExponentiation(acc, pool)
 	acc.Put(pool)
 
@@ -437,6 +477,7 @@ func (pool *bnPool) Get() *big.Int {
 	}
 
 	pool.count++
+
 	l := len(pool.bns)
 	if l == 0 {
 		return new(big.Int)
@@ -444,6 +485,7 @@ func (pool *bnPool) Get() *big.Int {
 
 	bn := pool.bns[l-1]
 	pool.bns = pool.bns[:l-1]
+
 	return bn
 }
 
@@ -451,6 +493,7 @@ func (pool *bnPool) Put(bn *big.Int) {
 	if pool == nil {
 		return
 	}
+
 	pool.bns = append(pool.bns, bn)
 	pool.count--
 }

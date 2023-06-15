@@ -31,17 +31,21 @@ type ulc struct {
 // newULC creates and returns an ultra light client instance.
 func newULC(servers []string, fraction int) (*ulc, error) {
 	keys := make(map[string]bool)
+
 	for _, id := range servers {
 		node, err := enode.Parse(enode.ValidSchemes, id)
 		if err != nil {
 			log.Warn("Failed to parse trusted server", "id", id, "err", err)
 			continue
 		}
+
 		keys[node.ID().String()] = true
 	}
+
 	if len(keys) == 0 {
 		return nil, errors.New("no trusted servers")
 	}
+
 	return &ulc{
 		keys:     keys,
 		fraction: fraction,

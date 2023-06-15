@@ -43,6 +43,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 		engine: engine,
 		bc:     blockchain,
 	}
+
 	return validator
 }
 
@@ -58,12 +59,15 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.
 	header := block.Header()
+
 	if err := v.engine.VerifyUncles(v.bc, block); err != nil {
 		return err
 	}
+
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
 	}
+
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
 	}
@@ -86,8 +90,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
 		}
+
 		return consensus.ErrPrunedAncestor
 	}
+
 	return nil
 }
 
@@ -95,6 +101,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // such as amount of used gas, the receipt roots and the state root itself.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
 	header := block.Header()
+
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
 	}
@@ -114,6 +121,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
+
 	return nil
 }
 
@@ -123,6 +131,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
 	limit := parentGasLimit
+
 	if desiredLimit < params.MinGasLimit {
 		desiredLimit = params.MinGasLimit
 	}
@@ -132,13 +141,16 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		if limit > desiredLimit {
 			limit = desiredLimit
 		}
+
 		return limit
 	}
+
 	if limit > desiredLimit {
 		limit = parentGasLimit - delta
 		if limit < desiredLimit {
 			limit = desiredLimit
 		}
 	}
+
 	return limit
 }

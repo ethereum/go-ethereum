@@ -99,11 +99,13 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 	} else {
 		breakpoints = append(breakpoints, basic.commitBlock, basic.snapshotBlock)
 	}
+
 	var startPoint uint64
 	for _, point := range breakpoints {
 		if _, err := chain.InsertChain(blocks[startPoint:point]); err != nil {
 			t.Fatalf("Failed to import canonical chain start: %v", err)
 		}
+
 		startPoint = point
 
 		if basic.commitBlock > 0 && basic.commitBlock == point {
@@ -128,6 +130,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 			}
 		}
 	}
+
 	if _, err := chain.InsertChain(blocks[startPoint:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
@@ -180,21 +183,26 @@ func (basic *snapshotTestBasic) dump() string {
 	buffer := new(strings.Builder)
 
 	fmt.Fprint(buffer, "Chain:\n  G")
+
 	for i := 0; i < basic.chainBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
 	fmt.Fprint(buffer, " (HEAD)\n\n")
 
 	fmt.Fprintf(buffer, "Commit:   G")
+
 	if basic.commitBlock > 0 {
 		fmt.Fprintf(buffer, ", C%d", basic.commitBlock)
 	}
+
 	fmt.Fprint(buffer, "\n")
 
 	fmt.Fprintf(buffer, "Snapshot: G")
+
 	if basic.snapshotBlock > 0 {
 		fmt.Fprintf(buffer, ", C%d", basic.snapshotBlock)
 	}
+
 	fmt.Fprint(buffer, "\n")
 
 	//if crash {
@@ -205,22 +213,26 @@ func (basic *snapshotTestBasic) dump() string {
 	fmt.Fprintf(buffer, "------------------------------\n\n")
 
 	fmt.Fprint(buffer, "Expected in leveldb:\n  G")
+
 	for i := 0; i < basic.expCanonicalBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
 	fmt.Fprintf(buffer, "\n\n")
 	fmt.Fprintf(buffer, "Expected head header    : C%d\n", basic.expHeadHeader)
 	fmt.Fprintf(buffer, "Expected head fast block: C%d\n", basic.expHeadFastBlock)
+
 	if basic.expHeadBlock == 0 {
 		fmt.Fprintf(buffer, "Expected head block     : G\n")
 	} else {
 		fmt.Fprintf(buffer, "Expected head block     : C%d\n", basic.expHeadBlock)
 	}
+
 	if basic.expSnapshotBottom == 0 {
 		fmt.Fprintf(buffer, "Expected snapshot disk  : G\n")
 	} else {
 		fmt.Fprintf(buffer, "Expected snapshot disk  : C%d\n", basic.expSnapshotBottom)
 	}
+
 	return buffer.String()
 }
 
@@ -279,6 +291,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+
 	defer newdb.Close()
 
 	// The interesting thing is: instead of starting the blockchain after
@@ -289,6 +302,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	newchain.Stop()
 
 	newchain, err = core.NewBlockChain(newdb, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
@@ -333,6 +347,7 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	newchain.InsertChain(gappedBlocks)
 	newchain.Stop()
 
@@ -400,6 +415,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 	}
+
 	newchain, err := core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
@@ -417,6 +433,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  256,
 		SnapshotWait:   false, // Don't wait rebuild
 	}
+
 	_, err = core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)

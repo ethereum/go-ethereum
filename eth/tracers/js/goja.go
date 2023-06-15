@@ -413,6 +413,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return ""
 		}
+
 		return hexutil.Encode(b)
 	})
 	vm.Set("toWord", func(v goja.Value) goja.Value {
@@ -422,12 +423,15 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		b = common.BytesToHash(b).Bytes()
+
 		res, err := t.toBuf(vm, b)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		return res
 	})
 	vm.Set("toAddress", func(v goja.Value) goja.Value {
@@ -436,12 +440,15 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		a = common.BytesToAddress(a).Bytes()
+
 		res, err := t.toBuf(vm, a)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		return res
 	})
 	vm.Set("toContract", func(from goja.Value, nonce uint) goja.Value {
@@ -450,13 +457,16 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		addr := common.BytesToAddress(a)
 		b := crypto.CreateAddress(addr, uint64(nonce)).Bytes()
+
 		res, err := t.toBuf(vm, b)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		return res
 	})
 	vm.Set("toContract2", func(from goja.Value, salt string, initcode goja.Value) goja.Value {
@@ -465,20 +475,25 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		addr := common.BytesToAddress(a)
+
 		code, err := t.fromBuf(vm, initcode, true)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		code = common.CopyBytes(code)
 		codeHash := crypto.Keccak256(code)
 		b := crypto.CreateAddress2(addr, common.HexToHash(salt), codeHash).Bytes()
+
 		res, err := t.toBuf(vm, b)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		return res
 	})
 	vm.Set("isPrecompiled", func(v goja.Value) bool {
@@ -487,12 +502,14 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return false
 		}
+
 		addr := common.BytesToAddress(a)
 		for _, p := range t.activePrecompiles {
 			if p == addr {
 				return true
 			}
 		}
+
 		return false
 	})
 	vm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
@@ -501,15 +518,18 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		if start < 0 || start > end || end > len(b) {
 			vm.Interrupt(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", len(b), start, end-start))
 			return nil
 		}
+
 		res, err := t.toBuf(vm, b[start:end])
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
+
 		return res
 	})
 }

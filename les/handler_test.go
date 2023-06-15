@@ -44,6 +44,7 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 		ReqID, BV uint64
 		Data      interface{}
 	}
+
 	return p2p.ExpectMsg(r, msgcode, resp{reqID, bv, data})
 }
 
@@ -58,11 +59,13 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
+
 	bc := server.handler.blockchain
 
 	// Create a "random" unknown hash for testing
@@ -168,6 +171,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	}
 	// Run each of the tests and verify the results against the chain
 	var reqID uint64
+
 	for i, tt := range tests {
 		// Collect the headers to expect in the response
 		var headers []*types.Header
@@ -178,6 +182,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		reqID++
 
 		sendRequest(rawPeer.app, GetBlockHeadersMsg, reqID, tt.query)
+
 		if err := expectResponse(rawPeer.app, BlockHeadersMsg, reqID, testBufLimit, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
 		}
@@ -195,6 +200,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -232,10 +238,13 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	}
 	// Run each of the tests and verify the results against the chain
 	var reqID uint64
+
 	for i, tt := range tests {
 		// Collect the hashes to request, and the response to expect
 		var hashes []common.Hash
+
 		seen := make(map[int64]bool)
+
 		var bodies []*types.Body
 
 		for j := 0; j < tt.random; j++ {
@@ -246,24 +255,30 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 					block := bc.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
+
 					if len(bodies) < tt.expected {
 						bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
 					}
+
 					break
 				}
 			}
 		}
+
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
+
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := bc.GetBlockByHash(hash)
 				bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
 			}
 		}
+
 		reqID++
 
 		// Send the hash request and verify the response
 		sendRequest(rawPeer.app, GetBlockBodiesMsg, reqID, hashes)
+
 		if err := expectResponse(rawPeer.app, BlockBodiesMsg, reqID, testBufLimit, bodies); err != nil {
 			t.Errorf("test %d: bodies mismatch: %v", i, err)
 		}
@@ -282,6 +297,7 @@ func testGetCode(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -291,6 +307,7 @@ func testGetCode(t *testing.T, protocol int) {
 	bc := server.handler.blockchain
 
 	var codereqs []*CodeReq
+
 	var codes [][]byte
 
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
@@ -300,12 +317,14 @@ func testGetCode(t *testing.T, protocol int) {
 			AccKey: crypto.Keccak256(testContractAddr[:]),
 		}
 		codereqs = append(codereqs, req)
+
 		if i >= testContractDeployed {
 			codes = append(codes, testContractCodeDeployed)
 		}
 	}
 
 	sendRequest(rawPeer.app, GetCodeMsg, 42, codereqs)
+
 	if err := expectResponse(rawPeer.app, CodeMsg, 42, testBufLimit, codes); err != nil {
 		t.Errorf("codes mismatch: %v", err)
 	}
@@ -322,6 +341,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -336,6 +356,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 			AccKey: crypto.Keccak256(testContractAddr[:]),
 		}
 		sendRequest(rawPeer.app, GetCodeMsg, 42, []*CodeReq{req})
+
 		if err := expectResponse(rawPeer.app, CodeMsg, 42, testBufLimit, expected); err != nil {
 			t.Errorf("codes mismatch: %v", err)
 		}
@@ -357,6 +378,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -367,6 +389,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 
 	// Collect the hashes to request, and the response to expect
 	var receipts []types.Receipts
+
 	var hashes []common.Hash
 
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
@@ -377,6 +400,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 	}
 	// Send the hash request and verify the response
 	sendRequest(rawPeer.app, GetReceiptsMsg, 42, hashes)
+
 	if err := expectResponse(rawPeer.app, ReceiptsMsg, 42, testBufLimit, receipts); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
@@ -394,6 +418,7 @@ func testGetProofs(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -403,6 +428,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	bc := server.handler.blockchain
 
 	var proofreqs []ProofReq
+
 	proofsV2 := light.NewNodeSet()
 
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
@@ -417,11 +443,13 @@ func testGetProofs(t *testing.T, protocol int) {
 				Key:   crypto.Keccak256(acc[:]),
 			}
 			proofreqs = append(proofreqs, req)
+
 			trie.Prove(crypto.Keccak256(acc[:]), 0, proofsV2)
 		}
 	}
 	// Send the proof request and verify the response
 	sendRequest(rawPeer.app, GetProofsV2Msg, 42, proofreqs)
+
 	if err := expectResponse(rawPeer.app, ProofsV2Msg, 42, testBufLimit, proofsV2.NodeList()); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
 	}
@@ -438,6 +466,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -451,6 +480,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 			header  = bc.GetHeaderByNumber(number)
 			account = crypto.Keccak256(userAddr1.Bytes())
 		)
+
 		req := &ProofReq{
 			BHash: header.Hash(),
 			Key:   account,
@@ -458,12 +488,14 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		sendRequest(rawPeer.app, GetProofsV2Msg, 42, []*ProofReq{req})
 
 		var expected []rlp.RawValue
+
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
 			t, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
 			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()
 		}
+
 		if err := expectResponse(rawPeer.app, ProofsV2Msg, 42, testBufLimit, expected); err != nil {
 			t.Errorf("codes mismatch: %v", err)
 		}
@@ -497,6 +529,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 			nopruning: true,
 		}
 	)
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -527,6 +560,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 	}}
 	// Send the proof request and verify the response
 	sendRequest(rawPeer.app, GetHelperTrieProofsMsg, 42, requestsV2)
+
 	if err := expectResponse(rawPeer.app, HelperTrieProofsMsg, 42, testBufLimit, proofsV2); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
 	}
@@ -556,6 +590,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 			nopruning: true,
 		}
 	)
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -578,6 +613,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 			TrieIdx: 0,
 			Key:     key,
 		}}
+
 		var proofs HelperTrieResps
 
 		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomTrieSize-1).Hash())
@@ -586,6 +622,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 
 		// Send the proof request and verify the response
 		sendRequest(rawPeer.app, GetHelperTrieProofsMsg, 42, requests)
+
 		if err := expectResponse(rawPeer.app, HelperTrieProofsMsg, 42, testBufLimit, proofs); err != nil {
 			t.Errorf("bit %d: proofs mismatch: %v", bit, err)
 		}
@@ -601,6 +638,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 		protocol:  protocol,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -620,6 +658,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 		} else {
 			sendRequest(rawPeer.app, GetTxStatusMsg, reqID, []common.Hash{tx.Hash()})
 		}
+
 		if err := expectResponse(rawPeer.app, TxStatusMsg, reqID, testBufLimit, []light.TxStatus{expStatus}); err != nil {
 			t.Error("transaction status mismatch", err)
 		}
@@ -656,8 +695,10 @@ func testTransactionStatus(t *testing.T, protocol int) {
 		if pending, _ := server.handler.txpool.Stats(); pending == 1 {
 			break
 		}
+
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	if pending, _ := server.handler.txpool.Stats(); pending != 1 {
 		t.Fatalf("pending count mismatch: have %d, want 1", pending)
 	}
@@ -682,8 +723,10 @@ func testTransactionStatus(t *testing.T, protocol int) {
 		if pending, _ := server.handler.txpool.Stats(); pending == 3 {
 			break
 		}
+
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	if pending, _ := server.handler.txpool.Stats(); pending != 3 {
 		t.Fatalf("pending count mismatch: have %d, want 3", pending)
 	}
@@ -705,6 +748,7 @@ func testStopResume(t *testing.T, protocol int) {
 		simClock:  true,
 		nopruning: true,
 	}
+
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -719,15 +763,18 @@ func testStopResume(t *testing.T, protocol int) {
 		expBuf   = testBufLimit
 		testCost = testBufLimit / 10
 	)
+
 	header := server.handler.blockchain.CurrentHeader()
 	req := func() {
 		reqID++
 		sendRequest(rawPeer.app, GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})
 	}
+
 	for i := 1; i <= 5; i++ {
 		// send requests while we still have enough buffer and expect a response
 		for expBuf >= testCost {
 			req()
+
 			expBuf -= testCost
 			if err := expectResponse(rawPeer.app, BlockHeadersMsg, reqID, expBuf, []*types.Header{header}); err != nil {
 				t.Errorf("expected response and failed: %v", err)
@@ -737,8 +784,10 @@ func testStopResume(t *testing.T, protocol int) {
 		c := i
 		for c > 0 {
 			req()
+
 			c--
 		}
+
 		if err := p2p.ExpectMsg(rawPeer.app, StopMsg, nil); err != nil {
 			t.Errorf("expected StopMsg and failed: %v", err)
 		}

@@ -47,12 +47,14 @@ func (info *freezerInfo) size() common.StorageSize {
 	for _, table := range info.sizes {
 		total += table.size
 	}
+
 	return total
 }
 
 // inspectFreezers inspects all freezers registered in the system.
 func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 	var infos []freezerInfo
+
 	for _, freezer := range freezers {
 		switch freezer {
 		case chainFreezerName:
@@ -65,6 +67,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 				if err != nil {
 					return nil, err
 				}
+
 				info.sizes = append(info.sizes, tableSize{name: table, size: common.StorageSize(size)})
 			}
 			// Retrieve the number of last stored item
@@ -72,6 +75,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			info.head = ancients - 1
 
 			// Retrieve the number of first stored item
@@ -79,6 +83,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			info.tail = tail
 			infos = append(infos, info)
 
@@ -86,6 +91,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			return nil, fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 		}
 	}
+
 	return infos, nil
 }
 
@@ -98,24 +104,30 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 		path   string
 		tables map[string]bool
 	)
+
 	switch freezerName {
 	case chainFreezerName:
 		path, tables = resolveChainFreezerDir(ancient), chainFreezerNoSnappy
 	default:
 		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 	}
+
 	noSnappy, exist := tables[tableName]
 	if !exist {
 		var names []string
 		for name := range tables {
 			names = append(names, name)
 		}
+
 		return fmt.Errorf("unknown table, supported ones: %v", names)
 	}
+
 	table, err := newFreezerTable(path, tableName, noSnappy, true)
 	if err != nil {
 		return err
 	}
+
 	table.dumpIndexStdout(start, end)
+
 	return nil
 }

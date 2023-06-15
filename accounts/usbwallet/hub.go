@@ -112,6 +112,7 @@ func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16,
 	if !usb.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
+
 	hub := &Hub{
 		scheme:     scheme,
 		vendorID:   vendorID,
@@ -122,6 +123,7 @@ func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16,
 		quit:       make(chan chan error),
 	}
 	hub.refreshWallets()
+
 	return hub, nil
 }
 
@@ -136,6 +138,7 @@ func (hub *Hub) Wallets() []accounts.Wallet {
 
 	cpy := make([]accounts.Wallet, len(hub.wallets))
 	copy(cpy, hub.wallets)
+
 	return cpy
 }
 
@@ -170,17 +173,22 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
+
 	infos, err := usb.Enumerate(hub.vendorID, 0)
 	if err != nil {
 		failcount := atomic.AddUint32(&hub.enumFails, 1)
+
 		if runtime.GOOS == "linux" {
 			// See rationale before the enumeration why this is needed and only on Linux.
 			hub.commsLock.Unlock()
 		}
+
 		log.Error("Failed to enumerate USB devices", "hub", hub.scheme,
 			"vendor", hub.vendorID, "failcount", failcount, "err", err)
+
 		return
 	}
+
 	atomic.StoreUint32(&hub.enumFails, 0)
 
 	for _, info := range infos {
@@ -192,6 +200,7 @@ func (hub *Hub) refreshWallets() {
 			}
 		}
 	}
+
 	if runtime.GOOS == "linux" {
 		// See rationale before the enumeration why this is needed and only on Linux.
 		hub.commsLock.Unlock()
@@ -225,12 +234,14 @@ func (hub *Hub) refreshWallets() {
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 			wallets = append(wallets, wallet)
+
 			continue
 		}
 		// If the device is the same as the first wallet, keep it
 		if hub.wallets[0].URL().Cmp(url) == 0 {
 			wallets = append(wallets, hub.wallets[0])
 			hub.wallets = hub.wallets[1:]
+
 			continue
 		}
 	}
@@ -238,6 +249,7 @@ func (hub *Hub) refreshWallets() {
 	for _, wallet := range hub.wallets {
 		events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletDropped})
 	}
+
 	hub.refreshed = time.Now()
 	hub.wallets = wallets
 	hub.stateLock.Unlock()
@@ -263,6 +275,7 @@ func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 		hub.updating = true
 		go hub.updater()
 	}
+
 	return sub
 }
 
@@ -282,6 +295,7 @@ func (hub *Hub) updater() {
 		if hub.updateScope.Count() == 0 {
 			hub.updating = false
 			hub.stateLock.Unlock()
+
 			return
 		}
 		hub.stateLock.Unlock()

@@ -53,6 +53,7 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
+
 	sealers := make([]*ecdsa.PrivateKey, 4)
 	for i := 0; i < len(sealers); i++ {
 		sealers[i], _ = crypto.GenerateKey()
@@ -69,6 +70,7 @@ func main() {
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
+
 	for _, sealer := range sealers {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := makeSealer(genesis)
@@ -91,6 +93,7 @@ func main() {
 
 		// Inject the signer key and start sealing with it
 		ks := keystore.NewKeyStore(stack.KeyStoreDir(), keystore.LightScryptN, keystore.LightScryptP)
+
 		signer, err := ks.ImportECDSA(sealer, "")
 		if err != nil {
 			panic(err)
@@ -98,20 +101,24 @@ func main() {
 		if err := ks.Unlock(signer, ""); err != nil {
 			panic(err)
 		}
+
 		stack.AccountManager().AddBackend(ks)
 	}
 
 	// Iterate over all the nodes and start signing on them
 	time.Sleep(3 * time.Second)
+
 	for _, node := range nodes {
 		if err := node.StartMining(1); err != nil {
 			panic(err)
 		}
 	}
+
 	time.Sleep(3 * time.Second)
 
 	// Start injecting transactions from the faucet like crazy
 	nonces := make([]uint64, len(faucets))
+
 	for {
 		// Stop when interrupted.
 		select {
@@ -119,6 +126,7 @@ func main() {
 			for _, node := range stacks {
 				node.Close()
 			}
+
 			return
 		default:
 		}
@@ -132,9 +140,11 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
 		if err := backend.TxPool().AddLocal(tx); err != nil {
 			panic(err)
 		}
+
 		nonces[index]++
 
 		// Wait if we're too saturated
@@ -165,6 +175,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	for i, sealer := range sealers {
 		signers[i] = crypto.PubkeyToAddress(sealer.PublicKey)
 	}
+
 	for i := 0; i < len(signers); i++ {
 		for j := i + 1; j < len(signers); j++ {
 			if bytes.Compare(signers[i][:], signers[j][:]) > 0 {
@@ -172,6 +183,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 			}
 		}
 	}
+
 	genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 	for i, signer := range signers {
 		copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
@@ -219,5 +231,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	}
 
 	err = stack.Start()
+
 	return stack, ethBackend, err
 }

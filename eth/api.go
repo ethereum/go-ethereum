@@ -90,6 +90,7 @@ func (api *MinerAPI) Start(threads *int) error {
 	if threads == nil {
 		return api.e.StartMining(runtime.NumCPU())
 	}
+
 	return api.e.StartMining(*threads)
 }
 
@@ -104,6 +105,7 @@ func (api *MinerAPI) SetExtra(extra string) (bool, error) {
 	if err := api.e.Miner().SetExtra([]byte(extra)); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -114,6 +116,7 @@ func (api *MinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 	api.e.lock.Unlock()
 
 	api.e.txPool.SetGasPrice((*big.Int)(&gasPrice))
+
 	return true
 }
 
@@ -151,10 +154,12 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	if first == nil && last != nil {
 		return false, errors.New("last cannot be specified without first")
 	}
+
 	if first != nil && last == nil {
 		head := api.eth.BlockChain().CurrentHeader().Number.Uint64()
 		last = &head
 	}
+
 	if _, err := os.Stat(file); err == nil {
 		// File already exists. Allowing overwrite could be a DoS vector,
 		// since the 'file' may point to arbitrary paths on the drive.
@@ -181,6 +186,7 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	} else if err := api.eth.BlockChain().Export(writer); err != nil {
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -214,6 +220,7 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 	stream := rlp.NewStream(reader, 0)
 
 	blocks, index := make([]*types.Block, 0, 2500), 0
+
 	for batch := 0; ; batch++ {
 		// Load a batch of blocks from the input file
 		for len(blocks) < cap(blocks) {
@@ -223,9 +230,11 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 			} else if err != nil {
 				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)
 			}
+
 			blocks = append(blocks, block)
 			index++
 		}
+
 		if len(blocks) == 0 {
 			break
 		}
@@ -238,8 +247,10 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 		if _, err := api.eth.BlockChain().InsertChain(blocks); err != nil {
 			return false, fmt.Errorf("batch %d: failed to insert: %v", batch, err)
 		}
+
 		blocks = blocks[:0]
 	}
+
 	return true, nil
 }
 
@@ -260,6 +271,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
+
 	if blockNr == rpc.PendingBlockNumber {
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
@@ -280,6 +292,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 		}
+
 		header = block.Header()
 	}
 
@@ -291,6 +304,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if err != nil {
 		return state.Dump{}, err
 	}
+
 	return stateDb.RawDump(opts), nil
 }
 
@@ -299,6 +313,7 @@ func (api *DebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.By
 	if preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); preimage != nil {
 		return preimage, nil
 	}
+
 	return nil, errors.New("unknown preimage")
 }
 
@@ -317,25 +332,30 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
+
 	for _, block := range blocks {
 		var (
 			blockRlp  string
 			blockJSON map[string]interface{}
 		)
+
 		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
 			blockRlp = err.Error() // Hacky, but hey, it works
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
+
 		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig(), api.eth.chainDb); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
+
 		results = append(results, &BadBlockArgs{
 			Hash:  block.Hash(),
 			RLP:   blockRlp,
 			Block: blockJSON,
 		})
 	}
+
 	return results, nil
 }
 
@@ -345,6 +365,7 @@ const AccountRangeMaxResults = 256
 // AccountRange enumerates all accounts in the given block and start point in paging request
 func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
+
 	var err error
 
 	if number, ok := blockNrOrHash.Number(); ok {
@@ -366,11 +387,14 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 				if block == nil {
 					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 				}
+
 				header = block.Header()
 			}
+
 			if header == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}
+
 			stateDb, err = api.eth.BlockChain().StateAt(header.Root)
 			if err != nil {
 				return state.IteratorDump{}, err
@@ -381,6 +405,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.IteratorDump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
+
 		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
 		if err != nil {
 			return state.IteratorDump{}, err
@@ -399,6 +424,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
 		opts.Max = AccountRangeMaxResults
 	}
+
 	return stateDb.IteratorDump(opts), nil
 }
 
@@ -435,25 +461,31 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, 
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
+
 	if st == nil {
 		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
 	}
+
 	return storageRangeAt(st, keyStart, maxResult)
 }
 
 func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(start))
 	result := StorageRangeResult{Storage: storageMap{}}
+
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)
 		if err != nil {
 			return StorageRangeResult{}, err
 		}
+
 		e := storageEntry{Value: common.BytesToHash(content)}
+
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			preimage := common.BytesToHash(preimage)
 			e.Key = &preimage
 		}
+
 		result.Storage[common.BytesToHash(it.Key)] = e
 	}
 	// Add the 'next key' so clients can continue downloading.
@@ -461,6 +493,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 		next := common.BytesToHash(it.Key)
 		result.NextKey = &next
 	}
+
 	return result, nil
 }
 
@@ -480,6 +513,7 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 	if endNum == nil {
 		endBlock = startBlock
 		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
 		}
@@ -489,6 +523,7 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 			return nil, fmt.Errorf("end block %d not found", *endNum)
 		}
 	}
+
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
@@ -499,6 +534,7 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
+
 	startBlock = api.eth.blockchain.GetBlockByHash(startHash)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startHash)
@@ -507,6 +543,7 @@ func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *c
 	if endHash == nil {
 		endBlock = startBlock
 		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
 		}
@@ -516,6 +553,7 @@ func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *c
 			return nil, fmt.Errorf("end block %x not found", *endHash)
 		}
 	}
+
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
@@ -523,6 +561,7 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
+
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
 	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
@@ -534,17 +573,21 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if err != nil {
 		return nil, err
 	}
+
 	diff, _ := trie.NewDifferenceIterator(oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}))
 	iter := trie.NewIterator(diff)
 
 	var dirty []common.Address
+
 	for iter.Next() {
 		key := newTrie.GetKey(iter.Key)
 		if key == nil {
 			return nil, fmt.Errorf("no preimage found for hash %x", iter.Key)
 		}
+
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
+
 	return dirty, nil
 }
 
@@ -555,11 +598,14 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 // either forwards or backwards
 func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
 	db := api.eth.ChainDb()
+
 	var pivot uint64
+
 	if p := rawdb.ReadLastPivotNumber(db); p != nil {
 		pivot = *p
 		log.Info("Found fast-sync pivot marker", "number", pivot)
 	}
+
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
@@ -571,6 +617,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		}
 		return uint64(num.Int64()), nil
 	}
+
 	var (
 		start   uint64
 		end     uint64
@@ -578,30 +625,39 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		lastLog time.Time
 		err     error
 	)
+
 	if start, err = resolveNum(from); err != nil {
 		return 0, err
 	}
+
 	if end, err = resolveNum(to); err != nil {
 		return 0, err
 	}
+
 	if start == end {
 		return 0, fmt.Errorf("from and to needs to be different")
 	}
+
 	if start > end {
 		delta = -1
 	}
+
 	for i := int64(start); i != int64(end); i += delta {
 		if time.Since(lastLog) > 8*time.Second {
 			log.Info("Finding roots", "from", start, "to", end, "at", i)
+
 			lastLog = time.Now()
 		}
+
 		if i < int64(pivot) {
 			continue
 		}
+
 		h := api.eth.BlockChain().GetHeaderByNumber(uint64(i))
 		if h == nil {
 			return 0, fmt.Errorf("missing header %d", i)
 		}
+
 		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
 			return uint64(i), nil
 		}

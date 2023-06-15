@@ -54,12 +54,14 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 		WriteBufferPool: wsBufferPool,
 		CheckOrigin:     wsHandshakeValidator(allowedOrigins),
 	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Debug("WebSocket upgrade failed", "err", err)
 			return
 		}
+
 		codec := newWebsocketCodec(conn, r.Host, r.Header)
 		s.ServeCodec(codec, 0)
 	})
@@ -76,6 +78,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 		if origin == "*" {
 			allowAllOrigins = true
 		}
+
 		if origin != "" {
 			origins.Add(origin)
 		}
@@ -83,10 +86,12 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 	// allow localhost if no allowedOrigins are specified.
 	if len(origins.ToSlice()) == 0 {
 		origins.Add("http://localhost")
+
 		if hostname, err := os.Hostname(); err == nil {
 			origins.Add("http://" + hostname)
 		}
 	}
+
 	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
 
 	f := func(req *http.Request) bool {
@@ -102,7 +107,9 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 		if allowAllOrigins || originIsAllowed(origins, origin) {
 			return true
 		}
+
 		log.Warn("Rejected WebSocket connection", "origin", origin)
+
 		return false
 	}
 
@@ -119,6 +126,7 @@ func (e wsHandshakeError) Error() string {
 	if e.status != "" {
 		s += " (HTTP status " + e.status + ")"
 	}
+
 	return s
 }
 
@@ -129,6 +137,7 @@ func originIsAllowed(allowedOrigins mapset.Set[string], browserOrigin string) bo
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -138,25 +147,31 @@ func ruleAllowsOrigin(allowedOrigin string, browserOrigin string) bool {
 		browserScheme, browserHostname, browserPort string
 		err                                         error
 	)
+
 	allowedScheme, allowedHostname, allowedPort, err = parseOriginURL(allowedOrigin)
 	if err != nil {
 		log.Warn("Error parsing allowed origin specification", "spec", allowedOrigin, "error", err)
 		return false
 	}
+
 	browserScheme, browserHostname, browserPort, err = parseOriginURL(browserOrigin)
 	if err != nil {
 		log.Warn("Error parsing browser 'Origin' field", "Origin", browserOrigin, "error", err)
 		return false
 	}
+
 	if allowedScheme != "" && allowedScheme != browserScheme {
 		return false
 	}
+
 	if allowedHostname != "" && allowedHostname != browserHostname {
 		return false
 	}
+
 	if allowedPort != "" && allowedPort != browserPort {
 		return false
 	}
+
 	return true
 }
 
@@ -165,6 +180,7 @@ func parseOriginURL(origin string) (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
+
 	var scheme, hostname, port string
 	if strings.Contains(origin, "://") {
 		scheme = parsedURL.Scheme
@@ -174,10 +190,12 @@ func parseOriginURL(origin string) (string, string, string, error) {
 		scheme = ""
 		hostname = parsedURL.Scheme
 		port = parsedURL.Opaque
+
 		if hostname == "" {
 			hostname = origin
 		}
 	}
+
 	return scheme, hostname, port, nil
 }
 
@@ -274,15 +292,19 @@ func wsClientHeaders(endpoint, origin string) (string, http.Header, error) {
 	if err != nil {
 		return endpoint, nil, err
 	}
+
 	header := make(http.Header)
 	if origin != "" {
 		header.Add("origin", origin)
 	}
+
 	if endpointURL.User != nil {
 		b64auth := base64.StdEncoding.EncodeToString([]byte(endpointURL.User.String()))
 		header.Add("authorization", "Basic "+b64auth)
+
 		endpointURL.User = nil
 	}
+
 	return endpointURL.String(), header, nil
 }
 
@@ -321,6 +343,7 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header) Serve
 	// Start pinger.
 	wc.wg.Add(1)
 	go wc.pingLoop()
+
 	return wc
 }
 
@@ -342,12 +365,14 @@ func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError 
 		default:
 		}
 	}
+
 	return err
 }
 
 // pingLoop sends periodic ping frames when the connection is idle.
 func (wc *websocketCodec) pingLoop() {
 	var timer = time.NewTimer(wsPingInterval)
+
 	defer wc.wg.Done()
 	defer timer.Stop()
 
@@ -359,6 +384,7 @@ func (wc *websocketCodec) pingLoop() {
 			if !timer.Stop() {
 				<-timer.C
 			}
+
 			timer.Reset(wsPingInterval)
 		case <-timer.C:
 			wc.jsonCodec.encMu.Lock()

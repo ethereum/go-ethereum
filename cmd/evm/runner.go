@@ -61,16 +61,19 @@ func readGenesis(genesisPath string) *core.Genesis {
 	if len(genesisPath) == 0 {
 		utils.Fatalf("Must supply path to genesis JSON file")
 	}
+
 	file, err := os.Open(genesisPath)
 	if err != nil {
 		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
+
 	defer file.Close()
 
 	genesis := new(core.Genesis)
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
+
 	return genesis
 }
 
@@ -95,10 +98,13 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 		stats.bytesAllocated = result.AllocedBytesPerOp()
 	} else {
 		var memStatsBefore, memStatsAfter goruntime.MemStats
+
 		goruntime.ReadMemStats(&memStatsBefore)
+
 		startTime := time.Now()
 		output, gasLeft, err = execFunc()
 		stats.time = time.Since(startTime)
+
 		goruntime.ReadMemStats(&memStatsAfter)
 		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
 		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
@@ -111,6 +117,7 @@ func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
+
 	logconfig := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.Bool(DisableStackFlag.Name),
@@ -156,6 +163,7 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
+
 	statedb.CreateAccount(sender)
 
 	if ctx.String(ReceiverFlag.Name) != "" {
@@ -170,6 +178,7 @@ func runCmd(ctx *cli.Context) error {
 	// The '--code' or '--codefile' flag overrides code in state
 	if codeFileFlag != "" || codeFlag != "" {
 		var hexcode []byte
+
 		if codeFileFlag != "" {
 			var err error
 			// If - is specified, it means that code comes from stdin
@@ -189,11 +198,13 @@ func runCmd(ctx *cli.Context) error {
 		} else {
 			hexcode = []byte(codeFlag)
 		}
+
 		hexcode = bytes.TrimSpace(hexcode)
 		if len(hexcode)%2 != 0 {
 			fmt.Printf("Invalid input length for hex data (%d)\n", len(hexcode))
 			os.Exit(1)
 		}
+
 		code = common.FromHex(string(hexcode))
 	} else if fn := ctx.Args().First(); len(fn) > 0 {
 		// EASM-file to compile
@@ -201,10 +212,12 @@ func runCmd(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
 		bin, err := compiler.Compile(fn, src, false)
 		if err != nil {
 			return err
 		}
+
 		code = common.Hex2Bytes(bin)
 	}
 
@@ -212,6 +225,7 @@ func runCmd(ctx *cli.Context) error {
 	if genesisConfig.GasLimit != 0 {
 		initialGas = genesisConfig.GasLimit
 	}
+
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
 		State:       statedb,
@@ -233,10 +247,12 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Println("could not create CPU profile: ", err)
 			os.Exit(1)
 		}
+
 		if err := pprof.StartCPUProfile(f); err != nil {
 			fmt.Println("could not start CPU profile: ", err)
 			os.Exit(1)
 		}
+
 		defer pprof.StopCPUProfile()
 	}
 
@@ -279,6 +295,7 @@ func runCmd(ctx *cli.Context) error {
 		if len(code) > 0 {
 			statedb.SetCode(receiver, code)
 		}
+
 		execFunc = func() ([]byte, uint64, error) {
 			return runtime.Call(receiver, input, &runtimeConfig)
 		}
@@ -299,10 +316,12 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Println("could not create memory profile: ", err)
 			os.Exit(1)
 		}
+
 		if err := pprof.WriteHeapProfile(f); err != nil {
 			fmt.Println("could not write memory profile: ", err)
 			os.Exit(1)
 		}
+
 		f.Close()
 	}
 
@@ -311,6 +330,7 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Fprintln(os.Stderr, "#### TRACE ####")
 			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
+
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
 		logger.WriteLogs(os.Stderr, statedb.Logs())
 	}
@@ -322,8 +342,10 @@ allocations:     %d
 allocated bytes: %d
 `, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
 	}
+
 	if tracer == nil {
 		fmt.Printf("%#x\n", output)
+
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}

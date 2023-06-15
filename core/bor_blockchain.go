@@ -26,5 +26,6 @@ func (bc *BlockChain) GetBorReceiptByHash(hash common.Hash) *types.Receipt {
 
 	// add into bor receipt cache
 	bc.borReceiptsCache.Add(hash, receipt)
+
 	return receipt
 }

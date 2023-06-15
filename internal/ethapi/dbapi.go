@@ -27,6 +27,7 @@ func (api *DebugAPI) DbGet(key string) (hexutil.Bytes, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return api.b.ChainDb().Get(blob)
 }
 

@@ -34,6 +34,7 @@ func runEthkey(t *testing.T, args ...string) *testEthkey {
 	tt := new(testEthkey)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 	tt.Run("ethkey-test", args...)
+
 	return tt
 }
 
@@ -44,11 +45,13 @@ func TestMain(m *testing.M) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+
 		os.Exit(0)
 	})
 	// check if we have been reexec'd
 	if reexec.Init() {
 		return
 	}
+
 	os.Exit(m.Run())
 }

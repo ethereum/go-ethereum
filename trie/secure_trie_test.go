@@ -41,6 +41,7 @@ func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
+
 	for i := byte(0); i < 255; i++ {
 		// Map the same data under multiple keys
 		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
@@ -66,11 +67,13 @@ func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 	}
 	// Re-create the trie based on the new state
 	trie, _ = NewStateTrie(TrieID(root), triedb)
+
 	return triedb, trie, content
 }
 
 func TestSecureDelete(t *testing.T) {
 	trie := newEmptySecure()
+
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -88,8 +91,10 @@ func TestSecureDelete(t *testing.T) {
 			trie.MustDelete([]byte(val.k))
 		}
 	}
+
 	hash := trie.Hash()
 	exp := common.HexToHash("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
+
 	if hash != exp {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -106,6 +111,7 @@ func TestSecureGetKey(t *testing.T) {
 	if !bytes.Equal(trie.MustGet(key), value) {
 		t.Errorf("Get did not return bar")
 	}
+
 	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {
 		t.Errorf("GetKey returned %q, want %q", k, key)
 	}
@@ -119,12 +125,14 @@ func TestStateTrieConcurrency(t *testing.T) {
 
 	threads := runtime.NumCPU()
 	tries := make([]*StateTrie, threads)
+
 	for i := 0; i < threads; i++ {
 		tries[i] = trie.Copy()
 	}
 	// Start a batch of goroutines interacting with the trie
 	pend := new(sync.WaitGroup)
 	pend.Add(threads)
+
 	for i := 0; i < threads; i++ {
 		go func(index int) {
 			defer pend.Done()

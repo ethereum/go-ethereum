@@ -28,12 +28,15 @@ import (
 func newTestServer() *Server {
 	server := NewServer(0, 0)
 	server.idgen = sequentialIDGenerator()
+
 	if err := server.RegisterName("test", new(testService)); err != nil {
 		panic(err)
 	}
+
 	if err := server.RegisterName("nftest", new(notificationTestService)); err != nil {
 		panic(err)
 	}
+
 	return server
 }
 
@@ -42,12 +45,15 @@ func sequentialIDGenerator() func() ID {
 		mu      sync.Mutex
 		counter uint64
 	)
+
 	return func() ID {
 		mu.Lock()
 		defer mu.Unlock()
+
 		counter++
 		id := make([]byte, 8)
 		binary.BigEndian.PutUint64(id, counter)
+
 		return encodeID(id)
 	}
 }
@@ -137,8 +143,10 @@ func (s *testService) CallMeBack(ctx context.Context, method string, args []inte
 	if !ok {
 		return nil, errors.New("no client")
 	}
+
 	var result interface{}
 	err := c.Call(&result, method, args...)
+
 	return result, err
 }
 
@@ -147,11 +155,15 @@ func (s *testService) CallMeBackLater(ctx context.Context, method string, args [
 	if !ok {
 		return errors.New("no client")
 	}
+
 	go func() {
 		<-ctx.Done()
+
 		var result interface{}
+
 		c.Call(&result, method, args...)
 	}()
+
 	return nil
 }
 
@@ -185,6 +197,7 @@ func (s *notificationTestService) SomeSubscription(ctx context.Context, n, val i
 	// back to the client before the first subscription.Notify is called. Otherwise the
 	// events might be send before the response for the *_subscribe method.
 	subscription := notifier.CreateSubscription()
+
 	go func() {
 		for i := 0; i < n; i++ {
 			if err := notifier.Notify(subscription.ID, val+i); err != nil {
@@ -195,10 +208,12 @@ func (s *notificationTestService) SomeSubscription(ctx context.Context, n, val i
 		case <-notifier.Closed():
 		case <-subscription.Err():
 		}
+
 		if s.unsubscribed != nil {
 			s.unsubscribed <- string(subscription.ID)
 		}
 	}()
+
 	return subscription, nil
 }
 
@@ -210,11 +225,13 @@ func (s *notificationTestService) HangSubscription(ctx context.Context, val int)
 	}
 	s.gotHangSubscriptionReq <- struct{}{}
 	<-s.unblockHangSubscription
+
 	subscription := notifier.CreateSubscription()
 
 	go func() {
 		notifier.Notify(subscription.ID, val)
 	}()
+
 	return subscription, nil
 }
 

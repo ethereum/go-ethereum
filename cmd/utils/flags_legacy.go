@@ -51,9 +51,11 @@ func showDeprecated(*cli.Context) error {
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println()
+
 	for _, flag := range DeprecatedFlags {
 		fmt.Println(flag.String())
 	}
+
 	fmt.Println()
 
 	return nil

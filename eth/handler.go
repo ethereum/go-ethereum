@@ -140,6 +140,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	if config.EventMux == nil {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
+
 	h := &handler{
 		networkID:      config.Network,
 		forkFilter:     forkid.NewFilter(config.Chain),
@@ -166,11 +167,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
 			log.Warn("Preventing switching sync mode from full sync to snap sync")
-
 			// Note: Ideally this should never happen with bor, but to be extra
 			// preventive we won't allow it to roll over to snap sync until
 			// we have it working
-
 			// TODO(snap): Uncomment when we have snap sync working
 			// h.snapSync = uint32(1)
 			// log.Warn("Switch sync mode from full sync to snap sync")
@@ -242,6 +241,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				return errors.New("unexpected post-merge header")
 			}
 		}
+
 		return h.chain.Engine().VerifyHeader(h.chain, header, true)
 	}
 	heighter := func() uint64 {
@@ -252,6 +252,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// after the transition. Print the warning log.
 		if h.merger.PoSFinalized() {
 			var ctx []interface{}
+
 			ctx = append(ctx, "blocks", len(blocks))
 			if len(blocks) > 0 {
 				ctx = append(ctx, "firsthash", blocks[0].Hash())
@@ -259,7 +260,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				ctx = append(ctx, "lasthash", blocks[len(blocks)-1].Hash())
 				ctx = append(ctx, "lastnumber", blocks[len(blocks)-1].Number())
 			}
+
 			log.Warn("Unexpected insertion activity", ctx...)
+
 			return 0, errors.New("unexpected behavior after transition")
 		}
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
@@ -281,6 +284,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Snap syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
+
 		if h.merger.TDDReached() {
 			// The blocks from the p2p network is regarded as untrusted
 			// after the transition. In theory block gossip should be disabled
@@ -293,21 +297,26 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				if ptd == nil {
 					return 0, nil
 				}
+
 				td := new(big.Int).Add(ptd, block.Difficulty())
 				if !h.chain.Config().IsTerminalPoWBlock(ptd, td) {
 					log.Info("Filtered out non-termimal pow block", "number", block.NumberU64(), "hash", block.Hash())
 					return 0, nil
 				}
+
 				if err := h.chain.InsertBlockWithoutSetHead(block); err != nil {
 					return i, err
 				}
 			}
+
 			return 0, nil
 		}
+
 		n, err := h.chain.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
+
 		return n, err
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
@@ -317,10 +326,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		if p == nil {
 			return errors.New("unknown peer")
 		}
+
 		return p.RequestTxs(hashes)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx, config.txArrivalWait)
 	h.chainSync = newChainSyncer(h)
+
 	return h, nil
 }
 
@@ -338,6 +349,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
 	}
+
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
@@ -355,7 +367,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
+
 	reject := false // reserved peer slots
+
 	if atomic.LoadUint32(&h.snapSync) == 1 {
 		if snap == nil {
 			// If we are running snap-sync, we want to reserve roughly half the peer
@@ -372,6 +386,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
+
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
@@ -390,12 +405,14 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
+
 	if snap != nil {
 		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
 			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
 			return err
 		}
 	}
+
 	h.chainSync.handlePeerEvent(peer)
 
 	// Propagate existing transactions. new transactions appearing
@@ -433,9 +450,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 					if atomic.LoadUint32(&h.snapSync) == 1 {
 						peer.Log().Warn("Dropping unsynced node during sync", "addr", peer.RemoteAddr(), "type", peer.Name())
 						res.Done <- errors.New("unsynced node cannot serve sync")
+
 						return
 					}
 					res.Done <- nil
+
 					return
 				}
 				// Validate the header and either drop the peer or continue
@@ -443,6 +462,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 					res.Done <- errors.New("too many headers in checkpoint response")
 					return
 				}
+
 				if headers[0].Hash() != h.checkpointHash {
 					res.Done <- errors.New("checkpoint hash mismatch")
 					return
@@ -488,11 +508,14 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 					res.Done <- errors.New("too many headers in required block response")
 					return
 				}
+
 				if headers[0].Number.Uint64() != number || headers[0].Hash() != hash {
 					peer.Log().Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
 					res.Done <- errors.New("required block mismatch")
+
 					return
 				}
+
 				peer.Log().Debug("Peer required block verified", "number", number, "hash", hash)
 				res.Done <- nil
 			case <-timeout.C:
@@ -517,6 +540,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 		peer.Log().Warn("Snapshot extension registration failed", "err", err)
 		return err
 	}
+
 	return handler(peer)
 }
 
@@ -551,6 +575,7 @@ func (h *handler) unregisterPeer(id string) {
 	if peer.snapExt != nil {
 		h.downloader.SnapSyncer.Unregister(id)
 	}
+
 	h.downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 
@@ -566,10 +591,12 @@ func (h *handler) Start(maxPeers int) {
 	h.wg.Add(1)
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+
 	go h.txBroadcastLoop()
 
 	// broadcast mined blocks
 	h.wg.Add(1)
+
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go h.minedBroadcastLoop()
 
@@ -611,6 +638,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 	}
+
 	hash := block.Hash()
 	peers := h.peers.peersWithoutBlock(hash)
 
@@ -629,7 +657,9 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
+
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
@@ -637,6 +667,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
+
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
@@ -669,16 +700,19 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 			annos[peer] = append(annos[peer], tx.Hash())
 		}
 	}
+
 	for peer, hashes := range txset {
 		directPeers++
 		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
 	}
+
 	for peer, hashes := range annos {
 		annoPeers++
 		annoCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
+
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,
 		"tx packs", directPeers, "broadcast txs", directCount)
@@ -699,6 +733,7 @@ func (h *handler) minedBroadcastLoop() {
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
+
 	for {
 		select {
 		case event := <-h.txsCh:

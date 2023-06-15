@@ -40,6 +40,7 @@ func TestPebbleDB(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			return &Database{
 				db: db,
 			}
@@ -55,6 +56,7 @@ func BenchmarkPebbleDB(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		return &Database{
 			db: db,
 		}

@@ -64,6 +64,7 @@ func NewEvent(name, rawName string, anonymous bool, inputs Arguments) Event {
 	// and precompute string and sig representation.
 	names := make([]string, len(inputs))
 	types := make([]string, len(inputs))
+
 	for i, input := range inputs {
 		if input.Name == "" {
 			inputs[i] = Argument{

@@ -45,15 +45,15 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase  common.Address `toml:",omitempty"` // Public address for block mining rewards
-	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
-	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
-	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor   uint64         // Target gas floor for mined blocks.
-	GasCeil    uint64         // Target gas ceiling for mined blocks.
-	GasPrice   *big.Int       // Minimum gas price for mining a transaction
-	Recommit   time.Duration  // The time interval for miner to re-create mining work.
-	Noverify   bool           // Disable remote mining solution verification(only useful in ethash).
+	Etherbase           common.Address `toml:",omitempty"` // Public address for block mining rewards
+	Notify              []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	NotifyFull          bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
+	ExtraData           hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor            uint64         // Target gas floor for mined blocks.
+	GasCeil             uint64         // Target gas ceiling for mined blocks.
+	GasPrice            *big.Int       // Minimum gas price for mining a transaction
+	Recommit            time.Duration  // The time interval for miner to re-create mining work.
+	Noverify            bool           // Disable remote mining solution verification(only useful in ethash).
 	CommitInterruptFlag bool           // Interrupt commit when time is up ( default = true)
 
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
@@ -96,7 +96,9 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 	}
 	miner.wg.Add(1)
+
 	go miner.update()
+
 	return miner
 }
 
@@ -117,6 +119,7 @@ func (miner *Miner) update() {
 	shouldStart := false
 	canStart := true
 	dlEventCh := events.Chan()
+
 	for {
 		select {
 		case ev := <-dlEventCh:
@@ -125,23 +128,29 @@ func (miner *Miner) update() {
 				dlEventCh = nil
 				continue
 			}
+
 			switch ev.Data.(type) {
 			case downloader.StartEvent:
 				wasMining := miner.Mining()
 				miner.worker.stop()
+
 				canStart = false
+
 				if wasMining {
 					// Resume mining after sync was finished
 					shouldStart = true
+
 					log.Info("Mining aborted due to sync")
 				}
 			case downloader.FailedEvent:
 				canStart = true
+
 				if shouldStart {
 					miner.worker.start()
 				}
 			case downloader.DoneEvent:
 				canStart = true
+
 				if shouldStart {
 					miner.worker.start()
 				}
@@ -152,9 +161,11 @@ func (miner *Miner) update() {
 			if canStart {
 				miner.worker.start()
 			}
+
 			shouldStart = true
 		case <-miner.stopCh:
 			shouldStart = false
+
 			miner.worker.stop()
 		case <-miner.exitCh:
 			miner.worker.close()
@@ -184,6 +195,7 @@ func (miner *Miner) Hashrate() uint64 {
 	if pow, ok := miner.engine.(consensus.PoW); ok {
 		return uint64(pow.Hashrate())
 	}
+
 	return 0
 }
 
@@ -191,7 +203,9 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
 	}
+
 	miner.worker.setExtra(extra)
+
 	return nil
 }
 

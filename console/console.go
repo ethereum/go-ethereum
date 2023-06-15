@@ -92,9 +92,11 @@ func New(config Config) (*Console, error) {
 	if config.Prompter == nil {
 		config.Prompter = prompt.Stdin
 	}
+
 	if config.Prompt == "" {
 		config.Prompt = DefaultPrompt
 	}
+
 	if config.Printer == nil {
 		config.Printer = colorable.NewColorableStdout()
 	}
@@ -112,9 +114,11 @@ func New(config Config) (*Console, error) {
 		signalReceived:     make(chan struct{}, 1),
 		stopped:            make(chan struct{}),
 	}
+
 	if err := os.MkdirAll(config.DataDir, 0700); err != nil {
 		return nil, err
 	}
+
 	if err := console.init(config.Preload); err != nil {
 		return nil, err
 	}
@@ -135,6 +139,7 @@ func (c *Console) init(preload []string) error {
 	if err := c.initWeb3(bridge); err != nil {
 		return err
 	}
+
 	if err := c.initExtensions(); err != nil {
 		return err
 	}
@@ -152,6 +157,7 @@ func (c *Console) init(preload []string) error {
 			if gojaErr, ok := err.(*goja.Exception); ok {
 				failure = gojaErr.String()
 			}
+
 			return fmt.Errorf("%s: %v", path, failure)
 		}
 	}
@@ -164,8 +170,10 @@ func (c *Console) init(preload []string) error {
 			c.history = strings.Split(string(content), "\n")
 			c.prompter.SetHistory(c.history)
 		}
+
 		c.prompter.SetWordCompleter(c.AutoCompleteInput)
 	}
+
 	return nil
 }
 
@@ -186,10 +194,13 @@ func (c *Console) initWeb3(bridge *bridge) error {
 	if err := c.jsre.Compile("web3.js", deps.Web3JS); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
+
 	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
 		return fmt.Errorf("web3 require: %v", err)
 	}
+
 	var err error
+
 	c.jsre.Do(func(vm *goja.Runtime) {
 		transport := vm.NewObject()
 		transport.Set("send", jsre.MakeCallback(vm, bridge.Send))
@@ -197,6 +208,7 @@ func (c *Console) initWeb3(bridge *bridge) error {
 		vm.Set("_consoleWeb3Transport", transport)
 		_, err = vm.RunString("var web3 = new Web3(_consoleWeb3Transport)")
 	})
+
 	return err
 }
 
@@ -205,6 +217,7 @@ var defaultAPIs = map[string]string{"eth": "1.0", "net": "1.0", "debug": "1.0"}
 // initExtensions loads and registers web3.js extensions.
 func (c *Console) initExtensions() error {
 	const methodNotFound = -32601
+
 	apis, err := c.client.SupportedModules()
 	if err != nil {
 		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == methodNotFound {
@@ -218,11 +231,14 @@ func (c *Console) initExtensions() error {
 
 	// Compute aliases from server-provided modules.
 	aliases := map[string]struct{}{"eth": {}}
+
 	for api := range apis {
 		if api == "web3" {
 			continue
 		}
+
 		aliases[api] = struct{}{}
+
 		if file, ok := web3ext.Modules[api]; ok {
 			if err = c.jsre.Compile(api+".js", file); err != nil {
 				return fmt.Errorf("%s.js: %v", api, err)
@@ -239,6 +255,7 @@ func (c *Console) initExtensions() error {
 			}
 		}
 	})
+
 	return nil
 }
 
@@ -264,6 +281,7 @@ func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	}
 
 	log.Warn("Enabling deprecated personal namespace")
+
 	jeth := vm.NewObject()
 	vm.Set("jeth", jeth)
 	jeth.Set("openWallet", personal.Get("openWallet"))
@@ -279,6 +297,7 @@ func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 func (c *Console) clearHistory() {
 	c.history = nil
 	c.prompter.ClearHistory()
+
 	if err := os.Remove(c.histPath); err != nil {
 		fmt.Fprintln(c.printer, "can't delete history file:", err)
 	} else {
@@ -293,7 +312,9 @@ func (c *Console) consoleOutput(call goja.FunctionCall) goja.Value {
 	for _, argument := range call.Arguments {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}
+
 	fmt.Fprintln(c.printer, strings.Join(output, " "))
+
 	return goja.Null()
 }
 
@@ -315,8 +336,10 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 		}
 		// We've hit an unexpected character, autocomplete form here
 		start++
+
 		break
 	}
+
 	return line[:start], c.jsre.CompleteKeywords(line[start:pos]), line[pos:]
 }
 
@@ -345,9 +368,11 @@ func (c *Console) Welcome() {
 		for api, version := range apis {
 			modules = append(modules, fmt.Sprintf("%s:%s", api, version))
 		}
+
 		sort.Strings(modules)
 		message += " modules: " + strings.Join(modules, " ") + "\n"
 	}
+
 	message += "\nTo exit, press ctrl-d or type exit"
 	fmt.Fprintln(c.printer, message)
 }
@@ -460,6 +485,7 @@ func (c *Console) Interactive() {
 				prompt, indents, input = c.prompt, 0, ""
 				continue
 			}
+
 			return
 
 		case line := <-inputLine:
@@ -467,11 +493,13 @@ func (c *Console) Interactive() {
 			if indents <= 0 && exit.MatchString(line) {
 				return
 			}
+
 			if onlyWhitespace.MatchString(line) {
 				continue
 			}
 			// Append the line to the input and check for multi-line interpretation.
 			input += line + "\n"
+
 			indents = countIndents(input)
 			if indents <= 0 {
 				prompt = c.prompt
@@ -488,6 +516,7 @@ func (c *Console) Interactive() {
 						}
 					}
 				}
+
 				c.Evaluate(input)
 				input = ""
 			}
@@ -531,16 +560,19 @@ func countIndents(input string) int {
 				inString = true
 				strOpenChar = c
 			}
+
 			charEscaped = false
 		case '{', '(':
 			if !inString { // ignore brackets when in string, allow var str = "a{"; without indenting
 				indents++
 			}
+
 			charEscaped = false
 		case '}', ')':
 			if !inString {
 				indents--
 			}
+
 			charEscaped = false
 		default:
 			charEscaped = false
@@ -559,6 +591,7 @@ func (c *Console) Stop(graceful bool) error {
 	})
 
 	c.jsre.Stop(graceful)
+
 	return nil
 }
 
@@ -566,5 +599,6 @@ func (c *Console) writeHistory() error {
 	if err := os.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
 	}
+
 	return os.Chmod(c.histPath, 0600) // Force 0600, even if it was different previously
 }

@@ -75,6 +75,7 @@ func NewSessionCache(maxItems int, clock mclock.Clock) *SessionCache {
 func generateNonce(counter uint32) (n Nonce, err error) {
 	binary.BigEndian.PutUint32(n[:4], counter)
 	_, err = crand.Read(n[4:])
+
 	return n, err
 }
 
@@ -100,6 +101,7 @@ func (sc *SessionCache) readKey(id enode.ID, addr string) []byte {
 	if s := sc.session(id, addr); s != nil {
 		return s.readKey
 	}
+
 	return nil
 }
 

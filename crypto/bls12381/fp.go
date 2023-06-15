@@ -23,14 +23,19 @@ import (
 
 func fromBytes(in []byte) (*fe, error) {
 	fe := &fe{}
+
 	if len(in) != 48 {
 		return nil, errors.New("input string should be equal 48 bytes")
 	}
+
 	fe.setBytes(in)
+
 	if !fe.isValid() {
 		return nil, errors.New("must be less than modulus")
 	}
+
 	toMont(fe, fe)
+
 	return fe, nil
 }
 
@@ -39,7 +44,9 @@ func fromBig(in *big.Int) (*fe, error) {
 	if !fe.isValid() {
 		return nil, errors.New("invalid input string")
 	}
+
 	toMont(fe, fe)
+
 	return fe, nil
 }
 
@@ -48,28 +55,34 @@ func fromString(in string) (*fe, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if !fe.isValid() {
 		return nil, errors.New("invalid input string")
 	}
+
 	toMont(fe, fe)
+
 	return fe, nil
 }
 
 func toBytes(e *fe) []byte {
 	e2 := new(fe)
 	fromMont(e2, e)
+
 	return e2.bytes()
 }
 
 func toBig(e *fe) *big.Int {
 	e2 := new(fe)
 	fromMont(e2, e)
+
 	return e2.big()
 }
 
 func toString(e *fe) (s string) {
 	e2 := new(fe)
 	fromMont(e2, e)
+
 	return e2.string()
 }
 
@@ -85,6 +98,7 @@ func exp(c, a *fe, e *big.Int) {
 	z := new(fe).set(r1)
 	for i := e.BitLen(); i >= 0; i-- {
 		mul(z, z, z)
+
 		if e.Bit(i) == 1 {
 			mul(z, z, a)
 		}
@@ -97,12 +111,16 @@ func inverse(inv, e *fe) {
 		inv.zero()
 		return
 	}
+
 	u := new(fe).set(&modulus)
 	v := new(fe).set(e)
 	s := &fe{1}
 	r := &fe{0}
+
 	var k int
+
 	var z uint64
+
 	var found = false
 	// Phase 1
 	for i := 0; i < 768; i++ {
@@ -110,11 +128,13 @@ func inverse(inv, e *fe) {
 			found = true
 			break
 		}
+
 		if u.isEven() {
 			u.div2(0)
 			s.mul2()
 		} else if v.isEven() {
 			v.div2(0)
+
 			z += r.mul2()
 		} else if u.cmp(v) == 1 {
 			lsubAssign(u, v)
@@ -127,6 +147,7 @@ func inverse(inv, e *fe) {
 			laddAssign(s, r)
 			z += r.mul2()
 		}
+
 		k += 1
 	}
 
@@ -143,6 +164,7 @@ func inverse(inv, e *fe) {
 	if r.cmp(&modulus) != -1 || z > 0 {
 		lsubAssign(r, &modulus)
 	}
+
 	u.set(&modulus)
 	lsubAssign(u, r)
 
@@ -157,11 +179,13 @@ func sqrt(c, a *fe) bool {
 	u, v := new(fe).set(a), new(fe)
 	exp(c, a, pPlus1Over4)
 	square(v, c)
+
 	return u.equal(v)
 }
 
 func isQuadraticNonResidue(elem *fe) bool {
 	result := new(fe)
 	exp(result, elem, pMinus1Over2)
+
 	return !result.isOne()
 }

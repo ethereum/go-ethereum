@@ -1847,6 +1847,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if _, err := back.BlockChain().InsertChain(canonblocks[:tt.commitBlock]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
+
 	if tt.commitBlock > 0 {
 		err = back.BlockChain().StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true)
 		if err != nil {
@@ -1955,7 +1956,6 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 func TestIssue23496(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
@@ -1967,6 +1967,7 @@ func TestIssue23496(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
+
 	defer db.Close() // Might double close, should be fine
 
 	// Initialize a fresh chain
@@ -2018,6 +2019,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
+
 	chain.StateCache().TrieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
@@ -2078,6 +2080,7 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
+
 	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
 		t.Error("Failed to regenerate the snapshot of known state")
 	}

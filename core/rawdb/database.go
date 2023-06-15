@@ -53,12 +53,15 @@ func (frdb *freezerdb) Close() error {
 	if err := frdb.AncientStore.Close(); err != nil {
 		errs = append(errs, err)
 	}
+
 	if err := frdb.KeyValueStore.Close(); err != nil {
 		errs = append(errs, err)
 	}
+
 	if len(errs) != 0 {
 		return fmt.Errorf("%v", errs)
 	}
+
 	return nil
 }
 
@@ -79,6 +82,7 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 	trigger := make(chan struct{}, 1)
 	frdb.AncientStore.(*chainFreezer).trigger <- trigger
 	<-trigger
+
 	return nil
 }
 
@@ -190,6 +194,7 @@ func resolveChainFreezerDir(ancient string) string {
 			log.Info("Found legacy ancient chain path", "location", ancient)
 		}
 	}
+
 	return freezer
 }
 
@@ -256,6 +261,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 					}
 					// We are about to exit on error. Print database metdata beore exiting
 					printChainMetadata(db)
+
 					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
 						frozen-1, number, head)
 				}
@@ -286,11 +292,13 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// Freezer is consistent with the key-value database, permit combining the two
 	if !frdb.readonly {
 		frdb.wg.Add(1)
+
 		go func() {
 			frdb.freeze(db)
 			frdb.wg.Done()
 		}()
 	}
+
 	return &freezerdb{
 		ancientRoot:   ancient,
 		KeyValueStore: db,
@@ -318,7 +326,9 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	if err != nil {
 		return nil, err
 	}
+
 	log.Info("Using LevelDB as the backing database")
+
 	return NewDatabase(db), nil
 }
 
@@ -334,12 +344,15 @@ func hasPreexistingDb(path string) string {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return "" // No pre-existing db
 	}
+
 	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
+
 		return dbPebble
 	}
+
 	return dbLeveldb
 }
 
@@ -366,6 +379,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
 	}
+
 	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
 			log.Info("Using pebble as the backing database")
@@ -374,9 +388,11 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
 	}
+
 	if len(o.Type) != 0 && o.Type != dbLeveldb {
 		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
 	}
+
 	log.Info("Using leveldb as the backing database")
 	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
 	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
@@ -392,14 +408,17 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(o.AncientsDirectory) == 0 {
 		return kvdb, nil
 	}
+
 	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
 	}
+
 	return frdb, nil
 }
 
@@ -478,7 +497,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			key  = it.Key()
 			size = common.StorageSize(len(key) + len(it.Value()))
 		)
+
 		total += size
+
 		switch {
 		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
 			headers.Add(size)
@@ -526,6 +547,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bloomTrieNodes.Add(size)
 		default:
 			var accounted bool
+
 			for _, meta := range [][]byte{
 				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
 				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
@@ -534,14 +556,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
+
 					accounted = true
+
 					break
 				}
 			}
+
 			if !accounted {
 				unaccounted.Add(size)
 			}
 		}
+
 		count++
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 			log.Info("Inspecting database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -574,6 +600,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	if err != nil {
 		return err
 	}
+
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
 			stats = append(stats, []string{
@@ -586,8 +613,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				fmt.Sprintf("%d", ancient.count()),
 			})
 		}
+
 		total += ancient.size()
 	}
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
 	table.SetFooter([]string{"", "Total", total.String(), " "})
@@ -597,15 +626,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
 	}
+
 	return nil
 }
 
 // printChainMetadata prints out chain metadata to stderr.
 func printChainMetadata(db ethdb.KeyValueStore) {
 	fmt.Fprintf(os.Stderr, "Chain metadata\n")
+
 	for _, v := range ReadChainMetadata(db) {
 		fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(v, ": "))
 	}
+
 	fmt.Fprintf(os.Stderr, "\n\n")
 }
 
@@ -617,8 +649,10 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		if val == nil {
 			return "<nil>"
 		}
+
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
+
 	data := [][]string{
 		{"databaseVersion", pp(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
@@ -636,5 +670,6 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
 	}
+
 	return data
 }

@@ -1042,9 +1042,12 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.Bool(SepoliaFlag.Name) {
 			return filepath.Join(path, "sepolia")
 		}
+
 		return path
 	}
+
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
+
 	return ""
 }
 
@@ -1058,6 +1061,7 @@ func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 		key  *ecdsa.PrivateKey
 		err  error
 	)
+
 	switch {
 	case file != "" && hex != "":
 		Fatalf("Options %q and %q are mutually exclusive", NodeKeyFileFlag.Name, NodeKeyHexFlag.Name)
@@ -1065,11 +1069,13 @@ func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 		if key, err = crypto.LoadECDSA(file); err != nil {
 			Fatalf("Option %q: %v", NodeKeyFileFlag.Name, err)
 		}
+
 		cfg.PrivateKey = key
 	case hex != "":
 		if key, err = crypto.HexToECDSA(hex); err != nil {
 			Fatalf("Option %q: %v", NodeKeyHexFlag.Name, err)
 		}
+
 		cfg.PrivateKey = key
 	}
 }
@@ -1085,6 +1091,7 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 // flags, reverting to pre-configured ones if none have been specified.
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
+
 	switch {
 	case ctx.IsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
@@ -1100,6 +1107,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	}
 
 	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
+
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
@@ -1107,6 +1115,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
 				continue
 			}
+
 			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
 		}
 	}
@@ -1116,6 +1125,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 // flags, reverting to pre-configured ones if none have been specified.
 func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.V5Bootnodes
+
 	switch {
 	case ctx.IsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
@@ -1124,6 +1134,7 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	}
 
 	cfg.BootstrapNodesV5 = make([]*enode.Node, 0, len(urls))
+
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
@@ -1131,6 +1142,7 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 				log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 				continue
 			}
+
 			cfg.BootstrapNodesV5 = append(cfg.BootstrapNodesV5, node)
 		}
 	}
@@ -1155,6 +1167,7 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 		if err != nil {
 			Fatalf("Option %s: %v", NATFlag.Name, err)
 		}
+
 		cfg.NAT = natif
 	}
 }
@@ -1168,6 +1181,7 @@ func SplitAndTrim(input string) (ret []string) {
 			ret = append(ret, r)
 		}
 	}
+
 	return ret
 }
 
@@ -1261,6 +1275,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
 	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+
 	switch {
 	case ctx.Bool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
@@ -1320,6 +1335,7 @@ func MakeDatabaseHandles(max int) int {
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
+
 	switch {
 	case max == 0:
 		// User didn't specify a meaningful value, use system limits
@@ -1333,10 +1349,12 @@ func MakeDatabaseHandles(max int) int {
 		// User limit is meaningful and within allowed range, use that
 		limit = max
 	}
+
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
 		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
+
 	return int(raised / 2) // Leave half for networking and other stuff
 }
 
@@ -1352,6 +1370,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	if err != nil || index < 0 {
 		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
 	}
+
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
@@ -1362,6 +1381,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	if len(accs) <= index {
 		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
 	}
+
 	return accs[index], nil
 }
 
@@ -1398,11 +1418,13 @@ func MakePasswordList(ctx *cli.Context) []string {
 	if err != nil {
 		Fatalf("Failed to read password file: %v", err)
 	}
+
 	lines := strings.Split(string(text), "\n")
 	// Sanitise DOS line endings.
 	for i := range lines {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
+
 	return lines
 }
 
@@ -1431,17 +1453,21 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		if lightServer {
 			cfg.MaxPeers += lightPeers
 		}
+
 		if lightClient && ctx.IsSet(LightMaxPeersFlag.Name) && cfg.MaxPeers < lightPeers {
 			cfg.MaxPeers = lightPeers
 		}
 	}
+
 	if !(lightClient || lightServer) {
 		lightPeers = 0
 	}
+
 	ethPeers := cfg.MaxPeers - lightPeers
 	if lightClient {
 		ethPeers = 0
 	}
+
 	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.IsSet(MaxPendingPeersFlag.Name) {
@@ -1468,6 +1494,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		if err != nil {
 			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
+
 		cfg.NetRestrict = list
 	}
 
@@ -1736,10 +1763,12 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 		if len(parts) != 2 {
 			Fatalf("Invalid required block entry: %s", entry)
 		}
+
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
 			Fatalf("Invalid required block number %s: %v", parts[0], err)
 		}
+
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
 			Fatalf("Invalid required block hash %s: %v", parts[1], err)
@@ -1754,6 +1783,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 // specialize it further.
 func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	set := make([]string, 0, 1)
+
 	for i := 0; i < len(args); i++ {
 		// Make sure the next argument is a flag and skip if not set
 		flag, ok := args[i].(cli.Flag)
@@ -1773,6 +1803,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 				}
 				// shift arguments and continue
 				i++
+
 				continue
 
 			case cli.Flag:
@@ -1785,6 +1816,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 			set = append(set, "--"+name)
 		}
 	}
+
 	if len(set) > 1 {
 		Fatalf("Flags %v can't be used at the same time", strings.Join(set, ", "))
 	}
@@ -1796,6 +1828,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+
 	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
 		ctx.Set(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
@@ -1820,6 +1853,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
 			mem.Total = 2 * 1024 * 1024 * 1024
 		}
+
 		allowance := int(mem.Total / 1024 / 1024 / 3)
 
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
@@ -1868,6 +1902,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	if cfg.NoPruning && !cfg.Preimages {
 		cfg.Preimages = true
+
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
 
@@ -1921,6 +1956,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.Uint64(RPCGlobalGasCapFlag.Name)
 	}
+
 	if cfg.RPCGasCap != 0 {
 		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
 	} else {
@@ -1952,24 +1988,28 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
+
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.Bool(SepoliaFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 11155111
 		}
+
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
 	case ctx.Bool(GoerliFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
+
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.Bool(DeveloperFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
+
 		cfg.SyncMode = downloader.FullSync
 		// Create new developer account or reuse existing one
 		var (
@@ -1977,6 +2017,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			passphrase string
 			err        error
 		)
+
 		if list := MakePasswordList(ctx); len(list) > 0 {
 			// Just take the first value. Although the function returns a possible multiple values and
 			// some usages iterate through them as attempts, that doesn't make sense in this setting,
@@ -2013,6 +2054,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if err := ks.Unlock(developer, passphrase); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
+
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
@@ -2031,6 +2073,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
+
 			chaindb.Close()
 		}
 
@@ -2050,10 +2093,12 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 	if cfg.EthDiscoveryURLs != nil {
 		return // already set through flags/config
 	}
+
 	protocol := "all"
 	if cfg.SyncMode == downloader.LightSync {
 		protocol = "les"
 	}
+
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
 		cfg.EthDiscoveryURLs = []string{url}
 		cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
@@ -2069,17 +2114,21 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
+
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 
 		if err := lescatalyst.Register(stack, backend); err != nil {
 			Fatalf("Failed to register the Engine API service: %v", err)
 		}
+
 		return backend.ApiBackend, nil
 	}
+
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
+
 	if cfg.LightServ > 0 {
 		_, err := les.NewLesServer(stack, backend, cfg)
 		if err != nil {
@@ -2090,7 +2139,9 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	if err := ethcatalyst.Register(stack, backend); err != nil {
 		Fatalf("Failed to register the Engine API service: %v", err)
 	}
+
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+
 	return backend.APIBackend, backend
 }
 
@@ -2142,6 +2193,7 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
 	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
 		Fatalf("Failed to decode block: %v", err)
 	}
+
 	ethcatalyst.RegisterFullSyncTester(stack, eth, &block)
 	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
 }
@@ -2249,9 +2301,11 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	default:
 		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly)
 	}
+
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
+
 	return chainDb
 }
 
@@ -2299,6 +2353,7 @@ func DialRPCWithHeaders(endpoint string, headers []string) (*rpc.Client, error) 
 
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
+
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		genesis = core.DefaultGenesisBlock()
@@ -2309,6 +2364,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	case ctx.Bool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
+
 	return genesis
 }
 
@@ -2350,6 +2406,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
+
 	cache := &core.CacheConfig{
 		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
 		TrieCleanNoPrefetch: ctx.Bool(CacheNoPrefetchFlag.Name),
@@ -2361,6 +2418,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	if cache.TrieDirtyDisabled && !cache.Preimages {
 		cache.Preimages = true
+
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
 
@@ -2387,6 +2445,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
+
 	return chain, chainDb
 }
 
@@ -2403,5 +2462,6 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	for _, file := range strings.Split(ctx.String(PreloadJSFlag.Name), ",") {
 		preloads = append(preloads, strings.TrimSpace(file))
 	}
+
 	return preloads
 }

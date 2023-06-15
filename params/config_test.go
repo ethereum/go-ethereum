@@ -32,6 +32,7 @@ func TestCheckCompatible(t *testing.T) {
 		headTimestamp uint64
 		wantErr       *ConfigCompatError
 	}
+
 	tests := []test{
 		{stored: AllEthashProtocolChanges, new: AllEthashProtocolChanges, headBlock: 0, headTimestamp: 0, wantErr: nil},
 		{stored: AllEthashProtocolChanges, new: AllEthashProtocolChanges, headBlock: 0, headTimestamp: uint64(time.Now().Unix()), wantErr: nil},

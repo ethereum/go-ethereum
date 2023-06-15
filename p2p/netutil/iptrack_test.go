@@ -87,10 +87,13 @@ func runIPTrackerTest(t *testing.T, evs []iptrackTestEvent) {
 		clock mclock.Simulated
 		it    = NewIPTracker(10*time.Second, 10*time.Second, 3)
 	)
+
 	it.clock = &clock
+
 	for i, ev := range evs {
 		evtime := time.Duration(ev.time) * time.Millisecond
 		clock.Run(evtime - time.Duration(clock.Now()))
+
 		switch ev.op {
 		case opStatement:
 			it.AddStatement(ev.from, ev.ip)
@@ -118,6 +121,7 @@ func TestIPTrackerForceGC(t *testing.T) {
 		max    = int(window/rate) + 1
 		it     = NewIPTracker(window, window, 3)
 	)
+
 	it.clock = &clock
 
 	for i := 0; i < 5*max; i++ {
@@ -129,9 +133,11 @@ func TestIPTrackerForceGC(t *testing.T) {
 		it.AddContact(string(e1))
 		clock.Run(rate)
 	}
+
 	if len(it.contact) > 2*max {
 		t.Errorf("contacts not GCed, have %d", len(it.contact))
 	}
+
 	if len(it.statements) > 2*max {
 		t.Errorf("statements not GCed, have %d", len(it.statements))
 	}

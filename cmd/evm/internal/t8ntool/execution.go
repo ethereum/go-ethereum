@@ -109,21 +109,24 @@ type rejectedTx struct {
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txs types.Transactions, miningReward int64,
 	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)) (*state.StateDB, *ExecutionResult, error) {
-
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
+
 	getHash := func(num uint64) common.Hash {
 		if pre.Env.BlockHashes == nil {
 			hashError = fmt.Errorf("getHash(%d) invoked, no blockhashes provided", num)
 			return common.Hash{}
 		}
+
 		h, ok := pre.Env.BlockHashes[math.HexOrDecimal64(num)]
 		if !ok {
 			hashError = fmt.Errorf("getHash(%d) invoked, blockhash for that block not provided", num)
 		}
+
 		return h
 	}
+
 	var (
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
@@ -135,6 +138,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
+
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -168,12 +172,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+
 			continue
 		}
+
 		tracer, err := getTracerFn(txIndex, tx.Hash())
 		if err != nil {
 			return nil, nil, err
 		}
+
 		vmConfig.Tracer = tracer
 
 		statedb.SetTxContext(tx.Hash(), txIndex)
@@ -183,6 +190,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			snapshot  = statedb.Snapshot()
 			prevGas   = gaspool.Gas()
 		)
+
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
 
 		// (ret []byte, usedGas uint64, failed bool, err error)
@@ -193,17 +201,22 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 
 			gaspool.SetGas(prevGas)
+
 			continue
 		}
+
 		includedTxs = append(includedTxs, tx)
+
 		if hashError != nil {
 			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
+
 		gasUsed += msgResult.UsedGas
 
 		// Receipt:
 		{
 			var root []byte
+
 			if chainConfig.IsByzantium(vmContext.BlockNumber) {
 				statedb.Finalise(true)
 			} else {
@@ -218,6 +231,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			} else {
 				receipt.Status = types.ReceiptStatusSuccessful
 			}
+
 			receipt.TxHash = tx.Hash()
 			receipt.GasUsed = msgResult.UsedGas
 
@@ -238,6 +252,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 		txIndex++
 	}
+
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
@@ -251,6 +266,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			minerReward = new(big.Int).Set(blockReward)
 			perOmmer    = new(big.Int).Div(blockReward, big.NewInt(32))
 		)
+
 		for _, ommer := range pre.Env.Ommers {
 			// Add 1/32th for each ommer included
 			minerReward.Add(minerReward, perOmmer)
@@ -261,6 +277,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Div(reward, big.NewInt(8))
 			statedb.AddBalance(ommer.Address, reward)
 		}
+
 		statedb.AddBalance(pre.Env.Coinbase, minerReward)
 	}
 	// Apply withdrawals
@@ -275,6 +292,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
+
 	execRs := &ExecutionResult{
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
@@ -292,16 +310,19 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
 		execRs.WithdrawalsRoot = &h
 	}
+
 	return statedb, execRs, nil
 }
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
 	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+
 	statedb, _ := state.New(common.Hash{}, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
 		statedb.SetBalance(addr, a.Balance)
+
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
@@ -309,6 +330,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	// Commit and re-open to start with a clean state.
 	root, _ := statedb.Commit(false)
 	statedb, _ = state.New(root, sdb, nil)
+
 	return statedb
 }
 
@@ -316,6 +338,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
+
 	return h
 }
 
@@ -329,6 +352,7 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 	if uncleHash == (common.Hash{}) {
 		uncleHash = types.EmptyUncleHash
 	}
+
 	parent := &types.Header{
 		ParentHash: common.Hash{},
 		UncleHash:  uncleHash,
@@ -336,5 +360,6 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 		Number:     new(big.Int).SetUint64(number - 1),
 		Time:       parentTime,
 	}
+
 	return ethash.CalcDifficulty(config, currentTime, parent)
 }

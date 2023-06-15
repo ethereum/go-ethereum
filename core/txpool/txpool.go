@@ -216,34 +216,42 @@ func (config *Config) sanitize() Config {
 		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
 		conf.Rejournal = time.Second
 	}
+
 	if conf.PriceLimit < 1 {
 		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultConfig.PriceLimit)
 		conf.PriceLimit = DefaultConfig.PriceLimit
 	}
+
 	if conf.PriceBump < 1 {
 		log.Warn("Sanitizing invalid txpool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
 		conf.PriceBump = DefaultConfig.PriceBump
 	}
+
 	if conf.AccountSlots < 1 {
 		log.Warn("Sanitizing invalid txpool account slots", "provided", conf.AccountSlots, "updated", DefaultConfig.AccountSlots)
 		conf.AccountSlots = DefaultConfig.AccountSlots
 	}
+
 	if conf.GlobalSlots < 1 {
 		log.Warn("Sanitizing invalid txpool global slots", "provided", conf.GlobalSlots, "updated", DefaultConfig.GlobalSlots)
 		conf.GlobalSlots = DefaultConfig.GlobalSlots
 	}
+
 	if conf.AccountQueue < 1 {
 		log.Warn("Sanitizing invalid txpool account queue", "provided", conf.AccountQueue, "updated", DefaultConfig.AccountQueue)
 		conf.AccountQueue = DefaultConfig.AccountQueue
 	}
+
 	if conf.GlobalQueue < 1 {
 		log.Warn("Sanitizing invalid txpool global queue", "provided", conf.GlobalQueue, "updated", DefaultConfig.GlobalQueue)
 		conf.GlobalQueue = DefaultConfig.GlobalQueue
 	}
+
 	if conf.Lifetime < 1 {
 		log.Warn("Sanitizing invalid txpool lifetime", "provided", conf.Lifetime, "updated", DefaultConfig.Lifetime)
 		conf.Lifetime = DefaultConfig.Lifetime
 	}
+
 	return conf
 }
 
@@ -333,10 +341,12 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain,
 	}
 
 	pool.locals = newAccountSet(pool.signer)
+
 	for _, addr := range config.Locals {
 		log.Info("Setting new local account", "address", addr)
 		pool.locals.add(addr)
 	}
+
 	pool.priced = newPricedList(pool.all)
 	pool.reset(nil, chain.CurrentBlock())
 
@@ -356,6 +366,7 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain,
 		if err := pool.journal.load(pool.AddLocals); err != nil {
 			log.Warn("Failed to load transaction journal", "err", err)
 		}
+
 		if err := pool.journal.rotate(pool.local()); err != nil {
 			log.Warn("Failed to rotate transaction journal", "err", err)
 		}
@@ -364,6 +375,7 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain,
 	// Subscribe events from blockchain and start the main event loop.
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.wg.Add(1)
+
 	go pool.loop()
 
 	return pool
@@ -384,12 +396,14 @@ func (pool *TxPool) loop() {
 		// Track the previous head headers for transaction reorgs
 		head = pool.chain.CurrentBlock()
 	)
+
 	defer report.Stop()
 	defer evict.Stop()
 	defer journal.Stop()
 
 	// Notify tests that the init phase is done
 	close(pool.initDoneCh)
+
 	for {
 		select {
 		// Handle ChainHeadEvent
@@ -482,6 +496,7 @@ func (pool *TxPool) Stop() {
 	if pool.journal != nil {
 		pool.journal.close()
 	}
+
 	log.Info("Transaction pool stopped")
 }
 
@@ -586,6 +601,7 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	defer pool.mu.Unlock()
 
 	pool.pendingMu.RLock()
+
 	pending := make(map[common.Address]types.Transactions, len(pool.pending))
 	for addr, list := range pool.pending {
 		pending[addr] = list.Flatten()
@@ -858,11 +874,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			// Deduct the cost of a transaction replaced by this
 			sum.Sub(sum, repl.Cost())
 		}
+
 		if balance.Cmp(sum) < 0 {
 			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
 			return ErrOverdraft
 		}
 	}
+
 	return nil
 }
 
@@ -879,6 +897,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if pool.all.Get(hash) != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
+
 		return false, ErrAlreadyKnown
 	}
 	// Make the local flag. If it's from local source or it's from the network but
@@ -889,6 +908,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if err := pool.validateTx(tx, isLocal); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
+
 		return false, err
 	}
 
@@ -901,6 +921,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		if !isLocal && pool.priced.Underpriced(tx) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCapUint(), "gasFeeCap", tx.GasFeeCapUint())
 			underpricedTxMeter.Mark(1)
+
 			return false, ErrUnderpriced
 		}
 
@@ -922,6 +943,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		if !isLocal && !success {
 			log.Trace("Discarding overflown transaction", "hash", hash)
 			overflowedTxMeter.Mark(1)
+
 			return false, ErrTxPoolOverflow
 		}
 		// If the new transaction is a future transaction it should never churn pending transactions
@@ -1003,12 +1025,15 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		pool.locals.add(from)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
+
 	if isLocal {
 		localGauge.Inc(1)
 	}
+
 	pool.journalTx(from, tx)
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
+
 	return replaced, nil
 }
 
@@ -1035,6 +1060,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if pool.queue[from] == nil {
 		pool.queue[from] = newList(false)
 	}
+
 	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
@@ -1055,6 +1081,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if pool.all.Get(hash) == nil && !addAll {
 		log.Error("Missing transaction in lookup set, please report the issue", "hash", hash)
 	}
+
 	if addAll {
 		pool.all.Add(tx, local)
 		pool.priced.Put(tx, local)
@@ -1063,6 +1090,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if _, exist := pool.beats[from]; !exist {
 		pool.beats[from] = time.Now()
 	}
+
 	return old != nil, nil
 }
 
@@ -1073,6 +1101,7 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	if pool.journal == nil || !pool.locals.contains(from) {
 		return
 	}
+
 	if err := pool.journal.insert(tx); err != nil {
 		log.Warn("Failed to journal local transaction", "err", err)
 	}
@@ -1099,6 +1128,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newList(true)
 	}
+
 	list := pool.pending[addr]
 
 	inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -1194,6 +1224,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 		if pool.all.Get(hash) != nil {
 			errs = append(errs, ErrAlreadyKnown)
+
 			knownTxMeter.Mark(1)
 
 			continue
@@ -1209,6 +1240,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		_, err = types.Sender(pool.signer, tx)
 		if err != nil {
 			errs = append(errs, ErrInvalidSender)
+
 			invalidTxMeter.Mark(1)
 
 			continue
@@ -1375,7 +1407,6 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 
 			pool.mu.RUnlock()
 		}
-
 		// implicit else: the tx may have been included into a block between
 		// checking pool.Get and obtaining the lock. In that case, TxStatusUnknown is correct
 	}
@@ -1408,6 +1439,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 
 	// Remove it from the list of known transactions
 	pool.all.Remove(hash)
+
 	if outofbound {
 		pool.priced.Removed(1)
 	}
@@ -1535,6 +1567,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			} else {
 				reset.newHead = req.newHead
 			}
+
 			launchNextRun = true
 			pool.reorgDoneCh <- nextDone
 
@@ -1545,6 +1578,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			} else {
 				dirtyAccounts.merge(req)
 			}
+
 			launchNextRun = true
 			pool.reorgDoneCh <- nextDone
 
@@ -1555,6 +1589,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			if _, ok := queuedEvents[addr]; !ok {
 				queuedEvents[addr] = newSortedMap()
 			}
+
 			queuedEvents[addr].Put(tx)
 
 		case <-curDone:
@@ -1565,7 +1600,9 @@ func (pool *TxPool) scheduleReorgLoop() {
 			if curDone != nil {
 				<-curDone
 			}
+
 			close(nextDone)
+
 			return
 		}
 	}
@@ -1604,7 +1641,6 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 
 		if reset != nil {
 			tracing.ElapsedTime(ctx, span, "03 reset-head reorg", func(_ context.Context, innerSpan trace.Span) {
-
 				// Reset from the old head to the new, rescheduling any reorged transactions
 				tracing.ElapsedTime(ctx, innerSpan, "04 reset-head-itself reorg", func(_ context.Context, innerSpan trace.Span) {
 					pool.reset(reset.oldHead, reset.newHead)
@@ -1659,7 +1695,6 @@ func (pool *TxPool) runReorg(ctx context.Context, done chan struct{}, reset *txp
 		//nolint:nestif
 		if reset != nil {
 			tracing.ElapsedTime(ctx, span, "new block", func(_ context.Context, innerSpan trace.Span) {
-
 				tracing.ElapsedTime(ctx, innerSpan, "06 demoteUnexecutables", func(_ context.Context, _ trace.Span) {
 					pool.demoteUnexecutables()
 				})
@@ -1762,10 +1797,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
+
 			var (
 				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
 				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number.Uint64())
 			)
+
 			if rem == nil {
 				// This can happen if a setHead is performed, where we simply discard the old
 				// head from the chain.
@@ -1784,30 +1821,38 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			} else {
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
+
 					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
 				}
+
 				for add.NumberU64() > rem.NumberU64() {
 					included = append(included, add.Transactions()...)
+
 					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
 						return
 					}
 				}
+
 				for rem.Hash() != add.Hash() {
 					discarded = append(discarded, rem.Transactions()...)
+
 					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
+
 					included = append(included, add.Transactions()...)
+
 					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
 						return
 					}
 				}
+
 				reinject = types.TxDifference(discarded, included)
 			}
 		}
@@ -1816,11 +1861,13 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock() // Special case during testing
 	}
+
 	statedb, err := pool.chain.StateAt(newHead.Root)
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return
 	}
+
 	pool.currentState = statedb
 	pool.pendingNonces = newNoncer(statedb)
 	pool.currentMaxGas.Store(newHead.GasLimit)
@@ -2043,6 +2090,7 @@ func (pool *TxPool) truncatePending() {
 					pool.priced.Removed(capsLen)
 
 					pendingGauge.Dec(int64(capsLen))
+
 					if pool.locals.contains(offenders[i]) {
 						localGauge.Dec(int64(capsLen))
 					}
@@ -2059,7 +2107,6 @@ func (pool *TxPool) truncatePending() {
 
 	// If still above threshold, reduce to limit or min allowance
 	if pending > pool.config.GlobalSlots && len(offenders) > 0 {
-
 		pool.pendingMu.RLock()
 
 		for pending > pool.config.GlobalSlots && uint64(pool.pending[offenders[len(offenders)-1]].Len()) > pool.config.AccountSlots {
@@ -2107,17 +2154,20 @@ func (pool *TxPool) truncateQueue() {
 	for _, list := range pool.queue {
 		queued += uint64(list.Len())
 	}
+
 	if queued <= pool.config.GlobalQueue {
 		return
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
 	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
+
 	for addr := range pool.queue {
 		if !pool.locals.contains(addr) { // don't drop locals
 			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 		}
 	}
+
 	sort.Sort(sort.Reverse(addresses))
 
 	var (
@@ -2300,6 +2350,7 @@ func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 	for _, addr := range addrs {
 		as.add(addr)
 	}
+
 	return as
 }
 
@@ -2309,6 +2360,7 @@ func (as *accountSet) contains(addr common.Address) bool {
 	defer as.m.RUnlock()
 
 	_, exist := as.accounts[addr]
+
 	return exist
 }
 
@@ -2328,6 +2380,7 @@ func (as *accountSet) containsTx(tx *types.Transaction) bool {
 	if addr, err := types.Sender(as.signer, tx); err == nil {
 		return as.contains(addr)
 	}
+
 	return false
 }
 
@@ -2370,6 +2423,7 @@ func (as *accountSet) merge(other *accountSet) {
 		if _, ok = as.accounts[addr]; !ok {
 			as.accountsFlatted = append(as.accountsFlatted, addr)
 		}
+
 		as.accounts[addr] = struct{}{}
 	}
 }
@@ -2415,6 +2469,7 @@ func (t *lookup) Range(f func(hash common.Hash, tx *types.Transaction, local boo
 			}
 		}
 	}
+
 	if remote {
 		for key, value := range t.remotes {
 			if !f(key, value, false) {
@@ -2432,6 +2487,7 @@ func (t *lookup) Get(hash common.Hash) *types.Transaction {
 	if tx := t.locals[hash]; tx != nil {
 		return tx
 	}
+
 	return t.remotes[hash]
 }
 
@@ -2507,10 +2563,12 @@ func (t *lookup) Remove(hash common.Hash) {
 	if !ok {
 		tx, ok = t.remotes[hash]
 	}
+
 	if !ok {
 		log.Error("No transaction found to be deleted", "hash", hash)
 		return
 	}
+
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
 
@@ -2525,6 +2583,7 @@ func (t *lookup) RemoteToLocals(locals *accountSet) int {
 	defer t.lock.Unlock()
 
 	var migrated int
+
 	for hash, tx := range t.remotes {
 		if locals.containsTx(tx) {
 			locals.m.Lock()
@@ -2532,21 +2591,26 @@ func (t *lookup) RemoteToLocals(locals *accountSet) int {
 			locals.m.Unlock()
 
 			delete(t.remotes, hash)
+
 			migrated += 1
 		}
 	}
+
 	return migrated
 }
 
 // RemotesBelowTip finds all remote transactions below the given tip threshold.
 func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
+
 	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
 		if tx.GasTipCapIntCmp(threshold) < 0 {
 			found = append(found, tx)
 		}
+
 		return true
 	}, false, true) // Only iterate remotes
+
 	return found
 }
 

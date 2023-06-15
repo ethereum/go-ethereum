@@ -91,6 +91,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		if cache < minCache {
 			cache = minCache
 		}
+
 		if handles < minHandles {
 			handles = minHandles
 		}
@@ -98,6 +99,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		options.OpenFilesCacheCapacity = handles
 		options.BlockCacheCapacity = cache / 2 * opt.MiB
 		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
+
 		if readonly {
 			options.ReadOnly = true
 		}
@@ -111,10 +113,12 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	options := configureOptions(customize)
 	logger := log.New("database", file)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
+
 	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}
+
 	logger.Info("Allocated cache and file handles", logCtx...)
 
 	// Open the db and recover any potential corruptions
@@ -122,6 +126,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +153,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 
 	// Start up the metrics gathering and return
 	go ldb.meter(metricsGatheringInterval)
+
 	return ldb, nil
 }
 
@@ -162,6 +168,7 @@ func configureOptions(customizeFn func(*opt.Options)) *opt.Options {
 	if customizeFn != nil {
 		customizeFn(options)
 	}
+
 	return options
 }
 
@@ -174,11 +181,14 @@ func (db *Database) Close() error {
 	if db.quitChan != nil {
 		errc := make(chan error)
 		db.quitChan <- errc
+
 		if err := <-errc; err != nil {
 			db.log.Error("Metrics collection failed", "err", err)
 		}
+
 		db.quitChan = nil
 	}
+
 	return db.db.Close()
 }
 
@@ -193,6 +203,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return dat, nil
 }
 
@@ -240,6 +251,7 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &snapshot{db: snap}, nil
 }
 
@@ -312,6 +324,7 @@ func (db *Database) meter(refresh time.Duration) {
 		if err != nil {
 			db.log.Error("Failed to read database stats", "err", err)
 			merr = err
+
 			continue
 		}
 		// Find the compaction table, skip the header
@@ -319,29 +332,37 @@ func (db *Database) meter(refresh time.Duration) {
 		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
 			lines = lines[1:]
 		}
+
 		if len(lines) <= 3 {
 			db.log.Error("Compaction leveldbTable not found")
+
 			merr = errors.New("compaction leveldbTable not found")
+
 			continue
 		}
+
 		lines = lines[3:]
 
 		// Iterate over all the leveldbTable rows, and accumulate the entries
 		for j := 0; j < len(compactions[i%2]); j++ {
 			compactions[i%2][j] = 0
 		}
+
 		for _, line := range lines {
 			parts := strings.Split(line, "|")
 			if len(parts) != 6 {
 				break
 			}
+
 			for idx, counter := range parts[2:] {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
 					db.log.Error("Compaction entry parsing failed", "err", err)
 					merr = err
+
 					continue
 				}
+
 				compactions[i%2][idx] += value
 			}
 		}
@@ -349,12 +370,15 @@ func (db *Database) meter(refresh time.Duration) {
 		if db.diskSizeGauge != nil {
 			db.diskSizeGauge.Update(int64(compactions[i%2][0] * 1024 * 1024))
 		}
+
 		if db.compTimeMeter != nil {
 			db.compTimeMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1000 * 1000 * 1000))
 		}
+
 		if db.compReadMeter != nil {
 			db.compReadMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
 		}
+
 		if db.compWriteMeter != nil {
 			db.compWriteMeter.Mark(int64((compactions[i%2][3] - compactions[(i-1)%2][3]) * 1024 * 1024))
 		}
@@ -363,28 +387,37 @@ func (db *Database) meter(refresh time.Duration) {
 		if err != nil {
 			db.log.Error("Failed to read database write delay statistic", "err", err)
 			merr = err
+
 			continue
 		}
+
 		var (
 			delayN        int64
 			delayDuration string
 			duration      time.Duration
 			paused        bool
 		)
+
 		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
 			db.log.Error("Write delay statistic not found")
+
 			merr = err
+
 			continue
 		}
+
 		duration, err = time.ParseDuration(delayDuration)
 		if err != nil {
 			db.log.Error("Failed to parse delay duration", "err", err)
 			merr = err
+
 			continue
 		}
+
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
 		}
+
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		}
@@ -393,8 +426,10 @@ func (db *Database) meter(refresh time.Duration) {
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
 			time.Now().After(lastWritePaused.Add(degradationWarnInterval)) {
 			db.log.Warn("Database compacting, degraded performance")
+
 			lastWritePaused = time.Now()
 		}
+
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
 		// Retrieve the database iostats.
@@ -402,37 +437,51 @@ func (db *Database) meter(refresh time.Duration) {
 		if err != nil {
 			db.log.Error("Failed to read database iostats", "err", err)
 			merr = err
+
 			continue
 		}
+
 		var nRead, nWrite float64
+
 		parts := strings.Split(ioStats, " ")
 		if len(parts) < 2 {
 			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
 			merr = fmt.Errorf("bad syntax of ioStats %s", ioStats)
+
 			continue
 		}
+
 		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
 			db.log.Error("Bad syntax of read entry", "entry", parts[0])
+
 			merr = err
+
 			continue
 		}
+
 		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
 			db.log.Error("Bad syntax of write entry", "entry", parts[1])
+
 			merr = err
+
 			continue
 		}
+
 		if db.diskReadMeter != nil {
 			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
 		}
+
 		if db.diskWriteMeter != nil {
 			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
 		}
+
 		iostats[0], iostats[1] = nRead, nWrite
 
 		compCount, err := db.db.GetProperty("leveldb.compcount")
 		if err != nil {
 			db.log.Error("Failed to read database iostats", "err", err)
 			merr = err
+
 			continue
 		}
 
@@ -442,11 +491,15 @@ func (db *Database) meter(refresh time.Duration) {
 			nonLevel0Comp uint32
 			seekComp      uint32
 		)
+
 		if n, err := fmt.Sscanf(compCount, "MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", &memComp, &level0Comp, &nonLevel0Comp, &seekComp); n != 4 || err != nil {
 			db.log.Error("Compaction count statistic not found")
+
 			merr = err
+
 			continue
 		}
+
 		db.memCompGauge.Update(int64(memComp))
 		db.level0CompGauge.Update(int64(level0Comp))
 		db.nonlevel0CompGauge.Update(int64(nonLevel0Comp))
@@ -480,6 +533,7 @@ type batch struct {
 func (b *batch) Put(key, value []byte) error {
 	b.b.Put(key, value)
 	b.size += len(key) + len(value)
+
 	return nil
 }
 
@@ -487,6 +541,7 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
 	b.size += len(key)
+
 	return nil
 }
 
@@ -523,6 +578,7 @@ func (r *replayer) Put(key, value []byte) {
 	if r.failure != nil {
 		return
 	}
+
 	r.failure = r.writer.Put(key, value)
 }
 
@@ -532,6 +588,7 @@ func (r *replayer) Delete(key []byte) {
 	if r.failure != nil {
 		return
 	}
+
 	r.failure = r.writer.Delete(key)
 }
 
@@ -541,6 +598,7 @@ func (r *replayer) Delete(key []byte) {
 func bytesPrefixRange(prefix, start []byte) *util.Range {
 	r := util.BytesPrefix(prefix)
 	r.Start = append(r.Start, start...)
+
 	return r
 }
 

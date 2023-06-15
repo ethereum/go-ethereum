@@ -37,6 +37,7 @@ func TestImportRaw(t *testing.T) {
 		// Run clef importraw
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "importraw", keyPath)
 		clef.input("myverylongpassword").input("myverylongpassword")
+
 		if out := string(clef.Output()); !strings.Contains(out,
 			"Key imported:\n  Address 0x9160DC9105f7De5dC5E7f3d97ef11DA47269BdA6") {
 			t.Logf("Output\n%v", out)
@@ -49,6 +50,7 @@ func TestImportRaw(t *testing.T) {
 		// Run clef importraw
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "importraw", keyPath)
 		clef.input("myverylongpassword1").input("myverylongpassword2").WaitExit()
+
 		if have, want := clef.StderrText(), "Passwords do not match\n"; have != want {
 			t.Errorf("have %q, want %q", have, want)
 		}
@@ -59,6 +61,7 @@ func TestImportRaw(t *testing.T) {
 		// Run clef importraw
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "importraw", keyPath)
 		clef.input("shorty").input("shorty").WaitExit()
+
 		if have, want := clef.StderrText(),
 			"password requirements not met: password too short (<10 characters)\n"; have != want {
 			t.Errorf("have %q, want %q", have, want)
@@ -76,6 +79,7 @@ func TestListAccounts(t *testing.T) {
 
 	t.Run("no-accounts", func(t *testing.T) {
 		t.Parallel()
+
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "list-accounts")
 		if out := string(clef.Output()); !strings.Contains(out, "The keystore is empty.") {
 			t.Logf("Output\n%v", out)
@@ -106,6 +110,7 @@ func TestListWallets(t *testing.T) {
 
 	t.Run("no-accounts", func(t *testing.T) {
 		t.Parallel()
+
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "list-wallets")
 		if out := string(clef.Output()); !strings.Contains(out, "There are no wallets.") {
 			t.Logf("Output\n%v", out)

@@ -137,6 +137,7 @@ type LegacyTxLookupEntry struct {
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
+
 	return enc
 }
 
@@ -226,6 +227,7 @@ func IsCodeKey(key []byte) (bool, []byte) {
 	if bytes.HasPrefix(key, CodePrefix) && len(key) == common.HashLength+len(CodePrefix) {
 		return true, key[len(CodePrefix):]
 	}
+
 	return false, nil
 }
 

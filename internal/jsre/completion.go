@@ -31,9 +31,11 @@ var numerical = regexp.MustCompile(`^(NaN|-?((\d*\.\d+|\d+)([Ee][+-]?\d+)?|Infin
 // evaluated, callers need to make sure that evaluating line does not have side effects.
 func (jsre *JSRE) CompleteKeywords(line string) []string {
 	var results []string
+
 	jsre.Do(func(vm *goja.Runtime) {
 		results = getCompletions(vm, line)
 	})
+
 	return results
 }
 
@@ -46,14 +48,17 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	// Find the right-most fully named object in the line. e.g. if line = "x.y.z"
 	// and "x.y" is an object, obj will reference "x.y".
 	obj := vm.GlobalObject()
+
 	for i := 0; i < len(parts)-1; i++ {
 		if numerical.MatchString(parts[i]) {
 			return nil
 		}
+
 		v := obj.Get(parts[i])
 		if v == nil || goja.IsNull(v) || goja.IsUndefined(v) {
 			return nil // No object was found
 		}
+
 		obj = v.ToObject(vm)
 	}
 
@@ -61,6 +66,7 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	// Example: if line = "x.y.z" and "x.y" exists and has keys "zebu", "zebra"
 	// and "platypus", then "x.y.zebu" and "x.y.zebra" will be added to results.
 	prefix := parts[len(parts)-1]
+
 	iterOwnAndConstructorKeys(vm, obj, func(k string) {
 		if strings.HasPrefix(k, prefix) {
 			if len(parts) == 1 {
@@ -89,5 +95,6 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	}
 
 	sort.Strings(results)
+
 	return results
 }

@@ -70,6 +70,7 @@ func ParseGeneratorStatus(generatorBlob []byte) string {
 	if len(generatorBlob) == 0 {
 		return ""
 	}
+
 	var generator journalGenerator
 	if err := rlp.DecodeBytes(generatorBlob, &generator); err != nil {
 		log.Warn("failed to decode snapshot generator", "err", err)
@@ -77,6 +78,7 @@ func ParseGeneratorStatus(generatorBlob []byte) string {
 	}
 	// Figure out whether we're after or within an account
 	var m string
+
 	switch marker := generator.Marker; len(marker) {
 	case common.HashLength:
 		m = fmt.Sprintf("at %#x", marker)
@@ -85,6 +87,7 @@ func ParseGeneratorStatus(generatorBlob []byte) string {
 	default:
 		m = fmt.Sprintf("%#x", marker)
 	}
+
 	return fmt.Sprintf(`Done: %v, Accounts: %d, Slots: %d, Storage: %d, Marker: %s`,
 		generator.Done, generator.Accounts, generator.Slots, generator.Storage, m)
 }
@@ -98,6 +101,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if len(generatorBlob) == 0 {
 		return nil, journalGenerator{}, errors.New("missing snapshot generator")
 	}
+
 	var generator journalGenerator
 	if err := rlp.DecodeBytes(generatorBlob, &generator); err != nil {
 		return nil, journalGenerator{}, fmt.Errorf("failed to decode snapshot generator: %v", err)
@@ -134,12 +138,14 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common
 	if baseRoot == (common.Hash{}) {
 		return nil, false, errors.New("missing or corrupted snapshot")
 	}
+
 	base := &diskLayer{
 		diskdb: diskdb,
 		triedb: triedb,
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
+
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
 		log.Warn("Failed to load journal", "error", err)
@@ -183,6 +189,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common
 		if len(generator.Marker) >= 8 {
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
+
 		go base.generate(&generatorStats{
 			origin:   origin,
 			start:    time.Now(),
@@ -191,6 +198,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common
 			storage:  common.StorageSize(generator.Storage),
 		})
 	}
+
 	return snapshot, false, nil
 }
 
@@ -199,6 +207,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// If the snapshot is currently being generated, abort it
 	var stats *generatorStats
+
 	if dl.genAbort != nil {
 		abort := make(chan *generatorStats)
 		dl.genAbort <- abort
@@ -218,6 +227,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	journalProgress(dl.diskdb, dl.genMarker, stats)
 
 	log.Debug("Journalled disk layer", "root", dl.root)
+
 	return dl.root, nil
 }
 
@@ -240,34 +250,45 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, dl.root); err != nil {
 		return common.Hash{}, err
 	}
+
 	destructs := make([]journalDestruct, 0, len(dl.destructSet))
 	for hash := range dl.destructSet {
 		destructs = append(destructs, journalDestruct{Hash: hash})
 	}
+
 	if err := rlp.Encode(buffer, destructs); err != nil {
 		return common.Hash{}, err
 	}
+
 	accounts := make([]journalAccount, 0, len(dl.accountData))
 	for hash, blob := range dl.accountData {
 		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
 	}
+
 	if err := rlp.Encode(buffer, accounts); err != nil {
 		return common.Hash{}, err
 	}
+
 	storage := make([]journalStorage, 0, len(dl.storageData))
+
 	for hash, slots := range dl.storageData {
 		keys := make([]common.Hash, 0, len(slots))
 		vals := make([][]byte, 0, len(slots))
+
 		for key, val := range slots {
 			keys = append(keys, key)
 			vals = append(vals, val)
 		}
+
 		storage = append(storage, journalStorage{Hash: hash, Keys: keys, Vals: vals})
 	}
+
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
+
 	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
+
 	return base, nil
 }
 

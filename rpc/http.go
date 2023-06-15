@@ -172,10 +172,12 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
+
 	respBody, err := hc.doRequest(ctx, msg)
 	if err != nil {
 		return err
 	}
+
 	defer respBody.Close()
 
 	var respmsg jsonrpcMessage
@@ -183,16 +185,20 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 		return err
 	}
 	op.resp <- &respmsg
+
 	return nil
 }
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
+
 	respBody, err := hc.doRequest(ctx, msgs)
 	if err != nil {
 		return err
 	}
+
 	defer respBody.Close()
+
 	var respmsgs []jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
@@ -201,9 +207,11 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	if len(respmsgs) != len(msgs) {
 		return fmt.Errorf("batch has %d requests but response has %d: %w", len(msgs), len(respmsgs), ErrBadResult)
 	}
+
 	for i := 0; i < len(respmsgs); i++ {
 		op.resp <- &respmsgs[i]
 	}
+
 	return nil
 }
 
@@ -217,6 +225,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
+
 	req.ContentLength = int64(len(body))
 	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 
@@ -237,8 +246,10 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var buf bytes.Buffer
+
 		var body []byte
 		if _, err := buf.ReadFrom(resp.Body); err == nil {
 			body = buf.Bytes()
@@ -250,6 +261,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 			Body:       body,
 		}
 	}
+
 	return resp.Body, nil
 }
 
@@ -322,6 +334,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+
 	if code, err := validateRequest(r); err != nil {
 		http.Error(w, err.Error(), code)
 		return
@@ -340,6 +353,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
 	w.Header().Set("content-type", contentType)
+
 	codec := newHTTPServerConn(r, w)
 	defer codec.close()
 	s.serveSingleRequest(ctx, codec)
@@ -351,6 +365,7 @@ func validateRequest(r *http.Request) (int, error) {
 	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
 		return http.StatusMethodNotAllowed, errors.New("method not allowed")
 	}
+
 	if r.ContentLength > maxRequestContentLength {
 		err := fmt.Errorf("content length too large (%d>%d)", r.ContentLength, maxRequestContentLength)
 		return http.StatusRequestEntityTooLarge, err
@@ -369,6 +384,7 @@ func validateRequest(r *http.Request) (int, error) {
 	}
 	// Invalid content-type
 	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
+
 	return http.StatusUnsupportedMediaType, err
 }
 

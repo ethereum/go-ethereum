@@ -90,6 +90,7 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 	})
 
 	protocols := make([]p2p.Protocol, len(ProtocolVersions))
+
 	for i, version := range ProtocolVersions {
 		version := version // Closure
 
@@ -112,6 +113,7 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 			DialCandidates: dnsdisc,
 		}
 	}
+
 	return protocols
 }
 
@@ -135,10 +137,13 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	if err != nil {
 		return err
 	}
+
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
+
 	defer msg.Discard()
+
 	start := time.Now()
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
@@ -216,6 +221,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 				}
 			}
 		}
+
 		requestTracker.Fulfil(peer.id, peer.version, StorageRangesMsg, res.ID)
 
 		return backend.Handle(peer, res)
@@ -241,6 +247,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
+
 		requestTracker.Fulfil(peer.id, peer.version, ByteCodesMsg, res.ID)
 
 		return backend.Handle(peer, res)
@@ -268,6 +275,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 		if err := msg.Decode(res); err != nil {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
+
 		requestTracker.Fulfil(peer.id, peer.version, TrieNodesMsg, res.ID)
 
 		return backend.Handle(peer, res)
@@ -288,6 +296,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	if err != nil {
 		return nil, nil
 	}
+
 	it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin)
 	if err != nil {
 		return nil, nil
@@ -298,6 +307,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		size     uint64
 		last     common.Hash
 	)
+
 	for it.Next() {
 		hash, account := it.Hash(), common.CopyBytes(it.Account())
 
@@ -314,6 +324,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		if bytes.Compare(hash[:], req.Limit[:]) >= 0 {
 			break
 		}
+
 		if size > req.Bytes {
 			break
 		}
@@ -326,16 +337,19 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 		return nil, nil
 	}
+
 	if last != (common.Hash{}) {
 		if err := tr.Prove(last[:], 0, proof); err != nil {
 			log.Warn("Failed to prove account range", "last", last, "err", err)
 			return nil, nil
 		}
 	}
+
 	var proofs [][]byte
 	for _, blob := range proof.NodeList() {
 		proofs = append(proofs, blob)
 	}
+
 	return accounts, proofs
 }
 
@@ -356,6 +370,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		proofs [][]byte
 		size   uint64
 	)
+
 	for _, account := range req.Accounts {
 		// If we've exceeded the requested data limit, abort without opening
 		// a new storage range (that we'd need to prove due to exceeded size)
@@ -367,6 +382,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if len(req.Origin) > 0 {
 			origin, req.Origin = common.BytesToHash(req.Origin), nil
 		}
+
 		var limit = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 		if len(req.Limit) > 0 {
 			limit, req.Limit = common.BytesToHash(req.Limit), nil
@@ -382,11 +398,13 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			last    common.Hash
 			abort   bool
 		)
+
 		for it.Next() {
 			if size >= hardLimit {
 				abort = true
 				break
 			}
+
 			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
 
 			// Track the returned interval for the Merkle proofs
@@ -403,9 +421,11 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				break
 			}
 		}
+
 		if len(storage) > 0 {
 			slots = append(slots, storage)
 		}
+
 		it.Release()
 
 		// Generate the Merkle proofs for the first and last storage slot, but
@@ -418,26 +438,32 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err != nil {
 				return nil, nil
 			}
+
 			acc, err := accTrie.GetAccountByHash(account)
 			if err != nil || acc == nil {
 				return nil, nil
 			}
+
 			id := trie.StorageTrieID(req.Root, account, acc.Root)
+
 			stTrie, err := trie.NewStateTrie(id, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
+
 			proof := light.NewNodeSet()
 			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return nil, nil
 			}
+
 			if last != (common.Hash{}) {
 				if err := stTrie.Prove(last[:], 0, proof); err != nil {
 					log.Warn("Failed to prove storage range", "last", last, "err", err)
 					return nil, nil
 				}
 			}
+
 			for _, blob := range proof.NodeList() {
 				proofs = append(proofs, blob)
 			}
@@ -447,6 +473,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			break
 		}
 	}
+
 	return slots, proofs
 }
 
@@ -456,6 +483,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
+
 	if len(req.Hashes) > maxCodeLookups {
 		req.Hashes = req.Hashes[:maxCodeLookups]
 	}
@@ -464,6 +492,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 		codes [][]byte
 		bytes uint64
 	)
+
 	for _, hash := range req.Hashes {
 		if hash == types.EmptyCodeHash {
 			// Peers should not request the empty code, but if they do, at
@@ -473,10 +502,12 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}
+
 		if bytes > req.Bytes {
 			break
 		}
 	}
+
 	return codes
 }
 
@@ -502,6 +533,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		bytes uint64
 		loads int // Trie hash expansions to count database reads
 	)
+
 	for _, pathset := range req.Paths {
 		switch len(pathset) {
 		case 0:
@@ -512,9 +544,11 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			// If we're only retrieving an account trie node, fetch it directly
 			blob, resolved, err := accTrie.GetNode(pathset[0])
 			loads += resolved // always account database reads, even for failures
+
 			if err != nil {
 				break
 			}
+
 			nodes = append(nodes, blob)
 			bytes += uint64(len(blob))
 
@@ -526,30 +560,39 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 				// but can look up the account via the trie instead.
 				account, err := accTrie.GetAccountByHash(common.BytesToHash(pathset[0]))
 				loads += 8 // We don't know the exact cost of lookup, this is an estimate
+
 				if err != nil || account == nil {
 					break
 				}
+
 				stRoot = account.Root
 			} else {
 				account, err := snap.Account(common.BytesToHash(pathset[0]))
 				loads++ // always account database reads, even for failures
+
 				if err != nil || account == nil {
 					break
 				}
+
 				stRoot = common.BytesToHash(account.Root)
 			}
+
 			id := trie.StorageTrieID(req.Root, common.BytesToHash(pathset[0]), stRoot)
 			stTrie, err := trie.NewStateTrie(id, triedb)
 			loads++ // always account database reads, even for failures
+
 			if err != nil {
 				break
 			}
+
 			for _, path := range pathset[1:] {
 				blob, resolved, err := stTrie.GetNode(path)
 				loads += resolved // always account database reads, even for failures
+
 				if err != nil {
 					break
 				}
+
 				nodes = append(nodes, blob)
 				bytes += uint64(len(blob))
 
@@ -564,6 +607,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			break
 		}
 	}
+
 	return nodes, nil
 }
 

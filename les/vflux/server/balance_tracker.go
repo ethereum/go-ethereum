@@ -90,12 +90,15 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 
 		ov, _ := oldValue.(uint64)
 		nv, _ := newValue.(uint64)
+
 		if ov == 0 && nv != 0 {
 			n.activate()
 		}
+
 		if nv != 0 {
 			n.setCapacity(nv)
 		}
+
 		if ov != 0 && nv == 0 {
 			n.deactivate()
 		}
@@ -104,6 +107,7 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 		type peer interface {
 			FreeClientId() string
 		}
+
 		if newValue != nil {
 			n := bt.newNodeBalance(node, newValue.(peer).FreeClientId(), true)
 			bt.lock.Lock()
@@ -112,9 +116,11 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 			ns.SetFieldSub(node, bt.setup.balanceField, n)
 		} else {
 			ns.SetStateSub(node, nodestate.Flags{}, bt.setup.priorityFlag, 0)
+
 			if b, _ := ns.GetField(node, bt.setup.balanceField).(*nodeBalance); b != nil {
 				b.deactivate()
 			}
+
 			ns.SetFieldSub(node, bt.setup.balanceField, nil)
 		}
 	})
@@ -135,6 +141,7 @@ func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db et
 			}
 		}
 	}()
+
 	return bt
 }
 
@@ -167,10 +174,13 @@ func (bt *balanceTracker) TotalTokenAmount() uint64 {
 				bt.active.AddExp(pos)
 			}
 		})
+
 		return true
 	})
+
 	total := bt.active
 	total.AddExp(bt.inactive)
+
 	return total.Value(bt.posExp.LogOffset(bt.clock.Now()))
 }
 
@@ -195,11 +205,13 @@ func (bt *balanceTracker) SetExpirationTCs(pos, neg uint64) {
 
 	bt.posExpTC, bt.negExpTC = pos, neg
 	now := bt.clock.Now()
+
 	if pos > 0 {
 		bt.posExp.SetRate(now, 1/float64(pos*uint64(time.Second)))
 	} else {
 		bt.posExp.SetRate(now, 0)
 	}
+
 	if neg > 0 {
 		bt.negExp.SetRate(now, 1/float64(neg*uint64(time.Second)))
 	} else {
@@ -224,10 +236,12 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb f
 		if node := bt.ns.GetNode(id); node != nil {
 			nb, _ = bt.ns.GetField(node, bt.setup.balanceField).(*nodeBalance)
 		}
+
 		if nb == nil {
 			node := enode.SignNull(&enr.Record{}, id)
 			nb = bt.newNodeBalance(node, connAddress, false)
 		}
+
 		cb(nb)
 	})
 }
@@ -239,6 +253,7 @@ func (bt *balanceTracker) BalanceOperation(id enode.ID, connAddress string, cb f
 func (bt *balanceTracker) newNodeBalance(node *enode.Node, connAddress string, setFlags bool) *nodeBalance {
 	pb := bt.ndb.getOrNewBalance(node.ID().Bytes(), false)
 	nb := bt.ndb.getOrNewBalance([]byte(connAddress), true)
+
 	n := &nodeBalance{
 		bt:          bt,
 		node:        node,
@@ -251,9 +266,11 @@ func (bt *balanceTracker) newNodeBalance(node *enode.Node, connAddress string, s
 	for i := range n.callbackIndex {
 		n.callbackIndex[i] = -1
 	}
+
 	if setFlags && n.checkPriorityStatus() {
 		n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
 	}
+
 	return n
 }
 
@@ -272,6 +289,7 @@ func (bt *balanceTracker) canDropBalance(now mclock.AbsTime, neg bool, b utils.E
 	if neg {
 		return b.Value(bt.negExp.LogOffset(now)) <= negThreshold
 	}
+
 	return b.Value(bt.posExp.LogOffset(now)) <= posThreshold
 }
 
@@ -284,14 +302,17 @@ func (bt *balanceTracker) updateTotalBalance(n *nodeBalance, callback func() boo
 	defer n.lock.Unlock()
 
 	original, active := n.balance.pos, n.active
+
 	if !callback() {
 		return
 	}
+
 	if active {
 		bt.active.SubExp(original)
 	} else {
 		bt.inactive.SubExp(original)
 	}
+
 	if n.active {
 		bt.active.AddExp(n.balance.pos)
 	} else {

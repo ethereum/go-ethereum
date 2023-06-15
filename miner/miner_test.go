@@ -246,6 +246,7 @@ func TestMinerSetEtherbase(t *testing.T) {
 
 	coinbase := common.HexToAddress("0xdeedbeef")
 	miner.SetEtherbase(coinbase)
+
 	if addr := miner.worker.etherbase(); addr != coinbase {
 		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
 	}
@@ -258,8 +259,10 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 	t.Helper()
 
 	var state bool
+
 	for i := 0; i < 100; i++ {
 		time.Sleep(10 * time.Millisecond)
+
 		if state = m.Mining(); state == mining {
 			return
 		}
@@ -275,6 +278,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	// Create chainConfig
 	chainDB := rawdb.NewMemoryDatabase()
 	genesis := core.DeveloperGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
+
 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
@@ -286,6 +290,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
+
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
@@ -299,9 +304,11 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 		bc.Stop()
 		engine.Close()
 		pool.Stop()
+
 		if !skipMiner {
 			miner.Close()
 		}
 	}
+
 	return miner, mux, cleanup
 }

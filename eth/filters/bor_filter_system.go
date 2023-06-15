@@ -27,5 +27,6 @@ func (es *EventSystem) SubscribeNewDeposits(data chan *types.StateSyncData) *Sub
 		installed:     make(chan struct{}),
 		err:           make(chan error),
 	}
+
 	return es.subscribe(sub)
 }

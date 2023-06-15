@@ -34,6 +34,7 @@ type MockBackendMockRecorder struct {
 func NewMockBackend(ctrl *gomock.Controller) *MockBackend {
 	mock := &MockBackend{ctrl: ctrl}
 	mock.recorder = &MockBackendMockRecorder{mock}
+
 	return mock
 }
 
@@ -48,6 +49,7 @@ func (m *MockBackend) BloomStatus() (uint64, uint64) {
 	ret := m.ctrl.Call(m, "BloomStatus")
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(uint64)
+
 	return ret0, ret1
 }
 
@@ -62,6 +64,7 @@ func (m *MockBackend) ChainConfig() *params.ChainConfig {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChainConfig")
 	ret0, _ := ret[0].(*params.ChainConfig)
+
 	return ret0
 }
 
@@ -76,6 +79,7 @@ func (m *MockBackend) ChainDb() ethdb.Database {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChainDb")
 	ret0, _ := ret[0].(ethdb.Database)
+
 	return ret0
 }
 
@@ -90,6 +94,7 @@ func (m *MockBackend) CurrentHeader() *types.Header {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CurrentHeader")
 	ret0, _ := ret[0].(*types.Header)
+
 	return ret0
 }
 
@@ -105,6 +110,7 @@ func (m *MockBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 	ret := m.ctrl.Call(m, "GetBody", ctx, hash, number)
 	ret0, _ := ret[0].(*types.Body)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -120,6 +126,7 @@ func (m *MockBackend) GetBorBlockLogs(ctx context.Context, blockHash common.Hash
 	ret := m.ctrl.Call(m, "GetBorBlockLogs", ctx, blockHash)
 	ret0, _ := ret[0].([]*types.Log)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -135,6 +142,7 @@ func (m *MockBackend) GetBorBlockReceipt(ctx context.Context, blockHash common.H
 	ret := m.ctrl.Call(m, "GetBorBlockReceipt", ctx, blockHash)
 	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -150,6 +158,7 @@ func (m *MockBackend) GetLogs(ctx context.Context, blockHash common.Hash, number
 	ret := m.ctrl.Call(m, "GetLogs", ctx, blockHash, number)
 	ret0, _ := ret[0].([][]*types.Log)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -165,6 +174,7 @@ func (m *MockBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (t
 	ret := m.ctrl.Call(m, "GetReceipts", ctx, blockHash)
 	ret0, _ := ret[0].(types.Receipts)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -180,6 +190,7 @@ func (m *MockBackend) HeaderByHash(ctx context.Context, blockHash common.Hash) (
 	ret := m.ctrl.Call(m, "HeaderByHash", ctx, blockHash)
 	ret0, _ := ret[0].(*types.Header)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -195,6 +206,7 @@ func (m *MockBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	ret := m.ctrl.Call(m, "HeaderByNumber", ctx, blockNr)
 	ret0, _ := ret[0].(*types.Header)
 	ret1, _ := ret[1].(error)
+
 	return ret0, ret1
 }
 
@@ -210,6 +222,7 @@ func (m *MockBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	ret := m.ctrl.Call(m, "PendingBlockAndReceipts")
 	ret0, _ := ret[0].(*types.Block)
 	ret1, _ := ret[1].(types.Receipts)
+
 	return ret0, ret1
 }
 
@@ -236,6 +249,7 @@ func (m *MockBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeChainEvent", ch)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 
@@ -250,6 +264,7 @@ func (m *MockBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeLogsEvent", ch)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 
@@ -264,6 +279,7 @@ func (m *MockBackend) SubscribeNewTxsEvent(arg0 chan<- core.NewTxsEvent) event.S
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeNewTxsEvent", arg0)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 
@@ -278,6 +294,7 @@ func (m *MockBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Su
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribePendingLogsEvent", ch)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 
@@ -292,6 +309,7 @@ func (m *MockBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeRemovedLogsEvent", ch)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 
@@ -306,6 +324,7 @@ func (m *MockBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) eve
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeStateSyncEvent", ch)
 	ret0, _ := ret[0].(event.Subscription)
+
 	return ret0
 }
 

@@ -45,6 +45,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
 	t1 := time.Now()
 
 	fc.mu.Lock()
@@ -55,6 +56,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 	mods := mapset.NewThreadUnsafeSet[string]()
 
 	var newLastMod time.Time
+
 	for _, fi := range files {
 		path := filepath.Join(keyDir, fi.Name())
 		// Skip any non-key files from the folder
@@ -69,14 +71,17 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 		if err != nil {
 			return nil, nil, nil, err
 		}
+
 		modified := info.ModTime()
 		if modified.After(fc.lastMod) {
 			mods.Add(path)
 		}
+
 		if modified.After(newLastMod) {
 			newLastMod = modified
 		}
 	}
+
 	t2 := time.Now()
 
 	// Update the tracked files and return the three sets
@@ -89,6 +94,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 
 	// Report on the scanning stats and return
 	log.Debug("FS scan times", "list", t1.Sub(t0), "set", t2.Sub(t1), "diff", t3.Sub(t2))
+
 	return creates, deletes, updates, nil
 }
 
@@ -102,5 +108,6 @@ func nonKeyFile(fi os.DirEntry) bool {
 	if fi.IsDir() || !fi.Type().IsRegular() {
 		return true
 	}
+
 	return false
 }

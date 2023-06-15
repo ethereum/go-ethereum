@@ -37,17 +37,21 @@ func (f *fuzzer) read(size int) []byte {
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
 func (f *fuzzer) readSlice(min, max int) []byte {
 	var a uint16
+
 	binary.Read(f.input, binary.LittleEndian, &a)
 	size := min + int(a)%(max-min)
+
 	out := make([]byte, size)
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
@@ -55,11 +59,14 @@ func (f *fuzzer) readUint64(min, max uint64) uint64 {
 	if min == max {
 		return min
 	}
+
 	var a uint64
 	if err := binary.Read(f.input, binary.LittleEndian, &a); err != nil {
 		f.exhausted = true
 	}
+
 	a = min + a%(max-min)
+
 	return a
 }
 func (f *fuzzer) readBool() bool {
@@ -80,6 +87,7 @@ func Fuzz(data []byte) int {
 		input:     bytes.NewReader(data),
 		exhausted: false,
 	}
+
 	return f.fuzz()
 }
 
@@ -99,6 +107,7 @@ func (f *fuzzer) fuzz() int {
 		if diff.Cmp(minDifficulty) < 0 {
 			diff.Set(minDifficulty)
 		}
+
 		header.Difficulty = diff
 	}
 	// Number can range between 0 and up to 32 bytes (but not so that the child exceeds it)
@@ -137,10 +146,12 @@ func (f *fuzzer) fuzz() int {
 	} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)
+
 		if want.Cmp(have) != 0 {
 			panic(fmt.Sprintf("pair %d: want %x have %x\nparent.Number: %x\np.Time: %x\nc.Time: %x\nBombdelay: %v\n", i, want, have,
 				header.Number, header.Time, time, bombDelay))
 		}
 	}
+
 	return 1
 }

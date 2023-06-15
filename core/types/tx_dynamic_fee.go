@@ -61,12 +61,15 @@ func (tx *DynamicFeeTx) copy() TxData {
 		S:          new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
+
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
+
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
+
 	if tx.GasTipCap != nil {
 		cpy.GasTipCap.Set(tx.GasTipCap)
 
@@ -76,6 +79,7 @@ func (tx *DynamicFeeTx) copy() TxData {
 			cpy.gasTipCapUint256, _ = uint256.FromBig(tx.GasTipCap)
 		}
 	}
+
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 
@@ -85,15 +89,19 @@ func (tx *DynamicFeeTx) copy() TxData {
 			cpy.gasFeeCapUint256, _ = uint256.FromBig(tx.GasFeeCap)
 		}
 	}
+
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
+
 	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
+
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
+
 	return cpy
 }
 
@@ -141,10 +149,12 @@ func (tx *DynamicFeeTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.I
 	if baseFee == nil {
 		return dst.Set(tx.GasFeeCap)
 	}
+
 	tip := dst.Sub(tx.GasFeeCap, baseFee)
 	if tip.Cmp(tx.GasTipCap) > 0 {
 		tip.Set(tx.GasTipCap)
 	}
+
 	return tip.Add(tip, baseFee)
 }
 

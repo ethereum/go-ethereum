@@ -49,6 +49,7 @@ func SlimAccount(nonce uint64, balance *big.Int, root common.Hash, codehash []by
 	if !bytes.Equal(codehash, types.EmptyCodeHash[:]) {
 		slim.CodeHash = codehash
 	}
+
 	return slim
 }
 
@@ -59,6 +60,7 @@ func SlimAccountRLP(nonce uint64, balance *big.Int, root common.Hash, codehash [
 	if err != nil {
 		panic(err)
 	}
+
 	return data
 }
 
@@ -69,12 +71,15 @@ func FullAccount(data []byte) (Account, error) {
 	if err := rlp.DecodeBytes(data, &account); err != nil {
 		return Account{}, err
 	}
+
 	if len(account.Root) == 0 {
 		account.Root = types.EmptyRootHash[:]
 	}
+
 	if len(account.CodeHash) == 0 {
 		account.CodeHash = types.EmptyCodeHash[:]
 	}
+
 	return account, nil
 }
 
@@ -84,5 +89,6 @@ func FullAccountRLP(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return rlp.EncodeToBytes(account)
 }

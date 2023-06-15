@@ -54,6 +54,7 @@ func getShortHostname() string {
 			shortHostName = host
 		}
 	}
+
 	return shortHostName
 }
 
@@ -61,12 +62,15 @@ func openTSDB(c *OpenTSDBConfig) error {
 	shortHostname := getShortHostname()
 	now := time.Now().Unix()
 	du := float64(c.DurationUnit)
+
 	conn, err := net.DialTCP("tcp", nil, c.Addr)
 	if nil != err {
 		return err
 	}
+
 	defer conn.Close()
 	w := bufio.NewWriter(conn)
+
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
 		case Counter:
@@ -117,5 +121,6 @@ func openTSDB(c *OpenTSDBConfig) error {
 		}
 		w.Flush()
 	})
+
 	return nil
 }

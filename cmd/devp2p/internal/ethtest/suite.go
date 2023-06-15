@@ -42,6 +42,7 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 	if err != nil {
 		return nil, err
 	}
+
 	return &Suite{
 		Dest:      dest,
 		chain:     chain.Shorten(1000),
@@ -93,7 +94,9 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -106,7 +109,9 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -119,6 +124,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 			Reverse: false,
 		},
 	}
+
 	headers, err := conn.headersRequest(req, s.chain, 33)
 	if err != nil {
 		t.Fatalf("could not get block headers: %v", err)
@@ -128,6 +134,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get headers for given request: %v", err)
 	}
+
 	if !headersMatch(expected, headers) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
 	}
@@ -143,7 +150,9 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -184,11 +193,14 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	// wait for responses
 	msg := conn.waitForResponse(s.chain, timeout, req1.RequestId)
 	headers1, ok := msg.(*BlockHeaders)
+
 	if !ok {
 		t.Fatalf("unexpected %s", pretty.Sdump(msg))
 	}
+
 	msg = conn.waitForResponse(s.chain, timeout, req2.RequestId)
 	headers2, ok := msg.(*BlockHeaders)
+
 	if !ok {
 		t.Fatalf("unexpected %s", pretty.Sdump(msg))
 	}
@@ -221,7 +233,9 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -258,11 +272,14 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	// wait for responses
 	msg := conn.waitForResponse(s.chain, timeout, reqID)
 	headers1, ok := msg.(*BlockHeaders)
+
 	if !ok {
 		t.Fatalf("unexpected %s", pretty.Sdump(msg))
 	}
+
 	msg = conn.waitForResponse(s.chain, timeout, reqID)
 	headers2, ok := msg.(*BlockHeaders)
+
 	if !ok {
 		t.Fatalf("unexpected %s", pretty.Sdump(msg))
 	}
@@ -294,16 +311,20 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
+
 	req := &GetBlockHeaders{
 		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 			Origin: eth.HashOrNumber{Number: 0},
 			Amount: 2,
 		},
 	}
+
 	headers, err := conn.headersRequest(req, s.chain, 0)
 	if err != nil {
 		t.Fatalf("failed to get block headers: %v", err)
@@ -313,6 +334,7 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
 	}
+
 	if !headersMatch(expected, headers) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
 	}
@@ -325,7 +347,9 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -343,6 +367,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	// wait for block bodies response
 	msg := conn.waitForResponse(s.chain, timeout, req.RequestId)
 	resp, ok := msg.(*BlockBodies)
+
 	if !ok {
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
@@ -389,9 +414,11 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		if err != nil {
 			t.Fatalf("dial failed: %v", err)
 		}
+
 		if err := conn.peer(s.chain, nil); err != nil {
 			t.Fatalf("peering failed: %v", err)
 		}
+
 		if err := conn.Write(blockAnnouncement); err != nil {
 			t.Fatalf("could not write to connection: %v", err)
 		}
@@ -476,6 +503,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to generate transactions: %v", err)
 	}
+
 	if err = sendMultipleSuccessfulTxs(t, s, txs); err != nil {
 		t.Fatalf("failed to send multiple txs: %v", err)
 	}
@@ -485,7 +513,9 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -546,7 +576,9 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+
 	defer conn.Close()
+
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
@@ -571,6 +603,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 			if len(msg.GetPooledTransactionsPacket) != len(hashes) {
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg.GetPooledTransactionsPacket))
 			}
+
 			return
 
 		// ignore propagated txs from previous tests

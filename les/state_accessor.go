@@ -54,6 +54,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
@@ -66,6 +67,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		blockContext := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
 
 		statedb.SetTxContext(tx.Hash(), idx)
+
 		if idx == txIndex {
 			return msg, blockContext, statedb, release, nil
 		}

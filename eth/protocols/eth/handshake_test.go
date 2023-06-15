@@ -42,6 +42,7 @@ func testHandshake(t *testing.T, protocol uint) {
 		td      = backend.chain.GetTd(head.Hash(), head.Number.Uint64())
 		forkID  = forkid.NewID(backend.chain.Config(), backend.chain.Genesis().Hash(), backend.chain.CurrentHeader().Number.Uint64(), backend.chain.CurrentHeader().Time)
 	)
+
 	tests := []struct {
 		code uint64
 		data interface{}

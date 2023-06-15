@@ -44,6 +44,7 @@ func TestMemoryGasCost(t *testing.T) {
 		if (err == ErrGasUintOverflow) != tt.overflow {
 			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == ErrGasUintOverflow, tt.overflow)
 		}
+
 		if v != tt.cost {
 			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, v, tt.cost)
 		}
@@ -99,9 +100,11 @@ func TestEIP2200(t *testing.T) {
 		if err != tt.failure {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
+
 		if used := tt.gaspool - gas; used != tt.used {
 			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, used, tt.used)
 		}
+
 		if refund := vmenv.StateDB.GetRefund(); refund != tt.refund {
 			t.Errorf("test %d: gas refund mismatch: have %v, want %v", i, refund, tt.refund)
 		}

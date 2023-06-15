@@ -157,6 +157,7 @@ func NewEndpoint(addr *net.UDPAddr, tcpPort uint16) Endpoint {
 	} else if ip6 := addr.IP.To16(); ip6 != nil {
 		ip = ip6
 	}
+
 	return Endpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
@@ -211,17 +212,21 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 	if len(input) < headSize+1 {
 		return nil, Pubkey{}, nil, ErrPacketTooSmall
 	}
+
 	hash, sig, sigdata := input[:macSize], input[macSize:headSize], input[headSize:]
 	shouldhash := crypto.Keccak256(input[macSize:])
+
 	if !bytes.Equal(hash, shouldhash) {
 		return nil, Pubkey{}, nil, ErrBadHash
 	}
+
 	fromKey, err := recoverNodeKey(crypto.Keccak256(input[headSize:]), sig)
 	if err != nil {
 		return nil, fromKey, hash, err
 	}
 
 	var req Packet
+
 	switch ptype := sigdata[0]; ptype {
 	case PingPacket:
 		req = new(Ping)
@@ -238,8 +243,10 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 	default:
 		return nil, fromKey, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
+
 	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
 	err = s.Decode(req)
+
 	return req, fromKey, hash, err
 }
 
@@ -248,18 +255,23 @@ func Encode(priv *ecdsa.PrivateKey, req Packet) (packet, hash []byte, err error)
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(req.Kind())
+
 	if err := rlp.Encode(b, req); err != nil {
 		return nil, nil, err
 	}
+
 	packet = b.Bytes()
+
 	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	copy(packet[macSize:], sig)
 	// Add the hash to the front. Note: this doesn't protect the packet in any way.
 	hash = crypto.Keccak256(packet[macSize:])
 	copy(packet, hash)
+
 	return packet, hash, nil
 }
 
@@ -269,15 +281,19 @@ func recoverNodeKey(hash, sig []byte) (key Pubkey, err error) {
 	if err != nil {
 		return key, err
 	}
+
 	copy(key[:], pubkey[1:])
+
 	return key, nil
 }
 
 // EncodePubkey encodes a secp256k1 public key.
 func EncodePubkey(key *ecdsa.PublicKey) Pubkey {
 	var e Pubkey
+
 	math.ReadBits(key.X, e[:len(e)/2])
 	math.ReadBits(key.Y, e[len(e)/2:])
+
 	return e
 }
 
@@ -287,8 +303,10 @@ func DecodePubkey(curve elliptic.Curve, e Pubkey) (*ecdsa.PublicKey, error) {
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])
 	p.Y.SetBytes(e[half:])
+
 	if !p.Curve.IsOnCurve(p.X, p.Y) {
 		return nil, ErrBadPoint
 	}
+
 	return p, nil
 }
