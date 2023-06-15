@@ -35,6 +35,9 @@ func (p *Printer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.
 	fmt.Printf("CaptureFault: pc=%v, op=%v, gas=%v, cost=%v, depth=%v, err=%v\n", pc, op, gas, cost, depth, err)
 }
 
+// CaptureKeccakPreimage is called during the KECCAK256 opcode.
+func (p *Printer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (p *Printer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	fmt.Printf("CaptureEnter: typ=%v, from=%v, to=%v, input=%v, gas=%v, value=%v\n", typ, from, to, input, gas, value)

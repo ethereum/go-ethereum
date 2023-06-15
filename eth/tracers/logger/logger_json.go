@@ -78,6 +78,9 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	l.encoder.Encode(log)
 }
 
+// CaptureKeccakPreimage is called during the KECCAK256 opcode.
+func (l *JSONLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+
 // CaptureEnd is triggered at end of execution.
 func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	type endLog struct {

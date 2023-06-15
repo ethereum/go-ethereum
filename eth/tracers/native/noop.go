@@ -54,6 +54,9 @@ func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 func (t *noopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
+// CaptureKeccakPreimage is called during the KECCAK256 opcode.
+func (t *noopTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }

@@ -286,6 +286,9 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	}
 }
 
+// CaptureKeccakPreimage is called during the KECCAK256 opcode.
+func (t *jsTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	t.ctx["output"] = t.vm.ToValue(output)
