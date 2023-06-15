@@ -198,7 +198,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 }
 
 func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes []*enode.Node) {
-	nodeSet := make(map[enode.ID]*enr.Record)
+	nodeSet := make(map[enode.ID]*enr.Record, len(wantNodes))
 	for _, n := range wantNodes {
 		nodeSet[n.ID()] = n.Record()
 	}

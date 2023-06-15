@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // IndexerConfig includes a set of configs for chain indexers.
@@ -134,6 +135,7 @@ type ChtIndexerBackend struct {
 	section, sectionSize uint64
 	lastHash             common.Hash
 	trie                 *trie.Trie
+	originRoot           common.Hash
 }
 
 // NewChtIndexer creates a Cht chain indexer
@@ -177,7 +179,7 @@ func (c *ChtIndexerBackend) fetchMissingNodes(ctx context.Context, section uint6
 
 // Reset implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
@@ -191,6 +193,7 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 		}
 	}
 	c.section = section
+	c.originRoot = root
 	return err
 }
 
@@ -214,7 +217,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	root, nodes := c.trie.Commit(false)
 	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
-		if err := c.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
+		if err := c.triedb.Update(root, c.originRoot, trienode.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
 		if err := c.triedb.Commit(root, false); err != nil {
@@ -332,6 +335,7 @@ type BloomTrieIndexerBackend struct {
 	size              uint64
 	bloomTrieRatio    uint64
 	trie              *trie.Trie
+	originRoot        common.Hash
 	sectionHeads      []common.Hash
 }
 
@@ -400,7 +404,7 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 
 // Reset implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
@@ -413,6 +417,7 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 		}
 	}
 	b.section = section
+	b.originRoot = root
 	return err
 }
 
@@ -463,7 +468,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	root, nodes := b.trie.Commit(false)
 	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
-		if err := b.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
+		if err := b.triedb.Update(root, b.originRoot, trienode.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
 		if err := b.triedb.Commit(root, false); err != nil {

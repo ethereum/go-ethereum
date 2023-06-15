@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !linux
-// +build !linux
+package params
 
-package ethash
+const (
+	EpochLength      = 32
+	SyncPeriodLength = 8192
 
-import (
-	"os"
+	BLSSignatureSize = 96
+	BLSPubkeySize    = 48
+
+	SyncCommitteeSize          = 512
+	SyncCommitteeBitmaskSize   = SyncCommitteeSize / 8
+	SyncCommitteeSupermajority = (SyncCommitteeSize*2 + 2) / 3
 )
 
-// ensureSize expands the file to the given size. This is to prevent runtime
-// errors later on, if the underlying file expands beyond the disk capacity,
-// even though it ostensibly is already expanded, but due to being sparse
-// does not actually occupy the full declared size on disk.
-func ensureSize(f *os.File, size int64) error {
-	// On systems which do not support fallocate, we merely truncate it.
-	// More robust alternatives  would be to
-	// - Use posix_fallocate, or
-	// - explicitly fill the file with zeroes.
-	return f.Truncate(size)
-}
+const (
+	StateIndexGenesisTime       = 32
+	StateIndexGenesisValidators = 33
+	StateIndexForkVersion       = 141
+	StateIndexLatestHeader      = 36
+	StateIndexBlockRoots        = 37
+	StateIndexStateRoots        = 38
+	StateIndexHistoricRoots     = 39
+	StateIndexFinalBlock        = 105
+	StateIndexSyncCommittee     = 54
+	StateIndexNextSyncCommittee = 55
+	StateIndexExecPayload       = 56
+	StateIndexExecHead          = 908
+)

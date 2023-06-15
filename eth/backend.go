@@ -134,14 +134,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Error("Failed to recover state", "error", err)
 	}
 	// Transfer mining-related config to the ethash config.
-	ethashConfig := config.Ethash
-	ethashConfig.NotifyFull = config.Miner.NotifyFull
-	cliqueConfig, err := core.LoadCliqueConfig(chainDb, config.Genesis)
+	chainConfig, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
-	engine := ethconfig.CreateConsensusEngine(stack, &ethashConfig, cliqueConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
-
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	if err != nil {
+		return nil, err
+	}
 	eth := &Ethereum{
 		config:            config,
 		merger:            consensus.NewMerger(chainDb),
@@ -206,7 +206,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
-	eth.txPool = txpool.NewTxPool(config.TxPool, eth.blockchain.Config(), eth.blockchain)
+	eth.txPool = txpool.New(config.TxPool, eth.blockchain.Config(), eth.blockchain)
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
@@ -323,7 +323,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.Address{}, errors.New("etherbase must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined
@@ -392,25 +392,14 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 // StartMining starts the miner with the given number of CPU threads. If mining
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
-func (s *Ethereum) StartMining(threads int) error {
-	// Update the thread count within the consensus engine
-	type threaded interface {
-		SetThreads(threads int)
-	}
-	if th, ok := s.engine.(threaded); ok {
-		log.Info("Updated mining threads", "threads", threads)
-		if threads == 0 {
-			threads = -1 // Disable the miner from within
-		}
-		th.SetThreads(threads)
-	}
+func (s *Ethereum) StartMining() error {
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
 		// Propagate the initial price point to the transaction pool
 		s.lock.RLock()
 		price := s.gasPrice
 		s.lock.RUnlock()
-		s.txPool.SetGasPrice(price)
+		s.txPool.SetGasTip(price)
 
 		// Configure the local mining address
 		eb, err := s.Etherbase()

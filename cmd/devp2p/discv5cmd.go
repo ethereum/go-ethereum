@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,7 +99,7 @@ func discv5Resolve(ctx *cli.Context) error {
 
 func discv5Crawl(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 	nodesFile := ctx.Args().First()
 	var inputSet nodeSet

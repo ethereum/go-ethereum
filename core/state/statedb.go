@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 type revision struct {
@@ -521,7 +522,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = types.SlimAccountRLP(obj.data)
 	}
 }
 
@@ -622,19 +623,38 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
-
-	var prevdestruct bool
-	if prev != nil {
-		_, prevdestruct = s.stateObjectsDestruct[prev.address]
-		if !prevdestruct {
-			s.stateObjectsDestruct[prev.address] = struct{}{}
-		}
-	}
 	newobj = newObject(s, addr, types.StateAccount{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
-		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
+		// The original account should be marked as destructed and all cached
+		// account and storage data should be cleared as well. Note, it must
+		// be done here, otherwise the destruction event of original one will
+		// be lost.
+		_, prevdestruct := s.stateObjectsDestruct[prev.address]
+		if !prevdestruct {
+			s.stateObjectsDestruct[prev.address] = struct{}{}
+		}
+		var (
+			account []byte
+			storage map[common.Hash][]byte
+		)
+		// There may be some cached account/storage data already since IntermediateRoot
+		// will be called for each transaction before byzantium fork which will always
+		// cache the latest account/storage data.
+		if s.snap != nil {
+			account = s.snapAccounts[prev.addrHash]
+			storage = s.snapStorage[prev.addrHash]
+			delete(s.snapAccounts, prev.addrHash)
+			delete(s.snapStorage, prev.addrHash)
+		}
+		s.journal.append(resetObjectChange{
+			account:      &addr,
+			prev:         prev,
+			prevdestruct: prevdestruct,
+			prevAccount:  account,
+			prevStorage:  storage,
+		})
 	}
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
@@ -783,13 +803,13 @@ func (s *StateDB) Copy() *StateDB {
 		state.snap = s.snap
 
 		// deep copy needed
-		state.snapAccounts = make(map[common.Hash][]byte)
+		state.snapAccounts = make(map[common.Hash][]byte, len(s.snapAccounts))
 		for k, v := range s.snapAccounts {
 			state.snapAccounts[k] = v
 		}
-		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte, len(s.snapStorage))
 		for k, v := range s.snapStorage {
-			temp := make(map[common.Hash][]byte)
+			temp := make(map[common.Hash][]byte, len(v))
 			for kk, vv := range v {
 				temp[kk] = vv
 			}
@@ -971,7 +991,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		accountTrieNodesDeleted int
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
-		nodes                   = trie.NewMergedNodeSet()
+		nodes                   = trienode.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
 	)
 	for addr := range s.stateObjectsDirty {
@@ -986,7 +1006,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if err != nil {
 				return common.Hash{}, err
 			}
-			// Merge the dirty nodes of storage trie into global set
+			// Merge the dirty nodes of storage trie into global set.
 			if set != nil {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
@@ -1071,7 +1091,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if root != origin {
 		start := time.Now()
-		if err := s.db.TrieDB().Update(nodes); err != nil {
+		if err := s.db.TrieDB().Update(root, origin, nodes); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
@@ -1160,7 +1180,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
 func (s *StateDB) convertAccountSet(set map[common.Address]struct{}) map[common.Hash]struct{} {
-	ret := make(map[common.Hash]struct{})
+	ret := make(map[common.Hash]struct{}, len(set))
 	for addr := range set {
 		obj, exist := s.stateObjects[addr]
 		if !exist {

@@ -43,7 +43,7 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := rawdb.NewMemoryDatabase()
 	sdb := NewDatabase(db)
-	state, _ := New(common.Hash{}, sdb, nil)
+	state, _ := New(types.EmptyRootHash, sdb, nil)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -125,7 +125,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if err != nil {
 		return err
 	}
-	it := NewNodeIterator(state)
+	it := newNodeIterator(state)
 	for it.Next() {
 	}
 	return it.Error
@@ -602,7 +602,8 @@ func TestIncompleteStateSync(t *testing.T) {
 		if len(nodeQueue) > 0 {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue))
 			for path, element := range nodeQueue {
-				data, err := srcDb.TrieDB().Node(element.hash)
+				owner, inner := trie.ResolvePath([]byte(element.path))
+				data, err := srcDb.TrieDB().Reader(srcRoot).Node(owner, inner, element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}

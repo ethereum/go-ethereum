@@ -57,7 +57,7 @@ func main() {
 	for i := 0; i < len(sealers); i++ {
 		sealers[i], _ = crypto.GenerateKey()
 	}
-	// Create a Clique network based off of the Rinkeby config
+	// Create a Clique network based off of the Sepolia config
 	genesis := makeGenesis(faucets, sealers)
 
 	// Handle interrupts.
@@ -104,7 +104,7 @@ func main() {
 	// Iterate over all the nodes and start signing on them
 	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
+		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
 	}
@@ -147,8 +147,8 @@ func main() {
 // makeGenesis creates a custom Clique genesis block based on some pre-defined
 // signer and faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core.Genesis {
-	// Create a Clique network based off of the Rinkeby config
-	genesis := core.DefaultRinkebyGenesisBlock()
+	// Create a Clique network based off of the Seplia config
+	genesis := core.DefaultSepoliaGenesisBlock()
 	genesis.GasLimit = 25000000
 
 	genesis.Config.ChainID = big.NewInt(18)

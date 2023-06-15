@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -127,6 +128,7 @@ func runCmd(ctx *cli.Context) error {
 		receiver      = common.BytesToAddress([]byte("receiver"))
 		genesisConfig *core.Genesis
 		preimages     = ctx.Bool(DumpFlag.Name)
+		blobHashes    []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -146,7 +148,7 @@ func runCmd(ctx *cli.Context) error {
 		chainConfig = gen.Config
 	} else {
 		sdb := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: preimages})
-		statedb, _ = state.New(common.Hash{}, sdb, nil)
+		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.String(SenderFlag.Name) != "" {
@@ -216,6 +218,7 @@ func runCmd(ctx *cli.Context) error {
 		Time:        genesisConfig.Timestamp,
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
+		BlobHashes:  blobHashes,
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		},

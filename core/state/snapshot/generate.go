@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -363,7 +363,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		}
 		root, nodes := snapTrie.Commit(false)
 		if nodes != nil {
-			tdb.Update(trie.NewWithNodeSet(nodes))
+			tdb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 			tdb.Commit(root, false)
 		}
 		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
@@ -572,12 +572,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
-		var acc struct {
-			Nonce    uint64
-			Balance  *big.Int
-			Root     common.Hash
-			CodeHash []byte
-		}
+		var acc types.StateAccount
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
@@ -593,7 +588,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				}
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
-				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				data := types.SlimAccountRLP(acc)
 				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
 				snapGeneratedAccountMeter.Mark(1)
@@ -639,7 +634,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	origin := common.CopyBytes(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
-		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, types.FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}

@@ -59,7 +59,7 @@ var (
 
 func nodesetInfo(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 
 	ns := loadNodesJSON(ctx.Args().First())
@@ -98,7 +98,7 @@ func showAttributeCounts(ns nodeSet) {
 
 func nodesetFilter(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 	// Parse -limit.
 	limit, err := parseFilterLimit(ctx.Args().Tail())
@@ -229,8 +229,6 @@ func ethFilter(args []string) (nodeFilter, error) {
 	switch args[0] {
 	case "mainnet":
 		filter = forkid.NewStaticFilter(params.MainnetChainConfig, params.MainnetGenesisHash)
-	case "rinkeby":
-		filter = forkid.NewStaticFilter(params.RinkebyChainConfig, params.RinkebyGenesisHash)
 	case "goerli":
 		filter = forkid.NewStaticFilter(params.GoerliChainConfig, params.GoerliGenesisHash)
 	case "sepolia":

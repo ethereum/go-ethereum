@@ -78,13 +78,13 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
-func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
 		return err
 	}
 	if !reached {
-		return beacon.ethone.VerifyHeader(chain, header, seal)
+		return beacon.ethone.VerifyHeader(chain, header)
 	}
 	// Short circuit if the parent is not known
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -149,13 +149,13 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
-func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	preHeaders, postHeaders, err := beacon.splitHeaders(chain, headers)
 	if err != nil {
 		return make(chan struct{}), errOut(len(headers), err)
 	}
 	if len(postHeaders) == 0 {
-		return beacon.ethone.VerifyHeaders(chain, headers, seals)
+		return beacon.ethone.VerifyHeaders(chain, headers)
 	}
 	if len(preHeaders) == 0 {
 		return beacon.verifyHeaders(chain, headers, nil)
@@ -171,7 +171,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			old, new, out      = 0, len(preHeaders), 0
 			errors             = make([]error, len(headers))
 			done               = make([]bool, len(headers))
-			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, seals[:len(preHeaders)])
+			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders)
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
 		// Collect the results
@@ -257,11 +257,11 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the header's EIP-1559 attributes.
-	if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	if err := misc.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
 	// Verify existence / non-existence of withdrawalsHash.
-	shanghai := chain.Config().IsShanghai(header.Time)
+	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
@@ -269,12 +269,17 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of excessDataGas
-	cancun := chain.Config().IsCancun(header.Time)
-	if cancun && header.ExcessDataGas == nil {
-		return errors.New("missing excessDataGas")
-	}
+	cancun := chain.Config().IsCancun(header.Number, header.Time)
 	if !cancun && header.ExcessDataGas != nil {
 		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
+	}
+	if !cancun && header.DataGasUsed != nil {
+		return fmt.Errorf("invalid dataGasUsed: have %d, expected nil", header.DataGasUsed)
+	}
+	if cancun {
+		if err := misc.VerifyEIP4844Header(parent, header); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -356,7 +361,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts, nil)
 	}
-	shanghai := chain.Config().IsShanghai(header.Time)
+	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
 		// All blocks after Shanghai must include a withdrawals root.
 		if withdrawals == nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // SecureTrie is the old name of StateTrie.
@@ -85,7 +86,12 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 // If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
-	return t.trie.Get(t.hashKey(key))
+	enc, err := t.trie.Get(t.hashKey(key))
+	if err != nil || len(enc) == 0 {
+		return nil, err
+	}
+	_, content, _, err := rlp.Split(enc)
+	return content, err
 }
 
 // GetAccount attempts to retrieve an account with provided account address.
@@ -147,7 +153,8 @@ func (t *StateTrie) MustUpdate(key, value []byte) {
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	hk := t.hashKey(key)
-	err := t.trie.Update(hk, value)
+	v, _ := rlp.EncodeToBytes(value)
+	err := t.trie.Update(hk, v)
 	if err != nil {
 		return err
 	}
@@ -212,7 +219,7 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 // All cached preimages will be also flushed if preimages recording is enabled.
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
+func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		if t.preimages != nil {

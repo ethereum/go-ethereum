@@ -31,7 +31,7 @@ type BlobTx struct {
 	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
 	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
 	Gas        uint64
-	To         *common.Address // `rlp:"nil"` // nil means contract creation
+	To         common.Address
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
@@ -48,7 +48,7 @@ type BlobTx struct {
 func (tx *BlobTx) copy() TxData {
 	cpy := &BlobTx{
 		Nonce: tx.Nonce,
-		To:    copyAddressPtr(tx.To),
+		To:    tx.To,
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
@@ -104,7 +104,7 @@ func (tx *BlobTx) gasTipCap() *big.Int       { return tx.GasTipCap.ToBig() }
 func (tx *BlobTx) gasPrice() *big.Int        { return tx.GasFeeCap.ToBig() }
 func (tx *BlobTx) value() *big.Int           { return tx.Value.ToBig() }
 func (tx *BlobTx) nonce() uint64             { return tx.Nonce }
-func (tx *BlobTx) to() *common.Address       { return tx.To }
+func (tx *BlobTx) to() *common.Address       { tmp := tx.To; return &tmp }
 func (tx *BlobTx) blobGas() uint64           { return params.BlobTxDataGasPerBlob * uint64(len(tx.BlobHashes)) }
 func (tx *BlobTx) blobGasFeeCap() *big.Int   { return tx.BlobFeeCap.ToBig() }
 func (tx *BlobTx) blobHashes() []common.Hash { return tx.BlobHashes }

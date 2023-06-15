@@ -19,6 +19,7 @@ package tests
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -286,7 +287,7 @@ func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool) (*snapshot.Tree, *state.StateDB) {
 	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	statedb, _ := state.New(common.Hash{}, sdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -395,7 +396,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 			tx.MaxFeePerGas)
 	}
 	if gasPrice == nil {
-		return nil, fmt.Errorf("no gas price provided")
+		return nil, errors.New("no gas price provided")
 	}
 
 	msg := &core.Message{

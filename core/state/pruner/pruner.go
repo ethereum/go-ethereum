@@ -146,9 +146,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
 				log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))
 			} else {
-				if ok, err := stateBloom.Contain(checkKey); err != nil {
-					return err
-				} else if ok {
+				if stateBloom.Contain(checkKey) {
 					continue
 				}
 			}
@@ -268,7 +266,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// is the presence of root can indicate the presence of the
 	// entire trie.
 	if !rawdb.HasLegacyTrieNode(p.db, root) {
-		// The special case is for clique based networks(rinkeby, goerli
+		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
 		// difflayer won't be created. So HEAD-127 may not paired with

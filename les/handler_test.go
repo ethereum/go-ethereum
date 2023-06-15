@@ -611,6 +611,8 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	var reqID uint64
 
 	test := func(tx *types.Transaction, send bool, expStatus light.TxStatus) {
+		t.Helper()
+
 		reqID++
 		if send {
 			sendRequest(rawPeer.app, SendTxV2Msg, reqID, types.Transactions{tx})
@@ -618,14 +620,14 @@ func testTransactionStatus(t *testing.T, protocol int) {
 			sendRequest(rawPeer.app, GetTxStatusMsg, reqID, []common.Hash{tx.Hash()})
 		}
 		if err := expectResponse(rawPeer.app, TxStatusMsg, reqID, testBufLimit, []light.TxStatus{expStatus}); err != nil {
-			t.Errorf("transaction status mismatch")
+			t.Errorf("transaction status mismatch: %v", err)
 		}
 	}
 	signer := types.HomesteadSigner{}
 
 	// test error status by sending an underpriced transaction
 	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
-	test(tx0, true, light.TxStatus{Status: txpool.TxStatusUnknown, Error: txpool.ErrUnderpriced.Error()})
+	test(tx0, true, light.TxStatus{Status: txpool.TxStatusUnknown, Error: "transaction underpriced: tip needed 1, tip permitted 0"})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	test(tx1, false, light.TxStatus{Status: txpool.TxStatusUnknown}) // query before sending, should be unknown

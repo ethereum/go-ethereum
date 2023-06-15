@@ -292,7 +292,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	for i, block := range gchain {
 		headers[i] = block.Header()
 	}
-	if _, err := lightchain.InsertHeaderChain(headers, 1); err != nil {
+	if _, err := lightchain.InsertHeaderChain(headers); err != nil {
 		t.Fatal(err)
 	}
 

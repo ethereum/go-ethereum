@@ -99,7 +99,7 @@ var (
 	chainIdFlag = &cli.Int64Flag{
 		Name:  "chainid",
 		Value: params.MainnetChainConfig.ChainID.Int64(),
-		Usage: "Chain id to use for signing (1=mainnet, 4=Rinkeby, 5=Goerli)",
+		Usage: "Chain id to use for signing (1=mainnet, 5=Goerli)",
 	}
 	rpcPortFlag = &cli.IntFlag{
 		Name:     "http.port",
@@ -326,7 +326,7 @@ func initializeSecrets(c *cli.Context) error {
 		return err
 	}
 	if num != len(masterSeed) {
-		return fmt.Errorf("failed to read enough random")
+		return errors.New("failed to read enough random")
 	}
 	n, p := keystore.StandardScryptN, keystore.StandardScryptP
 	if c.Bool(utils.LightKDFFlag.Name) {
@@ -482,7 +482,7 @@ func initialize(c *cli.Context) error {
 		}
 	} else if !c.Bool(acceptFlag.Name) {
 		if !confirm(legalWarning) {
-			return fmt.Errorf("aborted by user")
+			return errors.New("aborted by user")
 		}
 		fmt.Println()
 	}
@@ -590,7 +590,7 @@ func accountImport(c *cli.Context) error {
   Address %v
   Keystore file: %v
 
-The key is now encrypted; losing the password will result in permanently losing 
+The key is now encrypted; losing the password will result in permanently losing
 access to the key and all associated funds!
 
 Make sure to backup keystore and passwords in a safe location.`,
@@ -732,6 +732,7 @@ func signer(c *cli.Context) error {
 		cors := utils.SplitAndTrim(c.String(utils.HTTPCORSDomainFlag.Name))
 
 		srv := rpc.NewServer()
+		srv.SetBatchLimits(node.DefaultConfig.BatchRequestLimit, node.DefaultConfig.BatchResponseMaxSize)
 		err := node.RegisterApis(rpcAPI, []string{"account"}, srv)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)
@@ -844,7 +845,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	}
 	masterSeed, err := decryptSeed(cipherKey, password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt the master seed of clef")
+		return nil, errors.New("failed to decrypt the master seed of clef")
 	}
 	if len(masterSeed) < 256 {
 		return nil, fmt.Errorf("master seed of insufficient length, expected >255 bytes, got %d", len(masterSeed))

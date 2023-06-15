@@ -18,7 +18,7 @@
 package les
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -101,6 +101,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	if err != nil {
+		return nil, err
+	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
@@ -126,7 +130,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		reqDist:         newRequestDistributor(peers, &mclock.System{}),
 		accountManager:  stack.AccountManager(),
 		merger:          merger,
-		engine:          ethconfig.CreateConsensusEngine(stack, &config.Ethash, chainConfig.Clique, nil, false, chainDb),
+		engine:          engine,
 		bloomRequests:   make(chan chan *bloombits.Retrieval),
 		bloomIndexer:    core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:       stack.Server(),
@@ -185,11 +189,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
 	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, leth)
-	if leth.handler.ulc != nil {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.keys), "minTrustedFraction", leth.handler.ulc.fraction)
-		leth.blockchain.DisableCheckFreq()
-	}
-
 	leth.netRPCService = ethapi.NewNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
@@ -267,14 +266,14 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 
 type LightDummyAPI struct{}
 
-// Etherbase is the address that mining rewards will be send to
+// Etherbase is the address that mining rewards will be sent to
 func (s *LightDummyAPI) Etherbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
+// Coinbase is the address that mining rewards will be sent to (alias for Etherbase)
 func (s *LightDummyAPI) Coinbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
 // Hashrate returns the POW hashrate

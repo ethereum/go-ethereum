@@ -56,7 +56,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -95,10 +94,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 
 func TestGethClient(t *testing.T) {
 	backend, _ := newTestBackend(t)
-	client, err := backend.Attach()
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
