@@ -35,45 +35,58 @@ import (
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawalQueue struct {
+	// queued holds withdrawals that will be included in the next block
+	queued []*types.Withdrawal
+	// pending holds withdrawals that will be included in a future block
 	pending []*types.Withdrawal
 	mu      sync.Mutex
 }
 
-// pop removes up to 10 withdrawals from the queue
-func (w *withdrawalQueue) pop() []*types.Withdrawal {
+// getQueued returns withdrawals which are pending inclusion in the next block
+func (w *withdrawalQueue) getQueued() []*types.Withdrawal {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	var popCount int
-	if len(w.pending) >= 10 {
-		popCount = 10
-	} else {
-		popCount = len(w.pending)
-	}
-
-	popped := make([]*types.Withdrawal, popCount)
-	copy(popped[:], w.pending[0:popCount])
-	w.pending = append([]*types.Withdrawal{}, w.pending[popCount:]...)
-	return popped
+	queued := make([]*types.Withdrawal, len(w.queued))
+	copy(queued, w.queued)
+	return queued
 }
 
-// add adds a withdrawal to the queue
+// add queues a withdrawal for future inclusion
 func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	w.pending = append(w.pending, withdrawal)
+	if len(w.queued) < 10 {
+		w.queued = append(w.queued, withdrawal)
+	} else {
+		w.pending = append(w.pending, withdrawal)
+	}
 	return nil
 }
 
+// clearQueued shifts the last 10 withdrawals out of the queue
+func (w *withdrawalQueue) clearQueued() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var queueCount int
+	if len(w.pending) >= 10 {
+		queueCount = 10
+	} else {
+		queueCount = len(w.pending)
+	}
+	w.queued = make([]*types.Withdrawal, queueCount)
+	copy(w.queued, w.pending[0:queueCount])
+	w.pending = append([]*types.Withdrawal{}, w.pending[queueCount:]...)
+}
+
 type SimulatedBeacon struct {
-	shutdownCh  chan struct{}
-	eth         *eth.Ethereum
-	period      uint64
-	withdrawals withdrawalQueue
-	// list of withdrawals to be included in the next block
-	pendingWithdrawals []*types.Withdrawal
-	feeRecipient       common.Address
+	shutdownCh   chan struct{}
+	eth          *eth.Ethereum
+	period       uint64
+	withdrawals  withdrawalQueue
+	feeRecipient common.Address
 	// mu gates concurrent access to the feeRecipient
 	mu sync.Mutex
 }
@@ -85,11 +98,10 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	}
 
 	return &SimulatedBeacon{
-		eth:                eth,
-		period:             chainConfig.Dev.Period,
-		withdrawals:        withdrawalQueue{[]*types.Withdrawal{}, sync.Mutex{}},
-		pendingWithdrawals: nil,
-		feeRecipient:       common.Address{},
+		eth:          eth,
+		period:       chainConfig.Dev.Period,
+		withdrawals:  withdrawalQueue{[]*types.Withdrawal{}, []*types.Withdrawal{}, sync.Mutex{}},
+		feeRecipient: common.Address{},
 	}, nil
 }
 
@@ -148,13 +160,10 @@ func (c *SimulatedBeacon) loop() {
 		if tstamp <= lastBlockTime {
 			tstamp = lastBlockTime + 1
 		}
-		if c.pendingWithdrawals == nil {
-			c.pendingWithdrawals = c.withdrawals.pop()
-		}
 		return engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, &engine.PayloadAttributes{
 			Timestamp:             tstamp,
 			SuggestedFeeRecipient: c.getFeeRecipient(),
-			Withdrawals:           c.pendingWithdrawals,
+			Withdrawals:           c.withdrawals.getQueued(),
 		})
 	}
 	finalizeSealing := func(id *engine.PayloadID, onDemand bool) error {
@@ -169,7 +178,6 @@ func (c *SimulatedBeacon) loop() {
 			if buildWaitTime < 10*time.Second {
 				buildWaitTime += buildWaitTime
 			}
-			// TODO: don't lose withdrawals
 			return nil
 		}
 		buildWaitTime = 100 * time.Millisecond // Reset it
@@ -186,7 +194,7 @@ func (c *SimulatedBeacon) loop() {
 		if _, err = engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
 			return fmt.Errorf("failed to mark block as canonical: %v", err)
 		}
-		c.pendingWithdrawals = nil
+		c.withdrawals.clearQueued()
 		lastBlockTime = payload.Timestamp
 		return nil
 	}
@@ -205,7 +213,7 @@ func (c *SimulatedBeacon) loop() {
 		case <-ticker.C:
 			if onDemand {
 				// Do nothing as long as blocks are empty
-				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.pendingWithdrawals) == 0 {
+				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.getQueued()) == 0 {
 					ticker.Reset(buildWaitTime)
 					continue
 				}
