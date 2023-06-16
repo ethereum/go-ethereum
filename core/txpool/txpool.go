@@ -201,7 +201,7 @@ func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
 	splits := make([]int, len(txs))
 
 	for i, tx := range txs {
-		// Mark this tranaction belonging to no-subpool
+		// Mark this transaction belonging to no-subpool
 		splits[i] = -1
 
 		// Try to find a subpool that accepts the transaction
