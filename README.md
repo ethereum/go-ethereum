@@ -1,6 +1,14 @@
-## Go Ethereum
+## Pluggable Go Ethereum
 
-Official Golang execution layer implementation of the Ethereum protocol.
+Unofficial Golang execution layer implementation of the Ethereum protocol with plugin support
+
+The goal is to allow anyone to build [go plugins](https://pkg.go.dev/plugin) that follow our standard plugin interface, and run code alongside the node while accessing core geth capabilities.
+
+Plugins are running in an isolated mode, crashing with a plugin won't stop the node. Of course, playing with internal geth stuff can break your node.
+
+Example use cases: 
+- create a plugin that performs better evm simulations, extracting traces quickly
+- create a block builder
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667

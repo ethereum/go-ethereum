@@ -50,3 +50,7 @@ profile.cov
 logs/
 
 tests/spec-tests/
+#pgeth
+
+!plugin/.gitkeep
+plugins/*/

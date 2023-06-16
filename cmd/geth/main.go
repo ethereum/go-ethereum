@@ -45,6 +45,7 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
+	"github.com/ethereum/go-ethereum/pgeth"
 	"github.com/urfave/cli/v2"
 )
 
@@ -340,6 +341,11 @@ func geth(ctx *cli.Context) error {
 	defer stack.Close()
 
 	startNode(ctx, stack, backend, false)
+	pe := pgeth.NewEngine(&pgeth.PluginEngineConfig{
+		Node:    stack,
+		Backend: backend,
+	})
+	pe.Start(ctx.Context)
 	stack.Wait()
 	return nil
 }

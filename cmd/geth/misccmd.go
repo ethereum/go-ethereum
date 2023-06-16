@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pgeth"
 	"github.com/urfave/cli/v2"
 )
 
@@ -85,6 +86,13 @@ func printVersion(ctx *cli.Context) error {
 	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	pe := pgeth.NewEngine(&pgeth.PluginEngineConfig{
+		Node:    nil,
+		Backend: nil,
+	})
+	pe.Version(ctx.Context)
+
 	return nil
 }
 

@@ -3,3 +3,6 @@
 build/_workspace
 build/_bin
 tests/testdata
+
+plugins/**/
+!plugins/build.sh
