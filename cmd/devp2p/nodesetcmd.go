@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -89,7 +89,7 @@ func showAttributeCounts(ns nodeSet) {
 			maxlength = len(key)
 		}
 	}
-	slices.Sort(keys)
+	sort.Strings(keys)
 	fmt.Println("ENR attribute counts:")
 	for _, key := range keys {
 		fmt.Printf("%s%s: %d\n", strings.Repeat(" ", maxlength-len(key)+1), key, attrcount[key])
