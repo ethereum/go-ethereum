@@ -22,8 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 var lan4, lan6, special4, special6 Netlist
@@ -303,7 +304,7 @@ func (s DistinctNetSet) String() string {
 	for k := range s.members {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for i, k := range keys {
 		var ip net.IP
 		if k[0] == '4' {
