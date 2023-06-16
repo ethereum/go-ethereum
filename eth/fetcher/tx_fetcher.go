@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	mrand "math/rand"
-	"sort"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -848,7 +848,7 @@ func (f *TxFetcher) forEachPeer(peers map[string]struct{}, do func(peer string))
 	for peer := range peers {
 		list = append(list, peer)
 	}
-	sort.Strings(list)
+	slices.Sort(list)
 	rotateStrings(list, f.rand.Intn(len(list)))
 	for _, peer := range list {
 		do(peer)
