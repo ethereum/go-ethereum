@@ -238,7 +238,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			if err != nil {
 				return nil, err
 			}
-			if address.String() != "0x0000000000000000000000000000000000000000" {
+			if address.String() != "xdc0000000000000000000000000000000000000000" {
 				candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
 			}
 		}
