@@ -281,7 +281,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 	signer := LatestSignerForChainID(common.Big1)
 
 	// Generate a batch of transactions with overlapping values, but shifted nonces
-	groups := map[common.Address]Transactions{}
+	groups := map[common.Address][]*Transaction{}
 	expectedCount := 0
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -368,7 +368,7 @@ func TestTransactionTimeSort(t *testing.T) {
 	signer := HomesteadSigner{}
 
 	// Generate a batch of transactions with overlapping prices, but different creation times
-	groups := map[common.Address]Transactions{}
+	groups := map[common.Address][]*Transaction{}
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 

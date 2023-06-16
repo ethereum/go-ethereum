@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -128,6 +129,9 @@ type fuzzer struct {
 }
 
 func newFuzzer(input []byte) *fuzzer {
+	pool := legacypool.New(legacypool.DefaultConfig, chain)
+	txpool, _ := txpool.New(new(big.Int).SetUint64(legacypool.DefaultConfig.PriceLimit), chain, []txpool.SubPool{pool})
+
 	return &fuzzer{
 		chain:     chain,
 		chainLen:  testChainLen,
@@ -138,7 +142,7 @@ func newFuzzer(input []byte) *fuzzer {
 		chtKeys:   chtKeys,
 		bloomKeys: bloomKeys,
 		nonce:     uint64(len(txHashes)),
-		pool:      txpool.New(txpool.DefaultConfig, params.TestChainConfig, chain),
+		pool:      txpool,
 		input:     bytes.NewReader(input),
 	}
 }

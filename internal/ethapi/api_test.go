@@ -366,10 +366,10 @@ func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uin
 	panic("implement me")
 }
 func (b testBackend) Stats() (pending int, queued int) { panic("implement me") }
-func (b testBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (b testBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	panic("implement me")
 }
-func (b testBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (b testBackend) TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	panic("implement me")
 }
 func (b testBackend) SubscribeNewTxsEvent(events chan<- core.NewTxsEvent) event.Subscription {
