@@ -48,15 +48,15 @@ type payloadQueueItem struct {
 // payloadQueue tracks the latest handful of constructed payloads to be retrieved
 // by the beacon chain if block production is requested.
 type payloadQueue struct {
-	payloads []*payloadQueueItem
-	lock     sync.RWMutex
+	queue *circularQueue
+	lock  sync.RWMutex
 }
 
 // newPayloadQueue creates a pre-initialized queue with a fixed number of slots
 // all containing empty items.
 func newPayloadQueue() *payloadQueue {
 	return &payloadQueue{
-		payloads: make([]*payloadQueueItem, maxTrackedPayloads),
+		queue: newCircularQueue(maxTrackedPayloads),
 	}
 }
 
@@ -65,11 +65,10 @@ func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.payloads[1:], q.payloads)
-	q.payloads[0] = &payloadQueueItem{
+	q.queue.enqueue(&payloadQueueItem{
 		id:      id,
 		payload: payload,
-	}
+	})
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
@@ -77,14 +76,13 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.payloads {
-		if item == nil {
-			return nil // no more items
-		}
+	for i := 0; i < q.queue.count; i++ {
+		item := q.queue.get(i).(*payloadQueueItem)
 		if item.id == id {
 			return item.payload.Resolve()
 		}
 	}
+
 	return nil
 }
 
@@ -92,11 +90,8 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
-
-	for _, item := range q.payloads {
-		if item == nil {
-			return false
-		}
+	for i := 0; i < q.queue.count; i++ {
+		item := q.queue.get(i).(*payloadQueueItem)
 		if item.id == id {
 			return true
 		}
@@ -114,15 +109,15 @@ type headerQueueItem struct {
 // headerQueue tracks the latest handful of constructed headers to be retrieved
 // by the beacon chain if block production is requested.
 type headerQueue struct {
-	headers []*headerQueueItem
-	lock    sync.RWMutex
+	queue *circularQueue
+	lock  sync.RWMutex
 }
 
 // newHeaderQueue creates a pre-initialized queue with a fixed number of slots
 // all containing empty items.
 func newHeaderQueue() *headerQueue {
 	return &headerQueue{
-		headers: make([]*headerQueueItem, maxTrackedHeaders),
+		queue: newCircularQueue(maxTrackedHeaders),
 	}
 }
 
@@ -131,11 +126,11 @@ func (q *headerQueue) put(hash common.Hash, data *types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.headers[1:], q.headers)
-	q.headers[0] = &headerQueueItem{
+	item := &headerQueueItem{
 		hash:   hash,
 		header: data,
 	}
+	q.queue.enqueue(item)
 }
 
 // get retrieves a previously stored header item or nil if it does not exist.
@@ -143,13 +138,51 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.headers {
-		if item == nil {
-			return nil // no more items
-		}
+	for i := 0; i < q.queue.count; i++ {
+		item := q.queue.get(i).(*headerQueueItem)
 		if item.hash == hash {
 			return item.header
 		}
 	}
+
+	return nil
+}
+
+// circularQueue represents a generic circular queue.
+type circularQueue struct {
+	items []interface{}
+	head  int
+	tail  int
+	count int
+}
+
+// newCircularQueue creates a new circular queue with the given size.
+func newCircularQueue(size int) *circularQueue {
+	return &circularQueue{
+		items: make([]interface{}, size),
+	}
+}
+
+// enqueue adds an item to the queue.
+func (q *circularQueue) enqueue(item interface{}) {
+
+	if q.count == len(q.items) {
+		q.head = (q.head + 1) % len(q.items)
+	} else {
+		q.count++
+	}
+
+	q.items[q.tail] = item
+	q.tail = (q.tail + 1) % len(q.items)
+}
+
+// get retrieves an item from the queue based on the given index.
+func (q *circularQueue) get(index int) interface{} {
+
+	if index >= 0 && index < q.count {
+		index = (q.head + index) % len(q.items)
+		return q.items[index]
+	}
+
 	return nil
 }
