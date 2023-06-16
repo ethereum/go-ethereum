@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/big"
 	"reflect"
-	"sort"
 	"testing"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/slices"
 )
 
 type testServerPeerSub struct {
@@ -58,8 +58,8 @@ func TestPeerSubscription(t *testing.T) {
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}
-		sort.Strings(given)
-		sort.Strings(expect)
+		slices.Sort(given)
+		slices.Sort(expect)
 		if !reflect.DeepEqual(given, expect) {
 			t.Fatalf("all peer ids mismatch, want %v, given %v", expect, given)
 		}
