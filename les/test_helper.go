@@ -235,6 +235,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 
 	txpoolConfig := legacypool.DefaultConfig
 	txpoolConfig.Journal = ""
+
 	pool := legacypool.New(txpoolConfig, simulation.Blockchain())
 	txpool, _ := txpool.New(new(big.Int).SetUint64(txpoolConfig.PriceLimit), simulation.Blockchain(), []txpool.SubPool{pool})
 
