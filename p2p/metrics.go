@@ -44,6 +44,11 @@ var (
 	egressDialAttemptMeter  metrics.Meter
 	egressDialSuccessMeter  metrics.Meter
 	activePeerGauge         metrics.Gauge
+
+	dialTooManyPeers     metrics.Meter
+	dialAlreadyConnected metrics.Meter
+	dialSelf             metrics.Meter
+	dialUselessPeer      metrics.Meter
 )
 
 func init() {
@@ -53,12 +58,20 @@ func init() {
 		egressDialAttemptMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
 		egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
 		activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
+		dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/saturated", nil)
+		dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/known", nil)
+		dialSelf = metrics.NewRegisteredMeter("p2p/dials/self", nil)
+		dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/useless", nil)
 		return
 	}
 	ingressDialMeter = metrics.NilMeter{}
 	egressDialAttemptMeter = metrics.NilMeter{}
 	egressDialSuccessMeter = metrics.NilMeter{}
 	activePeerGauge = metrics.NilGauge{}
+	dialTooManyPeers = metrics.NilMeter{}
+	dialAlreadyConnected = metrics.NilMeter{}
+	dialSelf = metrics.NilMeter{}
+	dialUselessPeer = metrics.NilMeter{}
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the

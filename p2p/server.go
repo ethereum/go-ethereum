@@ -819,12 +819,16 @@ running:
 func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
+		dialTooManyPeers.Mark(1)
 		return DiscTooManyPeers
 	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+		dialTooManyPeers.Mark(1)
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
+		dialAlreadyConnected.Mark(1)
 		return DiscAlreadyConnected
 	case c.node.ID() == srv.localnode.ID():
+		dialSelf.Mark(1)
 		return DiscSelf
 	default:
 		return nil
@@ -834,6 +838,7 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
+		dialUselessPeer.Mark(1)
 		return DiscUselessPeer
 	}
 	// Repeat the post-handshake checks because the
