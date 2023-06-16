@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dop251/goja"
 	"github.com/fatih/color"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -221,8 +221,8 @@ func (ctx ppctx) fields(obj *goja.Object) []string {
 		}
 	}
 	iterOwnAndConstructorKeys(ctx.vm, obj, add)
-	slices.Sort(vals)
-	slices.Sort(methods)
+	sort.Strings(vals)
+	sort.Strings(methods)
 	return append(vals, methods...)
 }
 

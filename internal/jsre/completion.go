@@ -18,10 +18,10 @@ package jsre
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/dop251/goja"
-	"golang.org/x/exp/slices"
 )
 
 // JS numerical token
@@ -88,6 +88,6 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 		}
 	}
 
-	slices.Sort(results)
+	sort.Strings(results)
 	return results
 }
