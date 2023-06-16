@@ -1,0 +1,55 @@
+name: sync
+
+on:
+  push:
+    branches:
+      - "pgeth"
+  schedule:
+    - cron: "0 * * * *" # every hour
+
+permissions: write-all
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: "prepare sync operations"
+        run: |
+          git remote add geth https://github.com/ethereum/go-ethereum
+          git checkout master
+          git fetch geth master
+      - name: "check if diff exists"
+        id: diffcheck
+        run: echo "stdout=$(git diff master geth/master -- | wc -c)" >> $GITHUB_OUTPUT
+      - name: "perform sync operations"
+        if: steps.diffcheck.outputs.stdout != '0'
+        run: |
+          git reset --hard geth/master
+          git checkout pgeth
+          git config --global user.email "iulian@rotaru.fr"
+          git config --global user.name "mortimr"
+          git rebase --stat geth/master
+      - name: "build the docker image to ensure project still builds"
+        if: steps.diffcheck.outputs.stdout != '0'
+        run: docker build . --tag ghcr.io/kilnfi/pgeth:latest --tag ghcr.io/kilnfi/pgeth:${GITHUB_SHA}
+      - name: "push rebased master branch"
+        if: steps.diffcheck.outputs.stdout != '0'
+        run: git push origin master --force
+      - name: "push rebased pgeth branch"
+        if: steps.diffcheck.outputs.stdout != '0'
+        run: git push origin pgeth --force
+      - name: "login to ghcr"
+        if: steps.diffcheck.outputs.stdout != '0'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: "push to ghcr"
+        if: steps.diffcheck.outputs.stdout != '0'
+        run: |
+          docker push ghcr.io/kilnfi/pgeth:latest
+          docker push ghcr.io/kilnfi/pgeth:${GITHUB_SHA}
