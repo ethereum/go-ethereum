@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -134,7 +135,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		defer db.Close()
 
 		keys := []string{"1", "2", "3", "4", "6", "10", "11", "12", "20", "21", "22"}
-		slices.Sort(keys) // 1, 10, 11, etc
+		sort.Strings(keys) // 1, 10, 11, etc
 
 		for _, k := range keys {
 			if err := db.Put([]byte(k), nil); err != nil {
@@ -504,7 +505,7 @@ func iterateKeys(it ethdb.Iterator) []string {
 	for it.Next() {
 		keys = append(keys, string(it.Key()))
 	}
-	slices.Sort(keys)
+	sort.Strings(keys)
 	it.Release()
 	return keys
 }
