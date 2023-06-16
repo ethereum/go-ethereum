@@ -20,10 +20,10 @@ package prometheus
 import (
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"golang.org/x/exp/slices"
 )
 
 // Handler returns an HTTP handler which dump metrics in Prometheus format.
@@ -34,7 +34,7 @@ func Handler(reg metrics.Registry) http.Handler {
 		reg.Each(func(name string, i interface{}) {
 			names = append(names, name)
 		})
-		slices.Sort(names)
+		sort.Strings(names)
 
 		// Aggregate all the metrics into a Prometheus collector
 		c := newCollector()
