@@ -39,14 +39,8 @@ import (
 
 type allocItem struct{ Addr, Balance *big.Int }
 
-type allocList []allocItem
-
-func (a allocList) Len() int           { return len(a) }
-func (a allocList) Less(i, j int) bool { return a[i].Addr.Cmp(a[j].Addr) < 0 }
-func (a allocList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-
-func makelist(g *core.Genesis) allocList {
-	a := make(allocList, 0, len(g.Alloc))
+func makelist(g *core.Genesis) []allocItem {
+	a := make([]allocItem, 0, len(g.Alloc))
 	for addr, account := range g.Alloc {
 		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
@@ -54,7 +48,9 @@ func makelist(g *core.Genesis) allocList {
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
 		a = append(a, allocItem{bigAddr, account.Balance})
 	}
-	sort.Sort(a)
+	slices.SortFunc(a, func(b, c allocItem) bool {
+		return b.Addr.Cmp(c.Addr) < 0
+	})
 	return a
 }
 
