@@ -19,9 +19,9 @@ package tests
 import (
 	"fmt"
 	"math/big"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/slices"
 )
 
 func u64(val uint64) *uint64 { return &val }
@@ -307,7 +307,7 @@ func AvailableForks() []string {
 	for k := range Forks {
 		availableForks = append(availableForks, k)
 	}
-	sort.Strings(availableForks)
+	slices.Sort(availableForks)
 	return availableForks
 }
 

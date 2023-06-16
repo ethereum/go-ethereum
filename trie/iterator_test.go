@@ -84,6 +84,10 @@ type kv struct {
 	t    bool
 }
 
+func kvLessFunc(a, b *kv) bool {
+	return bytes.Compare(a.k, b.k) < 0
+}
+
 func TestIteratorLargeData(t *testing.T) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	vals := make(map[string]*kv)
