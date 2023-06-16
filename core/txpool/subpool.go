@@ -29,7 +29,7 @@ import (
 // Transaction is a helper struct to group together a canonical transaction with
 // satellite data items that are needed by the pool but are not part of the chain.
 type Transaction struct {
-	Tx *types.Transaction // Canonical transacrion
+	Tx *types.Transaction // Canonical transaction
 
 	BlobTxBlobs   []kzg4844.Blob       // Blobs needed by the blob pool
 	BlobTxCommits []kzg4844.Commitment // Commitments needed by the blob pool

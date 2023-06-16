@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -194,10 +194,17 @@ func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.
+	//
+	// We also need to track how the transactions were split across the subpools,
+	// so we can piece back the returned errors into the original order.
 	txsets := make([][]*Transaction, len(p.subpools))
 	splits := make([]int, len(txs))
 
 	for i, tx := range txs {
+		// Mark this tranaction belonging to no-subpool
+		splits[i] = -1
+
+		// Try to find a subpool that accepts the transaction
 		for j, subpool := range p.subpools {
 			if subpool.Filter(tx.Tx) {
 				txsets[j] = append(txsets[j], tx)
@@ -214,6 +221,12 @@ func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
 	}
 	errs := make([]error, len(txs))
 	for i, split := range splits {
+		// If the transaction was rejected by all subpools, mark it unsupported
+		if split == -1 {
+			errs[i] = core.ErrTxTypeNotSupported
+			continue
+		}
+		// Find which subpool handled it and pull in the corresponding error
 		errs[i] = errsets[split][0]
 		errsets[split] = errsets[split][1:]
 	}
