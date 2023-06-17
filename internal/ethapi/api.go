@@ -1202,7 +1202,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
+		failed, result, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
@@ -1211,6 +1211,14 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, err
 		}
 		if failed {
+			// If the execution reverts for any reason other than out of gas, then return the
+			// reversion reason immediately as increasing gas limit won't change the outcome.
+			if result != nil && result.Err != vm.ErrOutOfGas {
+				if len(result.Revert()) > 0 {
+					return 0, newRevertError(result)
+				}
+				return 0, result.Err
+			}
 			lo = mid
 		} else {
 			hi = mid
