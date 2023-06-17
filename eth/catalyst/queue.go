@@ -78,6 +78,9 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 
 	for i := 0; i < q.queue.count; i++ {
 		item := q.queue.get(i).(*payloadQueueItem)
+		if item == nil {
+			return nil // no more items
+		}
 		if item.id == id {
 			return item.payload.Resolve()
 		}
@@ -92,6 +95,9 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	defer q.lock.RUnlock()
 	for i := 0; i < q.queue.count; i++ {
 		item := q.queue.get(i).(*payloadQueueItem)
+		if item == nil {
+			return false // no more items
+		}
 		if item.id == id {
 			return true
 		}
@@ -140,6 +146,9 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 
 	for i := 0; i < q.queue.count; i++ {
 		item := q.queue.get(i).(*headerQueueItem)
+		if item == nil {
+			return nil // no more items
+		}
 		if item.hash == hash {
 			return item.header
 		}
