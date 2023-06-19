@@ -415,6 +415,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
+	select {
+	case <-h.quitSync:
+		return p2p.DiscQuitting
+	default:
+	}
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
