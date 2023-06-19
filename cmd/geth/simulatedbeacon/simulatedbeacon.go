@@ -114,10 +114,8 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient *common.Address) {
 
 func (c *SimulatedBeacon) getFeeRecipient() common.Address {
 	c.mu.Lock()
-	feeRecipient := c.feeRecipient
-	c.mu.Unlock()
-
-	return feeRecipient
+	defer c.mu.Unlock()
+	return c.feeRecipient
 }
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
