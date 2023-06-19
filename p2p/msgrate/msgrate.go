@@ -20,11 +20,11 @@ package msgrate
 import (
 	"errors"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/exp/slices"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final
@@ -293,7 +293,7 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 		rtts = append(rtts, float64(tt.roundtrip))
 		tt.lock.RUnlock()
 	}
-	slices.Sort(rtts)
+	sort.Float64s(rtts)
 
 	var median time.Duration
 	switch len(rtts) {
