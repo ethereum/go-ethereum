@@ -273,12 +273,12 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 	// Actually, we need to supply proofs either way! This seems to be an implementation
 	// quirk in go-ethereum
 	proof := light.NewNodeSet()
-	if err := t.accountTrie.Prove(origin[:], 0, proof); err != nil {
+	if err := t.accountTrie.Prove(origin[:], proof); err != nil {
 		t.logger.Error("Could not prove inexistence of origin", "origin", origin, "error", err)
 	}
 	if len(keys) > 0 {
 		lastK := (keys[len(keys)-1])[:]
-		if err := t.accountTrie.Prove(lastK, 0, proof); err != nil {
+		if err := t.accountTrie.Prove(lastK, proof); err != nil {
 			t.logger.Error("Could not prove last item", "error", err)
 		}
 	}
@@ -358,12 +358,12 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 			// Here's a potential gotcha: when constructing the proof, we cannot
 			// use the 'origin' slice directly, but must use the full 32-byte
 			// hash form.
-			if err := stTrie.Prove(originHash[:], 0, proof); err != nil {
+			if err := stTrie.Prove(originHash[:], proof); err != nil {
 				t.logger.Error("Could not prove inexistence of origin", "origin", originHash, "error", err)
 			}
 			if len(keys) > 0 {
 				lastK := (keys[len(keys)-1])[:]
-				if err := stTrie.Prove(lastK, 0, proof); err != nil {
+				if err := stTrie.Prove(lastK, proof); err != nil {
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
@@ -416,13 +416,13 @@ func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, acco
 			// Here's a potential gotcha: when constructing the proof, we cannot
 			// use the 'origin' slice directly, but must use the full 32-byte
 			// hash form.
-			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
+			if err := stTrie.Prove(origin[:], proof); err != nil {
 				t.logger.Error("Could not prove inexistence of origin", "origin", origin,
 					"error", err)
 			}
 			if len(keys) > 0 {
 				lastK := (keys[len(keys)-1])[:]
-				if err := stTrie.Prove(lastK, 0, proof); err != nil {
+				if err := stTrie.Prove(lastK, proof); err != nil {
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
@@ -594,12 +594,12 @@ func TestSyncBloatedProof(t *testing.T) {
 		}
 		// The proofs
 		proof := light.NewNodeSet()
-		if err := t.accountTrie.Prove(origin[:], 0, proof); err != nil {
+		if err := t.accountTrie.Prove(origin[:], proof); err != nil {
 			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 		}
 		// The bloat: add proof of every single element
 		for _, entry := range t.accountValues {
-			if err := t.accountTrie.Prove(entry.k, 0, proof); err != nil {
+			if err := t.accountTrie.Prove(entry.k, proof); err != nil {
 				t.logger.Error("Could not prove item", "error", err)
 			}
 		}

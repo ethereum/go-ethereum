@@ -241,7 +241,7 @@ func TestAccessListLeak(t *testing.T) {
 		{
 			func(tr *Trie) {
 				for _, val := range standard {
-					tr.Prove([]byte(val.k), 0, rawdb.NewMemoryDatabase())
+					tr.Prove([]byte(val.k), rawdb.NewMemoryDatabase())
 				}
 			},
 		},
