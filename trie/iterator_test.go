@@ -84,8 +84,8 @@ type kv struct {
 	t    bool
 }
 
-func kvLessFunc(a, b *kv) bool {
-	return bytes.Compare(a.k, b.k) < 0
+func (k *kv) less(other *kv) bool {
+	return bytes.Compare(k.k, other.k) < 0
 }
 
 func TestIteratorLargeData(t *testing.T) {
