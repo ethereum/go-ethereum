@@ -202,7 +202,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-
 		simulatedbeacon.RegisterAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 	} else if err := ethcatalyst.Register(stack, eth); err != nil {
