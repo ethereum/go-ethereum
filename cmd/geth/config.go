@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/geth/simulatedbeacon"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -204,6 +205,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, error) {
 
 		simulatedbeacon.RegisterAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
+	} else if err := ethcatalyst.Register(stack, eth); err != nil {
+		return nil, nil, err
 	}
 
 	return stack, backend, nil
