@@ -836,10 +836,6 @@ type badBlock struct {
 	Body   *types.Body
 }
 
-func (b *badBlock) Less(other *badBlock) bool {
-	return b.Header.Number.Uint64() < other.Header.Number.Uint64()
-}
-
 // ReadBadBlock retrieves the bad block with the corresponding block hash.
 func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	blob, err := db.Get(badBlockKey)
@@ -900,7 +896,8 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		Body:   block.Body(),
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) bool {
-		return !a.Less(b) // Sort reverse order
+		// Note: sorting in ascending order.
+		return a.Header.Number.Uint64() >= b.Header.Number.Uint64()
 	})
 	if len(badBlocks) > badBlockToKeep {
 		badBlocks = badBlocks[:badBlockToKeep]
