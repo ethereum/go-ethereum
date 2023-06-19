@@ -436,7 +436,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 			}
 			// Prove the user's request from the account or storage trie
-			if err := trie.Prove(request.Key, request.FromLevel, nodes); err != nil {
+			if err := trie.Prove(request.Key, nodes); err != nil {
 				p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
 				continue
 			}
@@ -480,7 +480,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			// the headers with no valid proof. Keep the compatibility for
 			// legacy les protocol and drop this hack when the les2/3 are
 			// not supported.
-			err := auxTrie.Prove(request.Key, request.FromLevel, nodes)
+			err := auxTrie.Prove(request.Key, nodes)
 			if p.version >= lpv4 && err != nil {
 				return nil
 			}

@@ -113,10 +113,10 @@ func (f *fuzzer) fuzz() int {
 			break
 		}
 		proof := memorydb.New()
-		if err := tr.Prove(entries[start].k, 0, proof); err != nil {
+		if err := tr.Prove(entries[start].k, proof); err != nil {
 			panic(fmt.Sprintf("Failed to prove the first node %v", err))
 		}
-		if err := tr.Prove(entries[end-1].k, 0, proof); err != nil {
+		if err := tr.Prove(entries[end-1].k, proof); err != nil {
 			panic(fmt.Sprintf("Failed to prove the last node %v", err))
 		}
 		var keys [][]byte

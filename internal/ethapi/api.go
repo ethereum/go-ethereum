@@ -705,7 +705,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 			continue
 		}
 		var proof proofList
-		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof); err != nil {
+		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
 			return nil, err
 		}
 		storageProof[i] = StorageResult{storageKeys[i],
