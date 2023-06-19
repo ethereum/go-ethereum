@@ -1208,11 +1208,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
-
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		s := state.Copy()
-
 		mid := (hi + lo) / 2
 		failed, _, err := executable(mid, s, header)
 
