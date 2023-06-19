@@ -643,6 +643,33 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(code, penCode) {
 		t.Fatalf("unexpected code: %v %v", code, penCode)
 	}
+	// Use HeaderByNumber to get a header for EstimateGasAt and EstimateGasAtHash
+	latestHeader, err := ec.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// EstimateGasAt
+	msg := ethereum.CallMsg{
+		From:  testAddr,
+		To:    &common.Address{},
+		Gas:   21000,
+		Value: big.NewInt(1),
+	}
+	gas, err := ec.EstimateGasAt(context.Background(), msg, latestHeader.Number)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas limit: %v", gas)
+	}
+	// EstimateGasAtHash
+	gas, err = ec.EstimateGasAtHash(context.Background(), msg, latestHeader.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas limit: %v", gas)
+	}
 }
 
 func testTransactionSender(t *testing.T, client *rpc.Client) {
