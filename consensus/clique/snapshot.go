@@ -308,9 +308,7 @@ func (s *Snapshot) signers() []common.Address {
 	for sig := range s.Signers {
 		sigs = append(sigs, sig)
 	}
-	slices.SortFunc(sigs, func(a, b common.Address) bool {
-		return bytes.Compare(a[:], b[:]) < 0
-	})
+	slices.SortFunc(sigs, common.Address.Less)
 	return sigs
 }
 
