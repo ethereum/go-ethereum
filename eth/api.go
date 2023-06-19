@@ -613,6 +613,17 @@ type ScrollAPI struct {
 	eth *Ethereum
 }
 
+// l1MessageTxRPC is the RPC-layer representation of an L1 message.
+type l1MessageTxRPC struct {
+	QueueIndex uint64          `json:"queueIndex"`
+	Gas        uint64          `json:"gas"`
+	To         *common.Address `json:"to"`
+	Value      *hexutil.Big    `json:"value"`
+	Data       hexutil.Bytes   `json:"data"`
+	Sender     common.Address  `json:"sender"`
+	Hash       common.Hash     `json:"hash"`
+}
+
 // NewScrollAPI creates a new RPC service to query the L1 message database.
 func NewScrollAPI(eth *Ethereum) *ScrollAPI {
 	return &ScrollAPI{eth: eth}
@@ -624,8 +635,21 @@ func (api *ScrollAPI) GetL1SyncHeight(ctx context.Context) (height *uint64, err 
 }
 
 // GetL1MessageByIndex queries an L1 message by its index in the local database.
-func (api *ScrollAPI) GetL1MessageByIndex(ctx context.Context, queueIndex uint64) (height *types.L1MessageTx, err error) {
-	return rawdb.ReadL1Message(api.eth.ChainDb(), queueIndex), nil
+func (api *ScrollAPI) GetL1MessageByIndex(ctx context.Context, queueIndex uint64) (height *l1MessageTxRPC, err error) {
+	msg := rawdb.ReadL1Message(api.eth.ChainDb(), queueIndex)
+	if msg == nil {
+		return nil, nil
+	}
+	rpcMsg := l1MessageTxRPC{
+		QueueIndex: msg.QueueIndex,
+		Gas:        msg.Gas,
+		To:         msg.To,
+		Value:      (*hexutil.Big)(msg.Value),
+		Data:       msg.Data,
+		Sender:     msg.Sender,
+		Hash:       types.NewTx(msg).Hash(),
+	}
+	return &rpcMsg, nil
 }
 
 // GetFirstQueueIndexNotInL2Block returns the first L1 message queue index that is
