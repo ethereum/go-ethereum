@@ -1283,6 +1283,14 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 					"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
 				// We still need to update the current state s.th. the lost transactions can be readded by the user
 			} else {
+				if add == nil {
+					// if the new head is nil, it means that something happened between
+					// the firing of newhead-event and _now_: most likely a
+					// reorg caused by sync-reversion or explicit sethead back to an
+					// earlier block.
+					log.Warn("New head missing in txpool reset", "number", newHead.Number, "hash", newHead.Hash())
+					return
+				}
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
 					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
