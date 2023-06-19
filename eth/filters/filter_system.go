@@ -504,7 +504,6 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 }
 
 func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent) {
-
 	for _, f := range filters[BlockHeadersSubscription] {
 		f.headers <- ev.Block.Header()
 	}
