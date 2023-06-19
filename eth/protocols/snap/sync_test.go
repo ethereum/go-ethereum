@@ -1321,9 +1321,8 @@ type kv struct {
 	k, v []byte
 }
 
-// Helper for sorting
-func kvLessFunc(a, b *kv) bool {
-	return bytes.Compare(a.k, b.k) < 0
+func (k *kv) less(other *kv) bool {
+	return bytes.Compare(k.k, other.k) < 0
 }
 
 func key32(i uint64) []byte {
@@ -1383,7 +1382,7 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, []*kv) {
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1445,7 +1444,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, []*kv) {
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1492,7 +1491,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
@@ -1557,7 +1556,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
@@ -1601,7 +1600,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
@@ -1652,7 +1651,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, kvLessFunc)
+	slices.SortFunc(entries, (*kv).less)
 	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
