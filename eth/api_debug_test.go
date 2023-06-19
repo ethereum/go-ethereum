@@ -105,9 +105,7 @@ func TestAccountRange(t *testing.T) {
 	}
 	// Test to see if it's possible to recover from the middle of the previous
 	// set and get an even split between the first and second sets.
-	slices.SortFunc(hList, func(a, b common.Hash) bool {
-		return bytes.Compare(a.Bytes(), b.Bytes()) < 0
-	})
+	slices.SortFunc(hList, common.Hash.Less)
 	middleH := hList[AccountRangeMaxResults/2]
 	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
 	missing, infirst, insecond := 0, 0, 0
