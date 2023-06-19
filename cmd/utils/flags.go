@@ -766,13 +766,18 @@ var (
 		Category: flags.NetworkingCategory,
 	}
 	DiscoveryV4Flag = &cli.BoolFlag{
-		Name:     "v4disc",
+		Name:     "discv4",
 		Usage:    "Enables the V4 discovery mechanism",
 		Category: flags.NetworkingCategory,
 		Value:    true,
 	}
-	DiscoveryV5Flag = &cli.BoolFlag{
+	LegacyDiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "v5disc",
+		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (note: this flag is deprecated, please use --discv5 instead)",
+		Category: flags.NetworkingCategory,
+	}
+	DiscoveryV5Flag = &cli.BoolFlag{
+		Name:     "discv5",
 		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
 		Category: flags.NetworkingCategory,
 	}
