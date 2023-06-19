@@ -17,7 +17,6 @@
 package ethapi
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -655,9 +654,7 @@ func newAccounts(n int) (accounts []Account) {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		accounts = append(accounts, Account{key: key, addr: addr})
 	}
-	slices.SortFunc(accounts, func(a, b Account) bool {
-		return bytes.Compare(a.addr.Bytes(), b.addr.Bytes()) < 0
-	})
+	slices.SortFunc(accounts, func(a, b Account) bool { return a.addr.Less(b.addr) })
 	return accounts
 }
 
