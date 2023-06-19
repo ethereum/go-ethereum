@@ -226,6 +226,11 @@ func IsHexAddress(s string) bool {
 	return len(s) == 2*AddressLength && isHex(s)
 }
 
+// Less compares two addresses.
+func (a Address) Less(other Address) bool {
+	return bytes.Compare(a[:], other[:]) < 0
+}
+
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
 
