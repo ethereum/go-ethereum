@@ -195,9 +195,15 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 		genesis      = &core.Genesis{
 			Config:  params.TestChainConfig,
 			BaseFee: big.NewInt(params.InitialBaseFee),
@@ -250,9 +256,15 @@ func TestPendingTxFilter(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -306,9 +318,15 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -362,9 +380,15 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 // If not it must return an error.
 func TestLogFilterCreation(t *testing.T) {
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db     = rawdb.NewMemoryDatabase()
 		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys, false)
+		api    = NewFilterAPI(cfg, sys, false)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -409,9 +433,15 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db     = rawdb.NewMemoryDatabase()
 		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys, false)
+		api    = NewFilterAPI(cfg, sys, false)
 	)
 
 	// different situations where log filter creation should fail.
@@ -431,9 +461,15 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 
 func TestInvalidGetLogsRequest(t *testing.T) {
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db        = rawdb.NewMemoryDatabase()
 		_, sys    = newTestFilterSystem(t, db, Config{})
-		api       = NewFilterAPI(sys, false)
+		api       = NewFilterAPI(cfg, sys, false)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
@@ -456,9 +492,15 @@ func TestLogFilter(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -570,9 +612,15 @@ func TestPendingLogsSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -750,9 +798,15 @@ func TestLightFilterLogs(t *testing.T) {
 	t.Parallel()
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, true)
+		api          = NewFilterAPI(cfg, sys, true)
 		signer       = types.HomesteadSigner{}
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -891,9 +945,15 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	timeout := 100 * time.Millisecond
 
 	var (
+		cfg = &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(2),
+			HomesteadBlock: new(big.Int),
+		}
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout})
-		api          = NewFilterAPI(sys, false)
+		api          = NewFilterAPI(cfg, sys, false)
 		done         = make(chan struct{})
 	)
 
