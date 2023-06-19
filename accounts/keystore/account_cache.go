@@ -39,7 +39,8 @@ import (
 // exist yet, the code will attempt to create a watcher at most this often.
 const minReloadInterval = 2 * time.Second
 
-func accountsByURLLess(a, b accounts.Account) bool {
+// byURL defines the sorting order for accounts.
+func byURL(a, b accounts.Account) bool {
 	return a.URL.Cmp(b.URL) < 0
 }
 
@@ -193,7 +194,7 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	default:
 		err := &AmbiguousAddrError{Addr: a.Address, Matches: make([]accounts.Account, len(matches))}
 		copy(err.Matches, matches)
-		slices.SortFunc(err.Matches, accountsByURLLess)
+		slices.SortFunc(err.Matches, byURL)
 		return accounts.Account{}, err
 	}
 }
