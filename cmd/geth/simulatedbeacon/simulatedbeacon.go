@@ -18,10 +18,10 @@ package simulatedbeacon
 
 import (
 	"errors"
-	"sync"
-	"time"
 	"fmt"
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
