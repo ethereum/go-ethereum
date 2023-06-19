@@ -414,7 +414,7 @@ func testGetProofs(t *testing.T, protocol int) {
 				Key:   crypto.Keccak256(acc[:]),
 			}
 			proofreqs = append(proofreqs, req)
-			trie.Prove(crypto.Keccak256(acc[:]), 0, proofsV2)
+			trie.Prove(crypto.Keccak256(acc[:]), proofsV2)
 		}
 	}
 	// Send the proof request and verify the response
@@ -458,7 +458,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
 			t, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
-			t.Prove(account, 0, proofsV2)
+			t.Prove(account, proofsV2)
 			expected = proofsV2.NodeList()
 		}
 		if err := expectResponse(rawPeer.app, ProofsV2Msg, 42, testBufLimit, expected); err != nil {
@@ -514,7 +514,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 	}
 	root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
 	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.ChtTablePrefix))))
-	trie.Prove(key, 0, &proofsV2.Proofs)
+	trie.Prove(key, &proofsV2.Proofs)
 	// Assemble the requests for the different protocols
 	requestsV2 := []HelperTrieReq{{
 		Type:    htCanonical,
@@ -579,7 +579,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 
 		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomTrieSize-1).Hash())
 		trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.BloomTrieTablePrefix))))
-		trie.Prove(key, 0, &proofs.Proofs)
+		trie.Prove(key, &proofs.Proofs)
 
 		// Send the proof request and verify the response
 		sendRequest(rawPeer.app, GetHelperTrieProofsMsg, 42, requests)

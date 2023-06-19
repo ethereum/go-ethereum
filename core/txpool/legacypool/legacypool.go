@@ -1206,9 +1206,13 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
-			pool.priced.SetBaseFee(pendingBaseFee)
+		if reset.newHead != nil {
+			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+				pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+				pool.priced.SetBaseFee(pendingBaseFee)
+			} else {
+				pool.priced.Reheap()
+			}
 		}
 		// Update all accounts to the latest known pending nonce
 		nonces := make(map[common.Address]uint64, len(pool.pending))
@@ -1278,6 +1282,14 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 					"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
 				// We still need to update the current state s.th. the lost transactions can be readded by the user
 			} else {
+				if add == nil {
+					// if the new head is nil, it means that something happened between
+					// the firing of newhead-event and _now_: most likely a
+					// reorg caused by sync-reversion or explicit sethead back to an
+					// earlier block.
+					log.Warn("New head missing in txpool reset", "number", newHead.Number, "hash", newHead.Hash())
+					return
+				}
 				var discarded, included types.Transactions
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
