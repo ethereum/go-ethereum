@@ -103,6 +103,10 @@ var (
 		Name:  "contract",
 		Usage: "Name of the contract to generate the bindings for",
 	}
+	tmplFlag = cli.StringFlag{
+		Name:  "tmpl",
+		Usage: "Template file if a user wants to customize",
+	}
 )
 
 func init() {
@@ -122,6 +126,7 @@ func init() {
 		langFlag,
 		aliasFlag,
 		contractFlag,
+		tmplFlag,
 	}
 	app.Action = utils.MigrateFlags(abigen)
 	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
@@ -264,6 +269,15 @@ func abigen(c *cli.Context) error {
 		for _, match := range submatches {
 			aliases[match[1]] = match[2]
 		}
+	}
+	// Set customize template file.
+	if c.GlobalIsSet(tmplFlag.Name) {
+		tmplFile := c.GlobalString(tmplFlag.Name)
+		data, err := os.ReadFile(tmplFile)
+		if err != nil {
+			utils.Fatalf("Failed to read template file: %v", err)
+		}
+		bind.SetTmplSource(lang, string(data))
 	}
 	// Generate the contract binding
 	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs, aliases)
