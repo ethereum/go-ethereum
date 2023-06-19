@@ -17,11 +17,6 @@
 package miner
 
 import (
-	"crypto/rand"
-	"errors"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"math/big"
 	"os"
 	"sync/atomic"
@@ -40,10 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
@@ -83,6 +79,7 @@ func init() {
 }
 
 // newTestWorker creates a new test worker with the given parameters.
+// nolint:unparam
 func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
@@ -103,89 +100,6 @@ func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 	w.noempty.Store(noempty)
 
 	return w, backend, w.close
-}
-
-func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
-func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
-	return nil, errors.New("not supported")
-}
-
-func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
-	var parent *types.Block
-
-	cur := b.chain.CurrentBlock()
-	if cur.Number.Uint64() == 0 {
-		parent = b.chain.Genesis()
-	} else {
-		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
-	}
-
-	var err error
-
-	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.DB, 1, func(i int, gen *core.BlockGen) {
-		var addr = make([]byte, common.AddressLength)
-
-		_, err = rand.Read(addr)
-		if err != nil {
-			return
-		}
-
-		gen.SetCoinbase(common.BytesToAddress(addr))
-	})
-
-	return blocks[0], err
-}
-
-func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
-	var tx *types.Transaction
-
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
-	if creation {
-		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
-	} else {
-		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(TestBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
-	}
-
-	return tx
-}
-
-// newRandomTxWithNonce creates a new transaction with the given nonce.
-func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *types.Transaction {
-	var tx *types.Transaction
-
-	gasPrice := big.NewInt(100 * params.InitialBaseFee)
-
-	if creation {
-		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
-	} else {
-		tx, _ = types.SignTx(types.NewTransaction(nonce, testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
-	}
-
-	return tx
-}
-
-// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
-func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
-	var tx *types.Transaction
-
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
-
-	tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(storageContractByteCode)), types.HomesteadSigner{}, testBankKey)
-	contractAddr := crypto.CreateAddress(TestBankAddress, b.txPool.Nonce(TestBankAddress))
-
-	return tx, contractAddr
-}
-
-// newStorageContractCallTx creates a new transaction to call a storage smart contract.
-func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce uint64) *types.Transaction {
-	var tx *types.Transaction
-
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
-
-	tx, _ = types.SignTx(types.NewTransaction(nonce, to, nil, storageCallTxGas, gasPrice, common.FromHex(storageContractTxCallData)), types.HomesteadSigner{}, testBankKey)
-
-	return tx
 }
 
 // nolint : paralleltest
@@ -615,7 +529,10 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 	testGetSealingWork(t, local, ethash.NewFaker())
 }
 
+// nolint:gocognit
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+	t.Helper()
+
 	defer engine.Close()
 
 	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)

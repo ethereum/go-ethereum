@@ -118,6 +118,7 @@ func abigen(c *cli.Context) error {
 		aliases = make(map[string]string)
 	)
 
+	// nolint:nestif
 	if c.String(abiFlag.Name) != "" {
 		// Load up the ABI, optional bytecode and type name from the parameters
 		var (

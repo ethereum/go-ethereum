@@ -566,13 +566,13 @@ func TestIncompleteSync(t *testing.T) {
 	// Sanity check that removing any node from the database is detected
 	for _, hash := range added {
 		value, _ := diskdb.Get(hash.Bytes())
-		diskdb.Delete(hash.Bytes())
+		_ = diskdb.Delete(hash.Bytes())
 
 		if err := checkTrieConsistency(triedb, root); err == nil {
 			t.Fatalf("trie inconsistency not caught, missing: %x", hash)
 		}
 
-		diskdb.Put(hash.Bytes(), value)
+		_ = diskdb.Put(hash.Bytes(), value)
 	}
 }
 

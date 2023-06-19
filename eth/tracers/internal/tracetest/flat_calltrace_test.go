@@ -199,13 +199,13 @@ func jsonEqualFlat(x, y interface{}) bool {
 	yTrace := new([]flatCallTrace)
 
 	if xj, err := json.Marshal(x); err == nil {
-		json.Unmarshal(xj, xTrace)
+		_ = json.Unmarshal(xj, xTrace)
 	} else {
 		return false
 	}
 
 	if yj, err := json.Marshal(y); err == nil {
-		json.Unmarshal(yj, yTrace)
+		_ = json.Unmarshal(yj, yTrace)
 	} else {
 		return false
 	}

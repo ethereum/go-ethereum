@@ -17,8 +17,9 @@
 package main
 
 import (
-	"github.com/urfave/cli/v2"
 	"strconv"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"

@@ -82,6 +82,7 @@ func testReceiveHeaders(t *testing.T, ln net.Listener, gethArgs ...string) {
 			}
 			atomic.StoreUint32(&ok, 1)
 		}}}
+	//nolint:errcheck
 	go server.Serve(ln)
 
 	defer server.Close()

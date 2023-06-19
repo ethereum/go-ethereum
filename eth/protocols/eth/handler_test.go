@@ -114,7 +114,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 	}
 
 	for _, block := range bs {
-		chain.StateCache().TrieDB().Commit(block.Root(), false)
+		_ = chain.StateCache().TrieDB().Commit(block.Root(), false)
 	}
 
 	txconfig := txpool.DefaultConfig

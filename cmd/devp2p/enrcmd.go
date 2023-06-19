@@ -48,6 +48,7 @@ var enrdumpCommand = &cli.Command{
 func enrdump(ctx *cli.Context) error {
 	var source string
 
+	// nolint:nestif
 	if file := ctx.String(fileFlag.Name); file != "" {
 		if ctx.NArg() != 0 {
 			return fmt.Errorf("can't dump record from command-line argument in -file mode")

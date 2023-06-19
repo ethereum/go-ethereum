@@ -125,9 +125,9 @@ func doMigrateFlags(ctx *cli.Context) {
 				// "alfa, beta, gamma" instead of "[alfa beta gamma]", in order
 				// for the backing StringSlice to parse it properly.
 				if result := parent.StringSlice(name); len(result) > 0 {
-					ctx.Set(name, strings.Join(result, ","))
+					_ = ctx.Set(name, strings.Join(result, ","))
 				} else {
-					ctx.Set(name, parent.String(name))
+					_ = ctx.Set(name, parent.String(name))
 				}
 
 				break

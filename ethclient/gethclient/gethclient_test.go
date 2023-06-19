@@ -357,7 +357,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
 	ch := make(chan *types.Transaction)
-	ec.SubscribeFullPendingTransactions(context.Background(), ch)
+	_, _ = ec.SubscribeFullPendingTransactions(context.Background(), ch)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {

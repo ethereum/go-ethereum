@@ -140,6 +140,7 @@ func sign(ctx *cli.Context) error {
 		oracle *checkpointoracle.CheckpointOracle
 	)
 
+	// nolint:nestif
 	if !ctx.IsSet(nodeURLFlag.Name) {
 		// Offline mode signing
 		offline = true

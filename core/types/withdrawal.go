@@ -52,5 +52,5 @@ func (s Withdrawals) Len() int { return len(s) }
 // because we assume that *Withdrawal will only ever contain valid withdrawals that were either
 // constructed by decoding or via public API in this package.
 func (s Withdrawals) EncodeIndex(i int, w *bytes.Buffer) {
-	rlp.Encode(w, s[i])
+	_ = rlp.Encode(w, s[i])
 }

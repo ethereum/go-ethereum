@@ -59,8 +59,8 @@ func returnHasherToPool(h *nodeHasher) { hasherPool.Put(h) }
 
 func (h *nodeHasher) hashData(data []byte) (n common.Hash) {
 	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(n[:])
+	_, _ = h.sha.Write(data)
+	_, _ = h.sha.Read(n[:])
 
 	return n
 }

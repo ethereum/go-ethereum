@@ -79,7 +79,7 @@ func TestHeaderInsertion(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	gspec.Commit(db, trie.NewDatabase(db))
+	_, _ = gspec.Commit(db, trie.NewDatabase(db))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {

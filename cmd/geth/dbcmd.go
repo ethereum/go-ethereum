@@ -337,8 +337,8 @@ func checkStateContent(ctx *cli.Context) error {
 		v := it.Value()
 
 		hasher.Reset()
-		hasher.Write(v)
-		hasher.Read(got)
+		_, _ = hasher.Write(v)
+		_, _ = hasher.Read(got)
 
 		if !bytes.Equal(k, got) {
 			errs++

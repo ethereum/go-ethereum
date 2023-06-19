@@ -82,7 +82,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// chunked transfer encoding must be disabled by setting content-length.
 				w.Header().Set("content-type", "application/json")
 				w.Header().Set("content-length", strconv.Itoa(len(responseJSON)))
-				w.Write(responseJSON)
+				_, _ = w.Write(responseJSON)
 
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
@@ -106,7 +106,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(responseJSON)
+		_, _ = w.Write(responseJSON)
 	})
 }
 

@@ -318,6 +318,7 @@ func SetupGenesisBlock(db ethdb.Database, triedb *trie.Database, genesis *Genesi
 	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
 }
 
+// nolint:gocognit
 func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig

@@ -171,7 +171,7 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	// larger buffer for creating both valid and invalid transactions.
 	var buf = make([]byte, 32+5)
 
-	crand.Read(buf)
+	_, _ = crand.Read(buf)
 	gasTipCap := new(big.Int).SetBytes(buf)
 
 	// If the given base fee is nil(the 1559 is still not available),
@@ -183,7 +183,7 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	var gasFeeCap *big.Int
 
 	if rand.Intn(4) == 0 {
-		crand.Read(buf)
+		_, _ = crand.Read(buf)
 		gasFeeCap = new(big.Int).SetBytes(buf)
 	} else {
 		gasFeeCap = new(big.Int).Add(baseFee, gasTipCap)

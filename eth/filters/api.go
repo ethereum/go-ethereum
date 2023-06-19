@@ -171,9 +171,9 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				for _, tx := range txs {
 					if fullTx != nil && *fullTx {
 						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
-						notifier.Notify(rpcSub.ID, rpcTx)
+						_ = notifier.Notify(rpcSub.ID, rpcTx)
 					} else {
-						notifier.Notify(rpcSub.ID, tx.Hash())
+						_ = notifier.Notify(rpcSub.ID, tx.Hash())
 					}
 				}
 			case <-rpcSub.Err():

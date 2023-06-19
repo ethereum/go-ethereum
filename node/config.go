@@ -19,7 +19,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -413,8 +413,9 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
 		return nil
 	}
+
 	// Interpret the list as a discovery node array
-	var nodes []*enode.Node
+	nodes := make([]*enode.Node, 0, len(nodelist))
 
 	for _, url := range nodelist {
 		if url == "" {

@@ -354,7 +354,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 	}
 
 	if len(requests) == 0 && req.deps == 0 {
-		s.commitNodeRequest(req)
+		_ = s.commitNodeRequest(req)
 	} else {
 		req.deps += len(requests)
 

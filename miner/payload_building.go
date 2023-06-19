@@ -47,10 +47,10 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	// Hash
 	hasher := sha256.New()
 	hasher.Write(args.Parent[:])
-	binary.Write(hasher, binary.BigEndian, args.Timestamp)
+	_ = binary.Write(hasher, binary.BigEndian, args.Timestamp)
 	hasher.Write(args.Random[:])
 	hasher.Write(args.FeeRecipient[:])
-	rlp.Encode(hasher, args.Withdrawals)
+	_ = rlp.Encode(hasher, args.Withdrawals)
 
 	var out engine.PayloadID
 

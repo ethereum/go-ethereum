@@ -340,6 +340,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
+	// nolint:nestif
 	if !bc.HasState(head.Root) {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
@@ -472,9 +473,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 
 		if compat.RewindToTime > 0 {
-			bc.SetHeadWithTimestamp(compat.RewindToTime)
+			_ = bc.SetHeadWithTimestamp(compat.RewindToTime)
 		} else {
-			bc.SetHead(compat.RewindToBlock)
+			_ = bc.SetHead(compat.RewindToBlock)
 		}
 
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
@@ -776,6 +777,7 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 // requested time. If both `head` and `time` is 0, the chain is rewound to genesis.
 //
 // The method returns the block number where the requested root cap was found.
+// nolint:gocognit
 func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Hash, repair bool) (uint64, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
@@ -794,6 +796,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
+		// nolint:nestif
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			newHeadBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
 			if newHeadBlock == nil {
@@ -1194,7 +1197,7 @@ func (bc *BlockChain) Stop() {
 	// Ensure all live cached entries be saved into disk, so that we can skip
 	// cache warmup when node restarts.
 	if bc.cacheConfig.TrieCleanJournal != "" {
-		bc.triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
+		_ = bc.triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
 	}
 
 	log.Info("Blockchain stopped")
@@ -1682,7 +1685,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	)
 
 	if nodes > limit || imgs > 4*1024*1024 {
-		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
+		_ = bc.triedb.Cap(limit - ethdb.IdealBatchSize)
 	}
 	// Find the next state trie we need to commit
 	chosen := current - bc.cacheConfig.TriesInMemory
@@ -1701,7 +1704,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/float64(bc.cacheConfig.TriesInMemory))
 			}
 			// Flush an entire trie and restart the counters
-			bc.triedb.Commit(header.Root, true)
+			_ = bc.triedb.Commit(header.Root, true)
 			bc.lastWrite = chosen
 			bc.gcproc = 0
 		}
@@ -2551,7 +2554,7 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 		receipts = append(receipts, borReceipt)
 	}
 
-	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.BaseFee(), b.Transactions())
+	_ = receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.BaseFee(), b.Transactions())
 
 	var logs []*types.Log
 
@@ -2574,6 +2577,7 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 // potential missing transactions and post an event about them.
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
+// nolint:gocognit
 func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	var (
 		newChain    types.Blocks

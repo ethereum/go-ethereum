@@ -44,6 +44,7 @@ var (
 	testBalance = big.NewInt(2e18)
 )
 
+// nolint:unparam
 func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*types.Block, []*types.Header, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
@@ -57,7 +58,7 @@ func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*ty
 	db, preBLocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), pre, nil)
 	totalDifficulty := new(big.Int).Set(params.GenesisDifficulty)
 
-	var preHeaders []*types.Header
+	preHeaders := make([]*types.Header, 0, len(preBLocks))
 
 	for _, b := range preBLocks {
 		totalDifficulty.Add(totalDifficulty, b.Difficulty())
@@ -72,7 +73,7 @@ func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*ty
 			b.SetPoS()
 		})
 
-	var postHeaders []*types.Header
+	postHeaders := make([]*types.Header, 0, len(postBlocks))
 	for _, b := range postBlocks {
 		postHeaders = append(postHeaders, b.Header())
 	}

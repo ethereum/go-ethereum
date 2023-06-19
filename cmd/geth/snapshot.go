@@ -442,8 +442,8 @@ func traverseRawState(ctx *cli.Context) error {
 			}
 
 			hasher.Reset()
-			hasher.Write(blob)
-			hasher.Read(got)
+			_, _ = hasher.Write(blob)
+			_, _ = hasher.Read(got)
 
 			if !bytes.Equal(got, node.Bytes()) {
 				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
@@ -485,8 +485,8 @@ func traverseRawState(ctx *cli.Context) error {
 						}
 
 						hasher.Reset()
-						hasher.Write(blob)
-						hasher.Read(got)
+						_, _ = hasher.Write(blob)
+						_, _ = hasher.Read(got)
 
 						if !bytes.Equal(got, node.Bytes()) {
 							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)

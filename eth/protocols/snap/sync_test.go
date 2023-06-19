@@ -1529,8 +1529,9 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 	var (
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie = trie.NewEmpty(db)
-		entries entrySlice
 	)
+
+	entries := make(entrySlice, uint64(n))
 
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
@@ -1549,7 +1550,7 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
 	root, nodes := accTrie.Commit(false)
-	db.Update(trie.NewWithNodeSet(nodes))
+	_ = db.Update(trie.NewWithNodeSet(nodes))
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
 
@@ -1614,7 +1615,7 @@ func makeBoundaryAccountTrie(n int) (string, *trie.Trie, entrySlice) {
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
 	root, nodes := accTrie.Commit(false)
-	db.Update(trie.NewWithNodeSet(nodes))
+	_ = db.Update(trie.NewWithNodeSet(nodes))
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
 
@@ -1643,7 +1644,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		}
 		// Create a storage trie
 		stRoot, stNodes, stEntries := makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), i, db)
-		nodes.Merge(stNodes)
+		_ = nodes.Merge(stNodes)
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
@@ -1662,10 +1663,10 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
-	nodes.Merge(set)
+	_ = nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
-	db.Update(nodes)
+	_ = db.Update(nodes)
 
 	// Re-create tries with new root
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1712,7 +1713,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 			stRoot, stNodes, stEntries = makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), 0, db)
 		}
 
-		nodes.Merge(stNodes)
+		_ = nodes.Merge(stNodes)
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
@@ -1732,10 +1733,10 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (strin
 
 	// Commit account trie
 	root, set := accTrie.Commit(true)
-	nodes.Merge(set)
+	_ = nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
-	db.Update(nodes)
+	_ = db.Update(nodes)
 
 	// Re-create tries with new root
 	accTrie, err := trie.New(trie.StateTrieID(root), db)

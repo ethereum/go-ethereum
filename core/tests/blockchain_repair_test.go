@@ -2020,7 +2020,7 @@ func TestIssue23496(t *testing.T) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 
-	chain.StateCache().TrieDB().Commit(blocks[2].Root(), false)
+	_ = chain.StateCache().TrieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {

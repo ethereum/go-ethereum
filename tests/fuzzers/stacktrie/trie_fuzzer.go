@@ -199,10 +199,10 @@ func (f *fuzzer) fuzz() int {
 	// Flush trie -> database
 	rootA, nodes := trieA.Commit(false)
 	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
+		_ = dbA.Update(trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false)
+	_ = dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)
@@ -216,7 +216,7 @@ func (f *fuzzer) fuzz() int {
 	}
 
 	rootB := trieB.Hash()
-	trieB.Commit()
+	_, _ = trieB.Commit()
 
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))

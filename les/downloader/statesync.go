@@ -631,8 +631,8 @@ func (s *stateSync) processNodeData(nodeTasks map[string]*trieTask, codeTasks ma
 	var hash common.Hash
 
 	s.keccak.Reset()
-	s.keccak.Write(blob)
-	s.keccak.Read(hash[:])
+	_, _ = s.keccak.Write(blob)
+	_, _ = s.keccak.Read(hash[:])
 
 	if _, present := codeTasks[hash]; present {
 		err := s.sched.ProcessCode(trie.CodeSyncResult{

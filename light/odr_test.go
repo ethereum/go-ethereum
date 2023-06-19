@@ -216,6 +216,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 
 		// Perform read-only call.
 		st.SetBalance(testBankAddress, math.MaxBig256)
+
 		msg := &core.Message{
 			From:              testBankAddress,
 			To:                &testContractAddr,
@@ -307,6 +308,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	gspec.MustCommit(ldb)
+
 	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 
 	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker(), nil, nil)

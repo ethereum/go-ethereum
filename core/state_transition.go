@@ -82,6 +82,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
+	// nolint:nestif
 	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
 		var nz uint64

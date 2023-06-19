@@ -270,7 +270,11 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 	t.Fatalf("Mining() == %t, want %t", state, mining)
 }
 
+// createMiner is not used in bor as NewBorDefaultMiner replaces it
+// nolint:staticcheck
 func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
+	t.Helper()
+
 	// Create Ethash config
 	config := Config{
 		Etherbase: common.HexToAddress("123456789"),
@@ -297,6 +301,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
 	backend := NewMockBackend(bc, pool)
 	// Create event Mux
+	// nolint:staticcheck
 	mux := new(event.TypeMux)
 	// Create Miner
 	miner := New(backend, &config, chainConfig, mux, engine, nil)

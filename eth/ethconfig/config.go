@@ -253,6 +253,7 @@ type Config struct {
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, ethConfig *Config, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) consensus.Engine {
 	var engine consensus.Engine
+	// nolint:nestif
 	if cliqueConfig != nil {
 		// If proof-of-authority is requested, set it up
 		engine = clique.New(cliqueConfig, db)

@@ -71,6 +71,7 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	return c
 }
 
+// nolint:gocognit
 func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)

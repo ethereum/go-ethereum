@@ -212,7 +212,7 @@ func (n *ethNode) insertBlock(eb engine.ExecutableData) error {
 	}
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed engine.ExecutableData) error {
+func (n *ethNode) insertBlockAndSetHead(_ *types.Header, ed engine.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -359,7 +359,7 @@ func (mgr *nodeManager) run() {
 				SafeBlockHash:      oldest.Hash(),
 				FinalizedBlockHash: oldest.Hash(),
 			}
-			node.api.ForkchoiceUpdatedV1(fcState, nil)
+			_, _ = node.api.ForkchoiceUpdatedV1(fcState, nil)
 		}
 
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
@@ -473,6 +473,7 @@ func main() {
 		node := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
+		// nolint:gosec
 		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(10_000_000_000+rand.Int63n(6_553_600_000)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)

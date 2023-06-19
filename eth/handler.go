@@ -210,6 +210,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success, config.checker)
+	// nolint:nestif
 	if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
 		if h.chain.Config().TerminalTotalDifficultyPassed {
 			log.Info("Chain post-merge, sync via beacon client")

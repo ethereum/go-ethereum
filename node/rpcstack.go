@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/rs/cors"
 	"io"
 	"net"
 	"net/http"
@@ -30,6 +29,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/cors"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"

@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"io"
 	"os"
 	"os/signal"
@@ -30,6 +29,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"

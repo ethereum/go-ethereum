@@ -197,8 +197,8 @@ func TestSizeBug(t *testing.T) {
 	leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
 
-	nt.Update(leaf, value)
-	st.Update(leaf, value)
+	_ = nt.Update(leaf, value)
+	_ = st.Update(leaf, value)
 
 	if nt.Hash() != st.Hash() {
 		t.Fatalf("error %x != %x", st.Hash(), nt.Hash())
@@ -222,8 +222,8 @@ func TestEmptyBug(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -245,8 +245,8 @@ func TestValLength56(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -268,8 +268,8 @@ func TestUpdateSmallNodes(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -299,8 +299,8 @@ func TestUpdateVariableKeys(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -318,7 +318,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		value := make([]byte, 1, 100)
 		value[0] = 0x2
 		want := common.CopyBytes(value)
-		st.Update([]byte{0x01}, value)
+		_ = st.Update([]byte{0x01}, value)
 		st.Hash()
 
 		if have := value; !bytes.Equal(have, want) {
@@ -344,7 +344,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		key := common.BigToHash(keyB)
 		value := getValue(i)
-		st.Update(key.Bytes(), value)
+		_ = st.Update(key.Bytes(), value)
 		vals = append(vals, value)
 		keyB = keyB.Add(keyB, keyDelta)
 		keyDelta.Add(keyDelta, common.Big1)
@@ -388,7 +388,7 @@ func TestStacktrieSerialization(t *testing.T) {
 	}
 
 	for i, k := range keys {
-		nt.Update(k, common.CopyBytes(vals[i]))
+		_ = nt.Update(k, common.CopyBytes(vals[i]))
 	}
 
 	for i, k := range keys {
@@ -403,7 +403,7 @@ func TestStacktrieSerialization(t *testing.T) {
 		}
 
 		st = newSt
-		st.Update(k, common.CopyBytes(vals[i]))
+		_ = st.Update(k, common.CopyBytes(vals[i]))
 	}
 
 	if have, want := st.Hash(), nt.Hash(); have != want {

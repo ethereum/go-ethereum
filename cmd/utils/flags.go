@@ -1435,6 +1435,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setBootstrapNodes(ctx, cfg)
 	setBootstrapNodesV5(ctx, cfg)
 
+	// nolint:goconst
 	lightClient := ctx.String(SyncModeFlag.Name) == "light"
 	lightServer := (ctx.Int(LightServeFlag.Name) != 0)
 
@@ -1829,8 +1830,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
+	// nolint:goconst
 	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
-		ctx.Set(TxLookupLimitFlag.Name, "0")
+		_ = ctx.Set(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
 
@@ -1858,7 +1860,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
 			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
-			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
+			_ = ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
 	// Ensure Go's GC ignores the database cache for trigger percentage
@@ -1886,6 +1888,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.DatabaseFreezer = ctx.String(AncientFlag.Name)
 	}
 
+	// nolint:goconst
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -2194,7 +2197,7 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
 		Fatalf("Failed to decode block: %v", err)
 	}
 
-	ethcatalyst.RegisterFullSyncTester(stack, eth, &block)
+	_, _ = ethcatalyst.RegisterFullSyncTester(stack, eth, &block)
 	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
 }
 

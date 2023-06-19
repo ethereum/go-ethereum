@@ -63,7 +63,9 @@ func newTester(t *testing.T) *downloadTester {
 }
 
 // newTester creates a new downloader test mocker.
-func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
+func newTesterWithNotification(t *testing.T, _ func()) *downloadTester {
+	t.Helper()
+
 	freezer := t.TempDir()
 
 	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
@@ -1928,7 +1930,7 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 
 			// Build the local chain segment if it's required
 			if c.local > 0 {
-				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
+				_, _ = tester.chain.InsertChain(chain.blocks[1 : c.local+1])
 			}
 
 			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {

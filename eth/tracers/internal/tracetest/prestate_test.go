@@ -55,20 +55,23 @@ type testcase struct {
 
 func TestPrestateTracerLegacy(t *testing.T) {
 	t.Parallel()
-	testPrestateDiffTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
+	testPrestateDiffTracer(t, "prestateTracerLegacy", "prestate_tracer_legacy")
 }
 
 func TestPrestateTracer(t *testing.T) {
 	t.Parallel()
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
+	testPrestateDiffTracer(t, "prestateTracer", "prestate_tracer")
 }
 
 func TestPrestateWithDiffModeTracer(t *testing.T) {
 	t.Parallel()
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
+	testPrestateDiffTracer(t, "prestateTracer", "prestate_tracer_with_diff_mode")
 }
 
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+// nolint:gocognit
+func testPrestateDiffTracer(t *testing.T, tracerName string, dirPath string) {
+	t.Helper()
+
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -146,7 +149,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				// we remove the legacy tracer.
 				var x prestateTrace
 
-				json.Unmarshal(res, &x)
+				_ = json.Unmarshal(res, &x)
 				res, _ = json.Marshal(x)
 			}
 

@@ -77,6 +77,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		num  uint64
 	)
 
+	// nolint:exhaustive
 	switch blockNr {
 	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
@@ -221,7 +222,7 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 	}()
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+func newTestFilterSystem(_ testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 
@@ -807,7 +808,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		<-testCases[i].sub.Err()
 	}
 }
-
+// nolint:gocognit
 func TestLightFilterLogs(t *testing.T) {
 	t.Parallel()
 

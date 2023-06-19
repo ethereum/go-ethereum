@@ -125,7 +125,7 @@ func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common
 	var encNumber [8]byte
 
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	_ = db.Put(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // ChtIndexerBackend implements core.ChainIndexerBackend.
@@ -264,7 +264,7 @@ func (c *ChtIndexerBackend) Commit() error {
 			trimmed := bytes.TrimPrefix(it.Key(), rawdb.ChtTablePrefix)
 			if len(trimmed) == common.HashLength {
 				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
-					batch.Delete(trimmed)
+					_ = batch.Delete(trimmed)
 
 					deleted += 1
 				}
@@ -352,7 +352,7 @@ func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root 
 	var encNumber [8]byte
 
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	_ = db.Put(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // BloomTrieIndexerBackend implements core.ChainIndexerBackend
@@ -558,7 +558,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			trimmed := bytes.TrimPrefix(it.Key(), rawdb.BloomTrieTablePrefix)
 			if len(trimmed) == common.HashLength {
 				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
-					batch.Delete(trimmed)
+					_ = batch.Delete(trimmed)
 
 					deleted += 1
 				}

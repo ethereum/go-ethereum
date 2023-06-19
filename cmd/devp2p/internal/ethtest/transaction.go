@@ -57,7 +57,7 @@ func (s *Suite) sendSuccessfulTxs(t *utesting.T) error {
 	return nil
 }
 
-// nolint:typecheck
+// nolint:typecheck, gocognit
 func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction) error {
 	sendConn, recvConn, err := s.createSendAndRecvConns()
 	if err != nil {

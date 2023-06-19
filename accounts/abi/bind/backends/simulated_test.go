@@ -1483,7 +1483,7 @@ func TestCommitReturnValue(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
-	sim.SendTransaction(context.Background(), tx)
+	_ = sim.SendTransaction(context.Background(), tx)
 	h2 := sim.Commit()
 
 	// Create another block in the original chain
@@ -1518,8 +1518,8 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	sim.Commit() // h1
 	h1 := sim.blockchain.CurrentHeader().Hash()
 	sim.Commit() // h2
-	sim.Fork(context.Background(), h1)
-	sim.AdjustTime(1 * time.Second)
+	_ = sim.Fork(context.Background(), h1)
+	_ = sim.AdjustTime(1 * time.Second)
 	sim.Commit()
 
 	head := sim.blockchain.CurrentHeader()

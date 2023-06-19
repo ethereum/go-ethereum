@@ -549,7 +549,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if proof == nil {
 		tr := NewStackTrie(nil)
 		for index, key := range keys {
-			tr.Update(key, values[index])
+			_ = tr.Update(key, values[index])
 		}
 
 		if have, want := tr.Hash(), rootHash; have != want {
@@ -627,7 +627,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 
 	for index, key := range keys {
-		tr.Update(key, values[index])
+		_ = tr.Update(key, values[index])
 	}
 
 	if tr.Hash() != rootHash {

@@ -39,9 +39,9 @@ func TestResetFreezer(t *testing.T) {
 	f, _ := NewResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
 	defer f.Close()
 
-	f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	_, _ = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for _, item := range items {
-			op.AppendRaw("test", item.id, item.blob)
+			_ = op.AppendRaw("test", item.id, item.blob)
 		}
 
 		return nil
@@ -55,7 +55,7 @@ func TestResetFreezer(t *testing.T) {
 	}
 
 	// Reset freezer
-	f.Reset()
+	_ = f.Reset()
 
 	count, _ := f.Ancients()
 	if count != 0 {
@@ -70,9 +70,9 @@ func TestResetFreezer(t *testing.T) {
 	}
 
 	// Fill the freezer
-	f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	_, _ = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for _, item := range items {
-			op.AppendRaw("test", item.id, item.blob)
+			_ = op.AppendRaw("test", item.id, item.blob)
 		}
 
 		return nil
@@ -99,19 +99,19 @@ func TestFreezerCleanup(t *testing.T) {
 	}
 	datadir := t.TempDir()
 	f, _ := NewResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
-	f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	_, _ = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for _, item := range items {
-			op.AppendRaw("test", item.id, item.blob)
+			_ = op.AppendRaw("test", item.id, item.blob)
 		}
 
 		return nil
 	})
-	f.Close()
-	os.Rename(datadir, tmpName(datadir))
+	_ = f.Close()
+	_ = os.Rename(datadir, tmpName(datadir))
 
 	// Open the freezer again, trigger cleanup operation
 	f, _ = NewResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
-	f.Close()
+	_ = f.Close()
 
 	if _, err := os.Lstat(tmpName(datadir)); !os.IsNotExist(err) {
 		t.Fatal("Failed to cleanup leftover directory")

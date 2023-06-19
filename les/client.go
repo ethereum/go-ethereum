@@ -19,7 +19,6 @@ package les
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
@@ -188,9 +188,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 
 		if compat.RewindToTime > 0 {
-			leth.blockchain.SetHeadWithTimestamp(compat.RewindToTime)
+			_ = leth.blockchain.SetHeadWithTimestamp(compat.RewindToTime)
 		} else {
-			leth.blockchain.SetHead(compat.RewindToBlock)
+			_ = leth.blockchain.SetHead(compat.RewindToBlock)
 		}
 
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)

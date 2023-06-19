@@ -21,11 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"math/big"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -458,6 +459,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	}
 
 	location := path.Join(baseDir, filename)
+	// nolint:gosec
 	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}

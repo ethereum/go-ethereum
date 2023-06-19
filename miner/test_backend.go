@@ -50,6 +50,18 @@ const (
 )
 
 func init() {
+
+	testTxPoolConfig = txpool.DefaultConfig
+	testTxPoolConfig.Journal = ""
+	ethashChainConfig = new(params.ChainConfig)
+	*ethashChainConfig = *params.TestChainConfig
+	cliqueChainConfig = new(params.ChainConfig)
+	*cliqueChainConfig = *params.TestChainConfig
+	cliqueChainConfig.Clique = &params.CliqueConfig{
+		Period: 10,
+		Epoch:  30000,
+	}
+
 	signer := types.LatestSigner(params.TestChainConfig)
 
 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
@@ -204,7 +216,7 @@ func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *t
 	return tx
 }
 
-// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
+// newStorageCreateContractTx creates a new transaction to deploy a storage smart contract.
 func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
 	var tx *types.Transaction
 

@@ -64,7 +64,7 @@ func TestIterator(t *testing.T) {
 	}
 
 	root, nodes := trie.Commit(false)
-	db.Update(NewWithNodeSet(nodes))
+	_ = db.Update(NewWithNodeSet(nodes))
 
 	trie, _ = New(TrieID(root), db)
 	found := make(map[string]string)
@@ -240,7 +240,7 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 
 	rootA, nodesA := triea.Commit(false)
-	dba.Update(NewWithNodeSet(nodesA))
+	_ = dba.Update(NewWithNodeSet(nodesA))
 	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
@@ -251,7 +251,7 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 
 	rootB, nodesB := trieb.Commit(false)
-	dbb.Update(NewWithNodeSet(nodesB))
+	_ = dbb.Update(NewWithNodeSet(nodesB))
 	trieb, _ = New(TrieID(rootB), dbb)
 
 	found := make(map[string]string)
@@ -288,7 +288,7 @@ func TestUnionIterator(t *testing.T) {
 	}
 
 	rootA, nodesA := triea.Commit(false)
-	dba.Update(NewWithNodeSet(nodesA))
+	_ = dba.Update(NewWithNodeSet(nodesA))
 	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
@@ -299,7 +299,7 @@ func TestUnionIterator(t *testing.T) {
 	}
 
 	rootB, nodesB := trieb.Commit(false)
-	dbb.Update(NewWithNodeSet(nodesB))
+	_ = dbb.Update(NewWithNodeSet(nodesB))
 	trieb, _ = New(TrieID(rootB), dbb)
 
 	di, _ := NewUnionIterator([]NodeIterator{triea.NodeIterator(nil), trieb.NodeIterator(nil)})
@@ -362,10 +362,10 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	}
 
 	_, nodes := tr.Commit(false)
-	triedb.Update(NewWithNodeSet(nodes))
+	_ = triedb.Update(NewWithNodeSet(nodes))
 
 	if !memonly {
-		triedb.Commit(tr.Hash(), false)
+		_ = triedb.Commit(tr.Hash(), false)
 	}
 
 	wantNodeCount := checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
@@ -466,10 +466,10 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	}
 
 	root, nodes := ctr.Commit(false)
-	triedb.Update(NewWithNodeSet(nodes))
+	_ = triedb.Update(NewWithNodeSet(nodes))
 
 	if !memonly {
-		triedb.Commit(root, false)
+		_ = triedb.Commit(root, false)
 	}
 
 	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
@@ -596,7 +596,7 @@ func makeLargeTestTrie() (*Database, *StateTrie, *loggingDb) {
 	}
 
 	_, nodes := trie.Commit(false)
-	triedb.Update(NewWithNodeSet(nodes))
+	_ = triedb.Update(NewWithNodeSet(nodes))
 	// Return the generated trie
 	return triedb, trie, logDb
 }
@@ -639,8 +639,8 @@ func TestIteratorNodeBlob(t *testing.T) {
 	}
 
 	_, nodes := trie.Commit(false)
-	triedb.Update(NewWithNodeSet(nodes))
-	triedb.Cap(0)
+	_ = triedb.Update(NewWithNodeSet(nodes))
+	_ = triedb.Cap(0)
 
 	found := make(map[common.Hash][]byte)
 

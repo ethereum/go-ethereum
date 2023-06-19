@@ -38,7 +38,7 @@ var prng = initRnd()
 func initRnd() *mrand.Rand {
 	var seed [8]byte
 
-	crand.Read(seed[:])
+	_, _ = crand.Read(seed[:])
 	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
 	fmt.Printf("Seed: %x\n", seed)
 

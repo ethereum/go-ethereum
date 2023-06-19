@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// nolint:prealloc
 func hexToNibbles(s string) []byte {
 	if len(s) >= 2 && s[0] == '0' && s[1] == 'x' {
 		s = s[2:]
@@ -38,6 +39,7 @@ func hexToNibbles(s string) []byte {
 	return common.Hex2Bytes(string(s2))
 }
 
+// nolint:prealloc
 func TestRequestSorting(t *testing.T) {
 	t.Parallel()
 

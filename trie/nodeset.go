@@ -211,7 +211,7 @@ func NewMergedNodeSet() *MergedNodeSet {
 // NewWithNodeSet constructs a merged nodeset with the provided single set.
 func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 	merged := NewMergedNodeSet()
-	merged.Merge(set)
+	_ = merged.Merge(set)
 
 	return merged
 }

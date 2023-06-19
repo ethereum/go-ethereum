@@ -205,6 +205,7 @@ type Transaction struct {
 
 // resolve returns the internal transaction object, fetching it if needed.
 // It also returns the block the tx blongs to, unless it is a pending tx.
+// nolint:unparam
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -540,7 +541,7 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 		return nil, err
 	}
 
-	var ret []*Log
+	ret := make([]*Log, len(logs))
 	// Select tx logs from all block logs
 	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) >= t.index })
 	for ix < len(logs) && uint64(logs[ix].TxIndex) == t.index {

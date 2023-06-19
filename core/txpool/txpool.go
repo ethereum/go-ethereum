@@ -747,6 +747,7 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // rules, but does not check state-dependent validation such as sufficient balance.
 // This check is meant as an early check which only needs to be performed once,
 // and does not require the pool mutex to be held.
+// nolint:gocognit
 func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718.Load() && tx.Type() != types.LegacyTxType {
@@ -852,7 +853,7 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+func (pool *TxPool) validateTx(tx *types.Transaction, _ bool) error {
 	// Signature has been checked already, this cannot error.
 	from, _ := types.Sender(pool.signer, tx)
 	// Ensure the transaction adheres to nonce ordering
@@ -1213,7 +1214,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	var (
 		errs []error
 		news = make([]*types.Transaction, 0, len(txs))
-		err  error
 
 		hash common.Hash
 	)
@@ -1230,20 +1230,20 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 
-		if pool.config.AllowUnprotectedTxs {
-			pool.signer = types.NewFakeSigner(tx.ChainId())
-		}
+		// Exclude transactions with basic errors, e.g. invalid signatures and
+		// insufficient intrinsic gas as soon as possible and cache senders
+		// in transactions before obtaining lock
 
-		// Exclude transactions with invalid signatures as soon as
-		// possible and cache senders in transactions before
-		// obtaining lock
-		_, err = types.Sender(pool.signer, tx)
-		if err != nil {
-			errs = append(errs, ErrInvalidSender)
+		if err := pool.validateTxBasics(tx, local); err != nil {
+			errs = append(errs, ErrAlreadyKnown)
 
 			invalidTxMeter.Mark(1)
 
 			continue
+		}
+
+		if pool.config.AllowUnprotectedTxs {
+			pool.signer = types.NewFakeSigner(tx.ChainId())
 		}
 
 		// Accumulate all unknown transactions for deeper processing

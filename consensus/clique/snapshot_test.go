@@ -389,6 +389,7 @@ func TestClique(t *testing.T) {
 	}
 }
 
+// nolint:gocognit
 func (tt *cliqueTest) run(t *testing.T) {
 	// Create the account pool and generate the initial set of signers
 	accounts := newTesterAccountPool()
@@ -471,6 +472,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
 	}
+
 	defer chain.Stop()
 
 	for j := 0; j < len(batches)-1; j++ {

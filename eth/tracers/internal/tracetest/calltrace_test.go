@@ -174,7 +174,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				// we remove the legacy tracer.
 				var x callTrace
 
-				json.Unmarshal(res, &x)
+				_ = json.Unmarshal(res, &x)
 				res, _ = json.Marshal(x)
 			}
 

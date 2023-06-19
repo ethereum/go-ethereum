@@ -1992,6 +1992,7 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 // readHeaderRange returns a list of headers, using the given last header as the base,
 // and going backwards towards genesis. This method assumes that the caller already has
 // placed a reasonable cap on count.
+// nolint:prealloc
 func (d *Downloader) readHeaderRange(last *types.Header, count int) []*types.Header {
 	var (
 		current = last

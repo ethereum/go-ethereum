@@ -380,15 +380,16 @@ func TestSkeletonSyncInit(t *testing.T) {
 
 		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
-		skeleton.Sync(tt.head, nil, true)
+		_ = skeleton.Sync(tt.head, nil, true)
 
 		<-wait
-		skeleton.Terminate()
+
+		_ = skeleton.Terminate()
 
 		// Ensure the correct resulting sync status
 		var progress skeletonProgress
 
-		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+		_ = json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
 
 		if len(progress.Subchains) != len(tt.newstate) {
 			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
@@ -498,7 +499,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 
 		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
-		skeleton.Sync(tt.head, nil, true)
+		_ = skeleton.Sync(tt.head, nil, true)
 
 		<-wait
 
@@ -544,7 +545,8 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		})
 	}
 	// Some tests require a forking side chain to trigger cornercases.
-	var sidechain []*types.Header
+	sidechain := make([]*types.Header, 0, len(chain))
+
 	for i := 0; i < len(chain)/2; i++ { // Fork at block #5000
 		sidechain = append(sidechain, chain[i])
 	}
@@ -853,7 +855,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			filler = &hookedBackfiller{
 				resumeHook: func() {
 					var progress skeletonProgress
-					json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+					_ = json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
 
 					for progress.Subchains[0].Tail < progress.Subchains[0].Head {
 						header := rawdb.ReadSkeletonHeader(db, progress.Subchains[0].Tail)
@@ -882,7 +884,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Create a skeleton sync and run a cycle
 		skeleton := newSkeleton(db, peerset, drop, filler)
-		skeleton.Sync(tt.head, nil, true)
+		_ = skeleton.Sync(tt.head, nil, true)
 
 		var progress skeletonProgress
 		// Wait a bit (bleah) for the initial sync loop to go to idle. This might
@@ -943,7 +945,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 		// Apply the post-init events if there's any
 		if tt.newHead != nil {
-			skeleton.Sync(tt.newHead, nil, true)
+			_ = skeleton.Sync(tt.newHead, nil, true)
 		}
 
 		if tt.newPeer != nil {

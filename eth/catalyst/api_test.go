@@ -315,6 +315,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 	}
 }
 
+// nolint:goconst
 func TestEth2NewBlock(t *testing.T) {
 	t.Skip("ETH2 in Bor")
 
@@ -539,7 +540,10 @@ func TestFullAPI(t *testing.T) {
 	setupBlocks(t, ethservice, 10, parent, callback, nil)
 }
 
+// nolint:unparam,prealloc
 func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header), withdrawals [][]*types.Withdrawal) []*types.Header {
+	t.Helper()
+
 	api := NewConsensusAPI(ethservice)
 
 	var blocks []*types.Header
@@ -925,6 +929,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {}, nil)
 	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
 
+	// nolint:prealloc
 	var invalidChain []*engine.ExecutableData
 	// create a valid payload (P1)
 	//payload1 := getNewPayload(t, apiA, commonAncestor)
@@ -1445,7 +1450,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().AddLocal(tx)
+		_ = ethservice.TxPool().AddLocal(tx)
 	}
 
 	withdrawals := make([][]*types.Withdrawal, 10)
@@ -1455,7 +1460,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	for i := 2; i < len(withdrawals); i++ {
 		addr := make([]byte, 20)
 
-		crand.Read(addr)
+		_, _ = crand.Read(addr)
 
 		withdrawals[i] = []*types.Withdrawal{
 			{Index: rand.Uint64(), Validator: rand.Uint64(), Amount: rand.Uint64(), Address: common.BytesToAddress(addr)},
@@ -1473,7 +1478,8 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 }
 
 func allHashes(blocks []*types.Block) []common.Hash {
-	var hashes []common.Hash
+	hashes := make([]common.Hash, 0, len(blocks))
+
 	for _, b := range blocks {
 		hashes = append(hashes, b.Hash())
 	}
@@ -1481,7 +1487,8 @@ func allHashes(blocks []*types.Block) []common.Hash {
 	return hashes
 }
 func allBodies(blocks []*types.Block) []*types.Body {
-	var bodies []*types.Body
+	bodies := make([]*types.Body, 0, len(blocks))
+
 	for _, b := range blocks {
 		bodies = append(bodies, b.Body())
 	}

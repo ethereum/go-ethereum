@@ -637,7 +637,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 // mainLoop is responsible for generating and submitting sealing work based on
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
-// nolint: gocognit
+// nolint: gocognit, contextcheck
 func (w *worker) mainLoop(ctx context.Context) {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
@@ -655,7 +655,6 @@ func (w *worker) mainLoop(ctx context.Context) {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			//nolint:contextcheck
 			if w.isRunning() {
 				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
 			}
@@ -1696,7 +1695,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
 	if !noempty && !w.noempty.Load() {
-		w.commit(ctx, work.copy(), nil, false, start)
+		_ = w.commit(ctx, work.copy(), nil, false, start)
 	}
 	// Fill pending transactions from the txpool into the block.
 	err = w.fillTransactions(ctx, interrupt, work, interruptCtx)
@@ -1730,7 +1729,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		return
 	}
 	// Submit the generated block for consensus sealing.
-	w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
+	_ = w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.

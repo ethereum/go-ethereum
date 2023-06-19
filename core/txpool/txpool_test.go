@@ -81,7 +81,7 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
-func newTestBlockChain(gasLimit uint64, statedb *state.StateDB, chainHeadFeed *event.Feed) *testBlockChain {
+func newTestBlockChain(gasLimit uint64, statedb *state.StateDB, _ *event.Feed) *testBlockChain {
 	bc := testBlockChain{statedb: statedb, chainHeadFeed: new(event.Feed)}
 	bc.gasLimit.Store(gasLimit)
 
@@ -145,7 +145,7 @@ func setupPool() (*TxPool, *ecdsa.PrivateKey) {
 	return setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit)
 }
 
-func setupPoolWithConfig(config *params.ChainConfig, txPoolConfig Config, gasLimit uint64, options ...func(pool *TxPool)) (*TxPool, *ecdsa.PrivateKey) {
+func setupPoolWithConfig(config *params.ChainConfig, txPoolConfig Config, _ uint64, options ...func(pool *TxPool)) (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(10000000, statedb, new(event.Feed))
 
@@ -775,6 +775,7 @@ func TestDropping(t *testing.T) {
 // Tests that if a transaction is dropped from the current pending pool (e.g. out
 // of fund), all consecutive (still valid, but not executable) transactions are
 // postponed back into the future queue to prevent broadcasting them.
+// nolint:gocognit
 func TestPostponing(t *testing.T) {
 	t.Parallel()
 
@@ -1178,7 +1179,10 @@ func TestQueueTimeLimitingNoLocals(t *testing.T) {
 	testQueueTimeLimiting(t, true)
 }
 
+// nolint:gocognit
 func testQueueTimeLimiting(t *testing.T, nolocals bool) {
+	t.Helper()
+
 	// Reduce the eviction interval to a testable amount
 	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
 	evictionInterval = time.Millisecond * 100

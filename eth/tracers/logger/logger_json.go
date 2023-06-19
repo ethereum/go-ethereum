@@ -95,6 +95,7 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 		errMsg = err.Error()
 	}
 
+	// nolint:errchkjson
 	_ = l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 

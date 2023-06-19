@@ -247,7 +247,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	if origin == nil && !diskMore {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
-			stackTr.Update(key, vals[i])
+			_ = stackTr.Update(key, vals[i])
 		}
 
 		if gotRoot := stackTr.Hash(); gotRoot != root {
@@ -396,8 +396,8 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		root, nodes := snapTrie.Commit(false)
 
 		if nodes != nil {
-			tdb.Update(trie.NewWithNodeSet(nodes))
-			tdb.Commit(root, false)
+			_ = tdb.Update(trie.NewWithNodeSet(nodes))
+			_ = tdb.Commit(root, false)
 		}
 
 		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
@@ -635,7 +635,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			snapWipedAccountMeter.Mark(1)
 			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
-			ctx.removeStorageAt(account)
+			_ = ctx.removeStorageAt(account)
 
 			return nil
 		}

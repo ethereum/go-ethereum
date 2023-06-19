@@ -335,7 +335,7 @@ func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 
 	var addr common.Address
 
-	crand.Read(addr[:])
+	_, _ = crand.Read(addr[:])
 
 	c, cancel := context.WithTimeout(ctx, time.Second*12)
 	defer cancel()

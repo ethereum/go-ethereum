@@ -383,6 +383,7 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
 
+// nolint:goconst
 func (*NewPooledTransactionHashesPacket66) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket66) Kind() byte   { return NewPooledTransactionHashesMsg }
 

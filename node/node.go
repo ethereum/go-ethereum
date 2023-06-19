@@ -409,7 +409,7 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
 	// Filter out personal api
-	var apis []rpc.API
+	apis := make([]rpc.API, 0, len(n.rpcAPIs))
 
 	for _, api := range n.rpcAPIs {
 		if api.Namespace == "personal" {

@@ -2841,7 +2841,7 @@ func TestTransactionIndices(t *testing.T) {
 	for _, l := range limit {
 		frdir := t.TempDir()
 		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+		_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
 
 		l := l
 
@@ -2867,7 +2867,7 @@ func TestTransactionIndices(t *testing.T) {
 	ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	defer ancientDb.Close()
 
-	rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+	_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
 
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
 
@@ -4072,17 +4072,20 @@ func TestSetCanonical(t *testing.T) {
 		}
 	}
 
-	chain.SetCanonical(side[len(side)-1])
+	_, _ = chain.SetCanonical(side[len(side)-1])
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	chain.SetCanonical(canon[int(DefaultCacheConfig.TriesInMemory)-1])
+	_, _ = chain.SetCanonical(canon[int(DefaultCacheConfig.TriesInMemory)-1])
 	verify(canon[int(DefaultCacheConfig.TriesInMemory)-1])
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
+// nolint:gocognit
 func TestCanonicalHashMarker(t *testing.T) {
+	t.Parallel()
+
 	var cases = []struct {
 		forkA int
 		forkB int
@@ -4169,7 +4172,7 @@ func TestCanonicalHashMarker(t *testing.T) {
 			verify(forkB[len(forkB)-1])
 		} else {
 			verify(forkA[len(forkA)-1])
-			chain.SetCanonical(forkB[len(forkB)-1])
+			_, _ = chain.SetCanonical(forkB[len(forkB)-1])
 			verify(forkB[len(forkB)-1])
 		}
 
@@ -4387,7 +4390,7 @@ func TestTxIndexer(t *testing.T) {
 	for _, c := range cases {
 		frdir := t.TempDir()
 		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+		_, _ = rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
 
 		// Index the initial blocks from ancient store
 		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA, nil)

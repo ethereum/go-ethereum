@@ -424,6 +424,7 @@ func (lc *LightChain) SetCanonical(header *types.Header) error {
 	}
 	// Emit events
 	block := types.NewBlockWithHeader(header)
+
 	lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
 	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
 	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())

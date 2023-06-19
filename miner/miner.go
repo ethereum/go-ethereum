@@ -73,6 +73,7 @@ var DefaultConfig = Config{
 }
 
 // Miner creates blocks and searches for proof-of-work values.
+// nolint:staticcheck
 type Miner struct {
 	mux     *event.TypeMux
 	eth     Backend
