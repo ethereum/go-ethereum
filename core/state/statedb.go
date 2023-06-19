@@ -60,9 +60,10 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 //
-// Once the state is committed, it's not usable anymore. A new state instance
-// must be created with new root and updated database for accessing latest
-// states.
+// Once the state is committed, tries cached in stateDB (including account
+// trie, storage tries) will no longer be functional. A new state instance
+// must be created with new root and updated database for accessing post-
+// commit states.
 type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
@@ -694,7 +695,11 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if err != nil {
 		return err
 	}
-	it := trie.NewIterator(tr.NodeIterator(nil))
+	trieIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(trieIt)
 
 	for it.Next() {
 		key := common.BytesToHash(s.trie.GetKey(it.Key))
@@ -982,9 +987,10 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // Commit writes the state to the underlying in-memory trie database.
-// Once the state is committed, it's not usable anymore and a new state
-// instance must be created with new root upon the updated database for
-// accessing latest state.
+// Once the state is committed, tries cached in stateDB (including account
+// trie, storage tries) will no longer be functional. A new state instance
+// must be created with new root and updated database for accessing post-
+// commit states.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {

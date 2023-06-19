@@ -94,7 +94,7 @@ func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash) er
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
-	it := trie.NodeIterator(nil)
+	it := trie.MustNodeIterator(nil)
 	for it.Next(true) {
 	}
 	return it.Error()

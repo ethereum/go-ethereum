@@ -109,7 +109,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if err != nil {
 		return err
 	}
-	it := trie.NodeIterator(nil)
+	it := trie.MustNodeIterator(nil)
 	for it.Next(true) {
 	}
 	return it.Error()
