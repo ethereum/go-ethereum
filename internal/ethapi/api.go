@@ -1206,7 +1206,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
-		return 0, err // TODO proper error return here
+		return 0, err
 	}
 
 	// Execute the binary search and hone in on an executable gas limit
