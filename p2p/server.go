@@ -498,7 +498,7 @@ func (srv *Server) setupLocalNode() error {
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
-	slices.SortFunc(srv.ourHandshake.Caps, capLessFunc)
+	slices.SortFunc(srv.ourHandshake.Caps, Cap.Less)
 
 	// Create the local node.
 	db, err := enode.OpenDB(srv.NodeDatabase)

@@ -77,6 +77,10 @@ func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
-func capLessFunc(a, b Cap) bool {
-	return a.Name < b.Name || (a.Name == b.Name && a.Version < b.Version)
+// Less defines the canonical sorting order of capabilities.
+func (cap Cap) Less(other Cap) bool {
+	if cap.Name == other.Name {
+		return cap.Version < other.Version
+	}
+	return cap.Name < other.Name
 }
