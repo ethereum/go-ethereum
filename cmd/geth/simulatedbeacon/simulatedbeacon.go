@@ -19,13 +19,11 @@ package simulatedbeacon
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
@@ -135,7 +133,6 @@ func (c *SimulatedBeacon) Stop() error {
 func (c *SimulatedBeacon) loop() {
 	var (
 		ticker             = time.NewTimer(time.Second * time.Duration(c.period))
-		exchangeTicker     = time.NewTimer(10 * time.Second)
 		buildWaitTime      = time.Millisecond * 100
 		header             = c.eth.BlockChain().CurrentHeader()
 		lastBlockTime      = header.Time
@@ -231,12 +228,6 @@ func (c *SimulatedBeacon) loop() {
 				ticker.Reset(time.Second * time.Duration(c.period))
 			} else {
 				ticker.Reset(buildWaitTime)
-			}
-		case <-exchangeTicker.C:
-			zeroTTD := hexutil.Big(*big.NewInt(0))
-			if _, err := engineAPI.ExchangeTransitionConfigurationV1(engine.TransitionConfigurationV1{TerminalTotalDifficulty: &zeroTTD}); err != nil {
-				log.Error("Error calling ExchangeTransitionConfigurationV1", "err", err)
-				return
 			}
 		}
 	}
