@@ -20,13 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -110,6 +108,9 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestGetProof",
 			func(t *testing.T) { testGetProof(t, client) },
+		}, {
+			"TestGetProofCanonicalizeKeys",
+			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
 		}, {
 			"TestGCStats",
 			func(t *testing.T) { testGCStats(t, client) },
@@ -223,6 +224,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if result.Balance.Cmp(balance) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
 	}
+
 	// test storage
 	if len(result.StorageProof) != 1 {
 		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
@@ -232,25 +234,38 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
 		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
 	}
-	if proof.Key != hexutil.EncodeBig(testSlot.Big()) {
-		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
+	if proof.Key != testSlot.String() {
+		t.Fatalf("invalid storage proof key, want: %q, got: %q", testSlot.String(), proof.Key)
 	}
-	{
-		// Tests with non-canon input
-		if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x0deadbeef"}, nil); err != nil {
-			t.Fatal(err)
-		}
-		p, _ := new(big.Int).SetString(testSlot.String(), 0)
-		if have, want := result.StorageProof[0].Key, fmt.Sprintf("%#x", p); want != have {
-			t.Fatalf("invalid storage proof key, want: %v, have: %v", want, have)
-		}
-		if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x000deadbeef"}, nil); err != nil {
-			t.Fatal(err)
-		}
-		p, _ = new(big.Int).SetString(testSlot.String(), 0)
-		if have, want := result.StorageProof[0].Key, fmt.Sprintf("%#x", p); want != have {
-			t.Fatalf("invalid storage proof key, want: %v, have: %v", want, have)
-		}
+}
+
+func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	// Tests with non-canon input for storage keys.
+	// Here we check that the storage key is canonicalized.
+	result, err := ec.GetProof(context.Background(), testAddr, []string{"0x0dEadbeef"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != "0xdeadbeef" {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+	if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x000deadbeef"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != "0xdeadbeef" {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+
+	// If the requested storage key is 32 bytes long, it will be returned as is.
+	hashSizedKey := "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+	result, err = ec.GetProof(context.Background(), testAddr, []string{hashSizedKey}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != hashSizedKey {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
 	}
 }
 
