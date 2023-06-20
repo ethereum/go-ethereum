@@ -88,18 +88,17 @@ func (p *TxPool) Close() error {
 	// Terminate the reset loop and wait for it to finish
 	errc := make(chan error)
 	p.quit <- errc
-	errs = append(errs, <-errc)
+	if err := <-errc; err != nil {
+		errs = append(errs, err)
+	}
 
 	// Terminate each subpool
-	var anyErr bool
 	for _, subpool := range p.subpools {
-		err := subpool.Close()
-		if err != nil {
-			anyErr = true
+		if err := subpool.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	if anyErr {
+	if len(errs) > 0 {
 		return fmt.Errorf("subpool close errors: %v", errs)
 	}
 	return nil
