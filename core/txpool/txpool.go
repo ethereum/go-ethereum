@@ -17,7 +17,7 @@
 package txpool
 
 import (
-	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -88,13 +88,20 @@ func (p *TxPool) Close() error {
 	// Terminate the reset loop and wait for it to finish
 	errc := make(chan error)
 	p.quit <- errc
-	errs = append(errs, <-errc)
+	if err := <-errc; err != nil {
+		errs = append(errs, err)
+	}
 
 	// Terminate each subpool
 	for _, subpool := range p.subpools {
-		errs = append(errs, subpool.Close())
+		if err := subpool.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return errors.Join(errs...)
+	if len(errs) > 0 {
+		return fmt.Errorf("subpool close errors: %v", errs)
+	}
+	return nil
 }
 
 // loop is the transaction pool's main event loop, waiting for and reacting to
