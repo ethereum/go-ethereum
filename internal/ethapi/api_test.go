@@ -981,7 +981,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		)
 		if tt.blockHash != nil {
 			if tt.reqHeader {
-				result = api.GetHeaderByHash(context.Background(), *tt.blockHash)
+				result, err = api.GetHeaderByHash(context.Background(), *tt.blockHash)
 			} else {
 				result, err = api.GetBlockByHash(context.Background(), *tt.blockHash, tt.fullTx)
 			}
