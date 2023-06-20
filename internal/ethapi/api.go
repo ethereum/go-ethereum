@@ -705,7 +705,8 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	for i, key := range keys {
 		// Output key encoding is a bit special: if the input was a 32-byte hash, it is
 		// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
-		// JSON-RPC spec for getProof.
+		// JSON-RPC spec for getProof. This behavior exists to preserve backwards
+		// compatibility with older client versions.
 		var outputKey string
 		if keyLengths[i] != 32 {
 			outputKey = hexutil.EncodeBig(key.Big())
