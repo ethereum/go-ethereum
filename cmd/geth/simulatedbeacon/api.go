@@ -31,6 +31,6 @@ func (api *API) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal)
 	return api.simBeacon.withdrawals.add(withdrawal)
 }
 
-func (api *API) SetFeeRecipient(ctx context.Context, feeRecipient *common.Address) {
+func (api *API) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
 	api.simBeacon.setFeeRecipient(feeRecipient)
 }

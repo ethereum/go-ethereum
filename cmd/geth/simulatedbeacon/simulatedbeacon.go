@@ -106,9 +106,9 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	}, nil
 }
 
-func (c *SimulatedBeacon) setFeeRecipient(feeRecipient *common.Address) {
+func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 	c.mu.Lock()
-	c.feeRecipient = *feeRecipient
+	c.feeRecipient = feeRecipient
 	c.mu.Unlock()
 }
 
