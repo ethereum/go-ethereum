@@ -233,11 +233,11 @@ func (c *SimulatedBeacon) loop() {
 	}
 }
 
-func RegisterSimulatedBeaconAPIs(stack *node.Node, c *SimulatedBeacon) {
+func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "dev",
-			Service:   &api{c},
+			Service:   &api{sim},
 			Version:   "1.0",
 		},
 	})
