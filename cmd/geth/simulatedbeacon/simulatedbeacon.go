@@ -100,6 +100,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 		period:       chainConfig.Dev.Period,
 		withdrawals:  *new(withdrawalQueue),
 		feeRecipient: common.Address{},
+		shutdownCh: make(chan struct{}),
 	}, nil
 }
 
@@ -117,7 +118,6 @@ func (c *SimulatedBeacon) getFeeRecipient() common.Address {
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
 func (c *SimulatedBeacon) Start() error {
-	c.shutdownCh = make(chan struct{})
 	go c.loop()
 	return nil
 }
