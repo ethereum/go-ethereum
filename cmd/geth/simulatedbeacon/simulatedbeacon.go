@@ -101,7 +101,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	return &SimulatedBeacon{
 		eth:          eth,
 		period:       chainConfig.Dev.Period,
-		withdrawals:  withdrawalQueue{[]*types.Withdrawal{}, []*types.Withdrawal{}, sync.Mutex{}},
+		withdrawals:  *new(withdrawalQueue),
 		feeRecipient: common.Address{},
 	}, nil
 }
