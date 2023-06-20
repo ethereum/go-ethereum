@@ -90,8 +90,11 @@ type (
 		account *common.Address
 	}
 	resetObjectChange struct {
+		account      *common.Address
 		prev         *stateObject
 		prevdestruct bool
+		prevAccount  []byte
+		prevStorage  map[common.Hash][]byte
 	}
 	suicideChange struct {
 		account     *common.Address
@@ -138,6 +141,11 @@ type (
 		address *common.Address
 		slot    *common.Hash
 	}
+
+	transientStorageChange struct {
+		account       *common.Address
+		key, prevalue common.Hash
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -151,13 +159,19 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
-	if !ch.prevdestruct && s.snap != nil {
-		delete(s.snapDestructs, ch.prev.addrHash)
+	if !ch.prevdestruct {
+		delete(s.stateObjectsDestruct, ch.prev.address)
+	}
+	if ch.prevAccount != nil {
+		s.snapAccounts[ch.prev.addrHash] = ch.prevAccount
+	}
+	if ch.prevStorage != nil {
+		s.snapStorage[ch.prev.addrHash] = ch.prevStorage
 	}
 }
 
 func (ch resetObjectChange) dirtied() *common.Address {
-	return nil
+	return ch.account
 }
 
 func (ch suicideChange) revert(s *StateDB) {
@@ -211,6 +225,14 @@ func (ch storageChange) revert(s *StateDB) {
 
 func (ch storageChange) dirtied() *common.Address {
 	return ch.account
+}
+
+func (ch transientStorageChange) revert(s *StateDB) {
+	s.setTransientState(*ch.account, ch.key, ch.prevalue)
+}
+
+func (ch transientStorageChange) dirtied() *common.Address {
+	return nil
 }
 
 func (ch refundChange) revert(s *StateDB) {

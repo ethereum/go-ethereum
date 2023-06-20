@@ -20,20 +20,23 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"reflect"
 	"unicode"
 
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -42,19 +45,19 @@ import (
 )
 
 var (
-	dumpConfigCommand = cli.Command{
-		Action:      utils.MigrateFlags(dumpConfig),
+	dumpConfigCommand = &cli.Command{
+		Action:      dumpConfig,
 		Name:        "dumpconfig",
-		Usage:       "Show configuration values",
-		ArgsUsage:   "",
-		Flags:       append(nodeFlags, rpcFlags...),
-		Category:    "MISCELLANEOUS COMMANDS",
-		Description: `The dumpconfig command shows configuration values.`,
+		Usage:       "Export configuration values in a TOML format",
+		ArgsUsage:   "<dumpfile (optional)>",
+		Flags:       flags.Merge(nodeFlags, rpcFlags),
+		Description: `Export configuration values in TOML format (to stdout by default).`,
 	}
 
-	configFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
+	configFileFlag = &cli.StringFlag{
+		Name:     "config",
+		Usage:    "TOML configuration file",
+		Category: flags.EthCategory,
 	}
 )
 
@@ -107,17 +110,19 @@ func loadConfig(file string, cfg *gethConfig) error {
 }
 
 func defaultNodeConfig() node.Config {
+	git, _ := version.VCS()
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
+	cfg.Version = params.VersionWithCommit(git.Commit, git.Date)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }
 
-// makeConfigNode loads geth configuration and creates a blank node instance.
-func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+// loadBaseConfig loads the gethConfig based on the given command line
+// parameters and config file.
+func loadBaseConfig(ctx *cli.Context) gethConfig {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:     ethconfig.Defaults,
@@ -126,7 +131,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
@@ -134,18 +139,24 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
+	return cfg
+}
+
+// makeConfigNode loads geth configuration and creates a blank node instance.
+func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+	cfg := loadBaseConfig(ctx)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	// Node doesn't by default populate account manager backends
-	if err := setAccountManagerBackends(stack); err != nil {
+	if err := setAccountManagerBackends(stack.Config(), stack.AccountManager(), stack.KeyStoreDir()); err != nil {
 		utils.Fatalf("Failed to set account manager backends: %v", err)
 	}
 
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
 
@@ -155,21 +166,28 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.GlobalIsSet(utils.OverrideArrowGlacierFlag.Name) {
-		cfg.Eth.OverrideArrowGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideArrowGlacierFlag.Name))
+	if ctx.IsSet(utils.OverrideCancun.Name) {
+		v := ctx.Uint64(utils.OverrideCancun.Name)
+		cfg.Eth.OverrideCancun = &v
 	}
-	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
-		cfg.Eth.OverrideTerminalTotalDifficulty = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideTerminalTotalDifficulty.Name))
-	}
-	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
-	// Configure GraphQL if requested
-	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, cfg.Node)
+	// Configure log filter RPC API.
+	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
+
+	// Configure GraphQL if requested.
+	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
+
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
+	}
+
+	// Configure full-sync tester service if requested
+	if ctx.IsSet(utils.SyncTargetFlag.Name) && cfg.Eth.SyncMode == downloader.FullSync {
+		utils.RegisterFullSyncTester(stack, eth, ctx.Path(utils.SyncTargetFlag.Name))
 	}
 	return stack, backend
 }
@@ -204,47 +222,47 @@ func dumpConfig(ctx *cli.Context) error {
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
-	if ctx.GlobalIsSet(utils.MetricsEnabledFlag.Name) {
-		cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
+	if ctx.IsSet(utils.MetricsEnabledFlag.Name) {
+		cfg.Metrics.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsEnabledExpensiveFlag.Name) {
-		cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
+	if ctx.IsSet(utils.MetricsEnabledExpensiveFlag.Name) {
+		cfg.Metrics.EnabledExpensive = ctx.Bool(utils.MetricsEnabledExpensiveFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsHTTPFlag.Name) {
-		cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
+	if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
+		cfg.Metrics.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsPortFlag.Name) {
-		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+	if ctx.IsSet(utils.MetricsPortFlag.Name) {
+		cfg.Metrics.Port = ctx.Int(utils.MetricsPortFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
-		cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
+	if ctx.IsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+		cfg.Metrics.EnableInfluxDB = ctx.Bool(utils.MetricsEnableInfluxDBFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
-		cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
+		cfg.Metrics.InfluxDBEndpoint = ctx.String(utils.MetricsInfluxDBEndpointFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
-		cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
+		cfg.Metrics.InfluxDBDatabase = ctx.String(utils.MetricsInfluxDBDatabaseFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
-		cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
+		cfg.Metrics.InfluxDBUsername = ctx.String(utils.MetricsInfluxDBUsernameFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
-		cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
+		cfg.Metrics.InfluxDBPassword = ctx.String(utils.MetricsInfluxDBPasswordFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBTagsFlag.Name) {
-		cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBTagsFlag.Name) {
+		cfg.Metrics.InfluxDBTags = ctx.String(utils.MetricsInfluxDBTagsFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
-		cfg.Metrics.EnableInfluxDBV2 = ctx.GlobalBool(utils.MetricsEnableInfluxDBV2Flag.Name)
+	if ctx.IsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
+		cfg.Metrics.EnableInfluxDBV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBTokenFlag.Name) {
-		cfg.Metrics.InfluxDBToken = ctx.GlobalString(utils.MetricsInfluxDBTokenFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBTokenFlag.Name) {
+		cfg.Metrics.InfluxDBToken = ctx.String(utils.MetricsInfluxDBTokenFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBBucketFlag.Name) {
-		cfg.Metrics.InfluxDBBucket = ctx.GlobalString(utils.MetricsInfluxDBBucketFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBBucketFlag.Name) {
+		cfg.Metrics.InfluxDBBucket = ctx.String(utils.MetricsInfluxDBBucketFlag.Name)
 	}
-	if ctx.GlobalIsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
-		cfg.Metrics.InfluxDBOrganization = ctx.GlobalString(utils.MetricsInfluxDBOrganizationFlag.Name)
+	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
+		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
 	}
 }
 
@@ -259,10 +277,7 @@ func deprecated(field string) bool {
 	}
 }
 
-func setAccountManagerBackends(stack *node.Node) error {
-	conf := stack.Config()
-	am := stack.AccountManager()
-	keydir := stack.KeyStoreDir()
+func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir string) error {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	if conf.UseLightweightKDF {
@@ -273,8 +288,8 @@ func setAccountManagerBackends(stack *node.Node) error {
 	// Assemble the supported backends
 	if len(conf.ExternalSigner) > 0 {
 		log.Info("Using external signer", "url", conf.ExternalSigner)
-		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
-			am.AddBackend(extapi)
+		if extBackend, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
+			am.AddBackend(extBackend)
 			return nil
 		} else {
 			return fmt.Errorf("error connecting to external signer: %v", err)

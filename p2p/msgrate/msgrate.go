@@ -38,14 +38,6 @@ const measurementImpact = 0.1
 // to fetch more than some local stable value.
 const capacityOverestimation = 1.01
 
-// qosTuningPeers is the number of best peers to tune round trip times based on.
-// An Ethereum node doesn't need hundreds of connections to operate correctly,
-// so instead of lowering our download speed to the median of potentially many
-// bad nodes, we can target a smaller set of vey good nodes. At worse this will
-// result in less nodes to sync from, but that's still better than some hogging
-// the pipeline.
-const qosTuningPeers = 5
-
 // rttMinEstimate is the minimal round trip time to target requests for. Since
 // every request entails a 2 way latency + bandwidth + serving database lookups,
 // it should be generous enough to permit meaningful work to be done on top of
@@ -81,7 +73,7 @@ const rttMinConfidence = 0.1
 const ttlScaling = 3
 
 // ttlLimit is the maximum timeout allowance to prevent reaching crazy numbers
-// if some unforeseen network events shappen. As much as we try to hone in on
+// if some unforeseen network events happen. As much as we try to hone in on
 // the most optimal values, it doesn't make any sense to go above a threshold,
 // even if everything is slow and screwy.
 const ttlLimit = time.Minute
@@ -100,9 +92,9 @@ const tuningImpact = 0.25
 
 // Tracker estimates the throughput capacity of a peer with regard to each data
 // type it can deliver. The goal is to dynamically adjust request sizes to max
-// out network throughput without overloading either the peer or th elocal node.
+// out network throughput without overloading either the peer or the local node.
 //
-// By tracking in real time the latencies and bandiwdths peers exhibit for each
+// By tracking in real time the latencies and bandwidths peers exhibit for each
 // packet type, it's possible to prevent overloading by detecting a slowdown on
 // one type when another type is pushed too hard.
 //
@@ -111,7 +103,7 @@ const tuningImpact = 0.25
 // local link is saturated. In that case, the live measurements will force us
 // to reduce request sizes until the throughput gets stable.
 //
-// Lastly, message rate measurements allows us to detect if a peer is unsuaully
+// Lastly, message rate measurements allows us to detect if a peer is unusually
 // slow compared to other peers, in which case we can decide to keep it around
 // or free up the slot so someone closer.
 //
@@ -127,7 +119,7 @@ type Tracker struct {
 	// in their sizes.
 	//
 	// Callers of course are free to use the item counter as a byte counter if
-	// or when their protocol of choise if capped by bytes instead of items.
+	// or when their protocol of choice if capped by bytes instead of items.
 	// (eg. eth.getHeaders vs snap.getAccountRange).
 	capacity map[uint64]float64
 
@@ -157,7 +149,7 @@ func NewTracker(caps map[uint64]float64, rtt time.Duration) *Tracker {
 }
 
 // Capacity calculates the number of items the peer is estimated to be able to
-// retrieve within the alloted time slot. The method will round up any division
+// retrieve within the allotted time slot. The method will round up any division
 // errors and will add an additional overestimation ratio on top. The reason for
 // overshooting the capacity is because certain message types might not increase
 // the load proportionally to the requested items, so fetching a bit more might
@@ -222,7 +214,7 @@ type Trackers struct {
 	// confidence represents the probability that the estimated roundtrip value
 	// is the real one across all our peers. The confidence value is used as an
 	// impact factor of new measurements on old estimates. As our connectivity
-	// stabilizes, this value gravitates towards 1, new measurements havinng
+	// stabilizes, this value gravitates towards 1, new measurements having
 	// almost no impact. If there's a large peer churn and few peers, then new
 	// measurements will impact it more. The confidence is increased with every
 	// packet and dropped with every new connection.
@@ -303,11 +295,15 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 	}
 	sort.Float64s(rtts)
 
-	median := rttMaxEstimate
-	if qosTuningPeers <= len(rtts) {
-		median = time.Duration(rtts[qosTuningPeers/2]) // Median of our best few peers
-	} else if len(rtts) > 0 {
-		median = time.Duration(rtts[len(rtts)/2]) // Median of all out connected peers
+	var median time.Duration
+	switch len(rtts) {
+	case 0:
+		median = rttMaxEstimate
+	case 1:
+		median = time.Duration(rtts[0])
+	default:
+		idx := int(math.Sqrt(float64(len(rtts))))
+		median = time.Duration(rtts[idx])
 	}
 	// Restrict the RTT into some QoS defaults, irrelevant of true RTT
 	if median < rttMinEstimate {
@@ -320,7 +316,7 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 }
 
 // MeanCapacities returns the capacities averaged across all the added trackers.
-// The purpos of the mean capacities are to initialize a new peer with some sane
+// The purpose of the mean capacities are to initialize a new peer with some sane
 // starting values that it will hopefully outperform. If the mean overshoots, the
 // peer will be cut back to minimal capacity and given another chance.
 func (t *Trackers) MeanCapacities() map[uint64]float64 {
@@ -333,7 +329,7 @@ func (t *Trackers) MeanCapacities() map[uint64]float64 {
 // meanCapacities is the internal lockless version of MeanCapacities used for
 // debug logging.
 func (t *Trackers) meanCapacities() map[uint64]float64 {
-	capacities := make(map[uint64]float64)
+	capacities := make(map[uint64]float64, len(t.trackers))
 	for _, tt := range t.trackers {
 		tt.lock.RLock()
 		for key, val := range tt.capacity {

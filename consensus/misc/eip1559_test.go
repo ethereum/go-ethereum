@@ -34,7 +34,6 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		DAOForkBlock:            original.DAOForkBlock,
 		DAOForkSupport:          original.DAOForkSupport,
 		EIP150Block:             original.EIP150Block,
-		EIP150Hash:              original.EIP150Hash,
 		EIP155Block:             original.EIP155Block,
 		EIP158Block:             original.EIP158Block,
 		ByzantiumBlock:          original.ByzantiumBlock,
@@ -96,7 +95,7 @@ func TestBlockGasLimits(t *testing.T) {
 			BaseFee:  initial,
 			Number:   big.NewInt(tc.pNum + 1),
 		}
-		err := VerifyEip1559Header(config(), parent, header)
+		err := VerifyEIP1559Header(config(), parent, header)
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
 		}

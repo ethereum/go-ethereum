@@ -21,7 +21,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-//*
+// *
 // Request: Ask device for public key corresponding to address_n path
 // @start
 // @next EthereumPublicKey
@@ -73,7 +73,7 @@ func (m *EthereumGetPublicKey) GetShowDisplay() bool {
 	return false
 }
 
-//*
+// *
 // Response: Contains public key derived from device private seed
 // @end
 type EthereumPublicKey struct {
@@ -123,7 +123,7 @@ func (m *EthereumPublicKey) GetXpub() string {
 	return ""
 }
 
-//*
+// *
 // Request: Ask device for Ethereum address corresponding to address_n path
 // @start
 // @next EthereumAddress
@@ -175,7 +175,7 @@ func (m *EthereumGetAddress) GetShowDisplay() bool {
 	return false
 }
 
-//*
+// *
 // Response: Contains an Ethereum address derived from device private seed
 // @end
 type EthereumAddress struct {
@@ -225,7 +225,7 @@ func (m *EthereumAddress) GetAddressHex() string {
 	return ""
 }
 
-//*
+// *
 // Request: Ask device to sign transaction
 // All fields are optional from the protocol's point of view. Each field defaults to value `0` if missing.
 // Note: the first at most 1024 bytes of data MUST be transmitted as part of this message.
@@ -351,7 +351,7 @@ func (m *EthereumSignTx) GetTxType() uint32 {
 	return 0
 }
 
-//*
+// *
 // Response: Device asks for more data from transaction payload, or returns the signature.
 // If data_length is set, device awaits that many more bytes of payload.
 // Otherwise, the signature_* fields contain the computed transaction signature. All three fields will be present.
@@ -420,7 +420,7 @@ func (m *EthereumTxRequest) GetSignatureS() []byte {
 	return nil
 }
 
-//*
+// *
 // Request: Transaction payload data.
 // @next EthereumTxRequest
 type EthereumTxAck struct {
@@ -462,7 +462,7 @@ func (m *EthereumTxAck) GetDataChunk() []byte {
 	return nil
 }
 
-//*
+// *
 // Request: Ask device to sign message
 // @start
 // @next EthereumMessageSignature
@@ -514,7 +514,7 @@ func (m *EthereumSignMessage) GetMessage() []byte {
 	return nil
 }
 
-//*
+// *
 // Response: Signed message
 // @end
 type EthereumMessageSignature struct {
@@ -572,7 +572,7 @@ func (m *EthereumMessageSignature) GetAddressHex() string {
 	return ""
 }
 
-//*
+// *
 // Request: Ask device to verify message
 // @start
 // @next Success

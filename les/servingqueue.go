@@ -17,12 +17,12 @@
 package les
 
 import (
-	"sort"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
+	"golang.org/x/exp/slices"
 )
 
 // servingQueue allows running tasks in a limited number of threads and puts the
@@ -38,10 +38,10 @@ type servingQueue struct {
 	setThreadsCh            chan int
 
 	wg          sync.WaitGroup
-	threadCount int          // number of currently running threads
-	queue       *prque.Prque // priority queue for waiting or suspended tasks
-	best        *servingTask // the highest priority task (not included in the queue)
-	suspendBias int64        // priority bias against suspending an already running task
+	threadCount int                               // number of currently running threads
+	queue       *prque.Prque[int64, *servingTask] // priority queue for waiting or suspended tasks
+	best        *servingTask                      // the highest priority task (not included in the queue)
+	suspendBias int64                             // priority bias against suspending an already running task
 }
 
 // servingTask represents a request serving task. Tasks can be implemented to
@@ -123,7 +123,7 @@ func (t *servingTask) waitOrStop() bool {
 // newServingQueue returns a new servingQueue
 func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 	sq := &servingQueue{
-		queue:          prque.NewWrapAround(nil),
+		queue:          prque.New[int64, *servingTask](nil),
 		suspendBias:    suspendBias,
 		queueAddCh:     make(chan *servingTask, 100),
 		queueBestCh:    make(chan *servingTask),
@@ -180,41 +180,25 @@ func (sq *servingQueue) threadController() {
 	}
 }
 
-type (
-	// peerTasks lists the tasks received from a given peer when selecting peers to freeze
-	peerTasks struct {
-		peer     *clientPeer
-		list     []*servingTask
-		sumTime  uint64
-		priority float64
-	}
-	// peerList is a sortable list of peerTasks
-	peerList []*peerTasks
-)
-
-func (l peerList) Len() int {
-	return len(l)
-}
-
-func (l peerList) Less(i, j int) bool {
-	return l[i].priority < l[j].priority
-}
-
-func (l peerList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
+// peerTasks lists the tasks received from a given peer when selecting peers to freeze
+type peerTasks struct {
+	peer     *clientPeer
+	list     []*servingTask
+	sumTime  uint64
+	priority float64
 }
 
 // freezePeers selects the peers with the worst priority queued tasks and freezes
 // them until burstTime goes under burstDropLimit or all peers are frozen
 func (sq *servingQueue) freezePeers() {
 	peerMap := make(map[*clientPeer]*peerTasks)
-	var peerList peerList
+	var peerList []*peerTasks
 	if sq.best != nil {
 		sq.queue.Push(sq.best, sq.best.priority)
 	}
 	sq.best = nil
 	for sq.queue.Size() > 0 {
-		task := sq.queue.PopItem().(*servingTask)
+		task := sq.queue.PopItem()
 		tasks := peerMap[task.peer]
 		if tasks == nil {
 			bufValue, bufLimit := task.peer.fcClient.BufferStatus()
@@ -231,7 +215,9 @@ func (sq *servingQueue) freezePeers() {
 		tasks.list = append(tasks.list, task)
 		tasks.sumTime += task.expTime
 	}
-	sort.Sort(peerList)
+	slices.SortFunc(peerList, func(a, b *peerTasks) bool {
+		return a.priority < b.priority
+	})
 	drop := true
 	for _, tasks := range peerList {
 		if drop {
@@ -251,7 +237,7 @@ func (sq *servingQueue) freezePeers() {
 		}
 	}
 	if sq.queue.Size() > 0 {
-		sq.best = sq.queue.PopItem().(*servingTask)
+		sq.best = sq.queue.PopItem()
 	}
 }
 
@@ -310,7 +296,7 @@ func (sq *servingQueue) queueLoop() {
 				if sq.queue.Size() == 0 {
 					sq.best = nil
 				} else {
-					sq.best, _ = sq.queue.PopItem().(*servingTask)
+					sq.best = sq.queue.PopItem()
 				}
 			case <-sq.quit:
 				return

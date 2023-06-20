@@ -32,12 +32,17 @@ func DialStdIO(ctx context.Context) (*Client, error) {
 
 // DialIO creates a client which uses the given IO channels
 func DialIO(ctx context.Context, in io.Reader, out io.Writer) (*Client, error) {
-	return newClient(ctx, func(_ context.Context) (ServerCodec, error) {
+	cfg := new(clientConfig)
+	return newClient(ctx, cfg, newClientTransportIO(in, out))
+}
+
+func newClientTransportIO(in io.Reader, out io.Writer) reconnectFunc {
+	return func(context.Context) (ServerCodec, error) {
 		return NewCodec(stdioConn{
 			in:  in,
 			out: out,
 		}), nil
-	})
+	}
 }
 
 type stdioConn struct {

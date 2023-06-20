@@ -17,20 +17,22 @@
 package build
 
 import (
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
 	"go/parser"
 	"go/token"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
+	"time"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -38,7 +40,7 @@ var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
-	fmt.Println(">>>", strings.Join(cmd.Args, " "))
+	fmt.Println(">>>", printArgs(cmd.Args))
 	if !*DryRunFlag {
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
@@ -46,6 +48,20 @@ func MustRun(cmd *exec.Cmd) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func printArgs(args []string) string {
+	var s strings.Builder
+	for i, arg := range args {
+		if i > 0 {
+			s.WriteByte(' ')
+		}
+		if strings.IndexByte(arg, ' ') >= 0 {
+			arg = strconv.QuoteToASCII(arg)
+		}
+		s.WriteString(arg)
+	}
+	return s.String()
 }
 
 func MustRunCommand(cmd string, args ...string) {
@@ -75,7 +91,7 @@ func RunGit(args ...string) string {
 
 // readGitFile returns content of file in .git directory.
 func readGitFile(file string) string {
-	content, err := ioutil.ReadFile(path.Join(".git", file))
+	content, err := os.ReadFile(path.Join(".git", file))
 	if err != nil {
 		return ""
 	}
@@ -111,17 +127,16 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 }
 
 // UploadSFTP uploads files to a remote host using the sftp command line tool.
-// The destination host may be specified either as [user@]host[: or as a URI in
+// The destination host may be specified either as [user@]host: or as a URI in
 // the form sftp://[user@]host[:port].
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
-	sftp.Stdout = nil
 	sftp.Stderr = os.Stderr
 	if identityFile != "" {
 		sftp.Args = append(sftp.Args, "-i", identityFile)
 	}
 	sftp.Args = append(sftp.Args, host)
-	fmt.Println(">>>", strings.Join(sftp.Args, " "))
+	fmt.Println(">>>", printArgs(sftp.Args))
 	if *DryRunFlag {
 		return nil
 	}
@@ -130,6 +145,10 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	if err != nil {
 		return fmt.Errorf("can't create stdin pipe for sftp: %v", err)
 	}
+	stdout, err := sftp.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("can't create stdout pipe for sftp: %v", err)
+	}
 	if err := sftp.Start(); err != nil {
 		return err
 	}
@@ -137,20 +156,50 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	for _, f := range files {
 		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
 	}
+	fmt.Fprintln(in, "exit")
+	// Some issue with the PPA sftp server makes it so the server does not
+	// respond properly to a 'bye', 'exit' or 'quit' from the client.
+	// To work around that, we check the output, and when we see the client
+	// exit command, we do a hard exit.
+	// See
+	// https://github.com/kolban-google/sftp-gcs/issues/23
+	// https://github.com/mscdex/ssh2/pull/1111
+	aborted := false
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			txt := scanner.Text()
+			fmt.Println(txt)
+			if txt == "sftp> exit" {
+				// Give it .5 seconds to exit (server might be fixed), then
+				// hard kill it from the outside
+				time.Sleep(500 * time.Millisecond)
+				aborted = true
+				sftp.Process.Kill()
+			}
+		}
+	}()
 	stdin.Close()
-	return sftp.Wait()
+	err = sftp.Wait()
+	if aborted {
+		return nil
+	}
+	return err
 }
 
 // FindMainPackages finds all 'main' packages in the given directory and returns their
 // package paths.
 func FindMainPackages(dir string) []string {
 	var commands []string
-	cmds, err := ioutil.ReadDir(dir)
+	cmds, err := os.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, cmd := range cmds {
 		pkgdir := filepath.Join(dir, cmd.Name())
+		if !cmd.IsDir() {
+			continue
+		}
 		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
 		if err != nil {
 			log.Fatal(err)

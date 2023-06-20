@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -148,81 +147,6 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	verifyChainHeight(t, c.handler.fetcher, 5)
 }
 
-func TestTrustedAnnouncementsLes2(t *testing.T) { testTrustedAnnouncement(t, 2) }
-func TestTrustedAnnouncementsLes3(t *testing.T) { testTrustedAnnouncement(t, 3) }
-
-func testTrustedAnnouncement(t *testing.T, protocol int) {
-	var (
-		servers   []*testServer
-		teardowns []func()
-		nodes     []*enode.Node
-		ids       []string
-		cpeers    []*clientPeer
-		speers    []*serverPeer
-	)
-	for i := 0; i < 10; i++ {
-		s, n, teardown := newTestServerPeer(t, 10, protocol)
-
-		servers = append(servers, s)
-		nodes = append(nodes, n)
-		teardowns = append(teardowns, teardown)
-
-		// A half of them are trusted servers.
-		if i < 5 {
-			ids = append(ids, n.String())
-		}
-	}
-	netconfig := testnetConfig{
-		protocol:    protocol,
-		nopruning:   true,
-		ulcServers:  ids,
-		ulcFraction: 60,
-	}
-	_, c, teardown := newClientServerEnv(t, netconfig)
-	defer teardown()
-	defer func() {
-		for i := 0; i < len(teardowns); i++ {
-			teardowns[i]()
-		}
-	}()
-	// Connect all server instances.
-	for i := 0; i < len(servers); i++ {
-		sp, cp, err := connect(servers[i].handler, nodes[i].ID(), c.handler, protocol, true)
-		if err != nil {
-			t.Fatalf("connect server and client failed, err %s", err)
-		}
-		cpeers = append(cpeers, cp)
-		speers = append(speers, sp)
-	}
-	newHead := make(chan *types.Header, 1)
-	c.handler.fetcher.newHeadHook = func(header *types.Header) { newHead <- header }
-
-	check := func(height []uint64, expected uint64, callback func()) {
-		for i := 0; i < len(height); i++ {
-			for j := 0; j < len(servers); j++ {
-				h := servers[j].backend.Blockchain().GetHeaderByNumber(height[i])
-				hash, number := h.Hash(), h.Number.Uint64()
-				td := rawdb.ReadTd(servers[j].db, hash, number)
-
-				// Sign the announcement if necessary.
-				announce := announceData{hash, number, td, 0, nil}
-				p := cpeers[j]
-				if p.announceType == announceTypeSigned {
-					announce.sign(servers[j].handler.server.privateKey)
-				}
-				p.sendAnnounce(announce)
-			}
-		}
-		if callback != nil {
-			callback()
-		}
-		verifyChainHeight(t, c.handler.fetcher, expected)
-	}
-	check([]uint64{1}, 1, func() { <-newHead })   // Sequential announcements
-	check([]uint64{4}, 4, func() { <-newHead })   // ULC-style light syncing, rollback untrusted headers
-	check([]uint64{10}, 10, func() { <-newHead }) // Sync the whole chain.
-}
-
 func TestInvalidAnnouncesLES2(t *testing.T) { testInvalidAnnounces(t, lpv2) }
 func TestInvalidAnnouncesLES3(t *testing.T) { testInvalidAnnounces(t, lpv3) }
 func TestInvalidAnnouncesLES4(t *testing.T) { testInvalidAnnounces(t, lpv4) }
@@ -258,7 +182,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	peer.cpeer.sendAnnounce(announce)
 	<-done // Wait syncing
 
-	// Ensure the bad peer is evicited
+	// Ensure the bad peer is evicted
 	if c.handler.backend.peers.len() != 0 {
 		t.Fatalf("Failed to evict invalid peer")
 	}

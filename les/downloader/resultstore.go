@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -71,10 +71,11 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 // wants to reserve headers for fetching.
 //
 // It returns the following:
-//   stale     - if true, this item is already passed, and should not be requested again
-//   throttled - if true, the store is at capacity, this particular header is not prio now
-//   item      - the result to store data into
-//   err       - any error that occurred
+//
+//	stale     - if true, this item is already passed, and should not be requested again
+//	throttled - if true, the store is at capacity, this particular header is not prio now
+//	item      - the result to store data into
+//	err       - any error that occurred
 func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -123,7 +124,7 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 	return item, index, stale, throttle, nil
 }
 
-// hasCompletedItems returns true if there are processable items available
+// HasCompletedItems returns true if there are processable items available
 // this method is cheaper than countCompleted
 func (r *resultStore) HasCompletedItems() bool {
 	r.lock.RLock()
@@ -141,7 +142,7 @@ func (r *resultStore) HasCompletedItems() bool {
 // countCompleted returns the number of items ready for delivery, stopping at
 // the first non-complete item.
 //
-// The mthod assumes (at least) rlock is held.
+// The method assumes (at least) rlock is held.
 func (r *resultStore) countCompleted() int {
 	// We iterate from the already known complete point, and see
 	// if any more has completed since last count

@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// NodeIterator is an iterator to traverse the entire state trie post-order,
+// nodeIterator is an iterator to traverse the entire state trie post-order,
 // including all of the contract code and contract state tries.
-type NodeIterator struct {
+type nodeIterator struct {
 	state *StateDB // State being iterated
 
 	stateIt trie.NodeIterator // Primary iterator for the global state trie
@@ -44,9 +44,9 @@ type NodeIterator struct {
 	Error error // Failure set in case of an internal error in the iterator
 }
 
-// NewNodeIterator creates an post-order state node iterator.
-func NewNodeIterator(state *StateDB) *NodeIterator {
-	return &NodeIterator{
+// newNodeIterator creates an post-order state node iterator.
+func newNodeIterator(state *StateDB) *nodeIterator {
+	return &nodeIterator{
 		state: state,
 	}
 }
@@ -54,7 +54,7 @@ func NewNodeIterator(state *StateDB) *NodeIterator {
 // Next moves the iterator to the next node, returning whether there are any
 // further nodes. In case of an internal error this method returns false and
 // sets the Error field to the encountered failure.
-func (it *NodeIterator) Next() bool {
+func (it *nodeIterator) Next() bool {
 	// If the iterator failed previously, don't do anything
 	if it.Error != nil {
 		return false
@@ -68,14 +68,18 @@ func (it *NodeIterator) Next() bool {
 }
 
 // step moves the iterator to the next entry of the state trie.
-func (it *NodeIterator) step() error {
+func (it *nodeIterator) step() error {
 	// Abort if we reached the end of the iteration
 	if it.state == nil {
 		return nil
 	}
 	// Initialize the iterator if we've just started
+	var err error
 	if it.stateIt == nil {
-		it.stateIt = it.state.trie.NodeIterator(nil)
+		it.stateIt, err = it.state.trie.NodeIterator(nil)
+		if err != nil {
+			return err
+		}
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -109,15 +113,18 @@ func (it *NodeIterator) step() error {
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}
-	dataTrie, err := it.state.db.OpenStorageTrie(common.BytesToHash(it.stateIt.LeafKey()), account.Root)
+	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, common.BytesToHash(it.stateIt.LeafKey()), account.Root)
 	if err != nil {
 		return err
 	}
-	it.dataIt = dataTrie.NodeIterator(nil)
+	it.dataIt, err = dataTrie.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
 		addrHash := common.BytesToHash(it.stateIt.LeafKey())
 		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))
@@ -131,7 +138,7 @@ func (it *NodeIterator) step() error {
 
 // retrieve pulls and caches the current state entry the iterator is traversing.
 // The method returns whether there are any more data left for inspection.
-func (it *NodeIterator) retrieve() bool {
+func (it *nodeIterator) retrieve() bool {
 	// Clear out any previously set values
 	it.Hash = common.Hash{}
 

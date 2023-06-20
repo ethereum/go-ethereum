@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -71,32 +72,40 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
+func (p *testTxPool) Get(hash common.Hash) *txpool.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	return p.pool[hash]
+	if tx := p.pool[hash]; tx != nil {
+		return &txpool.Transaction{Tx: tx}
+	}
+	return nil
 }
 
-// AddRemotes appends a batch of transactions to the pool, and notifies any
+// Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
+func (p *testTxPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
+	unwrapped := make([]*types.Transaction, len(txs))
+	for i, tx := range txs {
+		unwrapped[i] = tx.Tx
+	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	for _, tx := range txs {
+	for _, tx := range unwrapped {
 		p.pool[tx.Hash()] = tx
 	}
-	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
-	return make([]error, len(txs))
+
+	p.txFeed.Send(core.NewTxsEvent{Txs: unwrapped})
+	return make([]error, len(unwrapped))
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
+func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*types.Transaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	batches := make(map[common.Address]types.Transactions)
+	batches := make(map[common.Address][]*types.Transaction)
 	for _, tx := range p.pool {
 		from, _ := types.Sender(types.HomesteadSigner{}, tx)
 		batches[from] = append(batches[from], tx)
@@ -133,14 +142,13 @@ func newTestHandler() *testHandler {
 func newTestHandlerWithBlocks(blocks int) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
-	(&core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
-	}).MustCommit(db)
+	}
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 
-	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
-
-	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), db, blocks, nil)
+	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}

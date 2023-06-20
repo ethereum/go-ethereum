@@ -29,7 +29,7 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
-// An implementation of nat.Interface can map local ports to ports
+// Interface An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
 type Interface interface {
 	// These methods manage a mapping between a port on the local
@@ -41,11 +41,11 @@ type Interface interface {
 	AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error
 	DeleteMapping(protocol string, extport, intport int) error
 
-	// This method should return the external (Internet-facing)
+	// ExternalIP should return the external (Internet-facing)
 	// address of the gateway device.
 	ExternalIP() (net.IP, error)
 
-	// Should return name of the method. This is used for logging.
+	// String should return name of the method. This is used for logging.
 	String() string
 }
 
@@ -53,12 +53,12 @@ type Interface interface {
 // The following formats are currently accepted.
 // Note that mechanism names are not case-sensitive.
 //
-//     "" or "none"         return nil
-//     "extip:77.12.33.4"   will assume the local machine is reachable on the given IP
-//     "any"                uses the first auto-detected mechanism
-//     "upnp"               uses the Universal Plug and Play protocol
-//     "pmp"                uses NAT-PMP with an auto-detected gateway address
-//     "pmp:192.168.0.1"    uses NAT-PMP with the given gateway address
+//	"" or "none"         return nil
+//	"extip:77.12.33.4"   will assume the local machine is reachable on the given IP
+//	"any"                uses the first auto-detected mechanism
+//	"upnp"               uses the Universal Plug and Play protocol
+//	"pmp"                uses NAT-PMP with an auto-detected gateway address
+//	"pmp:192.168.0.1"    uses NAT-PMP with the given gateway address
 func Parse(spec string) (Interface, error) {
 	var (
 		parts = strings.SplitN(spec, ":", 2)

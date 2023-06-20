@@ -20,13 +20,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"golang.org/x/exp/slices"
 )
 
 const jsonIndent = "    "
@@ -66,7 +65,7 @@ func writeNodesJSON(file string, nodes nodeSet) {
 		os.Stdout.Write(nodesJSON)
 		return
 	}
-	if err := ioutil.WriteFile(file, nodesJSON, 0644); err != nil {
+	if err := os.WriteFile(file, nodesJSON, 0644); err != nil {
 		exit(err)
 	}
 }
@@ -78,8 +77,8 @@ func (ns nodeSet) nodes() []*enode.Node {
 		result = append(result, n.N)
 	}
 	// Sort by ID.
-	sort.Slice(result, func(i, j int) bool {
-		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
+	slices.SortFunc(result, func(a, b *enode.Node) bool {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
 	})
 	return result
 }
@@ -104,8 +103,8 @@ func (ns nodeSet) topN(n int) nodeSet {
 	for _, v := range ns {
 		byscore = append(byscore, v)
 	}
-	sort.Slice(byscore, func(i, j int) bool {
-		return byscore[i].Score >= byscore[j].Score
+	slices.SortFunc(byscore, func(a, b nodeJSON) bool {
+		return a.Score >= b.Score
 	})
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {

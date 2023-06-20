@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -199,7 +198,7 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
 			log.Error("RPC method " + method + " crashed: " + fmt.Sprintf("%v\n%s", err, buf))
-			errRes = errors.New("method handler crashed")
+			errRes = &internalServerError{errcodePanic, "method handler crashed"}
 		}
 	}()
 	// Run the callback.
@@ -215,19 +214,8 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	return results[0].Interface(), nil
 }
 
-// Is t context.Context or *context.Context?
-func isContextType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t == contextType
-}
-
 // Does t satisfy the error interface?
 func isErrorType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
 	return t.Implements(errorType)
 }
 
@@ -246,7 +234,7 @@ func isPubSub(methodType reflect.Type) bool {
 	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
 		return false
 	}
-	return isContextType(methodType.In(1)) &&
+	return methodType.In(1) == contextType &&
 		isSubscriptionType(methodType.Out(0)) &&
 		isErrorType(methodType.Out(1))
 }

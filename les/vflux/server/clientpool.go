@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ var (
 // each client can have several minutes of connection time.
 //
 // Balances of disconnected clients are stored in nodeDB including positive balance
-// and negative banalce. Boeth positive balance and negative balance will decrease
+// and negative balance. Both positive balance and negative balance will decrease
 // exponentially. If the balance is low enough, then the record will be dropped.
 type ClientPool struct {
 	*priorityPool
@@ -61,7 +61,6 @@ type ClientPool struct {
 
 	setup  *serverSetup
 	clock  mclock.Clock
-	closed bool
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 

@@ -91,7 +91,7 @@ func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, erro
 	return t.db.ModifyAncients(fn)
 }
 
-func (t *table) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
 	return t.db.ReadAncients(fn)
 }
 
@@ -111,6 +111,17 @@ func (t *table) TruncateTail(items uint64) error {
 // database.
 func (t *table) Sync() error {
 	return t.db.Sync()
+}
+
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (t *table) MigrateTable(kind string, convert convertLegacyFn) error {
+	return t.db.MigrateTable(kind, convert)
+}
+
+// AncientDatadir returns the ancient datadir of the underlying database.
+func (t *table) AncientDatadir() (string, error) {
+	return t.db.AncientDatadir()
 }
 
 // Put inserts the given value into the database at a prefixed version of the

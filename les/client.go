@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,7 +18,8 @@
 package les
 
 import (
-	"fmt"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type LightEthereum struct {
@@ -73,7 +74,7 @@ type LightEthereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-	netRPCService  *ethapi.PublicNetAPI
+	netRPCService  *ethapi.NetAPI
 
 	p2pServer  *p2p.Server
 	p2pConfig  *p2p.Config
@@ -92,11 +93,25 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
+	var overrides core.ChainOverrides
+	if config.OverrideCancun != nil {
+		overrides.OverrideCancun = config.OverrideCancun
+	}
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, trie.NewDatabase(chainDb), config.Genesis, &overrides)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("")
+	log.Info(strings.Repeat("-", 153))
+	for _, line := range strings.Split(chainConfig.Description(), "\n") {
+		log.Info(line)
+	}
+	log.Info(strings.Repeat("-", 153))
+	log.Info("")
 
 	peers := newServerPeerSet()
 	merger := consensus.NewMerger(chainDb)
@@ -115,7 +130,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		reqDist:         newRequestDistributor(peers, &mclock.System{}),
 		accountManager:  stack.AccountManager(),
 		merger:          merger,
-		engine:          ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
+		engine:          engine,
 		bloomRequests:   make(chan chan *bloombits.Retrieval),
 		bloomIndexer:    core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:       stack.Server(),
@@ -139,20 +154,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency, config.LightNoPrune)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
 
-	checkpoint := config.Checkpoint
-	if checkpoint == nil {
-		checkpoint = params.TrustedCheckpoints[genesisHash]
-	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint); err != nil {
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
 	leth.chainReader = leth.blockchain
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-
-	// Set up checkpoint oracle.
-	leth.oracle = leth.setupOracle(stack, genesisHash, config)
 
 	// Note: AddChildIndexer starts the update process for the child
 	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
@@ -165,7 +173,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		leth.blockchain.SetHead(compat.RewindTo)
+		if compat.RewindToTime > 0 {
+			leth.blockchain.SetHeadWithTimestamp(compat.RewindToTime)
+		} else {
+			leth.blockchain.SetHead(compat.RewindToBlock)
+		}
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
@@ -176,13 +188,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
-	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, leth)
-	if leth.handler.ulc != nil {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.keys), "minTrustedFraction", leth.handler.ulc.fraction)
-		leth.blockchain.DisableCheckFreq()
-	}
-
-	leth.netRPCService = ethapi.NewPublicNetAPI(leth.p2pServer, leth.config.NetworkId)
+	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, leth)
+	leth.netRPCService = ethapi.NewNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
 	stack.RegisterAPIs(leth.APIs())
@@ -259,14 +266,14 @@ func (s *LightEthereum) prenegQuery(n *enode.Node) int {
 
 type LightDummyAPI struct{}
 
-// Etherbase is the address that mining rewards will be send to
+// Etherbase is the address that mining rewards will be sent to
 func (s *LightDummyAPI) Etherbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
+// Coinbase is the address that mining rewards will be sent to (alias for Etherbase)
 func (s *LightDummyAPI) Coinbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("mining is not supported in light mode")
+	return common.Address{}, errors.New("mining is not supported in light mode")
 }
 
 // Hashrate returns the POW hashrate
@@ -287,34 +294,16 @@ func (s *LightEthereum) APIs() []rpc.API {
 	return append(apis, []rpc.API{
 		{
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   &LightDummyAPI{},
-			Public:    true,
 		}, {
 			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true, 5*time.Minute),
-			Public:    true,
+			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
 		}, {
 			Namespace: "net",
-			Version:   "1.0",
 			Service:   s.netRPCService,
-			Public:    true,
-		}, {
-			Namespace: "les",
-			Version:   "1.0",
-			Service:   NewPrivateLightAPI(&s.lesCommons),
-			Public:    false,
 		}, {
 			Namespace: "vflux",
-			Version:   "1.0",
 			Service:   s.serverPool.API(),
-			Public:    false,
 		},
 	}...)
 }

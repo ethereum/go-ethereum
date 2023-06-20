@@ -19,17 +19,17 @@ package gasprice
 import (
 	"context"
 	"math/big"
-	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/exp/slices"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -42,8 +42,8 @@ var (
 type Config struct {
 	Blocks           int
 	Percentile       int
-	MaxHeaderHistory int
-	MaxBlockHistory  int
+	MaxHeaderHistory uint64
+	MaxBlockHistory  uint64
 	Default          *big.Int `toml:",omitempty"`
 	MaxPrice         *big.Int `toml:",omitempty"`
 	IgnorePrice      *big.Int `toml:",omitempty"`
@@ -71,8 +71,9 @@ type Oracle struct {
 	fetchLock   sync.Mutex
 
 	checkBlocks, percentile           int
-	maxHeaderHistory, maxBlockHistory int
-	historyCache                      *lru.Cache
+	maxHeaderHistory, maxBlockHistory uint64
+
+	historyCache *lru.Cache[cacheKey, processedFees]
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
@@ -114,7 +115,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", params.MaxBlockHistory, "updated", maxBlockHistory)
 	}
 
-	cache, _ := lru.New(2048)
+	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
 	backend.SubscribeChainHeadEvent(headEvent)
 	go func() {
@@ -175,7 +176,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		results   []*big.Int
 	)
 	for sent < oracle.checkBlocks && number > 0 {
-		go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+		go oracle.getBlockValues(ctx, number, sampleNumber, oracle.ignorePrice, result, quit)
 		sent++
 		exp++
 		number--
@@ -198,7 +199,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		// meaningful returned, try to query more blocks. But the maximum
 		// is 2*checkBlocks.
 		if len(res.values) == 1 && len(results)+1+exp < oracle.checkBlocks*2 && number > 0 {
-			go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number))), number, sampleNumber, oracle.ignorePrice, result, quit)
+			go oracle.getBlockValues(ctx, number, sampleNumber, oracle.ignorePrice, result, quit)
 			sent++
 			exp++
 			number--
@@ -207,7 +208,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	price := lastPrice
 	if len(results) > 0 {
-		sort.Sort(bigIntArray(results))
+		slices.SortFunc(results, func(a, b *big.Int) bool { return a.Cmp(b) < 0 })
 		price = results[(len(results)-1)*oracle.percentile/100]
 	}
 	if price.Cmp(oracle.maxPrice) > 0 {
@@ -226,35 +227,11 @@ type results struct {
 	err    error
 }
 
-type txSorter struct {
-	txs     []*types.Transaction
-	baseFee *big.Int
-}
-
-func newSorter(txs []*types.Transaction, baseFee *big.Int) *txSorter {
-	return &txSorter{
-		txs:     txs,
-		baseFee: baseFee,
-	}
-}
-
-func (s *txSorter) Len() int { return len(s.txs) }
-func (s *txSorter) Swap(i, j int) {
-	s.txs[i], s.txs[j] = s.txs[j], s.txs[i]
-}
-func (s *txSorter) Less(i, j int) bool {
-	// It's okay to discard the error because a tx would never be
-	// accepted into a block with an invalid effective tip.
-	tip1, _ := s.txs[i].EffectiveGasTip(s.baseFee)
-	tip2, _ := s.txs[j].EffectiveGasTip(s.baseFee)
-	return tip1.Cmp(tip2) < 0
-}
-
-// getBlockPrices calculates the lowest transaction gas price in a given block
+// getBlockValues calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty or all transactions
 // are sent by the miner itself(it doesn't make any sense to include this kind of
 // transaction prices for sampling), nil gasprice is returned.
-func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, blockNum uint64, limit int, ignoreUnder *big.Int, result chan results, quit chan struct{}) {
+func (oracle *Oracle) getBlockValues(ctx context.Context, blockNum uint64, limit int, ignoreUnder *big.Int, result chan results, quit chan struct{}) {
 	block, err := oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
 		select {
@@ -263,15 +240,24 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 		}
 		return
 	}
+	signer := types.MakeSigner(oracle.backend.ChainConfig(), block.Number(), block.Time())
+
 	// Sort the transaction by effective tip in ascending sort.
-	txs := make([]*types.Transaction, len(block.Transactions()))
-	copy(txs, block.Transactions())
-	sorter := newSorter(txs, block.BaseFee())
-	sort.Sort(sorter)
+	txs := block.Transactions()
+	sortedTxs := make([]*types.Transaction, len(txs))
+	copy(sortedTxs, txs)
+	baseFee := block.BaseFee()
+	slices.SortFunc(sortedTxs, func(a, b *types.Transaction) bool {
+		// It's okay to discard the error because a tx would never be
+		// accepted into a block with an invalid effective tip.
+		tip1, _ := a.EffectiveGasTip(baseFee)
+		tip2, _ := b.EffectiveGasTip(baseFee)
+		return tip1.Cmp(tip2) < 0
+	})
 
 	var prices []*big.Int
-	for _, tx := range sorter.txs {
-		tip, _ := tx.EffectiveGasTip(block.BaseFee())
+	for _, tx := range sortedTxs {
+		tip, _ := tx.EffectiveGasTip(baseFee)
 		if ignoreUnder != nil && tip.Cmp(ignoreUnder) == -1 {
 			continue
 		}
@@ -288,9 +274,3 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 	case <-quit:
 	}
 }
-
-type bigIntArray []*big.Int
-
-func (s bigIntArray) Len() int           { return len(s) }
-func (s bigIntArray) Less(i, j int) bool { return s[i].Cmp(s[j]) < 0 }
-func (s bigIntArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

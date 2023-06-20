@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -111,7 +111,11 @@ func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (account
 
 // fetchKeystore retrieves the encrypted keystore from the account manager.
 func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
-	return am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := am.Backends(keystore.KeyStoreType)
+	if len(ks) == 0 {
+		return nil
+	}
+	return ks[0].(*keystore.KeyStore)
 }
 
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
@@ -173,9 +177,9 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 		return nil, err
 	}
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
-		return nil, fmt.Errorf("account is not a keystore-account")
+		return nil, errors.New("account is not a keystore-account")
 	}
-	return ioutil.ReadFile(wallet.URL().Path)
+	return os.ReadFile(wallet.URL().Path)
 }
 
 // Import tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be

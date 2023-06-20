@@ -34,7 +34,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -82,7 +81,7 @@ type keyStorePassphrase struct {
 
 func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
 	// Load the key from the keystore and decrypt its contents
-	keyjson, err := ioutil.ReadFile(filename)
+	keyjson, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +138,6 @@ func (ks keyStorePassphrase) JoinPath(filename string) string {
 
 // Encryptdata encrypts the data given as 'data' with the password 'auth'.
 func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) {
-
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
@@ -227,10 +225,13 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := crypto.ToECDSAUnsafe(keyBytes)
+	key, err := crypto.ToECDSA(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
+	}
 	id, err := uuid.FromBytes(keyId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
 	return &Key{
 		Id:         id,
@@ -342,7 +343,6 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 		r := ensureInt(cryptoJSON.KDFParams["r"])
 		p := ensureInt(cryptoJSON.KDFParams["p"])
 		return scrypt.Key(authArray, salt, n, r, p, dkLen)
-
 	} else if cryptoJSON.KDF == "pbkdf2" {
 		c := ensureInt(cryptoJSON.KDFParams["c"])
 		prf := cryptoJSON.KDFParams["prf"].(string)

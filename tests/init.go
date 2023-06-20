@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
 	"Frontier": {
@@ -87,6 +89,19 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
+	},
+	"MuirGlacier": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
 	},
 	"FrontierToHomesteadAt5": {
 		ChainID:        big.NewInt(1),
@@ -197,9 +212,96 @@ var Forks = map[string]*params.ChainConfig{
 		LondonBlock:         big.NewInt(0),
 		ArrowGlacierBlock:   big.NewInt(0),
 	},
+	"ArrowGlacierToMergeAtDiffC0000": {
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		GrayGlacierBlock:        big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0xC0000),
+	},
+	"GrayGlacier": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   big.NewInt(0),
+		GrayGlacierBlock:    big.NewInt(0),
+	},
+	"Merge": {
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+	},
+	"Shanghai": {
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+		ShanghaiTime:            u64(0),
+	},
+	"MergeToShanghaiAtTime15k": {
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+		ShanghaiTime:            u64(15_000),
+	},
 }
 
-// Returns the set of defined fork names
+// AvailableForks returns the set of defined fork names
 func AvailableForks() []string {
 	var availableForks []string
 	for k := range Forks {

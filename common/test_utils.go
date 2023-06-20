@@ -19,12 +19,12 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
 // LoadJSON reads the given file and unmarshals its content.
 func LoadJSON(file string, val interface{}) error {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}

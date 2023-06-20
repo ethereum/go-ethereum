@@ -36,18 +36,18 @@ import (
 	"crypto/hmac"
 	"crypto/subtle"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"hash"
 	"io"
 	"math/big"
 )
 
 var (
-	ErrImport                     = fmt.Errorf("ecies: failed to import key")
-	ErrInvalidCurve               = fmt.Errorf("ecies: invalid elliptic curve")
-	ErrInvalidPublicKey           = fmt.Errorf("ecies: invalid public key")
-	ErrSharedKeyIsPointAtInfinity = fmt.Errorf("ecies: shared key is point at infinity")
-	ErrSharedKeyTooBig            = fmt.Errorf("ecies: shared key params are too big")
+	ErrImport                     = errors.New("ecies: failed to import key")
+	ErrInvalidCurve               = errors.New("ecies: invalid elliptic curve")
+	ErrInvalidPublicKey           = errors.New("ecies: invalid public key")
+	ErrSharedKeyIsPointAtInfinity = errors.New("ecies: shared key is point at infinity")
+	ErrSharedKeyTooBig            = errors.New("ecies: shared key params are too big")
 )
 
 // PublicKey is a representation of an elliptic curve public key.
@@ -138,8 +138,8 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 }
 
 var (
-	ErrSharedTooLong  = fmt.Errorf("ecies: shared secret is too long")
-	ErrInvalidMessage = fmt.Errorf("ecies: invalid message")
+	ErrSharedTooLong  = errors.New("ecies: shared secret is too long")
+	ErrInvalidMessage = errors.New("ecies: invalid message")
 )
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).

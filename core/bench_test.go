@@ -18,9 +18,7 @@ package core
 
 import (
 	"crypto/ecdsa"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -85,8 +83,8 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
-		gas, _ := IntrinsicGas(data, nil, false, false, false)
-		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)))
+		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
+		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)), gen.header.Time)
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
@@ -130,7 +128,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
-		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)))
+		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)), gen.header.Time)
 		for {
 			gas -= params.TxGas
 			if gas < params.TxGas {
@@ -162,7 +160,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 
 // genUncles generates blocks with two uncle headers.
 func genUncles(i int, gen *BlockGen) {
-	if i >= 6 {
+	if i >= 7 {
 		b2 := gen.PrevBlock(i - 6).Header()
 		b2.Extra = []byte("foo")
 		gen.AddUncle(b2)
@@ -175,14 +173,11 @@ func genUncles(i int, gen *BlockGen) {
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
 	var db ethdb.Database
+	var err error
 	if !disk {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		dir, err := ioutil.TempDir("", "eth-core-bench")
-		if err != nil {
-			b.Fatalf("cannot create temporary directory: %v", err)
-		}
-		defer os.RemoveAll(dir)
+		dir := b.TempDir()
 		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
@@ -192,16 +187,15 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
-	gspec := Genesis{
+	gspec := &Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
 	}
-	genesis := gspec.MustCommit(db)
-	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, b.N, gen)
+	_, chain, _ := GenerateChainWithGenesis(gspec, ethash.NewFaker(), b.N, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chainman, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -258,14 +252,19 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 			ParentHash:  hash,
 			Difficulty:  big.NewInt(1),
 			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
 		}
 		hash = header.Hash()
 
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
 		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
+
+		if n == 0 {
+			rawdb.WriteChainConfig(db, hash, params.AllEthashProtocolChanges)
+		}
+		rawdb.WriteHeadHeaderHash(db, hash)
 
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
@@ -278,26 +277,18 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	for i := 0; i < b.N; i++ {
-		dir, err := ioutil.TempDir("", "eth-chain-bench")
-		if err != nil {
-			b.Fatalf("cannot create temporary directory: %v", err)
-		}
+		dir := b.TempDir()
 		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
 		makeChainForBench(db, full, count)
 		db.Close()
-		os.RemoveAll(dir)
 	}
 }
 
 func benchReadChain(b *testing.B, full bool, count uint64) {
-	dir, err := ioutil.TempDir("", "eth-chain-bench")
-	if err != nil {
-		b.Fatalf("cannot create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := b.TempDir()
 
 	db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 	if err != nil {
@@ -316,7 +307,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, &cacheConfig, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := NewBlockChain(db, &cacheConfig, nil, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}
@@ -326,7 +317,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 			if full {
 				hash := header.Hash()
 				rawdb.ReadBody(db, hash, n)
-				rawdb.ReadReceipts(db, hash, n, chain.Config())
+				rawdb.ReadReceipts(db, hash, n, header.Time, chain.Config())
 			}
 		}
 		chain.Stop()

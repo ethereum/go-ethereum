@@ -67,13 +67,13 @@ func (e ExpirationFactor) Value(base float64, exp uint64) float64 {
 	return base / e.Factor * math.Pow(2, float64(int64(exp-e.Exp)))
 }
 
-// value calculates the value at the given moment.
+// Value calculates the value at the given moment.
 func (e ExpiredValue) Value(logOffset Fixed64) uint64 {
 	offset := Uint64ToFixed64(e.Exp) - logOffset
 	return uint64(float64(e.Base) * offset.Pow2())
 }
 
-// add adds a signed value at the given moment
+// Add adds a signed value at the given moment
 func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 	integer, frac := logOffset.ToUint64(), logOffset.Fraction()
 	factor := frac.Pow2()
@@ -102,7 +102,7 @@ func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 	return net
 }
 
-// addExp adds another ExpiredValue
+// AddExp adds another ExpiredValue
 func (e *ExpiredValue) AddExp(a ExpiredValue) {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
@@ -114,7 +114,7 @@ func (e *ExpiredValue) AddExp(a ExpiredValue) {
 	e.Base += a.Base
 }
 
-// subExp subtracts another ExpiredValue
+// SubExp subtracts another ExpiredValue
 func (e *ExpiredValue) SubExp(a ExpiredValue) {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
@@ -143,7 +143,7 @@ type LinearExpiredValue struct {
 	Rate   mclock.AbsTime `rlp:"-"` // Expiration rate(by nanosecond), will ignored by RLP
 }
 
-// value calculates the value at the given moment. This function always has the
+// Value calculates the value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
 func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
 	offset := uint64(now / e.Rate)
@@ -158,7 +158,7 @@ func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
 	return e.Val
 }
 
-// add adds a signed value at the given moment. This function always has the
+// Add adds a signed value at the given moment. This function always has the
 // assumption that the given timestamp shouldn't less than the recorded one.
 func (e *LinearExpiredValue) Add(amount int64, now mclock.AbsTime) uint64 {
 	offset := uint64(now / e.Rate)
@@ -244,17 +244,17 @@ func Uint64ToFixed64(f uint64) Fixed64 {
 	return Fixed64(f * fixedFactor)
 }
 
-// float64ToFixed64 converts float64 to Fixed64 format.
+// Float64ToFixed64 converts float64 to Fixed64 format.
 func Float64ToFixed64(f float64) Fixed64 {
 	return Fixed64(f * fixedFactor)
 }
 
-// toUint64 converts Fixed64 format to uint64.
+// ToUint64 converts Fixed64 format to uint64.
 func (f64 Fixed64) ToUint64() uint64 {
 	return uint64(f64) / fixedFactor
 }
 
-// fraction returns the fractional part of a Fixed64 value.
+// Fraction returns the fractional part of a Fixed64 value.
 func (f64 Fixed64) Fraction() Fixed64 {
 	return f64 % fixedFactor
 }
@@ -264,7 +264,7 @@ var (
 	fixedToLogFactor = math.Log(2) / float64(fixedFactor)
 )
 
-// pow2Fixed returns the base 2 power of the fixed point value.
+// Pow2 returns the base 2 power of the fixed point value.
 func (f64 Fixed64) Pow2() float64 {
 	return math.Exp(float64(f64) * fixedToLogFactor)
 }

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build none
 // +build none
 
 /*
@@ -39,19 +40,19 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -68,7 +69,9 @@ var (
 		"common/bitutil/bitutil",
 		"common/prque/",
 		"consensus/ethash/xor.go",
+		"crypto/blake2b/",
 		"crypto/bn256/",
+		"crypto/bls12381/",
 		"crypto/ecies/",
 		"graphql/graphiql.go",
 		"internal/jsre/deps",
@@ -149,13 +152,6 @@ func (i info) gpl() bool {
 	}
 	return false
 }
-
-// authors implements the sort.Interface for strings in case-insensitive mode.
-type authors []string
-
-func (as authors) Len() int           { return len(as) }
-func (as authors) Less(i, j int) bool { return strings.ToLower(as[i]) < strings.ToLower(as[j]) }
-func (as authors) Swap(i, j int)      { as[i], as[j] = as[j], as[i] }
 
 func main() {
 	var (
@@ -241,7 +237,7 @@ func gitAuthors(files []string) []string {
 }
 
 func readAuthors() []string {
-	content, err := ioutil.ReadFile("AUTHORS")
+	content, err := os.ReadFile("AUTHORS")
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatalln("error reading AUTHORS:", err)
 	}
@@ -297,7 +293,9 @@ func writeAuthors(files []string) {
 		}
 	}
 	// Write sorted list of authors back to the file.
-	sort.Sort(authors(list))
+	slices.SortFunc(list, func(a, b string) bool {
+		return strings.ToLower(a) < strings.ToLower(b)
+	})
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)
 	for _, a := range list {
@@ -305,7 +303,7 @@ func writeAuthors(files []string) {
 		content.WriteString("\n")
 	}
 	fmt.Println("writing AUTHORS")
-	if err := ioutil.WriteFile("AUTHORS", content.Bytes(), 0644); err != nil {
+	if err := os.WriteFile("AUTHORS", content.Bytes(), 0644); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -340,7 +338,10 @@ func isGenerated(file string) bool {
 	}
 	defer fd.Close()
 	buf := make([]byte, 2048)
-	n, _ := fd.Read(buf)
+	n, err := fd.Read(buf)
+	if err != nil {
+		return false
+	}
 	buf = buf[:n]
 	for _, l := range bytes.Split(buf, []byte("\n")) {
 		if bytes.HasPrefix(l, []byte("// Code generated")) {
@@ -381,7 +382,7 @@ func writeLicense(info *info) {
 	if err != nil {
 		log.Fatalf("error stat'ing %s: %v\n", info.file, err)
 	}
-	content, err := ioutil.ReadFile(info.file)
+	content, err := os.ReadFile(info.file)
 	if err != nil {
 		log.Fatalf("error reading %s: %v\n", info.file, err)
 	}
@@ -400,7 +401,7 @@ func writeLicense(info *info) {
 		return
 	}
 	fmt.Println("writing", info.ShortLicense(), info.file)
-	if err := ioutil.WriteFile(info.file, buf.Bytes(), fi.Mode()); err != nil {
+	if err := os.WriteFile(info.file, buf.Bytes(), fi.Mode()); err != nil {
 		log.Fatalf("error writing %s: %v", info.file, err)
 	}
 }

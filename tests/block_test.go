@@ -46,11 +46,12 @@ func TestBlockchain(t *testing.T) {
 	// test takes a lot for time and goes easily OOM because of sha3 calculation on a huge range,
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
+
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		if err := bt.checkFailure(t, test.Run(false)); err != nil {
+		if err := bt.checkFailure(t, test.Run(false, nil)); err != nil {
 			t.Errorf("test without snapshotter failed: %v", err)
 		}
-		if err := bt.checkFailure(t, test.Run(true)); err != nil {
+		if err := bt.checkFailure(t, test.Run(true, nil)); err != nil {
 			t.Errorf("test with snapshotter failed: %v", err)
 		}
 	})

@@ -20,6 +20,7 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/prometheus/tsdb/fileutil"
+	"github.com/gofrs/flock"
 )
 
 // Node is a container on which services can be registered.
@@ -45,13 +46,13 @@ type Node struct {
 	config        *Config
 	accman        *accounts.Manager
 	log           log.Logger
-	keyDir        string            // key store directory
-	keyDirTemp    bool              // If true, key directory will be removed by Stop
-	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
-	stop          chan struct{}     // Channel to wait for termination notifications
-	server        *p2p.Server       // Currently running P2P networking layer
-	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
-	state         int               // Tracks state of node lifecycle
+	keyDir        string        // key store directory
+	keyDirTemp    bool          // If true, key directory will be removed by Stop
+	dirLock       *flock.Flock  // prevents concurrent use of instance directory
+	stop          chan struct{} // Channel to wait for termination notifications
+	server        *p2p.Server   // Currently running P2P networking layer
+	startStopLock sync.Mutex    // Start/Stop are protected by an additional lock
+	state         int           // Tracks state of node lifecycle
 
 	lock          sync.Mutex
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
@@ -100,10 +101,11 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-
+	server := rpc.NewServer()
+	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer(),
+		inprocHandler: server,
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
@@ -118,7 +120,7 @@ func New(conf *Config) (*Node, error) {
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-	keyDir, isEphem, err := getKeyStoreDir(conf)
+	keyDir, isEphem, err := conf.GetKeyStoreDir()
 	if err != nil {
 		return nil, err
 	}
@@ -132,12 +134,7 @@ func New(conf *Config) (*Node, error) {
 	node.server.Config.PrivateKey = node.config.NodeKey()
 	node.server.Config.Name = node.config.NodeName()
 	node.server.Config.Logger = node.log
-	if node.server.Config.StaticNodes == nil {
-		node.server.Config.StaticNodes = node.config.StaticNodes()
-	}
-	if node.server.Config.TrustedNodes == nil {
-		node.server.Config.TrustedNodes = node.config.TrustedNodes()
-	}
+	node.config.checkLegacyFiles()
 	if node.server.Config.NodeDatabase == "" {
 		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
@@ -324,20 +321,20 @@ func (n *Node) openDataDir() error {
 	}
 	// Lock the instance directory to prevent concurrent use by another instance as well as
 	// accidental use of the instance directory as a database.
-	release, _, err := fileutil.Flock(filepath.Join(instdir, "LOCK"))
-	if err != nil {
-		return convertFileLockError(err)
+	n.dirLock = flock.New(filepath.Join(instdir, "LOCK"))
+
+	if locked, err := n.dirLock.TryLock(); err != nil {
+		return err
+	} else if !locked {
+		return ErrDatadirUsed
 	}
-	n.dirLock = release
 	return nil
 }
 
 func (n *Node) closeDataDir() {
 	// Release instance directory lock.
-	if n.dirLock != nil {
-		if err := n.dirLock.Release(); err != nil {
-			n.log.Error("Can't release datadir lock", "err", err)
-		}
+	if n.dirLock != nil && n.dirLock.Locked() {
+		n.dirLock.Unlock()
 		n.dirLock = nil
 	}
 }
@@ -346,25 +343,16 @@ func (n *Node) closeDataDir() {
 // or from the default location. If neither of those are present, it generates
 // a new secret and stores to the default location.
 func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
-	var fileName string
-	if len(cliParam) > 0 {
-		// If a plaintext secret was provided via cli flags, use that
-		jwtSecret := common.FromHex(cliParam)
-		if len(jwtSecret) == 32 && strings.HasPrefix(cliParam, "0x") {
-			log.Warn("Plaintext JWT secret provided, please consider passing via file")
-			return jwtSecret, nil
-		}
-		// path provided
-		fileName = cliParam
-	} else {
+	fileName := cliParam
+	if len(fileName) == 0 {
 		// no path provided, use default
 		fileName = n.ResolvePath(datadirJWTKey)
 	}
 	// try reading from file
-	log.Debug("Reading JWT secret", "path", fileName)
 	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
 		if len(jwtSecret) == 32 {
+			log.Info("Loaded JWT secret file", "path", fileName, "crc32", fmt.Sprintf("%#x", crc32.ChecksumIEEE(jwtSecret)))
 			return jwtSecret, nil
 		}
 		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
@@ -389,30 +377,48 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
-	if err := n.startInProc(); err != nil {
+	// Filter out personal api
+	var apis []rpc.API
+	for _, api := range n.rpcAPIs {
+		if api.Namespace == "personal" {
+			if n.config.EnablePersonal {
+				log.Warn("Deprecated personal namespace activated")
+			} else {
+				continue
+			}
+		}
+		apis = append(apis, api)
+	}
+	if err := n.startInProc(apis); err != nil {
 		return err
 	}
 
 	// Configure IPC.
 	if n.ipc.endpoint != "" {
-		if err := n.ipc.start(n.rpcAPIs); err != nil {
+		if err := n.ipc.start(apis); err != nil {
 			return err
 		}
 	}
 	var (
-		servers   []*httpServer
-		open, all = n.GetAPIs()
+		servers           []*httpServer
+		openAPIs, allAPIs = n.getAPIs()
 	)
 
-	initHttp := func(server *httpServer, apis []rpc.API, port int) error {
+	rpcConfig := rpcEndpointConfig{
+		batchItemLimit:         n.config.BatchRequestLimit,
+		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
+	}
+
+	initHttp := func(server *httpServer, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
 		}
-		if err := server.enableRPC(apis, httpConfig{
+		if err := server.enableRPC(openAPIs, httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
+			rpcEndpointConfig:  rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -420,15 +426,16 @@ func (n *Node) startRPC() error {
 		return nil
 	}
 
-	initWS := func(apis []rpc.API, port int) error {
+	initWS := func(port int) error {
 		server := n.wsServerForPort(port, false)
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
 		}
-		if err := server.enableWS(n.rpcAPIs, wsConfig{
-			Modules: n.config.WSModules,
-			Origins: n.config.WSOrigins,
-			prefix:  n.config.WSPathPrefix,
+		if err := server.enableWS(openAPIs, wsConfig{
+			Modules:           n.config.WSModules,
+			Origins:           n.config.WSOrigins,
+			prefix:            n.config.WSPathPrefix,
+			rpcEndpointConfig: rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -436,32 +443,35 @@ func (n *Node) startRPC() error {
 		return nil
 	}
 
-	initAuth := func(apis []rpc.API, port int, secret []byte) error {
+	initAuth := func(port int, secret []byte) error {
 		// Enable auth via HTTP
 		server := n.httpAuth
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		if err := server.enableRPC(apis, httpConfig{
+		sharedConfig := rpcConfig
+		sharedConfig.jwtSecret = secret
+		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
-			jwtSecret:          secret,
+			rpcEndpointConfig:  sharedConfig,
 		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
+
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		if err := server.enableWS(apis, wsConfig{
-			Modules:   DefaultAuthModules,
-			Origins:   DefaultAuthOrigins,
-			prefix:    DefaultAuthPrefix,
-			jwtSecret: secret,
+		if err := server.enableWS(allAPIs, wsConfig{
+			Modules:           DefaultAuthModules,
+			Origins:           DefaultAuthOrigins,
+			prefix:            DefaultAuthPrefix,
+			rpcEndpointConfig: sharedConfig,
 		}); err != nil {
 			return err
 		}
@@ -472,24 +482,24 @@ func (n *Node) startRPC() error {
 	// Set up HTTP.
 	if n.config.HTTPHost != "" {
 		// Configure legacy unauthenticated HTTP.
-		if err := initHttp(n.http, open, n.config.HTTPPort); err != nil {
+		if err := initHttp(n.http, n.config.HTTPPort); err != nil {
 			return err
 		}
 	}
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
 		// legacy unauthenticated
-		if err := initWS(open, n.config.WSPort); err != nil {
+		if err := initWS(n.config.WSPort); err != nil {
 			return err
 		}
 	}
 	// Configure authenticated API
-	if len(open) != len(all) {
+	if len(openAPIs) != len(allAPIs) {
 		jwtSecret, err := n.obtainJWTSecret(n.config.JWTSecret)
 		if err != nil {
 			return err
 		}
-		if err := initAuth(all, n.config.AuthPort, jwtSecret); err != nil {
+		if err := initAuth(n.config.AuthPort, jwtSecret); err != nil {
 			return err
 		}
 	}
@@ -523,8 +533,8 @@ func (n *Node) stopRPC() {
 }
 
 // startInProc registers all RPC APIs on the inproc server.
-func (n *Node) startInProc() error {
-	for _, api := range n.rpcAPIs {
+func (n *Node) startInProc(apis []rpc.API) error {
+	for _, api := range apis {
 		if err := n.inprocHandler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
@@ -578,9 +588,9 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
-// GetAPIs return two sets of APIs, both the ones that do not require
+// getAPIs return two sets of APIs, both the ones that do not require
 // authentication, and the complete set
-func (n *Node) GetAPIs() (unauthenticated, all []rpc.API) {
+func (n *Node) getAPIs() (unauthenticated, all []rpc.API) {
 	for _, api := range n.rpcAPIs {
 		if !api.Authenticated {
 			unauthenticated = append(unauthenticated, api)
@@ -606,8 +616,8 @@ func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
-func (n *Node) Attach() (*rpc.Client, error) {
-	return rpc.DialInProc(n.inprocHandler), nil
+func (n *Node) Attach() *rpc.Client {
+	return rpc.DialInProc(n.inprocHandler)
 }
 
 // RPCHandler returns the in-process RPC request handler.
@@ -676,6 +686,19 @@ func (n *Node) WSEndpoint() string {
 	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.prefix
 }
 
+// HTTPAuthEndpoint returns the URL of the authenticated HTTP server.
+func (n *Node) HTTPAuthEndpoint() string {
+	return "http://" + n.httpAuth.listenAddr()
+}
+
+// WSAuthEndpoint returns the current authenticated JSON-RPC over WebSocket endpoint.
+func (n *Node) WSAuthEndpoint() string {
+	if n.httpAuth.wsAllowed() {
+		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.prefix
+	}
+	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
+}
+
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
@@ -697,7 +720,14 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
+		db, err = rawdb.Open(rawdb.OpenOptions{
+			Type:      n.config.DBEngine,
+			Directory: n.ResolvePath(name),
+			Namespace: namespace,
+			Cache:     cache,
+			Handles:   handles,
+			ReadOnly:  readonly,
+		})
 	}
 
 	if err == nil {
@@ -711,26 +741,26 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
-
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		root := n.ResolvePath(name)
-		switch {
-		case freezer == "":
-			freezer = filepath.Join(root, "ancient")
-		case !filepath.IsAbs(freezer):
-			freezer = n.ResolvePath(freezer)
-		}
-		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		db, err = rawdb.Open(rawdb.OpenOptions{
+			Type:              n.config.DBEngine,
+			Directory:         n.ResolvePath(name),
+			AncientsDirectory: n.ResolveAncient(name, ancient),
+			Namespace:         namespace,
+			Cache:             cache,
+			Handles:           handles,
+			ReadOnly:          readonly,
+		})
 	}
 
 	if err == nil {
@@ -742,6 +772,17 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
+}
+
+// ResolveAncient returns the absolute path of the root ancient directory.
+func (n *Node) ResolveAncient(name string, ancient string) string {
+	switch {
+	case ancient == "":
+		ancient = filepath.Join(n.ResolvePath(name), "ancient")
+	case !filepath.IsAbs(ancient):
+		ancient = n.ResolvePath(ancient)
+	}
+	return ancient
 }
 
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the

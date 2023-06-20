@@ -21,14 +21,15 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -68,7 +69,7 @@ var (
 	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
 
 	// the bloom offsets are runtime constants which determines which part of the
-	// the account/storage hash the hasher functions looks at, to determine the
+	// account/storage hash the hasher functions looks at, to determine the
 	// bloom key for an account/slot. This is randomized at init(), so that the
 	// global population of nodes do not all display the exact same behaviour with
 	// regards to bloom content
@@ -103,7 +104,7 @@ type diffLayer struct {
 	memory uint64     // Approximate guess as to how much memory we use
 
 	root  common.Hash // Root hash to which this snapshot diff belongs to
-	stale uint32      // Signals that the layer became stale (state progressed)
+	stale atomic.Bool // Signals that the layer became stale (state progressed)
 
 	// destructSet is a very special helper marker. If an account is marked as
 	// deleted, then it's recorded in this set. However it's allowed that an account
@@ -258,18 +259,21 @@ func (dl *diffLayer) Root() common.Hash {
 
 // Parent returns the subsequent layer of a diff layer.
 func (dl *diffLayer) Parent() snapshot {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
 	return dl.parent
 }
 
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diffLayer) Stale() bool {
-	return atomic.LoadUint32(&dl.stale) != 0
+	return dl.stale.Load()
 }
 
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
+func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	data, err := dl.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -277,7 +281,7 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 	if len(data) == 0 { // can be both nil and []byte{}
 		return nil, nil
 	}
-	account := new(Account)
+	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(data, account); err != nil {
 		panic(err)
 	}
@@ -289,9 +293,14 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	// Check staleness before reaching further.
+	dl.lock.RLock()
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return nil, ErrSnapshotStale
+	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	dl.lock.RLock()
 	hit := dl.diffed.Contains(accountBloomHasher(hash))
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(hash))
@@ -358,6 +367,11 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	dl.lock.RLock()
+	// Check staleness before reaching further.
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return nil, ErrSnapshotStale
+	}
 	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(accountHash))
@@ -446,7 +460,7 @@ func (dl *diffLayer) flatten() snapshot {
 
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
-	if atomic.SwapUint32(&parent.stale, 1) != 0 {
+	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
 	// Overwrite all the updated accounts blindly, merge the sorted list
@@ -470,7 +484,6 @@ func (dl *diffLayer) flatten() snapshot {
 		for storageHash, data := range storage {
 			comboData[storageHash] = data
 		}
-		parent.storageData[accountHash] = comboData
 	}
 	// Return the combo parent
 	return &diffLayer{
@@ -512,7 +525,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 			dl.accountList = append(dl.accountList, hash)
 		}
 	}
-	sort.Sort(hashes(dl.accountList))
+	slices.SortFunc(dl.accountList, common.Hash.Less)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
@@ -550,7 +563,7 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	for k := range storageMap {
 		storageList = append(storageList, k)
 	}
-	sort.Sort(hashes(storageList))
+	slices.SortFunc(storageList, common.Hash.Less)
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList, destructed

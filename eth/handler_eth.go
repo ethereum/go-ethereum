@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package eth
 import (
 	"fmt"
 	"math/big"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -52,7 +51,7 @@ func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 // AcceptTxs retrieves whether transaction processing is enabled on the node
 // or if inbound transactions should simply be dropped.
 func (h *ethHandler) AcceptTxs() bool {
-	return atomic.LoadUint32(&h.acceptTxs) == 1
+	return h.acceptTxs.Load()
 }
 
 // Handle is invoked from a peer's message handler when it receives a new remote
@@ -67,8 +66,11 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	case *eth.NewBlockPacket:
 		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
 
-	case *eth.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket66:
 		return h.txFetcher.Notify(peer.ID(), *packet)
+
+	case *eth.NewPooledTransactionHashesPacket68:
+		return h.txFetcher.Notify(peer.ID(), packet.Hashes)
 
 	case *eth.TransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)

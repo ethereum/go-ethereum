@@ -228,7 +228,7 @@ func (g *G1) IsAffine(p *PointG1) bool {
 	return p[2].isOne()
 }
 
-// Add adds two G1 points p1, p2 and assigns the result to point at first argument.
+// Affine calculates affine form of given G1 point.
 func (g *G1) Affine(p *PointG1) *PointG1 {
 	if g.IsZero(p) {
 		return p
@@ -247,7 +247,7 @@ func (g *G1) Affine(p *PointG1) *PointG1 {
 
 // Add adds two G1 points p1, p2 and assigns the result to point at first argument.
 func (g *G1) Add(r, p1, p2 *PointG1) *PointG1 {
-	// http://www.hyperelliptic.org/EFD/gp/auto-shortw-jacobian-0.html#addition-add-2007-bl
+	// www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
 	if g.IsZero(p1) {
 		return r.Set(p2)
 	}
@@ -295,7 +295,7 @@ func (g *G1) Add(r, p1, p2 *PointG1) *PointG1 {
 
 // Double doubles a G1 point p and assigns the result to the point at first argument.
 func (g *G1) Double(r, p *PointG1) *PointG1 {
-	// http://www.hyperelliptic.org/EFD/gp/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+	// http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 	if g.IsZero(p) {
 		return r.Set(p)
 	}

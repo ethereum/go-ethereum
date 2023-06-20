@@ -19,6 +19,7 @@ package tests
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -76,7 +78,7 @@ type stPostState struct {
 	}
 }
 
-//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
+//go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 
 type stEnv struct {
 	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
@@ -98,7 +100,7 @@ type stEnvMarshaling struct {
 	BaseFee    *math.HexOrDecimal256
 }
 
-//go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
+//go:generate go run github.com/fjl/gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
 	GasPrice             *big.Int            `json:"gasPrice"`
@@ -159,11 +161,39 @@ func (t *StateTest) Subtests() []StateSubtest {
 	return sub
 }
 
+// checkError checks if the error returned by the state transition matches any expected error.
+// A failing expectation returns a wrapped version of the original error, if any,
+// or a new error detailing the failing expectation.
+// This function does not return or modify the original error, it only evaluates and returns expectations for the error.
+func (t *StateTest) checkError(subtest StateSubtest, err error) error {
+	expectedError := t.json.Post[subtest.Fork][subtest.Index].ExpectException
+	if err == nil && expectedError == "" {
+		return nil
+	}
+	if err == nil && expectedError != "" {
+		return fmt.Errorf("expected error %q, got no error", expectedError)
+	}
+	if err != nil && expectedError == "" {
+		return fmt.Errorf("unexpected error: %w", err)
+	}
+	if err != nil && expectedError != "" {
+		// Ignore expected errors (TODO MariusVanDerWijden check error string)
+		return nil
+	}
+	return nil
+}
+
 // Run executes a specific subtest and verifies the post-state and logs
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool) (*snapshot.Tree, *state.StateDB, error) {
 	snaps, statedb, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter)
+	if checkedErr := t.checkError(subtest, err); checkedErr != nil {
+		return snaps, statedb, checkedErr
+	}
+	// The error has been checked; if it was unexpected, it's already returned.
 	if err != nil {
-		return snaps, statedb, err
+		// Here, an error exists but it was expected.
+		// We do not check the post state or logs.
+		return snaps, statedb, nil
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	// N.B: We need to do this in a two-step process, because the first Commit takes care
@@ -173,6 +203,11 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	}
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
 		return snaps, statedb, fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
+	}
+	// Re-init the post-state instance for further operation
+	statedb, err = state.New(root, statedb.Database(), snaps)
+	if err != nil {
+		return nil, nil, err
 	}
 	return snaps, statedb, nil
 }
@@ -184,7 +219,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		return nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
-	block := t.genesis(config).ToBlock(nil)
+	block := t.genesis(config).ToBlock()
 	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
@@ -220,7 +255,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
-	if t.json.Env.Random != nil {
+	context.Random = nil
+	if t.json.Env.Difficulty != nil {
+		context.Difficulty = new(big.Int).Set(t.json.Env.Difficulty)
+	}
+	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
@@ -230,21 +269,19 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	if _, err := core.ApplyMessage(evm, msg, gaspool); err != nil {
+	_, err = core.ApplyMessage(evm, msg, gaspool)
+	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
-
-	// Commit block
-	statedb.Commit(config.IsEIP158(block.Number()))
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
 	// - the coinbase suicided, or
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	statedb.AddBalance(block.Coinbase(), new(big.Int))
-	// And _now_ get the state root
-	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
-	return snaps, statedb, root, nil
+	// Commit block
+	root, _ := statedb.Commit(config.IsEIP158(block.Number()))
+	return snaps, statedb, root, err
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
@@ -252,8 +289,8 @@ func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 }
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool) (*snapshot.Tree, *state.StateDB) {
-	sdb := state.NewDatabase(db)
-	statedb, _ := state.New(common.Hash{}, sdb, nil)
+	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -267,7 +304,13 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 
 	var snaps *snapshot.Tree
 	if snapshotter {
-		snaps, _ = snapshot.New(db, sdb.TrieDB(), 1, root, false, true, false)
+		snapconfig := snapshot.Config{
+			CacheSize:  1,
+			Recovery:   false,
+			NoBuild:    false,
+			AsyncBuild: false,
+		}
+		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return snaps, statedb
@@ -291,7 +334,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return genesis
 }
 
-func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Message, error) {
+func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
 	// Derive sender from private key if present.
 	var from common.Address
 	if len(tx.PrivateKey) > 0 {
@@ -356,11 +399,21 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 			tx.MaxFeePerGas)
 	}
 	if gasPrice == nil {
-		return nil, fmt.Errorf("no gas price provided")
+		return nil, errors.New("no gas price provided")
 	}
 
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
-		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, false)
+	msg := &core.Message{
+		From:       from,
+		To:         to,
+		Nonce:      tx.Nonce,
+		Value:      value,
+		GasLimit:   gasLimit,
+		GasPrice:   gasPrice,
+		GasFeeCap:  tx.MaxFeePerGas,
+		GasTipCap:  tx.MaxPriorityFeePerGas,
+		Data:       data,
+		AccessList: accessList,
+	}
 	return msg, nil
 }
 

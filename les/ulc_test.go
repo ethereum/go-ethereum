@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +34,19 @@ func TestULCAnnounceThresholdLes3(t *testing.T) { testULCAnnounceThreshold(t, 3)
 func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	// todo figure out why it takes fetcher so longer to fetcher the announced header.
 	t.Skip("Sometimes it can failed")
+
+	// newTestLightPeer creates node with light sync mode
+	newTestLightPeer := func(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
+		netconfig := testnetConfig{
+			protocol:    protocol,
+			ulcServers:  ulcServers,
+			ulcFraction: ulcFraction,
+			nopruning:   true,
+		}
+		_, c, teardown := newClientServerEnv(t, netconfig)
+		return c, teardown
+	}
+
 	var cases = []struct {
 		height    []int
 		threshold int
@@ -55,7 +67,7 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 			ids       []string
 		)
 		for i := 0; i < len(testcase.height); i++ {
-			s, n, teardown := newTestServerPeer(t, 0, protocol)
+			s, n, teardown := newTestServerPeer(t, 0, protocol, nil)
 
 			servers = append(servers, s)
 			nodes = append(nodes, n)
@@ -123,7 +135,7 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		default:
 		}
-		if atomic.LoadUint32(&peer1.serving) == 1 && atomic.LoadUint32(&peer2.serving) == 1 {
+		if peer1.serving.Load() && peer2.serving.Load() {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -132,10 +144,11 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 }
 
 // newTestServerPeer creates server peer.
-func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
+func newTestServerPeer(t *testing.T, blocks int, protocol int, indexFn indexerCallback) (*testServer, *enode.Node, func()) {
 	netconfig := testnetConfig{
 		blocks:    blocks,
 		protocol:  protocol,
+		indexFn:   indexFn,
 		nopruning: true,
 	}
 	s, _, teardown := newClientServerEnv(t, netconfig)
@@ -146,16 +159,4 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *en
 	s.handler.server.privateKey = key
 	n := enode.NewV4(&key.PublicKey, net.ParseIP("127.0.0.1"), 35000, 35000)
 	return s, n, teardown
-}
-
-// newTestLightPeer creates node with light sync mode
-func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
-	netconfig := testnetConfig{
-		protocol:    protocol,
-		ulcServers:  ulcServers,
-		ulcFraction: ulcFraction,
-		nopruning:   true,
-	}
-	_, c, teardown := newClientServerEnv(t, netconfig)
-	return c, teardown
 }

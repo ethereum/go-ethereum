@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ type resultStore struct {
 	// Internal index of first non-completed entry, updated atomically when needed.
 	// If all items are complete, this will equal length(items), so
 	// *important* : is not safe to use for indexing without checking against length
-	indexIncomplete int32 // atomic access
+	indexIncomplete atomic.Int32
 
 	// throttleThreshold is the limit up to which we _want_ to fill the
 	// results. If blocks are large, we want to limit the results to less
@@ -71,10 +71,11 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 // wants to reserve headers for fetching.
 //
 // It returns the following:
-//   stale     - if true, this item is already passed, and should not be requested again
-//   throttled - if true, the store is at capacity, this particular header is not prio now
-//   item      - the result to store data into
-//   err       - any error that occurred
+//
+//	stale     - if true, this item is already passed, and should not be requested again
+//	throttled - if true, the store is at capacity, this particular header is not prio now
+//	item      - the result to store data into
+//	err       - any error that occurred
 func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -123,7 +124,7 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 	return item, index, stale, throttle, nil
 }
 
-// hasCompletedItems returns true if there are processable items available
+// HasCompletedItems returns true if there are processable items available
 // this method is cheaper than countCompleted
 func (r *resultStore) HasCompletedItems() bool {
 	r.lock.RLock()
@@ -145,7 +146,7 @@ func (r *resultStore) HasCompletedItems() bool {
 func (r *resultStore) countCompleted() int {
 	// We iterate from the already known complete point, and see
 	// if any more has completed since last count
-	index := atomic.LoadInt32(&r.indexIncomplete)
+	index := r.indexIncomplete.Load()
 	for ; ; index++ {
 		if index >= int32(len(r.items)) {
 			break
@@ -155,7 +156,7 @@ func (r *resultStore) countCompleted() int {
 			break
 		}
 	}
-	atomic.StoreInt32(&r.indexIncomplete, index)
+	r.indexIncomplete.Store(index)
 	return int(index)
 }
 
@@ -178,7 +179,7 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	}
 	// Advance the expected block number of the first cache entry
 	r.resultOffset += uint64(limit)
-	atomic.AddInt32(&r.indexIncomplete, int32(-limit))
+	r.indexIncomplete.Add(int32(-limit))
 
 	return results
 }

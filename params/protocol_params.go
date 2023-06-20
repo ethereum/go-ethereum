@@ -38,6 +38,7 @@ const (
 
 	Keccak256Gas     uint64 = 30 // Once per KECCAK256 operation.
 	Keccak256WordGas uint64 = 6  // Once per word of the KECCAK256 operation's data.
+	InitCodeWordGas  uint64 = 2  // Once per word of the init code when creating a contract.
 
 	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
 	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
@@ -119,11 +120,12 @@ const (
 	// Introduced in Tangerine Whistle (Eip 150)
 	CreateBySelfdestructGas uint64 = 25000
 
-	BaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
-	ElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
-	InitialBaseFee           = 1000000000 // Initial base fee for EIP-1559 blocks.
+	DefaultBaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
+	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
+	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
-	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
+	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
+	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
 
 	// Precompiled contract gas prices
 
@@ -157,6 +159,16 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
+
+	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
+	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
+	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
+	BlobTxMaxDataGasPerBlock           = 1 << 19 // Maximum consumable data gas for data blobs per block
+	BlobTxTargetDataGasPerBlock        = 1 << 18 // Target consumable data gas for data blobs per block (for 1559-like pricing)
+	BlobTxDataGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
+	BlobTxMinDataGasprice              = 1       // Minimum gas price for data blobs
+	BlobTxDataGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for data gas price
+	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

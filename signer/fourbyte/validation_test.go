@@ -29,11 +29,11 @@ func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }
 func toHexBig(h string) hexutil.Big {
-	b := big.NewInt(0).SetBytes(common.FromHex(h))
+	b := new(big.Int).SetBytes(common.FromHex(h))
 	return hexutil.Big(*b)
 }
 func toHexUint(h string) hexutil.Uint64 {
-	b := big.NewInt(0).SetBytes(common.FromHex(h))
+	b := new(big.Int).SetBytes(common.FromHex(h))
 	return hexutil.Uint64(b.Uint64())
 }
 func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
@@ -53,7 +53,6 @@ func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
 	if t.i != "" {
 		a := hexutil.Bytes(common.FromHex(t.i))
 		input = &a
-
 	}
 	return &apitypes.SendTxArgs{
 		From:     *from,

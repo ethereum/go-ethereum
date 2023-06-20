@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -42,7 +43,7 @@ func TestLoopInterrupt(t *testing.T) {
 	}
 
 	for i, tt := range loopInterruptTests {
-		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
@@ -73,5 +74,4 @@ func TestLoopInterrupt(t *testing.T) {
 			}
 		}
 	}
-
 }

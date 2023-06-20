@@ -1,6 +1,23 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package abi
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -24,7 +41,7 @@ func isIdentifierSymbol(c byte) bool {
 
 func parseToken(unescapedSelector string, isIdent bool) (string, string, error) {
 	if len(unescapedSelector) == 0 {
-		return "", "", fmt.Errorf("empty token")
+		return "", "", errors.New("empty token")
 	}
 	firstChar := unescapedSelector[0]
 	position := 1
@@ -86,12 +103,15 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if len(rest) == 0 || rest[0] != ')' {
 		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
 	}
+	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
+		return append(result, "[]"), rest[3:], nil
+	}
 	return result, rest[1:], nil
 }
 
 func parseType(unescapedSelector string) (interface{}, string, error) {
 	if len(unescapedSelector) == 0 {
-		return nil, "", fmt.Errorf("empty type")
+		return nil, "", errors.New("empty type")
 	}
 	if unescapedSelector[0] == '(' {
 		return parseCompositeType(unescapedSelector)
@@ -112,7 +132,12 @@ func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to assemble components: %v", err)
 			}
-			arguments = append(arguments, ArgumentMarshaling{name, "tuple", "tuple", subArgs, false})
+			tupleType := "tuple"
+			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
+				subArgs = subArgs[:len(subArgs)-1]
+				tupleType = "tuple[]"
+			}
+			arguments = append(arguments, ArgumentMarshaling{name, tupleType, tupleType, subArgs, false})
 		} else {
 			return nil, fmt.Errorf("failed to assemble args: unexpected type %T", arg)
 		}
@@ -142,7 +167,7 @@ func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': unexpected string '%s'", unescapedSelector, rest)
 	}
 
-	// Reassemble the fake ABI and constuct the JSON
+	// Reassemble the fake ABI and construct the JSON
 	fakeArgs, err := assembleArgs(args)
 	if err != nil {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector: %v", err)

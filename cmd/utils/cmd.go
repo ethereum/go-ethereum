@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -77,11 +77,11 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 
-		minFreeDiskSpace := ethconfig.Defaults.TrieDirtyCache
-		if ctx.GlobalIsSet(MinFreeDiskSpaceFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(MinFreeDiskSpaceFlag.Name)
-		} else if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+		minFreeDiskSpace := 2 * ethconfig.Defaults.TrieDirtyCache // Default 2 * 256Mb
+		if ctx.IsSet(MinFreeDiskSpaceFlag.Name) {
+			minFreeDiskSpace = ctx.Int(MinFreeDiskSpaceFlag.Name)
+		} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
+			minFreeDiskSpace = 2 * ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 		}
 		if minFreeDiskSpace > 0 {
 			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024)
@@ -118,6 +118,9 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 }
 
 func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritical uint64) {
+	if path == "" {
+		return
+	}
 	for {
 		freeSpace, err := getFreeDiskSpace(path)
 		if err != nil {
@@ -125,13 +128,13 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 			break
 		}
 		if freeSpace < freeDiskSpaceCritical {
-			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace))
+			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace), "path", path)
 			sigc <- syscall.SIGTERM
 			break
 		} else if freeSpace < 2*freeDiskSpaceCritical {
-			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
+			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical), "path", path)
 		}
-		time.Sleep(60 * time.Second)
+		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -181,7 +184,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
+			return errors.New("interrupted")
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
@@ -204,15 +207,21 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 		// Import the batch.
 		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
+			return errors.New("interrupted")
 		}
 		missing := missingBlocks(chain, blocks[:i])
 		if len(missing) == 0 {
 			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())
 			continue
 		}
-		if _, err := chain.InsertChain(missing); err != nil {
-			return fmt.Errorf("invalid block %d: %v", n, err)
+		if failindex, err := chain.InsertChain(missing); err != nil {
+			var failnumber uint64
+			if failindex > 0 && failindex < len(missing) {
+				failnumber = missing[failindex].NumberU64()
+			} else {
+				failnumber = missing[0].NumberU64()
+			}
+			return fmt.Errorf("invalid block %d: %v", failnumber, err)
 		}
 	}
 	return nil
@@ -222,7 +231,7 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
-		if head.NumberU64() > block.NumberU64() {
+		if head.Number.Uint64() > block.NumberU64() {
 			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
 				return blocks[i:]
 			}

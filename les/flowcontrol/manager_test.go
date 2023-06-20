@@ -17,6 +17,7 @@
 package flowcontrol
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -44,16 +45,17 @@ const (
 // maximum permitted rate. The max capacity nodes are changed multiple times during
 // a single test.
 func TestConstantTotalCapacity(t *testing.T) {
-	testConstantTotalCapacity(t, 10, 1, 0)
-	testConstantTotalCapacity(t, 10, 1, 1)
-	testConstantTotalCapacity(t, 30, 1, 0)
-	testConstantTotalCapacity(t, 30, 2, 3)
-	testConstantTotalCapacity(t, 100, 1, 0)
-	testConstantTotalCapacity(t, 100, 3, 5)
-	testConstantTotalCapacity(t, 100, 5, 10)
+	testConstantTotalCapacity(t, 10, 1, 0, false)
+	testConstantTotalCapacity(t, 10, 1, 1, false)
+	testConstantTotalCapacity(t, 30, 1, 0, false)
+	testConstantTotalCapacity(t, 30, 2, 3, false)
+	testConstantTotalCapacity(t, 100, 1, 0, false)
+	testConstantTotalCapacity(t, 100, 3, 5, false)
+	testConstantTotalCapacity(t, 100, 5, 10, false)
+	testConstantTotalCapacity(t, 100, 3, 5, true)
 }
 
-func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, randomSend int) {
+func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, randomSend int, priorityOverflow bool) {
 	clock := &mclock.Simulated{}
 	nodes := make([]*testNode, nodeCount)
 	var totalCapacity uint64
@@ -62,6 +64,10 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 		totalCapacity += nodes[i].capacity
 	}
 	m := NewClientManager(PieceWiseLinear{{0, totalCapacity}}, clock)
+	if priorityOverflow {
+		// provoke a situation where rcLastUpdate overflow needs to be handled
+		m.rcLastIntValue = math.MaxInt64 - 10000000000
+	}
 	for _, n := range nodes {
 		n.bufLimit = n.capacity * 6000
 		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
@@ -104,7 +110,6 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	if ratio < 0.98 || ratio > 1.02 {
 		t.Errorf("totalCost/totalCapacity/testLength ratio incorrect (expected: 1, got: %f)", ratio)
 	}
-
 }
 
 func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {

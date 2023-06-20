@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2022 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package ethtest
 
@@ -23,6 +23,7 @@ import (
 	"math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -90,7 +91,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		{4000, s.chain.RootAt(0), zero, ffHash, 0, zero, zero},
 		// A 127 block old stateroot, expected to be served
 		{4000, s.chain.RootAt(999 - 127), zero, ffHash, 77, firstKey, common.HexToHash("0xe4c6fdef5dd4e789a2612390806ee840b8ec0fe52548f8b4efe41abb20c37aac")},
-		// A root which is not actually an account root, but a storage orot
+		// A root which is not actually an account root, but a storage root
 		{4000, storageRoot, zero, ffHash, 0, zero, zero},
 
 		// And some non-sensical requests
@@ -104,6 +105,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		// Max bytes: 0. Expect to deliver one account.
 		{0, root, zero, ffHash, 1, firstKey, firstKey},
 	} {
+		tc := tc
 		if err := s.snapGetAccountRange(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\nfailed: %v", i, tc.root, tc.origin, tc.limit, tc.nBytes, err)
 		}
@@ -120,7 +122,7 @@ type stRangesTest struct {
 	expSlots int
 }
 
-// TestSnapGetStorageRange various forms of GetStorageRanges requests.
+// TestSnapGetStorageRanges various forms of GetStorageRanges requests.
 func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 	var (
 		ffHash    = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
@@ -194,6 +196,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 			expSlots: 2,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetStorageRanges(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
 				i, tc.root, tc.origin, tc.limit, tc.nBytes, len(tc.accounts), err)
@@ -207,13 +210,6 @@ type byteCodesTest struct {
 
 	expHashes int
 }
-
-var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode = common.HexToHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
-)
 
 // TestSnapGetByteCodes various forms of GetByteCodes requests.
 func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
@@ -261,15 +257,15 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 		},
 		// Empties
 		{
-			nBytes: 10000, hashes: []common.Hash{emptyRoot},
+			nBytes: 10000, hashes: []common.Hash{types.EmptyRootHash},
 			expHashes: 0,
 		},
 		{
-			nBytes: 10000, hashes: []common.Hash{emptyCode},
+			nBytes: 10000, hashes: []common.Hash{types.EmptyCodeHash},
 			expHashes: 1,
 		},
 		{
-			nBytes: 10000, hashes: []common.Hash{emptyCode, emptyCode, emptyCode},
+			nBytes: 10000, hashes: []common.Hash{types.EmptyCodeHash, types.EmptyCodeHash, types.EmptyCodeHash},
 			expHashes: 3,
 		},
 		// The existing bytecodes
@@ -291,6 +287,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 			expHashes: 4,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetByteCodes(t, &tc); err != nil {
 			t.Errorf("test %d \n bytes: %d\n #hashes: %d\nfailed: %v", i, tc.nBytes, len(tc.hashes), err)
 		}
@@ -347,7 +344,6 @@ func hexToCompact(hex []byte) []byte {
 
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-
 	key := common.FromHex("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 	// helper function to iterate the key, and generate the compact-encoded
 	// trie paths along the way.
@@ -361,7 +357,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 	for i := 1; i <= 65; i++ {
 		accPaths = append(accPaths, pathTo(i))
 	}
-	empty := emptyCode
+	empty := types.EmptyCodeHash
 	for i, tc := range []trieNodesTest{
 		{
 			root:      s.chain.RootAt(999),
@@ -372,8 +368,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{}, // zero-length pathset should 'abort' and kick us off
-				snap.TrieNodePathSet{[]byte{0}},
+				{}, // zero-length pathset should 'abort' and kick us off
+				{[]byte{0}},
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{},
@@ -382,8 +378,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
 			nBytes: 5000,
 			//0x6b3724a41b8c38b46d4d02fba2bb2074c47a507eb16a9a4b978f91d32e406faf
@@ -392,7 +388,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{ // nonsensically long path
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+				{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
 					0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8}},
 			},
 			nBytes:    5000,
@@ -401,11 +397,13 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(0),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
-			nBytes:    5000,
-			expHashes: []common.Hash{},
+			nBytes: 5000,
+			expHashes: []common.Hash{
+				common.HexToHash("0x1ee1bb2fbac4d46eab331f3e8551e18a0805d084ed54647883aa552809ca968d"),
+			},
 		},
 		{
 			// The leaf is only a couple of levels down, so the continued trie traversal causes lookup failures.
@@ -435,7 +433,36 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 				common.HexToHash("0xbcefee69b37cca1f5bf3a48aebe08b35f2ea1864fa958bb0723d909a0e0d28d8"),
 			},
 		},
-	} {
+		{
+			/*
+				A test against this account, requesting trie nodes for the storage trie
+				{
+				  "balance": "0",
+				  "nonce": 1,
+				  "root": "0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790",
+				  "codeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+				  "storage": {
+				    "0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace": "02",
+				    "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6": "01",
+				    "0xc2575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b": "03"
+				  },
+				  "key": "0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844"
+				}
+			*/
+			root: s.chain.RootAt(999),
+			paths: []snap.TrieNodePathSet{
+				{
+					common.FromHex("0xf493f79c43bd747129a226ad42529885a4b108aba6046b2d12071695a6627844"),
+					[]byte{0},
+				},
+			},
+			nBytes: 5000,
+			expHashes: []common.Hash{
+				common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790"),
+			},
+		},
+	}[7:] {
+		tc := tc
 		if err := s.snapGetTrieNodes(t, &tc); err != nil {
 			t.Errorf("test %d \n #hashes %x\n root: %#x\n bytes: %d\nfailed: %v", i, len(tc.expHashes), tc.root, tc.nBytes, err)
 		}
@@ -492,10 +519,10 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	if len(hashes) > 0 {
 		if exp, got := tc.expFirst, res.Accounts[0].Hash; exp != got {
-			return fmt.Errorf("expected first account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected first account %#x, got %#x", exp, got)
 		}
 		if exp, got := tc.expLast, res.Accounts[len(res.Accounts)-1].Hash; exp != got {
-			return fmt.Errorf("expected last account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected last account %#x, got %#x", exp, got)
 		}
 	}
 	// Reconstruct a partial trie from the response and verify it

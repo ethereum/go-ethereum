@@ -55,13 +55,12 @@ var (
 // ClientManager controls the capacity assigned to the clients of a server.
 // Since ServerParams guarantee a safe lower estimate for processable requests
 // even in case of all clients being active, ClientManager calculates a
-// corrigated buffer value and usually allows a higher remaining buffer value
+// corrugated buffer value and usually allows a higher remaining buffer value
 // to be returned with each reply.
 type ClientManager struct {
-	clock     mclock.Clock
-	lock      sync.Mutex
-	enabledCh chan struct{}
-	stop      chan chan struct{}
+	clock mclock.Clock
+	lock  sync.Mutex
+	stop  chan chan struct{}
 
 	curve                                      PieceWiseLinear
 	sumRecharge, totalRecharge, totalConnected uint64
@@ -76,10 +75,11 @@ type ClientManager struct {
 	// (totalRecharge / sumRecharge)*FixedPointMultiplier or 0 if sumRecharge==0
 	rcLastUpdate   mclock.AbsTime // last time the recharge integrator was updated
 	rcLastIntValue int64          // last updated value of the recharge integrator
+	priorityOffset int64          // offset for prque priority values ensures that all priorities stay in the int64 range
 	// recharge queue is a priority queue with currently recharging client nodes
 	// as elements. The priority value is rcFullIntValue which allows to quickly
 	// determine which client will first finish recharge.
-	rcQueue *prque.Prque
+	rcQueue *prque.Prque[int64, *ClientNode]
 }
 
 // NewClientManager returns a new client manager.
@@ -108,7 +108,7 @@ type ClientManager struct {
 func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager {
 	cm := &ClientManager{
 		clock:         clock,
-		rcQueue:       prque.NewWrapAround(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
+		rcQueue:       prque.New[int64, *ClientNode](func(a *ClientNode, i int) { a.queueIndex = i }),
 		capLastUpdate: clock.Now(),
 		stop:          make(chan chan struct{}),
 	}
@@ -154,7 +154,7 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 	}
 }
 
-// SetCapacityRaiseThreshold sets a threshold value used for raising capFactor.
+// SetCapacityLimits sets a threshold value used for raising capFactor.
 // Either if the difference between total allowed and connected capacity is less
 // than this threshold or if their ratio is less than capacityRaiseThresholdRatio
 // then capFactor is allowed to slowly raise.
@@ -224,7 +224,7 @@ func (cm *ClientManager) processed(node *ClientNode, maxCost, realCost uint64, n
 	cm.updateBuffer(node, int64(maxCost-realCost), now)
 }
 
-// updateBuffer recalulates the corrected buffer value, adds the given value to it
+// updateBuffer recalculates the corrected buffer value, adds the given value to it
 // and updates the node's actual buffer value if possible
 func (cm *ClientManager) updateBuffer(node *ClientNode, add int64, now mclock.AbsTime) {
 	cm.lock.Lock()
@@ -289,13 +289,13 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		}
 		dt := now - lastUpdate
 		// fetch the client that finishes first
-		rcqNode := cm.rcQueue.PopItem().(*ClientNode) // if sumRecharge > 0 then the queue cannot be empty
+		rcqNode := cm.rcQueue.PopItem() // if sumRecharge > 0 then the queue cannot be empty
 		// check whether it has already finished
 		dtNext := mclock.AbsTime(float64(rcqNode.rcFullIntValue-cm.rcLastIntValue) / bonusRatio)
 		if dt < dtNext {
 			// not finished yet, put it back, update integrator according
 			// to current bonusRatio and return
-			cm.rcQueue.Push(rcqNode, -rcqNode.rcFullIntValue)
+			cm.addToQueue(rcqNode)
 			cm.rcLastIntValue += int64(bonusRatio * float64(dt))
 			return
 		}
@@ -307,6 +307,20 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		}
 		cm.rcLastIntValue = rcqNode.rcFullIntValue
 	}
+}
+
+func (cm *ClientManager) addToQueue(node *ClientNode) {
+	if cm.priorityOffset-node.rcFullIntValue < -0x4000000000000000 {
+		cm.priorityOffset += 0x4000000000000000
+		// recreate priority queue with new offset to avoid overflow; should happen very rarely
+		newRcQueue := prque.New[int64, *ClientNode](func(a *ClientNode, i int) { a.queueIndex = i })
+		for cm.rcQueue.Size() > 0 {
+			n := cm.rcQueue.PopItem()
+			newRcQueue.Push(n, cm.priorityOffset-n.rcFullIntValue)
+		}
+		cm.rcQueue = newRcQueue
+	}
+	cm.rcQueue.Push(node, cm.priorityOffset-node.rcFullIntValue)
 }
 
 // updateNodeRc updates a node's corrBufValue and adds an external correction value.
@@ -345,7 +359,7 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		}
 		node.rcLastIntValue = cm.rcLastIntValue
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)
-		cm.rcQueue.Push(node, -node.rcFullIntValue)
+		cm.addToQueue(node)
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/slices"
 )
 
 // Tree is a merkle tree of node records.
@@ -117,32 +117,32 @@ func (t *Tree) Nodes() []*enode.Node {
 We want to keep the UDP size below 512 bytes. The UDP size is roughly:
 UDP length = 8 + UDP payload length ( 229 )
 UPD Payload length:
- - dns.id 2
- - dns.flags 2
- - dns.count.queries 2
- - dns.count.answers 2
- - dns.count.auth_rr 2
- - dns.count.add_rr 2
- - queries (query-size + 6)
- - answers :
- 	- dns.resp.name 2
- 	- dns.resp.type 2
- 	- dns.resp.class 2
- 	- dns.resp.ttl 4
- 	- dns.resp.len 2
- 	- dns.txt.length 1
- 	- dns.txt resp_data_size
+  - dns.id 2
+  - dns.flags 2
+  - dns.count.queries 2
+  - dns.count.answers 2
+  - dns.count.auth_rr 2
+  - dns.count.add_rr 2
+  - queries (query-size + 6)
+  - answers :
+  - dns.resp.name 2
+  - dns.resp.type 2
+  - dns.resp.class 2
+  - dns.resp.ttl 4
+  - dns.resp.len 2
+  - dns.txt.length 1
+  - dns.txt resp_data_size
 
-So the total size is roughly a fixed overhead of `39`, and the size of the
-query (domain name) and response.
-The query size is, for example, FVY6INQ6LZ33WLCHO3BPR3FH6Y.snap.mainnet.ethdisco.net (52)
+So the total size is roughly a fixed overhead of `39`, and the size of the query (domain
+name) and response. The query size is, for example,
+FVY6INQ6LZ33WLCHO3BPR3FH6Y.snap.mainnet.ethdisco.net (52)
 
 We also have some static data in the response, such as `enrtree-branch:`, and potentially
 splitting the response up with `" "`, leaving us with a size of roughly `400` that we need
 to stay below.
 
-The number `370` is used to have some margin for extra overhead (for example, the dns query
-may be larger - more subdomains).
+The number `370` is used to have some margin for extra overhead (for example, the dns
+query may be larger - more subdomains).
 */
 const (
 	hashAbbrevSize = 1 + 16*13/8          // Size of an encoded hash (plus comma)
@@ -214,8 +214,8 @@ func (t *Tree) build(entries []entry) entry {
 }
 
 func sortByID(nodes []*enode.Node) []*enode.Node {
-	sort.Slice(nodes, func(i, j int) bool {
-		return bytes.Compare(nodes[i].ID().Bytes(), nodes[j].ID().Bytes()) < 0
+	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
 	})
 	return nodes
 }

@@ -94,7 +94,7 @@ func (Failure_FailureType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{1, 0}
 }
 
-//*
+// *
 // Type of button request
 type ButtonRequest_ButtonRequestType int32
 
@@ -175,7 +175,7 @@ func (ButtonRequest_ButtonRequestType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{2, 0}
 }
 
-//*
+// *
 // Type of PIN request
 type PinMatrixRequest_PinMatrixRequestType int32
 
@@ -220,7 +220,7 @@ func (PinMatrixRequest_PinMatrixRequestType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{4, 0}
 }
 
-//*
+// *
 // Response: Success of the previous request
 // @end
 type Success struct {
@@ -262,7 +262,7 @@ func (m *Success) GetMessage() string {
 	return ""
 }
 
-//*
+// *
 // Response: Failure of the previous request
 // @end
 type Failure struct {
@@ -312,7 +312,7 @@ func (m *Failure) GetMessage() string {
 	return ""
 }
 
-//*
+// *
 // Response: Device is waiting for HW button press.
 // @auxstart
 // @next ButtonAck
@@ -363,7 +363,7 @@ func (m *ButtonRequest) GetData() string {
 	return ""
 }
 
-//*
+// *
 // Request: Computer agrees to wait for HW button press
 // @auxend
 type ButtonAck struct {
@@ -397,7 +397,7 @@ func (m *ButtonAck) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ButtonAck proto.InternalMessageInfo
 
-//*
+// *
 // Response: Device is asking computer to show PIN matrix and awaits PIN encoded using this matrix scheme
 // @auxstart
 // @next PinMatrixAck
@@ -440,7 +440,7 @@ func (m *PinMatrixRequest) GetType() PinMatrixRequest_PinMatrixRequestType {
 	return PinMatrixRequest_PinMatrixRequestType_Current
 }
 
-//*
+// *
 // Request: Computer responds with encoded PIN
 // @auxend
 type PinMatrixAck struct {
@@ -482,7 +482,7 @@ func (m *PinMatrixAck) GetPin() string {
 	return ""
 }
 
-//*
+// *
 // Response: Device awaits encryption passphrase
 // @auxstart
 // @next PassphraseAck
@@ -525,7 +525,7 @@ func (m *PassphraseRequest) GetOnDevice() bool {
 	return false
 }
 
-//*
+// *
 // Request: Send passphrase back
 // @next PassphraseStateRequest
 type PassphraseAck struct {
@@ -575,7 +575,7 @@ func (m *PassphraseAck) GetState() []byte {
 	return nil
 }
 
-//*
+// *
 // Response: Device awaits passphrase state
 // @next PassphraseStateAck
 type PassphraseStateRequest struct {
@@ -617,7 +617,7 @@ func (m *PassphraseStateRequest) GetState() []byte {
 	return nil
 }
 
-//*
+// *
 // Request: Send passphrase state back
 // @auxend
 type PassphraseStateAck struct {
@@ -651,7 +651,7 @@ func (m *PassphraseStateAck) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PassphraseStateAck proto.InternalMessageInfo
 
-//*
+// *
 // Structure representing BIP32 (hierarchical deterministic) node
 // Used for imports of private key into the device and exporting public key out of device
 // @embed

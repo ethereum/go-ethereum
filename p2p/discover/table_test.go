@@ -247,41 +247,6 @@ func TestTable_findnodeByID(t *testing.T) {
 	}
 }
 
-func TestTable_ReadRandomNodesGetAll(t *testing.T) {
-	cfg := &quick.Config{
-		MaxCount: 200,
-		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
-		Values: func(args []reflect.Value, rand *rand.Rand) {
-			args[0] = reflect.ValueOf(make([]*enode.Node, rand.Intn(1000)))
-		},
-	}
-	test := func(buf []*enode.Node) bool {
-		transport := newPingRecorder()
-		tab, db := newTestTable(transport)
-		defer db.Close()
-		defer tab.close()
-		<-tab.initDone
-
-		for i := 0; i < len(buf); i++ {
-			ld := cfg.Rand.Intn(len(tab.buckets))
-			fillTable(tab, []*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
-		}
-		gotN := tab.ReadRandomNodes(buf)
-		if gotN != tab.len() {
-			t.Errorf("wrong number of nodes, got %d, want %d", gotN, tab.len())
-			return false
-		}
-		if hasDuplicates(wrapNodes(buf[:gotN])) {
-			t.Errorf("result contains duplicates")
-			return false
-		}
-		return true
-	}
-	if err := quick.Check(test, cfg); err != nil {
-		t.Error(err)
-	}
-}
-
 type closeTest struct {
 	Self   enode.ID
 	Target enode.ID
@@ -394,6 +359,59 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	if !reflect.DeepEqual(intable, n2) {
 		t.Fatalf("table contains old record with seq %d, want seq %d", intable.Seq(), n2.Seq())
 	}
+}
+
+func TestNodesPush(t *testing.T) {
+	var target enode.ID
+	n1 := nodeAtDistance(target, 255, intIP(1))
+	n2 := nodeAtDistance(target, 254, intIP(2))
+	n3 := nodeAtDistance(target, 253, intIP(3))
+	perm := [][]*node{
+		{n3, n2, n1},
+		{n3, n1, n2},
+		{n2, n3, n1},
+		{n2, n1, n3},
+		{n1, n3, n2},
+		{n1, n2, n3},
+	}
+
+	// Insert all permutations into lists with size limit 3.
+	for _, nodes := range perm {
+		list := nodesByDistance{target: target}
+		for _, n := range nodes {
+			list.push(n, 3)
+		}
+		if !slicesEqual(list.entries, perm[0], nodeIDEqual) {
+			t.Fatal("not equal")
+		}
+	}
+
+	// Insert all permutations into lists with size limit 2.
+	for _, nodes := range perm {
+		list := nodesByDistance{target: target}
+		for _, n := range nodes {
+			list.push(n, 2)
+		}
+		if !slicesEqual(list.entries, perm[0][:2], nodeIDEqual) {
+			t.Fatal("not equal")
+		}
+	}
+}
+
+func nodeIDEqual(n1, n2 *node) bool {
+	return n1.ID() == n2.ID()
+}
+
+func slicesEqual[T any](s1, s2 []T, check func(e1, e2 T) bool) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i := range s1 {
+		if !check(s1[i], s2[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // gen wraps quick.Value so it's easier to use.

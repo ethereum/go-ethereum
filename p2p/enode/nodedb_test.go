@@ -19,9 +19,7 @@ package enode
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -275,11 +273,11 @@ func testSeedQuery() error {
 
 	// Retrieve the entire batch and check for duplicates
 	seeds := db.QuerySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
-	have := make(map[ID]struct{})
+	have := make(map[ID]struct{}, len(seeds))
 	for _, seed := range seeds {
 		have[seed.ID()] = struct{}{}
 	}
-	want := make(map[ID]struct{})
+	want := make(map[ID]struct{}, len(nodeDBSeedQueryNodes[1:]))
 	for _, seed := range nodeDBSeedQueryNodes[1:] {
 		want[seed.node.ID()] = struct{}{}
 	}
@@ -300,11 +298,7 @@ func testSeedQuery() error {
 }
 
 func TestDBPersistency(t *testing.T) {
-	root, err := ioutil.TempDir("", "nodedb-")
-	if err != nil {
-		t.Fatalf("failed to create temporary data folder: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	var (
 		testKey = []byte("somekey")

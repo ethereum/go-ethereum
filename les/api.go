@@ -21,27 +21,22 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-var (
-	errNoCheckpoint         = errors.New("no local checkpoint provided")
-	errNotActivated         = errors.New("checkpoint registrar is not activated")
-	errUnknownBenchmarkType = errors.New("unknown benchmark type")
-)
+var errUnknownBenchmarkType = errors.New("unknown benchmark type")
 
-// PrivateLightServerAPI provides an API to access the LES light server.
-type PrivateLightServerAPI struct {
+// LightServerAPI provides an API to access the LES light server.
+type LightServerAPI struct {
 	server                               *LesServer
 	defaultPosFactors, defaultNegFactors vfs.PriceFactors
 }
 
-// NewPrivateLightServerAPI creates a new LES light server API.
-func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
-	return &PrivateLightServerAPI{
+// NewLightServerAPI creates a new LES light server API.
+func NewLightServerAPI(server *LesServer) *LightServerAPI {
+	return &LightServerAPI{
 		server:            server,
 		defaultPosFactors: defaultPosFactors,
 		defaultNegFactors: defaultNegFactors,
@@ -61,7 +56,7 @@ func parseNode(node string) (enode.ID, error) {
 }
 
 // ServerInfo returns global server parameters
-func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
+func (api *LightServerAPI) ServerInfo() map[string]interface{} {
 	res := make(map[string]interface{})
 	res["minimumCapacity"] = api.server.minCapacity
 	res["maximumCapacity"] = api.server.maxCapacity
@@ -72,7 +67,7 @@ func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
 }
 
 // ClientInfo returns information about clients listed in the ids list or matching the given tags
-func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]interface{} {
+func (api *LightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[string]interface{} {
 	var ids []enode.ID
 	for _, node := range nodes {
 		if id, err := parseNode(node); err == nil {
@@ -102,7 +97,7 @@ func (api *PrivateLightServerAPI) ClientInfo(nodes []string) map[enode.ID]map[st
 // If maxCount limit is applied but there are more potential results then the ID
 // of the next potential result is included in the map with an empty structure
 // assigned to it.
-func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{} {
+func (api *LightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{} {
 	res := make(map[enode.ID]map[string]interface{})
 	ids := api.server.clientPool.GetPosBalanceIDs(start, stop, maxCount+1)
 	if len(ids) > maxCount {
@@ -122,7 +117,7 @@ func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCo
 }
 
 // clientInfo creates a client info data structure
-func (api *PrivateLightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBalance) map[string]interface{} {
+func (api *LightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadOnlyBalance) map[string]interface{} {
 	info := make(map[string]interface{})
 	pb, nb := balance.GetBalance()
 	info["isConnected"] = peer != nil
@@ -140,7 +135,7 @@ func (api *PrivateLightServerAPI) clientInfo(peer *clientPeer, balance vfs.ReadO
 
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientPeer, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
+func (api *LightServerAPI) setParams(params map[string]interface{}, client *clientPeer, posFactors, negFactors *vfs.PriceFactors) (updateFactors bool, err error) {
 	defParams := client == nil
 	for name, value := range params {
 		errValue := func() error {
@@ -191,7 +186,7 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 
 // SetClientParams sets client parameters for all clients listed in the ids list
 // or all connected clients if the list is empty
-func (api *PrivateLightServerAPI) SetClientParams(nodes []string, params map[string]interface{}) error {
+func (api *LightServerAPI) SetClientParams(nodes []string, params map[string]interface{}) error {
 	var err error
 	for _, node := range nodes {
 		var id enode.ID
@@ -215,7 +210,7 @@ func (api *PrivateLightServerAPI) SetClientParams(nodes []string, params map[str
 }
 
 // SetDefaultParams sets the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}) error {
+func (api *LightServerAPI) SetDefaultParams(params map[string]interface{}) error {
 	update, err := api.setParams(params, nil, &api.defaultPosFactors, &api.defaultNegFactors)
 	if update {
 		api.server.clientPool.SetDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
@@ -227,7 +222,7 @@ func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}
 // So that already connected client won't be kicked out very soon and we can ensure all
 // connected clients can have enough time to request or sync some data.
 // When the input parameter `bias` < 0 (illegal), return error.
-func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
+func (api *LightServerAPI) SetConnectedBias(bias time.Duration) error {
 	if bias < time.Duration(0) {
 		return fmt.Errorf("bias illegal: %v less than 0", bias)
 	}
@@ -237,7 +232,7 @@ func (api *PrivateLightServerAPI) SetConnectedBias(bias time.Duration) error {
 
 // AddBalance adds the given amount to the balance of a client if possible and returns
 // the balance before and after the operation
-func (api *PrivateLightServerAPI) AddBalance(node string, amount int64) (balance [2]uint64, err error) {
+func (api *LightServerAPI) AddBalance(node string, amount int64) (balance [2]uint64, err error) {
 	var id enode.ID
 	if id, err = parseNode(node); err != nil {
 		return
@@ -254,7 +249,7 @@ func (api *PrivateLightServerAPI) AddBalance(node string, amount int64) (balance
 //
 // Note: measurement time is adjusted for each pass depending on the previous ones.
 // Therefore a controlled total measurement time is achievable in multiple passes.
-func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, passCount, length int) ([]map[string]interface{}, error) {
+func (api *LightServerAPI) Benchmark(setups []map[string]interface{}, passCount, length int) ([]map[string]interface{}, error) {
 	benchmarks := make([]requestBenchmark, len(setups))
 	for i, setup := range setups {
 		if t, ok := setup["type"].(string); ok {
@@ -324,20 +319,20 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 	return result, nil
 }
 
-// PrivateDebugAPI provides an API to debug LES light server functionality.
-type PrivateDebugAPI struct {
+// DebugAPI provides an API to debug LES light server functionality.
+type DebugAPI struct {
 	server *LesServer
 }
 
-// NewPrivateDebugAPI creates a new LES light server debug API.
-func NewPrivateDebugAPI(server *LesServer) *PrivateDebugAPI {
-	return &PrivateDebugAPI{
+// NewDebugAPI creates a new LES light server debug API.
+func NewDebugAPI(server *LesServer) *DebugAPI {
+	return &DebugAPI{
 		server: server,
 	}
 }
 
 // FreezeClient forces a temporary client freeze which normally happens when the server is overloaded
-func (api *PrivateDebugAPI) FreezeClient(node string) error {
+func (api *DebugAPI) FreezeClient(node string) error {
 	var (
 		id  enode.ID
 		err error
@@ -351,56 +346,4 @@ func (api *PrivateDebugAPI) FreezeClient(node string) error {
 	} else {
 		return fmt.Errorf("client %064x is not connected", id[:])
 	}
-}
-
-// PrivateLightAPI provides an API to access the LES light server or light client.
-type PrivateLightAPI struct {
-	backend *lesCommons
-}
-
-// NewPrivateLightAPI creates a new LES service API.
-func NewPrivateLightAPI(backend *lesCommons) *PrivateLightAPI {
-	return &PrivateLightAPI{backend: backend}
-}
-
-// LatestCheckpoint returns the latest local checkpoint package.
-//
-// The checkpoint package consists of 4 strings:
-//   result[0], hex encoded latest section index
-//   result[1], 32 bytes hex encoded latest section head hash
-//   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
-//   result[3], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
-	var res [4]string
-	cp := api.backend.latestLocalCheckpoint()
-	if cp.Empty() {
-		return res, errNoCheckpoint
-	}
-	res[0] = hexutil.EncodeUint64(cp.SectionIndex)
-	res[1], res[2], res[3] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
-	return res, nil
-}
-
-// GetLocalCheckpoint returns the specific local checkpoint package.
-//
-// The checkpoint package consists of 3 strings:
-//   result[0], 32 bytes hex encoded latest section head hash
-//   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
-//   result[2], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
-	var res [3]string
-	cp := api.backend.localCheckpoint(index)
-	if cp.Empty() {
-		return res, errNoCheckpoint
-	}
-	res[0], res[1], res[2] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
-	return res, nil
-}
-
-// GetCheckpointContractAddress returns the contract contract address in hex format.
-func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
-	if api.backend.oracle == nil {
-		return "", errNotActivated
-	}
-	return api.backend.oracle.Contract().ContractAddr().Hex(), nil
 }

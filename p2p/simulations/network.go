@@ -235,7 +235,6 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 			}
 			peer := event.Peer
 			switch event.Type {
-
 			case p2p.PeerEventTypeAdd:
 				net.DidConnect(id, peer)
 
@@ -247,7 +246,6 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 
 			case p2p.PeerEventTypeMsgRecv:
 				net.DidReceive(peer, id, event.Protocol, *event.MsgCode)
-
 			}
 
 		case err := <-sub.Err():
@@ -648,8 +646,8 @@ func (net *Network) getConn(oneID, otherID enode.ID) *Conn {
 	return net.Conns[i]
 }
 
-// InitConn(one, other) retrieves the connection model for the connection between
-// peers one and other, or creates a new one if it does not exist
+// InitConn retrieves the connection model for the connection between
+// peers 'oneID' and 'otherID', or creates a new one if it does not exist
 // the order of nodes does not matter, i.e., Conn(i,j) == Conn(j, i)
 // it checks if the connection is already up, and if the nodes are running
 // NOTE:
@@ -927,7 +925,6 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 				if !haveSvc {
 					cleanedServices = append(cleanedServices, svc)
 				}
-
 			}
 			snap.Nodes[i].Node.Config.Lifecycles = cleanedServices
 		}
@@ -1021,7 +1018,6 @@ func (net *Network) Load(snap *Snapshot) error {
 
 	// Start connecting.
 	for _, conn := range snap.Conns {
-
 		if !net.GetNode(conn.One).Up() || !net.GetNode(conn.Other).Up() {
 			//in this case, at least one of the nodes of a connection is not up,
 			//so it would result in the snapshot `Load` to fail

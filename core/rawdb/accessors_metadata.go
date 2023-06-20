@@ -81,6 +81,20 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
+// ReadGenesisStateSpec retrieves the genesis state specification based on the
+// given genesis (block-)hash.
+func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {
+	data, _ := db.Get(genesisStateSpecKey(blockhash))
+	return data
+}
+
+// WriteGenesisStateSpec writes the genesis state specification into the disk.
+func WriteGenesisStateSpec(db ethdb.KeyValueWriter, blockhash common.Hash, data []byte) {
+	if err := db.Put(genesisStateSpecKey(blockhash), data); err != nil {
+		log.Crit("Failed to store genesis state", "err", err)
+	}
+}
+
 // crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
 // database
 type crashList struct {

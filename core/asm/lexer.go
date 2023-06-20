@@ -93,7 +93,7 @@ type lexer struct {
 	debug bool // flag for triggering debug output
 }
 
-// lex lexes the program by name with the given source. It returns a
+// Lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
 func Lex(source []byte, debug bool) <-chan token {
 	ch := make(chan token)

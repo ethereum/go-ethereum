@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/exp/slices"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise
@@ -32,18 +33,10 @@ type weightedIterator struct {
 	priority int
 }
 
-// weightedIterators is a set of iterators implementing the sort.Interface.
-type weightedIterators []*weightedIterator
-
-// Len implements sort.Interface, returning the number of active iterators.
-func (its weightedIterators) Len() int { return len(its) }
-
-// Less implements sort.Interface, returning which of two iterators in the stack
-// is before the other.
-func (its weightedIterators) Less(i, j int) bool {
+func (it *weightedIterator) Less(other *weightedIterator) bool {
 	// Order the iterators primarily by the account hashes
-	hashI := its[i].it.Hash()
-	hashJ := its[j].it.Hash()
+	hashI := it.it.Hash()
+	hashJ := other.it.Hash()
 
 	switch bytes.Compare(hashI[:], hashJ[:]) {
 	case -1:
@@ -52,12 +45,7 @@ func (its weightedIterators) Less(i, j int) bool {
 		return false
 	}
 	// Same account/storage-slot in multiple layers, split by priority
-	return its[i].priority < its[j].priority
-}
-
-// Swap implements sort.Interface, swapping two entries in the iterator stack.
-func (its weightedIterators) Swap(i, j int) {
-	its[i], its[j] = its[j], its[i]
+	return it.priority < other.priority
 }
 
 // fastIterator is a more optimized multi-layer iterator which maintains a
@@ -69,7 +57,7 @@ type fastIterator struct {
 	curAccount []byte
 	curSlot    []byte
 
-	iterators weightedIterators
+	iterators []*weightedIterator
 	initiated bool
 	account   bool
 	fail      error
@@ -167,7 +155,9 @@ func (fi *fastIterator) init() {
 		}
 	}
 	// Re-sort the entire list
-	sort.Sort(fi.iterators)
+	slices.SortFunc(fi.iterators, func(a, b *weightedIterator) bool {
+		return a.Less(b)
+	})
 	fi.initiated = false
 }
 
@@ -276,7 +266,7 @@ func (fi *fastIterator) next(idx int) bool {
 			return false
 		}
 		// The elem we're placing it next to has the same value,
-		// so whichever winds up on n+1 will need further iteraton
+		// so whichever winds up on n+1 will need further iteration
 		clash = n + 1
 
 		return cur.priority < fi.iterators[n+1].priority
@@ -319,7 +309,7 @@ func (fi *fastIterator) Slot() []byte {
 }
 
 // Release iterates over all the remaining live layer iterators and releases each
-// of thme individually.
+// of them individually.
 func (fi *fastIterator) Release() {
 	for _, it := range fi.iterators {
 		it.it.Release()
@@ -327,7 +317,7 @@ func (fi *fastIterator) Release() {
 	fi.iterators = nil
 }
 
-// Debug is a convencience helper during testing
+// Debug is a convenience helper during testing
 func (fi *fastIterator) Debug() {
 	for _, it := range fi.iterators {
 		fmt.Printf("[p=%v v=%v] ", it.priority, it.it.Hash()[0])

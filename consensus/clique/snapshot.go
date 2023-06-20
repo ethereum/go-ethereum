@@ -19,15 +19,16 @@ package clique
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/exp/slices"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the
@@ -46,10 +47,12 @@ type Tally struct {
 	Votes     int  `json:"votes"`     // Number of votes until now wanting to pass the proposal
 }
 
+type sigLRU = lru.Cache[common.Hash, common.Address]
+
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.CliqueConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache        // Cache of recent block signatures to speed up ecrecover
+	sigcache *sigLRU              // Cache of recent block signatures to speed up ecrecover
 
 	Number  uint64                      `json:"number"`  // Block number where the snapshot was created
 	Hash    common.Hash                 `json:"hash"`    // Block hash where the snapshot was created
@@ -59,17 +62,10 @@ type Snapshot struct {
 	Tally   map[common.Address]Tally    `json:"tally"`   // Current vote tally to avoid recalculating
 }
 
-// signersAscending implements the sort interface to allow sorting a list of addresses
-type signersAscending []common.Address
-
-func (s signersAscending) Len() int           { return len(s) }
-func (s signersAscending) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-func (s signersAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
-func newSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *Snapshot {
+func newSnapshot(config *params.CliqueConfig, sigcache *sigLRU, number uint64, hash common.Hash, signers []common.Address) *Snapshot {
 	snap := &Snapshot{
 		config:   config,
 		sigcache: sigcache,
@@ -86,8 +82,8 @@ func newSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, number uin
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
-	blob, err := db.Get(append([]byte("clique-"), hash[:]...))
+func loadSnapshot(config *params.CliqueConfig, sigcache *sigLRU, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
+	blob, err := db.Get(append(rawdb.CliqueSnapshotPrefix, hash[:]...))
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +103,7 @@ func (s *Snapshot) store(db ethdb.Database) error {
 	if err != nil {
 		return err
 	}
-	return db.Put(append([]byte("clique-"), s.Hash[:]...), blob)
+	return db.Put(append(rawdb.CliqueSnapshotPrefix, s.Hash[:]...), blob)
 }
 
 // copy creates a deep copy of the snapshot, though not the individual votes.
@@ -312,7 +308,7 @@ func (s *Snapshot) signers() []common.Address {
 	for sig := range s.Signers {
 		sigs = append(sigs, sig)
 	}
-	sort.Sort(signersAscending(sigs))
+	slices.SortFunc(sigs, common.Address.Less)
 	return sigs
 }
 

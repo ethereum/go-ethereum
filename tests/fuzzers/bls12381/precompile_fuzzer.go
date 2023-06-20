@@ -70,12 +70,14 @@ func checkInput(id byte, inputLen int) bool {
 	panic("programmer error")
 }
 
-// The fuzzer functions must return
-// 1 if the fuzzer should increase priority of the
-//    given input during subsequent fuzzing (for example, the input is lexically
-//    correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0  otherwise
+// The function must return
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
 // other values are reserved for future use.
 func fuzz(id byte, data []byte) int {
 	// Even on bad input, it should not crash, so we still test the gas calc

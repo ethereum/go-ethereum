@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package utils
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"

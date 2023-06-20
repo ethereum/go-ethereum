@@ -22,7 +22,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-//*
+// *
 // Mapping between TREZOR wire identifier (uint) and a protobuf message
 type MessageType int32
 

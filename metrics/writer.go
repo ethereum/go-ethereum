@@ -3,8 +3,9 @@ package metrics
 import (
 	"fmt"
 	"io"
-	"sort"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 // Write sorts writes each metric in the given registry periodically to the
@@ -18,17 +19,20 @@ func Write(r Registry, d time.Duration, w io.Writer) {
 // WriteOnce sorts and writes metrics in the given registry to the given
 // io.Writer.
 func WriteOnce(r Registry, w io.Writer) {
-	var namedMetrics namedMetricSlice
+	var namedMetrics []namedMetric
 	r.Each(func(name string, i interface{}) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
 
-	sort.Sort(namedMetrics)
+	slices.SortFunc(namedMetrics, namedMetric.less)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", metric.Count())
+		case CounterFloat64:
+			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
+			fmt.Fprintf(w, "  count:       %f\n", metric.Count())
 		case Gauge:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  value:       %9d\n", metric.Value())
@@ -88,13 +92,6 @@ type namedMetric struct {
 	m    interface{}
 }
 
-// namedMetricSlice is a slice of namedMetrics that implements sort.Interface.
-type namedMetricSlice []namedMetric
-
-func (nms namedMetricSlice) Len() int { return len(nms) }
-
-func (nms namedMetricSlice) Swap(i, j int) { nms[i], nms[j] = nms[j], nms[i] }
-
-func (nms namedMetricSlice) Less(i, j int) bool {
-	return nms[i].name < nms[j].name
+func (m namedMetric) less(other namedMetric) bool {
+	return m.name < other.name
 }

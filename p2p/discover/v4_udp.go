@@ -130,7 +130,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	cfg = cfg.withDefaults()
 	closeCtx, cancel := context.WithCancel(context.Background())
 	t := &UDPv4{
-		conn:            c,
+		conn:            newMeteredConn(c),
 		priv:            cfg.PrivateKey,
 		netrestrict:     cfg.NetRestrict,
 		localNode:       ln,
@@ -142,7 +142,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
+	tab, err := newTable(t, ln.Database(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -328,13 +328,13 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 	// enough nodes the reply matcher will time out waiting for the second reply, but
 	// there's no need for an error in that case.
 	err := <-rm.errc
-	if err == errTimeout && rm.reply != nil {
+	if errors.Is(err, errTimeout) && rm.reply != nil {
 		err = nil
 	}
 	return nodes, err
 }
 
-// RequestENR sends enrRequest to the given node and waits for a response.
+// RequestENR sends ENRRequest to the given node and waits for a response.
 func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 	t.ensureBond(n.ID(), addr)
@@ -525,8 +525,8 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			t.log.Debug("Temporary UDP read error", "err", err)
 			continue
 		} else if err != nil {
-			// Shut down the loop for permament errors.
-			if err != io.EOF {
+			// Shut down the loop for permanent errors.
+			if !errors.Is(err, io.EOF) {
 				t.log.Debug("UDP read error", "err", err)
 			}
 			return
