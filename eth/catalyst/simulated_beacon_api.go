@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package simulatedbeacon
+package catalyst
 
 import (
 	"context"
@@ -23,14 +23,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-type API struct {
+type api struct {
 	simBeacon *SimulatedBeacon
 }
 
-func (api *API) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
-	return api.simBeacon.withdrawals.add(withdrawal)
+func (a *api) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
+	return a.simBeacon.withdrawals.add(withdrawal)
 }
 
-func (api *API) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
-	api.simBeacon.setFeeRecipient(feeRecipient)
+func (a *api) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
+	a.simBeacon.setFeeRecipient(feeRecipient)
 }

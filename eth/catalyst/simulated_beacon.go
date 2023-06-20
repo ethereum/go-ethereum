@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package simulatedbeacon
+package catalyst
 
 import (
 	"errors"
@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -136,7 +135,7 @@ func (c *SimulatedBeacon) loop() {
 		buildWaitTime      = time.Millisecond * 100
 		header             = c.eth.BlockChain().CurrentHeader()
 		lastBlockTime      = header.Time
-		engineAPI          = catalyst.NewConsensusAPI(c.eth)
+		engineAPI          = NewConsensusAPI(c.eth)
 		curForkchoiceState = engine.ForkchoiceStateV1{
 			HeadBlockHash:      header.Hash(),
 			SafeBlockHash:      header.Hash(),
@@ -233,11 +232,11 @@ func (c *SimulatedBeacon) loop() {
 	}
 }
 
-func RegisterAPIs(stack *node.Node, c *SimulatedBeacon) {
+func RegisterSimulatedBeaconAPIs(stack *node.Node, c *SimulatedBeacon) {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "dev",
-			Service:   &API{c},
+			Service:   &api{c},
 			Version:   "1.0",
 		},
 	})

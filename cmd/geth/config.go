@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/cmd/geth/simulatedbeacon"
+	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -198,11 +198,11 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, error) {
 
 	// Start the dev mode if requested
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
-		simBeacon, err := simulatedbeacon.NewSimulatedBeacon(eth)
+		simBeacon, err := catalyst.NewSimulatedBeacon(eth)
 		if err != nil {
 			return nil, nil, err
 		}
-		simulatedbeacon.RegisterAPIs(stack, simBeacon)
+		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 	} else if err := ethcatalyst.Register(stack, eth); err != nil {
 		return nil, nil, err
