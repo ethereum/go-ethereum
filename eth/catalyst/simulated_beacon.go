@@ -79,14 +79,18 @@ func (w *withdrawalQueue) clearQueued() {
 }
 
 type SimulatedBeacon struct {
-	shutdownCh   chan struct{}
-	eth          *eth.Ethereum
-	period       uint64
-	withdrawals  withdrawalQueue
+	shutdownCh  chan struct{}
+	eth         *eth.Ethereum
+	period      uint64
+	withdrawals withdrawalQueue
 	// the fee recipient
 	feeTarget common.Address
 	// mu gates concurrent access to the feeRecipient
-	mu sync.Mutex
+	mu                 sync.Mutex
+	engineAPI          *ConsensusAPI
+	curForkchoiceState engine.ForkchoiceStateV1
+	buildWaitTime      time.Duration
+	lastBlockTime      uint64
 }
 
 func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
@@ -96,9 +100,10 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	}
 
 	return &SimulatedBeacon{
-		eth:          eth,
-		period:       chainConfig.Dev.Period,
-		shutdownCh: make(chan struct{}),
+		eth:           eth,
+		period:        chainConfig.Dev.Period,
+		shutdownCh:    make(chan struct{}),
+		buildWaitTime: time.Millisecond * 100,
 	}, nil
 }
 
@@ -126,74 +131,79 @@ func (c *SimulatedBeacon) Stop() error {
 	return nil
 }
 
+// beginSealing instructs the client to begin building a payload.
+func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
+	tstamp := uint64(time.Now().Unix())
+	if tstamp <= c.lastBlockTime {
+		tstamp = c.lastBlockTime + 1
+	}
+	return c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
+		Timestamp:             tstamp,
+		SuggestedFeeRecipient: c.feeRecipient(),
+		Withdrawals:           c.withdrawals.queued(),
+	})
+}
+
+// finalizeSealing retrieves a completed payload and marks it as canonical if it contains transactions or withdrawals.
+func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) error {
+	payload, err := c.engineAPI.GetPayloadV1(*id)
+	if err != nil {
+		return fmt.Errorf("error retrieving payload: %v", err)
+	}
+
+	if onDemand && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
+		// If the payload is empty, despite there being pending transactions,
+		// that indicates that we need to give it more time to build the block.
+		if c.buildWaitTime < 10*time.Second {
+			c.buildWaitTime += c.buildWaitTime
+		}
+		return nil
+	}
+	c.buildWaitTime = 100 * time.Millisecond // Reset it
+	// mark the payload as canon
+	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
+		return fmt.Errorf("failed to mark payload as canonical: %v", err)
+	}
+	c.curForkchoiceState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      payload.BlockHash,
+		SafeBlockHash:      payload.BlockHash,
+		FinalizedBlockHash: payload.BlockHash,
+	}
+	// mark the block containing the payload as canonical
+	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
+		return fmt.Errorf("failed to mark block as canonical: %v", err)
+	}
+	c.withdrawals.clearQueued()
+	c.lastBlockTime = payload.Timestamp
+	return nil
+}
+
 // loop manages the lifecycle of the SimulatedBeacon.
 // it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
 func (c *SimulatedBeacon) loop() {
 	var (
-		ticker             = time.NewTimer(time.Second * time.Duration(c.period))
-		buildWaitTime      = time.Millisecond * 100
-		header             = c.eth.BlockChain().CurrentHeader()
-		lastBlockTime      = header.Time
-		engineAPI          = NewConsensusAPI(c.eth)
-		curForkchoiceState = engine.ForkchoiceStateV1{
-			HeadBlockHash:      header.Hash(),
-			SafeBlockHash:      header.Hash(),
-			FinalizedBlockHash: header.Hash(),
-		}
+		ticker = time.NewTimer(time.Second * time.Duration(c.period))
+		header = c.eth.BlockChain().CurrentHeader()
 	)
+
+	c.curForkchoiceState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      header.Hash(),
+		SafeBlockHash:      header.Hash(),
+		FinalizedBlockHash: header.Hash(),
+	}
+	c.engineAPI = NewConsensusAPI(c.eth)
+	c.lastBlockTime = header.Time
+
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if header.Number.Sign() == 0 {
-		if _, err := engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
+		if _, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 			log.Error("failed to initiate PoS transition for genesis via Forkchoiceupdated", "err", err)
 			return
 		}
 	}
 
-	beginSealing := func() (engine.ForkChoiceResponse, error) {
-		tstamp := uint64(time.Now().Unix())
-		if tstamp <= lastBlockTime {
-			tstamp = lastBlockTime + 1
-		}
-		return engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, &engine.PayloadAttributes{
-			Timestamp:             tstamp,
-			SuggestedFeeRecipient: c.feeRecipient(),
-			Withdrawals:           c.withdrawals.queued(),
-		})
-	}
-	finalizeSealing := func(id *engine.PayloadID, onDemand bool) error {
-		payload, err := engineAPI.GetPayloadV1(*id)
-		if err != nil {
-			return fmt.Errorf("error retrieving payload: %v", err)
-		}
-
-		if onDemand && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
-			// If the payload is empty, despite there being pending transactions,
-			// that indicates that we need to give it more time to build the block.
-			if buildWaitTime < 10*time.Second {
-				buildWaitTime += buildWaitTime
-			}
-			return nil
-		}
-		buildWaitTime = 100 * time.Millisecond // Reset it
-		// mark the payload as canon
-		if _, err = engineAPI.NewPayloadV2(*payload); err != nil {
-			return fmt.Errorf("failed to mark payload as canonical: %v", err)
-		}
-		curForkchoiceState = engine.ForkchoiceStateV1{
-			HeadBlockHash:      payload.BlockHash,
-			SafeBlockHash:      payload.BlockHash,
-			FinalizedBlockHash: payload.BlockHash,
-		}
-		// mark the block containing the payload as canonical
-		if _, err = engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, nil); err != nil {
-			return fmt.Errorf("failed to mark block as canonical: %v", err)
-		}
-		c.withdrawals.clearQueued()
-		lastBlockTime = payload.Timestamp
-		return nil
-	}
 	var fcId *engine.PayloadID
-	if fc, err := beginSealing(); err != nil {
+	if fc, err := c.beginSealing(); err != nil {
 		log.Error("Error starting sealing-work", "err", err)
 		return
 	} else {
@@ -208,15 +218,15 @@ func (c *SimulatedBeacon) loop() {
 			if onDemand {
 				// Do nothing as long as blocks are empty
 				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.queued()) == 0 {
-					ticker.Reset(buildWaitTime)
+					ticker.Reset(c.buildWaitTime)
 					continue
 				}
 			}
-			if err := finalizeSealing(fcId, onDemand); err != nil {
+			if err := c.finalizeSealing(fcId, onDemand); err != nil {
 				log.Error("Error collecting sealing-work", "err", err)
 				return
 			}
-			if fc, err := beginSealing(); err != nil {
+			if fc, err := c.beginSealing(); err != nil {
 				log.Error("Error starting sealing-work", "err", err)
 				return
 			} else {
@@ -225,7 +235,7 @@ func (c *SimulatedBeacon) loop() {
 			if !onDemand {
 				ticker.Reset(time.Second * time.Duration(c.period))
 			} else {
-				ticker.Reset(buildWaitTime)
+				ticker.Reset(c.buildWaitTime)
 			}
 		}
 	}

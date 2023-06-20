@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func startEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
+func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -87,7 +87,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	period := 1
 	var gasLimit uint64 = 10_000_000
 	genesis := core.DeveloperGenesisBlock(uint64(period), gasLimit, testAddr)
-	node, ethService, mock := startEthService(t, genesis)
+	node, ethService, mock := startSimulatedBeaconEthService(t, genesis)
 	_ = mock
 	defer node.Close()
 
