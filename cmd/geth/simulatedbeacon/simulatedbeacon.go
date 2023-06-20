@@ -36,21 +36,26 @@ import (
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawalQueue struct {
-	// queued holds withdrawals that will be included in the next block
-	queued []*types.Withdrawal
 	// pending holds withdrawals that will be included in a future block
 	pending []*types.Withdrawal
 	mu      sync.Mutex
 }
 
-// getQueued returns withdrawals which are pending inclusion in the next block
-func (w *withdrawalQueue) getQueued() []*types.Withdrawal {
+// queued returns withdrawals which are pending inclusion in the next block
+func (w *withdrawalQueue) queued() []*types.Withdrawal {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	queued := make([]*types.Withdrawal, len(w.queued))
-	copy(queued, w.queued)
-	return queued
+	var queueCount int
+	if len(w.pending) >= 10 {
+		queueCount = 10
+	} else {
+		queueCount = len(w.pending)
+	}
+
+	p := make([]*types.Withdrawal, queueCount)
+	copy(p, w.pending[0:queueCount])
+	return p
 }
 
 // add queues a withdrawal for future inclusion
@@ -58,11 +63,7 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if len(w.queued) < 10 {
-		w.queued = append(w.queued, withdrawal)
-	} else {
-		w.pending = append(w.pending, withdrawal)
-	}
+	w.pending = append(w.pending, withdrawal)
 	return nil
 }
 
@@ -77,8 +78,6 @@ func (w *withdrawalQueue) clearQueued() {
 	} else {
 		queueCount = len(w.pending)
 	}
-	w.queued = make([]*types.Withdrawal, queueCount)
-	copy(w.queued, w.pending[0:queueCount])
 	w.pending = append([]*types.Withdrawal{}, w.pending[queueCount:]...)
 }
 
@@ -163,7 +162,7 @@ func (c *SimulatedBeacon) loop() {
 		return engineAPI.ForkchoiceUpdatedV2(curForkchoiceState, &engine.PayloadAttributes{
 			Timestamp:             tstamp,
 			SuggestedFeeRecipient: c.getFeeRecipient(),
-			Withdrawals:           c.withdrawals.getQueued(),
+			Withdrawals:           c.withdrawals.queued(),
 		})
 	}
 	finalizeSealing := func(id *engine.PayloadID, onDemand bool) error {
@@ -213,7 +212,7 @@ func (c *SimulatedBeacon) loop() {
 		case <-ticker.C:
 			if onDemand {
 				// Do nothing as long as blocks are empty
-				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.getQueued()) == 0 {
+				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.queued()) == 0 {
 					ticker.Reset(buildWaitTime)
 					continue
 				}
