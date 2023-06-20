@@ -65,3 +65,23 @@ func (p *Printer) CaptureBlockStart(b *types.Block) {
 func (p *Printer) CaptureBlockEnd() {
 	fmt.Printf("CaptureBlockEnd\n")
 }
+
+func (p *Printer) OnGenesisBlock(b *types.Block) {
+	fmt.Printf("OnGenesisBlock: b=%v\n", b.NumberU64())
+}
+
+func (p *Printer) OnBalanceChange(a common.Address, prev, new *big.Int) {
+	fmt.Printf("OnBalanceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
+}
+
+func (p *Printer) OnNonceChange(a common.Address, prev, new uint64) {
+	fmt.Printf("OnNonceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
+}
+
+func (p *Printer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+	fmt.Printf("OnCodeChange: a=%v, prevCodeHash=%v, prev=%v, codeHash=%v, code=%v\n", a, prevCodeHash, prev, codeHash, code)
+}
+
+func (p *Printer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+	fmt.Printf("OnStorageChange: a=%v, k=%v, prev=%v, new=%v\n", a, k, prev, new)
+}

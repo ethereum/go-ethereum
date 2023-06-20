@@ -53,6 +53,13 @@ func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
+type StateLogger interface {
+	OnBalanceChange(addr common.Address, prev, new *big.Int)
+	OnNonceChange(addr common.Address, prev, new uint64)
+	OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
+	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
+}
+
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -63,6 +70,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
+	logger     StateLogger
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -159,6 +167,11 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		}
 	}
 	return sdb, nil
+}
+
+// TODO: move to New
+func (s *StateDB) SetLogger(l StateLogger) {
+	s.logger = l
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the

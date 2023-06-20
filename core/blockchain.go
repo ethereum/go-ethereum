@@ -155,8 +155,10 @@ var defaultCacheConfig = &CacheConfig{
 
 type BlockchainLogger interface {
 	vm.EVMLogger
+	state.StateLogger
 	CaptureBlockStart(*types.Block)
 	CaptureBlockEnd()
+	OnGenesisBlock(*types.Block)
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -251,7 +253,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	// TODO: pass in blockchainLogger here to catch genesis block and allocs
+	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -1739,6 +1742,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err != nil {
 			return it.index, err
 		}
+		statedb.SetLogger(bc.logger)
 
 		// Enable prefetching to pull in trie node paths while processing transactions
 		statedb.StartPrefetcher("chain")
