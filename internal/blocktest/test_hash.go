@@ -36,20 +36,24 @@ type testHasher struct {
 	hasher hash.Hash
 }
 
+// NewHasher returns a new testHasher instance.
 func NewHasher() *testHasher {
 	return &testHasher{hasher: sha3.NewLegacyKeccak256()}
 }
 
+// Reset resets the hash state.
 func (h *testHasher) Reset() {
 	h.hasher.Reset()
 }
 
+// Update updates the hash state with the given key and value.
 func (h *testHasher) Update(key, val []byte) error {
 	h.hasher.Write(key)
 	h.hasher.Write(val)
 	return nil
 }
 
+// Hash returns the hash value.
 func (h *testHasher) Hash() common.Hash {
 	return common.BytesToHash(h.hasher.Sum(nil))
 }
