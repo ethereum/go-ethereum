@@ -1691,27 +1691,8 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 	return tx.MarshalBinary()
 }
 
-// RPCReceipt represents a serializable transaction receipt of RPC response
-type RPCReceipt struct {
-	BlockHash         common.Hash     `json:"blockHash"`
-	BlockNumber       hexutil.Uint64  `json:"blockNumber"`
-	TxHash            common.Hash     `json:"transactionHash"`
-	TxIndex           hexutil.Uint64  `json:"transactionIndex"`
-	From              common.Address  `json:"from"`
-	To                *common.Address `json:"to"`
-	GasUsed           hexutil.Uint64  `json:"gasUsed"`
-	CumulativeGasUsed hexutil.Uint64  `json:"cumulativeGasUsed"`
-	ContractAddress   *common.Address `json:"contractAddress"`
-	Logs              []*types.Log    `json:"logs"`
-	LogsBloom         types.Bloom     `json:"logsBloom"`
-	Type              hexutil.Uint    `json:"type"`
-	EffectiveGasPrice *hexutil.Big    `json:"effectiveGasPrice"`
-	Root              hexutil.Bytes   `json:"root,omitempty"`
-	Status            hexutil.Uint    `json:"status,omitempty"`
-}
-
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*RPCReceipt, error) {
+func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null
@@ -1735,38 +1716,37 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
 	from, _ := types.Sender(signer, tx)
 
-	response := &RPCReceipt{
-		BlockHash:         blockHash,
-		BlockNumber:       hexutil.Uint64(blockNumber),
-		TxHash:            hash,
-		TxIndex:           hexutil.Uint64(index),
-		From:              from,
-		To:                tx.To(),
-		GasUsed:           hexutil.Uint64(receipt.GasUsed),
-		CumulativeGasUsed: hexutil.Uint64(receipt.CumulativeGasUsed),
-		ContractAddress:   nil,
-		Logs:              receipt.Logs,
-		LogsBloom:         receipt.Bloom,
-		Type:              hexutil.Uint(tx.Type()),
-		EffectiveGasPrice: (*hexutil.Big)(receipt.EffectiveGasPrice),
+	fields := map[string]interface{}{
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(blockNumber),
+		"transactionHash":   hash,
+		"transactionIndex":  hexutil.Uint64(index),
+		"from":              from,
+		"to":                tx.To(),
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
+		"type":              hexutil.Uint(tx.Type()),
+		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
-		response.Root = hexutil.Bytes(receipt.PostState)
+		fields["root"] = hexutil.Bytes(receipt.PostState)
 	} else {
-		response.Status = hexutil.Uint(receipt.Status)
+		fields["status"] = hexutil.Uint(receipt.Status)
 	}
 	if receipt.Logs == nil {
-		response.Logs = []*types.Log{}
+		fields["logs"] = []*types.Log{}
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		response.ContractAddress = &receipt.ContractAddress
+		fields["contractAddress"] = receipt.ContractAddress
 	}
-
-	return response, nil
+	return fields, nil
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
