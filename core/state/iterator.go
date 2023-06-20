@@ -74,8 +74,12 @@ func (it *nodeIterator) step() error {
 		return nil
 	}
 	// Initialize the iterator if we've just started
+	var err error
 	if it.stateIt == nil {
-		it.stateIt = it.state.trie.NodeIterator(nil)
+		it.stateIt, err = it.state.trie.NodeIterator(nil)
+		if err != nil {
+			return err
+		}
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -113,7 +117,10 @@ func (it *nodeIterator) step() error {
 	if err != nil {
 		return err
 	}
-	it.dataIt = dataTrie.NodeIterator(nil)
+	it.dataIt, err = dataTrie.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}

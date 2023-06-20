@@ -519,8 +519,12 @@ func dbDumpTrie(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	trieIt, err := theTrie.NodeIterator(start)
+	if err != nil {
+		return err
+	}
 	var count int64
-	it := trie.NewIterator(theTrie.NodeIterator(start))
+	it := trie.NewIterator(trieIt)
 	for it.Next() {
 		if max > 0 && count == max {
 			fmt.Printf("Exiting after %d values\n", count)
