@@ -66,7 +66,7 @@ jobs:
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Putting toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/testnet-v4/sentry/sentry/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
         env:
@@ -78,31 +78,31 @@ jobs:
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Copying the postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Copying systemd file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/systemd/bor_bootnode.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/
         env:
           ARCH: amd64
           NODE: bootnode
-          NETWORK: any
+          NETWORK: mumbai
       - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
         run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
         env:
