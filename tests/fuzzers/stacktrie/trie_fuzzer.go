@@ -221,7 +221,7 @@ func (f *fuzzer) fuzz() int {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootC))
 	}
 	trieA, _ = trie.New(trie.TrieID(rootA), dbA)
-	iterA := trieA.NodeIterator(nil)
+	iterA := trieA.MustNodeIterator(nil)
 	for iterA.Next(true) {
 		if iterA.Hash() == (common.Hash{}) {
 			if _, present := nodeset[string(iterA.Path())]; present {

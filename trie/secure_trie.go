@@ -250,10 +250,16 @@ func (t *StateTrie) Copy() *StateTrie {
 	}
 }
 
-// NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
-// starts at the key after the given start key.
-func (t *StateTrie) NodeIterator(start []byte) NodeIterator {
+// NodeIterator returns an iterator that returns nodes of the underlying trie.
+// Iteration starts at the key after the given start key.
+func (t *StateTrie) NodeIterator(start []byte) (NodeIterator, error) {
 	return t.trie.NodeIterator(start)
+}
+
+// MustNodeIterator is a wrapper of NodeIterator and will omit any encountered
+// error but just print out an error message.
+func (t *StateTrie) MustNodeIterator(start []byte) NodeIterator {
+	return t.trie.MustNodeIterator(start)
 }
 
 // hashKey returns the hash of key as an ephemeral buffer.

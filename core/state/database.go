@@ -113,8 +113,9 @@ type Trie interface {
 	Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
-	// starts at the key after the given start key.
-	NodeIterator(startKey []byte) trie.NodeIterator
+	// starts at the key after the given start key. And error will be returned
+	// if fails to create node iterator.
+	NodeIterator(startKey []byte) (trie.NodeIterator, error)
 
 	// Prove constructs a Merkle proof for key. The result contains all encoded nodes
 	// on the path to the value at key. The value itself is also included in the last
