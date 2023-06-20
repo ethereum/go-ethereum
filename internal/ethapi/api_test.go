@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -209,10 +208,7 @@ type testBackend struct {
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
 	var (
-		engine  = ethash.NewFaker()
-		backend = &testBackend{
-			db: rawdb.NewMemoryDatabase(),
-		}
+		engine      = ethash.NewFaker()
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:    256,
 			TrieDirtyLimit:    256,
@@ -222,15 +218,15 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		}
 	)
 	// Generate blocks for testing
-	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	chain, err := core.NewBlockChain(backend.db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil)
+	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
+	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
-	backend.chain = chain
+	backend := &testBackend{db: db, chain: chain}
 	return backend
 }
 
