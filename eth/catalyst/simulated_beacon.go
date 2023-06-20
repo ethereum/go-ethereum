@@ -98,7 +98,6 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	return &SimulatedBeacon{
 		eth:          eth,
 		period:       chainConfig.Dev.Period,
-		feeTarget: common.Address{},
 		shutdownCh: make(chan struct{}),
 	}, nil
 }
