@@ -754,7 +754,7 @@ func decodeHash(s string) (common.Hash, error) {
 //   - When blockNr is -2 the chain latest header is returned.
 //   - When blockNr is -3 the chain finalized header is returned.
 //   - When blockNr is -4 the chain safe header is returned.
-func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*RPCBlock, error) {
+func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*RPCHeader, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
 		response := s.rpcMarshalHeader(ctx, header)
@@ -770,7 +770,7 @@ func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockN
 }
 
 // GetHeaderByHash returns the requested header by hash.
-func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) *RPCBlock {
+func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) *RPCHeader {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
 		return s.rpcMarshalHeader(ctx, header)
@@ -1246,20 +1246,19 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
-// RPCBlock represents a serializable block of RPC response
-type RPCBlock struct {
+// RPCHeader represents a serializable header of RPC response
+type RPCHeader struct {
 	Number          *hexutil.Big      `json:"number,omitempty"`
-	Hash            *common.Hash      `json:"hash,omitempty"`
+	Hash            *common.Hash      `json:"hash"`
 	ParentHash      common.Hash       `json:"parentHash"`
-	Nonce           *types.BlockNonce `json:"nonce,omitempty"`
+	Nonce           *types.BlockNonce `json:"nonce"`
 	MixDigest       common.Hash       `json:"mixHash"`
 	UncleHash       common.Hash       `json:"sha3Uncles"`
 	Bloom           types.Bloom       `json:"logsBloom"`
 	Root            common.Hash       `json:"stateRoot"`
-	Coinbase        *common.Address   `json:"miner,omitempty"`
+	Coinbase        *common.Address   `json:"miner"`
 	Difficulty      *hexutil.Big      `json:"difficulty"`
 	Extra           hexutil.Bytes     `json:"extraData"`
-	Size            hexutil.Uint64    `json:"size,omitempty"`
 	GasLimit        hexutil.Uint64    `json:"gasLimit"`
 	GasUsed         hexutil.Uint64    `json:"gasUsed"`
 	Time            hexutil.Uint64    `json:"timestamp"`
@@ -1267,16 +1266,22 @@ type RPCBlock struct {
 	ReceiptHash     common.Hash       `json:"receiptsRoot"`
 	BaseFee         *hexutil.Big      `json:"baseFeePerGas,omitempty"`
 	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot,omitempty"`
-	Transactions    []interface{}     `json:"transactions,omitempty"`
-	TotalDifficulty *hexutil.Big      `json:"totalDifficulty,omitempty"`
-	Uncles          *[]common.Hash    `json:"uncles,omitempty"`
-	Withdrawals     types.Withdrawals `json:"withdrawls,omitempty"`
+	TotalDifficulty *hexutil.Big      `json:"totalDifficulty"`
 }
 
-// RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) *RPCBlock {
+// RPCBlock represents a serializable block of RPC response
+type RPCBlock struct {
+	RPCHeader
+	Size         hexutil.Uint64    `json:"size,omitempty"`
+	Transactions []interface{}     `json:"transactions"`
+	Uncles       *[]common.Hash    `json:"uncles,omitempty"`
+	Withdrawals  types.Withdrawals `json:"withdrawals,omitempty"`
+}
+
+// RPCMarshalHeader converts the given header to the RPC output.
+func RPCMarshalHeader(head *types.Header) *RPCHeader {
 	headHash := head.Hash()
-	block := &RPCBlock{
+	header := &RPCHeader{
 		Number:      (*hexutil.Big)(head.Number),
 		Hash:        &headHash,
 		ParentHash:  head.ParentHash,
@@ -1296,22 +1301,25 @@ func RPCMarshalHeader(head *types.Header) *RPCBlock {
 	}
 
 	if head.BaseFee != nil {
-		block.BaseFee = (*hexutil.Big)(head.BaseFee)
+		header.BaseFee = (*hexutil.Big)(head.BaseFee)
 	}
 
 	if head.WithdrawalsHash != nil {
-		block.WithdrawalsHash = head.WithdrawalsHash
+		header.WithdrawalsHash = head.WithdrawalsHash
 	}
 
-	return block
+	return header
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
 func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) *RPCBlock {
-	fields := RPCMarshalHeader(block.Header())
-	fields.Size = hexutil.Uint64(block.Size())
+	header := RPCMarshalHeader(block.Header())
+	rpcBlock := &RPCBlock{
+		RPCHeader: *header,
+		Size:      hexutil.Uint64(block.Size()),
+	}
 
 	if inclTx {
 		formatTx := func(idx int, tx *types.Transaction) interface{} {
@@ -1327,26 +1335,26 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		for i, tx := range txs {
 			transactions[i] = formatTx(i, tx)
 		}
-		fields.Transactions = transactions
+		rpcBlock.Transactions = transactions
 	}
 	uncles := block.Uncles()
 	uncleHashes := make([]common.Hash, len(uncles))
 	for i, uncle := range uncles {
 		uncleHashes[i] = uncle.Hash()
 	}
-	fields.Uncles = &uncleHashes
+	rpcBlock.Uncles = &uncleHashes
 	if block.Header().WithdrawalsHash != nil {
-		fields.Withdrawals = block.Withdrawals()
+		rpcBlock.Withdrawals = block.Withdrawals()
 	}
-	return fields
+	return rpcBlock
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
-func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) *RPCBlock {
-	fields := RPCMarshalHeader(header)
-	fields.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
-	return fields
+func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) *RPCHeader {
+	rpcHeader := RPCMarshalHeader(header)
+	rpcHeader.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	return rpcHeader
 }
 
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
