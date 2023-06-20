@@ -758,7 +758,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 			continue
 		}
 
-		require.JSONEq(t, tc.want, string(have))
+		require.JSONEqf(t, tc.want, string(have), "test %d: json not match, want: %s, have: %s", i, tc.want, string(have))
 	}
 }
 
@@ -976,7 +976,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 
 	for i, tt := range testSuite {
 		var (
-			result *RPCBlock
+			result interface{}
 			err    error
 		)
 		if tt.blockHash != nil {
