@@ -98,7 +98,7 @@ func TestForkIDSplit68(t *testing.T) {
 }
 
 func testForkIDSplit(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	var (
 		engine = ethash.NewFaker()
@@ -268,7 +268,7 @@ func TestRecvTransactions68(t *testing.T) {
 }
 
 func testRecvTransactions(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	// Create a message handler, configure it to accept transactions and watch them
 	handler := newTestHandler()
@@ -442,7 +442,7 @@ func TestTransactionPropagation68(t *testing.T) {
 }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	// Create a source handler to send transactions from and a number of sinks
 	// to receive them. We need multiple sinks since a one-to-one peering would
@@ -774,7 +774,7 @@ func TestBroadcastMalformedBlock68(t *testing.T) {
 }
 
 func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	// Create a source handler to broadcast blocks from and a number of sinks
 	// to receive them.

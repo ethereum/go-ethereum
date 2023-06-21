@@ -165,7 +165,7 @@ func TestGetBlockHeaders68(t *testing.T) {
 }
 
 func testGetBlockHeaders(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	backend := newTestBackend(maxHeadersServe + 15)
 	defer backend.close()
@@ -365,8 +365,6 @@ func TestGetBlockBodies68(t *testing.T) {
 }
 
 func testGetBlockBodies(t *testing.T, protocol uint) {
-	t.Parallel()
-
 	gen := func(n int, g *core.BlockGen) {
 		if n%2 == 0 {
 			w := &types.Withdrawal{
@@ -613,7 +611,7 @@ func TestGetBlockReceipts68(t *testing.T) {
 }
 
 func testGetBlockReceipts(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	// Define three accounts to simulate transactions with
 	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")

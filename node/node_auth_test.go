@@ -207,7 +207,6 @@ func TestAuthEndpoints(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		t.Parallel()
 		t.Run(testCase.name, testCase.Run)
 	}
 }

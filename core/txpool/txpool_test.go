@@ -1080,7 +1080,6 @@ func TestQueueGlobalLimitingNoLocals(t *testing.T) {
 
 func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 	t.Helper()
-	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
