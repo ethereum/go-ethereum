@@ -725,8 +725,10 @@ func (c *BorConfig) CalculateStateSyncDelay(number uint64) uint64 {
 
 // TODO: modify this function once the block number is finalized
 func (c *BorConfig) IsParallelUniverse(number *big.Int) bool {
-	if c.ParallelUniverseBlock == big.NewInt(0) {
-		return false
+	if c.ParallelUniverseBlock != nil {
+		if c.ParallelUniverseBlock.Cmp(big.NewInt(0)) == 0 {
+			return false
+		}
 	}
 
 	return isBlockForked(c.ParallelUniverseBlock, number)
