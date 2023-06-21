@@ -339,7 +339,7 @@ func TestSendTransactions68(t *testing.T) {
 }
 
 func testSendTransactions(t *testing.T, protocol uint) {
-	t.Parallel()
+	t.Helper()
 
 	// Create a message handler and fill the pool with big transactions
 	handler := newTestHandler()

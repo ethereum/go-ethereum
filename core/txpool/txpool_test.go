@@ -2653,7 +2653,6 @@ func TestJournalingNoLocals(t *testing.T) {
 
 func testJournaling(t *testing.T, nolocals bool) {
 	t.Helper()
-	t.Parallel()
 
 	// Create a temporary file for the journal
 	file, err := os.CreateTemp("", "")

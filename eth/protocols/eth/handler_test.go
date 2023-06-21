@@ -478,7 +478,6 @@ func TestGetNodeData68(t *testing.T) {
 
 func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	t.Helper()
-	t.Parallel()
 
 	// Define three accounts to simulate transactions with
 	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
