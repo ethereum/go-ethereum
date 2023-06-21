@@ -1001,3 +1001,102 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
 	}
 }
+
+func TestRPCGetTransactionReceipt(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	var (
+		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
+		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
+		genesis    = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				acc1Addr: {Balance: big.NewInt(params.Ether)},
+				acc2Addr: {Balance: big.NewInt(params.Ether)},
+				// // SPDX-License-Identifier: GPL-3.0
+				// pragma solidity >=0.7.0 <0.9.0;
+				//
+				// contract Token {
+				//     event Transfer(address indexed from, address indexed to, uint256 value);
+				//     function transfer(address to, uint256 value) public returns (bool) {
+				//         emit Transfer(msg.sender, to, value);
+				//         return true;
+				//     }
+				// }
+				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
+			},
+		}
+		genBlocks = 10
+		signer    = types.HomesteadSigner{}
+	)
+	var txHashes []common.Hash
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		var tx *types.Transaction
+		switch i {
+		case 0:
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, acc1Key)
+			b.AddTx(tx)
+			txHashes = append(txHashes, tx.Hash())
+		}
+	})
+	api := NewTransactionAPI(backend, new(AddrLocker))
+	blockHashes := make([]common.Hash, genBlocks+1)
+	ctx := context.Background()
+	for i := 0; i <= genBlocks; i++ {
+		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+		if err != nil {
+			t.Errorf("failed to get block: %d err: %v", i, err)
+		}
+		blockHashes[i] = header.Hash()
+	}
+
+	var testSuite = []struct {
+		txHash    common.Hash
+		want      string
+		expectErr error
+	}{
+		// 0. normal success
+		{
+			txHash: txHashes[0],
+			want:   `{"blockHash":"0x1356e49a24d4504e450b303aa770f4ae13c29b9ffacaea1d7dd4043396229dd9","blockNumber":"0x1","contractAddress":null,"cumulativeGasUsed":"0x5208","effectiveGasPrice":"0x342770c0","from":"0x703c4b2bd70c169f5717101caee543299fc946c7","gasUsed":"0x5208","logs":[],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","status":"0x1","to":"0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e","transactionHash":"0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e","transactionIndex":"0x0","type":"0x0"}`,
+		},
+		// 1. normal failure
+		// 2. create contract
+		// 3. with logs success
+		// 4. txhash not exist
+		// 5. legacy post-state
+	}
+
+	for i, tt := range testSuite {
+		var (
+			result interface{}
+			err    error
+		)
+		result, err = api.GetTransactionReceipt(context.Background(), tt.txHash)
+		if tt.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: want error %v, have nothing", i, tt.expectErr)
+				continue
+			}
+			if !errors.Is(err, tt.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, tt.expectErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
