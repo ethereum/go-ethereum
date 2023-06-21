@@ -91,7 +91,11 @@ type Trie interface {
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
-	UpdateAccount(address common.Address, account *types.StateAccount, code []byte, dirtyCode bool) error
+	UpdateAccount(address common.Address, account *types.StateAccount) error
+
+	// UpdateContractCode abstracts code write to the trie. It is expected
+	// to be moved to the stateWriter interface when the latter is ready.
+	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
 
 	// DeleteStorage removes any existing value for key from the trie. If a node
 	// was not found in the database, a trie.MissingNodeError is returned.
