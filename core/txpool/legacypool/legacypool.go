@@ -245,6 +245,11 @@ func New(config Config, chain BlockChain) *LegacyPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
+	// Disable locals-handling in this pool. This is a precursor to fully
+	// deleting locals-related code
+	config.NoLocals = true
+	config.Locals = nil
+
 	// Create the transaction pool with its initial settings
 	pool := &LegacyPool{
 		config:          config,
