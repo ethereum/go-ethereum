@@ -231,6 +231,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	if n, err := chain.InsertReceiptChain(blocks, receipts, 0); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
+
 	backend := &testBackend{db: db, chain: chain}
 	return backend
 }
@@ -1032,15 +1033,27 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		}
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
+		txHashes  = make([]common.Hash, genBlocks)
 	)
-	var txHashes []common.Hash
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		var tx *types.Transaction
 		switch i {
 		case 0:
+			// transfer 1000wei
 			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, acc1Key)
+		case 1:
+			// create contract
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: nil, Gas: 53100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040")}), signer, acc1Key)
+			// case 2:
+			// 	// with logs
+			// 	tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Gas: params.MaxGasLimit, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040")}), signer, acc1Key)
+			// case 3:
+			// 	// low gasLimit
+			// 	tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: 100, GasPrice: b.BaseFee(), Data: nil}), signer, acc1Key)
+		}
+		if tx != nil {
 			b.AddTx(tx)
-			txHashes = append(txHashes, tx.Hash())
+			txHashes[i] = tx.Hash()
 		}
 	})
 	api := NewTransactionAPI(backend, new(AddrLocker))
@@ -1064,9 +1077,21 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			txHash: txHashes[0],
 			want:   `{"blockHash":"0x1356e49a24d4504e450b303aa770f4ae13c29b9ffacaea1d7dd4043396229dd9","blockNumber":"0x1","contractAddress":null,"cumulativeGasUsed":"0x5208","effectiveGasPrice":"0x342770c0","from":"0x703c4b2bd70c169f5717101caee543299fc946c7","gasUsed":"0x5208","logs":[],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","status":"0x1","to":"0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e","transactionHash":"0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e","transactionIndex":"0x0","type":"0x0"}`,
 		},
-		// 1. normal failure
-		// 2. create contract
-		// 3. with logs success
+		// 1. create contract
+		{
+			txHash: txHashes[1],
+			want:   `{"blockHash":"0x3353c5d0d435bb5ac2502a594c636704376026fb53e1b78b5063017ed24892de","blockNumber":"0x2","contractAddress":"0xae9bea628c4ce503dcfd7e305cab4e29e7476592","cumulativeGasUsed":"0xcf4e","effectiveGasPrice":"0x2db16291","from":"0x703c4b2bd70c169f5717101caee543299fc946c7","gasUsed":"0xcf4e","logs":[],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","status":"0x1","to":null,"transactionHash":"0x2aeeb0c1037d53d7e10292d725a390f9527f9ea02e0b7ba4987215bf266e129b","transactionIndex":"0x0","type":"0x0"}`,
+		},
+		// // 2. with logs success
+		// {
+		// 	txHash: txHashes[2],
+		// 	want:   `{}`,
+		// },
+		// // 1. normal failure
+		// {
+		// 	txHash: txHashes[1],
+		// 	want:   `{}`,
+		// },
 		// 4. txhash not exist
 		// 5. legacy post-state
 	}
