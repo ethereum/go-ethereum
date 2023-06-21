@@ -79,12 +79,11 @@ func (w *withdrawalQueue) clearQueued() {
 }
 
 type SimulatedBeacon struct {
-	shutdownCh  chan struct{}
-	eth         *eth.Ethereum
-	period      uint64
-	withdrawals withdrawalQueue
-	// the fee recipient
-	feeTarget common.Address
+	shutdownCh   chan struct{}
+	eth          *eth.Ethereum
+	period       uint64
+	withdrawals  withdrawalQueue
+	feeRecipient common.Address
 	// mu gates concurrent access to the feeRecipient
 	mu                 sync.Mutex
 	engineAPI          *ConsensusAPI
@@ -109,14 +108,8 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 
 func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 	c.mu.Lock()
-	c.feeTarget = feeRecipient
+	c.feeRecipient = feeRecipient
 	c.mu.Unlock()
-}
-
-func (c *SimulatedBeacon) feeRecipient() common.Address {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.feeTarget
 }
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
@@ -137,9 +130,13 @@ func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
 	if tstamp <= c.lastBlockTime {
 		tstamp = c.lastBlockTime + 1
 	}
+	c.mu.Lock()
+	feeRecipient := c.feeRecipient
+	c.mu.Unlock()
+
 	return c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
-		SuggestedFeeRecipient: c.feeRecipient(),
+		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           c.withdrawals.queued(),
 	})
 }
