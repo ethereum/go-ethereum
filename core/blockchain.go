@@ -486,7 +486,6 @@ func (bc *BlockChain) loadLastState() error {
 		}
 	}
 	bc.hc.SetCurrentHeader(headHeader)
-
 	// Restore the last known head fast block
 	bc.currentSnapBlock.Store(headBlock.Header())
 	headFastBlockGauge.Update(int64(headBlock.NumberU64()))
@@ -2006,13 +2005,11 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) {
 	// Gather all the sidechain hashes (full blocks may be memory heavy)
 	var (
-		hashes  []common.Hash
-		numbers []uint64
-		parent  = block
+		parent = block
+		chains []*types.Block
 	)
 	for parent != nil && !bc.HasState(parent.Root()) {
-		hashes = append(hashes, parent.Hash())
-		numbers = append(numbers, parent.NumberU64())
+		chains = append(chains, parent)
 		parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
 
 		// If the chain is terminating, stop iteration
@@ -2025,20 +2022,14 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		return common.Hash{}, errors.New("missing parent")
 	}
 	// Import all the pruned blocks to make the state available
-	for i := len(hashes) - 1; i >= 0; i-- {
+	for i := len(chains) - 1; i >= 0; i-- {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during blocks processing")
 			return common.Hash{}, errInsertionInterrupted
 		}
-		var b *types.Block
-		if i == 0 {
-			b = block
-		} else {
-			b = bc.GetBlock(hashes[i], numbers[i])
-		}
-		if _, err := bc.insertChain(types.Blocks{b}, false); err != nil {
-			return b.ParentHash(), err
+		if _, err := bc.insertChain(types.Blocks{chains[i]}, false); err != nil {
+			return chains[i].ParentHash(), err
 		}
 	}
 	return block.Hash(), nil
