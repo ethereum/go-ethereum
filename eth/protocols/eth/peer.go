@@ -56,6 +56,15 @@ const (
 	maxQueuedBlockAnns = 4
 )
 
+var (
+	knownTxsPool = sync.Pool{
+		New: func() interface{} { return newKnownCache(maxKnownTxs) },
+	}
+	knownBlocksPool = sync.Pool{
+		New: func() interface{} { return newKnownCache(maxKnownBlocks) },
+	}
+)
+
 // max is a helper function which returns the larger of the two given integers.
 func max(a, b int) int {
 	if a > b {
@@ -100,8 +109,8 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		Peer:            p,
 		rw:              rw,
 		version:         version,
-		knownTxs:        newKnownCache(maxKnownTxs),
-		knownBlocks:     newKnownCache(maxKnownBlocks),
+		knownTxs:        knownTxsPool.Get().(*knownCache),
+		knownBlocks:     knownBlocksPool.Get().(*knownCache),
 		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
 		txBroadcast:     make(chan []common.Hash),
@@ -126,6 +135,10 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 // clean it up!
 func (p *Peer) Close() {
 	close(p.term)
+	p.knownBlocks.Clear()
+	p.knownTxs.Clear()
+	knownBlocksPool.Put(p.knownBlocks)
+	knownTxsPool.Put(p.knownTxs)
 }
 
 // ID retrieves the peer's unique identifier.
@@ -532,4 +545,9 @@ func (k *knownCache) Contains(hash common.Hash) bool {
 // Cardinality returns the number of elements in the set.
 func (k *knownCache) Cardinality() int {
 	return k.hashes.Cardinality()
+}
+
+// Clears underlying cache.
+func (k *knownCache) Clear() {
+	k.hashes.Clear()
 }
