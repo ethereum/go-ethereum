@@ -219,12 +219,16 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		}
 	)
 	// Generate blocks for testing
-	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil)
+	db, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, n, generator)
+	txlookupLimit := uint64(0)
+	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	if n, err := chain.InsertReceiptChain(blocks, receipts, 0); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 	backend := &testBackend{db: db, chain: chain}
