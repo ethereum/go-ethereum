@@ -50,7 +50,6 @@ var (
 				ArgsUsage: "<root>",
 				Action:    pruneState,
 				Flags: flags.Merge([]cli.Flag{
-					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
@@ -160,7 +159,7 @@ block is used.
 // Deprecation: this command should be deprecated once the hash-based
 // scheme is deprecated.
 func pruneState(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
@@ -168,7 +167,6 @@ func pruneState(ctx *cli.Context) error {
 
 	prunerconfig := pruner.Config{
 		Datadir:   stack.ResolvePath(""),
-		Cachedir:  stack.ResolvePath(config.Eth.TrieCleanCacheJournal),
 		BloomSize: ctx.Uint64(utils.BloomFilterSizeFlag.Name),
 	}
 	pruner, err := pruner.NewPruner(chaindb, prunerconfig)

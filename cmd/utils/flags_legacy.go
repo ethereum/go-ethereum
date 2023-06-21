@@ -33,6 +33,8 @@ var ShowDeprecated = &cli.Command{
 
 var DeprecatedFlags = []cli.Flag{
 	NoUSBFlag,
+	CacheTrieJournalFlag,
+	CacheTrieRejournalFlag,
 }
 
 var (
@@ -41,6 +43,17 @@ var (
 		Name:     "nousb",
 		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
 		Category: flags.DeprecatedCategory,
+	}
+	// (Deprecated June 2023, shown in aliased flags section)
+	CacheTrieJournalFlag = &cli.StringFlag{
+		Name:     "cache.trie.journal",
+		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Category: flags.PerfCategory,
+	}
+	CacheTrieRejournalFlag = &cli.DurationFlag{
+		Name:     "cache.trie.rejournal",
+		Usage:    "Time interval to regenerate the trie cache journal",
+		Category: flags.PerfCategory,
 	}
 )
 
