@@ -67,7 +67,8 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool *txpool.TxPool
+	txPool         *txpool.TxPool
+	localTxTracker *legacypool.TxTracker
 
 	blockchain         *core.BlockChain
 	handler            *handler
@@ -209,6 +210,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
+	if !config.TxPool.NoLocals {
+		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal, eth.blockchain.Config(), legacyPool)
+		stack.RegisterLifecycle(eth.localTxTracker)
+	}
 
 	eth.txPool, err = txpool.New(new(big.Int).SetUint64(config.TxPool.PriceLimit), eth.blockchain, []txpool.SubPool{legacyPool})
 	if err != nil {

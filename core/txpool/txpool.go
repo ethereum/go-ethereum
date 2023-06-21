@@ -191,6 +191,8 @@ func (p *TxPool) Get(hash common.Hash) *Transaction {
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.
 func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
+	// Disable all local-tracking within the pool.
+	local = false
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.

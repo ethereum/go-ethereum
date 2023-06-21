@@ -107,7 +107,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
-	ethservice.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, true, false)
+	ethservice.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, false, false)
 	blockParams := engine.PayloadAttributes{
 		Timestamp: blocks[9].Time() + 5,
 	}

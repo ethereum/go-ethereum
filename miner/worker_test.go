@@ -194,8 +194,8 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(true)}}, true, false)
-		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(false)}}, true, false)
+		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(true)}}, false, false)
+		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(false)}}, fa;se, false)
 
 		select {
 		case ev := <-sub.Chan():
