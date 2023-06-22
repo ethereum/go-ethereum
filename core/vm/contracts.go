@@ -1166,5 +1166,11 @@ func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
 
 	// Verify the secp256r1 signature
-	return secp256r1.Verify(hash, r, s, x, y)
+	if secp256r1.Verify(hash, r, s, x, y) {
+		// Signature is valid
+		return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
+	} else {
+		// Signature is invalid
+		return nil, nil
+	}
 }
