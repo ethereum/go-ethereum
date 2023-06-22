@@ -268,7 +268,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
-		return s.trie, nil
+		return nil, nil
 	}
 	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
