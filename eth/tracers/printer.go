@@ -85,3 +85,11 @@ func (p *Printer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev 
 func (p *Printer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 	fmt.Printf("OnStorageChange: a=%v, k=%v, prev=%v, new=%v\n", a, k, prev, new)
 }
+
+func (p *Printer) OnLog(l *types.Log) {
+	fmt.Printf("OnLog: l=%v\n", l)
+}
+
+func (p *Printer) OnNewAccount(a common.Address) {
+	fmt.Printf("OnNewAccount: a=%v\n", a)
+}

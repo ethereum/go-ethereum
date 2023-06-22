@@ -58,6 +58,8 @@ type StateLogger interface {
 	OnNonceChange(addr common.Address, prev, new uint64)
 	OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
 	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
+	OnLog(log *types.Log)
+	OnNewAccount(addr common.Address)
 }
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -214,6 +216,9 @@ func (s *StateDB) AddLog(log *types.Log) {
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
 	log.Index = s.logSize
+	if s.logger != nil {
+		s.logger.OnLog(log)
+	}
 	s.logs[s.thash] = append(s.logs[s.thash], log)
 	s.logSize++
 }
@@ -668,6 +673,11 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 			prevAccount:  account,
 			prevStorage:  storage,
 		})
+	}
+	// TODO: add isPrecompile check
+	// TODO: should we emit on account reset?
+	if s.logger != nil {
+		s.logger.OnNewAccount(addr)
 	}
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
