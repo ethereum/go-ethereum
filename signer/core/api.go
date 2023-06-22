@@ -555,9 +555,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	if api.rejectMode {
 		err := msgs.GetWarnings()
 		if err != nil {
-			if strings.Contains(err.Error(), "ABI signature could not be found") {
-				return nil, fmt.Errorf("%s. Please use '--advanced' mode or provide the 'selector' argument to force the signing", err.Error())
-			}
+			log.Info("Signing aborted due to warnings. In order to continue despite warnings, please use the flag '--advanced'.")
 			return nil, err
 		}
 	}
