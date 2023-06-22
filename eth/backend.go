@@ -209,9 +209,25 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
-	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
+	// Init the legacypool without locals, to avoid collisions on the
+	// locals-journal.
+	legacyPool := legacypool.New(legacypool.Config{
+		Locals:       nil,
+		NoLocals:     true,
+		Journal:      "",
+		Rejournal:    0,
+		PriceLimit:   config.TxPool.PriceLimit,
+		PriceBump:    config.TxPool.PriceBump,
+		AccountSlots: config.TxPool.AccountSlots,
+		GlobalSlots:  config.TxPool.GlobalSlots,
+		AccountQueue: config.TxPool.AccountQueue,
+		GlobalQueue:  config.TxPool.GlobalQueue,
+		Lifetime:     config.TxPool.Lifetime,
+	}, eth.blockchain)
 	if !config.TxPool.NoLocals {
-		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal, eth.blockchain.Config(), legacyPool)
+		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal,
+			config.TxPool.Rejournal,
+			eth.blockchain.Config(), legacyPool)
 		stack.RegisterLifecycle(eth.localTxTracker)
 	}
 

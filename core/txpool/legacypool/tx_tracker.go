@@ -41,17 +41,17 @@ type TxTracker struct {
 	all    map[common.Hash]*types.Transaction // All tracked transactions
 	byAddr map[common.Address]*sortedMap      // Transactions by address
 
-	journal  *journal       // Journal of local transaction to back up to disk
-	modified bool           // Modification tracking
-	pool     txpool.SubPool // The 'main' subpool to interact with
-	signer   types.Signer
+	journal   *journal       // Journal of local transaction to back up to disk
+	rejournal time.Duration  // How often to rotate journal
+	pool      txpool.SubPool // The 'main' subpool to interact with
+	signer    types.Signer
 
 	shutdownCh chan struct{}
 	mu         sync.Mutex
 	wg         sync.WaitGroup
 }
 
-func NewTxTracker(journalPath string, chainConfig *params.ChainConfig, next txpool.SubPool) *TxTracker {
+func NewTxTracker(journalPath string, journalTime time.Duration, chainConfig *params.ChainConfig, next txpool.SubPool) *TxTracker {
 	signer := types.LatestSigner(chainConfig)
 	pool := &TxTracker{
 		all:        make(map[common.Hash]*types.Transaction),
@@ -62,6 +62,7 @@ func NewTxTracker(journalPath string, chainConfig *params.ChainConfig, next txpo
 	}
 	if journalPath != "" {
 		pool.journal = newTxJournal(journalPath)
+		pool.rejournal = journalTime
 	}
 	return pool
 }
@@ -86,22 +87,16 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 			tracker.byAddr[addr] = newSortedMap()
 		}
 		tracker.byAddr[addr].Put(tx)
-		tracker.modified = true
 	}
 }
 
 // recheck checks and returns any transactions that needs to be resubmitted.
-func (tracker *TxTracker) recheck() []*txpool.Transaction {
+func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*txpool.Transaction, rejournal map[common.Address]types.Transactions) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
-
-	if !tracker.modified {
-		return nil
-	}
 	var (
-		resubmits []*txpool.Transaction
-		nStales   = 0
-		nOk       = 0
+		nStales = 0
+		nOk     = 0
 	)
 	for sender, txs := range tracker.byAddr {
 		stales := txs.Forward(tracker.pool.Nonce(sender))
@@ -122,24 +117,21 @@ func (tracker *TxTracker) recheck() []*txpool.Transaction {
 		}
 	}
 
-	{ // rejournal
-		txs := make(map[common.Address]types.Transactions)
+	if journalCheck { // rejournal
+		rejournal = make(map[common.Address]types.Transactions)
 		for _, tx := range tracker.all {
 			addr, _ := types.Sender(tracker.signer, tx)
-			txs[addr] = append(txs[addr], tx)
+			rejournal[addr] = append(rejournal[addr], tx)
 		}
 		// Sort them
-		for _, list := range txs {
+		for _, list := range rejournal {
 			slices.SortFunc(list, func(a, b *types.Transaction) bool {
 				return a.Nonce() < b.Nonce()
 			})
 		}
-		if err := tracker.journal.rotate(txs); err != nil {
-			log.Warn("Transaction journal rotation failed", "err", err)
-		}
 	}
 	log.Debug("Tx tracker status", "need-resubmit", len(resubmits), "stale", nStales, "ok", nOk)
-	return resubmits
+	return resubmits, rejournal
 }
 
 // Start implements node.Lifecycle interface
@@ -166,6 +158,7 @@ func (tracker *TxTracker) loop() {
 		tracker.TrackAll(transactions)
 		return nil
 	})
+	var lastJournal = time.Now()
 	// Do initial check after 10 seconds, do rechecks more seldom.
 	t := time.NewTimer(10 * time.Second)
 	for {
@@ -173,9 +166,16 @@ func (tracker *TxTracker) loop() {
 		case <-tracker.shutdownCh:
 			return
 		case <-t.C:
-			// resubmit
-			if resubmits := tracker.recheck(); len(resubmits) > 0 {
+			checkJournal := time.Since(lastJournal) > tracker.rejournal
+			resubmits, rejournal := tracker.recheck(checkJournal)
+			if len(resubmits) > 0 {
 				tracker.pool.Add(resubmits, false, false)
+			}
+			if checkJournal {
+				lastJournal = time.Now()
+				if err := tracker.journal.rotate(rejournal); err != nil {
+					log.Warn("Transaction journal rotation failed", "err", err)
+				}
 			}
 			t.Reset(recheckInterval)
 		}
