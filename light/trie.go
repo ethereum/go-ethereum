@@ -147,6 +147,10 @@ func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount)
 	})
 }
 
+func (t *odrTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte) error {
+	return nil
+}
+
 func (t *odrTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	key = crypto.Keccak256(key)
 	v, _ := rlp.EncodeToBytes(value)
