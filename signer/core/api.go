@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -629,9 +628,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 	if api.rejectMode {
 		err := msgs.GetWarnings()
 		if err != nil {
-			if strings.Contains(err.Error(), "ABI signature could not be found") {
-				return nil, fmt.Errorf("%s. Please use '--advanced' mode or provide the 'selector' argument to force the signing", err.Error())
-			}
+			log.Info("Signing aborted due to warnings. In order to continue despite warnings, please use the flag '--advanced'.")
 			return nil, err
 		}
 	}
