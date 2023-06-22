@@ -552,8 +552,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		err := msgs.GetWarnings()
-		if err != nil {
+		if err := msgs.GetWarnings(); err != nil {
 			log.Info("Signing aborted due to warnings. In order to continue despite warnings, please use the flag '--advanced'.")
 			return nil, err
 		}
@@ -626,8 +625,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		err := msgs.GetWarnings()
-		if err != nil {
+		if err := msgs.GetWarnings(); err != nil {
 			log.Info("Signing aborted due to warnings. In order to continue despite warnings, please use the flag '--advanced'.")
 			return nil, err
 		}
