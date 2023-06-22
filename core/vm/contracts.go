@@ -123,7 +123,7 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-N. This is exported for testing purposes.
+// contract specified in EIP-7212. This is exported for testing purposes.
 var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{19}): &p256Verify{},
 }
