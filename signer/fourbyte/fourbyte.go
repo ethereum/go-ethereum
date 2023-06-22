@@ -111,7 +111,7 @@ func (db *Database) Selector(id []byte) (string, error) {
 	if selector, exists := db.custom[sig]; exists {
 		return selector, nil
 	}
-	return "", fmt.Errorf("signature %v not found, consider using --advanced mode or provide a selector", sig)
+	return "", fmt.Errorf("signature %v not found", sig)
 }
 
 // AddSelector inserts a new 4byte entry into the database. If custom database

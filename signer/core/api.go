@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -552,7 +553,11 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		if err := msgs.GetWarnings(); err != nil {
+		err := msgs.GetWarnings()
+		if err != nil {
+			if strings.Contains(err.Error(), "ABI signature could not be found") {
+				return nil, fmt.Errorf("%s. Please use '--advanced' mode or provide the 'selector' argument to force the signing", err.Error())
+			}
 			return nil, err
 		}
 	}
@@ -624,7 +629,11 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		if err := msgs.GetWarnings(); err != nil {
+		err := msgs.GetWarnings()
+		if err != nil {
+			if strings.Contains(err.Error(), "ABI signature could not be found") {
+				return nil, fmt.Errorf("%s. Please use '--advanced' mode or provide the 'selector' argument to force the signing", err.Error())
+			}
 			return nil, err
 		}
 	}
