@@ -39,39 +39,33 @@ var (
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
 
-	ingressDialMeter        metrics.Meter
-	ingressDialSuccessMeter metrics.Meter
-	egressDialAttemptMeter  metrics.Meter
-	egressDialSuccessMeter  metrics.Meter
-	activePeerGauge         metrics.Gauge
+	ingressDialMeter        metrics.Meter = metrics.NilMeter{}
+	ingressDialSuccessMeter metrics.Meter = metrics.NilMeter{}
+	egressDialAttemptMeter  metrics.Meter = metrics.NilMeter{}
+	egressDialSuccessMeter  metrics.Meter = metrics.NilMeter{}
+	activePeerGauge         metrics.Gauge = metrics.NilGauge{}
 
-	dialTooManyPeers     metrics.Meter
-	dialAlreadyConnected metrics.Meter
-	dialSelf             metrics.Meter
-	dialUselessPeer      metrics.Meter
+	dialTooManyPeers     metrics.Meter = metrics.NilMeter{}
+	dialAlreadyConnected metrics.Meter = metrics.NilMeter{}
+	dialSelf             metrics.Meter = metrics.NilMeter{}
+	dialUselessPeer      metrics.Meter = metrics.NilMeter{}
 )
 
 func init() {
-	if metrics.Enabled {
-		ingressDialMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-		ingressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
-		egressDialAttemptMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
-		egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
-		activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
-		dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/saturated", nil)
-		dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/known", nil)
-		dialSelf = metrics.NewRegisteredMeter("p2p/dials/self", nil)
-		dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/useless", nil)
+	if !metrics.Enabled {
 		return
 	}
-	ingressDialMeter = metrics.NilMeter{}
-	egressDialAttemptMeter = metrics.NilMeter{}
-	egressDialSuccessMeter = metrics.NilMeter{}
-	activePeerGauge = metrics.NilGauge{}
-	dialTooManyPeers = metrics.NilMeter{}
-	dialAlreadyConnected = metrics.NilMeter{}
-	dialSelf = metrics.NilMeter{}
-	dialUselessPeer = metrics.NilMeter{}
+
+	ingressDialMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
+	ingressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
+	egressDialAttemptMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
+	egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
+	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
+
+	dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/saturated", nil)
+	dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/known", nil)
+	dialSelf = metrics.NewRegisteredMeter("p2p/dials/self", nil)
+	dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/useless", nil)
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
