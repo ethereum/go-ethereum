@@ -1278,8 +1278,8 @@ type RPCBlock struct {
 	Withdrawals  types.Withdrawals `json:"withdrawals,omitempty"`
 }
 
-// RPCMarshalHeader converts the given header to the RPC output.
-func RPCMarshalHeader(head *types.Header) *RPCHeader {
+// NewRPCHeader converts the given header to the RPC output.
+func NewRPCHeader(head *types.Header) *RPCHeader {
 	headHash := head.Hash()
 	header := &RPCHeader{
 		Number:      (*hexutil.Big)(head.Number),
@@ -1315,7 +1315,7 @@ func RPCMarshalHeader(head *types.Header) *RPCHeader {
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
 func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) *RPCBlock {
-	header := RPCMarshalHeader(block.Header())
+	header := NewRPCHeader(block.Header())
 	rpcBlock := &RPCBlock{
 		RPCHeader: *header,
 		Size:      hexutil.Uint64(block.Size()),
@@ -1352,7 +1352,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) *RPCHeader {
-	rpcHeader := RPCMarshalHeader(header)
+	rpcHeader := NewRPCHeader(header)
 	rpcHeader.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return rpcHeader
 }
