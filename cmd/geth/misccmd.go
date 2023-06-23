@@ -72,9 +72,7 @@ and displays information about any security vulnerabilities that affect the curr
 
 func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
-	caser := cases.Title(language.Und)
-
-	fmt.Println(caser.String(clientIdentifier))
+	fmt.Println(cases.Title(language.Und).String(clientIdentifier))
 	fmt.Println("Version:", params.VersionWithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
