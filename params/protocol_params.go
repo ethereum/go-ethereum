@@ -169,6 +169,13 @@ const (
 	BlobTxMinDataGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxDataGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for data gas price
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
+
+	// Price of witness accesses in Verkle
+	WitnessBranchReadCost  uint64 = 1900
+	WitnessChunkReadCost   uint64 = 200
+	WitnessBranchWriteCost uint64 = 3000
+	WitnessChunkWriteCost  uint64 = 500
+	WitnessChunkFillCost   uint64 = 6200
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
