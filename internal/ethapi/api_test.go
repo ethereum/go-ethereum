@@ -752,13 +752,14 @@ func TestRPCMarshalBlock(t *testing.T) {
 
 	for i, tc := range testSuite {
 		resp := NewRPCBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig)
-		have, err := json.Marshal(resp)
+		out, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
 			continue
 		}
 
-		require.JSONEqf(t, tc.want, string(have), "test %d: json not match, want: %s, have: %s", i, tc.want, string(have))
+		want, have := tc.want, string(out)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
 	}
 }
 
