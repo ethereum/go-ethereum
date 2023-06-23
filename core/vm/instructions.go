@@ -591,7 +591,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// reuse size int for stackvalue
 	stackvalue := size
 
-	scope.Contract.UseGas(gas)
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer)
 	//TODO: use uint256.Int instead of converting with toBig()
 	var bigVal = big0
 	if !value.IsZero() {
@@ -634,7 +634,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	)
 	// Apply EIP150
 	gas -= gas / 64
-	scope.Contract.UseGas(gas)
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer)
 	// reuse size int for stackvalue
 	stackvalue := size
 	//TODO: use uint256.Int instead of converting with toBig()

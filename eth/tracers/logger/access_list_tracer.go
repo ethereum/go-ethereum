@@ -163,6 +163,8 @@ func (*AccessListTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 
 func (*AccessListTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
+func (*AccessListTracer) OnGasConsumed(gas, amount uint64) {}
+
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {}
 
 func (*AccessListTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {

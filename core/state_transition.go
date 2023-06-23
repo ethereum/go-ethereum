@@ -348,6 +348,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
+	if t := st.evm.Config.Tracer; t != nil {
+		t.OnGasConsumed(st.gasRemaining, gas)
+	}
 	st.gasRemaining -= gas
 
 	// Check clause 6

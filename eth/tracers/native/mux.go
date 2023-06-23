@@ -93,6 +93,13 @@ func (t *muxTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 	}
 }
 
+// CaptureGasConsumed is called when gas is consumed.
+func (t *muxTracer) OnGasConsumed(gas, amount uint64) {
+	for _, t := range t.tracers {
+		t.OnGasConsumed(gas, amount)
+	}
+}
+
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *muxTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {

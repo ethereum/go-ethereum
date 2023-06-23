@@ -98,7 +98,7 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	noopTracer
+	tracers.NoopTracer
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64

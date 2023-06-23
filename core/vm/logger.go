@@ -41,4 +41,6 @@ type EVMLogger interface {
 	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
+	// Misc
+	OnGasConsumed(gas, amount uint64)
 }

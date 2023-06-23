@@ -95,6 +95,8 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 // jsTracer is an implementation of the Tracer interface which evaluates
 // JS functions on the relevant EVM hooks. It uses Goja as its JS engine.
 type jsTracer struct {
+	tracers.NoopTracer
+
 	vm                *goja.Runtime
 	env               *vm.EVM
 	toBig             toBigFn               // Converts a hex string into a JS bigint
@@ -285,9 +287,6 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 		t.onError("fault", err)
 	}
 }
-
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (t *jsTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {

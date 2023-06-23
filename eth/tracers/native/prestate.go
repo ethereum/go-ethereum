@@ -54,7 +54,7 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	noopTracer
+	tracers.NoopTracer
 	env       *vm.EVM
 	pre       state
 	post      state

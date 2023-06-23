@@ -159,9 +159,12 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger EVMLogger) (ok bool) {
 	if c.Gas < gas {
 		return false
+	}
+	if logger != nil {
+		logger.OnGasConsumed(c.Gas, gas)
 	}
 	c.Gas -= gas
 	return true

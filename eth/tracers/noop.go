@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package native
+package tracers
 
 import (
 	"encoding/json"
@@ -22,59 +22,61 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("noopTracer", newNoopTracer, false)
+	DefaultDirectory.Register("noopTracer", newNoopTracer, false)
 }
 
-// noopTracer is a go implementation of the Tracer interface which
+// NoopTracer is a go implementation of the Tracer interface which
 // performs no action. It's mostly useful for testing purposes.
-type noopTracer struct{}
+type NoopTracer struct{}
 
 // newNoopTracer returns a new noop tracer.
-func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
-	return &noopTracer{}, nil
+func newNoopTracer(ctx *Context, _ json.RawMessage) (Tracer, error) {
+	return &NoopTracer{}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *NoopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *NoopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *NoopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *noopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *NoopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (t *noopTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+func (t *NoopTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+
+// OnGasConsumed is called when gas is consumed.
+func (t *NoopTracer) OnGasConsumed(gas, amount uint64) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *NoopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (*noopTracer) CaptureTxStart(gasLimit uint64) {}
+func (*NoopTracer) CaptureTxStart(gasLimit uint64) {}
 
-func (*noopTracer) CaptureTxEnd(restGas uint64) {}
+func (*NoopTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns an empty json object.
-func (t *noopTracer) GetResult() (json.RawMessage, error) {
+func (t *NoopTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *noopTracer) Stop(err error) {
+func (t *NoopTracer) Stop(err error) {
 }
