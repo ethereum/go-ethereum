@@ -1266,14 +1266,14 @@ type RPCHeader struct {
 	ReceiptHash     common.Hash       `json:"receiptsRoot"`
 	BaseFee         *hexutil.Big      `json:"baseFeePerGas,omitempty"`
 	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot,omitempty"`
-	TotalDifficulty *hexutil.Big      `json:"totalDifficulty"`
+	TotalDifficulty *hexutil.Big      `json:"totalDifficulty,omitempty"`
 }
 
 // RPCBlock represents a serializable block of RPC response
 type RPCBlock struct {
 	RPCHeader
 	Size         hexutil.Uint64    `json:"size,omitempty"`
-	Transactions []interface{}     `json:"transactions"`
+	Transactions []interface{}     `json:"transactions,omitempty"`
 	Uncles       *[]common.Hash    `json:"uncles,omitempty"`
 	Withdrawals  types.Withdrawals `json:"withdrawals,omitempty"`
 }
