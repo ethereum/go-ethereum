@@ -1352,19 +1352,19 @@ func NewRPCBlock(block *types.Block, inclTx bool, fullTx bool, config *params.Ch
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) *RPCHeader {
-	rpcHeader := NewRPCHeader(header)
-	rpcHeader.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
-	return rpcHeader
+	h := NewRPCHeader(header)
+	h.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	return h
 }
 
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
-func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) *RPCBlock {
-	fields := NewRPCBlock(b, inclTx, fullTx, s.b.ChainConfig())
+func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, block *types.Block, inclTx bool, fullTx bool) *RPCBlock {
+	b := NewRPCBlock(block, inclTx, fullTx, s.b.ChainConfig())
 	if inclTx {
-		fields.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
+		b.TotalDifficulty = (*hexutil.Big)(s.b.GetTd(ctx, block.Hash()))
 	}
-	return fields
+	return b
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
