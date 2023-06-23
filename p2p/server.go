@@ -554,13 +554,10 @@ func (srv *Server) setupDiscovery() error {
 		sconn     discover.UDPConn = conn
 		unhandled chan discover.ReadPacket
 	)
-	// Only initialize unhandled channel if discv5 is running.
-	if srv.DiscoveryV5 {
-		unhandled = make(chan discover.ReadPacket, 100)
-	}
 	// If both versions of discovery are running, setup a shared
 	// connection, so v5 can read unhandled messages from v4.
 	if srv.DiscoveryV4 && srv.DiscoveryV5 {
+		unhandled = make(chan discover.ReadPacket, 100)
 		sconn = &sharedUDPConn{conn, unhandled}
 	}
 
