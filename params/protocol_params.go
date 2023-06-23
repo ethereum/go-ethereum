@@ -160,8 +160,6 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
-	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
-	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
 	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
 	BlobTxMaxDataGasPerBlock           = 1 << 19 // Maximum consumable data gas for data blobs per block
 	BlobTxTargetDataGasPerBlock        = 1 << 18 // Target consumable data gas for data blobs per block (for 1559-like pricing)
@@ -169,6 +167,13 @@ const (
 	BlobTxMinDataGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxDataGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for data gas price
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
+
+	// Verkle tree EIP: costs associated to witness accesses
+	WitnessBranchReadCost  uint64 = 1900
+	WitnessChunkReadCost   uint64 = 200
+	WitnessBranchWriteCost uint64 = 3000
+	WitnessChunkWriteCost  uint64 = 500
+	WitnessChunkFillCost   uint64 = 6200
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

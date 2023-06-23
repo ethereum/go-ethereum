@@ -104,6 +104,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
+	if config.IsPrague(blockNumber, evm.Context.Time) {
+		txContext.Accesses = state.NewAccessWitness(statedb)
+	}
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
@@ -135,6 +138,10 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+	}
+
+	if config.IsPrague(blockNumber, evm.Context.Time) {
+		statedb.Witness().Merge(txContext.Accesses)
 	}
 
 	// Set the receipt logs and create the bloom filter.

@@ -305,8 +305,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
+	if bc.chainConfig.IsPrague(head.Number, head.Time) {
+		bc.stateCache.EndVerkleTransition()
+	}
+	// Make sure the state associated with the block is available
 	if !bc.HasState(head.Root) {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
@@ -403,6 +406,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			Recovery:   recover,
 			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
+			// XXX see if we can get rid of this
+			Verkle: chainConfig.IsPrague(head.Number, head.Time),
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 	}

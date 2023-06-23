@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 // Proof-of-stake protocol constants.
@@ -350,6 +351,19 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		// Convert amount from gwei to wei.
 		amount := new(big.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, big.NewInt(params.GWei))
+
+		// Add the withdrawal addresses to the verkle witness.
+		if chain.Config().IsCancun(header.Number, header.Time) {
+			hashedWithdrawalAddr := utils.GetTreeKeyBalance(w.Address.Bytes())
+			state.Witness().TouchAddressOnReadAndComputeGas(hashedWithdrawalAddr)
+			hashedWithdrawalAddr[31] = utils.VersionLeafKey // mark version
+			state.Witness().TouchAddressOnReadAndComputeGas(hashedWithdrawalAddr)
+			hashedWithdrawalAddr[31] = utils.NonceLeafKey // mark nonce
+			state.Witness().TouchAddressOnReadAndComputeGas(hashedWithdrawalAddr)
+			hashedWithdrawalAddr[31] = utils.CodeKeccakLeafKey // mark code keccak
+			state.Witness().TouchAddressOnReadAndComputeGas(hashedWithdrawalAddr)
+		}
+
 		state.AddBalance(w.Address, amount)
 	}
 	// No block reward which is issued by consensus layer instead.

@@ -25,11 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/gballet/go-verkle"
 )
 
 // BlockGen creates blocks for testing.
@@ -345,6 +347,101 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
+func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	proofs := make([]*verkle.VerkleProof, 0, n)
+	keyvals := make([]verkle.StateDiff, 0, n)
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		preState := statedb.Copy()
+		fmt.Println("prestate", preState.GetTrie().(*trie.VerkleTrie).ToDot())
+
+		// Mutate the state and block according to any hard-fork specs
+		if daoBlock := config.DAOForkBlock; daoBlock != nil {
+			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+				if config.DAOForkSupport {
+					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+				}
+			}
+		}
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+			misc.ApplyDAOHardFork(statedb)
+		}
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, nil /* No withdrawals for now */)
+			if err != nil {
+				panic(err)
+			}
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			// Generate an associated verkle proof
+			tr := preState.GetTrie()
+			if !tr.IsVerkle() {
+				panic("tree should be verkle")
+			}
+
+			vtr := tr.(*trie.VerkleTrie)
+			// Make sure all keys are resolved before
+			// building the proof. Ultimately, node
+			// resolution can be done with a prefetcher
+			// or from GetCommitmentsAlongPath.
+			kvs := make(map[string][]byte)
+			keys := statedb.Witness().Keys()
+			for _, key := range keys {
+				v, err := vtr.GetWithHashedKey(key)
+				if err != nil {
+					panic(err)
+				}
+				kvs[string(key)] = v
+			}
+
+			vtr.Hash()
+			p, k, err := vtr.ProveAndSerialize(statedb.Witness().Keys(), kvs)
+			if err != nil {
+				panic(err)
+			}
+			proofs = append(proofs, p)
+			keyvals = append(keyvals, k)
+			return block, b.receipts
+		}
+		return nil, nil
+	}
+	var snaps *snapshot.Tree
+	for i := 0; i < n; i++ {
+		triedb := state.NewDatabaseWithConfig(db, nil)
+		triedb.EndVerkleTransition()
+		statedb, err := state.New(parent.Root(), triedb, snaps)
+		if err != nil {
+			panic(fmt.Sprintf("could not find state for block %d: err=%v, parent root=%x", i, err, parent.Root()))
+		}
+		block, receipt := genblock(i, parent, statedb)
+		blocks[i] = block
+		receipts[i] = receipt
+		parent = block
+		snaps = statedb.Snaps()
+	}
+	return blocks, receipts, proofs, keyvals
+}
+
 // GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
 // genesis block to database first according to the provided genesis specification
 // then generate chain on top.
@@ -353,6 +450,10 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	_, err := genesis.Commit(db, trie.NewDatabase(db))
 	if err != nil {
 		panic(err)
+	}
+	if genesis.Config != nil && genesis.Config.IsPrague(genesis.ToBlock().Number(), genesis.ToBlock().Time()) {
+		blocks, receipts, _, _ := GenerateVerkleChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
+		return db, blocks, receipts
 	}
 	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 	return db, blocks, receipts

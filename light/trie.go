@@ -100,6 +100,10 @@ func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
 	panic("not implemented")
 }
 
+func (db *odrDatabase) EndVerkleTransition() {
+	panic("not implemented")
+}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
@@ -225,6 +229,10 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			return err
 		}
 	}
+}
+
+func (t *odrTrie) IsVerkle() bool {
+	return false
 }
 
 type nodeIterator struct {

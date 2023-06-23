@@ -63,6 +63,11 @@ var (
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
 
+	// ErrInsufficientBalanceWitness is returned if the transaction sender has enough
+	// funds to cover the transfer, but not enough to pay for witness access/modification
+	// costs for the transaction
+	ErrInsufficientBalanceWitness = errors.New("insufficient funds to cover witness access costs for transaction")
+
 	// ErrMaxInitCodeSizeExceeded is returned if creation transaction provides the init code bigger
 	// than init code size limit.
 	ErrMaxInitCodeSizeExceeded = errors.New("max initcode size exceeded")
