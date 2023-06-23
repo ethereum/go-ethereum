@@ -770,12 +770,12 @@ func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockN
 }
 
 // GetHeaderByHash returns the requested header by hash.
-func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) (*RPCHeader, error) {
-	header, err := s.b.HeaderByHash(ctx, hash)
-	if header != nil && err == nil {
-		return s.rpcMarshalHeader(ctx, header), nil
+func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) *RPCHeader {
+	header, _ := s.b.HeaderByHash(ctx, hash)
+	if header != nil {
+		return s.rpcMarshalHeader(ctx, header)
 	}
-	return nil, err
+	return nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
