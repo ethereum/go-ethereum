@@ -114,7 +114,7 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
-		rpcBlock := ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig())
+		rpcBlock := ethapi.NewRPCBlock(block, true, true, api.eth.APIBackend.ChainConfig())
 		results = append(results, &BadBlockArgs{
 			Hash:  block.Hash(),
 			RLP:   blockRlp,

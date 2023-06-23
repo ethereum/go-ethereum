@@ -751,7 +751,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig)
+		resp := NewRPCBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig)
 		have, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
