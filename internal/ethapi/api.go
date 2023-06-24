@@ -1266,15 +1266,15 @@ type RPCHeader struct {
 	ReceiptHash     common.Hash       `json:"receiptsRoot"`
 	BaseFee         *hexutil.Big      `json:"baseFeePerGas,omitempty"`
 	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot,omitempty"`
-	TotalDifficulty *hexutil.Big      `json:"totalDifficulty,omitempty"`
+	TotalDifficulty *hexutil.Big      `json:"totalDifficulty"`
 }
 
 // RPCBlock represents a serializable block of RPC response
 type RPCBlock struct {
 	RPCHeader
 	Size         hexutil.Uint64    `json:"size,omitempty"`
-	Transactions []interface{}     `json:"transactions,omitempty"`
-	Uncles       *[]common.Hash    `json:"uncles,omitempty"`
+	Transactions *[]interface{}    `json:"transactions,omitempty"` // uncle blocks don't include any transactions
+	Uncles       *[]common.Hash    `json:"uncles,omitempty"`       // uncle blocks don't include any uncle blocks
 	Withdrawals  types.Withdrawals `json:"withdrawals,omitempty"`
 }
 
@@ -1335,7 +1335,7 @@ func NewRPCBlock(block *types.Block, inclTx bool, fullTx bool, config *params.Ch
 		for i, tx := range txs {
 			transactions[i] = formatTx(i, tx)
 		}
-		rpcBlock.Transactions = transactions
+		rpcBlock.Transactions = &transactions
 	}
 	uncles := block.Uncles()
 	uncleHashes := make([]common.Hash, len(uncles))
