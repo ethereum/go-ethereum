@@ -44,13 +44,19 @@ func init() {
 			if !Enabled && flag == enabler {
 				log.Info("Enabling metrics collection")
 				Enabled = true
+				break
 			}
 		}
 		for _, enabler := range expensiveEnablerFlags {
 			if !EnabledExpensive && flag == enabler {
 				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
+				break
 			}
+		}
+
+		if Enabled && EnabledExpensive {
+			break
 		}
 	}
 }
