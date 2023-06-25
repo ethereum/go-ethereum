@@ -176,7 +176,7 @@ func TestBasicLRUPeek(t *testing.T) {
 	cache.Add(1, 1)
 	cache.Add(2, 2)
 	if v, ok := cache.Peek(1); !ok || v != 1 {
-		t.Errorf("1 shoud be set to 1")
+		t.Errorf("1 should be set to 1")
 	}
 	cache.Add(3, 3)
 	if cache.Contains(1) {
