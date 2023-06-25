@@ -54,7 +54,6 @@ func init() {
 				break
 			}
 		}
-
 		if Enabled && EnabledExpensive {
 			break
 		}
