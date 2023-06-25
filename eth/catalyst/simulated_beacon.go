@@ -64,18 +64,19 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	return nil
 }
 
-// clearQueued shifts the last 10 withdrawals out of the queue
-func (w *withdrawalQueue) clearQueued() {
+// clearQueued shifts up to 10 withdrawals out of the queue
+func (w *withdrawalQueue) clearQueued(count int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	var queueCount int
-	if len(w.pending) >= 10 {
-		queueCount = 10
-	} else {
-		queueCount = len(w.pending)
+	if count > 10 {
+		count = 10
 	}
-	w.pending = append([]*types.Withdrawal{}, w.pending[queueCount:]...)
+	if len(w.pending) < count {
+		count = len(w.pending)
+	}
+
+	w.pending = append([]*types.Withdrawal{}, w.pending[count:]...)
 }
 
 type SimulatedBeacon struct {
@@ -170,7 +171,7 @@ func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) e
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return fmt.Errorf("failed to mark block as canonical: %v", err)
 	}
-	c.withdrawals.clearQueued()
+	c.withdrawals.clearQueued(len(payload.Withdrawals))
 	c.lastBlockTime = payload.Timestamp
 	return nil
 }
