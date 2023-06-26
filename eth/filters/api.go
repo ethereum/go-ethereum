@@ -288,28 +288,32 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 		return errInvalidToBlock
 	}
 
-	switch from {
-	case rpc.LatestBlockNumber:
-		// do live filter only
+	// do live filter only
+	if from == rpc.LatestBlockNumber {
 		return api.liveLogs(ctx, notifier, rpcSub, crit)
-	case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
+	}
+
+	if from == rpc.SafeBlockNumber || from == rpc.FinalizedBlockNumber {
 		header, err := api.sys.backend.HeaderByNumber(ctx, from)
 		if err != nil {
 			return err
 		}
-		go func() {
-			// do historical sync first
-			_, err := api.histLogs(ctx, notifier, rpcSub, header.Number.Int64(), crit)
-			if err != nil {
-				return
-			}
-			// then subscribe from the header
-			api.liveLogs(ctx, notifier, rpcSub, crit)
-		}()
-		return nil
-	default:
+		from = rpc.BlockNumber(header.Number.Int64())
+	}
+	if from < 0 {
 		return errInvalidFromBlock
 	}
+
+	go func() {
+		// do historical sync first
+		_, err := api.histLogs(ctx, notifier, rpcSub, int64(from), crit)
+		if err != nil {
+			return
+		}
+		// then subscribe from the header
+		api.liveLogs(ctx, notifier, rpcSub, crit)
+	}()
+	return nil
 }
 
 // liveLogs only retrieves live logs
