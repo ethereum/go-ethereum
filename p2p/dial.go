@@ -525,6 +525,7 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
 		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
+		dialConnectionError.Mark(1)
 		return &dialError{err}
 	}
 	return d.setupFunc(newMeteredConn(fd), t.flags, dest)
