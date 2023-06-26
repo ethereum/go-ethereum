@@ -809,6 +809,21 @@ func TestLogsSubscription(t *testing.T) {
 			FilterCriteria{},
 			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
+		// from pending to pending
+		{
+			FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from latest to pending
+		{
+			FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from pending to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidFromTo, nil,
+		},
 		// from 1 to 3
 		{
 			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
