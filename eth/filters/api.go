@@ -284,12 +284,12 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 		to = rpc.BlockNumber(crit.ToBlock.Int64())
 	}
 
-	if to != rpc.LatestBlockNumber {
+	if to != rpc.LatestBlockNumber && to != rpc.PendingBlockNumber {
 		return errInvalidToBlock
 	}
 
 	// do live filter only
-	if from == rpc.LatestBlockNumber {
+	if from == rpc.LatestBlockNumber || from == rpc.PendingBlockNumber {
 		return api.liveLogs(ctx, notifier, rpcSub, crit)
 	}
 
