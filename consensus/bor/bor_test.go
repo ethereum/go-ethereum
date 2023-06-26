@@ -51,6 +51,7 @@ func TestGenesisContractChange(t *testing.T) {
 				Code:    []byte{0x1, 0x1},
 			},
 		},
+		Config: &params.ChainConfig{},
 	}
 
 	db := rawdb.NewMemoryDatabase()
