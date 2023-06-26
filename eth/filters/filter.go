@@ -376,19 +376,32 @@ func topicFilter(topics [][]common.Hash, filter func(i int, topic common.Hash) b
 
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
-	var ret []*types.Log
-	addrLen := len(addresses)
-	topicLen := len(topics)
+	var (
+		ret      []*types.Log
+		addrLen  = len(addresses)
+		topicLen = len(topics)
+		from     = uint64(0)
+		to       = uint64(0)
+	)
 
-	// sort logs in asc order
-	slices.SortFunc(logs, func(a, b *types.Log) bool { return a.BlockNumber < b.BlockNumber })
+	if fromBlock != nil && fromBlock.Sign() > 0 {
+		from = fromBlock.Uint64()
+	}
+	if toBlock != nil && toBlock.Sign() > 0 {
+		to = toBlock.Uint64()
+	}
+
+	// sort logs in asc order if to block is compared with
+	if to > 0 {
+		slices.SortFunc(logs, func(a, b *types.Log) bool { return a.BlockNumber < b.BlockNumber })
+	}
 
 	for _, log := range logs {
-		if fromBlock != nil && fromBlock.Sign() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+		if from > log.BlockNumber {
 			continue
 		}
 		// skip if the queried block number is smaller then current one
-		if toBlock != nil && toBlock.Sign() >= 0 && toBlock.Uint64() < log.BlockNumber {
+		if to > 0 && to < log.BlockNumber {
 			break
 		}
 
