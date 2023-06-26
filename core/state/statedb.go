@@ -53,6 +53,10 @@ func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
+// StateLogger is used to collect state update traces from  EVM transaction
+// execution.
+// Note that reference types are actual VM data structures; make copies
+// if you need to retain them beyond the current call.
 type StateLogger interface {
 	OnBalanceChange(addr common.Address, prev, new *big.Int)
 	OnNonceChange(addr common.Address, prev, new uint64)
@@ -171,7 +175,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
-// TODO: move to New
+// SetLogger sets the logger for account update hooks.
 func (s *StateDB) SetLogger(l StateLogger) {
 	s.logger = l
 }
