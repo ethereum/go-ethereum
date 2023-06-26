@@ -135,7 +135,6 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
-// It's only used in tests.
 func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
