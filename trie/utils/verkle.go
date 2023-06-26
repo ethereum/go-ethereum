@@ -25,6 +25,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// Basic account leaf suffixes, see:
+// https://notes.ethereum.org/@vbuterin/verkle_tree_eip#Tree-embedding
 const (
 	VersionLeafKey    = 0
 	BalanceLeafKey    = 1
@@ -69,7 +71,7 @@ func (pc *PointCache) GetTreeKeyHeader(addr []byte) *verkle.Point {
 		return point
 	}
 
-	point = EvaluateAddressPoint(addr)
+	point = evaluateAddressPoint(addr)
 	pc.lock.Lock()
 	pc.cache[string(addr)] = point
 	pc.lock.Unlock()
@@ -78,7 +80,7 @@ func (pc *PointCache) GetTreeKeyHeader(addr []byte) *verkle.Point {
 
 func (pc *PointCache) GetTreeKeyVersionCached(addr []byte) []byte {
 	p := pc.GetTreeKeyHeader(addr)
-	v := PointToHash(p, VersionLeafKey)
+	v := pointToHash(p, VersionLeafKey)
 	return v[:]
 }
 
@@ -113,7 +115,9 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	verkle.FromLEBytes(&poly[1], address[:16])
 	verkle.FromLEBytes(&poly[2], address[16:])
 
-	// treeIndex must be interpreted as a 32-byte aligned little-endian integer.
+	// tree
+	// Get does t,
+	// but reuses a cached evaluation of the address part of the polynomial.Index must be interpreted as a 32-byte aligned little-endian integer.
 	// e.g: if treeIndex is 0xAABBCC, we need the byte representation to be 0xCCBBAA00...00.
 	// poly[3] = LE({CC,BB,AA,00...0}) (16 bytes), poly[4]=LE({00,00,...}) (16 bytes).
 	//
@@ -132,9 +136,11 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	// add a constant point corresponding to poly[0]=[2+256*64].
 	ret.Add(ret, getTreePolyIndex0Point)
 
-	return PointToHash(ret, subIndex)
+	return pointToHash(ret, subIndex)
 }
 
+// GetTreeKeyAccountLeaf returns the key to the first leaf of
+// an account.
 func GetTreeKeyAccountLeaf(address []byte, leaf byte) []byte {
 	return GetTreeKey(address, zero, leaf)
 }
@@ -143,6 +149,10 @@ func GetTreeKeyVersion(address []byte) []byte {
 	return GetTreeKey(address, zero, VersionLeafKey)
 }
 
+// Get does the,
+// but uses the cached point corresponding to the address part of the polynomial.
+// GetTreeKeyVersionWithEvaluatedAddress does the same thing as GetTreeKeyVersion,
+// but reuses a cached evaluation of the address part of the polynomial.
 func GetTreeKeyVersionWithEvaluatedAddress(addrp *verkle.Point) []byte {
 	return getTreeKeyWithEvaluatedAddess(addrp, zero, VersionLeafKey)
 }
@@ -174,6 +184,8 @@ func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
+// GetTreeKeyCodeChunkWithEvaluatedAddress does the same thing as GetTreeKeyCodeChunk,
+// but uses the cached point corresponding to the address part of the polynomial.
 func GetTreeKeyCodeChunkWithEvaluatedAddress(addressPoint *verkle.Point, chunk *uint256.Int) []byte {
 	chunkOffset := new(uint256.Int).Add(CodeOffset, chunk)
 	treeIndex := new(uint256.Int).Div(chunkOffset, VerkleNodeWidth)
@@ -207,7 +219,7 @@ func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
+func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	// The output of Byte() is big engian for banderwagon. This
 	// introduces an imbalance in the tree, because hashes are
 	// elements of a 253-bit field. This means more than half the
@@ -242,10 +254,10 @@ func getTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.I
 	// add the pre-evaluated address
 	ret.Add(ret, evaluated)
 
-	return PointToHash(ret, subIndex)
+	return pointToHash(ret, subIndex)
 }
 
-func EvaluateAddressPoint(address []byte) *verkle.Point {
+func evaluateAddressPoint(address []byte) *verkle.Point {
 	if len(address) < 32 {
 		var aligned [32]byte
 		address = append(aligned[:32-len(address)], address...)
