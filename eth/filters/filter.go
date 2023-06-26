@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/exp/slices"
 )
 
 // Filter can be used to retrieve and filter logs.
@@ -379,12 +380,16 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 	addrLen := len(addresses)
 	topicLen := len(topics)
 
+	// sort logs in asc order
+	slices.SortFunc(logs, func(a, b *types.Log) bool { return a.BlockNumber < b.BlockNumber })
+
 	for _, log := range logs {
 		if fromBlock != nil && fromBlock.Sign() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			continue
 		}
+		// skip if the queried block number is smaller then current one
 		if toBlock != nil && toBlock.Sign() >= 0 && toBlock.Uint64() < log.BlockNumber {
-			continue
+			break
 		}
 
 		if addrLen > 0 && !includes(addresses, log.Address) {
