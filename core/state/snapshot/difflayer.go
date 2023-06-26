@@ -188,6 +188,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		panic("unknown parent type")
 	}
 	// Sanity check that accounts or storage slots are never nil
+	// start from here
 	for accountHash, blob := range accounts {
 		if blob == nil {
 			panic(fmt.Sprintf("account %#x nil", accountHash))
