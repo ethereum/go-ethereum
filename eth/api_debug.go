@@ -281,6 +281,9 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %d not found", *endNum)
 		}
+		if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
+			return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+		}
 	}
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
@@ -308,14 +311,14 @@ func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *c
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %x not found", *endHash)
 		}
+		if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
+			return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+		}
 	}
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
 func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
-		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
-	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
 	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
