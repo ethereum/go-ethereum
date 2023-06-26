@@ -367,10 +367,11 @@ func (s *stateObject) commitTrie(db Database) (*trienode.NodeSet, error) {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
 	root, nodes, err := tr.Commit(false)
-	if err == nil {
-		s.data.Root = root
+	if err != nil {
+		return nil, err
 	}
-	return nodes, err
+	s.data.Root = root
+	return nodes, nil
 }
 
 // AddBalance adds amount to s's balance.
