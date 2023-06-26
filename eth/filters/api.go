@@ -261,6 +261,8 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
+// notifier is used for broadcasting data(eg: logs) to rpc receivers
+// used in unit testing
 type notifier interface {
 	Notify(id rpc.ID, data interface{}) error
 	Closed() <-chan interface{}
@@ -275,6 +277,37 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	rpcSub := notifier.CreateSubscription()
 	err := api.logs(ctx, notifier, rpcSub, crit)
 	return rpcSub, err
+}
+
+// logs is the inner implmention of logs filter
+func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+	isLiveFilter := true
+	if crit.FromBlock != nil {
+		isLiveFilter = crit.FromBlock.Sign() < 0
+	}
+
+	// do live filter only
+	if isLiveFilter {
+		return api.liveLogs(ctx, notifier, rpcSub, crit)
+	}
+
+	// if toBlock is limited and handled, no need to subscribe live logs anymore
+	if toBlock := crit.ToBlock; toBlock != nil {
+		if header := api.sys.backend.CurrentHeader(); header != nil && toBlock.Sign() > 0 && toBlock.Cmp(header.Number) <= 0 {
+			return errors.New("historical only log subscription is not supported")
+		}
+	}
+
+	go func() {
+		// do historical sync first
+		_, err := api.histLogs(ctx, notifier, rpcSub, crit)
+		if err != nil {
+			return
+		}
+		// then subscribe from the header
+		api.liveLogs(ctx, notifier, rpcSub, crit)
+	}()
+	return nil
 }
 
 // liveLogs only retrieves live logs
@@ -384,37 +417,6 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 		// move forward to the next batch
 		n = head + 1
 	}
-}
-
-// logs is the inner implmention of logs filter
-func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	isLiveFilter := true
-	if crit.FromBlock != nil {
-		isLiveFilter = crit.FromBlock.Sign() < 0
-	}
-
-	// do live filter only
-	if isLiveFilter {
-		return api.liveLogs(ctx, notifier, rpcSub, crit)
-	}
-
-	// if toBlock is limited and handled, no need to subscribe live logs anymore
-	if toBlock := crit.ToBlock; toBlock != nil {
-		if header := api.sys.backend.CurrentHeader(); header != nil && toBlock.Sign() > 0 && toBlock.Cmp(header.Number) <= 0 {
-			return errors.New("historical only log subscription is not supported")
-		}
-	}
-
-	go func() {
-		// do historical sync first
-		_, err := api.histLogs(ctx, notifier, rpcSub, crit)
-		if err != nil {
-			return
-		}
-		// then subscribe from the header
-		api.liveLogs(ctx, notifier, rpcSub, crit)
-	}()
-	return nil
 }
 
 // FilterCriteria represents a request to create a new filter.
