@@ -37,6 +37,7 @@ import (
 var (
 	errInvalidTopic     = errors.New("invalid topic(s)")
 	errFilterNotFound   = errors.New("filter not found")
+	errConnectDropped   = errors.New("connection dropped")
 	errInvalidToBlock   = errors.New("log subscription does not support history block range")
 	errInvalidFromBlock = errors.New("invalid from block")
 )
@@ -375,7 +376,7 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 			select {
 			case <-notifier.Closed():
 				rmLogsSub.Unsubscribe()
-				return 0, errors.New("connection dropped")
+				return 0, errConnectDropped
 			case err := <-rpcSub.Err(): // client send an unsubscribe request
 				rmLogsSub.Unsubscribe()
 				return 0, err
@@ -402,7 +403,7 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 		for _, log := range rmLogs {
 			select {
 			case <-notifier.Closed():
-				return head, errors.New("connection dropped")
+				return head, errConnectDropped
 			case err := <-rpcSub.Err(): // client send an unsubscribe request
 				return head, err
 			default:
