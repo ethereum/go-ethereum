@@ -781,35 +781,60 @@ func TestLogsSubscription(t *testing.T) {
 		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(14).Bytes(), BlockNumber: 4},
 	}
 
-	pendingBlockNumber := big.NewInt(rpc.PendingBlockNumber.Int64())
 	testCases := []struct {
-		crit     FilterCriteria
-		expected []*types.Log
-		notifier *mockNotifier
-		sub      *rpc.Subscription
-		err      chan error
+		crit      FilterCriteria
+		expected  []*types.Log
+		notifier  *mockNotifier
+		sub       *rpc.Subscription
+		expectErr error
+		err       chan error
 	}{
 		// from 0 to latest
 		{
-			FilterCriteria{FromBlock: big.NewInt(0), ToBlock: big.NewInt(5)},
-			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+			FilterCriteria{FromBlock: big.NewInt(0)},
+			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
 		// from 1 to latest
 		{
-			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: pendingBlockNumber},
-			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
-		// // from 1 to 3
-		// {
-		// 	FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
-		// 	allLogs[0:3], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil,
-		// },
+		// from 2 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(2)},
+			allLogs[1:], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from latest to latest
+		{
+			FilterCriteria{},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from 1 to 3
+		{
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidToBlock, nil,
+		},
+		// from -101 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(-101)},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidFromBlock, nil,
+		},
 	}
 
 	// subscribe logs
 	for i, tc := range testCases {
 		testCases[i].err = make(chan error)
 		err := api.logs(context.Background(), tc.notifier, tc.sub, tc.crit)
+		if tc.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
+				continue
+			}
+			if !errors.Is(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatalf("SubscribeLogs %d failed: %v\n", i, err)
 		}
