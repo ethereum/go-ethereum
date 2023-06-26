@@ -358,6 +358,13 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
+// topicFilter checks if the given log topics match the filter topics.
+// It returns true if there is a match, false otherwise.
+//
+// So the full logic is:
+// - Wildcard filter topics (empty) always match
+// - If any non-wildcard filter topic does NOT match, the function returns false
+// - Otherwise, it returns true
 func topicFilter(topics [][]common.Hash, filter func(i int, topic common.Hash) bool) bool {
 	for i, sub := range topics {
 		match := len(sub) == 0 // empty rule set == wildcard
