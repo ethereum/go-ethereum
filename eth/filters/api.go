@@ -35,23 +35,10 @@ import (
 )
 
 var (
-	errInvalidTopic           = errors.New("invalid topic(s)")
-	errFilterNotFound         = errors.New("filter not found")
-	errInvalidBlockRange      = errors.New("invalid block range params")
-	errUnknownBlock           = errors.New("unknown block")
-	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
-	errPendingLogsUnsupported = errors.New("pending logs are not supported")
-	errExceedMaxTopics        = errors.New("exceed max topics")
-	errExceedMaxAddresses     = errors.New("exceed max addresses")
-)
-
-const (
-	// The maximum number of addresses allowed in a filter criteria
-	maxAddresses = 1000
-	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
-	maxTopics = 4
-	// The maximum number of allowed topics within a topic criteria
-	maxSubTopics = 1000
+	errInvalidTopic     = errors.New("invalid topic(s)")
+	errFilterNotFound   = errors.New("filter not found")
+	errInvalidToBlock   = errors.New("log subscription does not support history block range")
+	errInvalidFromBlock = errors.New("invalid from block")
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -280,34 +267,48 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 }
 
 // logs is the inner implmention of logs filter
+// from: nil, to: nil -> only live
+// from: blockNum | safe | finalized, to: nil -> historical from from and then toggle live
+// every other case should fail with an error
 func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	isLiveFilter := true
-	if crit.FromBlock != nil {
-		isLiveFilter = crit.FromBlock.Sign() < 0
+	var from, to rpc.BlockNumber
+	if crit.FromBlock == nil {
+		from = rpc.LatestBlockNumber
+	} else {
+		from = rpc.BlockNumber(crit.FromBlock.Int64())
+	}
+	if crit.ToBlock == nil {
+		to = rpc.LatestBlockNumber
+	} else {
+		to = rpc.BlockNumber(crit.ToBlock.Int64())
 	}
 
-	// do live filter only
-	if isLiveFilter {
+	if to != rpc.LatestBlockNumber {
+		return errInvalidToBlock
+	}
+
+	switch from {
+	case rpc.LatestBlockNumber:
+		// do live filter only
 		return api.liveLogs(ctx, notifier, rpcSub, crit)
-	}
-
-	// if toBlock is limited and handled, no need to subscribe live logs anymore
-	if toBlock := crit.ToBlock; toBlock != nil {
-		if header := api.sys.backend.CurrentHeader(); header != nil && toBlock.Sign() > 0 && toBlock.Cmp(header.Number) <= 0 {
-			return errors.New("historical only log subscription is not supported")
-		}
-	}
-
-	go func() {
-		// do historical sync first
-		_, err := api.histLogs(ctx, notifier, rpcSub, crit)
+	case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
+		header, err := api.sys.backend.HeaderByNumber(ctx, from)
 		if err != nil {
-			return
+			return err
 		}
-		// then subscribe from the header
-		api.liveLogs(ctx, notifier, rpcSub, crit)
-	}()
-	return nil
+		go func() {
+			// do historical sync first
+			_, err := api.histLogs(ctx, notifier, rpcSub, header.Number.Int64(), crit)
+			if err != nil {
+				return
+			}
+			// then subscribe from the header
+			api.liveLogs(ctx, notifier, rpcSub, crit)
+		}()
+		return nil
+	default:
+		return errInvalidFromBlock
+	}
 }
 
 // liveLogs only retrieves live logs
@@ -339,13 +340,12 @@ func (api *FilterAPI) liveLogs(ctx context.Context, notify notifier, rpcSub *rpc
 }
 
 // histLogs only retrieves the logs older than current header
-func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) (int64, error) {
+func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, n int64, crit FilterCriteria) (int64, error) {
 	// the ctx will be canceled after this callback(filter.Logs) is called
 	// and we are run in a background goroutine, use a new context instead
 	var (
 		cctx     = context.Background()
 		rmLogsCh = make(chan []*types.Log)
-		n        = crit.FromBlock.Int64()
 	)
 	for {
 		// get the latest block header
@@ -358,16 +358,12 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 			return head, nil
 		}
 
-		to := big.NewInt(head)
-		if toBlock := crit.ToBlock; toBlock != nil && toBlock.Sign() > 0 && toBlock.Cmp(to) < 0 {
-			to = toBlock
-		}
-		// do historical sync from n to min(head, to)
-		f := api.sys.NewRangeFilter(n, to.Int64(), crit.Addresses, crit.Topics)
+		// do historical sync from n to head
+		f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
 		logChan, errChan := f.rangeLogsAsync(cctx)
 
 		// subscribe rmLogs
-		query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: to, Addresses: crit.Addresses, Topics: crit.Topics}
+		query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
 		rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
 		if err != nil {
 			return 0, err
