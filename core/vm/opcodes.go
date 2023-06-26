@@ -300,6 +300,8 @@ var opCodeToString = map[OpCode]string{
 	MSIZE:    "MSIZE",
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
+	TLOAD:    "TLOAD",
+	TSTORE:   "TSTORE",
 	PUSH0:    "PUSH0",
 
 	// 0x60 range - pushes.
@@ -378,10 +380,6 @@ var opCodeToString = map[OpCode]string{
 	LOG2: "LOG2",
 	LOG3: "LOG3",
 	LOG4: "LOG4",
-
-	// 0xb0 range.
-	TLOAD:  "TLOAD",
-	TSTORE: "TSTORE",
 
 	// 0xf0 range - closures.
 	CREATE:       "CREATE",
@@ -473,6 +471,8 @@ var stringToOp = map[string]OpCode{
 	"MSIZE":          MSIZE,
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
+	"TLOAD":          TLOAD,
+	"TSTORE":         TSTORE,
 	"PUSH0":          PUSH0,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
@@ -543,8 +543,6 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
-	"TLOAD":          TLOAD,
-	"TSTORE":         TSTORE,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
