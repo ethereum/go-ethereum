@@ -147,6 +147,9 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
+	// LiveTrace will enable tracing during normal chain processing.
+	LiveTrace bool
+
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
 

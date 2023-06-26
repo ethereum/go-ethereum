@@ -250,11 +250,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		Journal:   cacheConfig.TrieCleanJournal,
 		Preimages: cacheConfig.Preimages,
 	})
+	var logger BlockchainLogger
+	if vmConfig.Tracer != nil {
+		l, ok := vmConfig.Tracer.(BlockchainLogger)
+		if !ok {
+			return nil, fmt.Errorf("only extended tracers are supported for live mode")
+		}
+		logger = l
+	}
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
 	// TODO: pass in blockchainLogger here to catch genesis block and allocs
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides, nil)
+	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides, logger)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -265,14 +273,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
-	var logger BlockchainLogger
-	if vmConfig.Tracer != nil {
-		l, ok := vmConfig.Tracer.(BlockchainLogger)
-		if !ok {
-			return nil, fmt.Errorf("only extended tracers are supported for live mode")
-		}
-		logger = l
-	}
 
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
