@@ -447,6 +447,7 @@ var (
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
+		Bor:                           &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -476,6 +477,7 @@ var (
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
 		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
+		Bor:                           &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -505,6 +507,7 @@ var (
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
+		Bor:                           &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
