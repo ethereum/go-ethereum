@@ -357,10 +357,28 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
+func topicFilter(topics [][]common.Hash, filter func(i int, topic common.Hash) bool) bool {
+	for i, sub := range topics {
+		match := len(sub) == 0 // empty rule set == wildcard
+		for _, topic := range sub {
+			if filter(i, topic) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
+}
+
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
 	var ret []*types.Log
-Logs:
+	addrLen := len(addresses)
+	topicLen := len(topics)
+
 	for _, log := range logs {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			continue
@@ -369,24 +387,15 @@ Logs:
 			continue
 		}
 
-		if len(addresses) > 0 && !includes(addresses, log.Address) {
+		if addrLen > 0 && !includes(addresses, log.Address) {
 			continue
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
-		if len(topics) > len(log.Topics) {
+		if topicLen > len(log.Topics) {
 			continue
 		}
-		for i, sub := range topics {
-			match := len(sub) == 0 // empty rule set == wildcard
-			for _, topic := range sub {
-				if log.Topics[i] == topic {
-					match = true
-					break
-				}
-			}
-			if !match {
-				continue Logs
-			}
+		if !topicFilter(topics, func(i int, topic common.Hash) bool { return log.Topics[i] == topic }) {
+			continue
 		}
 		ret = append(ret, log)
 	}
@@ -407,17 +416,9 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 		}
 	}
 
-	for _, sub := range topics {
-		included := len(sub) == 0 // empty rule set == wildcard
-		for _, topic := range sub {
-			if types.BloomLookup(bloom, topic) {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
+	if !topicFilter(topics, func(i int, topic common.Hash) bool { return types.BloomLookup(bloom, topic) }) {
+		return false
 	}
+
 	return true
 }
