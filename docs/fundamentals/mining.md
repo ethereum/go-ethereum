@@ -3,9 +3,10 @@ title: Proof-of-work mining with Ethash
 description: Introduction to proof-of-work mining with Geth
 ---
 
-<Note>Proof-of-work mining is no longer used to secure Ethereum Mainnet. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet.</Note>
+<Note>Proof-of-work mining is no longer used to secure Ethereum Mainnet.</Note>
 
 Blockchains grow when individual nodes create valid blocks and distribute them to their peers who check the blocks and add them to their own local databases.
+
 Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomly selects a node to produce each block.
 
 Ethereum wasn't always secured this way. Originally, a proof-of-work based consensus mechanism was used instead. Under proof-of-work, block producers are not selected randomly in each slot. Instead they compete for the right to add a block. The node that is fastest to compute a certain value that can only be found using brute force calculations is the one that gets to add a block. Only if a node can demonstrate that they have calculated this value, and therefore expended energy, will their block be accepted by other nodes. This process of creating blocks and securing them using proof-of-work is known as "mining".
@@ -15,9 +16,9 @@ Much more information about mining, including details about the specific algorit
 
 ## CPU vs GPU {#cpu-vs-gpu}
 
-Ethereum mining used an algorithm called ["Ethash"](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash). Geth includes a CPU miner which runs Ethash within the Geth process. Everything required to mine on a CPU is bundled with Geth. However, to mine using GPUs an additional piece of third-party software is required. The most commonly used GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
+Everything required to mine on a CPU used to come bundled with Geth. However, to mine using GPUs an additional piece of third-party software was required. The most commonly used GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
 
-Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain,meaning block rewards will not be recognized by the main network.
+Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain, meaning block rewards will not be recognized by the main network.
 
 ## GPU Mining {#gpu-mining}
 
@@ -97,16 +98,16 @@ More verbose logs can be configured using `-v` and a value between 0-9. The Etha
 
 ## CPU Mining with Geth {#cpu-mining-with-geth}
 
-When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores).
+When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. 
 
 ```sh
-geth --mine --miner.threads=4
+geth --mine
 ```
 
-CPU mining can also be started and stopped at runtime using the [console](/docs/interacting-with-geth/javascript-console). The command `miner.start` takes an optional parameter for the number of miner threads.
+CPU mining can also be started and stopped at runtime using the [console](/docs/interacting-with-geth/javascript-console).
 
 ```js
-miner.start(8);
+miner.start();
 true;
 miner.stop();
 true;
@@ -170,8 +171,7 @@ function minedBlocks(lastn, addr) {
 minedBlocks(1000, eth.coinbase)[(352708, 352655, 352559)];
 ```
 
-The etherbase balance will fluctuate if a mined block is re-org'd out of the canonical chain. This means that when the local Geth node includes the mined block
-in its own local blockchain the account balance appears higher because the block rewards are applied. When the node switches to another version of the chain due to information received from peers, that block may not be included and the block rewards are not applied.
+The etherbase balance will fluctuate if a mined block is re-org'd out of the canonical chain. This means that when the local Geth node includes the mined block in its own local blockchain the account balance appears higher because the block rewards are applied. When the node switches to another version of the chain due to information received from peers, that block may not be included and the block rewards are not applied.
 
 The logs show locally mined blocks confirmed after 5 blocks.
 

@@ -45,13 +45,13 @@ Updates the interval for recomitting the miner sealing work.
 
 ## miner_start {#miner-start}
 
-Start the CPU mining process with the given number of threads and generate a new DAG if need be.
+Start the CPU mining process and generate a new DAG if need be.
 
-| Client  | Method invocation                                   |
-| :------ | --------------------------------------------------- |
-| Go      | `miner.Start(threads *rpc.HexNumber) (bool, error)` |
-| Console | `miner.start(number)`                               |
-| RPC     | `{"method": "miner_start", "params": [number]}`     |
+| Client  | Method invocation                         |
+| :------ | ----------------------------------------- |
+| Go      | `miner.Start() (bool, error)`             |
+| Console | `miner.start()`                           |
+| RPC     | `{"method": "miner_start", "params": []}` |
 
 ## miner_stop {#miner-stop}
 

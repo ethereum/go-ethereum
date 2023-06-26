@@ -44,8 +44,6 @@ COMMANDS:
    init                   Bootstrap and initialize a new genesis block
    js                     (DEPRECATED) Execute the specified JavaScript files
    license                Display license information
-   makecache              Generate ethash verification cache (for testing)
-   makedag                Generate ethash mining DAG (for testing)
    removedb               Remove blockchain and state databases
    show-deprecated-flags  Show flags that have been deprecated
    snapshot               A set of commands based on the snapshot
@@ -207,31 +205,6 @@ GLOBAL OPTIONS:
     --dev.period value             (default: 0)
           Block period to use in developer mode (0 = mine only if transaction pending)
 
-   ETHASH
-
-    --ethash.cachedir value
-          Directory to store the ethash verification caches (default = inside the datadir)
-
-    --ethash.cachesinmem value     (default: 2)
-          Number of recent ethash caches to keep in memory (16MB each)
-
-    --ethash.cacheslockmmap        (default: false)
-          Lock memory maps of recent ethash caches
-
-    --ethash.cachesondisk value    (default: 3)
-          Number of recent ethash caches to keep on disk (16MB each)
-
-    --ethash.dagdir value          (default: /Users/fjl/Library/Ethash)
-          Directory to store the ethash mining DAGs
-
-    --ethash.dagsinmem value       (default: 1)
-          Number of recent ethash mining DAGs to keep in memory (1+GB each)
-
-    --ethash.dagslockmmap          (default: false)
-          Lock memory maps for recent ethash mining DAGs
-
-    --ethash.dagsondisk value      (default: 2)
-          Number of recent ethash mining DAGs to keep on disk (1+GB each)
 
    ETHEREUM
 
@@ -461,20 +434,12 @@ GLOBAL OPTIONS:
     --miner.newpayload-timeout value (default: 2s)
           Specify the maximum time allowance for creating a new payload
 
-    --miner.notify value
-          Comma separated HTTP URL list to notify of new work packages
-
     --miner.notify.full            (default: false)
           Notify with pending block headers instead of work packages
-
-    --miner.noverify               (default: false)
-          Disable remote sealing verification
 
     --miner.recommit value         (default: 2s)
           Time interval to recreate the block being mined
 
-    --miner.threads value          (default: 0)
-          Number of CPU threads to use for mining
 
    MISC
 
