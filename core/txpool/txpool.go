@@ -420,6 +420,7 @@ func (pool *TxPool) loop() {
 
 		// Handle stats reporting ticks
 		case <-report.C:
+			pool.mu.RLock()
 			pending, queued := pool.stats()
 			pool.mu.RUnlock()
 			stales := int(pool.priced.stales.Load())
