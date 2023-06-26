@@ -265,6 +265,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
+	var logger BlockchainLogger
+	if vmConfig.Tracer != nil {
+		l, ok := vmConfig.Tracer.(BlockchainLogger)
+		if !ok {
+			return nil, fmt.Errorf("only extended tracers are supported for live mode")
+		}
+		logger = l
+	}
 
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
@@ -282,6 +290,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
+		logger:        logger,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -451,12 +460,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		go bc.maintainTxIndex()
 	}
 	return bc, nil
-}
-
-// TODO: need to move this to NewBlockchain to capture genesis block
-func (bc *BlockChain) SetLogger(l BlockchainLogger) {
-	bc.logger = l
-	bc.vmConfig.Tracer = l
 }
 
 // empty returns an indicator whether the blockchain is empty.

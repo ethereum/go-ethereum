@@ -2163,15 +2163,15 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
-
+	if ctx.IsSet(VMTraceFlag.Name) {
+		vmcfg.Tracer = tracers.NewPrinter()
+	}
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
-	if ctx.IsSet(VMTraceFlag.Name) {
-		chain.SetLogger(tracers.NewPrinter())
-	}
+
 	return chain, chainDb
 }
 
