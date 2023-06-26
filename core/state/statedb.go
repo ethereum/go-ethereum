@@ -648,6 +648,10 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	newobj = newObject(s, addr, types.StateAccount{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
+		// TODO: add isPrecompile check
+		if s.logger != nil {
+			s.logger.OnNewAccount(addr)
+		}
 	} else {
 		// The original account should be marked as destructed and all cached
 		// account and storage data should be cleared as well. Note, it must
@@ -678,11 +682,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 			prevStorage:  storage,
 		})
 	}
-	// TODO: add isPrecompile check
-	// TODO: should we emit on account reset?
-	if s.logger != nil {
-		s.logger.OnNewAccount(addr)
-	}
+
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
 		return newobj, prev

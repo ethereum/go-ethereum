@@ -153,6 +153,8 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 }
 
+// BlockchainLogger is used to collect traces during chain processing.
+// Please make a copy of the referenced types if you intend to retain them.
 type BlockchainLogger interface {
 	vm.EVMLogger
 	state.StateLogger
