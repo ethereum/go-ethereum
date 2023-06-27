@@ -570,11 +570,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 		var numDirect int
 		if tx.Size() <= txMaxBroadcastSize {
-			// Send the tx unconditionally to a subset of our peers
 			numDirect = int(math.Sqrt(float64(len(peers))))
-			for _, peer := range peers[:numDirect] {
-				txset[peer] = append(txset[peer], tx.Hash())
-			}
+		}
+		// Send the tx unconditionally to a subset of our peers
+		for _, peer := range peers[:numDirect] {
+			txset[peer] = append(txset[peer], tx.Hash())
+		}
 		}
 		// For the remaining peers, send announcement only
 		for _, peer := range peers[numDirect:] {
