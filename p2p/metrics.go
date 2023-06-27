@@ -66,13 +66,13 @@ func init() {
 	egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
 	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
 
-	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/connection/err", nil)
-	dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/saturated", nil)
-	dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/known", nil)
-	dialSelf = metrics.NewRegisteredMeter("p2p/dials/self", nil)
-	dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/useless", nil)
-	dialFailedRLPXEncHandshake = metrics.NewRegisteredMeter("p2p/dials/rlpx/enc/fail", nil)
-	dialFailedRLPXProtoHandshake = metrics.NewRegisteredMeter("p2p/dials/rlpx/proto/fail", nil)
+	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
+	dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
+	dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/error/known", nil)
+	dialSelf = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
+	dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
+	dialFailedRLPXEncHandshake = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
+	dialFailedRLPXProtoHandshake = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
