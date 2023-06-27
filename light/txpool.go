@@ -409,21 +409,19 @@ func (pool *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		return err
 	}
 
-	if _, ok := pool.pending[hash]; !ok {
-		pool.pending[hash] = tx
+	pool.pending[hash] = tx
 
-		nonce := tx.Nonce() + 1
+	nonce := tx.Nonce() + 1
 
-		addr, _ := types.Sender(pool.signer, tx)
-		if nonce > pool.nonce[addr] {
-			pool.nonce[addr] = nonce
-		}
-
-		// Notify the subscribers. This event is posted in a goroutine
-		// because it's possible that somewhere during the post "Remove transaction"
-		// gets called which will then wait for the global tx pool lock and deadlock.
-		go pool.txFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
+	addr, _ := types.Sender(pool.signer, tx)
+	if nonce > pool.nonce[addr] {
+		pool.nonce[addr] = nonce
 	}
+
+	// Notify the subscribers. This event is posted in a goroutine
+	// because it's possible that somewhere during the post "Remove transaction"
+	// gets called which will then wait for the global tx pool lock and deadlock.
+	go pool.txFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
 
 	// Print a log message if low enough level is set
 	log.Debug("Pooled new transaction", "hash", hash, "from", log.Lazy{Fn: func() common.Address { from, _ := types.Sender(pool.signer, tx); return from }}, "to", tx.To())
