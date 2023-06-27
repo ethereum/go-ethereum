@@ -108,4 +108,11 @@ type SubPool interface {
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
+
+	// PriceBump returns the minimum price increase percentage required by the subpool
+	// for a new transaction to replace an existing one. If a transaction with the 
+	// same nonce already exists in the pool, the incoming transaction's price must 
+	// be higher than the existing one's price by at least the percentage returned 
+	// by PriceBump.
+	PriceBump() uint64
 }

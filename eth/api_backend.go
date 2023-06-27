@@ -322,6 +322,10 @@ func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 	return b.eth.txPool.Nonce(addr), nil
 }
 
+func (b *EthAPIBackend) GetPoolPriceBump() (uint64, error) {
+	return b.eth.txPool.PriceBump(), nil
+}
+
 func (b *EthAPIBackend) Stats() (runnable int, blocked int) {
 	return b.eth.txPool.Stats()
 }

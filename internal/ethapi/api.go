@@ -218,6 +218,12 @@ func (s *TxPoolAPI) Status() map[string]hexutil.Uint {
 	}
 }
 
+// PriceBump returns the PriceBump of the transaction pool.
+func (s *TxPoolAPI) PriceBump() hexutil.Uint {
+    priceBump, _ := s.b.GetPoolPriceBump()
+    return hexutil.Uint(priceBump)
+}
+
 // Inspect retrieves the content of the transaction pool and flattens it into an
 // easily inspectable list.
 func (s *TxPoolAPI) Inspect() map[string]map[string]map[string]string {

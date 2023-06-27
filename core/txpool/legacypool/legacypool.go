@@ -1586,6 +1586,11 @@ func (pool *LegacyPool) demoteUnexecutables() {
 	}
 }
 
+// PriceBump returns the current price bump percentage from the LegacyPool's configuration.
+func (pool *LegacyPool) PriceBump() uint64 {
+    return pool.config.PriceBump
+}
+
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type addressByHeartbeat struct {
 	address   common.Address
@@ -1845,3 +1850,4 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
+

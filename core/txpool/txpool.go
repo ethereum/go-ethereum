@@ -342,3 +342,20 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 	}
 	return TxStatusUnknown
 }
+
+func (p *TxPool) PriceBump() uint64 {
+    // Initialize the priceBump as 0
+    var priceBump uint64
+
+    // Loop over each subpool
+    for _, subpool := range p.subpools {
+        // Get the priceBump of the current subpool
+        if currentPriceBump := subpool.PriceBump(); currentPriceBump > priceBump {
+            // If the currentPriceBump is larger than the priceBump, update the priceBump
+            priceBump = currentPriceBump
+        }
+    }
+
+    // Return the maximum priceBump found
+    return priceBump
+}
