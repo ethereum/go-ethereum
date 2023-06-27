@@ -43,7 +43,7 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := rawdb.NewMemoryDatabase()
 	sdb := NewDatabase(db)
-	state, _ := New(common.Hash{}, sdb, nil)
+	state, _ := New(types.EmptyRootHash, sdb, nil)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -125,7 +125,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if err != nil {
 		return err
 	}
-	it := NewNodeIterator(state)
+	it := newNodeIterator(state)
 	for it.Next() {
 	}
 	return it.Error
@@ -213,14 +213,14 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 		for i, node := range nodeElements {
 			if bypath {
 				if len(node.syncPath) == 1 {
-					data, _, err := srcTrie.TryGetNode(node.syncPath[0])
+					data, _, err := srcTrie.GetNode(node.syncPath[0])
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[0], err)
 					}
 					nodeResults[i] = trie.NodeSyncResult{Path: node.path, Data: data}
 				} else {
 					var acc types.StateAccount
-					if err := rlp.DecodeBytes(srcTrie.Get(node.syncPath[0]), &acc); err != nil {
+					if err := rlp.DecodeBytes(srcTrie.MustGet(node.syncPath[0]), &acc); err != nil {
 						t.Fatalf("failed to decode account on path %x: %v", node.syncPath[0], err)
 					}
 					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
@@ -228,7 +228,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 					if err != nil {
 						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
 					}
-					data, _, err := stTrie.TryGetNode(node.syncPath[1])
+					data, _, err := stTrie.GetNode(node.syncPath[1])
 					if err != nil {
 						t.Fatalf("failed to retrieve node data for path %x: %v", node.syncPath[1], err)
 					}
@@ -602,7 +602,8 @@ func TestIncompleteStateSync(t *testing.T) {
 		if len(nodeQueue) > 0 {
 			results := make([]trie.NodeSyncResult, 0, len(nodeQueue))
 			for path, element := range nodeQueue {
-				data, err := srcDb.TrieDB().Node(element.hash)
+				owner, inner := trie.ResolvePath([]byte(element.path))
+				data, err := srcDb.TrieDB().Reader(srcRoot).Node(owner, inner, element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for %x", element.hash)
 				}

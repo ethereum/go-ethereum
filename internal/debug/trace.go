@@ -48,7 +48,7 @@ func (h *HandlerT) StartGoTrace(file string) error {
 	return nil
 }
 
-// StopTrace stops an ongoing trace.
+// StopGoTrace stops an ongoing trace.
 func (h *HandlerT) StopGoTrace() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

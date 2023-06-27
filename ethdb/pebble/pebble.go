@@ -70,19 +70,20 @@ type Database struct {
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
 
-	quitLock sync.Mutex      // Mutex protecting the quit channel access
+	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
+	closed   bool            // keep track of whether we're Closed
 
 	log log.Logger // Contextual logger tracking the database path
 
-	activeComp          int       // Current number of active compactions
-	compStartTime       time.Time // The start time of the earliest currently-active compaction
-	compTime            int64     // Total time spent in compaction in ns
-	level0Comp          uint32    // Total number of level-zero compactions
-	nonLevel0Comp       uint32    // Total number of non level-zero compactions
-	writeDelayStartTime time.Time // The start time of the latest write stall
-	writeDelayCount     int64     // Total number of write stall counts
-	writeDelayTime      int64     // Total time spent in write stalls
+	activeComp          int           // Current number of active compactions
+	compStartTime       time.Time     // The start time of the earliest currently-active compaction
+	compTime            atomic.Int64  // Total time spent in compaction in ns
+	level0Comp          atomic.Uint32 // Total number of level-zero compactions
+	nonLevel0Comp       atomic.Uint32 // Total number of non level-zero compactions
+	writeDelayStartTime time.Time     // The start time of the latest write stall
+	writeDelayCount     atomic.Int64  // Total number of write stall counts
+	writeDelayTime      atomic.Int64  // Total time spent in write stalls
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
@@ -91,16 +92,16 @@ func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	}
 	l0 := info.Input[0]
 	if l0.Level == 0 {
-		atomic.AddUint32(&d.level0Comp, 1)
+		d.level0Comp.Add(1)
 	} else {
-		atomic.AddUint32(&d.nonLevel0Comp, 1)
+		d.nonLevel0Comp.Add(1)
 	}
 	d.activeComp++
 }
 
 func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 	if d.activeComp == 1 {
-		atomic.AddInt64(&d.compTime, int64(time.Since(d.compStartTime)))
+		d.compTime.Add(int64(time.Since(d.compStartTime)))
 	} else if d.activeComp == 0 {
 		panic("should not happen")
 	}
@@ -112,7 +113,7 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 }
 
 func (d *Database) onWriteStallEnd() {
-	atomic.AddInt64(&d.writeDelayTime, int64(time.Since(d.writeDelayStartTime)))
+	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -221,7 +222,11 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 func (d *Database) Close() error {
 	d.quitLock.Lock()
 	defer d.quitLock.Unlock()
-
+	// Allow double closing, simplifies things
+	if d.closed {
+		return nil
+	}
+	d.closed = true
 	if d.quitChan != nil {
 		errc := make(chan error)
 		d.quitChan <- errc
@@ -235,6 +240,11 @@ func (d *Database) Close() error {
 
 // Has retrieves if a key is present in the key-value store.
 func (d *Database) Has(key []byte) (bool, error) {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return false, pebble.ErrClosed
+	}
 	_, closer, err := d.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return false, nil
@@ -247,6 +257,11 @@ func (d *Database) Has(key []byte) (bool, error) {
 
 // Get retrieves the given key if it's present in the key-value store.
 func (d *Database) Get(key []byte) ([]byte, error) {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return nil, pebble.ErrClosed
+	}
 	dat, closer, err := d.db.Get(key)
 	if err != nil {
 		return nil, err
@@ -259,11 +274,21 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 
 // Put inserts the given value into the key-value store.
 func (d *Database) Put(key []byte, value []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
 	return d.db.Set(key, value, pebble.NoSync)
 }
 
 // Delete removes the key from the key-value store.
 func (d *Database) Delete(key []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
 	return d.db.Delete(key, nil)
 }
 
@@ -271,7 +296,8 @@ func (d *Database) Delete(key []byte) error {
 // database until a final write is called.
 func (d *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		b: d.db.NewBatch(),
+		b:  d.db.NewBatch(),
+		db: d,
 	}
 }
 
@@ -281,7 +307,8 @@ func (d *Database) NewBatch() ethdb.Batch {
 // batch object without any pre-allocated space.
 func (d *Database) NewBatchWithSize(_ int) ethdb.Batch {
 	return &batch{
-		b: d.db.NewBatch(),
+		b:  d.db.NewBatch(),
+		db: d,
 	}
 }
 
@@ -407,11 +434,11 @@ func (d *Database) meter(refresh time.Duration) {
 			nWrite    int64
 
 			metrics            = d.db.Metrics()
-			compTime           = atomic.LoadInt64(&d.compTime)
-			writeDelayCount    = atomic.LoadInt64(&d.writeDelayCount)
-			writeDelayTime     = atomic.LoadInt64(&d.writeDelayTime)
-			nonLevel0CompCount = int64(atomic.LoadUint32(&d.nonLevel0Comp))
-			level0CompCount    = int64(atomic.LoadUint32(&d.level0Comp))
+			compTime           = d.compTime.Load()
+			writeDelayCount    = d.writeDelayCount.Load()
+			writeDelayTime     = d.writeDelayTime.Load()
+			nonLevel0CompCount = int64(d.nonLevel0Comp.Load())
+			level0CompCount    = int64(d.level0Comp.Load())
 		)
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount
@@ -478,6 +505,7 @@ func (d *Database) meter(refresh time.Duration) {
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
 	b    *pebble.Batch
+	db   *Database
 	size int
 }
 
@@ -502,6 +530,11 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
+	b.db.quitLock.RLock()
+	defer b.db.quitLock.RUnlock()
+	if b.db.closed {
+		return pebble.ErrClosed
+	}
 	return b.b.Commit(pebble.NoSync)
 }
 

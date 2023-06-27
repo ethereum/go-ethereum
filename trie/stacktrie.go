@@ -202,8 +202,8 @@ const (
 	hashedNode
 )
 
-// TryUpdate inserts a (key, value) pair into the stack trie
-func (st *StackTrie) TryUpdate(key, value []byte) error {
+// Update inserts a (key, value) pair into the stack trie.
+func (st *StackTrie) Update(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {
 		panic("deletion not supported")
@@ -212,8 +212,10 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-func (st *StackTrie) Update(key, value []byte) {
-	if err := st.TryUpdate(key, value); err != nil {
+// MustUpdate is a wrapper of Update and will omit any encountered error but
+// just print out an error message.
+func (st *StackTrie) MustUpdate(key, value []byte) {
+	if err := st.Update(key, value); err != nil {
 		log.Error("Unhandled trie error in StackTrie.Update", "err", err)
 	}
 }
@@ -418,17 +420,17 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 		return
 
 	case branchNode:
-		var nodes rawFullNode
+		var nodes fullNode
 		for i, child := range st.children {
 			if child == nil {
-				nodes[i] = nilValueNode
+				nodes.Children[i] = nilValueNode
 				continue
 			}
 			child.hashRec(hasher, append(path, byte(i)))
 			if len(child.val) < 32 {
-				nodes[i] = rawNode(child.val)
+				nodes.Children[i] = rawNode(child.val)
 			} else {
-				nodes[i] = hashNode(child.val)
+				nodes.Children[i] = hashNode(child.val)
 			}
 
 			// Release child back to pool.
@@ -442,7 +444,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 	case extNode:
 		st.children[0].hashRec(hasher, append(path, st.key...))
 
-		n := rawShortNode{Key: hexToCompact(st.key)}
+		n := shortNode{Key: hexToCompact(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
 		} else {
@@ -458,7 +460,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 
 	case leafNode:
 		st.key = append(st.key, byte(16))
-		n := rawShortNode{Key: hexToCompact(st.key), Val: valueNode(st.val)}
+		n := shortNode{Key: hexToCompact(st.key), Val: valueNode(st.val)}
 
 		n.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()

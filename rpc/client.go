@@ -43,7 +43,7 @@ var (
 const (
 	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
-	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	subscribeTimeout   = 10 * time.Second // overall timeout eth_subscribe, rpc_modules calls
 )
 
 const (
@@ -79,7 +79,7 @@ type Client struct {
 	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
 
-	idCounter uint32
+	idCounter atomic.Uint32
 
 	// This function, if non-nil, is called when the connection is lost.
 	reconnectFunc reconnectFunc
@@ -263,7 +263,7 @@ func (c *Client) RegisterName(name string, receiver interface{}) error {
 }
 
 func (c *Client) nextID() json.RawMessage {
-	id := atomic.AddUint32(&c.idCounter, 1)
+	id := c.idCounter.Add(1)
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 

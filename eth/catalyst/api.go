@@ -64,11 +64,6 @@ const (
 	// attached before starting to issue warnings.
 	beaconUpdateStartupTimeout = 30 * time.Second
 
-	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
-	// do a transition config exchange before it's considered offline and the user
-	// is warned.
-	beaconUpdateExchangeTimeout = 2 * time.Minute
-
 	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
 	// to send a consensus update before it's considered offline and the user is
 	// warned.
@@ -171,10 +166,10 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if payloadAttributes != nil {
 		if payloadAttributes.Withdrawals != nil {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 		}
-		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
+		if api.eth.BlockChain().Config().IsShanghai(api.eth.BlockChain().Config().LondonBlock, payloadAttributes.Timestamp) {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("forkChoiceUpdateV1 called post-shanghai"))
 		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
@@ -191,7 +186,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 }
 
 func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
-	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
+	if !api.eth.BlockChain().Config().IsShanghai(api.eth.BlockChain().Config().LondonBlock, attr.Timestamp) {
 		// Reject payload attributes with withdrawals before shanghai
 		if attr.Withdrawals != nil {
 			return errors.New("withdrawals before shanghai")
@@ -391,7 +386,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 				TerminalBlockNumber:     config.TerminalBlockNumber,
 			}, nil
 		}
-		return nil, fmt.Errorf("invalid terminal block hash")
+		return nil, errors.New("invalid terminal block hash")
 	}
 	return &engine.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
@@ -422,19 +417,19 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
 	return api.newPayload(params)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
+	if api.eth.BlockChain().Config().IsShanghai(new(big.Int).SetUint64(params.Number), params.Timestamp) {
 		if params.Withdrawals == nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 		}
 	} else if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
 	}
 	return api.newPayload(params)
 }
@@ -667,14 +662,13 @@ func (api *ConsensusAPI) heartbeat() {
 	// attached, so no need to print scary warnings to the user.
 	time.Sleep(beaconUpdateStartupTimeout)
 
-	var (
-		offlineLogged time.Time
-		ttd           = api.eth.BlockChain().Config().TerminalTotalDifficulty
-	)
 	// If the network is not yet merged/merging, don't bother continuing.
-	if ttd == nil {
+	if api.eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		return
 	}
+
+	var offlineLogged time.Time
+
 	for {
 		// Sleep a bit and retrieve the last known consensus updates
 		time.Sleep(5 * time.Second)
@@ -698,82 +692,20 @@ func (api *ConsensusAPI) heartbeat() {
 				offlineLogged = time.Time{}
 				continue
 			}
-			if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
-				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
+
+			if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
+				if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
 					if lastTransitionUpdate.IsZero() {
 						log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
 					} else {
-						log.Warn("Previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
+						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
 					}
-					offlineLogged = time.Now()
-				}
-				continue
-			}
-			if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-				if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
-					log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
 				} else {
 					log.Warn("Beacon client online, but no consensus updates received in a while. Please fix your beacon client to follow the chain!")
 				}
 				offlineLogged = time.Now()
 			}
 			continue
-		}
-		if time.Since(lastTransitionUpdate) <= beaconUpdateExchangeTimeout {
-			offlineLogged = time.Time{}
-			continue
-		}
-		if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-			// Retrieve the last few blocks and make a rough estimate as
-			// to when the merge transition should happen
-			var (
-				chain = api.eth.BlockChain()
-				head  = chain.CurrentHeader()
-				htd   = chain.GetTd(head.Hash(), head.Number.Uint64())
-			)
-			if htd.Cmp(ttd) >= 0 {
-				if lastTransitionUpdate.IsZero() {
-					log.Warn("Merge already reached, but no beacon client seen. Please launch one to follow the chain!")
-				} else {
-					log.Warn("Merge already reached, but previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
-				}
-				offlineLogged = time.Now()
-				continue
-			}
-			var eta time.Duration
-			if head.Number.Uint64() > 0 {
-				// Accumulate the last 64 difficulties to estimate the growth
-				var (
-					deltaDiff uint64
-					deltaTime uint64
-					current   = head
-				)
-				for i := 0; i < 64; i++ {
-					parent := chain.GetHeader(current.ParentHash, current.Number.Uint64()-1)
-					if parent == nil {
-						break
-					}
-					deltaDiff += current.Difficulty.Uint64()
-					deltaTime += current.Time - parent.Time
-					current = parent
-				}
-				// Estimate an ETA based on the block times and the difficulty growth
-				if deltaTime > 0 {
-					growth := deltaDiff / deltaTime
-					left := new(big.Int).Sub(ttd, htd)
-					eta = time.Duration(new(big.Int).Div(left, new(big.Int).SetUint64(growth+1)).Uint64()) * time.Second
-				}
-			}
-			message := "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transition arrives!"
-			if lastTransitionUpdate.IsZero() {
-				message = "Merge is configured, but no beacon client seen. Please ensure you have one available before the transition arrives!"
-			}
-			if eta < time.Second {
-				log.Warn(message)
-			} else {
-				log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doesn't handle days
-			}
-			offlineLogged = time.Now()
 		}
 	}
 }

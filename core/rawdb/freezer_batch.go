@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -107,7 +106,7 @@ func (t *freezerTable) newBatch() *freezerTableBatch {
 func (batch *freezerTableBatch) reset() {
 	batch.dataBuffer = batch.dataBuffer[:0]
 	batch.indexBuffer = batch.indexBuffer[:0]
-	batch.curItem = atomic.LoadUint64(&batch.t.items)
+	batch.curItem = batch.t.items.Load()
 	batch.totalBytes = 0
 }
 
@@ -201,7 +200,7 @@ func (batch *freezerTableBatch) commit() error {
 
 	// Update headBytes of table.
 	batch.t.headBytes += dataSize
-	atomic.StoreUint64(&batch.t.items, batch.curItem)
+	batch.t.items.Store(batch.curItem)
 
 	// Update metrics.
 	batch.t.sizeGauge.Inc(dataSize + indexSize)

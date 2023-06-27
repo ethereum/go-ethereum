@@ -141,7 +141,7 @@ loop:
 				"added", atomic.LoadUint64(&added),
 				"updated", atomic.LoadUint64(&updated),
 				"removed", atomic.LoadUint64(&removed),
-				"ignored(recent)", atomic.LoadUint64(&removed),
+				"ignored(recent)", atomic.LoadUint64(&recent),
 				"ignored(incompatible)", atomic.LoadUint64(&skipped))
 		}
 	}

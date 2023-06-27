@@ -100,34 +100,10 @@ func NewAPI(backend Backend) *API {
 	return &API{backend: backend}
 }
 
-type chainContext struct {
-	api *API
-	ctx context.Context
-}
-
-func (context *chainContext) Engine() consensus.Engine {
-	return context.api.backend.Engine()
-}
-
-func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
-	header, err := context.api.backend.HeaderByNumber(context.ctx, rpc.BlockNumber(number))
-	if err != nil {
-		return nil
-	}
-	if header.Hash() == hash {
-		return header
-	}
-	header, err = context.api.backend.HeaderByHash(context.ctx, hash)
-	if err != nil {
-		return nil
-	}
-	return header
-}
-
 // chainContext constructs the context reader which is used by the evm for reading
 // the necessary chain context.
 func (api *API) chainContext(ctx context.Context) core.ChainContext {
-	return &chainContext{api: api, ctx: ctx}
+	return ethapi.NewChainContext(ctx, api.backend)
 }
 
 // blockByNumber is the wrapper of the chain access function offered by the backend.
@@ -200,6 +176,7 @@ type StdTraceConfig struct {
 
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
+	TxHash common.Hash `json:"txHash"`           // transaction hash
 	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
@@ -288,7 +265,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// Fetch and execute the block trace taskCh
 			for task := range taskCh {
 				var (
-					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number())
+					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time())
 					blockCtx = core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
 				)
 				// Trace all the transactions contained within
@@ -302,13 +279,13 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					}
 					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
-						task.results[i] = &txTraceResult{Error: err.Error()}
+						task.results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
 						break
 					}
 					// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 					task.statedb.Finalise(api.backend.ChainConfig().IsEIP158(task.block.Number()))
-					task.results[i] = &txTraceResult{Result: res}
+					task.results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
 				}
 				// Tracing state is used up, queue it for de-referencing. Note the
 				// state is the parent state of trace block, use block.number-1 as
@@ -544,7 +521,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 
 	var (
 		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig        = api.backend.ChainConfig()
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
@@ -623,7 +600,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		blockHash = block.Hash()
 		is158     = api.backend.ChainConfig().IsEIP158(block.Number())
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 	)
 	for i, tx := range txs {
@@ -639,7 +616,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		if err != nil {
 			return nil, err
 		}
-		results[i] = &txTraceResult{Result: res}
+		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(is158)
@@ -656,7 +633,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		txs       = block.Transactions()
 		blockHash = block.Hash()
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 		pend      sync.WaitGroup
 	)
@@ -680,10 +657,10 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 				}
 				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
-					results[task.index] = &txTraceResult{Error: err.Error()}
+					results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
 					continue
 				}
-				results[task.index] = &txTraceResult{Result: res}
+				results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Result: res}
 			}
 		}()
 	}
@@ -765,7 +742,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
-		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig = api.backend.ChainConfig()
 		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		canon       = true
@@ -805,7 +782,6 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
-				Debug:                   true,
 				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
 				EnablePreimageRecording: true,
 			}
@@ -965,7 +941,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 			return nil, err
 		}
 	}
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {

@@ -27,9 +27,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -175,7 +177,7 @@ func (f *fuzzer) fuzz() int {
 		}
 		keys[string(k)] = struct{}{}
 		vals = append(vals, kv{k: k, v: v})
-		trieA.Update(k, v)
+		trieA.MustUpdate(k, v)
 		useful = true
 	}
 	if !useful {
@@ -184,7 +186,7 @@ func (f *fuzzer) fuzz() int {
 	// Flush trie -> database
 	rootA, nodes := trieA.Commit(false)
 	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
+		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false)
@@ -195,7 +197,7 @@ func (f *fuzzer) fuzz() int {
 		if f.debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
-		trieB.Update(kv.k, kv.v)
+		trieB.MustUpdate(kv.k, kv.v)
 	}
 	rootB := trieB.Hash()
 	trieB.Commit()
@@ -223,7 +225,7 @@ func (f *fuzzer) fuzz() int {
 		checked int
 	)
 	for _, kv := range vals {
-		trieC.Update(kv.k, kv.v)
+		trieC.MustUpdate(kv.k, kv.v)
 	}
 	rootC, _ := trieC.Commit()
 	if rootA != rootC {

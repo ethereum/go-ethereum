@@ -174,7 +174,7 @@ type BlockChain struct {
 	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
 	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
 	lastWrite     uint64                           // Last block when the state was flushed
-	flushInterval int64                            // Time interval (processing time) after which to flush a state
+	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *trie.Database                   // The database handler for maintaining trie nodes.
 	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
 
@@ -215,8 +215,8 @@ type BlockChain struct {
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
-	running       int32          // 0 if chain is running, 1 when stopped
-	procInterrupt int32          // interrupt signaler for block processing
+	stopping      atomic.Bool    // false if chain is running, true when stopped
+	procInterrupt atomic.Bool    // interrupt signaler for block processing
 
 	engine     consensus.Engine
 	validator  Validator // Block and state validator interface
@@ -233,7 +233,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
-
 	// Open trie database with provided config
 	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{
 		Cache:     cacheConfig.TrieCleanLimit,
@@ -260,7 +259,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig:   cacheConfig,
 		db:            db,
 		triedb:        triedb,
-		flushInterval: int64(cacheConfig.TrieTimeLimit),
 		triegc:        prque.New[int64, common.Hash](nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
@@ -273,6 +271,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
+	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -366,7 +365,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.CurrentHeader(), true)
+	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -909,14 +908,14 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	headBlockGauge.Update(int64(block.NumberU64()))
 }
 
-// stop stops the blockchain service. If any imports are currently in progress
+// stopWithoutSaving stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt. This method stops all running
 // goroutines, but does not do all the post-stop work of persisting data.
 // OBS! It is generally recommended to use the Stop method!
 // This method has been exposed to allow tests to stop the blockchain while simulating
 // a crash.
 func (bc *BlockChain) stopWithoutSaving() {
-	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
+	if !bc.stopping.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -983,8 +982,8 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	// Flush the collected preimages to disk
-	if err := bc.stateCache.TrieDB().CommitPreimages(); err != nil {
-		log.Error("Failed to commit trie preimages", "err", err)
+	if err := bc.stateCache.TrieDB().Close(); err != nil {
+		log.Error("Failed to close trie db", "err", err)
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
 	// cache warmup when node restarts.
@@ -998,12 +997,12 @@ func (bc *BlockChain) Stop() {
 // errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
 // calling this method.
 func (bc *BlockChain) StopInsert() {
-	atomic.StoreInt32(&bc.procInterrupt, 1)
+	bc.procInterrupt.Store(true)
 }
 
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
+	return bc.procInterrupt.Load()
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -1382,7 +1381,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// Find the next state trie we need to commit
 	chosen := current - TriesInMemory
-	flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
+	flushInterval := time.Duration(bc.flushInterval.Load())
 	// If we exceeded time allowance, flush an entire trie to disk
 	if bc.gcproc > flushInterval {
 		// If the header is missing (canonical chain behind), we're reorging a low
@@ -1523,7 +1522,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true, true)
+	return bc.insertChain(chain, true)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1534,14 +1533,14 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
 	}
 
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	SenderCacher.RecoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number()), chain)
+	SenderCacher.RecoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time()), chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -1555,13 +1554,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	}()
 	// Start the parallel header verifier
 	headers := make([]*types.Header, len(chain))
-	seals := make([]bool, len(chain))
-
 	for i, block := range chain {
 		headers[i] = block.Header()
-		seals[i] = verifySeals
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
+	abort, results := bc.engine.VerifyHeaders(bc, headers)
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
@@ -1735,7 +1731,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
-		var followupInterrupt uint32
+		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
@@ -1744,7 +1740,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
 
 					blockPrefetchExecuteTimer.Update(time.Since(start))
-					if atomic.LoadUint32(&followupInterrupt) == 1 {
+					if followupInterrupt.Load() {
 						blockPrefetchInterruptMeter.Mark(1)
 					}
 				}(time.Now(), followup, throwaway)
@@ -1756,7 +1752,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
+			followupInterrupt.Store(true)
 			return it.index, err
 		}
 		ptime := time.Since(pstart)
@@ -1764,7 +1760,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		vstart := time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
+			followupInterrupt.Store(true)
 			return it.index, err
 		}
 		vtime := time.Since(vstart)
@@ -1797,7 +1793,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
-		atomic.StoreUint32(&followupInterrupt, 1)
+		followupInterrupt.Store(true)
 		if err != nil {
 			return it.index, err
 		}
@@ -1982,7 +1978,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false, true); err != nil {
+			if _, err := bc.insertChain(blocks, true); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -1996,7 +1992,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false, true)
+		return bc.insertChain(blocks, true)
 	}
 	return 0, nil
 }
@@ -2039,7 +2035,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, err := bc.insertChain(types.Blocks{b}, false, false); err != nil {
+		if _, err := bc.insertChain(types.Blocks{b}, false); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -2050,7 +2046,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 // the processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.BaseFee(), b.Transactions())
+	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), b.Transactions())
 
 	var logs []*types.Log
 	for _, receipt := range receipts {
@@ -2243,7 +2239,7 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 	}
 	defer bc.chainmu.Unlock()
 
-	_, err := bc.insertChain(types.Blocks{block}, true, false)
+	_, err := bc.insertChain(types.Blocks{block}, false)
 	return err
 }
 
@@ -2463,17 +2459,12 @@ Receipts: %v
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
-//
-// The verify parameter can be used to fine tune whether nonce verification
-// should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verify nonces, as well as
-// because nonces can be verified sparsely, not needing to check each.
-func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
 	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 
@@ -2497,5 +2488,5 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 // The interval is in terms of block processing time, not wall clock.
 // It is thread-safe and can be called repeatedly without side effects.
 func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
-	atomic.StoreInt64(&bc.flushInterval, int64(interval))
+	bc.flushInterval.Store(int64(interval))
 }

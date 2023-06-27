@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 type revision struct {
@@ -512,7 +513,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	if err := s.trie.TryUpdateAccount(addr, &obj.data); err != nil {
+	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 
@@ -533,7 +534,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	}
 	// Delete the account from the trie
 	addr := obj.Address()
-	if err := s.trie.TryDeleteAccount(addr); err != nil {
+	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
 }
@@ -587,7 +588,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	if data == nil {
 		start := time.Now()
 		var err error
-		data, err = s.trie.TryGetAccount(addr)
+		data, err = s.trie.GetAccount(addr)
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)
 		}
@@ -783,13 +784,13 @@ func (s *StateDB) Copy() *StateDB {
 		state.snap = s.snap
 
 		// deep copy needed
-		state.snapAccounts = make(map[common.Hash][]byte)
+		state.snapAccounts = make(map[common.Hash][]byte, len(s.snapAccounts))
 		for k, v := range s.snapAccounts {
 			state.snapAccounts[k] = v
 		}
-		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		state.snapStorage = make(map[common.Hash]map[common.Hash][]byte, len(s.snapStorage))
 		for k, v := range s.snapStorage {
-			temp := make(map[common.Hash][]byte)
+			temp := make(map[common.Hash][]byte, len(v))
 			for kk, vv := range v {
 				temp[kk] = vv
 			}
@@ -871,7 +872,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		addressesToPrefetch = append(addressesToPrefetch, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
-		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, addressesToPrefetch)
+		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
@@ -971,7 +972,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		accountTrieNodesDeleted int
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
-		nodes                   = trie.NewMergedNodeSet()
+		nodes                   = trienode.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
 	)
 	for addr := range s.stateObjectsDirty {
@@ -986,7 +987,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if err != nil {
 				return common.Hash{}, err
 			}
-			// Merge the dirty nodes of storage trie into global set
+			// Merge the dirty nodes of storage trie into global set.
 			if set != nil {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
@@ -1071,7 +1072,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if root != origin {
 		start := time.Now()
-		if err := s.db.TrieDB().Update(nodes); err != nil {
+		if err := s.db.TrieDB().Update(root, origin, nodes); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
@@ -1160,7 +1161,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
 func (s *StateDB) convertAccountSet(set map[common.Address]struct{}) map[common.Hash]struct{} {
-	ret := make(map[common.Hash]struct{})
+	ret := make(map[common.Hash]struct{}, len(set))
 	for addr := range set {
 		obj, exist := s.stateObjects[addr]
 		if !exist {

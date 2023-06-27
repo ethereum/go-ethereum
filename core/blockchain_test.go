@@ -74,7 +74,7 @@ func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *G
 	}
 	// Header-only chain requested
 	genDb, headers := makeHeaderChainWithGenesis(genesis, n, engine, canonicalSeed)
-	_, err := blockchain.InsertHeaderChain(headers, 1)
+	_, err := blockchain.InsertHeaderChain(headers)
 	return genDb, genesis, blockchain, err
 }
 
@@ -115,7 +115,7 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 		}
 	} else {
 		headerChainB = makeHeaderChain(blockchain2.chainConfig, blockchain2.CurrentHeader(), n, ethash.NewFaker(), genDb, forkSeed)
-		if _, err := blockchain2.InsertHeaderChain(headerChainB, 1); err != nil {
+		if _, err := blockchain2.InsertHeaderChain(headerChainB); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 	}
@@ -148,7 +148,7 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 	for _, block := range chain {
 		// Try and process the block
-		err := blockchain.engine.VerifyHeader(blockchain, block.Header(), true)
+		err := blockchain.engine.VerifyHeader(blockchain, block.Header())
 		if err == nil {
 			err = blockchain.validator.ValidateBody(block)
 		}
@@ -187,7 +187,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := blockchain.engine.VerifyHeader(blockchain, header, false); err != nil {
+		if err := blockchain.engine.VerifyHeader(blockchain, header); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
@@ -252,7 +252,7 @@ func testInsertAfterMerge(t *testing.T, blockchain *BlockChain, i, n int, full b
 		}
 	} else {
 		headerChainB := makeHeaderChain(blockchain2.chainConfig, blockchain2.CurrentHeader(), n, ethash.NewFaker(), genDb, forkSeed)
-		if _, err := blockchain2.InsertHeaderChain(headerChainB, 1); err != nil {
+		if _, err := blockchain2.InsertHeaderChain(headerChainB); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 		if blockchain2.CurrentHeader().Number.Uint64() != headerChainB[len(headerChainB)-1].Number.Uint64() {
@@ -549,10 +549,10 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool) {
 		for i, block := range diffBlocks {
 			diffHeaders[i] = block.Header()
 		}
-		if _, err := blockchain.InsertHeaderChain(easyHeaders, 1); err != nil {
+		if _, err := blockchain.InsertHeaderChain(easyHeaders); err != nil {
 			t.Fatalf("failed to insert easy chain: %v", err)
 		}
-		if _, err := blockchain.InsertHeaderChain(diffHeaders, 1); err != nil {
+		if _, err := blockchain.InsertHeaderChain(diffHeaders); err != nil {
 			t.Fatalf("failed to insert difficult chain: %v", err)
 		}
 	}
@@ -613,7 +613,7 @@ func testBadHashes(t *testing.T, full bool) {
 		BadHashes[headers[2].Hash()] = true
 		defer func() { delete(BadHashes, headers[2].Hash()) }()
 
-		_, err = blockchain.InsertHeaderChain(headers, 1)
+		_, err = blockchain.InsertHeaderChain(headers)
 	}
 	if !errors.Is(err, ErrBannedHash) {
 		t.Errorf("error mismatch: have: %v, want: %v", err, ErrBannedHash)
@@ -645,7 +645,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		BadHashes[blocks[3].Header().Hash()] = true
 		defer func() { delete(BadHashes, blocks[3].Header().Hash()) }()
 	} else {
-		if _, err = blockchain.InsertHeaderChain(headers, 1); err != nil {
+		if _, err = blockchain.InsertHeaderChain(headers); err != nil {
 			t.Errorf("failed to import headers: %v", err)
 		}
 		if blockchain.CurrentHeader().Hash() != headers[3].Hash() {
@@ -711,7 +711,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 
 			blockchain.engine = ethash.NewFakeFailer(failNum)
 			blockchain.hc.engine = blockchain.engine
-			failRes, err = blockchain.InsertHeaderChain(headers, 1)
+			failRes, err = blockchain.InsertHeaderChain(headers)
 		}
 		// Check that the returned error indicates the failure
 		if failRes != failAt {
@@ -785,7 +785,7 @@ func TestFastVsFullChains(t *testing.T) {
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := fast.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
@@ -800,7 +800,7 @@ func TestFastVsFullChains(t *testing.T) {
 	ancient, _ := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer ancient.Stop()
 
-	if n, err := ancient.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(len(blocks)/2)); err != nil {
@@ -809,7 +809,7 @@ func TestFastVsFullChains(t *testing.T) {
 
 	// Iterate over all chain data components, and cross reference
 	for i := 0; i < len(blocks); i++ {
-		num, hash := blocks[i].NumberU64(), blocks[i].Hash()
+		num, hash, time := blocks[i].NumberU64(), blocks[i].Hash(), blocks[i].Time()
 
 		if ftd, atd := fast.GetTd(hash, num), archive.GetTd(hash, num); ftd.Cmp(atd) != 0 {
 			t.Errorf("block #%d [%x]: td mismatch: fastdb %v, archivedb %v", num, hash, ftd, atd)
@@ -832,9 +832,9 @@ func TestFastVsFullChains(t *testing.T) {
 		}
 
 		// Check receipts.
-		freceipts := rawdb.ReadReceipts(fastDb, hash, num, fast.Config())
-		anreceipts := rawdb.ReadReceipts(ancientDb, hash, num, fast.Config())
-		areceipts := rawdb.ReadReceipts(archiveDb, hash, num, fast.Config())
+		freceipts := rawdb.ReadReceipts(fastDb, hash, num, time, fast.Config())
+		anreceipts := rawdb.ReadReceipts(ancientDb, hash, num, time, fast.Config())
+		areceipts := rawdb.ReadReceipts(archiveDb, hash, num, time, fast.Config())
 		if types.DeriveSha(freceipts, trie.NewStackTrie(nil)) != types.DeriveSha(areceipts, trie.NewStackTrie(nil)) {
 			t.Errorf("block #%d [%x]: receipts mismatch: fastdb %v, ancientdb %v, archivedb %v", num, hash, freceipts, anreceipts, areceipts)
 		}
@@ -931,7 +931,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := fast.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
@@ -947,7 +947,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	ancient, _ := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer ancient.Stop()
 
-	if n, err := ancient.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
@@ -964,7 +964,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	lightDb := makeDb()
 	defer lightDb.Close()
 	light, _ := NewBlockChain(lightDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := light.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	defer light.Stop()
@@ -1701,7 +1701,7 @@ func TestTrieForkGC(t *testing.T) {
 		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
 		chain.stateCache.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
-	if len(chain.stateCache.TrieDB().Nodes()) > 0 {
+	if nodes, _ := chain.TrieDB().Size(); nodes > 0 {
 		t.Fatalf("stale tries still alive after garbase collection")
 	}
 }
@@ -1781,7 +1781,7 @@ func TestBlockchainRecovery(t *testing.T) {
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := ancient.InsertHeaderChain(headers, 1); err != nil {
+	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
@@ -1850,7 +1850,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 	for i, block := range canonblocks {
 		canonHeaders[i] = block.Header()
 	}
-	if _, err = ancientChain.InsertHeaderChain(canonHeaders, 1); err != nil {
+	if _, err = ancientChain.InsertHeaderChain(canonHeaders); err != nil {
 		t.Fatal("can't import canon headers:", err)
 	}
 
@@ -2128,7 +2128,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			_, err := chain.InsertHeaderChain(headers)
 			return err
 		}
 		asserter = func(t *testing.T, block *types.Block) {
@@ -2142,7 +2142,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			_, err := chain.InsertHeaderChain(headers)
 			if err != nil {
 				return err
 			}
@@ -2299,7 +2299,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			i, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers)
 			if err != nil {
 				return fmt.Errorf("index %d, number %d: %w", i, headers[i].Number, err)
 			}
@@ -2316,7 +2316,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			i, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers)
 			if err != nil {
 				return fmt.Errorf("index %d: %w", i, err)
 			}
@@ -2492,7 +2492,7 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 	for i, block := range canonblocks {
 		canonHeaders[i] = block.Header()
 	}
-	if n, err := chain.InsertHeaderChain(canonHeaders, 0); err != nil {
+	if n, err := chain.InsertHeaderChain(canonHeaders); err != nil {
 		t.Fatalf("header %d: failed to insert into chain: %v", n, err)
 	}
 	canonNum := chain.CurrentHeader().Number.Uint64()
@@ -2501,7 +2501,7 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 	for i, block := range sideblocks {
 		sideHeaders[i] = block.Header()
 	}
-	if n, err := chain.InsertHeaderChain(sideHeaders, 0); err != nil {
+	if n, err := chain.InsertHeaderChain(sideHeaders); err != nil {
 		t.Fatalf("header %d: failed to insert into chain: %v", n, err)
 	}
 	head := chain.CurrentHeader()
@@ -2692,7 +2692,7 @@ func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := chain.InsertHeaderChain(headers, 0); err != nil {
+	if n, err := chain.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	// The indices before ancient-N(32) should be ignored. After that all blocks should be indexed.
@@ -3024,7 +3024,6 @@ func TestDeleteRecreateSlots(t *testing.T) {
 	})
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{
-		Debug:  true,
 		Tracer: logger.NewJSONLogger(nil, os.Stdout),
 	}, nil, nil)
 	if err != nil {
@@ -3102,7 +3101,6 @@ func TestDeleteRecreateAccount(t *testing.T) {
 	})
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{
-		Debug:  true,
 		Tracer: logger.NewJSONLogger(nil, os.Stdout),
 	}, nil, nil)
 	if err != nil {

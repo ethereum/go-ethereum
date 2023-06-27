@@ -376,6 +376,32 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			}
 		}
 	})
+
+	t.Run("OperatonsAfterClose", func(t *testing.T) {
+		db := New()
+		db.Put([]byte("key"), []byte("value"))
+		db.Close()
+		if _, err := db.Get([]byte("key")); err == nil {
+			t.Fatalf("expected error on Get after Close")
+		}
+		if _, err := db.Has([]byte("key")); err == nil {
+			t.Fatalf("expected error on Get after Close")
+		}
+		if err := db.Put([]byte("key2"), []byte("value2")); err == nil {
+			t.Fatalf("expected error on Put after Close")
+		}
+		if err := db.Delete([]byte("key")); err == nil {
+			t.Fatalf("expected error on Delete after Close")
+		}
+
+		b := db.NewBatch()
+		if err := b.Put([]byte("batchkey"), []byte("batchval")); err != nil {
+			t.Fatalf("expected no error on batch.Put after Close, got %v", err)
+		}
+		if err := b.Write(); err == nil {
+			t.Fatalf("expected error on batch.Write after Close")
+		}
+	})
 }
 
 // BenchDatabaseSuite runs a suite of benchmarks against a KeyValueStore database
