@@ -10,8 +10,12 @@ blockNumber:
   - '0'
 blockTime:
   - '2'
-numOfValidators: 3
-numOfNonValidators: 0
+numOfBorValidators: 3
+numOfBorSentries: 0
+numOfBorArchiveNodes: 0
+numOfErigonValidators: 0
+numOfErigonSentries: 0
+numOfErigonArchiveNodes: 0
 ethURL: http://ganache:9545
 ethHostUser: ubuntu
 devnetType: docker
@@ -19,4 +23,3 @@ borDockerBuildContext: "../../bor"
 heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#develop"
 sprintSizeBlockNumber:
   - '0'
-numOfArchiveNodes: 0

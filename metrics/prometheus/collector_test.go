@@ -67,9 +67,6 @@ test_gauge 23456
 # TYPE test_gauge_float64 gauge
 test_gauge_float64 34567.89
 
-# TYPE test_histogram_count counter
-test_histogram_count 0
-
 # TYPE test_histogram summary
 test_histogram {quantile="0.5"} 0
 test_histogram {quantile="0.75"} 0
@@ -77,12 +74,11 @@ test_histogram {quantile="0.95"} 0
 test_histogram {quantile="0.99"} 0
 test_histogram {quantile="0.999"} 0
 test_histogram {quantile="0.9999"} 0
+test_histogram_sum 0.000000
+test_histogram_count 6
 
 # TYPE test_meter gauge
 test_meter 9999999
-
-# TYPE test_timer_count counter
-test_timer_count 6
 
 # TYPE test_timer summary
 test_timer {quantile="0.5"} 2.25e+07
@@ -91,16 +87,20 @@ test_timer {quantile="0.95"} 1.2e+08
 test_timer {quantile="0.99"} 1.2e+08
 test_timer {quantile="0.999"} 1.2e+08
 test_timer {quantile="0.9999"} 1.2e+08
-
-# TYPE test_resetting_timer_count counter
-test_resetting_timer_count 6
+test_timer_sum 550500000.000000
+test_timer_count 6
 
 # TYPE test_resetting_timer summary
 test_resetting_timer {quantile="0.50"} 12000000
 test_resetting_timer {quantile="0.95"} 120000000
 test_resetting_timer {quantile="0.99"} 120000000
+test_resetting_timer_sum 180000000
+test_resetting_timer_count 6
 
 `
+
+	c.addResettingTimer("test/empty_resetting_timer", emptyResettingTimer)
+
 	exp := c.buff.String()
 	if exp != expectedOutput {
 		t.Log("Expected Output:\n", expectedOutput)

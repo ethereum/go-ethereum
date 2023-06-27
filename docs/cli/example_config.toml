@@ -29,15 +29,16 @@ devfakeauthor = false           # Run miner without validator set authorization 
   debug = true       # Prepends log messages with call-site location (file and line number)  -  {requires some effort}
 
 [p2p]
-  maxpeers = 50       # Maximum number of network peers (network disabled if set to 0)
-  maxpendpeers = 50   # Maximum number of pending connection attempts
-  bind = "0.0.0.0"    # Network binding address
-  port = 30303        # Network listening port
-  nodiscover = false  # Disables the peer discovery mechanism (manual peer addition)
-  nat = "any"         # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
-  netrestrict = ""    # Restricts network communication to the given IP networks (CIDR masks)
-  nodekey = ""        # P2P node key file
-  nodekeyhex = ""     # P2P node key as hex
+  maxpeers = 50           # Maximum number of network peers (network disabled if set to 0)
+  maxpendpeers = 50       # Maximum number of pending connection attempts
+  bind = "0.0.0.0"        # Network binding address
+  port = 30303            # Network listening port
+  nodiscover = false      # Disables the peer discovery mechanism (manual peer addition)
+  nat = "any"             # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
+  netrestrict = ""        # Restricts network communication to the given IP networks (CIDR masks)
+  nodekey = ""            # P2P node key file
+  nodekeyhex = ""         # P2P node key as hex
+  txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
@@ -72,6 +73,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   gaslimit = 30000000      # Target gas ceiling for mined blocks
   gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
   recommit = "2m5s"        # The time interval for miner to re-create mining work
+  commitinterrupt = true   # Interrupt the current mining work when time is exceeded and create partial blocks
 
 [jsonrpc]
   ipcdisable = false                               # Disable the IPC-RPC server
@@ -128,7 +130,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   metrics = false                            # Enable metrics collection and reporting
   expensive = false                          # Enable expensive metrics collection and reporting
   prometheus-addr = "127.0.0.1:7071"         # Address for Prometheus Server
-  opencollector-endpoint = "127.0.0.1:4317"  # OpenCollector Endpoint (host:port)
+  opencollector-endpoint = ""                # OpenCollector Endpoint (host:port)
   [telemetry.influx]
     influxdb = false    # Enable metrics export/push to an external InfluxDB database (v1)
     endpoint = ""       # InfluxDB API endpoint to report metrics to

@@ -127,6 +127,9 @@ type Config struct {
 	// Developer has the developer mode related settings
 	Developer *DeveloperConfig `hcl:"developer,block" toml:"developer,block"`
 
+	// ParallelEVM has the parallel evm related settings
+	ParallelEVM *ParallelEVMConfig `hcl:"parallelevm,block" toml:"parallelevm,block"`
+
 	// Develop Fake Author mode to produce blocks without authorisation
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 
@@ -204,6 +207,11 @@ type P2PConfig struct {
 
 	// Discovery has the p2p discovery related settings
 	Discovery *P2PDiscovery `hcl:"discovery,block" toml:"discovery,block"`
+
+	// TxArrivalWait sets the maximum duration the transaction fetcher will wait for
+	// an announced transaction to arrive before explicitly requesting it
+	TxArrivalWait    time.Duration `hcl:"-,optional" toml:"-"`
+	TxArrivalWaitRaw string        `hcl:"txarrivalwait,optional" toml:"txarrivalwait,optional"`
 }
 
 type P2PDiscovery struct {
@@ -306,6 +314,8 @@ type SealerConfig struct {
 	// The time interval for miner to re-create mining work.
 	Recommit    time.Duration `hcl:"-,optional" toml:"-"`
 	RecommitRaw string        `hcl:"recommit,optional" toml:"recommit,optional"`
+
+	CommitInterruptFlag bool `hcl:"commitinterrupt,optional" toml:"commitinterrupt,optional"`
 }
 
 type JsonRPCConfig struct {
@@ -563,6 +573,12 @@ type DeveloperConfig struct {
 	GasLimit uint64 `hcl:"gaslimit,optional" toml:"gaslimit,optional"`
 }
 
+type ParallelEVMConfig struct {
+	Enable bool `hcl:"enable,optional" toml:"enable,optional"`
+
+	SpeculativeProcesses int `hcl:"procs,optional" toml:"procs,optional"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:                   "mainnet",
@@ -582,13 +598,14 @@ func DefaultConfig() *Config {
 		RPCBatchLimit:      100,
 		RPCReturnDataLimit: 100000,
 		P2P: &P2PConfig{
-			MaxPeers:     50,
-			MaxPendPeers: 50,
-			Bind:         "0.0.0.0",
-			Port:         30303,
-			NoDiscover:   false,
-			NAT:          "any",
-			NetRestrict:  "",
+			MaxPeers:      50,
+			MaxPendPeers:  50,
+			Bind:          "0.0.0.0",
+			Port:          30303,
+			NoDiscover:    false,
+			NAT:           "any",
+			NetRestrict:   "",
+			TxArrivalWait: 500 * time.Millisecond,
 			Discovery: &P2PDiscovery{
 				V5Enabled:    false,
 				Bootnodes:    []string{},
@@ -622,12 +639,13 @@ func DefaultConfig() *Config {
 			LifeTime:     3 * time.Hour,
 		},
 		Sealer: &SealerConfig{
-			Enabled:   false,
-			Etherbase: "",
-			GasCeil:   30_000_000,                  // geth's default
-			GasPrice:  big.NewInt(1 * params.GWei), // geth's default
-			ExtraData: "",
-			Recommit:  125 * time.Second,
+			Enabled:             false,
+			Etherbase:           "",
+			GasCeil:             30_000_000,                  // geth's default
+			GasPrice:            big.NewInt(1 * params.GWei), // geth's default
+			ExtraData:           "",
+			Recommit:            125 * time.Second,
+			CommitInterruptFlag: true,
 		},
 		Gpo: &GpoConfig{
 			Blocks:           20,
@@ -687,7 +705,7 @@ func DefaultConfig() *Config {
 			Enabled:               false,
 			Expensive:             false,
 			PrometheusAddr:        "127.0.0.1:7071",
-			OpenCollectorEndpoint: "127.0.0.1:4317",
+			OpenCollectorEndpoint: "",
 			InfluxDB: &InfluxDBConfig{
 				V1Enabled:    false,
 				Endpoint:     "",
@@ -739,6 +757,10 @@ func DefaultConfig() *Config {
 			MemProfileRate:   512 * 1024,
 			BlockProfileRate: 0,
 			// CPUProfile:       "",
+		},
+		ParallelEVM: &ParallelEVMConfig{
+			Enable:               true,
+			SpeculativeProcesses: 8,
 		},
 	}
 }
@@ -795,6 +817,7 @@ func (c *Config) fillTimeDurations() error {
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
 		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
 		{"cache.timeout", &c.Cache.TrieTimeout, &c.Cache.TrieTimeoutRaw},
+		{"p2p.txarrivalwait", &c.P2P.TxArrivalWait, &c.P2P.TxArrivalWaitRaw},
 	}
 
 	for _, x := range tds {
@@ -916,6 +939,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.Miner.GasPrice = c.Sealer.GasPrice
 		n.Miner.GasCeil = c.Sealer.GasCeil
 		n.Miner.ExtraData = []byte(c.Sealer.ExtraData)
+		n.Miner.CommitInterruptFlag = c.Sealer.CommitInterruptFlag
 
 		if etherbase := c.Sealer.Etherbase; etherbase != "" {
 			if !common.IsHexAddress(etherbase) {
@@ -1121,6 +1145,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
 
+	n.ParallelEVM.Enable = c.ParallelEVM.Enable
+	n.ParallelEVM.SpeculativeProcesses = c.ParallelEVM.SpeculativeProcesses
 	n.RPCReturnDataLimit = c.RPCReturnDataLimit
 
 	if c.Ancient != "" {
@@ -1257,6 +1283,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
+			TxArrivalWait:   c.P2P.TxArrivalWait,
 		},
 		HTTPModules:         c.JsonRPC.Http.API,
 		HTTPCors:            c.JsonRPC.Http.Cors,

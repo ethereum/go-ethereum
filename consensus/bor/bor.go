@@ -1184,22 +1184,44 @@ func (c *Bor) CommitStates(
 	fetchStart := time.Now()
 	number := header.Number.Uint64()
 
-	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
-	if err != nil {
-		return nil, err
+	var (
+		lastStateIDBig *big.Int
+		from           uint64
+		to             time.Time
+		err            error
+	)
+
+	if c.config.IsIndore(header.Number) {
+		// Fetch the LastStateId from contract via current state instance
+		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(state.Copy(), number-1, header.ParentHash)
+		if err != nil {
+			return nil, err
+		}
+
+		stateSyncDelay := c.config.CalculateStateSyncDelay(number)
+		to = time.Unix(int64(header.Time-stateSyncDelay), 0)
+		log.Debug("Post Indore", "lastStateIDBig", lastStateIDBig, "to", to, "stateSyncDelay", stateSyncDelay)
+	} else {
+		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(nil, number-1, header.ParentHash)
+		if err != nil {
+			return nil, err
+		}
+
+		to = time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.CalculateSprint(number)).Time), 0)
+		log.Debug("Pre Indore", "lastStateIDBig", lastStateIDBig, "to", to)
 	}
 
-	to := time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.CalculateSprint(number)).Time), 0)
-	lastStateID := _lastStateID.Uint64()
+	lastStateID := lastStateIDBig.Uint64()
+	from = lastStateID + 1
 
 	log.Info(
 		"Fetching state updates from Heimdall",
-		"fromID", lastStateID+1,
+		"fromID", from,
 		"to", to.Format(time.RFC3339))
 
-	eventRecords, err := c.HeimdallClient.StateSyncEvents(ctx, lastStateID+1, to.Unix())
+	eventRecords, err := c.HeimdallClient.StateSyncEvents(ctx, from, to.Unix())
 	if err != nil {
-		log.Error("Error occurred when fetching state sync events", "stateID", lastStateID+1, "error", err)
+		log.Error("Error occurred when fetching state sync events", "fromID", from, "to", to.Unix(), "err", err)
 	}
 
 	if c.config.OverrideStateSyncRecords != nil {
@@ -1222,7 +1244,7 @@ func (c *Bor) CommitStates(
 		}
 
 		if err = validateEventRecord(eventRecord, number, to, lastStateID, chainID); err != nil {
-			log.Error("while validating event record", "block", number, "to", to, "stateID", lastStateID, "error", err.Error())
+			log.Error("while validating event record", "block", number, "to", to, "stateID", lastStateID+1, "error", err.Error())
 			break
 		}
 

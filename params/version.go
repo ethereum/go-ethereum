@@ -21,12 +21,13 @@ import (
 )
 
 const (
-	GitCommit    = ""
-	VersionMajor = 0        // Major version component of the current release
-	VersionMinor = 3        // Minor version component of the current release
-	VersionPatch = 9        // Patch version component of the current release
-	VersionMeta  = "stable" // Version metadata to append to the version string
+	VersionMajor = 0  // Major version component of the current release
+	VersionMinor = 4  // Minor version component of the current release
+	VersionPatch = 0  // Patch version component of the current release
+	VersionMeta  = "" // Version metadata to append to the version string
 )
+
+var GitCommit string
 
 // Version holds the textual version string.
 var Version = func() string {
@@ -48,7 +49,7 @@ var VersionWithMetaCommitDetails = func() string {
 	if VersionMeta != "" {
 		v += "-" + VersionMeta
 	}
-	v_git := fmt.Sprintf("Version : %s\nGitCommit : %s\n", v, GitCommit)
+	v_git := fmt.Sprintf("Version: %s\nGitCommit: %s", v, GitCommit)
 	return v_git
 }()
 

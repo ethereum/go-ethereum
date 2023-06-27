@@ -987,16 +987,40 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 	return nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
+	var (
+		header *types.Header
+		err    error
+	)
+
+	// Fetch the state and header from blockNumberOrHash if it's coming from normal eth_call path.
+	if state == nil {
+		state, header, err = b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return nil, err
+		}
+	} else {
+		// Fetch the header from the given blockNumberOrHash. Note that this path is only taken
+		// when we're doing a call from bor consensus to fetch data from genesis contracts. It's
+		// necessary to fetch header using header hash as we might be experiencing a reorg and there
+		// can be multiple headers with same number.
+		header, err = b.HeaderByHash(ctx, *blockNrOrHash.BlockHash)
+		if header == nil || err != nil {
+			log.Warn("Error fetching header on CallWithState", "err", err)
+			return nil, err
+		}
 	}
+
 	if err := overrides.Apply(state); err != nil {
 		return nil, err
 	}
+
+	return doCallWithState(ctx, b, args, header, state, timeout, globalGasCap)
+}
+
+func doCallWithState(ctx context.Context, b Backend, args TransactionArgs, header *types.Header, state *state.StateDB, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1027,7 +1051,8 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	result, err := core.ApplyMessage(evm, msg, gp)
+	// nolint : contextcheck
+	result, err := core.ApplyMessage(evm, msg, gp, context.Background())
 	if err := vmError(); err != nil {
 		return nil, err
 	}
@@ -1079,7 +1104,20 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	return s.CallWithState(ctx, args, blockNrOrHash, nil, overrides)
+}
+
+// CallWithState executes the given transaction on the given state for
+// the given block number. Note that as it does an EVM call, fields in
+// the underlying state will change. Make sure to handle it outside of
+// this function (ideally by sending a copy of state).
+//
+// Additionally, the caller can specify a batch of contract for fields overriding.
+//
+// Note, this function doesn't make and changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (s *PublicBlockChainAPI) CallWithState(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride) (hexutil.Bytes, error) {
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, state, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -1092,6 +1130,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if len(result.Revert()) > 0 {
 		return nil, newRevertError(result)
 	}
+
 	return result.Return(), result.Err
 }
 
@@ -1169,7 +1208,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, nil, 0, gasCap)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -1595,13 +1634,16 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		// nolint : contextcheck
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), context.Background())
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
+
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil
 		}
+
 		prevTracer = tracer
 	}
 }

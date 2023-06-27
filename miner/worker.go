@@ -31,6 +31,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
+	lru "github.com/hashicorp/golang-lru"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -42,8 +43,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -95,7 +98,7 @@ const (
 var (
 	sealedBlocksCounter      = metrics.NewRegisteredCounter("worker/sealedBlocks", nil)
 	sealedEmptyBlocksCounter = metrics.NewRegisteredCounter("worker/sealedEmptyBlocks", nil)
-	commitInterruptCounter   = metrics.NewRegisteredCounter("worker/commitInterrupt", nil)
+	txCommitInterruptCounter = metrics.NewRegisteredCounter("worker/txCommitInterrupt", nil)
 )
 
 // environment is the worker's current environment and holds all
@@ -273,35 +276,38 @@ type worker struct {
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 
-	profileCount *int32 // Global count for profiling
+	profileCount        *int32 // Global count for profiling
+	interruptCommitFlag bool   // Interrupt commit ( Default true )
+	interruptedTxCache  *vm.TxCache
 }
 
 //nolint:staticcheck
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		mux:                mux,
-		chain:              eth.BlockChain(),
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
-		noempty:            1,
+		config:              config,
+		chainConfig:         chainConfig,
+		engine:              engine,
+		eth:                 eth,
+		mux:                 mux,
+		chain:               eth.BlockChain(),
+		isLocalBlock:        isLocalBlock,
+		localUncles:         make(map[common.Hash]*types.Block),
+		remoteUncles:        make(map[common.Hash]*types.Block),
+		unconfirmed:         newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		pendingTasks:        make(map[common.Hash]*task),
+		txsCh:               make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:         make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:           make(chan *newWorkReq),
+		getWorkCh:           make(chan *getWorkReq),
+		taskCh:              make(chan *task),
+		resultCh:            make(chan *types.Block, resultQueueSize),
+		exitCh:              make(chan struct{}),
+		startCh:             make(chan struct{}, 1),
+		resubmitIntervalCh:  make(chan time.Duration),
+		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
+		noempty:             1,
+		interruptCommitFlag: config.CommitInterruptFlag,
 	}
 	worker.profileCount = new(int32)
 	// Subscribe NewTxsEvent for tx pool
@@ -309,6 +315,19 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+
+	interruptedTxCache, err := lru.New(vm.InterruptedTxCacheSize)
+	if err != nil {
+		log.Warn("Failed to create interrupted tx cache", "err", err)
+	}
+
+	worker.interruptedTxCache = &vm.TxCache{
+		Cache: interruptedTxCache,
+	}
+
+	if !worker.interruptCommitFlag {
+		worker.noempty = 0
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -929,10 +948,12 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, tx *types.Transaction, interruptCtx context.Context) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	// nolint : staticcheck
+	interruptCtx = vm.SetCurrentTxOnContext(interruptCtx, tx.Hash())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return nil, err
@@ -950,6 +971,47 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
 	var coalescedLogs []*types.Log
+
+	var depsMVReadList [][]blockstm.ReadDescriptor
+
+	var depsMVFullWriteList [][]blockstm.WriteDescriptor
+
+	var mvReadMapList []map[blockstm.Key]blockstm.ReadDescriptor
+
+	var deps map[int]map[int]bool
+
+	chDeps := make(chan blockstm.TxDep)
+
+	var count int
+
+	var depsWg sync.WaitGroup
+
+	EnableMVHashMap := false
+
+	// create and add empty mvHashMap in statedb
+	if EnableMVHashMap {
+		depsMVReadList = [][]blockstm.ReadDescriptor{}
+
+		depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
+
+		mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
+
+		deps = map[int]map[int]bool{}
+
+		chDeps = make(chan blockstm.TxDep)
+
+		count = 0
+
+		depsWg.Add(1)
+
+		go func(chDeps chan blockstm.TxDep) {
+			for t := range chDeps {
+				deps = blockstm.UpdateDeps(deps, t)
+			}
+
+			depsWg.Done()
+		}(chDeps)
+	}
 
 	initialGasLimit := env.gasPool.Gas()
 	initialTxs := txs.GetTxs()
@@ -969,12 +1031,15 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 mainloop:
 	for {
-		// case of interrupting by timeout
 		if interruptCtx != nil {
+			if EnableMVHashMap {
+				env.state.AddEmptyMVHashMap()
+			}
+
 			// case of interrupting by timeout
 			select {
 			case <-interruptCtx.Done():
-				commitInterruptCounter.Inc(1)
+				txCommitInterruptCounter.Inc(1)
 				log.Warn("Tx Level Interrupt")
 				break mainloop
 			default:
@@ -1038,7 +1103,7 @@ mainloop:
 			start = time.Now()
 		})
 
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, tx, interruptCtx)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
@@ -1060,6 +1125,22 @@ mainloop:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
+
+			if EnableMVHashMap {
+				depsMVReadList = append(depsMVReadList, env.state.MVReadList())
+				depsMVFullWriteList = append(depsMVFullWriteList, env.state.MVFullWriteList())
+				mvReadMapList = append(mvReadMapList, env.state.MVReadMap())
+
+				temp := blockstm.TxDep{
+					Index:         env.tcount - 1,
+					ReadList:      depsMVReadList[count],
+					FullWriteList: depsMVFullWriteList,
+				}
+
+				chDeps <- temp
+				count++
+			}
+
 			txs.Shift()
 
 			log.OnDebug(func(lg log.Logging) {
@@ -1076,6 +1157,50 @@ mainloop:
 			// nonce-too-high clause will prevent us from executing in vain).
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift()
+		}
+
+		if EnableMVHashMap {
+			env.state.ClearReadMap()
+			env.state.ClearWriteMap()
+		}
+	}
+
+	// nolint:nestif
+	if EnableMVHashMap {
+		close(chDeps)
+		depsWg.Wait()
+
+		if len(mvReadMapList) > 0 {
+			tempDeps := make([][]uint64, len(mvReadMapList))
+
+			for j := range deps[0] {
+				tempDeps[0] = append(tempDeps[0], uint64(j))
+			}
+
+			delayFlag := true
+
+			for i := 1; i <= len(mvReadMapList)-1; i++ {
+				reads := mvReadMapList[i-1]
+
+				_, ok1 := reads[blockstm.NewSubpathKey(env.coinbase, state.BalancePath)]
+				_, ok2 := reads[blockstm.NewSubpathKey(common.HexToAddress(w.chainConfig.Bor.CalculateBurntContract(env.header.Number.Uint64())), state.BalancePath)]
+
+				if ok1 || ok2 {
+					delayFlag = false
+				}
+
+				for j := range deps[i] {
+					tempDeps[i] = append(tempDeps[i], uint64(j))
+				}
+			}
+
+			if delayFlag {
+				env.header.TxDependency = tempDeps
+			} else {
+				env.header.TxDependency = nil
+			}
+		} else {
+			env.header.TxDependency = nil
 		}
 	}
 
@@ -1441,8 +1566,20 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) (*typ
 	}
 	defer work.discard()
 
-	interruptCtx, stopFn := getInterruptTimer(ctx, work, w.chain.CurrentBlock())
-	defer stopFn()
+	// nolint : contextcheck
+	var interruptCtx = context.Background()
+
+	stopFn := func() {}
+
+	defer func() {
+		stopFn()
+	}()
+
+	if w.interruptCommitFlag {
+		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		// nolint : staticcheck
+		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
+	}
 
 	w.fillTransactions(ctx, nil, work, interruptCtx)
 
@@ -1482,7 +1619,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *int32, noempty bool,
 		return
 	}
 
-	//nolint:contextcheck
+	// nolint:contextcheck
 	var interruptCtx = context.Background()
 
 	stopFn := func() {}
@@ -1490,8 +1627,10 @@ func (w *worker) commitWork(ctx context.Context, interrupt *int32, noempty bool,
 		stopFn()
 	}()
 
-	if !noempty {
+	if !noempty && w.interruptCommitFlag {
 		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		// nolint : staticcheck
+		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
 	}
 
 	ctx, span := tracing.StartSpan(ctx, "commitWork")

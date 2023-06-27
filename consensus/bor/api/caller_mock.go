@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	hexutil "github.com/ethereum/go-ethereum/common/hexutil"
+	state "github.com/ethereum/go-ethereum/core/state"
 	ethapi "github.com/ethereum/go-ethereum/internal/ethapi"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
@@ -50,4 +51,19 @@ func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg
 func (mr *MockCallerMockRecorder) Call(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockCaller)(nil).Call), arg0, arg1, arg2, arg3)
+}
+
+// CallWithState mocks base method.
+func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *state.StateDB, arg4 *ethapi.StateOverride) (hexutil.Bytes, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CallWithState", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(hexutil.Bytes)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CallWithState indicates an expected call of CallWithState.
+func (mr *MockCallerMockRecorder) CallWithState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallWithState", reflect.TypeOf((*MockCaller)(nil).CallWithState), arg0, arg1, arg2, arg3, arg4)
 }

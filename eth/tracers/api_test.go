@@ -167,14 +167,17 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	for idx, tx := range block.Transactions() {
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+		blockContext := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {
-			return msg, context, statedb, nil
+			return msg, blockContext, statedb, nil
 		}
-		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+
+		vmenv := vm.NewEVM(blockContext, txContext, statedb, b.chainConfig, vm.Config{})
+		// nolint : contextcheck
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
+
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
@@ -417,6 +420,85 @@ func TestTraceBlock(t *testing.T) {
 			continue
 		}
 		have, _ := json.Marshal(result)
+		want := tc.want
+		if string(have) != want {
+			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, string(have), want)
+		}
+	}
+}
+
+func TestIOdump(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(5)
+	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
+		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[3].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[4].addr: {Balance: big.NewInt(params.Ether)},
+	}}
+	genBlocks := 1
+	signer := types.HomesteadSigner{}
+	api := NewAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1], account[1] to account[2], account[2] to account[3], account[3] to account[4], account[4] to account[0]
+		// value:  1000 wei
+		// fee:    0 wei
+
+		for j := 0; j < 5; j++ {
+			tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[(j+1)%5].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[j].key)
+			b.AddTx(tx)
+		}
+	}))
+
+	allowIOTracing = true
+
+	ioflag := new(bool)
+
+	*ioflag = true
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		config      *TraceConfig
+		want        string
+		expectErr   error
+	}{
+		// Trace head block
+		{
+			config: &TraceConfig{
+				IOFlag: ioflag,
+			},
+			blockNumber: rpc.BlockNumber(genBlocks),
+			want:        `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
+		},
+	}
+
+	for i, tc := range testSuite {
+		result, err := api.TraceBlockByNumber(context.Background(), tc.blockNumber, tc.config)
+		if tc.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.expectErr)
+				continue
+			}
+
+			if !reflect.DeepEqual(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, get %v", i, tc.expectErr, err)
+			}
+
+			continue
+		}
+
+		if err != nil {
+			t.Errorf("test %d, want no error, have %v", i, err)
+			continue
+		}
+
+		have, err := json.Marshal(result)
+		if err != nil {
+			t.Errorf("Error in Marshal: %v", err)
+		}
+
 		want := tc.want
 		if string(have) != want {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, string(have), want)

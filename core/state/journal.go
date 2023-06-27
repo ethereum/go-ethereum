@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 )
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -143,6 +144,7 @@ type (
 func (ch createObjectChange) revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
 	delete(s.stateObjectsDirty, *ch.account)
+	RevertWrite(s, blockstm.NewAddressKey(*ch.account))
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
@@ -151,6 +153,7 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
+	RevertWrite(s, blockstm.NewAddressKey(ch.prev.address))
 	if !ch.prevdestruct && s.snap != nil {
 		delete(s.snapDestructs, ch.prev.addrHash)
 	}
@@ -165,6 +168,7 @@ func (ch suicideChange) revert(s *StateDB) {
 	if obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
+		RevertWrite(s, blockstm.NewSubpathKey(*ch.account, SuicidePath))
 	}
 }
 
@@ -199,6 +203,7 @@ func (ch nonceChange) dirtied() *common.Address {
 
 func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	RevertWrite(s, blockstm.NewSubpathKey(*ch.account, CodePath))
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -207,6 +212,7 @@ func (ch codeChange) dirtied() *common.Address {
 
 func (ch storageChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+	RevertWrite(s, blockstm.NewStateKey(*ch.account, ch.key))
 }
 
 func (ch storageChange) dirtied() *common.Address {

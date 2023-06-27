@@ -31,6 +31,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -40,6 +42,10 @@ const (
 
 	// testGas is the gas required for contract deployment.
 	testGas = 144109
+
+	storageContractByteCode   = "608060405234801561001057600080fd5b50610150806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100a1565b60405180910390f35b610073600480360381019061006e91906100ed565b61007e565b005b60008054905090565b8060008190555050565b6000819050919050565b61009b81610088565b82525050565b60006020820190506100b66000830184610092565b92915050565b600080fd5b6100ca81610088565b81146100d557600080fd5b50565b6000813590506100e7816100c1565b92915050565b600060208284031215610103576101026100bc565b5b6000610111848285016100d8565b9150509291505056fea2646970667358221220322c78243e61b783558509c9cc22cb8493dde6925aa5e89a08cdf6e22f279ef164736f6c63430008120033"
+	storageContractTxCallData = "0x6057361d0000000000000000000000000000000000000000000000000000000000000001"
+	storageCallTxGas          = 100000
 )
 
 func init() {
@@ -167,6 +173,7 @@ func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
 	return blocks[0], err
 }
 
+// newRandomTx creates a new transaction.
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
 
@@ -181,15 +188,54 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	return tx
 }
 
-func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty uint32, delay uint) (*worker, *testWorkerBackend, func()) {
+// newRandomTxWithNonce creates a new transaction with the given nonce.
+func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(100 * params.InitialBaseFee)
+
+	if creation {
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+	} else {
+		tx, _ = types.SignTx(types.NewTransaction(nonce, testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	}
+
+	return tx
+}
+
+// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
+func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(storageContractByteCode)), types.HomesteadSigner{}, testBankKey)
+	contractAddr := crypto.CreateAddress(TestBankAddress, b.txPool.Nonce(TestBankAddress))
+
+	return tx, contractAddr
+}
+
+// newStorageContractCallTx creates a new transaction to call a storage smart contract.
+func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewTransaction(nonce, to, nil, storageCallTxGas, gasPrice, common.FromHex(storageContractTxCallData)), types.HomesteadSigner{}, testBankKey)
+
+	return tx
+}
+
+// NewTestWorker creates a new test worker with the given parameters.
+func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty uint32, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 
 	var w *worker
 
-	if delay != 0 {
+	if delay != 0 || opcodeDelay != 0 {
 		//nolint:staticcheck
-		w = newWorkerWithDelay(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, delay)
+		w = newWorkerWithDelay(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, delay, opcodeDelay)
 	} else {
 		//nolint:staticcheck
 		w = newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
@@ -203,32 +249,34 @@ func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 	return w, backend, w.close
 }
 
-//nolint:staticcheck
-func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, delay uint) *worker {
+// newWorkerWithDelay is newWorker() with extra params to induce artficial delays for tests such as commit-interrupt.
+// nolint:staticcheck
+func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, delay uint, opcodeDelay uint) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		mux:                mux,
-		chain:              eth.BlockChain(),
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
-		noempty:            1,
+		config:              config,
+		chainConfig:         chainConfig,
+		engine:              engine,
+		eth:                 eth,
+		mux:                 mux,
+		chain:               eth.BlockChain(),
+		isLocalBlock:        isLocalBlock,
+		localUncles:         make(map[common.Hash]*types.Block),
+		remoteUncles:        make(map[common.Hash]*types.Block),
+		unconfirmed:         newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		pendingTasks:        make(map[common.Hash]*task),
+		txsCh:               make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:         make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:           make(chan *newWorkReq),
+		getWorkCh:           make(chan *getWorkReq),
+		taskCh:              make(chan *task),
+		resultCh:            make(chan *types.Block, resultQueueSize),
+		exitCh:              make(chan struct{}),
+		startCh:             make(chan struct{}, 1),
+		resubmitIntervalCh:  make(chan time.Duration),
+		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
+		noempty:             1,
+		interruptCommitFlag: config.CommitInterruptFlag,
 	}
 	worker.profileCount = new(int32)
 	// Subscribe NewTxsEvent for tx pool
@@ -236,6 +284,19 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+
+	interruptedTxCache, err := lru.New(vm.InterruptedTxCacheSize)
+	if err != nil {
+		log.Warn("Failed to create interrupted tx cache", "err", err)
+	}
+
+	worker.interruptedTxCache = &vm.TxCache{
+		Cache: interruptedTxCache,
+	}
+
+	if !worker.interruptCommitFlag {
+		worker.noempty = 0
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -248,7 +309,7 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 
 	worker.wg.Add(4)
 
-	go worker.mainLoopWithDelay(ctx, delay)
+	go worker.mainLoopWithDelay(ctx, delay, opcodeDelay)
 	go worker.newWorkLoop(ctx, recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
@@ -261,8 +322,9 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 	return worker
 }
 
+// mainLoopWithDelay is mainLoop() with extra params to induce artficial delays for tests such as commit-interrupt.
 // nolint:gocognit
-func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
+func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay uint) {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
@@ -280,7 +342,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 		select {
 		case req := <-w.newWorkCh:
 			//nolint:contextcheck
-			w.commitWorkWithDelay(req.ctx, req.interrupt, req.noempty, req.timestamp, delay)
+			w.commitWorkWithDelay(req.ctx, req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
 
 		case req := <-w.getWorkCh:
 			//nolint:contextcheck
@@ -342,6 +404,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
+			// nolint : nestif
 			if !w.isRunning() && w.current != nil {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
@@ -358,7 +421,6 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
 				tcount := w.current.tcount
 
-				//nolint:contextcheck
 				w.commitTransactions(w.current, txset, nil, context.Background())
 
 				// Only update the snapshot if any new transactions were added
@@ -390,170 +452,8 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint) {
 	}
 }
 
-// nolint:gocognit
-func (w *worker) commitTransactionsWithDelay(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32, interruptCtx context.Context, delay uint) bool {
-	gasLimit := env.header.GasLimit
-	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
-
-	var coalescedLogs []*types.Log
-
-	initialGasLimit := env.gasPool.Gas()
-	initialTxs := txs.GetTxs()
-
-	var breakCause string
-
-	defer func() {
-		log.OnDebug(func(lg log.Logging) {
-			lg("commitTransactions-stats",
-				"initialTxsCount", initialTxs,
-				"initialGasLimit", initialGasLimit,
-				"resultTxsCount", txs.GetTxs(),
-				"resultGapPool", env.gasPool.Gas(),
-				"exitCause", breakCause)
-		})
-	}()
-
-mainloop:
-	for {
-		// case of interrupting by timeout
-		if interruptCtx != nil {
-			// case of interrupting by timeout
-			select {
-			case <-interruptCtx.Done():
-				commitInterruptCounter.Inc(1)
-				log.Warn("Tx Level Interrupt")
-				break mainloop
-			default:
-			}
-		}
-		// In the following three cases, we will interrupt the execution of the transaction.
-		// (1) new head block event arrival, the interrupt signal is 1
-		// (2) worker start or restart, the interrupt signal is 1
-		// (3) worker recreate the sealing block with any newly arrived transactions, the interrupt signal is 2.
-		// For the first two cases, the semi-finished work will be discarded.
-		// For the third case, the semi-finished work will be submitted to the consensus engine.
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
-			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit-env.gasPool.Gas()) / float64(gasLimit)
-				if ratio < 0.1 {
-					// nolint:goconst
-					ratio = 0.1
-				}
-				w.resubmitAdjustCh <- &intervalAdjust{
-					ratio: ratio,
-					inc:   true,
-				}
-			}
-			// nolint:goconst
-			breakCause = "interrupt"
-			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
-		}
-		// If we don't have enough gas for any further transactions then we're done
-		if env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
-			// nolint:goconst
-			breakCause = "Not enough gas for further transactions"
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
-			// nolint:goconst
-			breakCause = "all transactions has been included"
-			break
-		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		//
-		// We use the eip155 signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
-		// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-
-			txs.Pop()
-			continue
-		}
-		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
-
-		var start time.Time
-
-		log.OnDebug(func(log.Logging) {
-			start = time.Now()
-		})
-
-		logs, err := w.commitTransaction(env, tx)
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-
-		switch {
-		case errors.Is(err, core.ErrGasLimitReached):
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Trace("Gas limit exceeded for current block", "sender", from)
-			txs.Pop()
-
-		case errors.Is(err, core.ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Shift()
-
-		case errors.Is(err, core.ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Pop()
-
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
-			txs.Shift()
-
-			log.OnDebug(func(lg log.Logging) {
-				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
-			})
-
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-			txs.Pop()
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			txs.Shift()
-		}
-	}
-
-	if !w.isRunning() && len(coalescedLogs) > 0 {
-		// We don't push the pendingLogsEvent while we are sealing. The reason is that
-		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-
-		w.pendingLogsFeed.Send(cpy)
-	}
-	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-	// than the user-specified one.
-	if interrupt != nil {
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	}
-
-	return false
-}
-
-func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noempty bool, timestamp int64, delay uint) {
+// commitWorkWithDelay is commitWork() with extra params to induce artficial delays for tests such as commit-interrupt.
+func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noempty bool, timestamp int64, delay uint, opcodeDelay uint) {
 	start := time.Now()
 
 	var (
@@ -591,8 +491,14 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 		stopFn()
 	}()
 
-	if !noempty {
+	if !noempty && w.interruptCommitFlag {
 		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		// nolint : staticcheck
+		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
+		// nolint : staticcheck
+		interruptCtx = context.WithValue(interruptCtx, vm.InterruptCtxDelayKey, delay)
+		// nolint : staticcheck
+		interruptCtx = context.WithValue(interruptCtx, vm.InterruptCtxOpcodeDelayKey, opcodeDelay)
 	}
 
 	ctx, span := tracing.StartSpan(ctx, "commitWork")
@@ -613,7 +519,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	}
 
 	// Fill pending transactions from the txpool
-	w.fillTransactionsWithDelay(ctx, interrupt, work, interruptCtx, delay)
+	w.fillTransactionsWithDelay(ctx, interrupt, work, interruptCtx)
 
 	err = w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
 	if err != nil {
@@ -629,8 +535,9 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	w.current = work
 }
 
+// fillTransactionsWithDelay is fillTransactions() with extra params to induce artficial delays for tests such as commit-interrupt.
 // nolint:gocognit
-func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32, env *environment, interruptCtx context.Context, delay uint) {
+func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32, env *environment, interruptCtx context.Context) {
 	ctx, span := tracing.StartSpan(ctx, "fillTransactions")
 	defer tracing.EndSpan(span)
 
@@ -754,7 +661,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		})
 
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx, delay)
+			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx)
 		})
 
 		if committed {
@@ -777,7 +684,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		})
 
 		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx, delay)
+			committed = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx)
 		})
 
 		if committed {
@@ -792,4 +699,177 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		attribute.Int("len of final local txs ", localEnvTCount),
 		attribute.Int("len of final remote txs", remoteEnvTCount),
 	)
+}
+
+// commitTransactionsWithDelay is commitTransactions() with extra params to induce artficial delays for tests such as commit-interrupt.
+// nolint:gocognit, unparam
+func (w *worker) commitTransactionsWithDelay(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32, interruptCtx context.Context) bool {
+	gasLimit := env.header.GasLimit
+	if env.gasPool == nil {
+		env.gasPool = new(core.GasPool).AddGas(gasLimit)
+	}
+
+	var coalescedLogs []*types.Log
+
+	initialGasLimit := env.gasPool.Gas()
+	initialTxs := txs.GetTxs()
+
+	var breakCause string
+
+	defer func() {
+		log.OnDebug(func(lg log.Logging) {
+			lg("commitTransactions-stats",
+				"initialTxsCount", initialTxs,
+				"initialGasLimit", initialGasLimit,
+				"resultTxsCount", txs.GetTxs(),
+				"resultGapPool", env.gasPool.Gas(),
+				"exitCause", breakCause)
+		})
+	}()
+
+mainloop:
+	for {
+		if interruptCtx != nil {
+			// case of interrupting by timeout
+			select {
+			case <-interruptCtx.Done():
+				log.Warn("Interrupt")
+				break mainloop
+			default:
+			}
+		}
+
+		// In the following three cases, we will interrupt the execution of the transaction.
+		// (1) new head block event arrival, the interrupt signal is 1
+		// (2) worker start or restart, the interrupt signal is 1
+		// (3) worker recreate the sealing block with any newly arrived transactions, the interrupt signal is 2.
+		// For the first two cases, the semi-finished work will be discarded.
+		// For the third case, the semi-finished work will be submitted to the consensus engine.
+		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
+			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
+				ratio := float64(gasLimit-env.gasPool.Gas()) / float64(gasLimit)
+				if ratio < 0.1 {
+					// nolint:goconst
+					ratio = 0.1
+				}
+				w.resubmitAdjustCh <- &intervalAdjust{
+					ratio: ratio,
+					inc:   true,
+				}
+			}
+			// nolint:goconst
+			breakCause = "interrupt"
+
+			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
+		}
+		// If we don't have enough gas for any further transactions then we're done
+		if env.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+			// nolint:goconst
+			breakCause = "Not enough gas for further transactions"
+
+			break
+		}
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			// nolint:goconst
+			breakCause = "all transactions has been included"
+			break
+		}
+		// Error may be ignored here. The error has already been checked
+		// during transaction acceptance is the transaction pool.
+		//
+		// We use the eip155 signer regardless of the current hf.
+		from, _ := types.Sender(env.signer, tx)
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+
+			txs.Pop()
+
+			continue
+		}
+		// Start executing the transaction
+		env.state.Prepare(tx.Hash(), env.tcount)
+
+		var start time.Time
+
+		log.OnDebug(func(log.Logging) {
+			start = time.Now()
+		})
+
+		logs, err := w.commitTransaction(env, tx, interruptCtx)
+
+		if interruptCtx != nil {
+			if delay := interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
+				// nolint : durationcheck
+				time.Sleep(time.Duration(delay.(uint)) * time.Millisecond)
+			}
+		}
+
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Trace("Gas limit exceeded for current block", "sender", from)
+			txs.Pop()
+
+		case errors.Is(err, core.ErrNonceTooLow):
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+
+		case errors.Is(err, core.ErrNonceTooHigh):
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+
+		case errors.Is(err, nil):
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+
+			txs.Shift()
+
+			log.OnDebug(func(lg log.Logging) {
+				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
+			})
+
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			txs.Shift()
+		}
+	}
+
+	if !w.isRunning() && len(coalescedLogs) > 0 {
+		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		cpy := make([]*types.Log, len(coalescedLogs))
+		for i, l := range coalescedLogs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+
+		w.pendingLogsFeed.Send(cpy)
+	}
+	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
+	// than the user-specified one.
+	if interrupt != nil {
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	}
+
+	return false
 }

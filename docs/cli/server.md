@@ -72,6 +72,10 @@ The ```bor server``` command runs the Bor client.
 
 - ```dev.period```: Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
 
+- ```parallelevm.enable```: Enable Block STM (default: true)
+
+- ```parallelevm.procs```: Number of speculative processes (cores) in Block STM (default: 8)
+
 - ```dev.gaslimit```: Initial block gas limit (default: 11500000)
 
 - ```pprof```: Enable the pprof HTTP server (default: false)
@@ -216,6 +220,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
 
+- ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (defaults to 500ms) (default: 500ms)
+
 ### Sealer Options
 
 - ```mine```: Enable mining (default: false)
@@ -229,6 +235,8 @@ The ```bor server``` command runs the Bor client.
 - ```miner.gasprice```: Minimum gas price for mining a transaction (default: 1000000000)
 
 - ```miner.recommit```: The time interval for miner to re-create mining work (default: 2m5s)
+
+- ```miner.interruptcommit```: Interrupt block commit when block creation time is passed (default: true)
 
 ### Telemetry Options
 

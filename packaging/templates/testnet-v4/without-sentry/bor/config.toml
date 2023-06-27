@@ -33,6 +33,7 @@ syncmode = "full"
     # netrestrict = ""
     # nodekey = ""
     # nodekeyhex = ""
+    # txarrivalwait = "500ms"
     # [p2p.discovery]
         # v5disc = false
         # bootnodes = []
@@ -67,6 +68,7 @@ syncmode = "full"
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
+    # commitinterrupt = true
 
 [jsonrpc]
     ipcpath = "/var/lib/bor/bor.ipc"

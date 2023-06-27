@@ -36,15 +36,15 @@ import (
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
 // Parameters:
-// - block: The block for which we want the state (== state at the stateRoot of the parent)
-// - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
-// - base: If the caller is tracing multiple blocks, the caller can provide the parent state
-//         continuously from the callsite.
-// - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
-//        perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
-//        storing trash persistently
-// - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
-//        it would be preferrable to start from a fresh state, if we have it on disk.
+//   - block: The block for which we want the state (== state at the stateRoot of the parent)
+//   - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
+//   - base: If the caller is tracing multiple blocks, the caller can provide the parent state
+//     continuously from the callsite.
+//   - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
+//     perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
+//     storing trash persistently
+//   - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
+//     it would be preferrable to start from a fresh state, if we have it on disk.
 func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
@@ -131,7 +131,9 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+
+		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{}, nil)
+
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
@@ -191,9 +193,11 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
 		statedb.Prepare(tx.Hash(), idx)
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), nil); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
+
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
