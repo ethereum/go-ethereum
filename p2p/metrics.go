@@ -50,7 +50,6 @@ var (
 	dialAlreadyConnected         metrics.Meter = metrics.NilMeter{}
 	dialSelf                     metrics.Meter = metrics.NilMeter{}
 	dialUselessPeer              metrics.Meter = metrics.NilMeter{}
-	dialNoSecp256k1Key           metrics.Meter = metrics.NilMeter{}
 	dialFailedRLPXEncHandshake   metrics.Meter = metrics.NilMeter{}
 	dialFailedRLPXProtoHandshake metrics.Meter = metrics.NilMeter{}
 )
