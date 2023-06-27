@@ -33,14 +33,14 @@ const (
 )
 
 var (
-	bucketGauge         []metrics.Gauge
+	bucketsCounter      []metrics.Counter
 	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
 )
 
 func init() {
 	for i := 0; i < nBuckets; i++ {
-		bucketGauge = append(bucketGauge, metrics.NewRegisteredGauge(fmt.Sprintf("%s/bucket/%d/count", moduleName, i), nil))
+		bucketsCounter = append(bucketsCounter, metrics.NewRegisteredCounter(fmt.Sprintf("%s/bucket/%d/count", moduleName, i), nil))
 	}
 }
 
