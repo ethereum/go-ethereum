@@ -366,7 +366,10 @@ func (s *stateObject) commitTrie(db Database) (*trienode.NodeSet, error) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
-	root, nodes := tr.Commit(false)
+	root, nodes, err := tr.Commit(false)
+	if err != nil {
+		return nil, err
+	}
 	s.data.Root = root
 	return nodes, nil
 }
