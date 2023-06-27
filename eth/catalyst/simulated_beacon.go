@@ -209,7 +209,7 @@ func (c *SimulatedBeacon) loop() {
 		select {
 		case <-c.shutdownCh:
 			return
-		case <-ticker.C:
+		case t := <-ticker.C:
 			if onDemand {
 				// Do nothing as long as blocks are empty
 				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.queued()) == 0 {
@@ -227,10 +227,13 @@ func (c *SimulatedBeacon) loop() {
 			} else {
 				fcId = fc.PayloadID
 			}
-			if !onDemand {
-				ticker.Reset(time.Second * time.Duration(c.period))
+
+			now := time.Now()
+			if onDemand || !now.After(t.Add(time.Duration(c.period))) {
+				ticker.Reset(time.Duration(0))
 			} else {
-				ticker.Reset(c.buildWaitTime)
+				execTime := now.Sub(t)
+				ticker.Reset(time.Duration(c.period) - execTime)
 			}
 		}
 	}
