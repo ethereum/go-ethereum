@@ -161,10 +161,12 @@ func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
 
 // finalizeSealing retrieves a completed payload and marks it as canonical if it contains transactions or withdrawals.
 func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) error {
-	payload, err := c.engineAPI.GetPayloadV1(*id)
+	envelope, err := c.engineAPI.GetFullPayload(*id)
 	if err != nil {
 		return fmt.Errorf("error retrieving payload: %v", err)
 	}
+
+	payload := envelope.ExecutionPayload
 
 	if onDemand && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
 		// If the payload is empty, despite there being pending transactions,
@@ -233,7 +235,7 @@ func (c *SimulatedBeacon) loop() {
 				ticker.Reset(time.Duration(0))
 			} else {
 				execTime := now.Sub(t)
-				ticker.Reset(time.Duration(c.period) - execTime)
+				ticker.Reset(time.Duration(c.period) * time.Second - execTime)
 			}
 		}
 	}
