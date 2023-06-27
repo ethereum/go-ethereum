@@ -80,13 +80,14 @@ func (w *withdrawalQueue) clearQueued(count int) {
 }
 
 type SimulatedBeacon struct {
-	shutdownCh   chan struct{}
-	eth          *eth.Ethereum
-	period       uint64
-	withdrawals  withdrawalQueue
-	feeRecipient common.Address
-	// mu gates concurrent access to the feeRecipient
-	mu                 sync.Mutex
+	shutdownCh  chan struct{}
+	eth         *eth.Ethereum
+	period      uint64
+	withdrawals withdrawalQueue
+
+	feeRecipient     common.Address
+	feeRecipientLock sync.Mutex // lock gates concurrent access to the feeRecipient
+
 	engineAPI          *ConsensusAPI
 	curForkchoiceState engine.ForkchoiceStateV1
 	buildWaitTime      time.Duration
@@ -98,19 +99,35 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	if chainConfig.Dev == nil {
 		return nil, errors.New("incompatible pre-existing chain configuration")
 	}
+	header := eth.BlockChain().CurrentHeader()
+	current := engine.ForkchoiceStateV1{
+		HeadBlockHash:      header.Hash(),
+		SafeBlockHash:      header.Hash(),
+		FinalizedBlockHash: header.Hash(),
+	}
+	engineAPI := NewConsensusAPI(eth)
 
+	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
+	if header.Number.Sign() == 0 {
+		if _, err := engineAPI.ForkchoiceUpdatedV2(current, nil); err != nil {
+			return nil, err
+		}
+	}
 	return &SimulatedBeacon{
-		eth:           eth,
-		period:        chainConfig.Dev.Period,
-		shutdownCh:    make(chan struct{}),
-		buildWaitTime: time.Millisecond * 100,
+		eth:                eth,
+		period:             chainConfig.Dev.Period,
+		shutdownCh:         make(chan struct{}),
+		buildWaitTime:      time.Millisecond * 100,
+		engineAPI:          engineAPI,
+		lastBlockTime:      header.Time,
+		curForkchoiceState: current,
 	}, nil
 }
 
 func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
-	c.mu.Lock()
+	c.feeRecipientLock.Lock()
 	c.feeRecipient = feeRecipient
-	c.mu.Unlock()
+	c.feeRecipientLock.Unlock()
 }
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
@@ -131,9 +148,9 @@ func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
 	if tstamp <= c.lastBlockTime {
 		tstamp = c.lastBlockTime + 1
 	}
-	c.mu.Lock()
+	c.feeRecipientLock.Lock()
 	feeRecipient := c.feeRecipient
-	c.mu.Unlock()
+	c.feeRecipientLock.Unlock()
 
 	return c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
@@ -179,27 +196,7 @@ func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) e
 // loop manages the lifecycle of the SimulatedBeacon.
 // it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
 func (c *SimulatedBeacon) loop() {
-	var (
-		ticker = time.NewTimer(time.Second * time.Duration(c.period))
-		header = c.eth.BlockChain().CurrentHeader()
-	)
-
-	c.curForkchoiceState = engine.ForkchoiceStateV1{
-		HeadBlockHash:      header.Hash(),
-		SafeBlockHash:      header.Hash(),
-		FinalizedBlockHash: header.Hash(),
-	}
-	c.engineAPI = NewConsensusAPI(c.eth)
-	c.lastBlockTime = header.Time
-
-	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
-	if header.Number.Sign() == 0 {
-		if _, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
-			log.Error("failed to initiate PoS transition for genesis via Forkchoiceupdated", "err", err)
-			return
-		}
-	}
-
+	ticker := time.NewTimer(time.Second * time.Duration(c.period))
 	var fcId *engine.PayloadID
 	if fc, err := c.beginSealing(); err != nil {
 		log.Error("Error starting sealing-work", "err", err)
