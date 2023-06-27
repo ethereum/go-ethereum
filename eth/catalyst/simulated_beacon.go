@@ -194,7 +194,7 @@ func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) e
 }
 
 // loop manages the lifecycle of the SimulatedBeacon.
-// it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
+// It drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs.
 func (c *SimulatedBeacon) loop() {
 	ticker := time.NewTimer(time.Second * time.Duration(c.period))
 	var fcId *engine.PayloadID
