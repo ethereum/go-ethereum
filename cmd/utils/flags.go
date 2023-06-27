@@ -766,7 +766,8 @@ var (
 		Category: flags.NetworkingCategory,
 	}
 	DiscoveryV4Flag = &cli.BoolFlag{
-		Name:     "discv4",
+		Name:     "discovery.v4",
+		Aliases:  []string{"discv4"},
 		Usage:    "Enables the V4 discovery mechanism",
 		Category: flags.NetworkingCategory,
 		Value:    true,
@@ -777,7 +778,8 @@ var (
 		Category: flags.NetworkingCategory,
 	}
 	DiscoveryV5Flag = &cli.BoolFlag{
-		Name:     "discv5",
+		Name:     "discovery.v5",
+		Aliases:  []string{"discv5"},
 		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
 		Category: flags.NetworkingCategory,
 	}
