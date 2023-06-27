@@ -412,6 +412,11 @@ var (
 			JaipurBlock:           big.NewInt(23850000),
 			DelhiBlock:            big.NewInt(38189056),
 			ParallelUniverseBlock: big.NewInt(0),
+			IndoreBlock:           big.NewInt(44915456),
+			StateSyncConfirmationDelay: map[string]uint64{
+				"44915456": 128,
+			},
+
 			Period: map[string]uint64{
 				"0": 2,
 			},
