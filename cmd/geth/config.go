@@ -204,8 +204,11 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
-	} else if err := ethcatalyst.Register(stack, eth); err != nil {
-		utils.Fatalf("failed to register catalyst service: %v", err)
+	} else if cfg.Eth.SyncMode != downloader.LightSync {
+		err := ethcatalyst.Register(stack, eth)
+		if err != nil {
+			utils.Fatalf("failed to register catalyst service: %v", err)
+		}
 	}
 
 	return stack, backend
