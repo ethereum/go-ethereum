@@ -80,9 +80,9 @@ type SimulatedBeacon struct {
 	lastBlockTime      uint64
 }
 
-func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
+func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	chainConfig := eth.APIBackend.ChainConfig()
-	if chainConfig.Dev == nil {
+	if !chainConfig.IsDevMode {
 		return nil, errors.New("incompatible pre-existing chain configuration")
 	}
 	header := eth.BlockChain().CurrentHeader()
@@ -101,7 +101,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	}
 	return &SimulatedBeacon{
 		eth:                eth,
-		period:             chainConfig.Dev.Period,
+		period:             period,
 		shutdownCh:         make(chan struct{}),
 		buildWaitTime:      time.Millisecond * 100,
 		engineAPI:          engineAPI,

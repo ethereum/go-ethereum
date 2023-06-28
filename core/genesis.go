@@ -554,12 +554,9 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
-func DeveloperGenesisBlock(period uint64, gasLimit uint64, faucet common.Address) *Genesis {
+func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
 	config := *params.AllDevChainProtocolChanges
-	config.Dev = &params.DeveloperModeConfig{
-		Period: period,
-	}
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{

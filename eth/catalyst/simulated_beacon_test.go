@@ -54,7 +54,7 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.
 		t.Fatal("can't create eth service:", err)
 	}
 
-	simBeacon, err := NewSimulatedBeacon(ethservice)
+	simBeacon, err := NewSimulatedBeacon(1, ethservice)
 	if err != nil {
 		t.Fatal("can't create simulated beacon:", err)
 	}
@@ -84,9 +84,8 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	)
 
 	// short period (1 second) for testing purposes
-	period := 1
 	var gasLimit uint64 = 10_000_000
-	genesis := core.DeveloperGenesisBlock(uint64(period), gasLimit, testAddr)
+	genesis := core.DeveloperGenesisBlock(gasLimit, testAddr)
 	node, ethService, mock := startSimulatedBeaconEthService(t, genesis)
 	_ = mock
 	defer node.Close()
