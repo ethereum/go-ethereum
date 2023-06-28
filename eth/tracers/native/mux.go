@@ -128,6 +128,42 @@ func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt) {
 	}
 }
 
+func (t *muxTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {
+	for _, t := range t.tracers {
+		t.OnBalanceChange(a, prev, new)
+	}
+}
+
+func (t *muxTracer) OnNonceChange(a common.Address, prev, new uint64) {
+	for _, t := range t.tracers {
+		t.OnNonceChange(a, prev, new)
+	}
+}
+
+func (t *muxTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+	for _, t := range t.tracers {
+		t.OnCodeChange(a, prevCodeHash, prev, codeHash, code)
+	}
+}
+
+func (t *muxTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+	for _, t := range t.tracers {
+		t.OnStorageChange(a, k, prev, new)
+	}
+}
+
+func (t *muxTracer) OnLog(log *types.Log) {
+	for _, t := range t.tracers {
+		t.OnLog(log)
+	}
+}
+
+func (t *muxTracer) OnNewAccount(a common.Address) {
+	for _, t := range t.tracers {
+		t.OnNewAccount(a)
+	}
+}
+
 // GetResult returns an empty json object.
 func (t *muxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)

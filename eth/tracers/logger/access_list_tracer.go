@@ -176,6 +176,19 @@ func (*AccessListTracer) CaptureTxStart(tx *types.Transaction) {}
 
 func (*AccessListTracer) CaptureTxEnd(receipt *types.Receipt) {}
 
+func (*AccessListTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+
+func (*AccessListTracer) OnNonceChange(a common.Address, prev, new uint64) {}
+
+func (*AccessListTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+}
+
+func (*AccessListTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+
+func (*AccessListTracer) OnLog(log *types.Log) {}
+
+func (*AccessListTracer) OnNewAccount(a common.Address) {}
+
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {
 	return a.list.accessList()

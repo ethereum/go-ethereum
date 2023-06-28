@@ -24,6 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -36,10 +37,13 @@ type Context struct {
 	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
-// Tracer interface extends vm.EVMLogger and additionally
-// allows collecting the tracing result.
+// The set of methods that must be exposed by a tracer
+// for it to be available through the RPC interface.
+// This involves a method to retrieve results and one to
+// stop tracing.
 type Tracer interface {
 	vm.EVMLogger
+	state.StateLogger
 	GetResult() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop(err error)

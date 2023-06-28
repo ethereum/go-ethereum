@@ -106,3 +106,16 @@ func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 func (l *JSONLogger) CaptureTxStart(tx *types.Transaction) {}
 
 func (l *JSONLogger) CaptureTxEnd(receipt *types.Receipt) {}
+
+func (*JSONLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+
+func (*JSONLogger) OnNonceChange(a common.Address, prev, new uint64) {}
+
+func (*JSONLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+}
+
+func (*JSONLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+
+func (*JSONLogger) OnLog(log *types.Log) {}
+
+func (*JSONLogger) OnNewAccount(a common.Address) {}

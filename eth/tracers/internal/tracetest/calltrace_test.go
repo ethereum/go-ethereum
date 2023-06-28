@@ -145,6 +145,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
+			statedb.SetLogger(tracer)
 			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
@@ -360,6 +361,7 @@ func TestInternals(t *testing.T) {
 					Balance: big.NewInt(500000000000000),
 				},
 			}, false)
+		statedb.SetLogger(tc.tracer)
 		evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
 		tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
 			To:       &to,

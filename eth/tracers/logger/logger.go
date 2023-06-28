@@ -271,6 +271,19 @@ func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt) {
 	l.usedGas = receipt.GasUsed
 }
 
+func (l *StructLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+
+func (l *StructLogger) OnNonceChange(a common.Address, prev, new uint64) {}
+
+func (l *StructLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+}
+
+func (l *StructLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+
+func (l *StructLogger) OnLog(log *types.Log) {}
+
+func (l *StructLogger) OnNewAccount(a common.Address) {}
+
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
 
@@ -403,6 +416,19 @@ func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 func (*mdLogger) CaptureTxStart(tx *types.Transaction) {}
 
 func (*mdLogger) CaptureTxEnd(receipt *types.Receipt) {}
+
+func (*mdLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+
+func (*mdLogger) OnNonceChange(a common.Address, prev, new uint64) {}
+
+func (*mdLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+}
+
+func (*mdLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+
+func (*mdLogger) OnLog(log *types.Log) {}
+
+func (*mdLogger) OnNewAccount(a common.Address) {}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction

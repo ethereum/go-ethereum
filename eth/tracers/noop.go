@@ -73,6 +73,19 @@ func (*NoopTracer) CaptureTxStart(tx *types.Transaction) {}
 
 func (*NoopTracer) CaptureTxEnd(receipt *types.Receipt) {}
 
+func (*NoopTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+
+func (*NoopTracer) OnNonceChange(a common.Address, prev, new uint64) {}
+
+func (*NoopTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+}
+
+func (*NoopTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+
+func (*NoopTracer) OnLog(log *types.Log) {}
+
+func (*NoopTracer) OnNewAccount(a common.Address) {}
+
 // GetResult returns an empty json object.
 func (t *NoopTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
