@@ -45,6 +45,11 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// txMaxBroadcastSize is the max size of a transaction that will be broadcasted.
+	// All transactions with a higher size will be announced and need to be fetched
+	// by the peer.
+	txMaxBroadcastSize = 4096
 )
 
 var (
@@ -564,8 +569,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
+
+		var numDirect int
+		if tx.Size() <= txMaxBroadcastSize {
+			numDirect = int(math.Sqrt(float64(len(peers))))
+		}
 		// Send the tx unconditionally to a subset of our peers
-		numDirect := int(math.Sqrt(float64(len(peers))))
 		for _, peer := range peers[:numDirect] {
 			txset[peer] = append(txset[peer], tx.Hash())
 		}
