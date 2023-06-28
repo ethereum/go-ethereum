@@ -332,6 +332,8 @@ func TestPrecompiledBLS12381G2MultiExpFail(t *testing.T) { testJsonFail("blsG2Mu
 func TestPrecompiledBLS12381PairingFail(t *testing.T)    { testJsonFail("blsPairing", "10", t) }
 func TestPrecompiledBLS12381MapG1Fail(t *testing.T)      { testJsonFail("blsMapG1", "11", t) }
 func TestPrecompiledBLS12381MapG2Fail(t *testing.T)      { testJsonFail("blsMapG2", "12", t) }
+func TestPrecompiledModExpFail(t *testing.T)             { testJsonFail("modexp", "05", t) }
+func TestPrecompiledModExpEip2565Fail(t *testing.T)      { testJsonFail("modexp_eip2565", "f5", t) }
 
 func loadJson(name string) ([]precompiledTest, error) {
 	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
