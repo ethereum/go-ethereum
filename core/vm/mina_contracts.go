@@ -2,22 +2,22 @@ package vm
 
 // Solidity interfaces for precompiles
 //
-// enum NetworkId {
+// enum HashParameter {
 //     MAINNET,
 //     TESTNET,
-//     NULLNET
+//     EMPTY
 // }
 //
 // interface IHasher {
 //     function poseidonHash(
-//         NetworkId networkId,
+//         HashParameter hashParameter,
 //         bytes32[] memory fields
 //     ) external view returns (bytes32);
 // }
 //
 // interface ISigner {
 //     function verify(
-//         NetworkId networkId,
+//         HashParameter hashParameter,
 //         bytes32 pubKeyX,
 //         bytes32 pubKeyY,
 //         bytes32 signatureRX,
@@ -79,7 +79,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	calldata := input[4:]
 
 	unpacked, err := (abi.Arguments{{
-		Type: sol_uint8}, // networkId
+		Type: sol_uint8}, // hashParameter
 		{Type: sol_bytes32Arr}, // fields
 	}).Unpack(calldata)
 
@@ -87,7 +87,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 		return packErr("Unable to unpack calldata"), err
 	}
 
-	networkId := unpacked[0].(uint8)
+	hashParameter := unpacked[0].(uint8)
 	fields := unpacked[1].([][32]uint8)
 
 	output_buffer := [32]byte{}
@@ -100,7 +100,7 @@ func (c *MinaPoseidon) Run(input []byte) ([]byte, error) {
 	}
 
 	if !C.poseidon(
-		C.uint8_t(networkId),
+		C.uint8_t(hashParameter),
 		fields_ptr,
 		C.uintptr_t(len(fields)),
 		(*C.uint8_t)(&output_buffer[0]),
@@ -128,7 +128,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	calldata := input[4:]
 
 	unpacked, err := (abi.Arguments{
-		{Type: sol_uint8},      // networkId
+		{Type: sol_uint8},      // hashParameter
 		{Type: sol_bytes32},    // pubKeyX
 		{Type: sol_bytes32},    // pubKeyY
 		{Type: sol_bytes32},    // signatureRX
@@ -140,7 +140,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 		return packErr("Unable to unpack calldata"), err
 	}
 
-	networkId := unpacked[0].(uint8)
+	hashParameter := unpacked[0].(uint8)
 	pubKeyX := unpacked[1].([32]uint8)
 	pubKeyY := unpacked[2].([32]uint8)
 	signatureRX := unpacked[3].([32]uint8)
@@ -157,7 +157,7 @@ func (c *MinaSigner) Run(input []byte) ([]byte, error) {
 	}
 
 	if !C.verify(
-		C.uint8_t(networkId),
+		C.uint8_t(hashParameter),
 		(*C.uint8_t)(&pubKeyX[0]),
 		(*C.uint8_t)(&pubKeyY[0]),
 		(*C.uint8_t)(&signatureRX[0]),

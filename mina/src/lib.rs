@@ -2,7 +2,7 @@ mod mina;
 
 use std::array::TryFromSliceError;
 
-use mina::{Message, NetworkId};
+use mina::{HashParameter, Message};
 use mina_signer::{BaseField, CurvePoint, PubKey, ScalarField, Signature};
 use o1_utils::FieldHelpers;
 
@@ -24,9 +24,9 @@ pub unsafe extern "C" fn poseidon(
     }
 
     let network_id = match network_id {
-        0x00 => NetworkId::Mainnet,
-        0x01 => NetworkId::Testnet,
-        0x02 => NetworkId::Nullnet,
+        0x00 => HashParameter::Mainnet,
+        0x01 => HashParameter::Testnet,
+        0x02 => HashParameter::Empty,
         _ => return false,
     };
 
@@ -81,9 +81,9 @@ pub unsafe extern "C" fn verify(
     }
 
     let network_id = match network_id {
-        0x00 => NetworkId::Mainnet,
-        0x01 => NetworkId::Testnet,
-        0x02 => NetworkId::Nullnet,
+        0x00 => HashParameter::Mainnet,
+        0x01 => HashParameter::Testnet,
+        0x02 => HashParameter::Empty,
         _ => return false,
     };
 
