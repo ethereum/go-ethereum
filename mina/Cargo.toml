@@ -9,9 +9,12 @@ edition = "2021"
 crate-type = ["staticlib"]
 
 [dependencies]
-mina-hasher = { git = "https://github.com/o1-labs/proof-systems", tag = "0.1.0", version = "0.1.0" }
-mina-signer = { git = "https://github.com/o1-labs/proof-systems", tag = "0.1.0", version = "0.1.0" }
-o1-utils = { git = "https://github.com/o1-labs/proof-systems", tag = "0.1.0", version = "0.1.0" }
+mina-tree = { version = "0.1.0", path = "../../ledger" }
+mina-p2p-messages = { git = "https://github.com/openmina/mina-p2p-messages-rs", branch = "signed-amount", features = ["hashing"] }
+mina-hasher = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+mina-signer = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+o1-utils = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+binprot = { git = "https://github.com/openmina/binprot-rs", rev = "ead5ba916725abf8ab212b89985b47c79d1a006a" }
 
 [build-dependencies]
 cbindgen = "0.24.3"
@@ -20,3 +23,15 @@ cbindgen = "0.24.3"
 num-bigint = "0.4.3"
 serde = "1.0.160"
 serde_json = "1.0.96"
+
+[patch.crates-io]
+ark-ff = { git = "https://github.com/openmina/algebra", branch = "openmina" }
+ark-ec = { git = "https://github.com/openmina/algebra", branch = "openmina" }
+ark-poly = { git = "https://github.com/openmina/algebra", branch = "openmina" }
+ark-serialize = { git = "https://github.com/openmina/algebra", branch = "openmina" }
+
+[patch.'https://github.com/o1-labs/proof-systems']
+mina-hasher = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+mina-signer = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+mina-curves = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
+o1-utils = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }

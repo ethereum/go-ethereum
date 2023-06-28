@@ -24,3 +24,10 @@ bool verify(uint8_t network_id,
             const uint8_t *field_ptr,
             uintptr_t field_len,
             bool *output_ptr);
+
+/**
+ *  * # Safety  * this functions accepts raw pointer from golang
+ */
+bool transaction_commitment(const uint8_t *zkapp_command_ptr,
+                            uintptr_t zkapp_command_len,
+                            uint8_t *output_ptr);

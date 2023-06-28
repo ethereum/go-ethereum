@@ -105,7 +105,7 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 var PrecompiledContractsMina = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x50}): &MinaPoseidon{},
+	common.BytesToAddress([]byte{0x50}): &MinaHasher{},
 	common.BytesToAddress([]byte{0x51}): &MinaSigner{},
 }
 
