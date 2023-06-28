@@ -112,7 +112,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	if evm.Config.Tracer != nil {
-		evm.Config.Tracer.CaptureTxStart(tx)
+		evm.Config.Tracer.CaptureTxStart(evm, tx)
 		defer func() {
 			evm.Config.Tracer.CaptureTxEnd(receipt)
 		}()

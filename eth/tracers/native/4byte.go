@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -47,6 +48,7 @@ func init() {
 //	}
 type fourByteTracer struct {
 	tracers.NoopTracer
+	env               *vm.EVM
 	ids               map[string]int   // ids aggregates the 4byte ids found
 	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	reason            error            // Textual reason for the interruption
@@ -78,13 +80,16 @@ func (t *fourByteTracer) store(id []byte, size int) {
 	t.ids[key] += 1
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+	t.env = env
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
+	rules := t.env.ChainConfig().Rules(t.env.Context.BlockNumber, t.env.Context.Random != nil, t.env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
+}
 
-	// Save the outer calldata also
+// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
+func (t *fourByteTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	// Save the outer calldata
 	if len(input) >= 4 {
 		t.store(input[0:4], len(input)-4)
 	}

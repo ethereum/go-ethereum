@@ -107,7 +107,6 @@ type jsTracer struct {
 	activePrecompiles []common.Address      // List of active precompiles at current block
 	traceStep         bool                  // True if tracer object exposes a `step()` method
 	traceFrame        bool                  // True if tracer object exposes the `enter()` and `exit()` methods
-	gasLimit          uint64                // Amount of gas bought for the whole tx
 	err               error                 // Any error that should stop tracing
 	obj               *goja.Object          // Trace object
 
@@ -215,8 +214,17 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracer
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(tx *types.Transaction) {
-	t.gasLimit = tx.Gas()
+func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+	t.env = env
+	// Need statedb access for db object
+	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
+	t.dbValue = db.setupObject()
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
+	t.activePrecompiles = vm.ActivePrecompiles(rules)
+	t.ctx["block"] = t.vm.ToValue(t.env.Context.BlockNumber.Uint64())
+	t.ctx["gasPrice"] = t.vm.ToValue(t.env.TxContext.GasPrice)
+	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
 }
 
 // CaptureTxEnd implements the Tracer interface and is invoked at the end of
@@ -226,10 +234,7 @@ func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt) {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
-	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
-	t.dbValue = db.setupObject()
+func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	if create {
 		t.ctx["type"] = t.vm.ToValue("CREATE")
 	} else {
@@ -238,18 +243,12 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["from"] = t.vm.ToValue(from.Bytes())
 	t.ctx["to"] = t.vm.ToValue(to.Bytes())
 	t.ctx["input"] = t.vm.ToValue(input)
-	t.ctx["gas"] = t.vm.ToValue(t.gasLimit)
-	t.ctx["gasPrice"] = t.vm.ToValue(env.TxContext.GasPrice)
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
 		t.err = err
 		return
 	}
 	t.ctx["value"] = valueBig
-	t.ctx["block"] = t.vm.ToValue(env.Context.BlockNumber.Uint64())
-	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.

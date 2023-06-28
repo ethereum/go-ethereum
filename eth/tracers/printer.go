@@ -16,7 +16,7 @@ func NewPrinter() *Printer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (p *Printer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (p *Printer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	fmt.Printf("CaptureStart: from=%v, to=%v, create=%v, input=%v, gas=%v, value=%v\n", from, to, create, input, gas, value)
 }
 
@@ -49,7 +49,7 @@ func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	fmt.Printf("CaptureExit: output=%v, gasUsed=%v, err=%v\n", output, gasUsed, err)
 }
 
-func (p *Printer) CaptureTxStart(tx *types.Transaction) {
+func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	fmt.Printf("CaptureTxStart: tx=%v\n", tx)
 
 }

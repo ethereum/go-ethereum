@@ -790,7 +790,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.SetTxContext(tx.Hash(), i)
-		vmConf.Tracer.CaptureTxStart(tx)
+		vmConf.Tracer.CaptureTxStart(vmenv, tx)
 		vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		vmConf.Tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
 		if writer != nil {
@@ -973,7 +973,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	tracer.CaptureTxStart(tx)
+	tracer.CaptureTxStart(vmenv, tx)
 	res, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)

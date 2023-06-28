@@ -146,11 +146,8 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
-	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
+func (t *flatCallTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.tracer.CaptureStart(from, to, create, input, gas, value)
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -203,8 +200,11 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(tx *types.Transaction) {
-	t.tracer.CaptureTxStart(tx)
+func (t *flatCallTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+	t.tracer.CaptureTxStart(env, tx)
+	// Update list of precompiles based on current block
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
+	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt) {

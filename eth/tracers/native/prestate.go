@@ -19,6 +19,7 @@ package native
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -61,7 +62,6 @@ type prestateTracer struct {
 	post      state
 	create    bool
 	to        common.Address
-	gasLimit  uint64 // Amount of gas bought for the whole tx
 	config    prestateTracerConfig
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -90,31 +90,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
-	t.create = create
-	t.to = to
-
-	t.lookupAccount(from)
-	t.lookupAccount(to)
-	t.lookupAccount(env.Context.Coinbase)
-
-	// The recipient balance includes the value transferred.
-	toBal := new(big.Int).Sub(t.pre[to].Balance, value)
-	t.pre[to].Balance = toBal
-
-	// The sender balance is after reducing: value and gasLimit.
-	// We need to re-add them to get the pre-tx balance.
-	fromBal := new(big.Int).Set(t.pre[from].Balance)
-	gasPrice := env.TxContext.GasPrice
-	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
-	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
-	t.pre[from].Balance = fromBal
-	t.pre[from].Nonce--
-
-	if create && t.config.DiffMode {
-		t.created[to] = true
-	}
+func (t *prestateTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -175,8 +151,29 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(tx *types.Transaction) {
-	t.gasLimit = tx.Gas()
+func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+	t.env = env
+	signer := types.MakeSigner(env.ChainConfig(), env.Context.BlockNumber, env.Context.Time)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		t.Stop(fmt.Errorf("could not recover sender address: %v", err))
+		return
+	}
+	if tx.To() == nil {
+		t.create = true
+		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
+	} else {
+		t.to = *tx.To()
+		t.create = false
+	}
+
+	t.lookupAccount(from)
+	t.lookupAccount(t.to)
+	t.lookupAccount(env.Context.Coinbase)
+
+	if t.create && t.config.DiffMode {
+		t.created[t.to] = true
+	}
 }
 
 func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt) {

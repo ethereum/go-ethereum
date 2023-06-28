@@ -151,7 +151,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			tracer.CaptureTxStart(tx)
+			tracer.CaptureTxStart(evm, tx)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
@@ -266,17 +266,13 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 func TestInternals(t *testing.T) {
 	var (
-		config    = params.AllEthashProtocolChanges
+		config    = params.MainnetChainConfig
 		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 		originHex = "0x71562b71999873db5b286df957af199ec94617f7"
 		origin    = common.HexToAddress(originHex)
 		signer    = types.LatestSigner(config)
 		key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		txContext = vm.TxContext{
-			Origin:   origin,
-			GasPrice: big.NewInt(1),
-		}
-		context = vm.BlockContext{
+		context   = vm.BlockContext{
 			CanTransfer: core.CanTransfer,
 			Transfer:    core.Transfer,
 			Coinbase:    common.Address{},
@@ -284,6 +280,7 @@ func TestInternals(t *testing.T) {
 			Time:        5,
 			Difficulty:  big.NewInt(0x30000),
 			GasLimit:    uint64(6000000),
+			BaseFee:     new(big.Int),
 		}
 	)
 	mkTracer := func(name string, cfg json.RawMessage) tracers.Tracer {
@@ -349,7 +346,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52640350"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 	} {
 		_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(),
@@ -362,21 +359,25 @@ func TestInternals(t *testing.T) {
 				},
 			}, false)
 		statedb.SetLogger(tc.tracer)
-		evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
 		tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
 			To:       &to,
 			Value:    big.NewInt(0),
 			Gas:      50000,
-			GasPrice: big.NewInt(0),
+			GasPrice: new(big.Int),
 		})
 		if err != nil {
 			t.Fatalf("test %v: failed to sign transaction: %v", tc.name, err)
 		}
+		txContext := vm.TxContext{
+			Origin:   origin,
+			GasPrice: tx.GasPrice(),
+		}
+		evm := vm.NewEVM(context, txContext, statedb, config, vm.Config{Tracer: tc.tracer})
 		msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 		if err != nil {
 			t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 		}
-		tc.tracer.CaptureTxStart(tx)
+		tc.tracer.CaptureTxStart(evm, tx)
 		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)

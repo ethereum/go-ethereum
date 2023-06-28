@@ -132,7 +132,7 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (a *AccessListTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
@@ -172,7 +172,7 @@ func (*AccessListTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 
 func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*AccessListTracer) CaptureTxStart(tx *types.Transaction) {}
+func (*AccessListTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
 func (*AccessListTracer) CaptureTxEnd(receipt *types.Receipt) {}
 
