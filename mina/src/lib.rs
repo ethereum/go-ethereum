@@ -8,8 +8,12 @@ use o1_utils::FieldHelpers;
 
 pub const FIELD_SIZE: usize = 32;
 
+/**
+ * # Safety
+ * this functions accepts raw pointer from golang
+ */
 #[no_mangle]
-pub extern "C" fn poseidon(
+pub unsafe extern "C" fn poseidon(
     network_id: u8,
     field_ptr: *const u8,
     field_len: usize,
@@ -20,9 +24,9 @@ pub extern "C" fn poseidon(
     }
 
     let network_id = match network_id {
-        0x00 => NetworkId::MAINNET,
-        0x01 => NetworkId::TESTNET,
-        0x02 => NetworkId::NULLNET,
+        0x00 => NetworkId::Mainnet,
+        0x01 => NetworkId::Testnet,
+        0x02 => NetworkId::Nullnet,
         _ => return false,
     };
 
@@ -51,8 +55,12 @@ pub extern "C" fn poseidon(
     true
 }
 
+/**
+ * # Safety
+ * this functions accepts raw pointer from golang
+ */
 #[no_mangle]
-pub extern "C" fn verify(
+pub unsafe extern "C" fn verify(
     network_id: u8,
     pubkey_x: *const u8,
     pubkey_y: *const u8,
@@ -73,9 +81,9 @@ pub extern "C" fn verify(
     }
 
     let network_id = match network_id {
-        0x00 => NetworkId::MAINNET,
-        0x01 => NetworkId::TESTNET,
-        0x02 => NetworkId::NULLNET,
+        0x00 => NetworkId::Mainnet,
+        0x01 => NetworkId::Testnet,
+        0x02 => NetworkId::Nullnet,
         _ => return false,
     };
 
@@ -161,19 +169,17 @@ mod tests {
             let input = test_vector
                 .input
                 .iter()
-                .map(|input| BaseField::from_hex(input).unwrap().to_bytes())
-                .flatten()
+                .flat_map(|input| BaseField::from_hex(input).unwrap().to_bytes())
                 .collect::<Vec<u8>>();
 
-            assert_eq!(
-                poseidon(
+            unsafe {
+                assert!(poseidon(
                     0x02,
                     input.as_ptr(),
                     test_vector.input.len(),
                     output.as_mut_ptr()
-                ),
-                true
-            );
+                ))
+            };
 
             assert_eq!(
                 BaseField::from_bytes(&output).unwrap().to_hex(),
@@ -222,16 +228,15 @@ mod tests {
             let fields = test_vector
                 .fields
                 .iter()
-                .map(|input| {
-                    BaseField::from_biguint(&BigUint::from_str(&input).unwrap())
+                .flat_map(|input| {
+                    BaseField::from_biguint(&BigUint::from_str(input).unwrap())
                         .unwrap()
                         .to_bytes()
                 })
-                .flatten()
                 .collect::<Vec<u8>>();
 
-            assert_eq!(
-                verify(
+            unsafe {
+                assert!(verify(
                     0x01,
                     pub_key_x.as_ptr(),
                     pub_key_y.as_ptr(),
@@ -240,9 +245,8 @@ mod tests {
                     fields.as_ptr(),
                     test_vector.fields.len(),
                     &mut output
-                ),
-                true
-            );
+                ))
+            };
 
             assert_eq!(output, test_vector.output);
         }
@@ -250,12 +254,9 @@ mod tests {
 
     #[test]
     fn null_pointer() {
-        assert_eq!(
-            poseidon(0x00, std::ptr::null(), 1, std::ptr::null_mut()),
-            false
-        );
-        assert_eq!(
-            verify(
+        unsafe {
+            assert!(!poseidon(0x00, std::ptr::null(), 1, std::ptr::null_mut()));
+            assert!(!verify(
                 0x00,
                 std::ptr::null(),
                 std::ptr::null(),
@@ -264,8 +265,7 @@ mod tests {
                 std::ptr::null(),
                 0,
                 std::ptr::null_mut()
-            ),
-            false
-        );
+            ));
+        }
     }
 }

@@ -5,9 +5,9 @@ use o1_utils::{field_helpers::FieldHelpersError, FieldHelpers};
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub enum NetworkId {
-    MAINNET = 0x00,
-    TESTNET = 0x01,
-    NULLNET = 0x02,
+    Mainnet = 0x00,
+    Testnet = 0x01,
+    Nullnet = 0x02,
 }
 
 impl From<NetworkId> for u8 {
@@ -49,9 +49,9 @@ impl Hashable for Message {
 
     fn domain_string(network_id: NetworkId) -> Option<String> {
         match network_id {
-            NetworkId::MAINNET => "MinaSignatureMainnet".to_string().into(),
-            NetworkId::TESTNET => "CodaSignature".to_string().into(),
-            NetworkId::NULLNET => None,
+            NetworkId::Mainnet => "MinaSignatureMainnet".to_string().into(),
+            NetworkId::Testnet => "CodaSignature".to_string().into(),
+            NetworkId::Nullnet => None,
         }
     }
 }
