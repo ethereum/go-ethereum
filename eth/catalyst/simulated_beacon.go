@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,50 +34,34 @@ import (
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawalQueue struct {
-	// pending holds withdrawals that will be included in a future block
-	pending []*types.Withdrawal
-	mu      sync.Mutex
-}
-
-// queued returns withdrawals which are pending inclusion in the next block
-func (w *withdrawalQueue) queued() []*types.Withdrawal {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	var queueCount int
-	if len(w.pending) >= 10 {
-		queueCount = 10
-	} else {
-		queueCount = len(w.pending)
-	}
-
-	p := make([]*types.Withdrawal, queueCount)
-	copy(p, w.pending[0:queueCount])
-	return p
+	// TODO: implement closing logic for this channel
+	pending chan *types.Withdrawal
 }
 
 // add queues a withdrawal for future inclusion
 func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.pending = append(w.pending, withdrawal)
+	select {
+	case w.pending <- withdrawal:
+		break
+	default:
+		return errors.New("withdrawal queue full")
+	}
 	return nil
 }
 
-// clearQueued shifts up to 10 withdrawals out of the queue
-func (w *withdrawalQueue) clearQueued(count int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if count > 10 {
-		count = 10
+func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
+	withdrawals := []*types.Withdrawal{}
+	for {
+		select {
+		case withdrawal := <-w.pending:
+			withdrawals = append(withdrawals, withdrawal)
+			if len(withdrawals) == maxCount {
+				break
+			}
+		default:
+			return withdrawals
+		}
 	}
-	if len(w.pending) < count {
-		count = len(w.pending)
-	}
-
-	w.pending = append([]*types.Withdrawal{}, w.pending[count:]...)
 }
 
 type SimulatedBeacon struct {
@@ -121,6 +106,7 @@ func NewSimulatedBeacon(eth *eth.Ethereum) (*SimulatedBeacon, error) {
 		engineAPI:          engineAPI,
 		lastBlockTime:      header.Time,
 		curForkchoiceState: current,
+		withdrawals:        withdrawalQueue{make(chan *types.Withdrawal, 20)},
 	}, nil
 }
 
@@ -132,7 +118,11 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine
 func (c *SimulatedBeacon) Start() error {
-	go c.loop()
+	if c.period == 0 {
+		go c.loopOnDemand()
+	} else {
+		go c.loop()
+	}
 	return nil
 }
 
@@ -142,8 +132,7 @@ func (c *SimulatedBeacon) Stop() error {
 	return nil
 }
 
-// beginSealing instructs the client to begin building a payload.
-func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
+func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	tstamp := uint64(time.Now().Unix())
 	if tstamp <= c.lastBlockTime {
 		tstamp = c.lastBlockTime + 1
@@ -152,31 +141,28 @@ func (c *SimulatedBeacon) beginSealing() (engine.ForkChoiceResponse, error) {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
-	return c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
+	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
 		SuggestedFeeRecipient: feeRecipient,
-		Withdrawals:           c.withdrawals.queued(),
+		Withdrawals:           withdrawals,
 	})
-}
+	if err != nil {
+		return fmt.Errorf("error calling forkchoice update: %v", err)
+	}
 
-// finalizeSealing retrieves a completed payload and marks it as canonical if it contains transactions or withdrawals.
-func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) error {
-	envelope, err := c.engineAPI.GetFullPayload(*id)
+	envelope, err := c.engineAPI.GetFullPayload(*fcResponse.PayloadID)
+	if err != nil {
+		return fmt.Errorf("error retrieving payload: %v", err)
+	}
+
+	// TODO: this is a bit of a hack.  need to modify payload builder to stop payload w/ GetFullPayload
+	_, _ = c.engineAPI.GetPayloadV1(*fcResponse.PayloadID)
 	if err != nil {
 		return fmt.Errorf("error retrieving payload: %v", err)
 	}
 
 	payload := envelope.ExecutionPayload
 
-	if onDemand && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
-		// If the payload is empty, despite there being pending transactions,
-		// that indicates that we need to give it more time to build the block.
-		if c.buildWaitTime < 10*time.Second {
-			c.buildWaitTime += c.buildWaitTime
-		}
-		return nil
-	}
-	c.buildWaitTime = 100 * time.Millisecond // Reset it
 	// mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
 		return fmt.Errorf("failed to mark payload as canonical: %v", err)
@@ -190,53 +176,54 @@ func (c *SimulatedBeacon) finalizeSealing(id *engine.PayloadID, onDemand bool) e
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return fmt.Errorf("failed to mark block as canonical: %v", err)
 	}
-	c.withdrawals.clearQueued(len(payload.Withdrawals))
 	c.lastBlockTime = payload.Timestamp
 	return nil
 }
 
-// loop manages the lifecycle of the SimulatedBeacon.
-// It drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs.
-func (c *SimulatedBeacon) loop() {
-	ticker := time.NewTimer(time.Second * time.Duration(c.period))
-	var fcId *engine.PayloadID
-	if fc, err := c.beginSealing(); err != nil {
-		log.Error("Error starting sealing-work", "err", err)
-		return
-	} else {
-		fcId = fc.PayloadID
-	}
-	onDemand := (c.period == 0)
+func (c *SimulatedBeacon) loopOnDemand() {
+	var (
+		newTxs = make(chan core.NewTxsEvent)
+		sub    = c.eth.TxPool().SubscribeNewTxsEvent(newTxs)
+	)
+	defer sub.Unsubscribe()
+
 	for {
 		select {
 		case <-c.shutdownCh:
 			return
-		case t := <-ticker.C:
-			if onDemand {
-				// Do nothing as long as blocks are empty
-				if pendingTxs, _ := c.eth.APIBackend.TxPool().Stats(); pendingTxs == 0 && len(c.withdrawals.queued()) == 0 {
-					ticker.Reset(c.buildWaitTime)
-					continue
-				}
-			}
-			if err := c.finalizeSealing(fcId, onDemand); err != nil {
-				log.Error("Error collecting sealing-work", "err", err)
+		case w := <-c.withdrawals.pending:
+			withdrawals := append(c.withdrawals.gatherPending(9), w)
+			if err := c.sealBlock(withdrawals); err != nil {
+				log.Error("Error performing sealing-work", "err", err)
 				return
 			}
-			if fc, err := c.beginSealing(); err != nil {
-				log.Error("Error starting sealing-work", "err", err)
+		case <-newTxs:
+			fmt.Println("gathering pending")
+			withdrawals := c.withdrawals.gatherPending(10)
+			fmt.Println("done gathering pending")
+			if err := c.sealBlock(withdrawals); err != nil {
+				log.Error("Error performing sealing-work", "err", err)
 				return
-			} else {
-				fcId = fc.PayloadID
 			}
+		}
+	}
+}
 
-			now := time.Now()
-			if onDemand || !now.After(t.Add(time.Duration(c.period))) {
-				ticker.Reset(time.Duration(0))
-			} else {
-				execTime := now.Sub(t)
-				ticker.Reset(time.Duration(c.period) * time.Second - execTime)
+// loop manages the lifecycle of the SimulatedBeacon.
+// it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
+func (c *SimulatedBeacon) loop() {
+	timer := time.NewTimer(time.Duration(0))
+	for {
+		select {
+		case <-c.shutdownCh:
+			return
+		case <-timer.C:
+			withdrawals := c.withdrawals.gatherPending(10)
+			if err := c.sealBlock(withdrawals); err != nil {
+				log.Error("Error performing sealing-work", "err", err)
+				return
 			}
+			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
 }
