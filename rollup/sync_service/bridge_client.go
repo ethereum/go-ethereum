@@ -72,12 +72,12 @@ func (c *BridgeClient) fetchMessagesInRange(ctx context.Context, from, to uint64
 		event := it.Event
 		log.Trace("Received new L1 QueueTransaction event", "event", event)
 
-		if !event.QueueIndex.IsUint64() || !event.GasLimit.IsUint64() {
+		if !event.GasLimit.IsUint64() {
 			return nil, fmt.Errorf("invalid QueueTransaction event: QueueIndex = %v, GasLimit = %v", event.QueueIndex, event.GasLimit)
 		}
 
 		msgs = append(msgs, types.L1MessageTx{
-			QueueIndex: event.QueueIndex.Uint64(),
+			QueueIndex: event.QueueIndex,
 			Gas:        event.GasLimit.Uint64(),
 			To:         &event.Target,
 			Value:      event.Value,
