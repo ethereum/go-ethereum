@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/status-im/keycard-go/hexutils"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -255,7 +256,7 @@ func UnpackRevert(data []byte) (string, error) {
 		return "", errors.New("invalid data for unpacking")
 	}
 	if !bytes.Equal(data[:4], revertSelector) {
-		return "", errors.New("invalid data for unpacking")
+		return hexutils.BytesToHex(data), nil
 	}
 	typ, err := NewType("string", "", nil)
 	if err != nil {
