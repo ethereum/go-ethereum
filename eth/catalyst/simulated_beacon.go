@@ -49,6 +49,7 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	return nil
 }
 
+// gatherPending returns a number of queued withdrawals up to a maximum count
 func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
 	withdrawals := []*types.Withdrawal{}
 	for {
@@ -198,9 +199,7 @@ func (c *SimulatedBeacon) loopOnDemand() {
 				return
 			}
 		case <-newTxs:
-			fmt.Println("gathering pending")
 			withdrawals := c.withdrawals.gatherPending(10)
-			fmt.Println("done gathering pending")
 			if err := c.sealBlock(withdrawals); err != nil {
 				log.Error("Error performing sealing-work", "err", err)
 				return
