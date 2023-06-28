@@ -295,8 +295,8 @@ func testGetCode(t *testing.T, protocol int) {
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
-			BHash:  header.Hash(),
-			AccKey: crypto.Keccak256(testContractAddr[:]),
+			BHash:          header.Hash(),
+			AccountAddress: testContractAddr[:],
 		}
 		codereqs = append(codereqs, req)
 		if i >= testContractDeployed {
@@ -331,8 +331,8 @@ func testGetStaleCode(t *testing.T, protocol int) {
 
 	check := func(number uint64, expected [][]byte) {
 		req := &CodeReq{
-			BHash:  bc.GetHeaderByNumber(number).Hash(),
-			AccKey: crypto.Keccak256(testContractAddr[:]),
+			BHash:          bc.GetHeaderByNumber(number).Hash(),
+			AccountAddress: testContractAddr[:],
 		}
 		sendRequest(rawPeer.app, GetCodeMsg, 42, []*CodeReq{req})
 		if err := expectResponse(rawPeer.app, CodeMsg, 42, testBufLimit, expected); err != nil {
