@@ -87,9 +87,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
-		if vmenv.Config.Tracer != nil {
-			vmenv.Config.Tracer.CaptureTxStart(tx)
-		}
+
 		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if vmenv.Config.Tracer != nil {
 			vmenv.Config.Tracer.CaptureTxEnd(receipt)
@@ -112,6 +110,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+	var receipt *types.Receipt
+	if evm.Config.Tracer != nil {
+		evm.Config.Tracer.CaptureTxStart(tx)
+		defer func() {
+			evm.Config.Tracer.CaptureTxEnd(receipt)
+		}()
+	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -133,7 +138,7 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	receipt = &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 	} else {
