@@ -268,6 +268,11 @@ var (
 		Usage:    "Manually specify the Cancun fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	OverrideVerkle = &cli.Uint64Flag{
+		Name:     "override.verkle",
+		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
 		Name:     "light.serve",
