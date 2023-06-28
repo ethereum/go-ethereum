@@ -34,7 +34,6 @@ import (
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
 type withdrawalQueue struct {
-	// TODO: implement closing logic for this channel
 	pending chan *types.Withdrawal
 }
 
@@ -133,6 +132,7 @@ func (c *SimulatedBeacon) Stop() error {
 	return nil
 }
 
+// sealBlock initiates payload building for a new block and creates a new block with the completed payload
 func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	tstamp := uint64(time.Now().Unix())
 	if tstamp <= c.lastBlockTime {
@@ -181,6 +181,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	return nil
 }
 
+// loopOnDemand runs the block production loop for "on-demand" configuration (period = 0)
 func (c *SimulatedBeacon) loopOnDemand() {
 	var (
 		newTxs = make(chan core.NewTxsEvent)
@@ -208,8 +209,7 @@ func (c *SimulatedBeacon) loopOnDemand() {
 	}
 }
 
-// loop manages the lifecycle of the SimulatedBeacon.
-// it drives block production, taking the role of a CL client and interacting with Geth via public engine/eth APIs
+// loopOnDemand runs the block production loop for non-zero period configuration
 func (c *SimulatedBeacon) loop() {
 	timer := time.NewTimer(time.Duration(0))
 	for {
