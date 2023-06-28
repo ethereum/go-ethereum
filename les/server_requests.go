@@ -304,16 +304,16 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				continue
 			}
 			triedb := bc.StateCache().TrieDB()
-
-			account, err := getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
+			address := common.BytesToAddress(request.AccountAddress)
+			account, err := getAccount(triedb, header.Root, address)
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", address, "err", err)
 				p.bumpInvalid()
 				continue
 			}
-			code, err := bc.StateCache().ContractCode(common.BytesToHash(request.AccKey), common.BytesToHash(account.CodeHash))
+			code, err := bc.StateCache().ContractCode(address, common.BytesToHash(account.CodeHash))
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
+				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", address, "codehash", common.BytesToHash(account.CodeHash), "err", err)
 				continue
 			}
 			// Accumulate the code and abort if enough data was retrieved
@@ -413,7 +413,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			statedb := bc.StateCache()
 
 			var trie state.Trie
-			switch len(request.AccKey) {
+			switch len(request.AccountAddress) {
 			case 0:
 				// No account key specified, open an account trie
 				trie, err = statedb.OpenTrie(root)
@@ -423,15 +423,16 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 			default:
 				// Account key specified, open a storage trie
-				account, err := getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
+				address := common.BytesToAddress(request.AccountAddress)
+				account, err := getAccount(statedb.TrieDB(), root, address)
 				if err != nil {
-					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", address, "err", err)
 					p.bumpInvalid()
 					continue
 				}
-				trie, err = statedb.OpenStorageTrie(root, common.BytesToHash(request.AccKey), account.Root)
+				trie, err = statedb.OpenStorageTrie(root, address, account.Root)
 				if trie == nil || err != nil {
-					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
+					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", address, "root", account.Root, "err", err)
 					continue
 				}
 			}
