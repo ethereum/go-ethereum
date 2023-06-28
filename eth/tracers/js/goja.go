@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/dop251/goja"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -214,14 +215,14 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracer
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(gasLimit uint64) {
-	t.gasLimit = gasLimit
+func (t *jsTracer) CaptureTxStart(tx *types.Transaction) {
+	t.gasLimit = tx.Gas()
 }
 
 // CaptureTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
-func (t *jsTracer) CaptureTxEnd(restGas uint64) {
-	t.ctx["gasUsed"] = t.vm.ToValue(t.gasLimit - restGas)
+func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt) {
+	t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.

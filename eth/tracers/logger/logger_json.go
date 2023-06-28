@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -102,6 +103,6 @@ func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (l *JSONLogger) CaptureTxStart(gasLimit uint64) {}
+func (l *JSONLogger) CaptureTxStart(tx *types.Transaction) {}
 
-func (l *JSONLogger) CaptureTxEnd(restGas uint64) {}
+func (l *JSONLogger) CaptureTxEnd(receipt *types.Receipt) {}

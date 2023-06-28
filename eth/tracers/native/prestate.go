@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -174,11 +175,11 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
-	t.gasLimit = gasLimit
+func (t *prestateTracer) CaptureTxStart(tx *types.Transaction) {
+	t.gasLimit = tx.Gas()
 }
 
-func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
+func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt) {
 	if !t.config.DiffMode {
 		return
 	}

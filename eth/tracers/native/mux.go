@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -115,15 +116,15 @@ func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *muxTracer) CaptureTxStart(gasLimit uint64) {
+func (t *muxTracer) CaptureTxStart(tx *types.Transaction) {
 	for _, t := range t.tracers {
-		t.CaptureTxStart(gasLimit)
+		t.CaptureTxStart(tx)
 	}
 }
 
-func (t *muxTracer) CaptureTxEnd(restGas uint64) {
+func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt) {
 	for _, t := range t.tracers {
-		t.CaptureTxEnd(restGas)
+		t.CaptureTxEnd(receipt)
 	}
 }
 

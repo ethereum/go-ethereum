@@ -49,13 +49,13 @@ func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	fmt.Printf("CaptureExit: output=%v, gasUsed=%v, err=%v\n", output, gasUsed, err)
 }
 
-func (p *Printer) CaptureTxStart(gasLimit uint64) {
-	fmt.Printf("CaptureTxStart: gasLimit=%v\n", gasLimit)
+func (p *Printer) CaptureTxStart(tx *types.Transaction) {
+	fmt.Printf("CaptureTxStart: tx=%v\n", tx)
 
 }
 
-func (p *Printer) CaptureTxEnd(restGas uint64) {
-	fmt.Printf("CaptureTxEnd: restGas=%v\n", restGas)
+func (p *Printer) CaptureTxEnd(receipt *types.Receipt) {
+	fmt.Printf("CaptureTxEnd: receipt=%v\n", receipt)
 }
 
 func (p *Printer) CaptureBlockStart(b *types.Block) {

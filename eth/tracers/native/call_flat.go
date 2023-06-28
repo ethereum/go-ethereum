@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -202,12 +203,12 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {
-	t.tracer.CaptureTxStart(gasLimit)
+func (t *flatCallTracer) CaptureTxStart(tx *types.Transaction) {
+	t.tracer.CaptureTxStart(tx)
 }
 
-func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
-	t.tracer.CaptureTxEnd(restGas)
+func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt) {
+	t.tracer.CaptureTxEnd(receipt)
 }
 
 // GetResult returns an empty json object.

@@ -119,10 +119,12 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if _, err = st.TransitionDb(); err != nil {
+			tracer.CaptureTxStart(tx)
+			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
+			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
 			// Retrieve the trace result and compare against the expected
 			res, err := tracer.GetResult()
 			if err != nil {

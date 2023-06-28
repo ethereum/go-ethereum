@@ -18,6 +18,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -148,10 +150,12 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
+			tracer.CaptureTxStart(tx)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
+			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
 			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
@@ -261,8 +265,12 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 func TestInternals(t *testing.T) {
 	var (
+		config    = params.AllEthashProtocolChanges
 		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")
+		originHex = "0x71562b71999873db5b286df957af199ec94617f7"
+		origin    = common.HexToAddress(originHex)
+		signer    = types.LatestSigner(config)
+		key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		txContext = vm.TxContext{
 			Origin:   origin,
 			GasPrice: big.NewInt(1),
@@ -302,13 +310,13 @@ func TestInternals(t *testing.T) {
 				byte(vm.CALL),
 			},
 			tracer: mkTracer("callTracer", nil),
-			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`,
+			want:   fmt.Sprintf(`{"from":"%s","gas":"0xc350","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			name:   "Stack depletion in LOG0",
 			code:   []byte{byte(vm.LOG3)},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0xc350","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`,
+			want:   fmt.Sprintf(`{"from":"%s","gas":"0xc350","gasUsed":"0xc350","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			name: "Mem expansion in LOG0",
@@ -321,7 +329,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}],"value":"0x0","type":"CALL"}`,
+			want:   fmt.Sprintf(`{"from":"%s","gas":"0xc350","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}],"value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			// Leads to OOM on the prestate tracer
@@ -340,7 +348,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   `{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x000000000000000000000000000000000000feed":{"balance":"0x1c6bf52640350"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"}}`,
+			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52640350"}}`, originHex),
 		},
 	} {
 		_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(),
@@ -353,20 +361,25 @@ func TestInternals(t *testing.T) {
 				},
 			}, false)
 		evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
-		msg := &core.Message{
-			To:                &to,
-			From:              origin,
-			Value:             big.NewInt(0),
-			GasLimit:          50000,
-			GasPrice:          big.NewInt(0),
-			GasFeeCap:         big.NewInt(0),
-			GasTipCap:         big.NewInt(0),
-			SkipAccountChecks: false,
+		tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
+			To:       &to,
+			Value:    big.NewInt(0),
+			Gas:      50000,
+			GasPrice: big.NewInt(0),
+		})
+		if err != nil {
+			t.Fatalf("test %v: failed to sign transaction: %v", tc.name, err)
 		}
-		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if _, err := st.TransitionDb(); err != nil {
+		msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
+		if err != nil {
+			t.Fatalf("test %v: failed to create message: %v", tc.name, err)
+		}
+		tc.tracer.CaptureTxStart(tx)
+		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		if err != nil {
 			t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 		}
+		tc.tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
 		// Retrieve the trace result and compare against the expected
 		res, err := tc.tracer.GetResult()
 		if err != nil {

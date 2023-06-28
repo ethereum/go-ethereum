@@ -109,12 +109,11 @@ type StructLogger struct {
 	cfg Config
 	env *vm.EVM
 
-	storage  map[common.Address]Storage
-	logs     []StructLog
-	output   []byte
-	err      error
-	gasLimit uint64
-	usedGas  uint64
+	storage map[common.Address]Storage
+	logs    []StructLog
+	output  []byte
+	err     error
+	usedGas uint64
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -266,12 +265,10 @@ func (l *StructLogger) Stop(err error) {
 	l.interrupt.Store(true)
 }
 
-func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
-	l.gasLimit = gasLimit
-}
+func (l *StructLogger) CaptureTxStart(tx *types.Transaction) {}
 
-func (l *StructLogger) CaptureTxEnd(restGas uint64) {
-	l.usedGas = l.gasLimit - restGas
+func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt) {
+	l.usedGas = receipt.GasUsed
 }
 
 // StructLogs returns the captured log entries.
@@ -403,9 +400,9 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
+func (*mdLogger) CaptureTxStart(tx *types.Transaction) {}
 
-func (*mdLogger) CaptureTxEnd(restGas uint64) {}
+func (*mdLogger) CaptureTxEnd(receipt *types.Receipt) {}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction

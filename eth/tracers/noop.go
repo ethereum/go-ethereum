@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -68,9 +69,9 @@ func (t *NoopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (*NoopTracer) CaptureTxStart(gasLimit uint64) {}
+func (*NoopTracer) CaptureTxStart(tx *types.Transaction) {}
 
-func (*NoopTracer) CaptureTxEnd(restGas uint64) {}
+func (*NoopTracer) CaptureTxEnd(receipt *types.Receipt) {}
 
 // GetResult returns an empty json object.
 func (t *NoopTracer) GetResult() (json.RawMessage, error) {

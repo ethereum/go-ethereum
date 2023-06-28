@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
@@ -73,12 +74,12 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 		contract.Code = contractCode
 	}
 
-	tracer.CaptureTxStart(gasLimit)
+	tracer.CaptureTxStart(types.NewTx(&types.LegacyTx{Gas: gasLimit}))
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
 	// Rest gas assumes no refund
-	tracer.CaptureTxEnd(contract.Gas)
+	tracer.CaptureTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas})
 	if err != nil {
 		return nil, err
 	}

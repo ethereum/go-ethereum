@@ -87,7 +87,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
+		if vmenv.Config.Tracer != nil {
+			vmenv.Config.Tracer.CaptureTxStart(tx)
+		}
 		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		if vmenv.Config.Tracer != nil {
+			vmenv.Config.Tracer.CaptureTxEnd(receipt)
+		}
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}

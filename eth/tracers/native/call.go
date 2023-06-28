@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -233,12 +234,12 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) CaptureTxStart(gasLimit uint64) {
-	t.gasLimit = gasLimit
+func (t *callTracer) CaptureTxStart(tx *types.Transaction) {
+	t.gasLimit = tx.Gas()
 }
 
-func (t *callTracer) CaptureTxEnd(restGas uint64) {
-	t.callstack[0].GasUsed = t.gasLimit - restGas
+func (t *callTracer) CaptureTxEnd(receipt *types.Receipt) {
+	t.callstack[0].GasUsed = receipt.GasUsed
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
 		clearFailedLogs(&t.callstack[0], false)
