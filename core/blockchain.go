@@ -215,7 +215,8 @@ type BlockChain struct {
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 
 	// Reorged transactions
-	droppedTxCache *lru.Cache[common.Hash, struct{}]
+	droppedTxCache     *lru.Cache[common.Hash, int]
+	forceLocalBuilding bool
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -271,7 +272,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		blockCache:     lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache:  lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
 		futureBlocks:   lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
-		droppedTxCache: lru.NewCache[common.Hash, struct{}](droppedTxCacheLimit),
+		droppedTxCache: lru.NewCache[common.Hash, int](droppedTxCacheLimit),
 		engine:         engine,
 		vmConfig:       vmConfig,
 	}
@@ -2155,10 +2156,15 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
 	for _, tx := range types.HashDifference(deletedTxs, addedTxs) {
-		if bc.droppedTxCache.Contains(tx) {
-			log.Warn("Transaction reorged twice", "hash", tx)
+		if key, ok := bc.droppedTxCache.Get(tx); ok {
+			if key > 2 {
+				// Transaction dropped at least three times
+				// indicates a censoring event
+				bc.forceLocalBuilding = true
+			}
+			bc.droppedTxCache.Add(tx, key+1)
 		} else {
-			bc.droppedTxCache.Add(tx, struct{}{})
+			bc.droppedTxCache.Add(tx, 1)
 		}
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}

@@ -411,3 +411,8 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
+
+// ShouldForceLocalBuilding returns true if the node suspects transactions being censored.
+func (bc *BlockChain) ShouldForceLocalBuilding() bool {
+	return bc.forceLocalBuilding
+}

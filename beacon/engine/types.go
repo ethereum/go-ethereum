@@ -86,6 +86,7 @@ type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+	OverrideBuilder  bool            `json:"shouldOverrideBuilder"  gencodec:"required"`
 }
 
 type BlobsBundleV1 struct {

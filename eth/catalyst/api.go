@@ -418,6 +418,7 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 	if data == nil {
 		return nil, engine.UnknownPayload
 	}
+	data.OverrideBuilder = api.eth.BlockChain().ShouldForceLocalBuilding()
 	return data, nil
 }
 
