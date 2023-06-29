@@ -45,11 +45,11 @@ Updates the interval for recomitting the miner sealing work.
 
 ## miner_start {#miner-start}
 
-Start the CPU mining process and generate a new DAG if need be.
+Start the CPU mining process.
 
 | Client  | Method invocation                         |
 | :------ | ----------------------------------------- |
-| Go      | `miner.Start() (bool, error)`             |
+| Go      | `miner.Start() error`             |
 | Console | `miner.start()`                           |
 | RPC     | `{"method": "miner_start", "params": []}` |
 
