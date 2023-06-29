@@ -136,6 +136,9 @@ func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing
 	gas := p.RequiredGas(in)
 	t.Run(test.Name, func(t *testing.T) {
 		_, _, err := RunPrecompiledContract(p, in, gas)
+		if err == nil {
+			t.Errorf("Expected error [%v], got nil", test.ExpectedError)
+		}
 		if err.Error() != test.ExpectedError {
 			t.Errorf("Expected error [%v], got [%v]", test.ExpectedError, err)
 		}
@@ -259,6 +262,7 @@ func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJson("bn256ScalarMu
 
 // Tests the sample inputs from the elliptic curve pairing check EIP 197.
 func TestPrecompiledBn256Pairing(t *testing.T)      { testJson("bn256Pairing", "08", t) }
+func TestPrecompiledBn256PairingFail(t *testing.T)  { testJsonFail("bn256Pairing", "08", t) }
 func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJson("bn256Pairing", "08", b) }
 
 func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }
