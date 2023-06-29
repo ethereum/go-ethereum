@@ -276,7 +276,7 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 		return errInvalidToBlock
 	}
 	if crit.FromBlock == nil {
-		return api.liveLogs(ctx, notifier, rpcSub, crit)
+		return api.liveLogs(notifier, rpcSub, crit)
 	}
 	from := rpc.BlockNumber(crit.FromBlock.Int64())
 	switch from {
@@ -294,18 +294,18 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 	}
 	go func() {
 		// do historical sync first
-		_, err := api.histLogs(ctx, notifier, rpcSub, int64(from), crit)
+		_, err := api.histLogs(notifier, rpcSub, int64(from), crit)
 		if err != nil {
 			return
 		}
 		// then subscribe from the header
-		api.liveLogs(ctx, notifier, rpcSub, crit)
+		api.liveLogs(notifier, rpcSub, crit)
 	}()
 	return nil
 }
 
 // liveLogs only retrieves live logs
-func (api *FilterAPI) liveLogs(ctx context.Context, notify notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
 	matchedLogs := make(chan []*types.Log)
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 	if err != nil {
@@ -332,31 +332,31 @@ func (api *FilterAPI) liveLogs(ctx context.Context, notify notifier, rpcSub *rpc
 	return nil
 }
 
-// histLogs only retrieves the logs older than current header
-func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, n int64, crit FilterCriteria) (int64, error) {
-	// the ctx will be canceled after this callback(filter.Logs) is called
-	// and we are run in a background goroutine, use a new context instead
+// histLogs retrieves the logs older than current header.
+func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from int64, crit FilterCriteria) (int64, error) {
+	// The original request ctx will be canceled as soon as the parent goroutine
+	// returns a subscription. Use a new context instead.
 	var (
-		cctx     = context.Background()
+		ctx      = context.Background()
 		rmLogsCh = make(chan []*types.Log)
 	)
 	for {
-		// get the latest block header
+		// Get the latest block header.
 		header := api.sys.backend.CurrentHeader()
 		if header == nil {
-			return 0, errors.New("header is null")
+			return 0, errors.New("unexpected error: no header block found")
 		}
 		head := header.Number.Int64()
-		if n >= head {
+		if from >= head {
 			return head, nil
 		}
 
-		// do historical sync from n to head
-		f := api.sys.NewRangeFilter(n, head, crit.Addresses, crit.Topics)
-		logChan, errChan := f.rangeLogsAsync(cctx)
+		// Do historical sync beginning at `from` to head.
+		f := api.sys.NewRangeFilter(from, head, crit.Addresses, crit.Topics)
+		logChan, errChan := f.rangeLogsAsync(ctx)
 
 		// subscribe rmLogs
-		query := ethereum.FilterQuery{FromBlock: big.NewInt(n), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
+		query := ethereum.FilterQuery{FromBlock: big.NewInt(from), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
 		rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
 		if err != nil {
 			return 0, err
@@ -404,7 +404,7 @@ func (api *FilterAPI) histLogs(ctx context.Context, notifier notifier, rpcSub *r
 		}
 
 		// move forward to the next batch
-		n = head + 1
+		from = head + 1
 	}
 }
 
