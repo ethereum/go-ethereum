@@ -19,6 +19,7 @@ package common
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -64,6 +65,13 @@ func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
 // HexToHash sets byte representation of s to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
+
+// Uint64ToHash sets the lowest 8 bytes of hash to u in big endian format.
+func Uint64ToHash(u uint64) Hash {
+	var h Hash
+	binary.BigEndian.PutUint64(h[24:], u)
+	return h
+}
 
 // Less compares two hashes.
 func (h Hash) Less(other Hash) bool {

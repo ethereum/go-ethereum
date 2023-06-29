@@ -1152,17 +1152,26 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 // BeaconRoot is a stateful precompile that returns a beacon root.
 type beaconRoot struct{}
 
+var beaconRootStorageAddress = common.BytesToAddress([]byte{20})
+
 func (c *beaconRoot) RequiredGas(input []byte) uint64 {
-	return 20 // TODO (MariusVanDerWijden) change
+	return 4200
 }
 
 func (c *beaconRoot) Run(stateDB StateDB, input []byte) ([]byte, error) {
 	if len(input) != common.HashLength {
 		return nil, errors.New("invalid input length")
 	}
-	var root common.Hash
-	copy(root[:], input)
-	historicalStorageAddress := common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffd")
-	val := stateDB.GetState(historicalStorageAddress, root)
-	return val[:], nil
+	var timestamp common.Hash
+	copy(timestamp[:], input)
+	// retrieve stored timestamp
+	timeIndex := binary.BigEndian.Uint64(timestamp[24:]) % params.HistoricalRootModulus
+	recordedTimestamp := stateDB.GetState(beaconRootStorageAddress, common.Uint64ToHash(timeIndex))
+	if recordedTimestamp != timestamp {
+		return make([]byte, 32), nil
+	}
+	// retrieve stored beacon root
+	rootIndex := timeIndex + params.HistoricalRootModulus
+	beaconRoot := stateDB.GetState(beaconRootStorageAddress, common.Uint64ToHash(rootIndex))
+	return beaconRoot[:], nil
 }

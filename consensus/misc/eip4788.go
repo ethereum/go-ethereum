@@ -17,18 +17,21 @@
 package misc
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ApplyBeaconRoot adds the beacon root from the header to the state.
 func ApplyBeaconRoot(header *types.Header, state *state.StateDB) {
 	// If EIP-4788 is enabled, we need to store the block root
-	historicalStorageAddress := common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffd")
-	key := header.Time
-	value := header.BeaconRoot
-	state.SetState(historicalStorageAddress, common.BigToHash(big.NewInt(int64(key))), *value)
+	historicalStorageAddress := common.BytesToAddress([]byte{20})
+	timeIndex := header.Time % params.HistoricalRootModulus
+	rootIndex := timeIndex + params.HistoricalRootModulus
+	time := header.Time
+	// timeIndex -> header.Time
+	state.SetState(historicalStorageAddress, common.Uint64ToHash(timeIndex), common.Uint64ToHash(time))
+	// rootIndex -> header.BeaconRoot
+	state.SetState(historicalStorageAddress, common.Uint64ToHash(rootIndex), *header.BeaconRoot)
 }

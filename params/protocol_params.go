@@ -160,6 +160,8 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
+	HistoricalRootModulus = 98304 // Limits how many historical roots are stored by EIP-4788
+
 	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
 	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
 	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
