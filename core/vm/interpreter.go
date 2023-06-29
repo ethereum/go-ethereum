@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -177,15 +178,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
 		contract.Chunks = trie.ChunkifyCode(contract.Code)
 
-		totalEvals := len(contract.Code) / 31 / 256
-		if len(contract.Code)%(256*31) != 0 {
-			totalEvals += 1
-		}
+		// number of extra stems to evaluate after the header stem
+		extraEvals := (len(contract.Chunks) + 127) / verkle.NodeWidth
 
-		chunkEvals = make([][]byte, totalEvals)
-		for i := 0; i < totalEvals; i++ {
+		chunkEvals = make([][]byte, extraEvals+1)
+		for i := 1; i < extraEvals+1; i++ {
 			chunkEvals[i] = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(contract.AddressPoint(), uint256.NewInt(uint64(i)*256))
 		}
+		// Header account is already known, it's the header account
+		chunkEvals[0] = utils.GetTreeKeyVersionWithEvaluatedAddress(contract.AddressPoint())
 	}
 
 	// The Interpreter main run loop (contextual). This loop runs until either an
