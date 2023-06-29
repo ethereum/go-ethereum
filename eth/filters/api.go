@@ -39,7 +39,7 @@ var (
 	errFilterNotFound   = errors.New("filter not found")
 	errConnectDropped   = errors.New("connection dropped")
 	errInvalidToBlock   = errors.New("log subscription does not support history block range")
-	errInvalidFromBlock = errors.New("invalid from block")
+	errInvalidFromBlock = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -267,33 +267,22 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	return rpcSub, err
 }
 
-// logs is the inner implmention of logs filter
-// from: nil, to: nil -> only live
-// from: blockNum | safe | finalized, to: nil -> historical from from and then toggle live
-// every other case should fail with an error
+// logs is the inner implementation of logs filtering.
+// from: nil, to: nil -> only live mode.
+// from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live mode.
+// Every other case should fail with an error.
 func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	var from, to rpc.BlockNumber
-	if crit.FromBlock == nil {
-		from = rpc.LatestBlockNumber
-	} else {
-		from = rpc.BlockNumber(crit.FromBlock.Int64())
-	}
-	if crit.ToBlock == nil {
-		to = rpc.LatestBlockNumber
-	} else {
-		to = rpc.BlockNumber(crit.ToBlock.Int64())
-	}
-
-	if to != rpc.LatestBlockNumber && to != rpc.PendingBlockNumber {
+	if crit.ToBlock != nil {
 		return errInvalidToBlock
 	}
-
-	// do live filter only
-	if from == rpc.LatestBlockNumber || from == rpc.PendingBlockNumber {
+	if crit.FromBlock == nil {
 		return api.liveLogs(ctx, notifier, rpcSub, crit)
 	}
-
-	if from == rpc.SafeBlockNumber || from == rpc.FinalizedBlockNumber {
+	from := rpc.BlockNumber(crit.FromBlock.Int64())
+	switch from {
+	case rpc.LatestBlockNumber, rpc.PendingBlockNumber:
+		return errInvalidFromBlock
+	case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
 		header, err := api.sys.backend.HeaderByNumber(ctx, from)
 		if err != nil {
 			return err
@@ -303,7 +292,6 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 	if from < 0 {
 		return errInvalidFromBlock
 	}
-
 	go func() {
 		// do historical sync first
 		_, err := api.histLogs(ctx, notifier, rpcSub, int64(from), crit)
