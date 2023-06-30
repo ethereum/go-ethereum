@@ -66,10 +66,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
+		err         error
 	)
 	if p.bc.logger != nil {
-		p.bc.logger.CaptureBlockStart(block)
-		defer p.bc.logger.CaptureBlockEnd()
+		p.bc.logger.OnBlockStart(block)
+		defer func() {
+			var td *big.Int
+			if err == nil {
+				td = p.bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+				td.Add(td, block.Difficulty())
+			}
+			p.bc.logger.OnBlockEnd(td, err)
+		}()
 	}
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -82,13 +90,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
+		var msg *Message
+		msg, err = TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		var receipt *types.Receipt
+		receipt, err = applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if vmenv.Config.Tracer != nil {
 			vmenv.Config.Tracer.CaptureTxEnd(receipt)
 		}
@@ -101,7 +111,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
 	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Number(), block.Time()) {
-		return nil, nil, 0, errors.New("withdrawals before shanghai")
+		err = errors.New("withdrawals before shanghai")
+		return nil, nil, 0, err
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)

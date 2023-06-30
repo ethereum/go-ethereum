@@ -58,12 +58,16 @@ func (p *Printer) CaptureTxEnd(receipt *types.Receipt) {
 	fmt.Printf("CaptureTxEnd: receipt=%v\n", receipt)
 }
 
-func (p *Printer) CaptureBlockStart(b *types.Block) {
-	fmt.Printf("CaptureBlockStart: b=%v\n", b.NumberU64())
+func (p *Printer) OnBlockStart(b *types.Block) {
+	fmt.Printf("OnBlockStart: b=%v\n", b.NumberU64())
 }
 
-func (p *Printer) CaptureBlockEnd() {
-	fmt.Printf("CaptureBlockEnd\n")
+func (p *Printer) OnBlockEnd(td *big.Int, err error) {
+	fmt.Printf("OnBlockEnd: td=%v, err=%v\n", td, err)
+}
+
+func (p *Printer) OnBlockValidationError(block *types.Block, err error) {
+	fmt.Printf("OnBlockValidationError: b=%v, err=%v\n", block.NumberU64(), err)
 }
 
 func (p *Printer) OnGenesisBlock(b *types.Block) {

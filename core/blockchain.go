@@ -158,8 +158,9 @@ var defaultCacheConfig = &CacheConfig{
 type BlockchainLogger interface {
 	vm.EVMLogger
 	state.StateLogger
-	CaptureBlockStart(*types.Block)
-	CaptureBlockEnd()
+	OnBlockStart(*types.Block)
+	OnBlockEnd(td *big.Int, err error)
+	OnBlockValidationError(block *types.Block, err error)
 	OnGenesisBlock(*types.Block)
 }
 
@@ -1785,6 +1786,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
+			if bc.logger != nil {
+				bc.logger.OnBlockValidationError(block, err)
+			}
 			return it.index, err
 		}
 		vtime := time.Since(vstart)
