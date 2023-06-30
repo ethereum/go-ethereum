@@ -414,13 +414,13 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 	return data, nil
 }
 
-// GetFullPayload returns a cached payload by it. The difference is that this
+// getFullPayload returns a cached payload by it. The difference is that this
 // function always expects a non-empty payload, but can also return empty one
 // if no transaction is executable.
 //
 // Note, this function is not a part of standard engine API, meant to be used
 // by consensus client mock in dev mode.
-func (api *ConsensusAPI) GetFullPayload(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *ConsensusAPI) getFullPayload(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetFullPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, true)
 	if data == nil {

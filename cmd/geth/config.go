@@ -196,7 +196,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		utils.RegisterFullSyncTester(stack, eth, ctx.Path(utils.SyncTargetFlag.Name))
 	}
 
-	// Start the dev mode if requested
+	// Start the dev mode if requested, or launch the engine API for
+	// interacting with external consensus client.
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), eth)
 		if err != nil {
@@ -210,7 +211,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			utils.Fatalf("failed to register catalyst service: %v", err)
 		}
 	}
-
 	return stack, backend
 }
 

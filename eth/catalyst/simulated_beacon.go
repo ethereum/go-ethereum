@@ -32,12 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// withdrawalQueue implements a FIFO queue which holds withdrawals that are pending inclusion
+// withdrawalQueue implements a FIFO queue which holds withdrawals that are
+// pending inclusion.
 type withdrawalQueue struct {
 	pending chan *types.Withdrawal
 }
 
-// add queues a withdrawal for future inclusion
+// add queues a withdrawal for future inclusion.
 func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	select {
 	case w.pending <- withdrawal:
@@ -48,7 +49,7 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	return nil
 }
 
-// gatherPending returns a number of queued withdrawals up to a maximum count
+// gatherPending returns a number of queued withdrawals up to a maximum count.
 func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
 	withdrawals := []*types.Withdrawal{}
 	for {
@@ -75,7 +76,6 @@ type SimulatedBeacon struct {
 
 	engineAPI          *ConsensusAPI
 	curForkchoiceState engine.ForkchoiceStateV1
-	buildWaitTime      time.Duration
 	lastBlockTime      uint64
 }
 
@@ -84,16 +84,16 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 	if !chainConfig.IsDevMode {
 		return nil, errors.New("incompatible pre-existing chain configuration")
 	}
-	header := eth.BlockChain().CurrentHeader()
+	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
-		HeadBlockHash:      header.Hash(),
-		SafeBlockHash:      header.Hash(),
-		FinalizedBlockHash: header.Hash(),
+		HeadBlockHash:      block.Hash(),
+		SafeBlockHash:      block.Hash(),
+		FinalizedBlockHash: block.Hash(),
 	}
 	engineAPI := NewConsensusAPI(eth)
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
-	if header.Number.Sign() == 0 {
+	if block.Number.Sign() == 0 {
 		if _, err := engineAPI.ForkchoiceUpdatedV2(current, nil); err != nil {
 			return nil, err
 		}
@@ -102,9 +102,8 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		eth:                eth,
 		period:             period,
 		shutdownCh:         make(chan struct{}),
-		buildWaitTime:      time.Millisecond * 100,
 		engineAPI:          engineAPI,
-		lastBlockTime:      header.Time,
+		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
 		withdrawals:        withdrawalQueue{make(chan *types.Withdrawal, 20)},
 	}, nil
@@ -116,7 +115,7 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 	c.feeRecipientLock.Unlock()
 }
 
-// Start invokes the SimulatedBeacon life-cycle function in a goroutine
+// Start invokes the SimulatedBeacon life-cycle function in a goroutine.
 func (c *SimulatedBeacon) Start() error {
 	if c.period == 0 {
 		go c.loopOnDemand()
@@ -126,13 +125,14 @@ func (c *SimulatedBeacon) Start() error {
 	return nil
 }
 
-// Stop halts the SimulatedBeacon service
+// Stop halts the SimulatedBeacon service.
 func (c *SimulatedBeacon) Stop() error {
 	close(c.shutdownCh)
 	return nil
 }
 
-// sealBlock initiates payload building for a new block and creates a new block with the completed payload
+// sealBlock initiates payload building for a new block and creates a new block
+// with the completed payload.
 func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	tstamp := uint64(time.Now().Unix())
 	if tstamp <= c.lastBlockTime {
@@ -151,17 +151,10 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		return fmt.Errorf("error calling forkchoice update: %v", err)
 	}
 
-	envelope, err := c.engineAPI.GetFullPayload(*fcResponse.PayloadID)
+	envelope, err := c.engineAPI.getFullPayload(*fcResponse.PayloadID)
 	if err != nil {
 		return fmt.Errorf("error retrieving payload: %v", err)
 	}
-
-	// TODO: this is a bit of a hack.  need to modify payload builder to stop payload w/ GetFullPayload
-	_, _ = c.engineAPI.GetPayloadV1(*fcResponse.PayloadID)
-	if err != nil {
-		return fmt.Errorf("error retrieving payload: %v", err)
-	}
-
 	payload := envelope.ExecutionPayload
 
 	// mark the payload as canon
@@ -211,7 +204,7 @@ func (c *SimulatedBeacon) loopOnDemand() {
 
 // loopOnDemand runs the block production loop for non-zero period configuration
 func (c *SimulatedBeacon) loop() {
-	timer := time.NewTimer(time.Duration(0))
+	timer := time.NewTimer(0)
 	for {
 		select {
 		case <-c.shutdownCh:
