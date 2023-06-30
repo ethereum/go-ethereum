@@ -81,7 +81,8 @@ type Table struct {
 	closeReq   chan struct{}
 	closed     chan struct{}
 
-	nodeAddedHook func(*node) // for testing
+	nodeAddedHook   func(*bucket, *node)
+	nodeRemovedHook func(*bucket, *node)
 }
 
 // transport is implemented by the UDP transports.
@@ -128,6 +129,22 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 	tab.seedRand()
 	tab.loadSeedNodes()
 
+	return tab, nil
+}
+
+func newMeteredTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
+	tab, err := newTable(t, db, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if metrics.Enabled {
+		tab.nodeAddedHook = func(b *bucket, n *node) {
+			bucketsCounter[b.index].Inc(1)
+		}
+		tab.nodeRemovedHook = func(b *bucket, n *node) {
+			bucketsCounter[b.index].Dec(1)
+		}
+	}
 	return tab, nil
 }
 
@@ -498,10 +515,7 @@ func (tab *Table) addSeenNode(n *node) {
 	n.addedAt = time.Now()
 
 	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
-	}
-	if metrics.Enabled {
-		bucketsCounter[b.index].Inc(1)
+		tab.nodeAddedHook(b, n)
 	}
 }
 
@@ -545,10 +559,7 @@ func (tab *Table) addVerifiedNode(n *node) {
 	n.addedAt = time.Now()
 
 	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
-	}
-	if metrics.Enabled {
-		bucketsCounter[b.index].Inc(1)
+		tab.nodeAddedHook(b, n)
 	}
 }
 
@@ -647,11 +658,16 @@ func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 }
 
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
-	if metrics.Enabled && contains(b.entries, n.ID()) {
-		bucketsCounter[b.index].Dec(1)
+	// Check if the node is actually in the bucket so the removed hook
+	// isn't called multiple times for the same node.
+	if !contains(b.entries, n.ID()) {
+		return
 	}
 	b.entries = deleteNode(b.entries, n)
 	tab.removeIP(b, n.IP())
+	if tab.nodeRemovedHook != nil {
+		tab.nodeRemovedHook(b, n)
+	}
 }
 
 func contains(ns []*node, id enode.ID) bool {
