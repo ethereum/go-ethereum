@@ -27,9 +27,9 @@ type bidirectionalMeters struct {
 	egress  *hsMeters
 }
 
-// Get returns the corresponding meter depending if ingress or egress is
+// get returns the corresponding meter depending if ingress or egress is
 // desired.
-func (h *bidirectionalMeters) Get(ingress bool) *hsMeters {
+func (h *bidirectionalMeters) get(ingress bool) *hsMeters {
 	if ingress {
 		return h.ingress
 	}

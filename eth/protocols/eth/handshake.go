@@ -115,7 +115,7 @@ func markError(p *Peer, err error) {
 	if !metrics.Enabled {
 		return
 	}
-	m := meters.Get(p.Inbound())
+	m := meters.get(p.Inbound())
 	switch errors.Unwrap(err) {
 	case errNetworkIDMismatch:
 		m.networkIDMismatch.Mark(1)
