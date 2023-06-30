@@ -21,9 +21,9 @@ import (
 )
 
 var (
-	IngressRegistrationError = "eth/protocols/snap/ingress/registration/error"
-	EgressRegistrationError  = "eth/protocols/snap/egress/registration/error"
+	ingressRegistrationErrorName = "eth/protocols/snap/ingress/registration/error"
+	egressRegistrationErrorName  = "eth/protocols/snap/egress/registration/error"
 
-	_ = metrics.NewRegisteredMeter(IngressRegistrationError, nil)
-	_ = metrics.NewRegisteredMeter(EgressRegistrationError, nil)
+	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
+	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
 )

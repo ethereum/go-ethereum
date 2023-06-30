@@ -427,9 +427,9 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
 		if metrics.Enabled {
 			if peer.Inbound() {
-				metrics.GetOrRegisterMeter(snap.IngressRegistrationError, nil).Mark(1)
+				snap.IngressRegistrationErrorMeter.Mark(1)
 			} else {
-				metrics.GetOrRegisterMeter(snap.EgressRegistrationError, nil).Mark(1)
+				snap.EgressRegistrationErrorMeter.Mark(1)
 			}
 		}
 		peer.Log().Warn("Snapshot extension registration failed", "err", err)
