@@ -598,7 +598,7 @@ func TestCall(t *testing.T) {
 	}
 }
 
-func TestMulticall(t *testing.T) {
+func TestMulticallV1(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
 	var (
@@ -982,7 +982,7 @@ func TestMulticall(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		result, err := api.Multicall(context.Background(), tc.blocks, tc.tag, tc.includeTransfers)
+		result, err := api.MulticallV1(context.Background(), tc.blocks, tc.tag, tc.includeTransfers)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)

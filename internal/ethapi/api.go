@@ -1127,7 +1127,7 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) Multicall(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([][]callResult, error) {
+func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([][]callResult, error) {
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err

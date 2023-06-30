@@ -612,8 +612,8 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null],
 		}),
 		new web3._extend.Method({
-			name: 'multicall',
-			call: 'eth_multicall',
+			name: 'multicallV1',
+			call: 'eth_multicallV1',
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter, null],
 		}),
