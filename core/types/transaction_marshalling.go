@@ -273,6 +273,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+
 	case L1MessageTxType:
 		var itx L1MessageTx
 		inner = &itx

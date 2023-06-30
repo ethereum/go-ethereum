@@ -1331,6 +1331,10 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+
+	// L1 message transaction fields:
+	Sender     common.Address  `json:"sender,omitempty"`
+	QueueIndex *hexutil.Uint64 `json:"queueIndex,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1377,6 +1381,10 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
+	case types.L1MessageTxType:
+		msg := tx.AsL1MessageTx()
+		result.Sender = msg.Sender
+		result.QueueIndex = (*hexutil.Uint64)(&msg.QueueIndex)
 	}
 	return result
 }
