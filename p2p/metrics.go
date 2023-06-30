@@ -19,6 +19,7 @@
 package p2p
 
 import (
+	"errors"
 	"net"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -36,22 +37,26 @@ const (
 )
 
 var (
+	activePeerGauge metrics.Gauge = metrics.NilGauge{}
+
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
 
-	ingressDialMeter        metrics.Meter = metrics.NilMeter{}
-	ingressDialSuccessMeter metrics.Meter = metrics.NilMeter{}
-	egressDialAttemptMeter  metrics.Meter = metrics.NilMeter{}
-	egressDialSuccessMeter  metrics.Meter = metrics.NilMeter{}
-	activePeerGauge         metrics.Gauge = metrics.NilGauge{}
+	// general ingress/egress connection meters
+	serveMeter          metrics.Meter = metrics.NilMeter{}
+	serveSuccessMeter   metrics.Meter = metrics.NilMeter{}
+	dialMeter           metrics.Meter = metrics.NilMeter{}
+	dialSuccessMeter    metrics.Meter = metrics.NilMeter{}
+	dialConnectionError metrics.Meter = metrics.NilMeter{}
 
-	dialConnectionError          metrics.Meter = metrics.NilMeter{}
-	dialTooManyPeers             metrics.Meter = metrics.NilMeter{}
-	dialAlreadyConnected         metrics.Meter = metrics.NilMeter{}
-	dialSelf                     metrics.Meter = metrics.NilMeter{}
-	dialUselessPeer              metrics.Meter = metrics.NilMeter{}
-	dialFailedRLPXEncHandshake   metrics.Meter = metrics.NilMeter{}
-	dialFailedRLPXProtoHandshake metrics.Meter = metrics.NilMeter{}
+	// handshake error meters
+	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
+	dialAlreadyConnected    = metrics.NewRegisteredMeter("p2p/dials/error/known", nil)
+	dialSelf                = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
+	dialUselessPeer         = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
+	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
+	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
+	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
 )
 
 func init() {
@@ -59,19 +64,39 @@ func init() {
 		return
 	}
 
-	ingressDialMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-	ingressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
-	egressDialAttemptMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
-	egressDialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
 	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
-
+	serveMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
+	serveSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
+	dialMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
+	dialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
 	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
-	dialTooManyPeers = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
-	dialAlreadyConnected = metrics.NewRegisteredMeter("p2p/dials/error/known", nil)
-	dialSelf = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
-	dialUselessPeer = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
-	dialFailedRLPXEncHandshake = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
-	dialFailedRLPXProtoHandshake = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+}
+
+// markDialError matches errors that occur while setting up a dial connection
+// to the corresponding meter.
+func markDialError(err error) {
+	if !metrics.Enabled {
+		return
+	}
+	if err2 := errors.Unwrap(err); err2 != nil {
+		err = err2
+	}
+	switch err {
+	case DiscTooManyPeers:
+		dialTooManyPeers.Mark(1)
+	case DiscAlreadyConnected:
+		dialAlreadyConnected.Mark(1)
+	case DiscSelf:
+		dialSelf.Mark(1)
+	case DiscUselessPeer:
+		dialUselessPeer.Mark(1)
+	case DiscUnexpectedIdentity:
+		dialUnexpectedIdentity.Mark(1)
+	case errEncHandshakeError:
+		dialEncHandshakeError.Mark(1)
+	case errProtoHandshakeError:
+		dialProtoHandshakeError.Mark(1)
+	}
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
