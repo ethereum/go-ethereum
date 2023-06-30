@@ -103,7 +103,7 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 		hasher.Update(indexBuf, value)
 	}
 	if list.Len() > 0 {
-		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
+		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(0))
 		value := encodeForDerive(list, 0, valueBuf)
 		hasher.Update(indexBuf, value)
 	}
