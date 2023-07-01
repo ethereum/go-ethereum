@@ -187,8 +187,12 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	default:
 		panic("unknown parent type")
 	}
+
+	// We use a map to collect the addresses. The reason for using a map is because the keys in a map are unique.
+	// This means if we try to add the same address to the map twice, it will just overwrite the existing entry,
+	// effectively ignoring any duplicates. The `common.Hash` type is the type of the account addresses.	
+	addresses := make(map[common.Hash]struct{})
 	// Sanity check that accounts or storage slots are never nil
-	// start from here
 	for accountHash, blob := range accounts {
 		if blob == nil {
 			panic(fmt.Sprintf("account %#x nil", accountHash))
@@ -196,6 +200,9 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		// Determine memory size and track the dirty writes
 		dl.memory += uint64(common.HashLength + len(blob))
 		snapshotDirtyAccountWriteMeter.Mark(int64(len(blob)))
+		// Add the account address to our map. We use an empty struct{} as the value in the map because it doesn't
+    	// take any additional space. We only care about the keys in the map (the addresses), not the values.
+		addresses[accountHash] = struct{}{}
 	}
 	for accountHash, slots := range storage {
 		if slots == nil {
@@ -206,6 +213,9 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 			dl.memory += uint64(common.HashLength + len(data))
 			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
 		}
+		// Add the account address to our map. We use an empty struct{} as the value in the map because it doesn't
+    	// take any additional space. We only care about the keys in the map (the addresses), not the values.
+		addresses[accountHash] = struct{}{}
 	}
 	dl.memory += uint64(len(destructs) * common.HashLength)
 	return dl
