@@ -263,7 +263,11 @@ func (c *Config) HTTPEndpoint() string {
 	if c.HTTPHost == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
+	host := c.HTTPHost
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]" // IPv6 address
+	}
+	return fmt.Sprintf("%s:%d", host, c.HTTPPort)
 }
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
@@ -278,7 +282,11 @@ func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s:%d", c.WSHost, c.WSPort)
+	host := c.HTTPHost
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]" // IPv6 address
+	}
+	return fmt.Sprintf("%s:%d", host, c.WSPort)
 }
 
 // DefaultWSEndpoint returns the websocket endpoint used by default.

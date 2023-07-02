@@ -110,7 +110,9 @@ func (h *httpServer) setListenAddr(host string, port int) error {
 	if h.listener != nil && (host != h.host || port != h.port) {
 		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
 	}
-
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]" // IPv6
+	}
 	h.host, h.port = host, port
 	h.endpoint = fmt.Sprintf("%s:%d", host, port)
 	return nil
