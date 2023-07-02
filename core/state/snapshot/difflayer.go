@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -170,6 +171,7 @@ func (h storageBloomHasher) Sum64() uint64 {
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
 func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+	var feed event.Feed
 	// Create the new layer with some pre-allocated data segments
 	dl := &diffLayer{
 		parent:      parent,
@@ -187,7 +189,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	default:
 		panic("unknown parent type")
 	}
-
+	
 	// We use a map to collect the addresses. The reason for using a map is because the keys in a map are unique.
 	// This means if we try to add the same address to the map twice, it will just overwrite the existing entry,
 	// effectively ignoring any duplicates. The `common.Hash` type is the type of the account addresses.	
@@ -218,6 +220,19 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		addresses[accountHash] = struct{}{}
 	}
 	dl.memory += uint64(len(destructs) * common.HashLength)
+	// Create an event and add all addresses from the addresses map to event.Addresses slice
+	// todo: use this type from core/events.go directly(fix import cycle)
+	type AccountStateEvent struct {
+    Addresses []common.Hash
+	}
+	event := AccountStateEvent{
+		Addresses: make([]common.Hash, 0, len(addresses)),
+	}
+	for address := range addresses {
+		event.Addresses = append(event.Addresses, address)
+	}
+	// Send the event
+    feed.Send(event)
 	return dl
 }
 
