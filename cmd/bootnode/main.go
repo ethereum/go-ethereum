@@ -107,6 +107,7 @@ func main() {
 	if err != nil {
 		utils.Fatalf("-ListenUDP: %v", err)
 	}
+	defer conn.Close()
 
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	if natm != nil {

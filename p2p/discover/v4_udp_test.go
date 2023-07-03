@@ -569,6 +569,8 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer socket.Close()
+
 	realaddr := socket.LocalAddr().(*net.UDPAddr)
 	ln.SetStaticIP(realaddr.IP)
 	ln.SetFallbackUDP(realaddr.Port)

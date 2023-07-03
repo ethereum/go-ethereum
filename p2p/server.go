@@ -568,6 +568,8 @@ func (srv *Server) setupDiscovery() error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
+
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	srv.log.Debug("UDP listener up", "addr", realaddr)
 	if srv.NAT != nil {

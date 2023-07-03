@@ -91,6 +91,8 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer socket.Close()
+
 	realaddr := socket.LocalAddr().(*net.UDPAddr)
 	ln.SetStaticIP(realaddr.IP)
 	ln.Set(enr.UDP(realaddr.Port))
