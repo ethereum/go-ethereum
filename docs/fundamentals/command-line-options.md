@@ -434,7 +434,6 @@ GLOBAL OPTIONS:
     --miner.newpayload-timeout value (default: 2s)
           Specify the maximum time allowance for creating a new payload
 
-          Notify with pending block headers instead of work packages
 
     --miner.recommit value         (default: 2s)
           Time interval to recreate the block being mined
