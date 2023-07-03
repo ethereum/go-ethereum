@@ -16,6 +16,11 @@
     "bor": {
       "jaipurBlock": 23850000,
       "delhiBlock": 38189056,
+      "parallelUniverseBlock": 0,
+      "indoreBlock": 44934656,
+      "stateSyncConfirmationDelay": {
+        "44934656": 128
+      },
       "period": {
         "0": 2
       },

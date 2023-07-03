@@ -599,9 +599,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 		select {
 		case req := <-w.newWorkCh:
 			//nolint:contextcheck
-			if w.isRunning() {
-				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
-			}
+			w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
 			//nolint:contextcheck
@@ -988,13 +986,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 	var depsWg sync.WaitGroup
 
-	var EnableMVHashMap bool
-
-	if w.chainConfig.Bor.IsParallelUniverse(env.header.Number) {
-		EnableMVHashMap = true
-	} else {
-		EnableMVHashMap = false
-	}
+	EnableMVHashMap := false
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {

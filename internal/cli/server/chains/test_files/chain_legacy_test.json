@@ -50,9 +50,9 @@
       "jaipurBlock": 22770000,
       "delhiBlock": 29638656,
       "parallelUniverseBlock": 0,
-      "indoreBlock": 36877056,
+      "indoreBlock": 37075456,
       "stateSyncConfirmationDelay": {
-        "36877056": 128
+        "37075456": 128
       }
     }
   },
