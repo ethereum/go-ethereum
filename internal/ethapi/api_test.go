@@ -633,19 +633,29 @@ func TestMulticallV1(t *testing.T) {
 		latest           = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		includeTransfers = true
 	)
-	type res struct {
+	type callRes struct {
 		ReturnValue string `json:"return"`
 		Error       string
 		Logs        []types.Log
 		GasUsed     string
 		Transfers   []transfer
 	}
+	type blockRes struct {
+		Number string
+		Hash   string
+		// Ignore timestamp
+		GasLimit     string
+		GasUsed      string
+		FeeRecipient string
+		BaseFee      string
+		Calls        []callRes
+	}
 	var testSuite = []struct {
 		blocks           []CallBatch
 		tag              rpc.BlockNumberOrHash
 		includeTransfers *bool
 		expectErr        error
-		want             [][]res
+		want             []blockRes
 	}{
 		// State build-up over calls:
 		// First value transfer OK after state override.
@@ -666,17 +676,21 @@ func TestMulticallV1(t *testing.T) {
 					Value: (*hexutil.Big)(big.NewInt(1000)),
 				}},
 			}},
-			want: [][]res{{
-				res{
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xa410",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
-				},
-				res{
+				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
-				},
+				}},
 			}},
 		}, {
 			// State build-up over blocks.
@@ -712,32 +726,38 @@ func TestMulticallV1(t *testing.T) {
 					},
 				},
 			}},
-			want: [][]res{
-				{
-					res{
-						ReturnValue: "0x",
-						GasUsed:     "0x5208",
-						Logs:        []types.Log{},
-					},
-					res{
-						ReturnValue: "0x",
-						GasUsed:     "0x5208",
-						Logs:        []types.Log{},
-					},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xa410",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+					Logs:        []types.Log{},
 				}, {
-					res{
-						ReturnValue: "0x",
-						GasUsed:     "0x5208",
-						Logs:        []types.Log{},
-					},
-					res{
-						ReturnValue: "0x",
-						GasUsed:     "0x0",
-						Logs:        []types.Log{},
-						Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
-					},
-				},
-			},
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+					Logs:        []types.Log{},
+				}},
+			}, {
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x5208",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+					Logs:        []types.Log{},
+				}, {
+					ReturnValue: "0x",
+					GasUsed:     "0x0",
+					Logs:        []types.Log{},
+					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
+				}},
+			}},
 		}, {
 			// Block overrides should work, each call is simulated on a different block number
 			tag: latest,
@@ -768,18 +788,28 @@ func TestMulticallV1(t *testing.T) {
 					},
 				}},
 			}},
-			want: [][]res{{
-				res{
+			want: []blockRes{{
+				Number:       "0xb",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xe891",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
 					Logs:        []types.Log{},
-				},
+				}},
 			}, {
-				res{
+				Number:       "0xc",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xe891",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
 					Logs:        []types.Log{},
-				},
+				}},
 			}},
 		},
 		// Block numbers must be in order.
@@ -810,7 +840,7 @@ func TestMulticallV1(t *testing.T) {
 					},
 				}},
 			}},
-			want:      [][]res{},
+			want:      []blockRes{},
 			expectErr: errors.New("block numbers must be in order"),
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
@@ -835,15 +865,22 @@ func TestMulticallV1(t *testing.T) {
 				},
 				},
 			}},
-			want: [][]res{{{
-				ReturnValue: "0x",
-				GasUsed:     "0xaacc",
-				Logs:        []types.Log{},
-			}, {
-				ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
-				GasUsed:     "0x5bb7",
-				Logs:        []types.Log{},
-			}}},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x10683",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0xaacc",
+					Logs:        []types.Log{},
+				}, {
+					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
+					GasUsed:     "0x5bb7",
+					Logs:        []types.Log{},
+				}},
+			}},
 		},
 		// Test logs output.
 		{
@@ -867,16 +904,23 @@ func TestMulticallV1(t *testing.T) {
 					To:   &randomAccounts[2].addr,
 				}},
 			}},
-			want: [][]res{{{
-				ReturnValue: "0x",
-				Logs: []types.Log{{
-					Address:     randomAccounts[2].addr,
-					Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
-					BlockNumber: 10,
-					Data:        []byte{},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x5508",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					Logs: []types.Log{{
+						Address:     randomAccounts[2].addr,
+						Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
+						BlockNumber: 10,
+						Data:        []byte{},
+					}},
+					GasUsed: "0x5508",
 				}},
-				GasUsed: "0x5508",
-			}}},
+			}},
 		},
 		// Test ecrecover override
 		{
@@ -926,12 +970,19 @@ func TestMulticallV1(t *testing.T) {
 					To:   &randomAccounts[2].addr,
 				}},
 			}},
-			want: [][]res{{{
-				// Caller is in this case the contract that invokes ecrecover.
-				ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
-				GasUsed:     "0x52f6",
-				Logs:        []types.Log{},
-			}}},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x52f6",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					// Caller is in this case the contract that invokes ecrecover.
+					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
+					GasUsed:     "0x52f6",
+					Logs:        []types.Log{},
+				}},
+			}},
 		},
 		// Test ether transfers.
 		{
@@ -962,22 +1013,29 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 			includeTransfers: &includeTransfers,
-			want: [][]res{{{
-				ReturnValue: "0x",
-				GasUsed:     "0xd984",
-				Transfers: []transfer{
-					{
-						From:  accounts[0].addr,
-						To:    randomAccounts[0].addr,
-						Value: big.NewInt(50),
-					}, {
-						From:  randomAccounts[0].addr,
-						To:    randomAccounts[1].addr,
-						Value: big.NewInt(100),
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xd984",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0xd984",
+					Transfers: []transfer{
+						{
+							From:  accounts[0].addr,
+							To:    randomAccounts[0].addr,
+							Value: big.NewInt(50),
+						}, {
+							From:  randomAccounts[0].addr,
+							To:    randomAccounts[1].addr,
+							Value: big.NewInt(100),
+						},
 					},
-				},
-				Logs: []types.Log{},
-			}}},
+					Logs: []types.Log{},
+				}},
+			}},
 		},
 	}
 
@@ -1001,7 +1059,7 @@ func TestMulticallV1(t *testing.T) {
 			continue
 		}
 		// Turn result into res-struct
-		var have [][]res
+		var have []blockRes
 		resBytes, _ := json.Marshal(result)
 		if err := json.Unmarshal(resBytes, &have); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)

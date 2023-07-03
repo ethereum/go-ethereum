@@ -1103,6 +1103,17 @@ type CallBatch struct {
 	Calls             []TransactionArgs
 }
 
+type blockResult struct {
+	Number       hexutil.Uint64 `json:"number"`
+	Hash         common.Hash    `json:"hash"`
+	Time         hexutil.Uint64 `json:"timestamp"`
+	GasLimit     hexutil.Uint64 `json:"gasLimit"`
+	GasUsed      hexutil.Uint64 `json:"gasUsed"`
+	FeeRecipient common.Address `json:"feeRecipient"`
+	BaseFee      *hexutil.Big   `json:"baseFeePerGas"`
+	Calls        []callResult   `json:"calls"`
+}
+
 type callResult struct {
 	ReturnValue hexutil.Bytes  `json:"return"`
 	Logs        []*types.Log   `json:"logs"`
@@ -1120,14 +1131,14 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
-// Multicall executes series of transactions on top of a base state.
+// MulticallV1 executes series of transactions on top of a base state.
 // The transactions are packed into blocks. For each block, block header
 // fields can be overridden. The state can also be overridden prior to
 // execution of each block.
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([][]callResult, error) {
+func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([]blockResult, error) {
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -1147,7 +1158,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 	// this makes sure resources are cleaned up.
 	defer cancel()
 	var (
-		results = make([][]callResult, len(blocks))
+		results = make([]blockResult, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		globalGasCap = s.b.RPCGasCap()
 		gp           = new(core.GasPool).AddGas(globalGasCap)
@@ -1171,7 +1182,16 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 		if block.ECRecoverOverride != nil {
 			state.SetCode(common.BytesToAddress([]byte{1}), *block.ECRecoverOverride)
 		}
-		results[bi] = make([]callResult, len(block.Calls))
+		results[bi] = blockResult{
+			Number:       hexutil.Uint64(blockContext.BlockNumber.Uint64()),
+			Hash:         common.Hash{}, // TODO
+			Time:         hexutil.Uint64(blockContext.Time),
+			GasLimit:     hexutil.Uint64(blockContext.GasLimit),
+			FeeRecipient: blockContext.Coinbase,
+			BaseFee:      (*hexutil.Big)(blockContext.BaseFee),
+			Calls:        make([]callResult, len(block.Calls)),
+		}
+		gasUsed := uint64(0)
 		for i, call := range block.Calls {
 			// Hack to get logs from statedb which stores logs by txhash.
 			txhash := common.BigToHash(big.NewInt(int64(i)))
@@ -1185,7 +1205,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 			}
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig)
 			if err != nil {
-				results[bi][i] = callResult{Error: err.Error()}
+				results[bi].Calls[i] = callResult{Error: err.Error()}
 				continue
 			}
 			// If the result contains a revert reason, try to unpack it.
@@ -1205,8 +1225,10 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 			if result.Err != nil {
 				callRes.Error = result.Err.Error()
 			}
-			results[bi][i] = callRes
+			results[bi].Calls[i] = callRes
+			gasUsed += result.UsedGas
 		}
+		results[bi].GasUsed = hexutil.Uint64(gasUsed)
 	}
 	return results, nil
 }
