@@ -45,6 +45,12 @@ func u64(val uint64) *uint64 { return &val }
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
 	var (
+		cacheConfig = &CacheConfig{
+			TrieCleanLimit:   154,
+			TrieCleanJournal: "triecache",
+			Preimages:        true,
+		}
+
 		config = &params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
@@ -256,7 +262,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 
 		defer blockchain.Stop()
@@ -303,7 +309,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 		)
 
 		defer blockchain.Stop()
@@ -360,6 +366,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					TerminalTotalDifficultyPassed: true,
 					// TODO marcello double check
 					ShanghaiTime: u64(0),
+					Bor:          &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -370,7 +377,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			}
 			genesis               = gspec.MustCommit(db)
 			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 			tooBigInitCode        = [params.MaxInitCodeSize + 1]byte{}
 			smallInitCode         = [320]byte{}
 		)

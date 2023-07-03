@@ -342,6 +342,12 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 
+			// bor block receipt
+			borBlockReceipt := ReadBorReceiptRLP(nfdb, hash, number)
+			if err := op.AppendRaw(freezerBorReceiptTable, number, borBlockReceipt); err != nil {
+				return fmt.Errorf("can't write bor-receipt to freezer: %v", err)
+			}
+
 			hashes = append(hashes, hash)
 		}
 
