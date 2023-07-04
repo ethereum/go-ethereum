@@ -435,6 +435,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		// Move forward to the next batch
 		from = head + 1
 	}
+	return 0, nil
 }
 
 // FilterCriteria represents a request to create a new filter.

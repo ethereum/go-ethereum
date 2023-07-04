@@ -17,7 +17,6 @@
 package filters
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -765,9 +764,18 @@ func TestLogsSubscription(t *testing.T) {
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
+	// Generate pending block, logs for which
+	// will be sent to subscription feed.
+	_, preceipts := core.GenerateChain(genesis.Config, blocks[len(blocks)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(len(blocks) + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		gen.AddTx(tx)
+	})
+	liveLogs := preceipts[0][0].Logs
 	var (
-		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys, false)
+		backend, sys = newTestFilterSystem(t, db, Config{})
+		api          = NewFilterAPI(sys, false)
 		// Transfer(address indexed from, address indexed to, uint256 value);
 		topic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	)
@@ -775,12 +783,11 @@ func TestLogsSubscription(t *testing.T) {
 	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
 
 	allLogs := []*types.Log{
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3},
-		{Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(14).Bytes(), BlockNumber: 4},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, BlockHash: blocks[0].Hash(), TxHash: blocks[0].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, BlockHash: blocks[1].Hash(), TxHash: blocks[1].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(14).Bytes(), BlockNumber: 4, BlockHash: blocks[3].Hash(), TxHash: blocks[3].Transactions()[0].Hash()},
 	}
-
 	testCases := []struct {
 		crit      FilterCriteria
 		expected  []*types.Log
@@ -792,7 +799,7 @@ func TestLogsSubscription(t *testing.T) {
 		// from 0 to latest
 		{
 			FilterCriteria{FromBlock: big.NewInt(0)},
-			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+			append(allLogs, liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
 		// from 1 to latest
 		{
@@ -802,12 +809,12 @@ func TestLogsSubscription(t *testing.T) {
 		// from 2 to latest
 		{
 			FilterCriteria{FromBlock: big.NewInt(2)},
-			allLogs[1:], newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+			append(allLogs[1:], liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
 		// from latest to latest
 		{
 			FilterCriteria{},
-			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+			liveLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
 		// from 1 to 3
 		{
@@ -865,7 +872,7 @@ func TestLogsSubscription(t *testing.T) {
 
 			for l := range fetched {
 				have, want := fetched[l], tt.expected[l]
-				if have.Address != contract || len(have.Topics) != len(want.Topics) || !bytes.Equal(have.Topics[2].Bytes(), want.Topics[2].Bytes()) || !bytes.Equal(have.Data, want.Data) || have.BlockNumber != want.BlockNumber {
+				if !reflect.DeepEqual(have, want) {
 					tt.err <- fmt.Errorf("invalid log on index %d for case %d have: %+v want: %+v\n", l, i, have, want)
 					return
 				}
@@ -873,6 +880,11 @@ func TestLogsSubscription(t *testing.T) {
 			tt.err <- nil
 		}()
 	}
+
+	// Wait for historical logs to be processed
+	time.Sleep(1 * time.Second)
+	// Send live logs
+	backend.logsFeed.Send(liveLogs)
 
 	for i := range testCases {
 		err := <-testCases[i].err
