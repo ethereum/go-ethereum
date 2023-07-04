@@ -4389,10 +4389,12 @@ func TestTxIndexer(t *testing.T) {
 		},
 	}
 
+	borReceipts := make([]types.Receipts, len(receipts))
+
 	for _, c := range cases {
 		frdir := t.TempDir()
 		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		_, _ = rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+		_, _ = rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), append([]types.Receipts{{}}, borReceipts...), big.NewInt(0))
 
 		// Index the initial blocks from ancient store
 		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA, nil)
