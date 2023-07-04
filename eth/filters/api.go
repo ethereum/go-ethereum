@@ -337,9 +337,11 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	// The original request ctx will be canceled as soon as the parent goroutine
 	// returns a subscription. Use a new context instead.
 	var (
-		ctx      = context.Background()
-		rmLogsCh = make(chan []*types.Log)
+		ctx, cancel = context.WithCancel(context.Background())
+		reorgLogsCh = make(chan []*types.Log)
 	)
+	defer cancel()
+
 	for {
 		// Get the latest block header.
 		header := api.sys.backend.CurrentHeader()
@@ -355,35 +357,62 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		f := api.sys.NewRangeFilter(from, head, crit.Addresses, crit.Topics)
 		logChan, errChan := f.rangeLogsAsync(ctx)
 
-		// subscribe rmLogs
+		// Subscribe the ChainReorg logs
+		// if an ChainReorg occured,
+		// we will first recv the old chain's deleted logs in descending order,
+		// and then the new chain's added logs in desecnding order
+		// see core/blockchain.go#reorg(oldHead *types.Header, newHead *types.Block) for more details
+		// if an reorg happened between `from` and `to`, we will need to think about some senarios:
+		// 1. if a reorg occurs after the currently delivered block, then because this is happening in the future, has nothing to do with the current historical sync, we can just ignore it.
+		// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
 		query := ethereum.FilterQuery{FromBlock: big.NewInt(from), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
-		rmLogsSub, err := api.events.SubscribeLogs(query, rmLogsCh)
+		reorgLogsSub, err := api.events.SubscribeLogs(query, reorgLogsCh)
 		if err != nil {
 			return 0, err
 		}
 
-		var rmLogs []*types.Log
+		var (
+			delivered  uint64
+			reorged    bool
+			reorgBlock uint64
+			reorgLogs  []*types.Log
+		)
 	FORLOOP:
 		for {
 			select {
 			case <-notifier.Closed():
-				rmLogsSub.Unsubscribe()
+				reorgLogsSub.Unsubscribe()
 				return 0, errConnectDropped
 			case err := <-rpcSub.Err(): // client send an unsubscribe request
-				rmLogsSub.Unsubscribe()
+				reorgLogsSub.Unsubscribe()
 				return 0, err
 			case log := <-logChan:
-				notifier.Notify(rpcSub.ID, &log)
-			case logs := <-rmLogsCh:
+				// We transmit all data that meets the following conditions:
+				// 1. reorg not happened
+				// 2. reorg happened but the the log is in the remainder of the currently delivered block
+				if !reorged || log.BlockNumber < reorgBlock || log.BlockNumber <= delivered {
+					notifier.Notify(rpcSub.ID, &log)
+					delivered = log.BlockNumber
+				} else {
+					// No more rangelogs are needed, let's stop the rangeLogsAsync
+					cancel()
+				}
+			case logs := <-reorgLogsCh:
 				for _, log := range logs {
-					log := log
-					if log.Removed {
-						rmLogs = append(rmLogs, log)
+					reorgLogs = append(reorgLogs, log)
+					// Update the reorgBlock to the last removed log's block number or the first added log's
+					if reorgBlock == 0 || log.Removed {
+						reorgBlock = log.BlockNumber
 					}
 				}
+				reorged = reorgBlock < delivered
+				// Reorg happens in the future
+				if !reorged {
+					reorgLogs = reorgLogs[:]
+				}
 			case err := <-errChan:
-				// range filter is done or error, let's also stop the rmLogs subscribe
-				rmLogsSub.Unsubscribe()
+				// Range filter is done or error, let's also stop the reorgLogs subscribe
+				reorgLogsSub.Unsubscribe()
 				if err != nil {
 					return 0, err
 				}
@@ -391,8 +420,8 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			}
 		}
 
-		// send the reorged logs
-		for _, log := range rmLogs {
+		// Send the reorged logs
+		for _, log := range reorgLogs {
 			select {
 			case <-notifier.Closed():
 				return head, errConnectDropped
@@ -403,7 +432,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			}
 		}
 
-		// move forward to the next batch
+		// Move forward to the next batch
 		from = head + 1
 	}
 }
