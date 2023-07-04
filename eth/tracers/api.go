@@ -1193,6 +1193,8 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 			return &ethapi.ExecutionResult{
 				StructLogs: make([]ethapi.StructLogRes, 0),
 			}, nil
+		} else {
+			return nil, errTxNotFound
 		}
 	}
 

@@ -1529,9 +1529,8 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 	var (
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie = trie.NewEmpty(db)
+		entries entrySlice
 	)
-
-	entries := make(entrySlice, uint64(n))
 
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{

@@ -2383,7 +2383,7 @@ func TestDeduplication(t *testing.T) {
 
 	errs := pool.AddRemotesSync(firsts)
 
-	if len(errs) != 0 {
+	if len(errs) != len(firsts) {
 		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), 0)
 	}
 
@@ -2405,7 +2405,7 @@ func TestDeduplication(t *testing.T) {
 
 	// Try to add all of them now and ensure previous ones error out as knowns
 	errs = pool.AddRemotesSync(txs)
-	if len(errs) != 0 {
+	if len(errs) != len(txs) {
 		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), 0)
 	}
 
