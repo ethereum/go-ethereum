@@ -305,8 +305,8 @@ func (db *Database) meter(refresh time.Duration) {
 			compactions[i%2][j] = 0
 		}
 		compactions[i%2][0] = stats.LevelSizes.Sum()
-		for i := range stats.LevelDurations {
-			compactions[i%2][1] += stats.LevelDurations[i].Nanoseconds()
+		for _, t := range stats.LevelDurations {
+			compactions[i%2][1] += t.Nanoseconds()
 		}
 		compactions[i%2][2] = stats.LevelRead.Sum()
 		compactions[i%2][3] = stats.LevelWrite.Sum()
