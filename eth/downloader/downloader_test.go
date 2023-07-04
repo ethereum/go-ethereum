@@ -1860,8 +1860,6 @@ func TestCheckpointEnforcement67Light(t *testing.T) {
 }
 
 func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
-	t.Parallel()
-
 	// Create a new tester with a particular hard coded checkpoint block
 	tester := newTester(t)
 	defer tester.terminate()
