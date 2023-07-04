@@ -322,8 +322,9 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 }
 
 const (
-	dbPebble  = "pebble"
-	dbLeveldb = "leveldb"
+	dbPebble   = "pebble"
+	dbLeveldb  = "leveldb"
+	dbMemorydb = "memorydb"
 )
 
 // hasPreexistingDb checks the given data directory whether a database is already
@@ -354,7 +355,7 @@ type OpenOptions struct {
 	ReadOnly          bool
 }
 
-// openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
+// openKeyValueDatabase opens a disk-based or in-memory key-value database, e.g. leveldb or pebble.
 //
 //	                      type == null          type != null
 //	                   +----------------------------------------
@@ -362,7 +363,7 @@ type OpenOptions struct {
 //	db is existent     |  from db         |  specified type (if compatible)
 func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	// Reject any unsupported database type
-	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
+	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble && o.Type != dbMemorydb {
 		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
 	}
 	// Retrieve any pre-existing database's type and use that or the requested one
@@ -383,6 +384,10 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 		log.Info("Using leveldb as the backing database")
 		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 	}
+	if o.Type == dbMemorydb {
+		log.Info("Using memorydb as the backing database")
+		return  NewMemoryDatabase(), nil
+	}
 	// No pre-existing database, no user-requested one either. Default to Pebble
 	// on supported platforms and LevelDB on anything else.
 	if PebbleEnabled {
@@ -394,7 +399,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	}
 }
 
-// Open opens both a disk-based key-value database such as leveldb or pebble, but also
+// Open opens both a disk-based or in-memory key-value database such as leveldb or pebble, but also
 // integrates it with a freezer database -- if the AncientDir option has been
 // set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where

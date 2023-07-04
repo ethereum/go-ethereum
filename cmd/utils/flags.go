@@ -102,7 +102,7 @@ var (
 	}
 	DBEngineFlag = &cli.StringFlag{
 		Name:     "db.engine",
-		Usage:    "Backing database implementation to use ('pebble' or 'leveldb')",
+		Usage:    "Backing database implementation to use ('leveldb' or 'pebble' or 'memorydb')",
 		Value:    node.DefaultConfig.DBEngine,
 		Category: flags.EthCategory,
 	}
@@ -1432,8 +1432,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
-		if dbEngine != "leveldb" && dbEngine != "pebble" {
-			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+		if dbEngine != "leveldb" && dbEngine != "pebble" && dbEngine != "memorydb" {
+			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble' or 'memorydb'", dbEngine)
 		}
 		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
 		cfg.DBEngine = dbEngine
