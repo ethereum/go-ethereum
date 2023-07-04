@@ -399,6 +399,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				}
 			case logs := <-reorgLogsCh:
 				for _, log := range logs {
+					log := log
 					reorgLogs = append(reorgLogs, log)
 					// Update the reorgBlock to the last removed log's block number or the first added log's
 					if reorgBlock == 0 || log.Removed {
@@ -408,7 +409,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				reorged = reorgBlock < delivered
 				// Reorg happens in the future
 				if !reorged {
-					reorgLogs = reorgLogs[:]
+					reorgLogs = nil
 				}
 			case err := <-errChan:
 				// Range filter is done or error, let's also stop the reorgLogs subscribe
