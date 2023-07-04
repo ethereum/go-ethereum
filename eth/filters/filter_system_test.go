@@ -797,7 +797,7 @@ func TestLogsSubscription(t *testing.T) {
 		// from 1 to latest
 		{
 			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
-			allLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidToBlock, nil,
 		},
 		// from 2 to latest
 		{
@@ -808,21 +808,6 @@ func TestLogsSubscription(t *testing.T) {
 		{
 			FilterCriteria{},
 			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
-		},
-		// from pending to pending
-		{
-			FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())},
-			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
-		},
-		// from latest to pending
-		{
-			FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())},
-			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
-		},
-		// from pending to latest
-		{
-			FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
-			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidFromTo, nil,
 		},
 		// from 1 to 3
 		{
