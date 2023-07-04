@@ -881,7 +881,9 @@ func TestLogsSubscription(t *testing.T) {
 		}()
 	}
 
-	// Wait for historical logs to be processed
+	// Wait for historical logs to be processed.
+	// The reason we need to wait is this test is artificial
+	// and no new block containing the logs is mined.
 	time.Sleep(1 * time.Second)
 	// Send live logs
 	backend.logsFeed.Send(liveLogs)
