@@ -44,6 +44,7 @@ type traceEnv struct {
 	// this lock is used to protect StorageTrace's read and write mutual exclusion.
 	sMu sync.Mutex
 	*types.StorageTrace
+	txStorageTraces []*types.StorageTrace
 	// zktrie tracer is used for zktrie storage to build additional deletion proof
 	zkTrieTracer     map[string]state.ZktrieProofTracer
 	executionResults []*types.ExecutionResult
@@ -125,6 +126,7 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 		},
 		zkTrieTracer:     make(map[string]state.ZktrieProofTracer),
 		executionResults: make([]*types.ExecutionResult, block.Transactions().Len()),
+		txStorageTraces:  make([]*types.StorageTrace, block.Transactions().Len()),
 	}
 
 	key := coinbase.String()
@@ -208,6 +210,13 @@ func (api *API) getBlockTrace(block *types.Block, env *traceEnv) (*types.BlockTr
 			for _, proof := range delProofs {
 				env.DeletionProofs = append(env.DeletionProofs, proof)
 			}
+		}
+	}
+
+	// build dummy per-tx deletion proof
+	for _, txStorageTrace := range env.txStorageTraces {
+		if txStorageTrace != nil {
+			txStorageTrace.DeletionProofs = env.DeletionProofs
 		}
 	}
 
@@ -298,6 +307,17 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		})
 	}
 
+	txStorageTrace := &types.StorageTrace{
+		Proofs:        make(map[string][]hexutil.Bytes),
+		StorageProofs: make(map[string]map[string][]hexutil.Bytes),
+	}
+	// still we have no state root for per tx, only set the head and tail
+	if index == 0 {
+		txStorageTrace.RootBefore = state.GetRootHash()
+	} else if index == len(block.Transactions())-1 {
+		txStorageTrace.RootAfter = block.Root()
+	}
+
 	// merge required proof data
 	proofAccounts := tracer.UpdatedAccounts()
 	proofAccounts[vmenv.FeeRecipient()] = struct{}{}
@@ -306,7 +326,10 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		addrStr := addr.String()
 
 		env.pMu.Lock()
-		_, existed := env.Proofs[addrStr]
+		checkedProof, existed := env.Proofs[addrStr]
+		if existed {
+			txStorageTrace.Proofs[addrStr] = checkedProof
+		}
 		env.pMu.Unlock()
 		if existed {
 			continue
@@ -322,6 +345,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		}
 		env.pMu.Lock()
 		env.Proofs[addrStr] = wrappedProof
+		txStorageTrace.Proofs[addrStr] = wrappedProof
 		env.pMu.Unlock()
 	}
 
@@ -333,6 +357,10 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 			rcfg.ScalarSlot:    {},
 		})
 	for addr, keys := range proofStorages {
+		if _, existed := txStorageTrace.StorageProofs[addr.String()]; !existed {
+			txStorageTrace.StorageProofs[addr.String()] = make(map[string][]hexutil.Bytes)
+		}
+
 		env.sMu.Lock()
 		trie, err := state.GetStorageTrieForProof(addr)
 		if err != nil {
@@ -349,6 +377,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 			keyStr := key.String()
 			isDelete := bytes.Equal(values.Bytes(), common.Hash{}.Bytes())
 
+			txm := txStorageTrace.StorageProofs[addrStr]
 			env.sMu.Lock()
 			m, existed := env.StorageProofs[addrStr]
 			if !existed {
@@ -357,7 +386,8 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 				if zktrieTracer.Available() {
 					env.zkTrieTracer[addrStr] = state.NewProofTracer(trie)
 				}
-			} else if _, existed := m[keyStr]; existed {
+			} else if proof, existed := m[keyStr]; existed {
+				txm[keyStr] = proof
 				// still need to touch tracer for deletion
 				if isDelete && zktrieTracer.Available() {
 					env.zkTrieTracer[addrStr].MarkDeletion(key)
@@ -383,6 +413,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 				wrappedProof[i] = bt
 			}
 			env.sMu.Lock()
+			txm[keyStr] = wrappedProof
 			m[keyStr] = wrappedProof
 			if zktrieTracer.Available() {
 				if isDelete {
@@ -405,6 +436,7 @@ func (api *API) getTxResult(env *traceEnv, state *state.StateDB, index int, bloc
 		ReturnValue:    fmt.Sprintf("%x", returnVal),
 		StructLogs:     vm.FormatLogs(tracer.StructLogs()),
 	}
+	env.txStorageTraces[index] = txStorageTrace
 
 	return nil
 }
@@ -461,6 +493,7 @@ func (api *API) fillBlockTrace(env *traceEnv, block *types.Block) (*types.BlockT
 		Header:           block.Header(),
 		StorageTrace:     env.StorageTrace,
 		ExecutionResults: env.executionResults,
+		TxStorageTraces:  env.txStorageTraces,
 		Transactions:     txs,
 	}
 
