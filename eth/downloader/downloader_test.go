@@ -1899,7 +1899,6 @@ func TestBeaconSync66Snap(t *testing.T) {
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Helper()
-	t.Parallel()
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	var cases = []struct {

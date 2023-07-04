@@ -2798,6 +2798,8 @@ func TestTransactionIndices(t *testing.T) {
 		block.AddTx(tx)
 	})
 
+	borReceipts := make([]types.Receipts, len(receipts))
+
 	check := func(tail *uint64, chain *BlockChain) {
 		stored := rawdb.ReadTxIndexTail(chain.db)
 		if tail == nil && stored != nil {
@@ -2841,7 +2843,7 @@ func TestTransactionIndices(t *testing.T) {
 	for _, l := range limit {
 		frdir := t.TempDir()
 		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+		_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), append([]types.Receipts{{}}, borReceipts...), big.NewInt(0))
 
 		l := l
 
@@ -2867,7 +2869,7 @@ func TestTransactionIndices(t *testing.T) {
 	ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	defer ancientDb.Close()
 
-	_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), []types.Receipts{nil}, big.NewInt(0))
+	_, _ = rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), append([]types.Receipts{{}}, borReceipts...), big.NewInt(0))
 
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
 
