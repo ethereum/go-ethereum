@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,4 +41,20 @@ type EVMLogger interface {
 	// Opcode level
 	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
+}
+
+// TraceContext contains some contextual infos for a transaction execution that is not
+// available from within the EVM object.
+type TraceContext struct {
+	BlockHash   common.Hash // Hash of the block the tx is contained within (zero if dangling tx or call)
+	BlockNumber *big.Int    // Number of the block the tx is contained within (zero if dangling tx or call)
+	TxIndex     int         // Index of the transaction within a block (zero if dangling tx or call)
+	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
+}
+
+// EVMLoggerWithResult interface extends vm.EVMLogger and additionally
+// allows collecting the tracing result.
+type EVMLoggerWithResult interface {
+	EVMLogger
+	GetResult() (json.RawMessage, error)
 }

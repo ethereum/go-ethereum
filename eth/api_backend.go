@@ -18,7 +18,9 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -316,6 +318,24 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
 	return tx, blockHash, blockNumber, index, nil
+}
+
+func (b *EthAPIBackend) GetTransactionTrace(ctx context.Context, traceCfg *tracers.TraceConfig, txHash common.Hash) (json.RawMessage, error) {
+	vmCfg := b.eth.BlockChain().GetVMConfig()
+	if vmCfg.EnableTxTraceRecording &&
+		*vmCfg.TxTracerName == *traceCfg.Tracer &&
+		common.CmpJson(vmCfg.TxTracerConfig, traceCfg.TracerConfig) {
+		data, err := rawdb.ReadTxTrace(b.eth.ChainDb(), txHash)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("transaction trace %s not found", txHash.Hex())
+		}
+		return data, nil
+	}
+
+	return nil, fmt.Errorf("transaction trace config not support")
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {

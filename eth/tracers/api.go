@@ -82,6 +82,7 @@ type Backend interface {
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransactionTrace(ctx context.Context, traceCfg *TraceConfig, txHash common.Hash) (json.RawMessage, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -837,6 +838,16 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")
+	}
+	// if txtrace is enabled, try to get the trace from the database
+	data, err := api.backend.GetTransactionTrace(ctx, config, hash)
+	if err == nil && len(data) > 0 {
+		result := make([]interface{}, 0)
+		err = json.Unmarshal(data, &result)
+		if err == nil {
+			log.Debug("TraceTransaction: trace found in database", "hash", hash)
+			return result, nil
+		}
 	}
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {

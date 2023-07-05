@@ -24,10 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -78,6 +80,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+		if cfg.EnableTxTraceRecording {
+			txctx := &vm.TraceContext{
+				BlockHash:   blockHash,
+				BlockNumber: blockNumber,
+				TxIndex:     i,
+				TxHash:      tx.Hash(),
+			}
+			tracer, err := cfg.TxTracerCreateFn(cfg.TxTracerName, txctx, cfg.TxTracerConfig)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("could not create txtracer: %w", err)
+			}
+			cfg.Tracer = tracer
+			vmenv = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+		}
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -89,6 +105,19 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+		if cfg.EnableTxTraceRecording {
+			tracer := (cfg.Tracer).(vm.EVMLoggerWithResult)
+			if tracer != nil {
+				res, err := tracer.GetResult()
+				if err != nil {
+					log.Error("could not get result from tracer", "err", err)
+				} else {
+					if res != nil {
+						rawdb.WriteTxTrace(p.bc.db, tx.Hash(), res)
+					}
+				}
+			}
+		}
 	}
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()

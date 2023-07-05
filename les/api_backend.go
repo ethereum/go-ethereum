@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
 	"time"
@@ -214,6 +215,9 @@ func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transactio
 
 func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	return light.GetTransaction(ctx, b.eth.odr, txHash)
+}
+func (b *LesApiBackend) GetTransactionTrace(ctx context.Context, traceCfg *tracers.TraceConfig, txHash common.Hash) (json.RawMessage, error) {
+	return nil, errors.New("trace transaction not supported")
 }
 
 func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
