@@ -707,7 +707,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
@@ -761,7 +761,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 

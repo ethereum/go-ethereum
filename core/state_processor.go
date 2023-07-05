@@ -137,6 +137,10 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	// stop recording read and write
 	statedb.SetMVHashmap(nil)
 
+	if evm.ChainConfig().IsLondon(blockNumber) {
+		statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
+	}
+
 	if result.Err == vm.ErrInterrupt {
 		return nil, result.Err
 	}
