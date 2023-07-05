@@ -210,7 +210,7 @@ dependencies = [
 [[package]]
 name = "binprot"
 version = "0.1.8"
-source = "git+https://github.com/openmina/binprot-rs?rev=ead5ba916725abf8ab212b89985b47c79d1a006a#ead5ba916725abf8ab212b89985b47c79d1a006a"
+source = "git+https://github.com/openmina/binprot-rs?rev=dfbd3bbda8b2681d86ac73065523c658ee31d45d#dfbd3bbda8b2681d86ac73065523c658ee31d45d"
 dependencies = [
  "binprot_derive",
  "byteorder",
@@ -220,7 +220,7 @@ dependencies = [
 [[package]]
 name = "binprot_derive"
 version = "0.1.7"
-source = "git+https://github.com/openmina/binprot-rs?rev=ead5ba916725abf8ab212b89985b47c79d1a006a#ead5ba916725abf8ab212b89985b47c79d1a006a"
+source = "git+https://github.com/openmina/binprot-rs?rev=dfbd3bbda8b2681d86ac73065523c658ee31d45d#dfbd3bbda8b2681d86ac73065523c658ee31d45d"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -979,7 +979,7 @@ dependencies = [
 [[package]]
 name = "mina-p2p-messages"
 version = "0.6.4"
-source = "git+https://github.com/openmina/mina-p2p-messages-rs?branch=signed-amount#97cce0286aef69c26f3752c06d47daf4298a3656"
+source = "git+https://github.com/openmina/mina-p2p-messages-rs?rev=94fd3389acdf6986aa6731b0e64f5cd8b0db5eed#94fd3389acdf6986aa6731b0e64f5cd8b0db5eed"
 dependencies = [
  "ark-ff",
  "base64",
@@ -1880,7 +1880,7 @@ version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e686886bc078bc1b0b600cac0147aadb815089b6e4da64016cbd754b6342700f"
 dependencies = [
- "windows-targets 0.48.0",
+ "windows-targets 0.48.1",
 ]
 
 [[package]]
@@ -1909,9 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "windows-targets"
-version = "0.48.0"
+version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b1eb6f0cd7c80c79759c929114ef071b87354ce476d9d94271031c0497adfd5"
+checksum = "05d4b17490f70499f20b9e791dcf6a299785ce8af4d709018206dc5b4953e95f"
 dependencies = [
  "windows_aarch64_gnullvm 0.48.0",
  "windows_aarch64_msvc 0.48.0",

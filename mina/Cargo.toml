@@ -9,12 +9,13 @@ edition = "2021"
 crate-type = ["staticlib"]
 
 [dependencies]
-mina-tree = { version = "0.1.0", path = "../../ledger" }
-mina-p2p-messages = { git = "https://github.com/openmina/mina-p2p-messages-rs", branch = "signed-amount", features = ["hashing"] }
+# rev 79f99e347dba72ed8217bdf5791e6ea2170ff975
+mina-tree = { path = "../../ledger" }
+mina-p2p-messages = { git = "https://github.com/openmina/mina-p2p-messages-rs", features = ["hashing"], rev = "94fd3389acdf6986aa6731b0e64f5cd8b0db5eed" }
 mina-hasher = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
 mina-signer = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
 o1-utils = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes" }
-binprot = { git = "https://github.com/openmina/binprot-rs", rev = "ead5ba916725abf8ab212b89985b47c79d1a006a" }
+binprot = { git = "https://github.com/openmina/binprot-rs", rev = "dfbd3bbda8b2681d86ac73065523c658ee31d45d" }
 
 [build-dependencies]
 cbindgen = "0.24.3"
