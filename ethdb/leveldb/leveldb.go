@@ -147,7 +147,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// leveldb has only up to 7 levels
-	for i := 0; i < 7; i++ {
+	for i := range ldb.levelsGauge {
 		ldb.levelsGauge[i] = metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil)
 	}
 
