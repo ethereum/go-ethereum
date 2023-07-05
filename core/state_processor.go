@@ -126,8 +126,6 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	// pause recording read and write
 	statedb.SetMVHashmap(nil)
 
-	coinbaseBalance := statedb.GetBalance(evm.Context.Coinbase)
-
 	// resume recording read and write
 	statedb.SetMVHashmap(backupMVHashMap)
 
@@ -138,29 +136,6 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 
 	// stop recording read and write
 	statedb.SetMVHashmap(nil)
-
-	if evm.ChainConfig().IsLondon(blockNumber) {
-		statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
-	}
-
-	statedb.AddBalance(evm.Context.Coinbase, result.FeeTipped)
-	output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
-	output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
-
-	// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
-	// add transfer log
-	AddFeeTransferLog(
-		statedb,
-
-		msg.From,
-		evm.Context.Coinbase,
-
-		result.FeeTipped,
-		result.SenderInitBalance,
-		coinbaseBalance,
-		output1.Sub(output1, result.FeeTipped),
-		output2.Add(output2, result.FeeTipped),
-	)
 
 	if result.Err == vm.ErrInterrupt {
 		return nil, result.Err
