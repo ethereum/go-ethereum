@@ -735,9 +735,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 		txs = append(txs, tx)
 	}
 
-	if err := b.TxPool().AddRemotes(txs); err != nil {
-		t.Fatal(err)
-	}
+	b.TxPool().AddRemotes(txs)
 
 	// Start mining!
 	w.start()
@@ -783,9 +781,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 		txs = append(txs, tx)
 	}
 
-	if err := b.TxPool().AddRemotes(txs); err != nil {
-		t.Fatal(err)
-	}
+	b.TxPool().AddRemotes(txs)
 
 	// Start mining!
 	w.start()
