@@ -123,7 +123,9 @@ type handler struct {
 
 	chainSync *chainSyncer
 	wg        sync.WaitGroup
-	peerWG    sync.WaitGroup
+
+	activeHandlers atomic.Int32
+	handlerDoneCh  chan struct{}
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
@@ -143,6 +145,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		merger:         config.Merger,
 		requiredBlocks: config.RequiredBlocks,
 		quitSync:       make(chan struct{}),
+		handlerDoneCh:  make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -288,9 +291,34 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
+// incHandlers increments the number of active handlers if not quitting.
+func (h *handler) incHandlers() bool {
+	if h.chainSync.handlePeerEvent() {
+		h.activeHandlers.Add(1)
+		return true
+	}
+	return false
+}
+
+// decHandlers decrements the number of active handlers, unless quitting, in
+// which case it signals on the handlerDoneCh that it is finished.
+func (h *handler) decHandlers() {
+	select {
+	case <-h.quitSync:
+		h.handlerDoneCh <- struct{}{}
+	default:
+		h.activeHandlers.Add(-1)
+	}
+}
+
 // runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
 // various subsystems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
+	defer h.decHandlers()
+
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
 	snap, err := h.peers.waitSnapExtension(peer)
@@ -298,12 +326,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Snapshot extension barrier failed", "err", err)
 		return err
 	}
-	// TODO(karalabe): Not sure why this is needed
-	if !h.chainSync.handlePeerEvent(peer) {
-		return p2p.DiscQuitting
-	}
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
 
 	// Execute the Ethereum handshake
 	var (
@@ -359,7 +381,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent(peer)
+	h.chainSync.handlePeerEvent()
 
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
@@ -420,8 +442,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
+	defer h.decHandlers()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
 		peer.Log().Warn("Snapshot extension registration failed", "err", err)
@@ -502,7 +526,9 @@ func (h *handler) Stop() {
 	// sessions which are already established but not added to h.peers yet
 	// will exit when they try to register.
 	h.peers.close()
-	h.peerWG.Wait()
+	for i := 0; i < int(h.activeHandlers.Load()); i++ {
+		<-h.handlerDoneCh
+	}
 
 	log.Info("Ethereum protocol stopped")
 }
