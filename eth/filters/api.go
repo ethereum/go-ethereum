@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	logger "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -358,11 +359,11 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		logChan, errChan := f.rangeLogsAsync(ctx)
 
 		// Subscribe the ChainReorg logs
-		// if an ChainReorg occured,
+		// if an ChainReorg occurred,
 		// we will first recv the old chain's deleted logs in descending order,
-		// and then the new chain's added logs in desecnding order
+		// and then the new chain's added logs in descending order
 		// see core/blockchain.go#reorg(oldHead *types.Header, newHead *types.Block) for more details
-		// if an reorg happened between `from` and `to`, we will need to think about some senarios:
+		// if an reorg happened between `from` and `to`, we will need to think about some scenarios:
 		// 1. if a reorg occurs after the currently delivered block, then because this is happening in the future, has nothing to do with the current historical sync, we can just ignore it.
 		// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
 		query := ethereum.FilterQuery{FromBlock: big.NewInt(from), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
@@ -375,7 +376,6 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			delivered  uint64
 			reorged    bool
 			reorgBlock uint64
-			reorgLogs  []*types.Log
 		)
 	FORLOOP:
 		for {
@@ -387,29 +387,39 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				reorgLogsSub.Unsubscribe()
 				return 0, err
 			case log := <-logChan:
-				// We transmit all data that meets the following conditions:
-				// 1. reorg not happened
-				// 2. reorg happened but the the log is in the remainder of the currently delivered block
-				if !reorged || log.BlockNumber < reorgBlock || log.BlockNumber <= delivered {
-					notifier.Notify(rpcSub.ID, &log)
-					delivered = log.BlockNumber
-				} else {
-					// No more rangelogs are needed, let's stop the rangeLogsAsync
+				// TODO: deliver all logs of the current block when we detect a reorg
+				if reorged {
+					logger.Debug("reorged, dropping log from old chain", "log", log)
 					cancel()
+					continue
 				}
+				delivered = log.BlockNumber
+				notifier.Notify(rpcSub.ID, &log)
 			case logs := <-reorgLogsCh:
-				for _, log := range logs {
-					log := log
-					reorgLogs = append(reorgLogs, log)
-					// Update the reorgBlock to the last removed log's block number or the first added log's
-					if reorgBlock == 0 || log.Removed {
-						reorgBlock = log.BlockNumber
-					}
+				if len(logs) == 0 {
+					continue
 				}
-				reorged = reorgBlock < delivered
-				// Reorg happens in the future
+				if reorgBlock == 0 {
+					reorgBlock = logs[0].BlockNumber
+					reorged = reorgBlock <= delivered
+				}
 				if !reorged {
-					reorgLogs = nil
+					continue
+				}
+				if logs[0].Removed {
+					// Send removed logs notification up until the point
+					// we have delivered logs from old chain.
+					for _, log := range logs {
+						if log.BlockNumber <= delivered {
+							notifier.Notify(rpcSub.ID, &log)
+						}
+					}
+				} else {
+					// New logs are emitted for the whole new chain since the reorg block.
+					// Send them all.
+					for _, log := range logs {
+						notifier.Notify(rpcSub.ID, &log)
+					}
 				}
 			case err := <-errChan:
 				// Range filter is done or error, let's also stop the reorgLogs subscribe
@@ -421,22 +431,9 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			}
 		}
 
-		// Send the reorged logs
-		for _, log := range reorgLogs {
-			select {
-			case <-notifier.Closed():
-				return head, errConnectDropped
-			case err := <-rpcSub.Err(): // client send an unsubscribe request
-				return head, err
-			default:
-				notifier.Notify(rpcSub.ID, &log)
-			}
-		}
-
 		// Move forward to the next batch
 		from = head + 1
 	}
-	return 0, nil
 }
 
 // FilterCriteria represents a request to create a new filter.
