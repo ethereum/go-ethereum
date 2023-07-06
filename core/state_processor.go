@@ -141,6 +141,9 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 		statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
 	}
 
+	// TODO(raneet10) Double check
+	statedb.AddBalance(evm.Context.Coinbase, result.FeeTipped)
+
 	if result.Err == vm.ErrInterrupt {
 		return nil, result.Err
 	}
