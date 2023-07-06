@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"dev":      DevJs,
 }
 
 const CliqueJs = `
@@ -884,5 +885,24 @@ web3._extend({
 			getter: 'vflux_requestStats'
 		}),
 	]
+});
+`
+
+const DevJs = `
+web3._extend({
+	property: 'dev',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'addWithdrawal',
+			call: 'dev_addWithdrawal',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setFeeRecipient',
+			call: 'dev_setFeeRecipient',
+			params: 1
+		}),
+	],
 });
 `

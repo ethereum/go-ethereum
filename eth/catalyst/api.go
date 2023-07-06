@@ -407,7 +407,22 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.Execu
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.localBlocks.get(payloadID)
+	data := api.localBlocks.get(payloadID, false)
+	if data == nil {
+		return nil, engine.UnknownPayload
+	}
+	return data, nil
+}
+
+// getFullPayload returns a cached payload by it. The difference is that this
+// function always expects a non-empty payload, but can also return empty one
+// if no transaction is executable.
+//
+// Note, this function is not a part of standard engine API, meant to be used
+// by consensus client mock in dev mode.
+func (api *ConsensusAPI) getFullPayload(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	log.Trace("Engine API request received", "method", "GetFullPayload", "id", payloadID)
+	data := api.localBlocks.get(payloadID, true)
 	if data == nil {
 		return nil, engine.UnknownPayload
 	}
@@ -715,8 +730,8 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
 
-// GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
-// of block bodies by the engine api.
+// GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which
+// allows for retrieval of a list of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBodyV1 {
 	var bodies = make([]*engine.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
@@ -726,8 +741,8 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 	return bodies
 }
 
-// GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
-// of block bodies by the engine api.
+// GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which
+// allows for retrieval of a range of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
 	if start == 0 || count == 0 {
 		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
@@ -753,23 +768,19 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 	if block == nil {
 		return nil
 	}
-
 	var (
 		body        = block.Body()
 		txs         = make([]hexutil.Bytes, len(body.Transactions))
 		withdrawals = body.Withdrawals
 	)
-
 	for j, tx := range body.Transactions {
 		data, _ := tx.MarshalBinary()
 		txs[j] = hexutil.Bytes(data)
 	}
-
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
 	if withdrawals == nil && block.Header().WithdrawalsHash != nil {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
-
 	return &engine.ExecutionPayloadBodyV1{
 		TransactionData: txs,
 		Withdrawals:     withdrawals,
