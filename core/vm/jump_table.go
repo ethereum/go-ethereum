@@ -82,7 +82,8 @@ func validate(jt JumpTable) JumpTable {
 
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
-	enable4844(&instructionSet) // BLOBHASH opcode
+	enable4844(&instructionSet) // EIP-4844 (DATAHASH opcode)
+	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
 	return validate(instructionSet)
 }
 
