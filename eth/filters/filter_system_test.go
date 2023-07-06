@@ -32,12 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type testBackend struct {
@@ -169,34 +171,20 @@ func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return b.fm.NewMatcherBackend()
 }
 
-func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
-	head := b.CurrentBlock()
-	chainView := filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
-	config := filtermaps.Config{
-		History:        history,
-		Disabled:       disabled,
-		ExportFileName: "",
-	}
-	b.fm, _ = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
-	b.fm.Start()
-	b.fm.WaitIdle()
+func (b *testBackend) forwardLogEvents(logCh chan []*types.Log, removedLogCh chan core.RemovedLogsEvent) {
+	go func() {
+		for {
+			select {
+			case logs := <-logCh:
+				b.logsFeed.Send(logs)
+			case logs := <-removedLogCh:
+				b.rmLogsFeed.Send(logs)
+			}
+		}
+	}()
 }
 
-func (b *testBackend) stopFilterMaps() {
-	b.fm.Stop()
-	b.fm = nil
-}
-
-func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
-	b.pendingBlock = block
-	b.pendingReceipts = receipts
-}
-
-func (b *testBackend) HistoryPruningCutoff() uint64 {
-	return 0
-}
-
-func newTestFilterSystem(db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
@@ -727,6 +715,7 @@ func TestLogsSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
+		db       = rawdb.NewMemoryDatabase()
 		signer   = types.HomesteadSigner{}
 		key, _   = crypto.GenerateKey()
 		addr     = crypto.PubkeyToAddress(key.PublicKey)
@@ -748,20 +737,27 @@ func TestLogsSubscription(t *testing.T) {
 				addr:     {Balance: big.NewInt(params.Ether)},
 			},
 		}
-
-		db, blocks, receipts = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 4, func(i int, b *core.BlockGen) {
-			// transfer(address to, uint256 value)
-			data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
-			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
-			b.AddTx(tx)
-		})
 	)
 
-	for i, block := range blocks {
-		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+	// Hack: GenerateChainWithGenesis creates a new db.
+	// Commit the genesis manually and use GenerateChain.
+	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		b.AddTx(tx)
+	})
+	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = bc.InsertChain(blocks)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Generate pending block, logs for which
@@ -893,5 +889,170 @@ func TestLogsSubscription(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %d failed: %v", i, err)
 		}
+	}
+}
+
+// TestLogsSubscription tests if a rpc subscription receives the correct logs
+func TestLogsSubscriptionReorg(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{})
+		api          = NewFilterAPI(sys, false)
+		signer       = types.HomesteadSigner{}
+		key, _       = crypto.GenerateKey()
+		addr         = crypto.PubkeyToAddress(key.PublicKey)
+		contract     = common.HexToAddress("0000000000000000000000000000000000031ec7")
+		// Transfer(address indexed from, address indexed to, uint256 value);
+		topic   = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+		genesis = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				// // SPDX-License-Identifier: GPL-3.0
+				// pragma solidity >=0.7.0 <0.9.0;
+				//
+				// contract Token {
+				//     event Transfer(address indexed from, address indexed to, uint256 value);
+				//     function transfer(address to, uint256 value) public returns (bool) {
+				//         emit Transfer(msg.sender, to, value);
+				//         return true;
+				//     }
+				// }
+				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
+				addr:     {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+
+	// Hack: GenerateChainWithGenesis creates a new db.
+	// Commit the genesis manually and use GenerateChain.
+	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		b.AddTx(tx)
+	})
+	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Hack: FilterSystem is using mock backend, i.e. blockchain events will be not received
+	// by it. Forward them manually.
+	var (
+		bcLogsFeed   = make(chan []*types.Log)
+		bcRmLogsFeed = make(chan core.RemovedLogsEvent)
+	)
+	backend.forwardLogEvents(bcLogsFeed, bcRmLogsFeed)
+	bc.SubscribeLogsEvent(bcLogsFeed)
+	bc.SubscribeRemovedLogsEvent(bcRmLogsFeed)
+
+	_, err = bc.InsertChain(blocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reorgChain, _ := core.GenerateChain(genesis.Config, blocks[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 1000)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(2 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		b.AddTx(tx)
+	})
+
+	// Generate pending block, logs for which
+	// will be sent to subscription feed.
+	_, preceipts := core.GenerateChain(genesis.Config, blocks[len(blocks)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(len(blocks) + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		gen.AddTx(tx)
+	})
+	liveLogs := preceipts[0][0].Logs
+
+	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
+	expected := []*types.Log{
+		// Original chain until block 3
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, BlockHash: blocks[0].Hash(), TxHash: blocks[0].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, BlockHash: blocks[1].Hash(), TxHash: blocks[1].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash()},
+		// Removed log for block 3
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash(), Removed: true},
+		// New logs for 3 onwards
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(1003).Bytes(), BlockNumber: 3, BlockHash: reorgChain[0].Hash(), TxHash: reorgChain[0].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(1004).Bytes(), BlockNumber: 4, BlockHash: reorgChain[1].Hash(), TxHash: reorgChain[1].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(5)}, Data: i2h(1005).Bytes(), BlockNumber: 5, BlockHash: reorgChain[2].Hash(), TxHash: reorgChain[2].Transactions()[0].Hash()},
+	}
+	expected = append(expected, liveLogs...)
+
+	// Subscribe to logs
+	var (
+		errc        = make(chan error)
+		notifier    = newMockNotifier()
+		sub         = &rpc.Subscription{ID: rpc.NewID()}
+		crit        = FilterCriteria{FromBlock: big.NewInt(1)}
+		reorgSignal = make(chan struct{})
+	)
+	err = api.logs(context.Background(), notifier, sub, crit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		var fetched []*types.Log
+
+		timeout := time.After(3 * time.Second)
+	fetchLoop:
+		for {
+			select {
+			case log := <-notifier.c:
+				l := *log.(**types.Log)
+				fetched = append(fetched, l)
+				// We halt the sender by blocking Notify(). However sender will already prepare
+				// logs for next block and send as soon as Notify is released. So we do reorg
+				// one block earlier than we intend.
+				if l.BlockNumber == 2 {
+					// signal reorg
+					reorgSignal <- struct{}{}
+					// wait for reorg to happen
+					<-reorgSignal
+				}
+			case <-timeout:
+				break fetchLoop
+			}
+		}
+
+		if len(fetched) != len(expected) {
+			errc <- fmt.Errorf("invalid number of logs, want %d log(s), got %d", len(expected), len(fetched))
+			return
+		}
+
+		for l := range fetched {
+			have, want := fetched[l], expected[l]
+			if !reflect.DeepEqual(have, want) {
+				errc <- fmt.Errorf("invalid log on index %d have: %+v want: %+v\n", l, have, want)
+				return
+			}
+		}
+		errc <- nil
+	}()
+	<-reorgSignal
+	if n, err := bc.InsertChain(reorgChain); err != nil {
+		t.Fatalf("failed to insert forked chain at %d: %v", n, err)
+	}
+	reorgSignal <- struct{}{}
+
+	// Wait for historical logs to be processed.
+	// The reason we need to wait is this test is artificial
+	// and no new block containing the logs is mined.
+	time.Sleep(1 * time.Second)
+	// Send live logs
+	backend.logsFeed.Send(liveLogs)
+
+	err = <-errc
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
 	}
 }
