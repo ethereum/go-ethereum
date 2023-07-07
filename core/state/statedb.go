@@ -1068,11 +1068,11 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 // (a) the account was not existent and be marked as destructed
 // (b) the account was not existent and be marked as destructed,
 //	   but is resurrected later on in the same block.
-
+//
 // (c) the account was existent and be marked as destructed
 // (d) the account was existent and be marked as destructed,
 //	   but is resurrected later on in the same block.
-
+//
 //   - in case (a), nothing needs be deleted, nil to nil transition can be ignored.
 //   - in case (b), nothing needs be deleted, but nil is used as the original
 //     value for newly created account and storages
