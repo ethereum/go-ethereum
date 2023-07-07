@@ -964,10 +964,10 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 
 	// Generate pending block, logs for which
 	// will be sent to subscription feed.
-	_, preceipts := core.GenerateChain(genesis.Config, blocks[len(blocks)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+	_, preceipts := core.GenerateChain(genesis.Config, reorgChain[len(reorgChain)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
 		// transfer(address to, uint256 value)
 		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(len(blocks) + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(6 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
 		gen.AddTx(tx)
 	})
 	liveLogs := preceipts[0][0].Logs
@@ -1047,7 +1047,7 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	// Wait for historical logs to be processed.
 	// The reason we need to wait is this test is artificial
 	// and no new block containing the logs is mined.
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	// Send live logs
 	backend.logsFeed.Send(liveLogs)
 
