@@ -29,6 +29,62 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
+type Spec struct {
+	spec     string
+	instance Interface
+}
+
+// NewFromSpec parses the spec and returns a Spec. If the string specification
+// is "none", then nil will be returned.
+func NewFromSpec(spec string) (*Spec, error) {
+	instance, err := Parse(spec)
+	if err != nil {
+		return nil, err
+	}
+	if instance == nil {
+		return nil, nil
+	}
+	return &Spec{spec, instance}, nil
+}
+
+// MustFromSpec parses the spec and returns a Spec. If the string specification
+// is "none", then nil will be returned.
+func MustFromSpec(spec string) *Spec {
+	instance, err := Parse(spec)
+	if err != nil {
+		panic(err)
+	}
+	if instance == nil {
+		return nil
+	}
+	return &Spec{spec, instance}
+}
+
+func (s *Spec) Implementation() Interface {
+	if s == nil {
+		return nil
+	}
+	return s.instance
+}
+
+// MarshalTOML implements toml.MarshalerRec.
+func (s *Spec) MarshalTOML() ([]byte, error) {
+	return []byte(fmt.Sprintf("%q", s.spec)), nil
+}
+
+// UnmarshalTOML implements toml.UnmarshalerRec.
+func (s *Spec) UnmarshalTOML(fn func(interface{}) error) error {
+	var spec string
+	fn(&spec)
+	instance, err := Parse(spec)
+	if err != nil {
+		return err
+	}
+	s.instance = instance
+	s.spec = spec
+	return nil
+}
+
 // Interface An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
 type Interface interface {
