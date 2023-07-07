@@ -296,10 +296,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 func (h *handler) protoTracker() {
 	defer h.wg.Done()
 	var (
-		active int
-		done   = make(chan struct{})
+		wg       sync.WaitGroup
+		done     = make(chan struct{})
+		active   int
+		quitting bool
 	)
 	// Start goroutine to track active protocol handlers.
+	wg.Add(1)
 	go func() {
 		for {
 			select {
@@ -308,19 +311,22 @@ func (h *handler) protoTracker() {
 			case <-h.handlerDoneCh:
 				active--
 			case <-done:
+				quitting = true
+			}
+			// Only check if active is 0 after quitSync has been
+			// closed. This ensures that in case active drops to 0
+			// naturally, this tracker routine stays operational.
+			if quitting && active == 0 {
+				wg.Done()
 				return
 			}
 		}
 	}()
 	<-h.quitSync
-
-	// After quit is initiated, poll until all handlers are closed.
-	for range time.Tick(time.Millisecond * 50) {
-		if active == 0 {
-			break
-		}
-	}
 	done <- struct{}{}
+
+	// Wait until all handlers finish.
+	wg.Wait()
 }
 
 // incHandlers signals to increment the number of active handlers if not
