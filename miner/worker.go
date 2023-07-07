@@ -791,14 +791,16 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Shift()
-
+			if err = txs.Shift(); err != nil {
+				log.Warn("ignoring transaction", "err", err)
+			}
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			txs.Shift()
-
+			if err = txs.Shift(); err != nil {
+				log.Warn("ignoring transaction", "err", err)
+			}
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
