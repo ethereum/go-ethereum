@@ -101,7 +101,6 @@ const (
 	SELFBALANCE OpCode = 0x47
 	BASEFEE     OpCode = 0x48
 	BLOBHASH    OpCode = 0x49
-	BEACONROOT  OpCode = 0x4A
 )
 
 // 0x50 range - 'storage' and execution.

@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var historicalStorageAddress = common.BytesToAddress([]byte{0xB})
+var historicalStorageAddress = common.BytesToAddress([]byte{params.BeaconRootStorageAddress})
 
 // ApplyBeaconRoot adds the beacon root from the header to the state.
 func ApplyBeaconRoot(header *types.Header, state *state.StateDB) {
