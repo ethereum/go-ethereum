@@ -538,7 +538,10 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				txset, errs := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				if len(errs) > 0 {
+
+				}
 				tcount := w.current.tcount
 				w.commitTransactions(w.current, txset, nil)
 
@@ -913,13 +916,25 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
+		txs, errs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
+		if errs != nil {
+			for txHash, err := range errs {
+				log.Warn(fmt.Sprintf("wrapping transaction %x failed", txHash), "err", err)
+			}
+		}
+
 		if err := w.commitTransactions(env, txs, interrupt); err != nil {
 			return err
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
+		txs, errs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
+		if errs != nil {
+			for txHash, err := range errs {
+				log.Warn(fmt.Sprintf("wrapping transaction %x failed", txHash), "err", err)
+			}
+		}
+
 		if err := w.commitTransactions(env, txs, interrupt); err != nil {
 			return err
 		}

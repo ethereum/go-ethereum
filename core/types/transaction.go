@@ -566,14 +566,20 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address][]*Transaction, baseFee *big.Int) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address][]*Transaction, baseFee *big.Int) (*TransactionsByPriceAndNonce, map[common.Hash]error) {
 	// Initialize a price and received time based heap with the head transactions
+	errs := make(map[common.Hash]error)
 	heads := make(TxByPriceAndTime, 0, len(txs))
 	for from, accTxs := range txs {
 		acc, _ := Sender(signer, accTxs[0])
 		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
 		if acc != from || err != nil {
+			if err != nil {
+				errs[accTxs[0].Hash()] = err
+			} else {
+				errs[accTxs[0].Hash()] = errors.New("recovered account sender did not match expected value")
+			}
 			delete(txs, from)
 			continue
 		}
@@ -588,7 +594,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address][]*Tra
 		heads:   heads,
 		signer:  signer,
 		baseFee: baseFee,
-	}
+	}, errs
 }
 
 // Peek returns the next transaction by price.
@@ -600,16 +606,18 @@ func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 }
 
 // Shift replaces the current best head with the next one from the same account.
-func (t *TransactionsByPriceAndNonce) Shift() {
+func (t *TransactionsByPriceAndNonce) Shift() error {
 	acc, _ := Sender(t.signer, t.heads[0].tx)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee); err == nil {
+		wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee)
+		if err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			heap.Fix(&t.heads, 0)
-			return
 		}
+		return err
 	}
 	heap.Pop(&t.heads)
+	return nil
 }
 
 // Pop removes the best transaction, *not* replacing it with the next one from
