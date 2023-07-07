@@ -304,9 +304,9 @@ func (h *handler) protoTracker() {
 		for {
 			select {
 			case <-h.handlerStartCh:
-				active--
-			case <-h.handlerDoneCh:
 				active++
+			case <-h.handlerDoneCh:
+				active--
 			case <-done:
 				return
 			}
