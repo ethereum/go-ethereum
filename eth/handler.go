@@ -124,7 +124,7 @@ type handler struct {
 	chainSync *chainSyncer
 	wg        sync.WaitGroup
 
-	activeHandlers atomic.Int32
+	handlerStartCh chan struct{}
 	handlerDoneCh  chan struct{}
 }
 
@@ -146,6 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		requiredBlocks: config.RequiredBlocks,
 		quitSync:       make(chan struct{}),
 		handlerDoneCh:  make(chan struct{}),
+		handlerStartCh: make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -291,24 +292,50 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
-// incHandlers increments the number of active handlers if not quitting.
+// protoTracker tracks the number of active protocol handlers.
+func (h *handler) protoTracker() {
+	defer h.wg.Done()
+	var (
+		active int
+		done   = make(chan struct{})
+	)
+	// Start goroutine to track active protocol handlers.
+	go func() {
+		for {
+			select {
+			case <-h.handlerStartCh:
+				active--
+			case <-h.handlerDoneCh:
+				active++
+			case <-done:
+				return
+			}
+		}
+	}()
+	<-h.quitSync
+
+	// After quit is initiated, poll until all handlers are closed.
+	for range time.Tick(time.Millisecond * 50) {
+		if active == 0 {
+			break
+		}
+	}
+	done <- struct{}{}
+}
+
+// incHandlers signals to increment the number of active handlers if not
+// quitting.
 func (h *handler) incHandlers() bool {
 	if h.chainSync.handlePeerEvent() {
-		h.activeHandlers.Add(1)
+		h.handlerStartCh <- struct{}{}
 		return true
 	}
 	return false
 }
 
-// decHandlers decrements the number of active handlers, unless quitting, in
-// which case it signals on the handlerDoneCh that it is finished.
+// decHandlers signals to decrement the number of active handlers.
 func (h *handler) decHandlers() {
-	select {
-	case <-h.quitSync:
-		h.handlerDoneCh <- struct{}{}
-	default:
-		h.activeHandlers.Add(-1)
-	}
+	h.handlerDoneCh <- struct{}{}
 }
 
 // runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
@@ -510,6 +537,10 @@ func (h *handler) Start(maxPeers int) {
 	// start sync handlers
 	h.wg.Add(1)
 	go h.chainSync.loop()
+
+	// start peer handler tracker
+	h.wg.Add(1)
+	go h.protoTracker()
 }
 
 func (h *handler) Stop() {
@@ -519,16 +550,13 @@ func (h *handler) Stop() {
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
 	close(h.quitSync)
-	h.wg.Wait()
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
 	// sessions which are already established but not added to h.peers yet
 	// will exit when they try to register.
 	h.peers.close()
-	for i := 0; i < int(h.activeHandlers.Load()); i++ {
-		<-h.handlerDoneCh
-	}
+	h.wg.Wait()
 
 	log.Info("Ethereum protocol stopped")
 }
