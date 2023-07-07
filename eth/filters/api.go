@@ -411,6 +411,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// we have delivered logs from old chain.
 					for _, log := range logs {
 						if log.BlockNumber <= delivered {
+							log := log
 							notifier.Notify(rpcSub.ID, &log)
 						}
 					}
@@ -418,6 +419,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// New logs are emitted for the whole new chain since the reorg block.
 					// Send them all.
 					for _, log := range logs {
+						log := log
 						notifier.Notify(rpcSub.ID, &log)
 					}
 				}
