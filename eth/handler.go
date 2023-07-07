@@ -326,11 +326,13 @@ func (h *handler) protoTracker() {
 // incHandlers signals to increment the number of active handlers if not
 // quitting.
 func (h *handler) incHandlers() bool {
-	if h.chainSync.handlePeerEvent() {
+	select {
+	case <-h.quitSync:
+		return false
+	default:
 		h.handlerStartCh <- struct{}{}
 		return true
 	}
-	return false
 }
 
 // decHandlers signals to decrement the number of active handlers.
