@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -613,6 +614,8 @@ func (t *TransactionsByPriceAndNonce) Shift() error {
 		if err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			heap.Fix(&t.heads, 0)
+		} else {
+			err = fmt.Errorf("failed to wrap transaction %x: %s", txs[0].Hash(), err)
 		}
 		return err
 	}
