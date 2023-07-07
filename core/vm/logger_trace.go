@@ -95,7 +95,7 @@ func traceLastNAddressAccount(n int) traceFunc {
 		address := common.Address(stack.data[stack.len()-1-n].Bytes20())
 		state := getWrappedAccountForAddr(l, address)
 		extraData.StateList = append(extraData.StateList, state)
-		l.statesAffected[scope.Contract.Address()] = struct{}{}
+		l.statesAffected[address] = struct{}{}
 
 		return nil
 	}
