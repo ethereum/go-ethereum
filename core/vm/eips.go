@@ -26,7 +26,6 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
-	4788: enable4788,
 	3855: enable3855,
 	3860: enable3860,
 	3529: enable3529,
@@ -217,17 +216,6 @@ func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
 	return nil, nil
-}
-
-// enable4788 applies EIP-4788 (BEACONROOT opcode)
-func enable4788(jt *JumpTable) {
-	// New opcode
-	jt[BEACONROOT] = &operation{
-		execute:     opBeaconRoot,
-		constantGas: GasExtStep,
-		minStack:    minStack(1, 1),
-		maxStack:    maxStack(1, 1),
-	}
 }
 
 // enable3855 applies EIP-3855 (PUSH0 opcode)

@@ -23,15 +23,23 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var historicalStorageAddress = common.BytesToAddress([]byte{0xB})
+
 // ApplyBeaconRoot adds the beacon root from the header to the state.
 func ApplyBeaconRoot(header *types.Header, state *state.StateDB) {
 	// If EIP-4788 is enabled, we need to store the block root
-	historicalStorageAddress := common.BytesToAddress([]byte{20})
+	timeKey, time, rootKey, root := calcBeaconRootIndices(header)
+	state.SetState(historicalStorageAddress, timeKey, time)
+	state.SetState(historicalStorageAddress, rootKey, root)
+}
+
+func calcBeaconRootIndices(header *types.Header) (timeKey, time, rootKey, root common.Hash) {
+	// timeKey -> header.Time
 	timeIndex := header.Time % params.HistoricalRootModulus
-	rootIndex := timeIndex + params.HistoricalRootModulus
-	time := header.Time
-	// timeIndex -> header.Time
-	state.SetState(historicalStorageAddress, common.Uint64ToHash(timeIndex), common.Uint64ToHash(time))
-	// rootIndex -> header.BeaconRoot
-	state.SetState(historicalStorageAddress, common.Uint64ToHash(rootIndex), *header.BeaconRoot)
+	timeKey = common.Uint64ToHash(timeIndex)
+	time = common.Uint64ToHash(header.Time)
+	// rootKey -> header.BeaconRoot
+	rootKey = common.Uint64ToHash(timeIndex + params.HistoricalRootModulus)
+	root = *header.BeaconRoot
+	return
 }

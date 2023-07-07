@@ -452,17 +452,6 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	return nil, nil
 }
 
-func opBeaconRoot(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	loc := scope.Stack.peek()
-	slotsPerHistoricalRoot := 8192
-	loc = loc.Mod(loc, uint256.NewInt(uint64(slotsPerHistoricalRoot))) // TODO might be unsafe
-	hash := common.Hash(loc.Bytes32())
-	historicalStorageAddress := common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffd")
-	val := interpreter.evm.StateDB.GetState(historicalStorageAddress, hash)
-	loc.SetBytes(val.Bytes())
-	return nil, nil
-}
-
 func opCoinbase(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int).SetBytes(interpreter.evm.Context.Coinbase.Bytes()))
 	return nil, nil
