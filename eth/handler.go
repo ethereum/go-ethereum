@@ -327,11 +327,10 @@ func (h *handler) protoTracker() {
 // quitting.
 func (h *handler) incHandlers() bool {
 	select {
+	case h.handlerStartCh <- struct{}{}:
+		return true
 	case <-h.quitSync:
 		return false
-	default:
-		h.handlerStartCh <- struct{}{}
-		return true
 	}
 }
 
