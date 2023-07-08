@@ -10,7 +10,7 @@ The `faucet` is a single binary app (everything included) with all configuration
 
 First thing's first, the `faucet` needs to connect to an Ethereum network, for which it needs the necessary genesis and network infos. Each of the following flags must be set:
 
-- `--genesis` is a path to a file containin the network `genesis.json`
+- `--genesis` is a path to a file containing the network `genesis.json`
 - `--network` is the devp2p network id used during connection
 - `--bootnodes` is a list of `enode://` ids to join the network through
 

@@ -276,7 +276,7 @@ func Transition(ctx *cli.Context) error {
 		return err
 	}
 	body, _ := rlp.EncodeToBytes(txs)
-	// Dump the excution result
+	// Dump the execution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)

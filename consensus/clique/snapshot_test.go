@@ -344,7 +344,7 @@ func TestClique(t *testing.T) {
 			},
 			failure: errUnauthorizedSigner,
 		}, {
-			// An authorized signer that signed recenty should not be able to sign again
+			// An authorized signer that signed recently should not be able to sign again
 			signers: []string{"A", "B"},
 			votes: []testerVote{
 				{signer: "A"},

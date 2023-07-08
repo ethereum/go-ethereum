@@ -12,7 +12,7 @@ These integration tests are included in the bor repo via using the git submodule
 The version used is the last stable release, tagged as v10.4 from branch develop in ethereum/tests    
 Details on release code can be found here https://github.com/ethereum/tests/commit/a380655e5ffab1a5ea0f4d860224bdb19013f06a  
 
-To run the tests, we hava a `make` command:  
+To run the tests, we have a `make` command:  
 ``` 
 make test-integration
 ```
