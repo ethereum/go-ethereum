@@ -62,8 +62,6 @@ func ckzgInit() {
 
 // ckzgBlobToCommitment creates a small commitment out of a data blob.
 func ckzgBlobToCommitment(blob Blob) (Commitment, error) {
-	ckzgIniter.Do(ckzgInit)
-
 	commitment, err := ckzg4844.BlobToKZGCommitment((ckzg4844.Blob)(blob))
 	if err != nil {
 		return Commitment{}, err
