@@ -1877,8 +1877,8 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
-	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
-		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+	if args.GasPrice == nil && args.MaxFeePerGas == nil{
+		return nil, errors.New("missing gasPrice or maxFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
