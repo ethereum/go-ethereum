@@ -205,6 +205,7 @@ type BlockChain struct {
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
+	tracesFeed    event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 

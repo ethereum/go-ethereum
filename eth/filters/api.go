@@ -284,6 +284,37 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	return rpcSub, nil
 }
 
+// Logs creates a subscription that fires for all new log that match the given filter criteria.
+func (api *FilterAPI) Traces(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		traces := make(chan json.RawMessage)
+		tracesSub := api.events.SubscribeTraces(traces)
+
+		for {
+			select {
+			case s := <-traces:
+				notifier.Notify(rpcSub.ID, s)
+			case <-rpcSub.Err():
+				tracesSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				tracesSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery

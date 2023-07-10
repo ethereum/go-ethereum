@@ -18,6 +18,7 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
 	"time"
@@ -275,6 +276,10 @@ func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.miner.SubscribePendingLogs(ch)
+}
+
+func (b *EthAPIBackend) SubscribeTracesEvent(ch chan<- json.RawMessage) event.Subscription {
+	return b.eth.BlockChain().SubscribeTracesEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

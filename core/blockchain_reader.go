@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -408,4 +409,9 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// SubscribeTracesEvent registers a subscription of TracesEvent.
+func (bc *BlockChain) SubscribeTracesEvent(ch chan<- json.RawMessage) event.Subscription {
+	return bc.scope.Track(bc.tracesFeed.Subscribe(ch))
 }

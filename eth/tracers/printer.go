@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -13,6 +14,12 @@ type Printer struct{}
 
 func NewPrinter() *Printer {
 	return &Printer{}
+}
+
+func NewPrinterWithFeed(bc core.BlockChain) *Printer {
+    Ptr := &Printer{}
+	Ptr.EventLoop(bc)
+	return Ptr
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -100,4 +107,18 @@ func (p *Printer) OnNewAccount(a common.Address) {
 
 func (p *Printer) OnGasConsumed(gas, amount uint64) {
 	fmt.Printf("OnGasConsumed: gas=%v, amount=%v\n", gas, amount)
+}
+
+// EventLoop receives data from channels, adds them to Trace,
+// and sends Trace when the OnBlockEnd event occurs. This function operates
+// in a loop and should typically be run in a separate goroutine.
+func (p *Printer) EventLoop(bc core.BlockChain) {
+	for {
+		select {
+		//TODO
+		case <-bc.quit:
+			return
+
+		}
+	}
 }
