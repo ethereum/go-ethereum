@@ -83,6 +83,7 @@ func validate(jt JumpTable) JumpTable {
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // BLOBHASH opcode
+	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
 	return validate(instructionSet)
 }
 
