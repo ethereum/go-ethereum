@@ -1,6 +1,7 @@
 package tracers
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -10,16 +11,26 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-type Printer struct{}
-
-func NewPrinter() *Printer {
-	return &Printer{}
+type Printer struct {
+	eventsChan chan json.RawMessage
+	feed bool
 }
 
-func NewPrinterWithFeed(bc core.BlockChain) *Printer {
-    Ptr := &Printer{}
-	Ptr.EventLoop(bc)
-	return Ptr
+func NewPrinter() *Printer {
+	return &Printer{
+		eventsChan: make(chan json.RawMessage, 100),
+	}
+}
+
+func NewPrinterWithFeed(bc *core.BlockChain) *Printer {
+	p := &Printer{
+		eventsChan: make(chan json.RawMessage, 100),
+        feed: true,
+	}
+	//TODO: Collecting streaming logs through the event loop and distributing them 
+	//triggered by specific events, such as onBlockEnd.
+	//go p.EventLoop(bc)
+	return p
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -112,13 +123,14 @@ func (p *Printer) OnGasConsumed(gas, amount uint64) {
 // EventLoop receives data from channels, adds them to Trace,
 // and sends Trace when the OnBlockEnd event occurs. This function operates
 // in a loop and should typically be run in a separate goroutine.
-func (p *Printer) EventLoop(bc core.BlockChain) {
+
+//TODO: Collecting streaming logs through the event loop and distributing them 
+//triggered by specific events, such as onBlockEnd.
+/* func (p *Printer) EventLoop(bc *core.BlockChain) {
 	for {
 		select {
-		//TODO
-		case <-bc.quit:
-			return
-
+		case data := <-p.eventsChan:
+			bc.TracersEventsSent(data)
 		}
 	}
-}
+} */
