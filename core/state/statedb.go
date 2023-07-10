@@ -1064,21 +1064,26 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 // and associated storage slots if necessary. There are four possible situations
 // here:
 //
-// (a) the account was not existent and be marked as destructed
-// (b) the account was not existent and be marked as destructed,
-//	   but is resurrected later on in the same block.
+//   - the account was not existent and be marked as destructed
 //
-// (c) the account was existent and be marked as destructed
-// (d) the account was existent and be marked as destructed,
-//	   but is resurrected later on in the same block.
+//   - the account was not existent and be marked as destructed,
+//     however, it's resurrected later in the same block.
 //
-//   - in case (a), nothing needs be deleted, nil to nil transition can be ignored.
-//   - in case (b), nothing needs be deleted, but nil is used as the original
-//     value for newly created account and storages
-//   - in case (c), **original** account along with its storages should be deleted,
-//     with their values be tracked as original value.
-//   - in case (d), **original** account along with its storages should be deleted,
-//     with their values be tracked as original value.
+//   - the account was existent and be marked as destructed
+//
+//   - the account was existent and be marked as destructed,
+//     however it's resurrected later in the same block.
+//
+// In case (a), nothing needs be deleted, nil to nil transition can be ignored.
+//
+// In case (b), nothing needs be deleted, nil is used as the original value for
+// newly created account and storages
+//
+// In case (c), **original** account along with its storages should be deleted,
+// with their values be tracked as original value.
+//
+// In case (d), **original** account along with its storages should be deleted,
+// with their values be tracked as original value.
 func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.Hash]struct{}, error) {
 	incomplete := make(map[common.Hash]struct{})
 	for addr, prev := range s.stateObjectsDestruct {

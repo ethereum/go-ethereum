@@ -321,7 +321,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 			}
 		}
 		khash := crypto.HashData(hasher, key[:])
-		storage[khash] = snapshotVal // v will be nil if it's deleted
+		storage[khash] = snapshotVal // snapshotVal will be nil if it's deleted
 
 		// Cache the original value of mutated storage slots
 		if origin == nil {
