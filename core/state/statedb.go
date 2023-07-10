@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 type revision struct {
@@ -1026,7 +1025,7 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 	)
 	for it.Next(true) {
 		// arbitrary stateSize limit, make it configurable
-		if stateSize+nodeSize > 512*opt.MiB {
+		if stateSize+nodeSize > 512*1024*1024 {
 			log.Info("Skip large storage deletion", "address", addr.Hex(), "states", stateSize, "nodes", nodeSize)
 			if metrics.EnabledExpensive {
 				slotDeletionSkip.Inc(1)

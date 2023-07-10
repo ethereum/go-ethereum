@@ -378,6 +378,7 @@ func (s *stateObject) commit(db Database) (*trienode.NodeSet, error) {
 	}
 	// If nothing changed, don't bother with committing anything
 	if tr == nil {
+		s.origin = s.data.Copy()
 		return nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
