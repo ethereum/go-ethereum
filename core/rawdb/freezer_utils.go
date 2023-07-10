@@ -117,3 +117,15 @@ func truncateFreezerFile(file *os.File, size int64) error {
 	}
 	return nil
 }
+
+// grow prepares the slice space for new item, and doubles the slice capacity
+// if space is not enough.
+func grow(buf []byte, n int) []byte {
+	if cap(buf)-len(buf) < n {
+		nbuf := make([]byte, len(buf), 2*cap(buf))
+		copy(nbuf, buf)
+		buf = nbuf
+	}
+	buf = buf[:len(buf)+n]
+	return buf
+}
