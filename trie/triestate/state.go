@@ -26,12 +26,3 @@ type Set struct {
 	Storages   map[common.Hash]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
 	Incomplete map[common.Hash]struct{}               // Indicator whether the storage slot is incomplete due to large deletion
 }
-
-// New constructs the state set with provided data.
-func New(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, incomplete map[common.Hash]struct{}) *Set {
-	return &Set{
-		Accounts:   accounts,
-		Storages:   storages,
-		Incomplete: incomplete,
-	}
-}

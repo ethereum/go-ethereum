@@ -1257,7 +1257,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if root != origin {
 		start := time.Now()
-		if err := s.db.TrieDB().Update(root, origin, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
+		set := &triestate.Set{
+			Accounts:   s.accountsOrigin,
+			Storages:   s.storagesOrigin,
+			Incomplete: incomplete,
+		}
+		if err := s.db.TrieDB().Update(root, origin, nodes, set); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
