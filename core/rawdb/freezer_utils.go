@@ -122,7 +122,11 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // if space is not enough.
 func grow(buf []byte, n int) []byte {
 	if cap(buf)-len(buf) < n {
-		nbuf := make([]byte, len(buf), 2*cap(buf))
+		newcap := 2 * cap(buf)
+		if newcap-len(buf) < n {
+			newcap = len(buf) + n
+		}
+		nbuf := make([]byte, len(buf), newcap)
 		copy(nbuf, buf)
 		buf = nbuf
 	}
