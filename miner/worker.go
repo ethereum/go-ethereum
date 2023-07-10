@@ -904,11 +904,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
-	/*blobtxs := w.eth.BlobPool().Pending(
-		uint256.MustFromBig(env.header.BaseFee),
-		uint256.MustFromBig(misc.CalcBlobFee(*env.header.ExcessDataGas)),
-	)
-	log.Trace("Side-effect log, much wow", "blobs", len(blobtxs))*/
 
 	localTxs, remoteTxs := make(map[common.Address][]*types.Transaction), pending
 	for _, account := range w.eth.TxPool().Locals() {

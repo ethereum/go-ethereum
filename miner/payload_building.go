@@ -135,7 +135,7 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
-// It's only used in tests.
+// Don't call Resolve until ResolveFull returns, otherwise it might block forever.
 func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
@@ -146,7 +146,16 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 			return nil
 		default:
 		}
+		// Wait the full payload construction. Note it might block
+		// forever if Resolve is called in the meantime which
+		// terminates the background construction process.
 		payload.cond.Wait()
+	}
+	// Terminate the background payload construction
+	select {
+	case <-payload.stop:
+	default:
+		close(payload.stop)
 	}
 	return engine.BlockToExecutableData(payload.full, payload.fullFees)
 }

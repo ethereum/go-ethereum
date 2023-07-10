@@ -64,7 +64,11 @@ const (
 	frameWriteTimeout = 20 * time.Second
 )
 
-var errServerStopped = errors.New("server stopped")
+var (
+	errServerStopped       = errors.New("server stopped")
+	errEncHandshakeError   = errors.New("rlpx enc error")
+	errProtoHandshakeError = errors.New("rlpx proto error")
+)
 
 // Config holds Server options.
 type Config struct {
@@ -772,7 +776,11 @@ running:
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
 					inboundCount++
+					serveSuccessMeter.Mark(1)
+				} else {
+					dialSuccessMeter.Mark(1)
 				}
+				activePeerGauge.Inc(1)
 			}
 			c.cont <- err
 
@@ -785,6 +793,7 @@ running:
 			if pd.Inbound() {
 				inboundCount--
 			}
+			activePeerGauge.Dec(1)
 		}
 	}
 
@@ -894,11 +903,8 @@ func (srv *Server) listenLoop() {
 			continue
 		}
 		if remoteIP != nil {
-			var addr *net.TCPAddr
-			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
-				addr = tcp
-			}
-			fd = newMeteredConn(fd, true, addr)
+			fd = newMeteredConn(fd)
+			serveMeter.Mark(1)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
 		go func() {
@@ -939,6 +945,9 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 
 	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
+		if !c.is(inboundConn) {
+			markDialError(err)
+		}
 		c.close(err)
 	}
 	return err
@@ -957,7 +966,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	if dialDest != nil {
 		dialPubkey := new(ecdsa.PublicKey)
 		if err := dialDest.Load((*enode.Secp256k1)(dialPubkey)); err != nil {
-			err = errors.New("dial destination doesn't have a secp256k1 public key")
+			err = fmt.Errorf("%w: dial destination doesn't have a secp256k1 public key", errEncHandshakeError)
 			srv.log.Trace("Setting up connection failed", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 			return err
 		}
@@ -967,7 +976,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
 	if err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
-		return err
+		return fmt.Errorf("%w: %v", errEncHandshakeError, err)
 	}
 	if dialDest != nil {
 		c.node = dialDest
@@ -985,7 +994,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
-		return err
+		return fmt.Errorf("%w: %v", errProtoHandshakeError, err)
 	}
 	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
 		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
