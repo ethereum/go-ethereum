@@ -160,7 +160,6 @@ type BlockchainLogger interface {
 	state.StateLogger
 	OnBlockStart(*types.Block)
 	OnBlockEnd(td *big.Int, err error)
-	OnBlockValidationError(block *types.Block, err error)
 	OnGenesisBlock(*types.Block)
 }
 
@@ -1774,10 +1773,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Process block using the parent state as reference point
 		pstart := time.Now()
+
+		if bc.logger != nil {
+			bc.logger.OnBlockStart(block)
+		}
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
+			if bc.logger != nil {
+				bc.logger.OnBlockEnd(new(big.Int), err)
+			}
 			return it.index, err
 		}
 		ptime := time.Since(pstart)
@@ -1787,7 +1793,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
 			if bc.logger != nil {
-				bc.logger.OnBlockValidationError(block, err)
+				bc.logger.OnBlockEnd(new(big.Int), err)
 			}
 			return it.index, err
 		}
@@ -1823,6 +1829,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		followupInterrupt.Store(true)
 		if err != nil {
+			if bc.logger != nil {
+				bc.logger.OnBlockEnd(new(big.Int), err)
+			}
 			return it.index, err
 		}
 		// Update the metrics touched during block commit
@@ -1840,6 +1849,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		dirty, _ := bc.triedb.Size()
 		stats.report(chain, it.index, dirty, setHead)
+
+		if bc.logger != nil {
+			td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			td.Add(td, block.Difficulty())
+			bc.logger.OnBlockEnd(td, nil)
+		}
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count

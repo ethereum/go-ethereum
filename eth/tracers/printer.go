@@ -78,10 +78,6 @@ func (p *Printer) OnBlockEnd(td *big.Int, err error) {
 	fmt.Printf("OnBlockEnd: td=%v, err=%v\n", td, err)
 }
 
-func (p *Printer) OnBlockValidationError(block *types.Block, err error) {
-	fmt.Printf("OnBlockValidationError: b=%v, err=%v\n", block.NumberU64(), err)
-}
-
 func (p *Printer) OnGenesisBlock(b *types.Block) {
 	fmt.Printf("OnGenesisBlock: b=%v\n", b.NumberU64())
 }
