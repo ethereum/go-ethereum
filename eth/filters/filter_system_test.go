@@ -18,6 +18,7 @@ package filters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -50,6 +51,7 @@ type testBackend struct {
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
+	tracesFeed      event.Feed
 	pendingBlock    *types.Block
 	pendingReceipts types.Receipts
 }
@@ -149,6 +151,10 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
+func (b *testBackend) SubscribeTracesEvent(ch chan<- []json.RawMessage) event.Subscription {
+	return b.tracesFeed.Subscribe(ch)
+}
+
 func (b *testBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
@@ -244,6 +250,48 @@ func TestBlockSubscription(t *testing.T) {
 	<-sub0.Err()
 	<-sub1.Err()
 }
+
+func TestTracesSubscription(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{})
+		api          = NewFilterAPI(sys, false)
+		tracesEvents = [][]json.RawMessage{}  
+	)
+
+	for i := 0; i < 10; i++ {
+		tracesEvents = append(tracesEvents, []json.RawMessage{json.RawMessage(fmt.Sprintf(`{"id":%d}`, i))})  
+	}
+
+	chan0 := make(chan []json.RawMessage)
+	sub0 := api.events.SubscribeTraces(chan0)
+
+	go func() { // simulate client
+		i1 := 0
+		for i1 != len(tracesEvents) {
+			select {
+			case receivedEvents := <-chan0:
+				if !reflect.DeepEqual(receivedEvents, tracesEvents[i1]) {  
+					t.Errorf("sub0 received invalid event on index %d, want %s, got %s", i1, string(tracesEvents[i1][0]), string(receivedEvents[0]))
+				}
+				i1++
+			}
+		}
+
+		sub0.Unsubscribe()
+	}()
+
+	time.Sleep(1 * time.Second)
+	for _, e := range tracesEvents {
+		backend.tracesFeed.Send(e)
+	}
+
+	<-sub0.Err()
+}
+
+
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.
 func TestPendingTxFilter(t *testing.T) {

@@ -164,10 +164,10 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
-	// LastIndexSubscription keeps track of the last index
-	LastIndexSubscription
 	// TracesSubscription keeps track of the normal chain processing operations
 	TracesSubscription
+	// LastIndexSubscription keeps track of the last index
+	LastIndexSubscription
 )
 
 const (
@@ -180,6 +180,8 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
+	// tracesChanSize is the size of channel listening to TracesEvent.
+	tracesChanSize = 100
 )
 
 type subscription struct {
@@ -240,6 +242,7 @@ func NewEventSystem(sys *FilterSystem, lightMode bool) *EventSystem {
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
+		tracesCh:      make(chan []json.RawMessage, tracesChanSize),
 	}
 
 	// Subscribe events
@@ -586,6 +589,7 @@ func (es *EventSystem) eventLoop() {
 		es.rmLogsSub.Unsubscribe()
 		es.pendingLogsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
+		es.tracesSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
