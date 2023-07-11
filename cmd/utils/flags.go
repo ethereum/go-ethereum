@@ -252,11 +252,6 @@ var (
 		Usage:    "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 		Category: flags.EthCategory,
 	}
-	LegacyWhitelistFlag = &cli.StringFlag{
-		Name:     "whitelist",
-		Usage:    "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
-		Category: flags.DeprecatedCategory,
-	}
 	BloomFilterSizeFlag = &cli.Uint64Flag{
 		Name:     "bloomfilter.size",
 		Usage:    "Megabytes of memory allocated to bloom-filter for pruning",
@@ -771,11 +766,6 @@ var (
 		Usage:    "Enables the V4 discovery mechanism",
 		Category: flags.NetworkingCategory,
 		Value:    true,
-	}
-	LegacyDiscoveryV5Flag = &cli.BoolFlag{
-		Name:     "v5disc",
-		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (note: this flag is deprecated, please use --discv5 instead)",
-		Category: flags.NetworkingCategory,
 	}
 	DiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "discovery.v5",

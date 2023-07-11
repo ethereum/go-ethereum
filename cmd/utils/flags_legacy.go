@@ -33,13 +33,27 @@ var ShowDeprecated = &cli.Command{
 
 var DeprecatedFlags = []cli.Flag{
 	NoUSBFlag,
+	LegacyWhitelistFlag,
+	LegacyDiscoveryV5Flag,
 }
 
 var (
-	// (Deprecated May 2020, shown in aliased flags section)
+	// Deprecated May 2020, shown in aliased flags section
 	NoUSBFlag = &cli.BoolFlag{
 		Name:     "nousb",
 		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated March 2022
+	LegacyWhitelistFlag = &cli.StringFlag{
+		Name:     "whitelist",
+		Usage:    "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated July 2023
+	LegacyDiscoveryV5Flag = &cli.BoolFlag{
+		Name:     "v5disc",
+		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use --discv5 instead)",
 		Category: flags.DeprecatedCategory,
 	}
 )
