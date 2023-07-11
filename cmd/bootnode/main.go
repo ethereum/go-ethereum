@@ -109,66 +109,18 @@ func main() {
 		utils.Fatalf("-ListenUDP: %v", err)
 	}
 
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		var (
-			protocol   = "udp"
-			name       = "ethereum discovery"
-			intport    = realaddr.Port
-			extport    = realaddr.Port
-			mapTimeout = nat.DefaultMapTimeout
+	db, _ := enode.OpenDB("")
+	ln := enode.NewLocalNode(db, nodeKey)
 
-			newLogger = func(p string, e int, i int, n nat.Interface) log.Logger {
-				return log.New("proto", p, "extport", e, "intport", i, "interface", n)
-			}
-		)
-
-		if !realaddr.IP.IsLoopback() {
-			log := newLogger(protocol, extport, intport, natm)
-
-			p, err := natm.AddMapping(protocol, extport, intport, name, mapTimeout)
-			if err != nil {
-				log.Debug("Couldn't add port mapping", "err", err)
-			} else {
-				log.Info("Mapped network port")
-				if p != uint16(extport) {
-					log.Debug("Already mapped port", extport, "use alternative port", p)
-					log = newLogger(protocol, int(p), intport, natm)
-					extport = int(p)
-				}
-			}
-
-			go func() {
-				refresh := time.NewTimer(mapTimeout)
-				for {
-					<-refresh.C
-					log.Trace("Start port mapping")
-					p, err := natm.AddMapping(protocol, extport, intport, name, mapTimeout)
-					if err != nil {
-						log.Debug("Couldn't add port mapping", "err", err)
-					} else {
-						if p != uint16(extport) {
-							// If the port mapping is changed after the boot node is executed and the
-							// URL is shared, there is no point in continuing the node. In this case,
-							// re-execute with an available port and share the URL again.
-							natm.DeleteMapping(protocol, int(p), intport)
-							panic(fmt.Errorf("port %d already mapped to another address (hint: use %d", extport, p))
-						}
-						log.Info("Mapped network port")
-					}
-					refresh.Reset(mapTimeout)
-				}
-			}()
-		}
-		if extip, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: extip, Port: extport}
+	listenerAddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil && !listenerAddr.IP.IsLoopback() {
+		natAddr := doPortMapping(natm, ln, listenerAddr)
+		if natAddr != nil {
+			listenerAddr = natAddr
 		}
 	}
 
-	printNotice(&nodeKey.PublicKey, *realaddr)
-
-	db, _ := enode.OpenDB("")
-	ln := enode.NewLocalNode(db, nodeKey)
+	printNotice(&nodeKey.PublicKey, *listenerAddr)
 	cfg := discover.Config{
 		PrivateKey:  nodeKey,
 		NetRestrict: restrictList,
@@ -194,4 +146,61 @@ func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
 	fmt.Println(n.URLv4())
 	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")
 	fmt.Println("We recommend using a regular node as bootstrap node for production deployments.")
+}
+
+func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *net.UDPAddr {
+	const (
+		protocol = "udp"
+		name     = "ethereum discovery"
+	)
+	newLogger := func(external int, internal int) log.Logger {
+		return log.New("proto", protocol, "extport", external, "intport", internal, "interface", natm)
+	}
+
+	var (
+		intport    = addr.Port
+		extaddr    = &net.UDPAddr{IP: addr.IP, Port: addr.Port}
+		mapTimeout = nat.DefaultMapTimeout
+		log        = newLogger(addr.Port, intport)
+	)
+	addMapping := func() {
+		// Get the external address.
+		var err error
+		extaddr.IP, err = natm.ExternalIP()
+		if err != nil {
+			log.Debug("Couldn't get external IP", "err", err)
+			return
+		}
+		// Create the mapping.
+		p, err := natm.AddMapping(protocol, extaddr.Port, intport, name, mapTimeout)
+		if err != nil {
+			log.Debug("Couldn't add port mapping", "err", err)
+			return
+		}
+		if p != uint16(extaddr.Port) {
+			extaddr.Port = int(p)
+			log = newLogger(extaddr.Port, intport)
+			log.Info("NAT mapped alternate port")
+		} else {
+			log.Info("NAT mapped port")
+		}
+		// Update IP/port information of the local node.
+		ln.SetStaticIP(extaddr.IP)
+		ln.SetFallbackUDP(extaddr.Port)
+	}
+
+	// Perform mapping once, synchronously.
+	log.Info("Attempting port mapping")
+	addMapping()
+
+	// Refresh the mapping periodically.
+	go func() {
+		refresh := time.NewTimer(mapTimeout)
+		for range refresh.C {
+			addMapping()
+			refresh.Reset(mapTimeout)
+		}
+	}()
+
+	return extaddr
 }
