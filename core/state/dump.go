@@ -171,7 +171,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		} else {
 			address = &addr
 		}
-		obj := newObject(s, addr, data)
+		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
 			account.Code = obj.Code(s.db)
 		}
