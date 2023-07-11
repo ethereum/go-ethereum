@@ -41,15 +41,21 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
-	jwtSecret          []byte // optional JWT secret
+	rpcEndpointConfig
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins   []string
-	Modules   []string
-	prefix    string // path prefix on which to mount ws handler
-	jwtSecret []byte // optional JWT secret
+	Origins []string
+	Modules []string
+	prefix  string // path prefix on which to mount ws handler
+	rpcEndpointConfig
+}
+
+type rpcEndpointConfig struct {
+	jwtSecret              []byte // optional JWT secret
+	batchItemLimit         int
+	batchResponseSizeLimit int
 }
 
 type rpcHandler struct {
@@ -106,7 +112,7 @@ func (h *httpServer) setListenAddr(host string, port int) error {
 	}
 
 	h.host, h.port = host, port
-	h.endpoint = fmt.Sprintf("%s:%d", host, port)
+	h.endpoint = net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	return nil
 }
 
@@ -297,6 +303,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
+	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
@@ -328,6 +335,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
+	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}

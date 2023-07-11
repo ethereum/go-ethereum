@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package snapshot
+package snap
 
 import (
-	"bytes"
-
-	"github.com/ethereum/go-ethereum/common"
+	metrics "github.com/ethereum/go-ethereum/metrics"
 )
 
-// hashes is a helper to implement sort.Interface.
-type hashes []common.Hash
+var (
+	ingressRegistrationErrorName = "eth/protocols/snap/ingress/registration/error"
+	egressRegistrationErrorName  = "eth/protocols/snap/egress/registration/error"
 
-// Len is the number of elements in the collection.
-func (hs hashes) Len() int { return len(hs) }
-
-// Less reports whether the element with index i should sort before the element
-// with index j.
-func (hs hashes) Less(i, j int) bool { return bytes.Compare(hs[i][:], hs[j][:]) < 0 }
-
-// Swap swaps the elements with indexes i and j.
-func (hs hashes) Swap(i, j int) { hs[i], hs[j] = hs[j], hs[i] }
+	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
+	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
+)

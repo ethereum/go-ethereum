@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -159,7 +160,7 @@ var (
 		Usage:    "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
 		Category: flags.DevCategory,
 	}
-	DeveloperPeriodFlag = &cli.IntFlag{
+	DeveloperPeriodFlag = &cli.Uint64Flag{
 		Name:     "dev.period",
 		Usage:    "Block period to use in developer mode (0 = mine only if transaction pending)",
 		Category: flags.DevCategory,
@@ -263,6 +264,11 @@ var (
 		Usage:    "Manually specify the Cancun fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	OverrideVerkle = &cli.Uint64Flag{
+		Name:     "override.verkle",
+		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
 		Name:     "light.serve",
@@ -329,18 +335,18 @@ var (
 	TxPoolJournalFlag = &cli.StringFlag{
 		Name:     "txpool.journal",
 		Usage:    "Disk journal for local transaction to survive node restarts",
-		Value:    txpool.DefaultConfig.Journal,
+		Value:    ethconfig.Defaults.TxPool.Journal,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolRejournalFlag = &cli.DurationFlag{
 		Name:     "txpool.rejournal",
 		Usage:    "Time interval to regenerate the local transaction journal",
-		Value:    txpool.DefaultConfig.Rejournal,
+		Value:    ethconfig.Defaults.TxPool.Rejournal,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolPriceLimitFlag = &cli.Uint64Flag{
 		Name:     "txpool.pricelimit",
-		Usage:    "Minimum gas price limit to enforce for acceptance into the pool",
+		Usage:    "Minimum gas price tip to enforce for acceptance into the pool",
 		Value:    ethconfig.Defaults.TxPool.PriceLimit,
 		Category: flags.TxPoolCategory,
 	}
@@ -380,7 +386,6 @@ var (
 		Value:    ethconfig.Defaults.TxPool.Lifetime,
 		Category: flags.TxPoolCategory,
 	}
-
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
@@ -398,18 +403,6 @@ var (
 		Name:     "cache.trie",
 		Usage:    "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
 		Value:    15,
-		Category: flags.PerfCategory,
-	}
-	CacheTrieJournalFlag = &cli.StringFlag{
-		Name:     "cache.trie.journal",
-		Usage:    "Disk journal directory for trie cache to survive node restarts",
-		Value:    ethconfig.Defaults.TrieCleanCacheJournal,
-		Category: flags.PerfCategory,
-	}
-	CacheTrieRejournalFlag = &cli.DurationFlag{
-		Name:     "cache.trie.rejournal",
-		Usage:    "Time interval to regenerate the trie cache journal",
-		Value:    ethconfig.Defaults.TrieCleanCacheRejournal,
 		Category: flags.PerfCategory,
 	}
 	CacheGCFlag = &cli.IntFlag{
@@ -706,6 +699,18 @@ var (
 	AllowUnprotectedTxs = &cli.BoolFlag{
 		Name:     "rpc.allow-unprotected-txs",
 		Usage:    "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
+		Category: flags.APICategory,
+	}
+	BatchRequestLimit = &cli.IntFlag{
+		Name:     "rpc.batch-request-limit",
+		Usage:    "Maximum number of requests in a batch",
+		Value:    node.DefaultConfig.BatchRequestLimit,
+		Category: flags.APICategory,
+	}
+	BatchResponseMaxSize = &cli.IntFlag{
+		Name:     "rpc.batch-response-max-size",
+		Usage:    "Maximum number of bytes returned from a batched call",
+		Value:    node.DefaultConfig.BatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
 	EnablePersonal = &cli.BoolFlag{
@@ -1133,6 +1138,14 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(AllowUnprotectedTxs.Name) {
 		cfg.AllowUnprotectedTxs = ctx.Bool(AllowUnprotectedTxs.Name)
 	}
+
+	if ctx.IsSet(BatchRequestLimit.Name) {
+		cfg.BatchRequestLimit = ctx.Int(BatchRequestLimit.Name)
+	}
+
+	if ctx.IsSet(BatchResponseMaxSize.Name) {
+		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
+	}
 }
 
 // setGraphQL creates the GraphQL listener interface string from the set
@@ -1487,7 +1500,7 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	}
 }
 
-func setTxPool(ctx *cli.Context, cfg *txpool.Config) {
+func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 	if ctx.IsSet(TxPoolLocalsFlag.Name) {
 		locals := strings.Split(ctx.String(TxPoolLocalsFlag.Name), ",")
 		for _, account := range locals {
@@ -1692,12 +1705,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
-	if ctx.IsSet(CacheTrieJournalFlag.Name) {
-		cfg.TrieCleanCacheJournal = ctx.String(CacheTrieJournalFlag.Name)
-	}
-	if ctx.IsSet(CacheTrieRejournalFlag.Name) {
-		cfg.TrieCleanCacheRejournal = ctx.Duration(CacheTrieRejournalFlag.Name)
-	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cfg.TrieDirtyCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
@@ -1817,7 +1824,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.Int(DeveloperPeriodFlag.Name)), ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
+		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
 			// If datadir doesn't exist we need to open db in write-mode
 			// so leveldb can create files.
@@ -1891,9 +1898,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if err != nil {
 			Fatalf("Failed to create the LES server: %v", err)
 		}
-	}
-	if err := ethcatalyst.Register(stack, backend); err != nil {
-		Fatalf("Failed to register the Engine API service: %v", err)
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
@@ -1997,7 +2001,7 @@ func SetupMetrics(ctx *cli.Context) {
 		}
 
 		if ctx.IsSet(MetricsHTTPFlag.Name) {
-			address := fmt.Sprintf("%s:%d", ctx.String(MetricsHTTPFlag.Name), ctx.Int(MetricsPortFlag.Name))
+			address := net.JoinHostPort(ctx.String(MetricsHTTPFlag.Name), fmt.Sprintf("%d", ctx.Int(MetricsPortFlag.Name)))
 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
 			exp.Setup(address)
 		} else if ctx.IsSet(MetricsPortFlag.Name) {

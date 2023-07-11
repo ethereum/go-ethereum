@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package txpool
+package legacypool
 
 import (
 	"container/heap"
@@ -590,7 +590,7 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
-		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio || floatingRatio == 0 {
+		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated

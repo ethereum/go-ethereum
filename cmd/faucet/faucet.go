@@ -268,11 +268,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		}
 	}
 	// Attach to the client and retrieve and interesting metadatas
-	api, err := stack.Attach()
-	if err != nil {
-		stack.Close()
-		return nil, err
-	}
+	api := stack.Attach()
 	client := ethclient.NewClient(api)
 
 	return &faucet{

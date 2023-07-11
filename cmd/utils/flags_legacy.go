@@ -33,7 +33,9 @@ var ShowDeprecated = &cli.Command{
 
 var DeprecatedFlags = []cli.Flag{
 	NoUSBFlag,
-	LegacyWhitelistFlag,
+  LegacyWhitelistFlag,
+	CacheTrieJournalFlag,
+	CacheTrieRejournalFlag,
 	LegacyDiscoveryV5Flag,
 }
 
@@ -51,11 +53,21 @@ var (
 		Category: flags.DeprecatedCategory,
 	}
 	// Deprecated July 2023
-	LegacyDiscoveryV5Flag = &cli.BoolFlag{
+	CacheTrieJournalFlag = &cli.StringFlag{
+		Name:     "cache.trie.journal",
+		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Category: flags.PerfCategory,
+	}
+	CacheTrieRejournalFlag = &cli.DurationFlag{
+		Name:     "cache.trie.rejournal",
+		Usage:    "Time interval to regenerate the trie cache journal",
+		Category: flags.PerfCategory,
+	}
+  LegacyDiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "v5disc",
 		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use --discv5 instead)",
 		Category: flags.DeprecatedCategory,
-	}
+  }
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.

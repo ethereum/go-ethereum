@@ -438,14 +438,12 @@ func createNode(t *testing.T) *node.Node {
 
 func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
 	ethConf := &ethconfig.Config{
-		Genesis:                 gspec,
-		NetworkId:               1337,
-		TrieCleanCache:          5,
-		TrieCleanCacheJournal:   "triecache",
-		TrieCleanCacheRejournal: 60 * time.Minute,
-		TrieDirtyCache:          5,
-		TrieTimeout:             60 * time.Minute,
-		SnapshotCache:           5,
+		Genesis:        gspec,
+		NetworkId:      1337,
+		TrieCleanCache: 5,
+		TrieDirtyCache: 5,
+		TrieTimeout:    60 * time.Minute,
+		SnapshotCache:  5,
 	}
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {

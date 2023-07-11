@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -57,25 +57,23 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:                downloader.SnapSync,
-	NetworkId:               1,
-	TxLookupLimit:           2350000,
-	LightPeers:              100,
-	UltraLightFraction:      75,
-	DatabaseCache:           512,
-	TrieCleanCache:          154,
-	TrieCleanCacheJournal:   "triecache",
-	TrieCleanCacheRejournal: 60 * time.Minute,
-	TrieDirtyCache:          256,
-	TrieTimeout:             60 * time.Minute,
-	SnapshotCache:           102,
-	FilterLogCacheSize:      32,
-	Miner:                   miner.DefaultConfig,
-	TxPool:                  txpool.DefaultConfig,
-	RPCGasCap:               50000000,
-	RPCEVMTimeout:           5 * time.Second,
-	GPO:                     FullNodeGPO,
-	RPCTxFeeCap:             1, // 1 ether
+	SyncMode:           downloader.SnapSync,
+	NetworkId:          1,
+	TxLookupLimit:      2350000,
+	LightPeers:         100,
+	UltraLightFraction: 75,
+	DatabaseCache:      512,
+	TrieCleanCache:     154,
+	TrieDirtyCache:     256,
+	TrieTimeout:        60 * time.Minute,
+	SnapshotCache:      102,
+	FilterLogCacheSize: 32,
+	Miner:              miner.DefaultConfig,
+	TxPool:             legacypool.DefaultConfig,
+	RPCGasCap:          50000000,
+	RPCEVMTimeout:      5 * time.Second,
+	GPO:                FullNodeGPO,
+	RPCTxFeeCap:        1, // 1 ether
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -124,13 +122,11 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
-	TrieCleanCache          int
-	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
-	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
-	TrieDirtyCache          int
-	TrieTimeout             time.Duration
-	SnapshotCache           int
-	Preimages               bool
+	TrieCleanCache int
+	TrieDirtyCache int
+	TrieTimeout    time.Duration
+	SnapshotCache  int
+	Preimages      bool
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
@@ -139,7 +135,7 @@ type Config struct {
 	Miner miner.Config
 
 	// Transaction pool options
-	TxPool txpool.Config
+	TxPool legacypool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
@@ -162,6 +158,9 @@ type Config struct {
 
 	// OverrideCancun (TODO: remove after the fork)
 	OverrideCancun *uint64 `toml:",omitempty"`
+
+	// OverrideVerkle (TODO: remove after the fork)
+	OverrideVerkle *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
