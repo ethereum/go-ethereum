@@ -68,17 +68,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 		err         error
 	)
-	if p.bc.logger != nil {
-		p.bc.logger.OnBlockStart(block)
-		defer func() {
-			var td *big.Int
-			if err == nil {
-				td = p.bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-				td.Add(td, block.Difficulty())
-			}
-			p.bc.logger.OnBlockEnd(td, err)
-		}()
-	}
+
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
@@ -99,9 +89,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		var receipt *types.Receipt
 		receipt, err = applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-		if vmenv.Config.Tracer != nil {
-			vmenv.Config.Tracer.CaptureTxEnd(receipt)
-		}
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}

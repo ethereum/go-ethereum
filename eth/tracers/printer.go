@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -36,7 +37,7 @@ func NewPrinterWithFeed(bc *core.BlockChain) *Printer {
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (p *Printer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	fmt.Printf("CaptureStart: from=%v, to=%v, create=%v, input=%v, gas=%v, value=%v\n", from, to, create, input, gas, value)
+	fmt.Printf("CaptureStart: from=%v, to=%v, create=%v, input=%v, gas=%v, value=%v\n", from, to, create, hexutil.Bytes(input), gas, value)
 	if p.feed {
 		message := map[string]interface{}{
 			"event": "CaptureStart",
@@ -60,7 +61,7 @@ func (p *Printer) CaptureStart(from common.Address, to common.Address, create bo
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (p *Printer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	fmt.Printf("CaptureEnd: output=%v, gasUsed=%v, err=%v\n", output, gasUsed, err)
+	fmt.Printf("CaptureEnd: output=%v, gasUsed=%v, err=%v\n", hexutil.Bytes(output), gasUsed, err)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -136,7 +137,7 @@ func (p *Printer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (p *Printer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	fmt.Printf("CaptureEnter: typ=%v, from=%v, to=%v, input=%v, gas=%v, value=%v\n", typ, from, to, input, gas, value)
+	fmt.Printf("CaptureEnter: typ=%v, from=%v, to=%v, input=%v, gas=%v, value=%v\n", typ, from, to, hexutil.Bytes(input), gas, value)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -162,7 +163,7 @@ func (p *Printer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Add
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	fmt.Printf("CaptureExit: output=%v, gasUsed=%v, err=%v\n", output, gasUsed, err)
+	fmt.Printf("CaptureExit: output=%v, gasUsed=%v, err=%v\n", hexutil.Bytes(output), gasUsed, err)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -183,7 +184,12 @@ func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
-	fmt.Printf("CaptureTxStart: tx=%v\n", tx)
+	buf, err := json.Marshal(tx)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	fmt.Printf("CaptureTxStart: tx=%s\n", buf)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -202,7 +208,12 @@ func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 }
 
 func (p *Printer) CaptureTxEnd(receipt *types.Receipt) {
-	fmt.Printf("CaptureTxEnd: receipt=%v\n", receipt)
+	buf, err := json.Marshal(receipt)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	fmt.Printf("CaptureTxEnd: receipt=%s\n", buf)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -256,26 +267,6 @@ func (p *Printer) OnBlockEnd(td *big.Int, err error) {
 		}
 
 		p.triggerEvent <- json.RawMessage(data)
-	}
-}
-
-func (p *Printer) OnBlockValidationError(block *types.Block, err error) {
-	fmt.Printf("OnBlockValidationError: b=%v, err=%v\n", block.NumberU64(), err)
-
-	if p.feed {
-		message := map[string]interface{}{
-			"event": "OnBlockValidationError",
-			"blockNumber": block.NumberU64(),
-			"error": err.Error(),
-		}
-
-		data, err := json.Marshal(message)
-		if err != nil {
-			fmt.Printf("Failed to marshal json: %v\n", err)
-			return
-		}
-
-		p.eventsChan <- json.RawMessage(data)
 	}
 }
 
@@ -341,7 +332,7 @@ func (p *Printer) OnNonceChange(a common.Address, prev, new uint64) {
 }
 
 func (p *Printer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-	fmt.Printf("OnCodeChange: a=%v, prevCodeHash=%v, prev=%v, codeHash=%v, code=%v\n", a, prevCodeHash, prev, codeHash, code)
+	fmt.Printf("OnCodeChange: a=%v, prevCodeHash=%v, prev=%v, codeHash=%v, code=%v\n", a, prevCodeHash, hexutil.Bytes(prev), codeHash, code)
 
 	if p.feed {
 		message := map[string]interface{}{
@@ -386,7 +377,12 @@ func (p *Printer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 }
 
 func (p *Printer) OnLog(l *types.Log) {
-	fmt.Printf("OnLog: l=%v\n", l)
+	buf, err := json.Marshal(l)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	fmt.Printf("OnLog: l=%s\n", buf)
 
 	if p.feed {
 		message := map[string]interface{}{
