@@ -111,6 +111,10 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to start test stack: %v", err)
 	}
 	client := stack.Attach()
+	t.Cleanup(func() {
+		client.Close()
+	})
+
 	prompter := &hookedPrompter{scheduler: make(chan string)}
 	printer := new(bytes.Buffer)
 
