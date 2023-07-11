@@ -148,6 +148,34 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 	return api.blockByHash(ctx, hash)
 }
 
+// blockByNumberOrHash is the wrapper of the chain access function offered by backend.
+// It will return an error if the block is not found.
+func (api *API) blockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
+	var (
+		err   error
+		block *types.Block
+	)
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		block, err = api.blockByHash(ctx, hash)
+	} else if number, ok := blockNrOrHash.Number(); ok {
+		if number == rpc.PendingBlockNumber {
+			// We don't have access to the miner here. For tracing 'future' transactions,
+			// it can be done with block- and state-overrides instead, which offers
+			// more flexibility and stability than trying to trace on 'pending', since
+			// the contents of 'pending' is unstable and probably not a true representation
+			// of what the next actual block is likely to contain.
+			return nil, errors.New("tracing on top of pending is not supported")
+		}
+		block, err = api.blockByNumber(ctx, number)
+	} else {
+		return nil, errors.New("invalid arguments; neither block nor hash specified")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
 // TraceConfig holds extra parameters to trace functions.
 type TraceConfig struct {
 	*logger.Config
@@ -176,9 +204,9 @@ type StdTraceConfig struct {
 
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
-	TxHash common.Hash `json:"txHash"`           // transaction hash
-	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
-	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+	TxHash *common.Hash `json:"txHash,omitempty"` // transaction hash
+	Result interface{}  `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string       `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
 
 // blockTraceTask represents a single block trace task when an entire chain is
@@ -279,13 +307,15 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					}
 					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
-						task.results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+						txHash := tx.Hash()
+						task.results[i] = &txTraceResult{TxHash: &txHash, Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
 						break
 					}
 					// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 					task.statedb.Finalise(api.backend.ChainConfig().IsEIP158(task.block.Number()))
-					task.results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+					txHash := tx.Hash()
+					task.results[i] = &txTraceResult{TxHash: &txHash, Result: res}
 				}
 				// Tracing state is used up, queue it for de-referencing. Note the
 				// state is the parent state of trace block, use block.number-1 as
@@ -616,7 +646,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		if err != nil {
 			return nil, err
 		}
-		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+		txHash := tx.Hash()
+		results[i] = &txTraceResult{TxHash: &txHash, Result: res}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(is158)
@@ -657,10 +688,12 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 				}
 				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
-					results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
+					txHash := txs[task.index].Hash()
+					results[task.index] = &txTraceResult{TxHash: &txHash, Error: err.Error()}
 					continue
 				}
-				results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Result: res}
+				txHash := txs[task.index].Hash()
+				results[task.index] = &txTraceResult{TxHash: &txHash, Result: res}
 			}
 		}()
 	}
@@ -866,25 +899,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 // top of the provided block and returns them as a JSON object.
 func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
 	// Try to retrieve the specified block
-	var (
-		err   error
-		block *types.Block
-	)
-	if hash, ok := blockNrOrHash.Hash(); ok {
-		block, err = api.blockByHash(ctx, hash)
-	} else if number, ok := blockNrOrHash.Number(); ok {
-		if number == rpc.PendingBlockNumber {
-			// We don't have access to the miner here. For tracing 'future' transactions,
-			// it can be done with block- and state-overrides instead, which offers
-			// more flexibility and stability than trying to trace on 'pending', since
-			// the contents of 'pending' is unstable and probably not a true representation
-			// of what the next actual block is likely to contain.
-			return nil, errors.New("tracing on top of pending is not supported")
-		}
-		block, err = api.blockByNumber(ctx, number)
-	} else {
-		return nil, errors.New("invalid arguments; neither block nor hash specified")
-	}
+	block, err := api.blockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
@@ -918,6 +933,59 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		traceConfig = &config.TraceConfig
 	}
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
+}
+
+// TraceCallMany executes the given calls one after the other,
+// collects the structured logs created during the execution of EVM
+// and returns a number of possible traces for each of it.
+func (api *API) TraceCallMany(ctx context.Context, args []ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) ([]*txTraceResult, error) {
+	block, err := api.blockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	var traceConfig *TraceConfig
+	if config != nil {
+		traceConfig = &config.TraceConfig
+	}
+
+	var (
+		is158   = api.backend.ChainConfig().IsEIP158(block.Number())
+		results = make([]*txTraceResult, len(args))
+	)
+
+	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+		config.BlockOverrides.Apply(&vmctx)
+	}
+	for i, arg := range args {
+		msg, err := arg.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+		if err != nil {
+			return nil, err
+		}
+		res, err := api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
+		if err != nil {
+			// If there's an error in tracing the transaction, return the error.
+			// This is because executing subsequent transactions in an erroneous state
+			// would not yield meaningful results.
+			return nil, err
+		}
+		results[i] = &txTraceResult{Result: res}
+		statedb.Finalise(is158)
+	}
+	return results, nil
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
