@@ -337,6 +337,14 @@ func (ec *Client) GetBlockTraceByNumber(ctx context.Context, number *big.Int) (*
 	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getBlockTraceByNumberOrHash", toBlockNumArg(number))
 }
 
+// GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
+// detail, otherwise only the transaction hash is returned.
+func (ec *Client) GetBlockByHash(ctx context.Context, blockHash common.Hash, inclTx bool) (map[string]interface{}, error) {
+	block := make(map[string]interface{})
+	err := ec.c.CallContext(ctx, &block, "scroll_getBlockByHash", blockHash, inclTx)
+	return block, err
+}
+
 // SubscribeNewBlockTrace subscribes to block execution trace when a new block is created.
 func (ec *Client) SubscribeNewBlockTrace(ctx context.Context, ch chan<- *types.BlockTrace) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newBlockTrace")

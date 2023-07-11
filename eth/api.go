@@ -671,3 +671,30 @@ func (api *ScrollAPI) GetLatestRelayedQueueIndex(ctx context.Context) (queueInde
 	lastIncluded := *queueIndex - 1
 	return &lastIncluded, nil
 }
+
+// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
+// a `ScrollAPI`.
+func (api *ScrollAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, fullTx bool) (map[string]interface{}, error) {
+	fields, err := ethapi.RPCMarshalBlock(b, true, fullTx, api.eth.APIBackend.ChainConfig())
+	if err != nil {
+		return nil, err
+	}
+	fields["totalDifficulty"] = (*hexutil.Big)(api.eth.APIBackend.GetTd(ctx, b.Hash()))
+	rc := rawdb.ReadBlockRowConsumption(api.eth.ChainDb(), b.Hash())
+	if rc != nil {
+		fields["rowConsumption"] = hexutil.Uint64(rc.Rows)
+	} else {
+		fields["rowConsumption"] = nil
+	}
+	return fields, err
+}
+
+// GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
+// detail, otherwise only the transaction hash is returned.
+func (api *ScrollAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
+	block, err := api.eth.APIBackend.BlockByHash(ctx, hash)
+	if block != nil {
+		return api.rpcMarshalBlock(ctx, block, fullTx)
+	}
+	return nil, err
+}

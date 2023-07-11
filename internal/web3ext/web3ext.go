@@ -874,7 +874,13 @@ web3._extend({
 			name: 'getFirstQueueIndexNotInL2Block',
 			call: 'scroll_getFirstQueueIndexNotInL2Block',
 			params: 1
-		})
+		}),
+		new web3._extend.Method({
+			name: 'getBlockByHash',
+			call: 'scroll_getBlockByHash',
+			params: 2,
+			inputFormatter: [null, function (val) { return !!val; }]
+		}),
 	],
 	properties:
 	[

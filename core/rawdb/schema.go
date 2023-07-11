@@ -20,8 +20,12 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+
+	leveldb "github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/metrics"
 )
 
@@ -103,6 +107,9 @@ var (
 	syncedL1BlockNumberKey            = []byte("LastSyncedL1BlockNumber")
 	l1MessagePrefix                   = []byte("l1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
 	firstQueueIndexNotInL2BlockPrefix = []byte("q")  // firstQueueIndexNotInL2BlockPrefix + L2 block hash -> enqueue index
+
+	// Row consumption
+	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
 )
 
 const (
@@ -251,4 +258,13 @@ func L1MessageKey(queueIndex uint64) []byte {
 // FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
 func FirstQueueIndexNotInL2BlockKey(l2BlockHash common.Hash) []byte {
 	return append(firstQueueIndexNotInL2BlockPrefix, l2BlockHash.Bytes()...)
+}
+
+// rowConsumptionKey = rowConsumptionPrefix + hash
+func rowConsumptionKey(hash common.Hash) []byte {
+	return append(rowConsumptionPrefix, hash.Bytes()...)
+}
+
+func isNotFoundErr(err error) bool {
+	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
 }

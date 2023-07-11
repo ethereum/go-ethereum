@@ -3,22 +3,14 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math/big"
-
-	leveldb "github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb"
-	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rlp"
 )
-
-func isNotFoundErr(err error) bool {
-	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
-}
 
 // WriteSyncedL1BlockNumber writes the highest synced L1 block number to the database.
 func WriteSyncedL1BlockNumber(db ethdb.KeyValueWriter, L1BlockNumber uint64) {
