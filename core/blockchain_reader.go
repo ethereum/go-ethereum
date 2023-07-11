@@ -412,6 +412,6 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 }
 
 // SubscribeTracesEvent registers a subscription of TracesEvent.
-func (bc *BlockChain) SubscribeTracesEvent(ch chan<- json.RawMessage) event.Subscription {
+func (bc *BlockChain) SubscribeTracesEvent(ch chan<- []json.RawMessage) event.Subscription {
 	return bc.scope.Track(bc.tracesFeed.Subscribe(ch))
 }

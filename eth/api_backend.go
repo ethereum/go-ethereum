@@ -278,7 +278,7 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	return b.eth.miner.SubscribePendingLogs(ch)
 }
 
-func (b *EthAPIBackend) SubscribeTracesEvent(ch chan<- json.RawMessage) event.Subscription {
+func (b *EthAPIBackend) SubscribeTracesEvent(ch chan<- []json.RawMessage) event.Subscription {
 	return b.eth.BlockChain().SubscribeTracesEvent(ch)
 }
 

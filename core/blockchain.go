@@ -2525,6 +2525,6 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
 
-func (bc *BlockChain) TracersEventsSent(data json.RawMessage) {
+func (bc *BlockChain) TracersEventsSent(data []json.RawMessage) {
 	bc.tracesFeed.Send(data)
 }

@@ -294,7 +294,7 @@ func (api *FilterAPI) Traces(ctx context.Context) (*rpc.Subscription, error) {
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		traces := make(chan json.RawMessage)
+		traces := make(chan []json.RawMessage)
 		tracesSub := api.events.SubscribeTraces(traces)
 
 		for {

@@ -73,7 +73,7 @@ type Backend interface {
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribeTracesEvent(ch chan<- json.RawMessage) event.Subscription
+	SubscribeTracesEvent(ch chan<- []json.RawMessage) event.Subscription
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
@@ -189,7 +189,7 @@ type subscription struct {
 	logsCrit  ethereum.FilterQuery
 	logs      chan []*types.Log
 	txs       chan []*types.Transaction
-	traces    chan json.RawMessage
+	traces    chan []json.RawMessage
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -219,7 +219,7 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
-	tracesCh      chan json.RawMessage       // Channel to receive new traces json.RawMessage
+	tracesCh      chan []json.RawMessage       // Channel to receive new traces json.RawMessage
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -428,7 +428,7 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 
 // SubscribePendingTxs creates a subscription that writes transactions for
 // transactions that enter the transaction pool.
-func (es *EventSystem) SubscribeTraces(traces chan json.RawMessage) *Subscription {
+func (es *EventSystem) SubscribeTraces(traces chan []json.RawMessage) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       TracesSubscription,
@@ -497,7 +497,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	}
 }
 
-func (es *EventSystem) handleTraces(filters filterIndex, ev json.RawMessage) {
+func (es *EventSystem) handleTraces(filters filterIndex, ev []json.RawMessage) {
 	if len(ev) == 0 {
 		return
 	}
