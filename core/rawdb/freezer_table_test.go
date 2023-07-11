@@ -830,7 +830,6 @@ func TestTruncateTail(t *testing.T) {
 
 	// truncate all, the entire freezer should be deleted
 	f.truncateTail(7)
-	n = 7
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
