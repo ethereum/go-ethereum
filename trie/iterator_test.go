@@ -63,7 +63,7 @@ func TestIterator(t *testing.T) {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	root, nodes, _ := trie.Commit(false)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
 	found := make(map[string]string)
@@ -255,7 +255,7 @@ func TestDifferenceIterator(t *testing.T) {
 		triea.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	rootA, nodesA, _ := triea.Commit(false)
-	dba.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA))
+	dba.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA), nil)
 	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
@@ -264,7 +264,7 @@ func TestDifferenceIterator(t *testing.T) {
 		trieb.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	rootB, nodesB, _ := trieb.Commit(false)
-	dbb.Update(rootB, types.EmptyRootHash, trienode.NewWithNodeSet(nodesB))
+	dbb.Update(rootB, types.EmptyRootHash, trienode.NewWithNodeSet(nodesB), nil)
 	trieb, _ = New(TrieID(rootB), dbb)
 
 	found := make(map[string]string)
@@ -297,7 +297,7 @@ func TestUnionIterator(t *testing.T) {
 		triea.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	rootA, nodesA, _ := triea.Commit(false)
-	dba.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA))
+	dba.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA), nil)
 	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
@@ -306,7 +306,7 @@ func TestUnionIterator(t *testing.T) {
 		trieb.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	rootB, nodesB, _ := trieb.Commit(false)
-	dbb.Update(rootB, types.EmptyRootHash, trienode.NewWithNodeSet(nodesB))
+	dbb.Update(rootB, types.EmptyRootHash, trienode.NewWithNodeSet(nodesB), nil)
 	trieb, _ = New(TrieID(rootB), dbb)
 
 	di, _ := NewUnionIterator([]NodeIterator{triea.MustNodeIterator(nil), trieb.MustNodeIterator(nil)})
@@ -368,7 +368,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
 		tr.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	root, nodes, _ := tr.Commit(false)
-	tdb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	tdb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	if !memonly {
 		tdb.Commit(root, false)
 	}
@@ -484,7 +484,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme strin
 			break
 		}
 	}
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	if !memonly {
 		triedb.Commit(root, false)
 	}
@@ -605,7 +605,7 @@ func makeLargeTestTrie() (*Database, *StateTrie, *loggingDb) {
 		trie.MustUpdate(key, val)
 	}
 	root, nodes, _ := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	triedb.Commit(root, false)
 
 	// Return the generated trie
@@ -648,7 +648,7 @@ func testIteratorNodeBlob(t *testing.T, scheme string) {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
 	root, nodes, _ := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	triedb.Commit(root, false)
 
 	var found = make(map[common.Hash][]byte)

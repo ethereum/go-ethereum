@@ -89,7 +89,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, nodes, _ := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 
 	if !memonly {
 		triedb.Commit(root, false)
@@ -203,7 +203,7 @@ func TestGet(t *testing.T) {
 			return
 		}
 		root, nodes, _ := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 		trie, _ = New(TrieID(root), db)
 	}
 }
@@ -275,7 +275,7 @@ func TestReplication(t *testing.T) {
 		updateString(trie, val.k, val.v)
 	}
 	root, nodes, _ := trie.Commit(false)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 
 	// create a new trie on top of the database and check that lookups work.
 	trie2, err := New(TrieID(root), db)
@@ -294,7 +294,7 @@ func TestReplication(t *testing.T) {
 
 	// recreate the trie after commit
 	if nodes != nil {
-		db.Update(hash, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(hash, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	}
 	trie2, err = New(TrieID(hash), db)
 	if err != nil {
@@ -503,7 +503,7 @@ func runRandTest(rt randTest) bool {
 		case opCommit:
 			root, nodes, _ := tr.Commit(true)
 			if nodes != nil {
-				triedb.Update(root, origin, trienode.NewWithNodeSet(nodes))
+				triedb.Update(root, origin, trienode.NewWithNodeSet(nodes), nil)
 			}
 			newtr, err := New(TrieID(root), triedb)
 			if err != nil {
@@ -838,7 +838,7 @@ func TestCommitSequence(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes, _ := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -879,7 +879,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes, _ := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -919,7 +919,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		// Flush trie -> database
 		root, nodes, _ := trie.Commit(false)
 		// Flush memdb -> disk (sponge)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 		db.Commit(root, false)
 		// And flush stacktrie -> disk
 		stRoot, err := stTrie.Commit()
@@ -967,7 +967,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	// Flush trie -> database
 	root, nodes, _ := trie.Commit(false)
 	// Flush memdb -> disk (sponge)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	db.Commit(root, false)
 	// And flush stacktrie -> disk
 	stRoot, err := stTrie.Commit()
@@ -1139,7 +1139,7 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	}
 	h := trie.Hash()
 	root, nodes, _ := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
 	b.StartTimer()
 	triedb.Dereference(h)
 	b.StopTimer()

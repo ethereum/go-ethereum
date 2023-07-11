@@ -30,22 +30,22 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-type stateTest struct {
+type stateEnv struct {
 	db    ethdb.Database
 	state *StateDB
 }
 
-func newStateTest() *stateTest {
+func newStateEnv() *stateEnv {
 	db := rawdb.NewMemoryDatabase()
 	sdb, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
-	return &stateTest{db: db, state: sdb}
+	return &stateEnv{db: db, state: sdb}
 }
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
 	sdb, _ := New(types.EmptyRootHash, tdb, nil)
-	s := &stateTest{db: db, state: sdb}
+	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -99,7 +99,7 @@ func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
 	sdb, _ := New(types.EmptyRootHash, tdb, nil)
-	s := &stateTest{db: db, state: sdb}
+	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -133,7 +133,7 @@ func TestIterativeDump(t *testing.T) {
 }
 
 func TestNull(t *testing.T) {
-	s := newStateTest()
+	s := newStateEnv()
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
@@ -155,7 +155,7 @@ func TestSnapshot(t *testing.T) {
 	var storageaddr common.Hash
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
-	s := newStateTest()
+	s := newStateEnv()
 
 	// snapshot the genesis state
 	genesis := s.state.Snapshot()
@@ -186,7 +186,7 @@ func TestSnapshot(t *testing.T) {
 }
 
 func TestSnapshotEmpty(t *testing.T) {
-	s := newStateTest()
+	s := newStateEnv()
 	s.state.RevertToSnapshot(s.state.Snapshot())
 }
 
