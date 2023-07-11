@@ -56,12 +56,12 @@ var (
 	CacheTrieJournalFlag = &cli.StringFlag{
 		Name:     "cache.trie.journal",
 		Usage:    "Disk journal directory for trie cache to survive node restarts",
-		Category: flags.PerfCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	CacheTrieRejournalFlag = &cli.DurationFlag{
 		Name:     "cache.trie.rejournal",
 		Usage:    "Time interval to regenerate the trie cache journal",
-		Category: flags.PerfCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LegacyDiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "v5disc",
