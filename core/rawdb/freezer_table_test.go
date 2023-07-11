@@ -682,6 +682,7 @@ func TestTruncateTail(t *testing.T) {
 
 	// nothing to do, all the items should still be there.
 	f.truncateTail(0)
+	n := uint64(0)
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieve(t, f, map[uint64][]byte{
 		0: getChunk(20, 0xFF),
@@ -693,10 +694,22 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
-	checkLiveElementsSize(t, f, 7)
+	liveElementsSize, err := f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err := f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize-n*40 != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	}
 
 	// truncate single element( item 0 ), deletion is only supported at file level
 	f.truncateTail(1)
+	n = 1
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
@@ -710,7 +723,18 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
-	checkLiveElementsSize(t, f, 6)
+	liveElementsSize, err = f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize-n*40 != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	}
 
 	// Reopen the table, the deletion information should be persisted as well
 	f.Close()
@@ -730,10 +754,22 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
-	checkLiveElementsSize(t, f, 6)
+	liveElementsSize, err = f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize-n*40 != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	}
 
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
 	f.truncateTail(2)
+	n = 2
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
@@ -746,7 +782,18 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
-	checkLiveElementsSize(t, f, 5)
+	liveElementsSize, err = f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize-n*40 != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	}
 
 	// Reopen the table, the above testing should still pass
 	f.Close()
@@ -767,10 +814,22 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
-	checkLiveElementsSize(t, f, 5)
+	liveElementsSize, err = f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize-n*40 != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	}
 
 	// truncate all, the entire freezer should be deleted
 	f.truncateTail(7)
+	n = 7
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
@@ -781,7 +840,18 @@ func TestTruncateTail(t *testing.T) {
 		6: errOutOfBounds,
 	})
 
-	checkLiveElementsSize(t, f, 0)
+	liveElementsSize, err = f.sizeLiveElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if liveElementsSize != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", 0, liveElementsSize, unhiddenElementsSize)
+	}
 }
 
 func TestTruncateHead(t *testing.T) {
@@ -860,16 +930,6 @@ func checkRetrieveError(t *testing.T, f *freezerTable, items map[uint64]error) {
 			t.Fatalf("wrong error for item %d: %v", item, err)
 		}
 	}
-}
-
-func checkLiveElementsSize(t *testing.T, f *freezerTable, size uint64) {
-	t.Helper()
-
-	liveElementsSize := f.sizeLiveElements()
-	if liveElementsSize != size {
-		t.Fatalf("wrong live elements size %d, want %d", liveElementsSize, size)
-	}
-
 }
 
 // Gets a chunk of data, filled with 'b'

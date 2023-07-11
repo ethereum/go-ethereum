@@ -854,19 +854,33 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	return total, nil
 }
 
-func (t *freezerTable) sizeLiveElements() uint64 {
-	hiddenItems := t.itemHidden.Load()
-	if hiddenItems == 0 {
-		return t.items.Load()
+// sizeLiveElements returns the total size of the live elements (all elements) in the freezer table.
+func (t *freezerTable) sizeLiveElements() (uint64, error) {
+	stat, err := t.index.Stat()
+	if err != nil {
+		return 0, err
+	}
+	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
+	return total, nil
+}
+
+// sizeUnhiddenElements returns the total size of the elements that are not hidden in the freezer table.
+func (t *freezerTable) sizeUnhiddenElements() (uint64, error) {
+	stat, err := t.index.Stat()
+	if err != nil {
+		return 0, err
 	}
 
-	liveEventsSize := t.items.Load() - hiddenItems
-	if liveEventsSize < hiddenItems {
-		return 0
+	hiddenElementsAmount := uint32(t.itemHidden.Load())
 
+	var diff uint64
+	// prevents underflow
+	if hiddenElementsAmount+t.tailId <= t.headId {
+		diff = uint64(t.headId - (hiddenElementsAmount + t.tailId))
 	}
-	return liveEventsSize
 
+	total := uint64(t.maxFileSize)*diff + uint64(t.headBytes) + uint64(stat.Size())
+	return total, nil
 }
 
 // advanceHead should be called when the current head file would outgrow the file limits,
