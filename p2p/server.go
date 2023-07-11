@@ -691,14 +691,13 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 	srv.localnode.SetFallbackUDP(realaddr.Port)
 	srv.log.Debug("UDP listener up", "addr", realaddr)
 
-	if srv.NAT != nil {
-		if !realaddr.IP.IsLoopback() {
-			srv.loopWG.Add(1)
-			go func() {
-				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-				srv.loopWG.Done()
-			}()
-		}
+	// Enable port mapping if configured.
+	if srv.NAT != nil && !realaddr.IP.IsLoopback() {
+		srv.loopWG.Add(1)
+		go func() {
+			defer srv.loopWG.Done()
+			srv.natMapLoop(srv.NAT, "udp", realaddr.Port, realaddr.Port, "ethereum p2p", nat.DefaultMapTimeout)
+		}()
 	}
 
 	return conn, nil
