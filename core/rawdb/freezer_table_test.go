@@ -663,8 +663,9 @@ func TestTruncateTail(t *testing.T) {
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("truncate-tail-%d", rand.Uint64())
 
+	maxFileSize := uint32(40)
 	// Fill table
-	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -703,8 +704,8 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*40 != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate single element( item 0 ), deletion is only supported at file level
@@ -732,13 +733,13 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*40 != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// Reopen the table, the deletion information should be persisted as well
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,8 +764,8 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*40 != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
@@ -791,13 +792,13 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*40 != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// Reopen the table, the above testing should still pass
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -823,8 +824,8 @@ func TestTruncateTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*40 != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*40, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate all, the entire freezer should be deleted
