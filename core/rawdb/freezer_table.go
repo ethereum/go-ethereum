@@ -854,6 +854,21 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	return total, nil
 }
 
+func (t *freezerTable) sizeLiveElements() uint64 {
+	hiddenItems := t.itemHidden.Load()
+	if hiddenItems == 0 {
+		return t.items.Load()
+	}
+
+	liveEventsSize := t.items.Load() - hiddenItems
+	if liveEventsSize < hiddenItems {
+		return 0
+
+	}
+	return liveEventsSize
+
+}
+
 // advanceHead should be called when the current head file would outgrow the file limits,
 // and a new file must be opened. The caller of this method must hold the write-lock
 // before calling this method.

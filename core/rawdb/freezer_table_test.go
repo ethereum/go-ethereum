@@ -693,6 +693,8 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
+	checkLiveElementsSize(t, f, 7)
+
 	// truncate single element( item 0 ), deletion is only supported at file level
 	f.truncateTail(1)
 	fmt.Println(f.dumpIndexString(0, 1000))
@@ -707,6 +709,8 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
+
+	checkLiveElementsSize(t, f, 6)
 
 	// Reopen the table, the deletion information should be persisted as well
 	f.Close()
@@ -726,6 +730,8 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 
+	checkLiveElementsSize(t, f, 6)
+
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
 	f.truncateTail(2)
 	checkRetrieveError(t, f, map[uint64]error{
@@ -739,6 +745,8 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
+
+	checkLiveElementsSize(t, f, 5)
 
 	// Reopen the table, the above testing should still pass
 	f.Close()
@@ -759,6 +767,7 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
+	checkLiveElementsSize(t, f, 5)
 
 	// truncate all, the entire freezer should be deleted
 	f.truncateTail(7)
@@ -771,6 +780,8 @@ func TestTruncateTail(t *testing.T) {
 		5: errOutOfBounds,
 		6: errOutOfBounds,
 	})
+
+	checkLiveElementsSize(t, f, 0)
 }
 
 func TestTruncateHead(t *testing.T) {
@@ -849,6 +860,16 @@ func checkRetrieveError(t *testing.T, f *freezerTable, items map[uint64]error) {
 			t.Fatalf("wrong error for item %d: %v", item, err)
 		}
 	}
+}
+
+func checkLiveElementsSize(t *testing.T, f *freezerTable, size uint64) {
+	t.Helper()
+
+	liveElementsSize := f.sizeLiveElements()
+	if liveElementsSize != size {
+		t.Fatalf("wrong live elements size %d, want %d", liveElementsSize, size)
+	}
+
 }
 
 // Gets a chunk of data, filled with 'b'
