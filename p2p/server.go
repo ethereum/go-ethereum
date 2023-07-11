@@ -656,14 +656,13 @@ func (srv *Server) setupListening() error {
 	srv.ListenAddr = listener.Addr().String()
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
-	if tcp, ok := listener.Addr().(*net.TCPAddr); ok {
-		if !tcp.IP.IsLoopback() && srv.NAT != nil {
-			srv.loopWG.Add(1)
-			go func() {
-				srv.natMapLoop(srv.NAT, "tcp", tcp.Port, tcp.Port, "ethereum p2p", nat.DefaultMapTimeout)
-				srv.loopWG.Done()
-			}()
-		}
+	tcp, isTCP := listener.Addr().(*net.TCPAddr)
+	if srv.NAT != nil && isTCP && !tcp.IP.IsLoopback() {
+		srv.loopWG.Add(1)
+		go func() {
+			srv.natMapLoop(srv.NAT, "tcp", tcp.Port, tcp.Port, "ethereum p2p", nat.DefaultMapTimeout)
+			srv.loopWG.Done()
+		}()
 	}
 
 	srv.loopWG.Add(1)
