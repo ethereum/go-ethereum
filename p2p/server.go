@@ -93,6 +93,9 @@ type Config struct {
 	// Disabling is useful for protocol debugging (manual topology).
 	NoDiscovery bool
 
+	// DiscoveryV4 specifies whether V4 discovery should be started.
+	DiscoveryV4 bool `toml:",omitempty"`
+
 	// DiscoveryV5 specifies whether the new topic-discovery based V5 discovery
 	// protocol should be started or not.
 	DiscoveryV5 bool `toml:",omitempty"`
@@ -542,57 +545,28 @@ func (srv *Server) setupLocalNode() error {
 func (srv *Server) setupDiscovery() error {
 	srv.discmix = enode.NewFairMix(discmixTimeout)
 
-	// Add protocol-specific discovery sources.
-	added := make(map[string]bool)
-	for _, proto := range srv.Protocols {
-		if proto.DialCandidates != nil && !added[proto.Name] {
-			srv.discmix.AddSource(proto.DialCandidates)
-			added[proto.Name] = true
-		}
-	}
-
 	// Don't listen on UDP endpoint if DHT is disabled.
-	if srv.NoDiscovery && !srv.DiscoveryV5 {
+	if srv.NoDiscovery {
 		return nil
 	}
-
-	listenAddr := srv.ListenAddr
-
-	// Use an alternate listening address for UDP if
-	// a custom discovery address is configured.
-	if srv.DiscAddr != "" {
-		listenAddr = srv.DiscAddr
-	}
-
-	addr, err := net.ResolveUDPAddr("udp", listenAddr)
+	conn, err := srv.setupUDPListening()
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	srv.log.Debug("UDP listener up", "addr", realaddr)
-	if srv.NAT != nil {
-		if !realaddr.IP.IsLoopback() {
-			srv.loopWG.Add(1)
-			go func() {
-				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-				srv.loopWG.Done()
-			}()
-		}
-	}
-	srv.localnode.SetFallbackUDP(realaddr.Port)
 
-	// Discovery V4
-	var unhandled chan discover.ReadPacket
-	var sconn *sharedUDPConn
-	if !srv.NoDiscovery {
-		if srv.DiscoveryV5 {
-			unhandled = make(chan discover.ReadPacket, 100)
-			sconn = &sharedUDPConn{conn, unhandled}
-		}
+	var (
+		sconn     discover.UDPConn = conn
+		unhandled chan discover.ReadPacket
+	)
+	// If both versions of discovery are running, setup a shared
+	// connection, so v5 can read unhandled messages from v4.
+	if srv.DiscoveryV4 && srv.DiscoveryV5 {
+		unhandled = make(chan discover.ReadPacket, 100)
+		sconn = &sharedUDPConn{conn, unhandled}
+	}
+
+	// Start discovery services.
+	if srv.DiscoveryV4 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
@@ -607,8 +581,6 @@ func (srv *Server) setupDiscovery() error {
 		srv.ntab = ntab
 		srv.discmix.AddSource(ntab.RandomNodes())
 	}
-
-	// Discovery V5
 	if srv.DiscoveryV5 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
@@ -616,14 +588,18 @@ func (srv *Server) setupDiscovery() error {
 			Bootnodes:   srv.BootstrapNodesV5,
 			Log:         srv.log,
 		}
-		var err error
-		if sconn != nil {
-			srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
-		} else {
-			srv.DiscV5, err = discover.ListenV5(conn, srv.localnode, cfg)
-		}
+		srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
 		if err != nil {
 			return err
+		}
+	}
+
+	// Add protocol-specific discovery sources.
+	added := make(map[string]bool)
+	for _, proto := range srv.Protocols {
+		if proto.DialCandidates != nil && !added[proto.Name] {
+			srv.discmix.AddSource(proto.DialCandidates)
+			added[proto.Name] = true
 		}
 	}
 	return nil
@@ -694,6 +670,37 @@ func (srv *Server) setupListening() error {
 	srv.loopWG.Add(1)
 	go srv.listenLoop()
 	return nil
+}
+
+func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
+	listenAddr := srv.ListenAddr
+
+	// Use an alternate listening address for UDP if
+	// a custom discovery address is configured.
+	if srv.DiscAddr != "" {
+		listenAddr = srv.DiscAddr
+	}
+	addr, err := net.ResolveUDPAddr("udp", listenAddr)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	srv.log.Debug("UDP listener up", "addr", realaddr)
+	if srv.NAT != nil {
+		if !realaddr.IP.IsLoopback() {
+			srv.loopWG.Add(1)
+			go func() {
+				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				srv.loopWG.Done()
+			}()
+		}
+	}
+	srv.localnode.SetFallbackUDP(realaddr.Port)
+	return conn, nil
 }
 
 // doPeerOp runs fn on the main loop.

@@ -33,27 +33,40 @@ var ShowDeprecated = &cli.Command{
 
 var DeprecatedFlags = []cli.Flag{
 	NoUSBFlag,
+	LegacyWhitelistFlag,
 	CacheTrieJournalFlag,
 	CacheTrieRejournalFlag,
+	LegacyDiscoveryV5Flag,
 }
 
 var (
-	// (Deprecated May 2020, shown in aliased flags section)
+	// Deprecated May 2020, shown in aliased flags section
 	NoUSBFlag = &cli.BoolFlag{
 		Name:     "nousb",
 		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
 		Category: flags.DeprecatedCategory,
 	}
-	// (Deprecated June 2023, shown in aliased flags section)
+	// Deprecated March 2022
+	LegacyWhitelistFlag = &cli.StringFlag{
+		Name:     "whitelist",
+		Usage:    "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated July 2023
 	CacheTrieJournalFlag = &cli.StringFlag{
 		Name:     "cache.trie.journal",
 		Usage:    "Disk journal directory for trie cache to survive node restarts",
-		Category: flags.PerfCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	CacheTrieRejournalFlag = &cli.DurationFlag{
 		Name:     "cache.trie.rejournal",
 		Usage:    "Time interval to regenerate the trie cache journal",
-		Category: flags.PerfCategory,
+		Category: flags.DeprecatedCategory,
+	}
+	LegacyDiscoveryV5Flag = &cli.BoolFlag{
+		Name:     "v5disc",
+		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use --discv5 instead)",
+		Category: flags.DeprecatedCategory,
 	}
 )
 
