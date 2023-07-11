@@ -712,7 +712,7 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 		if !t.noCompression {
 			decompressedSize, _ = snappy.DecodedLen(item)
 		}
-		if i > 0 && uint64(outputSize+decompressedSize) > maxBytes {
+		if i > 0 && maxBytes != 0 && uint64(outputSize+decompressedSize) > maxBytes {
 			break
 		}
 		if !t.noCompression {
