@@ -485,9 +485,6 @@ func (srv *Server) Start() (err error) {
 	if err := srv.setupLocalNode(); err != nil {
 		return err
 	}
-
-	// The NAT protocol mapping channel can receive up to two messages: one for
-	// enabling TCP port mapping, and one more for enabling the UDP port mapping.
 	srv.setupPortMapping()
 
 	if srv.ListenAddr != "" {
