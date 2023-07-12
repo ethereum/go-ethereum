@@ -664,6 +664,7 @@ func TestTruncateTail(t *testing.T) {
 	fname := fmt.Sprintf("truncate-tail-%d", rand.Uint64())
 
 	maxFileSize := uint32(40)
+	elementSize := int(20)
 	// Fill table
 	f, err := newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
@@ -672,13 +673,13 @@ func TestTruncateTail(t *testing.T) {
 
 	// Write 7 x 20 bytes, splitting out into four files
 	batch := f.newBatch()
-	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
-	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
-	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
-	require.NoError(t, batch.AppendRaw(3, getChunk(20, 0xcc)))
-	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
-	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
-	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
+	require.NoError(t, batch.AppendRaw(0, getChunk(elementSize, 0xFF)))
+	require.NoError(t, batch.AppendRaw(1, getChunk(elementSize, 0xEE)))
+	require.NoError(t, batch.AppendRaw(2, getChunk(elementSize, 0xdd)))
+	require.NoError(t, batch.AppendRaw(3, getChunk(elementSize, 0xcc)))
+	require.NoError(t, batch.AppendRaw(4, getChunk(elementSize, 0xbb)))
+	require.NoError(t, batch.AppendRaw(5, getChunk(elementSize, 0xaa)))
+	require.NoError(t, batch.AppendRaw(6, getChunk(elementSize, 0x11)))
 	require.NoError(t, batch.commit())
 
 	// nothing to do, all the items should still be there.
@@ -686,26 +687,26 @@ func TestTruncateTail(t *testing.T) {
 	n := uint64(0)
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieve(t, f, map[uint64][]byte{
-		0: getChunk(20, 0xFF),
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		0: getChunk(elementSize, 0xFF),
+		1: getChunk(elementSize, 0xEE),
+		2: getChunk(elementSize, 0xdd),
+		3: getChunk(elementSize, 0xcc),
+		4: getChunk(elementSize, 0xbb),
+		5: getChunk(elementSize, 0xaa),
+		6: getChunk(elementSize, 0x11),
 	})
 
-	liveElementsSize, err := f.sizeLiveElements()
+	liveElementsSize, err := f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err := f.sizeUnhiddenElements()
+	unhiddenElementsSize, err := f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate single element( item 0 ), deletion is only supported at file level
@@ -716,25 +717,25 @@ func TestTruncateTail(t *testing.T) {
 		0: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		1: getChunk(elementSize, 0xEE),
+		2: getChunk(elementSize, 0xdd),
+		3: getChunk(elementSize, 0xcc),
+		4: getChunk(elementSize, 0xbb),
+		5: getChunk(elementSize, 0xaa),
+		6: getChunk(elementSize, 0x11),
 	})
 
-	liveElementsSize, err = f.sizeLiveElements()
+	liveElementsSize, err = f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	unhiddenElementsSize, err = f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// Reopen the table, the deletion information should be persisted as well
@@ -747,25 +748,25 @@ func TestTruncateTail(t *testing.T) {
 		0: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		1: getChunk(elementSize, 0xEE),
+		2: getChunk(elementSize, 0xdd),
+		3: getChunk(elementSize, 0xcc),
+		4: getChunk(elementSize, 0xbb),
+		5: getChunk(elementSize, 0xaa),
+		6: getChunk(elementSize, 0x11),
 	})
 
-	liveElementsSize, err = f.sizeLiveElements()
+	liveElementsSize, err = f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	unhiddenElementsSize, err = f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
@@ -776,24 +777,24 @@ func TestTruncateTail(t *testing.T) {
 		1: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		2: getChunk(elementSize, 0xdd),
+		3: getChunk(elementSize, 0xcc),
+		4: getChunk(elementSize, 0xbb),
+		5: getChunk(elementSize, 0xaa),
+		6: getChunk(elementSize, 0x11),
 	})
 
-	liveElementsSize, err = f.sizeLiveElements()
+	liveElementsSize, err = f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	unhiddenElementsSize, err = f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// Reopen the table, the above testing should still pass
@@ -809,23 +810,23 @@ func TestTruncateTail(t *testing.T) {
 		1: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		2: getChunk(elementSize, 0xdd),
+		3: getChunk(elementSize, 0xcc),
+		4: getChunk(elementSize, 0xbb),
+		5: getChunk(elementSize, 0xaa),
+		6: getChunk(elementSize, 0x11),
 	})
-	liveElementsSize, err = f.sizeLiveElements()
+	liveElementsSize, err = f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	unhiddenElementsSize, err = f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize-n*uint64(maxFileSize) != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", n*uint64(maxFileSize), liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 
 	// truncate all, the entire freezer should be deleted
@@ -839,18 +840,17 @@ func TestTruncateTail(t *testing.T) {
 		5: errOutOfBounds,
 		6: errOutOfBounds,
 	})
-
-	liveElementsSize, err = f.sizeLiveElements()
+	liveElementsSize, err = f.sizeLiveItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	unhiddenElementsSize, err = f.sizeUnhiddenElements()
+	unhiddenElementsSize, err = f.sizeUnhiddenItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if liveElementsSize != unhiddenElementsSize {
-		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", 0, liveElementsSize, unhiddenElementsSize)
+	if liveElementsSize-(n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize) != unhiddenElementsSize {
+		t.Fatalf("expected %d bytes difference in elements size, got %d bytes liveElements, %d bytes unhiddenElements", (n%(uint64(maxFileSize)/uint64(elementSize)))*uint64(elementSize), liveElementsSize, unhiddenElementsSize)
 	}
 }
 

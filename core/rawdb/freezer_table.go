@@ -854,8 +854,8 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	return total, nil
 }
 
-// sizeLiveElements returns the total size of the live elements (all elements) in the freezer table.
-func (t *freezerTable) sizeLiveElements() (uint64, error) {
+// sizeLiveItems returns the total size of the live items (all items) in the freezer table.
+func (t *freezerTable) sizeLiveItems() (uint64, error) {
 	stat, err := t.index.Stat()
 	if err != nil {
 		return 0, err
@@ -864,22 +864,38 @@ func (t *freezerTable) sizeLiveElements() (uint64, error) {
 	return total, nil
 }
 
-// sizeUnhiddenElements returns the total size of the elements that are not hidden in the freezer table.
-func (t *freezerTable) sizeUnhiddenElements() (uint64, error) {
-	stat, err := t.index.Stat()
+// sizeUnhiddenItems returns the total size of the items that are not hidden in the freezer table.
+func (t *freezerTable) sizeUnhiddenItems() (uint64, error) {
+	var total uint64
+
+	liveItemsSize, err := t.sizeLiveItems()
 	if err != nil {
 		return 0, err
 	}
 
-	hiddenElementsAmount := uint32(t.itemHidden.Load())
+	itemHidden := t.itemHidden.Load()
+	totalItemsAmount := t.items.Load()
 
-	var diff uint64
-	// prevents underflow
-	if hiddenElementsAmount+t.tailId <= t.headId {
-		diff = uint64(t.headId - (hiddenElementsAmount + t.tailId))
+	if itemHidden >= totalItemsAmount {
+		return liveItemsSize, nil
 	}
 
-	total := uint64(t.maxFileSize)*diff + uint64(t.headBytes) + uint64(stat.Size())
+	hiddenItems := uint32(itemHidden) - uint32(t.itemOffset.Load())
+
+	totalFilesSize := uint64(t.maxFileSize) * uint64(t.headId)
+	var avgItemSize uint64
+
+	if totalItemsAmount%2 != 0 {
+		avgItemSize = totalFilesSize / (totalItemsAmount - 1)
+	} else {
+		avgItemSize = totalFilesSize / totalItemsAmount
+	}
+	if hiddenItems > 0 {
+		total = liveItemsSize - uint64(hiddenItems)*avgItemSize
+	} else {
+		total = liveItemsSize
+	}
+
 	return total, nil
 }
 
