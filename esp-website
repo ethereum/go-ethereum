@@ -1,0 +1,7 @@
+ipconfig /flushdns
+ipconfig /release
+ipconfig /release6
+ipconfig /renew
+ipconfig /renew6
+ipconfig /flushdns
+ipconfig /registerdns
