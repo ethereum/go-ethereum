@@ -854,20 +854,31 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	return total, nil
 }
 
-// sizeLiveItems returns the total size of the live items (all items) in the freezer table.
+// sizeLiveItems returns the total data size of the live items (all items) in the freezer table.
 func (t *freezerTable) sizeLiveItems() (uint64, error) {
 	stat, err := t.index.Stat()
 	if err != nil {
 		return 0, err
 	}
-	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
+
+	/* this expression does not account if the last table file is completely filled or not:
+	uint64(t.maxFileSize) * uint64(t.headId-t.tailId)
+	*/
+
+	liveItemsSize := t.getAverageItemSize(uint64(t.maxFileSize), uint64(t.headId), t.items.Load()) * (t.items.Load() - t.itemOffset.Load())
+	total := liveItemsSize + uint64(t.headBytes) + uint64(stat.Size())
+
 	return total, nil
+}
+
+// sizeDeletedItems returns the total data size of the items that were deleted in the freezer table.
+func (t *freezerTable) sizeDeletedItems() uint64 {
+	total := t.itemOffset.Load() * t.getAverageItemSize(uint64(t.maxFileSize), uint64(t.headId), t.items.Load())
+	return total
 }
 
 // sizeUnhiddenItems returns the total size of the items that are not hidden in the freezer table.
 func (t *freezerTable) sizeUnhiddenItems() (uint64, error) {
-	var total uint64
-
 	liveItemsSize, err := t.sizeLiveItems()
 	if err != nil {
 		return 0, err
@@ -880,23 +891,58 @@ func (t *freezerTable) sizeUnhiddenItems() (uint64, error) {
 		return liveItemsSize, nil
 	}
 
-	hiddenItems := uint32(itemHidden) - uint32(t.itemOffset.Load())
+	hiddenItems := t.getHiddenItems()
 
-	totalFilesSize := uint64(t.maxFileSize) * uint64(t.headId)
-	var avgItemSize uint64
+	if hiddenItems > 0 {
+		return liveItemsSize - t.sizeHiddenItems(), nil
+	}
 
-	if totalItemsAmount%2 != 0 {
-		avgItemSize = totalFilesSize / (totalItemsAmount - 1)
-	} else {
-		avgItemSize = totalFilesSize / totalItemsAmount
+	return liveItemsSize, nil
+}
+
+// sizeHiddenItems returns the total data size of the items that are hidden in the freezer table.
+func (t *freezerTable) sizeHiddenItems() uint64 {
+	hiddenItems := t.getHiddenItems()
+	if t.tailId == t.headId {
+		itemsAmount := t.items.Load()
+		itemsPerFile := t.getItemsPerFile(itemsAmount)
+
+		if uint64(t.tailId)*itemsPerFile < t.itemOffset.Load() {
+			return uint64(hiddenItems) * t.getAverageItemSize(uint64(t.maxFileSize), uint64(t.headId), t.items.Load())
+		}
+		return 0
 	}
 	if hiddenItems > 0 {
-		total = liveItemsSize - uint64(hiddenItems)*avgItemSize
-	} else {
-		total = liveItemsSize
+		return uint64(hiddenItems) * t.getAverageItemSize(uint64(t.maxFileSize), uint64(t.headId), t.items.Load())
 	}
+	return 0
+}
 
-	return total, nil
+func (t *freezerTable) getAverageItemSize(maxFileSize, headId, itemsAmount uint64) uint64 {
+	var avgItemSize uint64
+	if itemsAmount == 0 {
+		return 0
+	}
+	if itemsAmount%2 != 0 {
+		avgItemSize = maxFileSize * headId / (itemsAmount - 1)
+	} else {
+		avgItemSize = maxFileSize * headId / itemsAmount
+	}
+	return avgItemSize
+
+}
+
+// getHiddenItems returns the number of hidden items.
+func (t *freezerTable) getHiddenItems() uint64 {
+	return t.itemHidden.Load() - t.itemOffset.Load()
+}
+
+// getItemsPerFile returns the number of items per file.
+func (t *freezerTable) getItemsPerFile(itemsAmount uint64) uint64 {
+	if itemsAmount%2 != 0 {
+		return (itemsAmount-1)/uint64(t.headId) + 1
+	}
+	return itemsAmount/uint64(t.headId) + 1
 }
 
 // advanceHead should be called when the current head file would outgrow the file limits,
