@@ -46,7 +46,7 @@ func NewExecutionServiceServer(eth *eth.Ethereum) *ExecutionServiceServer {
 
 func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.DoBlockRequest) (*executionv1.DoBlockResponse, error) {
 	log.Info("DoBlock called request", "request", req)
-	prevHeadHash := common.BytesToHash(req.PrevStateRoot)
+	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
 
 	// The Engine API has been modified to use transactions from this mempool and abide by it's ordering.
 	s.eth.TxPool().SetAstriaOrdered(req.Transactions)

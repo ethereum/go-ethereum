@@ -9,7 +9,7 @@ brew install leveldb
 make geth
 
 # generating protobuf files
-buf generate buf.build/astria/execution-apis
+buf generate buf.build/astria/astria --path "astria/execution"
 ```
 
 See [private_network.md](../private_network.md) for running a local geth node.
