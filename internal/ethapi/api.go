@@ -1091,7 +1091,7 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 	err := errors.New("execution reverted")
 	if errUnpack == nil {
 		err = fmt.Errorf("execution reverted: %v", reason)
-	} else {
+	} else if len(result.Revert()) >= 4 {
 		err = fmt.Errorf("%#x", result.Revert())
 	}
 	return &revertError{

@@ -19,6 +19,7 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -85,6 +86,8 @@ func (f *callFrame) processOutput(output []byte, err error) {
 	}
 	if unpacked, err := abi.UnpackRevert(output); err == nil {
 		f.RevertReason = unpacked
+	} else if len(output) >= 4 {
+		f.RevertReason = fmt.Sprintf("%#x", output)
 	}
 }
 
