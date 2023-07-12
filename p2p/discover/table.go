@@ -203,7 +203,7 @@ func (tab *Table) close() {
 // are used to connect to the network if the table is empty and there
 // are no known nodes in the database.
 func (tab *Table) setFallbackNodes(nodes []*enode.Node) error {
-	nursery := make([]*node, len(nodes))
+	nursery := make([]*node, 0, len(nodes))
 	for _, n := range nodes {
 		if err := n.ValidateComplete(); err != nil {
 			return fmt.Errorf("bad bootstrap node %q: %v", n, err)
