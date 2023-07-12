@@ -160,7 +160,7 @@ type BlockchainLogger interface {
 	state.StateLogger
 	// OnBlockStart is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	OnBlockStart(block *types.Block, td *big.Int)
+	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
 	OnBlockEnd(err error)
 	OnGenesisBlock(genesis *types.Block)
 }
@@ -1778,7 +1778,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		if bc.logger != nil {
 			td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			bc.logger.OnBlockStart(block, td)
+			bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
 		}
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
