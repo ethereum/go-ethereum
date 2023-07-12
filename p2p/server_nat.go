@@ -160,21 +160,21 @@ func (srv *Server) portMappingLoop() {
 					continue
 				}
 				// It was mapped!
-				external = int(p)
+				m.extPort = int(p)
 				m.nextTime = now.Add(portMapRefreshInterval)
-				m.extPort = external
-				if external != m.port {
-					log = newLogger(m.protocol, external, m.port)
+				if external != m.extPort {
+					log = newLogger(m.protocol, m.extPort, m.port)
 					log.Info("NAT mapped alternative port")
 				} else {
 					log.Info("NAT mapped port")
 				}
+
 				// Update port in local ENR.
 				switch m.protocol {
 				case "TCP":
-					srv.localnode.Set(enr.TCP(external))
+					srv.localnode.Set(enr.TCP(m.extPort))
 				case "UDP":
-					srv.localnode.SetFallbackUDP(external)
+					srv.localnode.SetFallbackUDP(m.extPort)
 				}
 			}
 		}
