@@ -31,7 +31,6 @@ type MockGenesisContractMockRecorder struct {
 func NewMockGenesisContract(ctrl *gomock.Controller) *MockGenesisContract {
 	mock := &MockGenesisContract{ctrl: ctrl}
 	mock.recorder = &MockGenesisContractMockRecorder{mock}
-
 	return mock
 }
 
@@ -46,7 +45,6 @@ func (m *MockGenesisContract) CommitState(arg0 *clerk.EventRecordWithTime, arg1 
 	ret := m.ctrl.Call(m, "CommitState", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -62,7 +60,6 @@ func (m *MockGenesisContract) LastStateId(arg0 *state.StateDB, arg1 uint64, arg2
 	ret := m.ctrl.Call(m, "LastStateId", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*big.Int)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 

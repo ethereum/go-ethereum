@@ -79,19 +79,19 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	t.Helper()
 
-	addr0 := common.Address{0x1}
+	// addr0 := common.Address{0x1}
 
-	genspec := &core.Genesis{
-		Alloc: map[common.Address]core.GenesisAccount{
-			addr0: {
-				Balance: big.NewInt(0),
-				Code:    []byte{0x1, 0x1},
-			},
-		},
-	}
+	// genspec := &core.Genesis{
+	// 	Alloc: map[common.Address]core.GenesisAccount{
+	// 		addr0: {
+	// 			Balance: big.NewInt(0),
+	// 			Code:    []byte{0x1, 0x1},
+	// 		},
+	// 	},
+	// }
 
 	// Create Ethash config
-	chainDB, _, chainConfig := NewDBForFakes(t)
+	chainDB, genspec, chainConfig := NewDBForFakes(t)
 
 	engine := NewFakeBor(t, chainDB, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 
@@ -200,6 +200,7 @@ type testBlockChain struct {
 func (bc *testBlockChain) CurrentBlock() *types.Header {
 	return &types.Header{
 		GasLimit: bc.gasLimit,
+		Number:   new(big.Int),
 	}
 }
 
