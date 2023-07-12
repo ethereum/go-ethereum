@@ -50,11 +50,9 @@ func TestServerPortMapping(t *testing.T) {
 	// goroutine works like this: For each iteration, we allow other goroutines to run and
 	// also advance the virtual clock by 1 second. Waiting stops when the NAT interface
 	// has received some requests, or when the clock reaches a timeout.
-	for time.Duration(clock.Now()) < portMapRefreshInterval {
+	deadline := clock.Now().Add(portMapRefreshInterval)
+	for clock.Now() < deadline && mockNAT.mapRequests.Load() < 2 {
 		time.Sleep(10 * time.Millisecond)
-		if mockNAT.mapRequests.Load() >= 2 {
-			break
-		}
 		clock.Run(1 * time.Second)
 	}
 
