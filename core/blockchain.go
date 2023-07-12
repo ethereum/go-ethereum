@@ -162,7 +162,7 @@ type BlockchainLogger interface {
 	// `td` is the total difficulty prior to `block`.
 	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
 	OnBlockEnd(err error)
-	OnGenesisBlock(genesis *types.Block)
+	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
 }
 
 // BlockChain represents the canonical chain given a database with a genesis

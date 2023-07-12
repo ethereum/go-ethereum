@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -82,8 +83,8 @@ func (p *Printer) OnBlockEnd(err error) {
 	fmt.Printf("OnBlockEnd: err=%v\n", err)
 }
 
-func (p *Printer) OnGenesisBlock(b *types.Block) {
-	fmt.Printf("OnGenesisBlock: b=%v\n", b.NumberU64())
+func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+	fmt.Printf("OnGenesisBlock: b=%v, allocLength=%d\n", b.NumberU64(), len(alloc))
 }
 
 func (p *Printer) OnBalanceChange(a common.Address, prev, new *big.Int) {

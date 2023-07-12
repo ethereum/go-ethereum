@@ -485,7 +485,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	if bcLogger != nil {
-		bcLogger.OnGenesisBlock(block)
+		bcLogger.OnGenesisBlock(block, g.Alloc)
 	}
 	// All the checks has passed, flush the states derived from the genesis
 	// specification as well as the specification itself into the provided
