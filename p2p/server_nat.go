@@ -54,7 +54,7 @@ func (srv *Server) setupPortMapping() {
 
 	switch srv.NAT.(type) {
 	case nil:
-		// No NAT interface, do nothing.
+		// No NAT interface configured.
 		srv.loopWG.Add(1)
 		go srv.consumePortMappingRequests()
 
@@ -66,8 +66,6 @@ func (srv *Server) setupPortMapping() {
 		go srv.consumePortMappingRequests()
 
 	default:
-		// Ask the router about the IP. This takes a while and blocks startup,
-		// do it in the background.
 		srv.loopWG.Add(1)
 		go srv.portMappingLoop()
 	}
