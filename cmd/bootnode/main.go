@@ -180,7 +180,7 @@ func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *
 		if p != uint16(extaddr.Port) {
 			extaddr.Port = int(p)
 			log = newLogger(extaddr.Port, intport)
-			log.Info("NAT mapped alternate port")
+			log.Info("NAT mapped alternative port")
 		} else {
 			log.Info("NAT mapped port")
 		}
