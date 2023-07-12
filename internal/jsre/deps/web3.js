@@ -3706,6 +3706,13 @@ var inputDefaultBlockNumberFormatter = function (blockNumber) {
     return inputBlockNumberFormatter(blockNumber);
 };
 
+var inputBlockNumberOrHashFormatter = function (numberOrHash) {
+    if (utils.isString(numberOrHash) && numberOrHash.indexOf('0x') === 0) {
+        return numberOrHash;
+    }
+    return inputBlockNumberFormatter(numberOrHash);
+};
+
 var inputBlockNumberFormatter = function (blockNumber) {
     if (blockNumber === undefined) {
         return undefined;
