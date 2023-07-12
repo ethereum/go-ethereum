@@ -46,10 +46,10 @@ type portMapping struct {
 // setupPortMapping starts the port mapping loop if necessary.
 // Note: this needs to be called after the LocalNode instance has been set on the server.
 func (srv *Server) setupPortMapping() {
-	// portMappingRegister will receive up to two values: one for
-	// thr TCP port if listening is enabled, and one more for enabling UDP port mapping
-	// if discovery is enabled. We make it buffered to avoid blocking their setup while
-	// a port mapping request is in progress.
+	// portMappingRegister will receive up to two values: one for the TCP port if
+	// listening is enabled, and one more for enabling UDP port mapping if discovery is
+	// enabled. We make it buffered to avoid blocking setup while a mapping request is in
+	// progress.
 	srv.portMappingRegister = make(chan *portMapping, 2)
 
 	switch srv.NAT.(type) {
