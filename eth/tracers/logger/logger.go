@@ -418,7 +418,7 @@ type StructLogRes struct {
 	Depth         int                `json:"depth"`
 	Error         string             `json:"error,omitempty"`
 	Stack         *[]string          `json:"stack,omitempty"`
-	ReturnData    *[]string          `json:"returnData,omitempty"`
+	ReturnData    string             `json:"returnData,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
@@ -445,11 +445,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			formatted[index].Stack = &stack
 		}
 		if trace.ReturnData != nil {
-			rdata := make([]string, 0, (len(trace.ReturnData)+31)/32)
-			for i := 0; i+32 <= len(trace.ReturnData); i += 32 {
-				rdata = append(rdata, fmt.Sprintf("%x", trace.ReturnData[i:i+32]))
-			}
-			formatted[index].ReturnData = &rdata
+			formatted[index].ReturnData = fmt.Sprintf("%x", trace.ReturnData)
 		}
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
