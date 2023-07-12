@@ -77,8 +77,9 @@ func (srv *Server) portMappingLoop() {
 	}
 
 	var (
-		refresh  = mclock.NewAlarm(srv.clock)
-		mappings = make(map[string]*portMapping, 2)
+		refresh        = mclock.NewAlarm(srv.clock)
+		mappings       = make(map[string]*portMapping, 2)
+		lastExternalIP net.IP
 	)
 	defer func() {
 		refresh.Stop()
@@ -91,9 +92,6 @@ func (srv *Server) portMappingLoop() {
 		}
 	}()
 
-	var (
-		lastExternalIP net.IP
-	)
 	for {
 		// Schedule next refresh.
 		for _, p := range mappings {
