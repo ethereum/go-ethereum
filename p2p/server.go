@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"golang.org/x/exp/slices"
@@ -194,6 +193,9 @@ type Server struct {
 	DiscV5    *discover.UDPv5
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
+
+	// This is read by the NAT port mapping loop.
+	portMappingRegister chan *portMapping
 
 	// Channels into the run loop.
 	quit                    chan struct{}
@@ -483,6 +485,11 @@ func (srv *Server) Start() (err error) {
 	if err := srv.setupLocalNode(); err != nil {
 		return err
 	}
+
+	// The NAT protocol mapping channel can receive up to two messages: one for
+	// enabling TCP port mapping, and one more for enabling the UDP port mapping.
+	srv.setupPortMapping()
+
 	if srv.ListenAddr != "" {
 		if err := srv.setupListening(); err != nil {
 			return err
@@ -520,24 +527,6 @@ func (srv *Server) setupLocalNode() error {
 		for _, e := range p.Attributes {
 			srv.localnode.Set(e)
 		}
-	}
-	switch srv.NAT.(type) {
-	case nil:
-		// No NAT interface, do nothing.
-	case nat.ExtIP:
-		// ExtIP doesn't block, set the IP right away.
-		ip, _ := srv.NAT.ExternalIP()
-		srv.localnode.SetStaticIP(ip)
-	default:
-		// Ask the router about the IP. This takes a while and blocks startup,
-		// do it in the background.
-		srv.loopWG.Add(1)
-		go func() {
-			defer srv.loopWG.Done()
-			if ip, err := srv.NAT.ExternalIP(); err == nil {
-				srv.localnode.SetStaticIP(ip)
-			}
-		}()
 	}
 	return nil
 }
@@ -657,12 +646,12 @@ func (srv *Server) setupListening() error {
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	tcp, isTCP := listener.Addr().(*net.TCPAddr)
-	if srv.NAT != nil && isTCP && !tcp.IP.IsLoopback() {
-		srv.loopWG.Add(1)
-		go func() {
-			srv.natMapLoop(srv.NAT, "tcp", tcp.Port, tcp.Port, "ethereum p2p", nat.DefaultMapTimeout)
-			srv.loopWG.Done()
-		}()
+	if isTCP && !tcp.IP.IsLoopback() {
+		srv.portMappingRegister <- &portMapping{
+			protocol: "TCP",
+			name:     "ethereum p2p",
+			port:     tcp.Port,
+		}
 	}
 
 	srv.loopWG.Add(1)
@@ -690,76 +679,15 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 	srv.localnode.SetFallbackUDP(realaddr.Port)
 	srv.log.Debug("UDP listener up", "addr", realaddr)
 
-	// Enable port mapping if configured.
-	if srv.NAT != nil && !realaddr.IP.IsLoopback() {
-		srv.loopWG.Add(1)
-		go func() {
-			defer srv.loopWG.Done()
-			srv.natMapLoop(srv.NAT, "udp", realaddr.Port, realaddr.Port, "ethereum p2p", nat.DefaultMapTimeout)
-		}()
+	if !realaddr.IP.IsLoopback() {
+		srv.portMappingRegister <- &portMapping{
+			protocol: "UDP",
+			name:     "ethereum peer discovery",
+			port:     realaddr.Port,
+		}
 	}
 
 	return conn, nil
-}
-
-// natMapLoop performs initialization mapping for nat and repeats refresh.
-func (srv *Server) natMapLoop(natm nat.Interface, protocol string, intport, extport int, name string, interval time.Duration) {
-	newLogger := func(p string, e int, i int, n nat.Interface) log.Logger {
-		return log.New("proto", p, "extport", e, "intport", i, "interface", n)
-	}
-	log := newLogger(protocol, extport, intport, natm)
-
-	var (
-		hasMapping bool
-		internal   = intport
-		external   = extport
-		mapTimeout = interval
-		refresh    = time.NewTimer(time.Duration(0))
-	)
-	// Set to 0 to perform initial port mapping. This will return C
-	// immediately and set it to mapTimeout in the next loop.
-	defer func() {
-		refresh.Stop()
-		if hasMapping {
-			log.Debug("Deleting port mapping")
-			natm.DeleteMapping(protocol, external, internal)
-		}
-	}()
-
-loop:
-	for {
-		select {
-		case <-srv.quit:
-			return
-
-		case <-refresh.C:
-			log.Trace("Start port mapping")
-			p, err := natm.AddMapping(protocol, external, internal, name, mapTimeout)
-			if err != nil {
-				hasMapping = false
-				log.Debug("Couldn't add port mapping", "err", err)
-				continue loop
-			}
-			// It was mapped!
-			hasMapping = true
-			if p != uint16(external) {
-				external = int(p)
-				log = newLogger(protocol, external, internal, natm)
-				log.Info("NAT mapped alternative port")
-			} else {
-				log.Info("NAT mapped port")
-			}
-
-			// Update port in local ENR.
-			switch protocol {
-			case "tcp":
-				srv.localnode.Set(enr.TCP(external))
-			case "udp":
-				srv.localnode.SetFallbackUDP(external)
-			}
-			refresh.Reset(mapTimeout)
-		}
-	}
 }
 
 // doPeerOp runs fn on the main loop.
