@@ -42,6 +42,7 @@ type upnp struct {
 	client      upnpClient
 	mu          sync.Mutex
 	lastReqTime time.Time
+	rand        *rand.Rand
 }
 
 type upnpClient interface {
@@ -109,8 +110,15 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 	}
 	// It will retry with a random port number if the client does
 	// not support AddAnyPortMapping.
-	extport = randomPort()
+	extport = n.randomPort()
 	return uint16(extport), n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+}
+
+func (n *upnp) randomPort() int {
+	if n.rand == nil {
+		n.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return n.rand.Intn(math.MaxUint16-10000) + 10000
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {
@@ -235,9 +243,4 @@ func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient
 	if !found {
 		out <- nil
 	}
-}
-
-func randomPort() int {
-	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(math.MaxUint16-10000) + 10000
 }
