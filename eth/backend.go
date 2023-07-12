@@ -194,7 +194,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	)
 	if config.LiveTrace {
-		vmConfig.Tracer = tracers.NewPrinter()
+		// vmConfig.Tracer = tracers.NewPrinter()
+		vmConfig.Tracer = tracers.NewFirehoseLogger()
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
