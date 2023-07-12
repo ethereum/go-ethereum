@@ -621,6 +621,7 @@ web3._extend({
 			name: 'getBlockReceipts',
 			call: 'eth_getBlockReceipts',
 			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberOrHashFormatter],
 		}),
 	],
 	properties: [
