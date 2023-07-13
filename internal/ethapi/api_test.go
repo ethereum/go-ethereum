@@ -647,6 +647,7 @@ func TestMulticallV1(t *testing.T) {
 		Error       string
 		Logs        []types.Log
 		GasUsed     string
+		Status      string
 		Transfers   []transfer
 	}
 	type blockRes struct {
@@ -695,10 +696,12 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		}, {
@@ -745,10 +748,12 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}, {
 				Number:       "0xa",
@@ -760,10 +765,12 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x0",
 					Logs:        []types.Log{},
+					Status:      "0x0",
 					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
 				}},
 			}},
@@ -807,6 +814,7 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}, {
 				Number:       "0xc",
@@ -818,6 +826,7 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		},
@@ -884,10 +893,12 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0xaacc",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}, {
 					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
 					GasUsed:     "0x5bb7",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		},
@@ -928,6 +939,7 @@ func TestMulticallV1(t *testing.T) {
 						Data:        []byte{},
 					}},
 					GasUsed: "0x5508",
+					Status:  "0x1",
 				}},
 			}},
 		},
@@ -990,6 +1002,7 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
 					GasUsed:     "0x52f6",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		},
@@ -1042,7 +1055,8 @@ func TestMulticallV1(t *testing.T) {
 							Value: big.NewInt(100),
 						},
 					},
-					Logs: []types.Log{},
+					Logs:   []types.Log{},
+					Status: "0x1",
 				}},
 			}},
 		},
@@ -1084,10 +1098,12 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0xd166",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0xe6d9",
 					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		},

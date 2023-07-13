@@ -1119,6 +1119,7 @@ type callResult struct {
 	Logs        []*types.Log   `json:"logs"`
 	Transfers   []transfer     `json:"transfers,omitempty"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	Status      hexutil.Uint64 `json:"status"`
 	Error       string         `json:"error,omitempty"`
 }
 
@@ -1205,7 +1206,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 			}
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig)
 			if err != nil {
-				results[bi].Calls[i] = callResult{Error: err.Error()}
+				results[bi].Calls[i] = callResult{Error: err.Error(), Status: hexutil.Uint64(types.ReceiptStatusFailed)}
 				continue
 			}
 			// If the result contains a revert reason, try to unpack it.
@@ -1222,8 +1223,11 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 				transfers = vmConfig.Tracer.(*tracer).Transfers()
 			}
 			callRes := callResult{ReturnValue: result.Return(), Logs: logs, Transfers: transfers, GasUsed: hexutil.Uint64(result.UsedGas)}
-			if result.Err != nil {
+			if result.Failed() {
+				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 				callRes.Error = result.Err.Error()
+			} else {
+				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
 			}
 			results[bi].Calls[i] = callRes
 			gasUsed += result.UsedGas
