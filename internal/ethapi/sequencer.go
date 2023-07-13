@@ -51,6 +51,6 @@ func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
 		return fmt.Errorf("failed to broadcast tx (error code %d): %s", resp.Code, resp.Log)
 	}
 
-	log.Info("successfully broadcasted tx to sequencer; hash: %s", resp.Hash)
+	log.Info("successfully broadcasted tx to sequencer", "hash", resp.Hash)
 	return nil
 }
