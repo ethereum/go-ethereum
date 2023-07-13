@@ -614,8 +614,6 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 		queued[addr] = list.Flatten()
 	}
 
-	pool.mu.RUnlock()
-
 	return pending, queued
 }
 
