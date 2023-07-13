@@ -112,20 +112,18 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 	var (
 		newHeadCh  = make(chan core.ChainHeadEvent)
 		newHeadSub = chain.SubscribeChainHeadEvent(newHeadCh)
-	)
-	defer newHeadSub.Unsubscribe()
 
-	// Track the previous and current head to feed to an idle reset
-	var (
+		// Track the previous and current head to feed to an idle reset
 		oldHead = head
 		newHead = oldHead
-	)
-	// Consume chain head events and start resets when none is running
-	var (
+
+		// Consume chain head events and start resets when none is running
 		resetBusy = make(chan struct{}, 1) // Allow 1 reset to run concurrently
 		resetDone = make(chan *types.Header)
+
+		errc      chan error
 	)
-	var errc chan error
+	defer newHeadSub.Unsubscribe()
 	for errc == nil {
 		// Something interesting might have happened, run a reset if there is
 		// one needed but none is running. The resetter will run on its own
