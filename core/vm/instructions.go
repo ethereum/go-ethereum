@@ -408,7 +408,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // emptyCodeHash. If the precompile account is not transferred any amount on a private or
 // customized chain, the return value will be zero.
 //
-//  5. Caller tries to get the code hash for an account which is marked as suicided
+//  5. Caller tries to get the code hash for an account which is marked as self-destructed
 //     in the current transaction, the code hash of this account should be returned.
 //
 //  6. Caller tries to get the code hash for an account which is marked as deleted, this

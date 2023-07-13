@@ -478,7 +478,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // This clears the account balance.
 //
 // The account's state object is still available until the state is committed,
-// getStateObject will return a non-nil account after Suicide.
+// getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
 	s.journal.append(selfDestructChange{
