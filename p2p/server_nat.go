@@ -91,12 +91,15 @@ func (srv *Server) portMappingLoop() {
 	}
 
 	var (
-		refresh        = mclock.NewAlarm(srv.clock)
-		mappings       = make(map[string]*portMapping, 2)
-		lastExternalIP net.IP
+		mappings  = make(map[string]*portMapping, 2)
+		refresh   = mclock.NewAlarm(srv.clock)
+		extip     = mclock.NewAlarm(srv.clock)
+		lastExtIP net.IP
 	)
+	extip.Schedule(srv.clock.Now())
 	defer func() {
 		refresh.Stop()
+		extip.Stop()
 		for _, m := range mappings {
 			if m.extPort != 0 {
 				log := newLogger(m.protocol, m.extPort, m.port)
@@ -107,14 +110,32 @@ func (srv *Server) portMappingLoop() {
 	}()
 
 	for {
-		// Schedule next refresh.
-		for _, p := range mappings {
-			refresh.Schedule(p.nextTime)
+		// Schedule refresh of existing mappings.
+		for _, m := range mappings {
+			refresh.Schedule(m.nextTime)
 		}
 
 		select {
 		case <-srv.quit:
 			return
+
+		case <-extip.C():
+			extip.Schedule(srv.clock.Now().Add(extipRetryInterval))
+			ip, err := srv.NAT.ExternalIP()
+			if err != nil {
+				log.Debug("Couldn't get external IP", "err", err, "interface", srv.NAT)
+			} else if !ip.Equal(lastExtIP) {
+				log.Debug("External IP changed", "ip", extip, "interface", srv.NAT)
+			} else {
+				return
+			}
+			// Here, we either failed to get the external IP, or it has changed.
+			// Ensure port mappings are refreshed in case we have moved to a new network.
+			lastExtIP = ip
+			srv.localnode.SetStaticIP(ip)
+			for _, m := range mappings {
+				m.nextTime = srv.clock.Now()
+			}
 
 		case m := <-srv.portMappingRegister:
 			if m.protocol != "TCP" && m.protocol != "UDP" {
@@ -124,23 +145,8 @@ func (srv *Server) portMappingLoop() {
 			m.nextTime = srv.clock.Now()
 
 		case <-refresh.C():
-			now := srv.clock.Now()
-
-			// Get/update the external IP address.
-			extip, err := srv.NAT.ExternalIP()
-			if err != nil {
-				log.Debug("Couldn't get external IP", "err", err, "interface", srv.NAT)
-				srv.localnode.SetStaticIP(nil)
-				refresh.Schedule(now.Add(extipRetryInterval))
-			} else if !extip.Equal(lastExternalIP) {
-				log.Debug("External IP changed", "ip", extip, "interface", srv.NAT)
-				srv.localnode.SetStaticIP(extip)
-				lastExternalIP = extip
-			}
-
-			// Update all mappings.
 			for _, m := range mappings {
-				if now < m.nextTime {
+				if srv.clock.Now() < m.nextTime {
 					continue
 				}
 
@@ -152,16 +158,15 @@ func (srv *Server) portMappingLoop() {
 
 				log.Trace("Attempting port mapping")
 				p, err := srv.NAT.AddMapping(m.protocol, external, m.port, m.name, portMapDuration)
-				now = srv.clock.Now()
 				if err != nil {
 					log.Debug("Couldn't add port mapping", "err", err)
 					m.extPort = 0
-					m.nextTime = now.Add(portMapRetryInterval)
+					m.nextTime = srv.clock.Now().Add(portMapRetryInterval)
 					continue
 				}
 				// It was mapped!
 				m.extPort = int(p)
-				m.nextTime = now.Add(portMapRefreshInterval)
+				m.nextTime = srv.clock.Now().Add(portMapRefreshInterval)
 				if external != m.extPort {
 					log = newLogger(m.protocol, m.extPort, m.port)
 					log.Info("NAT mapped alternative port")
@@ -177,6 +182,8 @@ func (srv *Server) portMappingLoop() {
 					srv.localnode.SetFallbackUDP(m.extPort)
 				}
 			}
+
 		}
+
 	}
 }
