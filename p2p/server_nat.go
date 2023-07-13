@@ -39,7 +39,7 @@ type portMapping struct {
 	port     int
 
 	// for use by the portMappingLoop goroutine:
-	extPort  int // if non-zero, this is mapped port returned by the NAT interface
+	extPort  int // the mapped port returned by the NAT interface
 	nextTime mclock.AbsTime
 }
 
