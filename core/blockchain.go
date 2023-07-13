@@ -49,8 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/txtrace"
-
-	txtracelib "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
 )
 
 var (
@@ -175,9 +173,8 @@ var defaultCacheConfig = &CacheConfig{
 type BlockChain struct {
 	chainConfig   *params.ChainConfig // Chain & network configuration
 	cacheConfig   *CacheConfig        // Cache configuration for pruning
-	txTraceConfig *txtrace.Config
-	// txtraceStore
-	txTraceStore txtracelib.Store
+	txTraceConfig *txtrace.Config     // Config for transaction tracing
+	txTraceDb     ethdb.Database      // Db for transaction tracing
 
 	db            ethdb.Database                   // Low level persistent database to store final content in
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
@@ -239,13 +236,13 @@ type BlockChain struct {
 // NewBlockChainV2 returns a fully initialised blockchain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor. The different between NewBlockChainV2 and NewBlockchain are additional txtrace.Config and txtracelib.Store parameter will passed.
-func NewBlockChainV2(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64, txTraceConfig *txtrace.Config, txStore txtracelib.Store) (*BlockChain, error) {
+func NewBlockChainV2(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64, txTraceConfig *txtrace.Config, txStore ethdb.Database) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit)
 	if err != nil {
 		return nil, err
 	}
 	bc.txTraceConfig = txTraceConfig
-	bc.txTraceStore = txStore
+	bc.txTraceDb = txStore
 	return bc, nil
 }
 
@@ -479,10 +476,6 @@ func (bc *BlockChain) empty() bool {
 		}
 	}
 	return true
-}
-
-func (bc *BlockChain) tracingTx() bool {
-	return bc.txTraceConfig != nil && bc.txTraceConfig.Enabled
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -1792,7 +1785,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, bc.tracingTx())
+		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
@@ -2524,8 +2517,8 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
-// TxTraceStore retrieves the blockchain's tx-trace store.
-func (bc *BlockChain) TxTraceStore() txtracelib.Store { return bc.txTraceStore }
+// TxTraceDB retrieves the blockchain's tx-trace db.
+func (bc *BlockChain) TxTraceDB() ethdb.Database { return bc.txTraceDb }
 
 // SetBlockValidatorAndProcessorForTesting sets the current validator and processor.
 // This method can be used to force an invalid blockchain to be verified for tests.

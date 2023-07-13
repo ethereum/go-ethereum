@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -44,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -57,7 +59,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/txtrace"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -133,15 +134,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Init tx-trace underlying database and storage layer
-	var traceDb ethdb.Database
-	if config.TxTrace.Enabled {
-		traceDb, err = stack.OpenDatabaseWithTrace(config.DatabaseCache, config.DatabaseHandles, config.TxTrace.StoreDir, "eth/db/tracedb", false)
-		if err != nil {
-			return nil, err
-		}
-	}
-	txStore := txtrace.NewTraceStore(traceDb)
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
@@ -207,12 +199,35 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			AncientPrune:        config.AncientPrune,
 		}
 	)
+	var traceDB ethdb.Database
+	if config.TxTrace.Enabled {
+		traceDB, err = stack.OpenDatabaseWithTrace(config.DatabaseCache, config.DatabaseHandles, config.TxTrace.StoreDir, "eth/db/tracedb", false)
+		if err != nil {
+			return nil, err
+		}
+		vmConfig.TxTraceDB = traceDB
+		vmConfig.TxTracerName = "flatCallTracer"
+		tracerConfigdata, _ := json.Marshal(map[string]interface{}{
+			"convertParityErrors": true,
+			"includePrecompiles":  true,
+		})
+		vmConfig.TxTracerConfig = tracerConfigdata
+		vmConfig.TxTracerCreateFn = func(name *string, tc *vm.TraceContext, config json.RawMessage) (vm.EVMLoggerWithResult, error) {
+			return tracers.DefaultDirectory.New(*name, &tracers.Context{
+				BlockHash:   tc.BlockHash,
+				BlockNumber: tc.BlockNumber,
+				TxIndex:     tc.TxIndex,
+				TxHash:      tc.TxHash,
+			}, config)
+		}
+	}
+
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
 	if config.OverrideShanghai != nil {
 		overrides.OverrideShanghai = config.OverrideShanghai
 	}
-	eth.blockchain, err = core.NewBlockChainV2(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, &config.TxTrace, txStore)
+	eth.blockchain, err = core.NewBlockChainV2(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, &config.TxTrace, traceDB)
 	if err != nil {
 		return nil, err
 	}

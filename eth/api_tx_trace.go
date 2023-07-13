@@ -21,12 +21,11 @@ package eth
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-
-	txtracelib "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 // PublicTxTraceAPI provides an API to tracing transaction or block information.
@@ -45,21 +44,15 @@ func (api *PublicTxTraceAPI) Transaction(ctx context.Context, txHash common.Hash
 	if api.e.blockchain == nil {
 		return []byte{}, fmt.Errorf("blockchain corruput")
 	}
-
-	raw, err := api.e.blockchain.TxTraceStore().ReadTxTrace(ctx, txHash)
-	if err != nil {
-		return []byte{}, err
-	}
-
+	traceDb := api.e.blockchain.TxTraceDB()
+	raw := rawdb.ReadTxTrace(traceDb, txHash)
 	if bytes.Equal(raw, []byte{}) { // empty response
 		return nil, fmt.Errorf("trace result of tx {%#v} not found in tracedb", txHash)
 	}
-
-	flatten := new(txtracelib.ActionTraceList)
-	err = rlp.DecodeBytes(raw, flatten)
+	var res interface{}
+	err := json.Unmarshal(raw, &res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode rlp flatten traces: %v", err)
+		return nil, err
 	}
-
-	return *flatten, nil
+	return res, nil
 }

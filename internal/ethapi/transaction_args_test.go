@@ -343,3 +343,10 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (b *backendMock) GetCallCache(key string) (interface{}, bool) {
+	return nil, false
+}
+
+func (b *backendMock) SetCallCache(key string, value interface{}, weight int64) {
+}

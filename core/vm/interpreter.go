@@ -17,9 +17,12 @@
 package vm
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -30,6 +33,11 @@ type Config struct {
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int     // Additional EIPS that are to be enabled
+
+	TxTraceDB        ethdb.Database                                                             // TxTraceStore for tx tracing
+	TxTracerName     string                                                                     // Name of the tracer
+	TxTracerConfig   json.RawMessage                                                            // Json config of the tracer
+	TxTracerCreateFn func(*string, *TraceContext, json.RawMessage) (EVMLoggerWithResult, error) // fn for create tracer
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

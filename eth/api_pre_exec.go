@@ -2,19 +2,20 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
 	"strings"
 
-	txtrace2 "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -85,11 +86,11 @@ func toPreError(err error, result *core.ExecutionResult) PreError {
 }
 
 type PreResult struct {
-	Trace     txtrace2.ActionTraceList `json:"trace"`
-	Logs      []*types.Log             `json:"logs"`
-	StateDiff txtrace2.StateDiff       `json:"stateDiff"`
-	Error     PreError                 `json:"error,omitempty"`
-	GasUsed   uint64                   `json:"gasUsed"`
+	Trace     interface{}  `json:"trace"`
+	Logs      []*types.Log `json:"logs"`
+	StateDiff interface{}  `json:"stateDiff,omitempty"`
+	Error     PreError     `json:"error,omitempty"`
+	GasUsed   uint64       `json:"gasUsed"`
 }
 
 func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreResult, error) {
@@ -142,7 +143,15 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 			continue
 		}
 		txHash := common.BigToHash(big.NewInt(int64(i)))
-		tracer := txtrace2.NewOeTracer(nil, header.Hash(), header.Number, txHash, uint64(i))
+		tracer, err := tracers.DefaultDirectory.New("flatCallTracer", &tracers.Context{
+			BlockHash:   header.Hash(),
+			BlockNumber: big.NewInt(0).Set(header.Number),
+			TxIndex:     0,
+			TxHash:      txHash,
+		}, nil)
+		if err != nil {
+			return nil, err
+		}
 		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Tracer: tracer, PreExec: true})
 		evm.Context.BaseFee = big.NewInt(0)
 		evm.Context.BlockNumber.Add(evm.Context.BlockNumber, big.NewInt(rand.Int63n(6)+6))
@@ -180,10 +189,31 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 			preResList = append(preResList, preRes)
 			continue
 		}
+		rawRes, err := tracer.GetResult()
+		if err != nil {
+			preRes := PreResult{
+				Error: toPreError(err, result),
+			}
+			if result != nil {
+				preRes.GasUsed = result.UsedGas
+			}
+			preResList = append(preResList, preRes)
+			continue
+		}
+		var res []map[string]interface{}
+		if err := json.Unmarshal(rawRes, &res); err != nil {
+			preRes := PreResult{
+				Error: toPreError(err, result),
+			}
+			if result != nil {
+				preRes.GasUsed = result.UsedGas
+			}
+			preResList = append(preResList, preRes)
+			continue
+		}
 		preRes := PreResult{
-			Trace:     tracer.GetTraces(),
-			Logs:      state.GetLogs(txHash, header.Number.Uint64(), header.Hash()),
-			StateDiff: tracer.GetStateDiff(),
+			Trace: res,
+			Logs:  state.GetLogs(txHash, header.Number.Uint64(), header.Hash()),
 		}
 		if result != nil {
 			preRes.GasUsed = result.UsedGas
@@ -192,10 +222,10 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 			}
 		}
 
-		if preRes.Error.Msg == "" && len(preRes.Trace) > 0 && (preRes.Trace)[0].Error != "" {
+		if preRes.Error.Msg == "" && len(res) > 0 && (res)[0]["error"] != nil {
 			preRes.Error = PreError{
 				Code: Reverted,
-				Msg:  (preRes.Trace)[0].Error,
+				Msg:  fmt.Sprintf("%s", (res)[0]["error"]),
 			}
 		}
 		preResList = append(preResList, preRes)

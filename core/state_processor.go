@@ -24,14 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-
-	txtracelib "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -60,7 +59,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, tracing bool) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -79,8 +78,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	start := time.Now()
 	for i, tx := range block.Transactions() {
-		if tracing {
-			cfg.Tracer = txtracelib.NewOeTracer(p.bc.TxTraceStore(), header.Hash(), header.Number, tx.Hash(), uint64(statedb.TxIndex()))
+		if cfg.TxTracerName != "" {
+			txctx := &vm.TraceContext{
+				BlockHash:   blockHash,
+				BlockNumber: blockNumber,
+				TxIndex:     i,
+				TxHash:      tx.Hash(),
+			}
+			tracer, err := cfg.TxTracerCreateFn(&cfg.TxTracerName, txctx, cfg.TxTracerConfig)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("could not create txtracer: %w", err)
+			}
+			cfg.Tracer = tracer
 		}
 		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		msg, err := TransactionToMessage(tx, types.MakeSigner(p.config, header.Number), header.BaseFee)
@@ -96,17 +105,24 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 
 		// Finalize trace logger result and save to underlying database if necessary.
-		switch t := cfg.Tracer.(type) {
-		case *txtracelib.OeTracer:
-			log.Debug("Persist oe-style trace result to database", "blockNumber", header.Number.Int64(), "txHash", tx.Hash())
-			t.PersistTrace()
-		default:
+		if cfg.TxTracerName != "" {
+			tracer := (cfg.Tracer).(vm.EVMLoggerWithResult)
+			if tracer != nil {
+				res, err := tracer.GetResult()
+				if err != nil {
+					log.Error("could not get result from tracer", "err", err)
+				} else {
+					if res != nil {
+						rawdb.WriteTxTrace(p.bc.txTraceDb, tx.Hash(), res)
+					}
+				}
+			}
 		}
 
 	}
 
-	if tracing {
-		log.Info("Apply all transaction messages finished", "elapsed", common.PrettyDuration(time.Since(start)), "blockNumber", block.NumberU64(), "txs", len(block.Transactions()))
+	if cfg.TxTracerName != "" {
+		log.Debug("store all transaction trace messages finished", "elapsed", common.PrettyDuration(time.Since(start)), "blockNumber", block.NumberU64(), "txs", len(block.Transactions()))
 	}
 
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
@@ -183,24 +199,5 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 		return nil, err
 	}
 
-	// Finalize trace logger result and save to underlying database if necessary.
-	switch t := cfg.Tracer.(type) {
-	case *txtracelib.OeTracer:
-		log.Debug("Persist oe-style trace result to database", "blockNumber", header.Number.Int64(), "txHash", tx.Hash())
-		t.PersistTrace()
-	default:
-	}
-
 	return receipt, nil
-}
-
-func ApplyTransactionForPreExec(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
-	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
-	if err != nil {
-		return nil, err
-	}
-	blockContext := NewEVMBlockContext(header, bc, author)
-	blockContext.BaseFee = big.NewInt(0)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
