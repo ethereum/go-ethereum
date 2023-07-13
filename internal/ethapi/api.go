@@ -900,7 +900,7 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if err != nil {
+	if block == nil || err != nil {
 		return nil, err
 	}
 	receipts, err := s.b.GetReceipts(ctx, block.Hash())
