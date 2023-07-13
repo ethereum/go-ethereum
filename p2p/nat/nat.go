@@ -97,7 +97,8 @@ const (
 // Map adds a port mapping on m and keeps it alive until c is closed.
 // This function is typically invoked in its own goroutine.
 //
-// This does not support using alternate ports.
+// Note that Map does not handle the situation where the NAT interface assigns a different
+// external port than the requested one.
 func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, name string) {
 	log := log.New("proto", protocol, "extport", extport, "intport", intport, "interface", m)
 	refresh := time.NewTimer(DefaultMapTimeout)
