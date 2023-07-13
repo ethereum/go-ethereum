@@ -220,16 +220,13 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		}
 	)
 	// Generate blocks for testing
-	db, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, n, generator)
+	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
 	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-	if n, err := chain.InsertReceiptChain(blocks, receipts, 0); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
@@ -1088,9 +1085,8 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	}
 
 	var testSuite = []struct {
-		txHash    common.Hash
-		want      string
-		expectErr error
+		txHash common.Hash
+		want   string
 	}{
 		// 0. normal success
 		{
@@ -1130,16 +1126,6 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			err    error
 		)
 		result, err = api.GetTransactionReceipt(context.Background(), tt.txHash)
-		if tt.expectErr != nil {
-			if err == nil {
-				t.Errorf("test %d: want error %v, have nothing", i, tt.expectErr)
-				continue
-			}
-			if !errors.Is(err, tt.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, have %v", i, tt.expectErr, err)
-			}
-			continue
-		}
 		if err != nil {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
