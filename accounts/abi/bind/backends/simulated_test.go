@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -38,10 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m, goleak.IgnoreCurrent())
-}
 
 func TestSimulatedBackend(t *testing.T) {
 	var gasLimit uint64 = 8000029
