@@ -1766,9 +1766,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 }
 
-func TestRPCGetTransactionReceipt(t *testing.T) {
-	t.Parallel()
-
+func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
 	// Initialize test accounts
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1794,9 +1792,8 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
 			},
 		}
-		genBlocks = 5
-		signer    = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
-		txHashes  = make([]common.Hash, genBlocks)
+		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
+		txHashes = make([]common.Hash, genBlocks)
 	)
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		var (
@@ -1838,16 +1835,16 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			txHashes[i] = tx.Hash()
 		}
 	})
-	api := NewTransactionAPI(backend, new(AddrLocker))
-	blockHashes := make([]common.Hash, genBlocks+1)
-	ctx := context.Background()
-	for i := 0; i <= genBlocks; i++ {
-		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
-		if err != nil {
-			t.Errorf("failed to get block: %d err: %v", i, err)
-		}
-		blockHashes[i] = header.Hash()
-	}
+	return backend, txHashes
+}
+
+func TestRPCGetTransactionReceipt(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, txHashes = setupReceiptBackend(t, 5)
+		api               = NewTransactionAPI(backend, new(AddrLocker))
+	)
 
 	var testSuite = []struct {
 		txHash common.Hash
