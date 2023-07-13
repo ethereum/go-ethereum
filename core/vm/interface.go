@@ -51,8 +51,8 @@ type StateDB interface {
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
 
-	Suicide(common.Address)
-	HasSuicided(common.Address) bool
+	SelfDestruct(common.Address)
+	HasSelfDestructed(common.Address) bool
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
