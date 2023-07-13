@@ -82,7 +82,7 @@ type stateObject struct {
 	// is still accessible in the scope of same transaction.
 	selfDestructed bool
 
-	// Flag whether the account was marked as deleted. a self-destructed account
+	// Flag whether the account was marked as deleted. A self-destructed account
 	// or an account that is considered as empty will be marked as deleted at
 	// the end of transaction and no longer accessible anymore.
 	deleted bool
