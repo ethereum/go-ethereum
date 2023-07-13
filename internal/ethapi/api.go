@@ -1227,6 +1227,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 			}
 			results[bi].Calls[i] = callRes
 			gasUsed += result.UsedGas
+			state.Finalise(true)
 		}
 		results[bi].GasUsed = hexutil.Uint64(gasUsed)
 	}

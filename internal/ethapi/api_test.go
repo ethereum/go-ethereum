@@ -605,12 +605,21 @@ func TestMulticallV1(t *testing.T) {
 		accounts  = newAccounts(3)
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
+		cac       = common.HexToAddress("0x0000000000000000000000000000000000000cac")
 		genesis   = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc: core.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+				// Yul:
+				// object "Test" {
+				//     code {
+				//         let dad := 0x0000000000000000000000000000000000000dad
+				//         selfdestruct(dad)
+				//     }
+				// }
+				cac: {Balance: big.NewInt(params.Ether), Code: common.Hex2Bytes("610dad80ff")},
 			},
 		}
 	)
@@ -1034,6 +1043,51 @@ func TestMulticallV1(t *testing.T) {
 						},
 					},
 					Logs: []types.Log{},
+				}},
+			}},
+		},
+		// Tests selfdestructed contract.
+		{
+			tag: latest,
+			blocks: []CallBatch{{
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &cac,
+				}, {
+					From: &accounts[0].addr,
+					// Check that cac is selfdestructed and balance transferred to dad.
+					// object "Test" {
+					//    code {
+					//        let cac := 0x0000000000000000000000000000000000000cac
+					//        let dad := 0x0000000000000000000000000000000000000dad
+					//        if gt(balance(cac), 0) {
+					//            revert(0, 0)
+					//        }
+					//        if gt(extcodesize(cac), 0) {
+					//            revert(0, 0)
+					//        }
+					//        if eq(balance(dad), 0) {
+					//            revert(0, 0)
+					//        }
+					//    }
+					// }
+					Input: hex2Bytes("610cac610dad600082311115601357600080fd5b6000823b1115602157600080fd5b6000813103602e57600080fd5b5050"),
+				}},
+			}},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x1b83f",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0xd166",
+					Logs:        []types.Log{},
+				}, {
+					ReturnValue: "0x",
+					GasUsed:     "0xe6d9",
+					Logs:        []types.Log{},
 				}},
 			}},
 		},
