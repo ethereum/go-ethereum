@@ -65,6 +65,9 @@ func TestState(t *testing.T) {
 
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
+		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP1153-transientStorage"),
+		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP5656-MCOPY"),
+		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP4844-blobtransactions"),
 		stateTestDir,
 		legacyStateTestDir,
 		benchmarksDir,
