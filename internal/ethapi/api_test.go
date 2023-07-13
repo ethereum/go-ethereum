@@ -1110,7 +1110,11 @@ func TestMulticallV1(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		result, err := api.MulticallV1(context.Background(), tc.blocks, tc.tag, tc.includeTransfers)
+		opts := multicallOpts{Blocks: tc.blocks}
+		if tc.includeTransfers != nil && *tc.includeTransfers {
+			opts.TraceTransfers = true
+		}
+		result, err := api.MulticallV1(context.Background(), opts, tc.tag)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)

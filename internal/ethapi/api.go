@@ -1132,6 +1132,11 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
+type multicallOpts struct {
+	Blocks         []CallBatch
+	TraceTransfers bool
+}
+
 // MulticallV1 executes series of transactions on top of a base state.
 // The transactions are packed into blocks. For each block, block header
 // fields can be overridden. The state can also be overridden prior to
@@ -1139,7 +1144,7 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blockNrOrHash rpc.BlockNumberOrHash, includeTransfers *bool) ([]blockResult, error) {
+func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blockNrOrHash rpc.BlockNumberOrHash) ([]blockResult, error) {
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -1149,6 +1154,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 	var (
 		cancel  context.CancelFunc
 		timeout = s.b.RPCEVMTimeout()
+		blocks  = opts.Blocks
 	)
 	if timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -1201,7 +1207,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 			if block.ECRecoverOverride != nil {
 				vmConfig.DisableECRecover = true
 			}
-			if includeTransfers != nil && *includeTransfers {
+			if opts.TraceTransfers {
 				vmConfig.Tracer = newTracer()
 			}
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig)
@@ -1219,7 +1225,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, blocks []CallBatch, blo
 				l.TxHash = common.Hash{}
 			}
 			var transfers []transfer
-			if includeTransfers != nil && *includeTransfers {
+			if opts.TraceTransfers {
 				transfers = vmConfig.Tracer.(*tracer).Transfers()
 			}
 			callRes := callResult{ReturnValue: result.Return(), Logs: logs, Transfers: transfers, GasUsed: hexutil.Uint64(result.UsedGas)}
