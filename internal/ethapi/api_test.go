@@ -323,15 +323,11 @@ func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 }
 func (b testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) { panic("implement me") }
 func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-	header, err := b.HeaderByNumber(ctx, rpc.BlockNumber(*number))
+	header, err := b.HeaderByHash(ctx, hash)
 	if header == nil || err != nil {
 		return nil, err
 	}
-	receipts := rawdb.ReadReceipts(b.db, hash, *number, header.Time, b.chain.Config())
+	receipts := rawdb.ReadReceipts(b.db, hash, header.Number.Uint64(), header.Time, b.chain.Config())
 	return receipts, nil
 }
 func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
