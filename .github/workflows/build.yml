@@ -10,10 +10,6 @@ env:
   BUILT_BINARY_PATH: build/bin
   BUILT_BINARY_NAME: geth
   ARCHIVE_FILE_NAME: eth-latest-linux-amd64
-  ARCHIVE_BUCKET: debank-build-artifacts
-  ARCHIVE_FILE_PREFIX: downloads/ethereum
-  AWS_REGION: ap-northeast-1
-
 jobs:
   build-artifacts:
     runs-on: [self-hosted, general]
@@ -38,34 +34,3 @@ jobs:
         run: |
           git config --global url."https://${{ steps.generate-token.outputs.token }}:x-oauth-basic@github.com/DeBankDeFi".insteadOf "https://github.com/DeBankDeFi"
           make
-
-      - name: Set env
-        run: |
-          echo "ARCHIVE_FILE_NAME=eth-$(git rev-parse --short HEAD)-linux-amd64" >> $GITHUB_ENV
-
-      - name: Archive artifacts
-        run: |
-          mkdir $ARCHIVE_FILE_NAME
-          cp $BUILT_BINARY_PATH/$BUILT_BINARY_NAME $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
-          sha256sum $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME --tag >> $ARCHIVE_FILE_NAME/sha256.checksum
-          chmod u+x $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
-          $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
-          tar cvfz $ARCHIVE_FILE_NAME.tar.gz $ARCHIVE_FILE_NAME
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Copy artifacts to s3
-        run: |
-          aws s3 cp $ARCHIVE_FILE_NAME.tar.gz s3://$ARCHIVE_BUCKET/$ARCHIVE_FILE_PREFIX/$ARCHIVE_FILE_NAME.tar.gz --acl public-read
-
-      - name: comment PR
-        uses: unsplash/comment-on-pr@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          msg: "Artifacts uploaded, click or copy [this link](https://${{ env.ARCHIVE_BUCKET }}.s3.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ARCHIVE_FILE_PREFIX }}/${{ env.ARCHIVE_FILE_NAME }}.tar.gz) to download. :tada:"
-          check_for_duplicate_msg: true
-        continue-on-error: true

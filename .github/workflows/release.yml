@@ -50,12 +50,3 @@ jobs:
           chmod u+x $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
           $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
           tar cvfz $ARCHIVE_FILE_NAME.tar.gz $ARCHIVE_FILE_NAME
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Copy artifacts to s3
-        run: |
-          aws s3 cp $ARCHIVE_FILE_NAME.tar.gz s3://$ARCHIVE_BUCKET/$ARCHIVE_FILE_PREFIX/$ARCHIVE_FILE_NAME.tar.gz --acl public-read
