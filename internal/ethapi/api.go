@@ -1681,7 +1681,7 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
-	if err != nil {
+	if tx == nil || err != nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null
 		// as per specification.
 		return nil, nil
