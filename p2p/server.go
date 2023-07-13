@@ -644,9 +644,15 @@ func (srv *Server) setupListening() error {
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	tcp, isTCP := listener.Addr().(*net.TCPAddr)
-	if isTCP && !tcp.IP.IsLoopback() {
+	if isTCP {
 		srv.localnode.Set(enr.TCP(tcp.Port))
-		srv.portMappingRegister <- &portMapping{protocol: "TCP", name: "ethereum p2p", port: tcp.Port}
+		if !tcp.IP.IsLoopback() && !tcp.IP.IsPrivate() {
+			srv.portMappingRegister <- &portMapping{
+				protocol: "TCP",
+				name:     "ethereum p2p",
+				port:     tcp.Port,
+			}
+		}
 	}
 
 	srv.loopWG.Add(1)
@@ -670,15 +676,14 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	srv.localnode.SetFallbackUDP(realaddr.Port)
-	srv.log.Debug("UDP listener up", "addr", realaddr)
-
-	if !realaddr.IP.IsLoopback() {
+	laddr := conn.LocalAddr().(*net.UDPAddr)
+	srv.localnode.SetFallbackUDP(laddr.Port)
+	srv.log.Debug("UDP listener up", "addr", laddr)
+	if !laddr.IP.IsLoopback() && !laddr.IP.IsPrivate() {
 		srv.portMappingRegister <- &portMapping{
 			protocol: "UDP",
 			name:     "ethereum peer discovery",
-			port:     realaddr.Port,
+			port:     laddr.Port,
 		}
 	}
 
