@@ -622,6 +622,7 @@ func TestMulticallV1(t *testing.T) {
 				cac: {Balance: big.NewInt(params.Ether), Code: common.Hex2Bytes("610dad80ff")},
 			},
 		}
+		n10hash = crypto.Keccak256Hash([]byte{0xa}).Hex()
 	)
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
@@ -688,7 +689,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa410",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -740,7 +741,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa410",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -757,7 +758,7 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5208",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -806,7 +807,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         crypto.Keccak256Hash([]byte{0xb}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -818,7 +819,7 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xc",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -885,7 +886,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x10683",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -926,7 +927,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5508",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -993,7 +994,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x52f6",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -1037,7 +1038,7 @@ func TestMulticallV1(t *testing.T) {
 			includeTransfers: &includeTransfers,
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xd984",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",
@@ -1090,7 +1091,7 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
-				Hash:         "0x0000000000000000000000000000000000000000000000000000000000000000",
+				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x1b83f",
 				FeeRecipient: "0x0000000000000000000000000000000000000000",

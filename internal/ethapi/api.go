@@ -1189,9 +1189,10 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		if block.ECRecoverOverride != nil {
 			state.SetCode(common.BytesToAddress([]byte{1}), *block.ECRecoverOverride)
 		}
+		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		results[bi] = blockResult{
 			Number:       hexutil.Uint64(blockContext.BlockNumber.Uint64()),
-			Hash:         common.Hash{}, // TODO
+			Hash:         hash,
 			Time:         hexutil.Uint64(blockContext.Time),
 			GasLimit:     hexutil.Uint64(blockContext.GasLimit),
 			FeeRecipient: blockContext.Coinbase,
