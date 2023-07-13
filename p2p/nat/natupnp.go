@@ -111,7 +111,11 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 	// It will retry with a random port number if the client does
 	// not support AddAnyPortMapping.
 	extport = n.randomPort()
-	return uint16(extport), n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(extport), nil
 }
 
 func (n *upnp) randomPort() int {
