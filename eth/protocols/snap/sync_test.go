@@ -1529,6 +1529,8 @@ func makeAccountTrieNoStorage(n int) (string, *trie.Trie, entrySlice) {
 	var (
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		accTrie = trie.NewEmpty(db)
+
+		// nolint:prealloc
 		entries entrySlice
 	)
 
