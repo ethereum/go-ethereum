@@ -263,8 +263,6 @@ var parallelizabilityTimer = metrics.NewRegisteredTimer("block/parallelizability
 // transactions failed to execute due to insufficient gas it will return an error.
 // nolint:gocognit
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (types.Receipts, []*types.Log, uint64, error) {
-	blockstm.SetProcs(cfg.ParallelSpeculativeProcesses)
-
 	var (
 		receipts    types.Receipts
 		header      = block.Header()
@@ -364,7 +362,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	backupStateDB := statedb.Copy()
 
 	profile := false
-	result, err := blockstm.ExecuteParallel(tasks, profile, metadata, interruptCtx)
+	result, err := blockstm.ExecuteParallel(tasks, profile, metadata, cfg.ParallelSpeculativeProcesses, interruptCtx)
 
 	if err == nil && profile && result.Deps != nil {
 		_, weight := result.Deps.LongestPath(*result.Stats)
@@ -398,7 +396,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				t.totalUsedGas = usedGas
 			}
 
-			_, err = blockstm.ExecuteParallel(tasks, false, metadata, interruptCtx)
+			_, err = blockstm.ExecuteParallel(tasks, false, metadata, cfg.ParallelSpeculativeProcesses, interruptCtx)
 
 			break
 		}
