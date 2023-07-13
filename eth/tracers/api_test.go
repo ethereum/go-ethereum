@@ -320,6 +320,155 @@ func TestTraceCall(t *testing.T) {
 	}
 }
 
+func TestTraceCallMany(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: core.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlocks := 10
+	signer := types.HomesteadSigner{}
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		//    value: 1000 wei
+		//    fee:   0 wei
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.teardown()
+	api := NewAPI(backend)
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		calls       []ethapi.TransactionArgs
+		config      *TraceCallConfig
+		expectErr   error
+		expect      string
+	}{
+		// Standard JSON trace upon the genesis, plain transfer.
+		{
+			blockNumber: rpc.BlockNumber(0),
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					To:    &accounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+				{
+					From:  &accounts[1].addr,
+					To:    &accounts[0].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+			},
+			config:    nil,
+			expectErr: nil,
+			expect:    `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
+		},
+		// Standard JSON trace upon the head, plain transfer.
+		{
+			blockNumber: rpc.BlockNumber(genBlocks),
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					To:    &accounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+				{
+					From:  &accounts[1].addr,
+					To:    &accounts[0].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+			},
+			config:    nil,
+			expectErr: nil,
+			expect:    `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
+		},
+		// Standard JSON trace upon the non-existent block, error expects
+		{
+			blockNumber: rpc.BlockNumber(genBlocks + 1),
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					To:    &accounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+			},
+			config:    nil,
+			expectErr: fmt.Errorf("block #%d not found", genBlocks+1),
+		},
+		// Standard JSON trace upon the latest block
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					To:    &accounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+			},
+			config:    nil,
+			expectErr: nil,
+			expect:    `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
+		},
+		// Tracing on 'pending' should fail:
+		{
+			blockNumber: rpc.PendingBlockNumber,
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					To:    &accounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				},
+			},
+			config:    nil,
+			expectErr: errors.New("tracing on top of pending is not supported"),
+		},
+		// Tracing with BlockOverrides
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			calls: []ethapi.TransactionArgs{
+				{
+					From:  &accounts[0].addr,
+					Input: &hexutil.Bytes{0x43}, // blocknumber
+				},
+			},
+			config: &TraceCallConfig{
+				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+			},
+			expectErr: nil,
+			expect:    `[{"result":{"gas":53018,"failed":false,"returnValue":"","structLogs":[{"pc":0,"op":"NUMBER","gas":24946984,"gasCost":2,"depth":1,"stack":[]},{"pc":1,"op":"STOP","gas":24946982,"gasCost":0,"depth":1,"stack":["0x1337"]}]}}]`,
+		},
+	}
+	for i, testspec := range testSuite {
+		result, err := api.TraceCallMany(context.Background(), testspec.calls, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, have %v", i, err)
+			continue
+		}
+		have, _ := json.Marshal(result)
+		expect := testspec.expect
+		if string(have) != expect {
+			t.Errorf("test %d, result mismatch, have\n%v\n, expect\n%v\n", i, string(have), expect)
+		}
+	}
+}
+
 func TestTraceTransaction(t *testing.T) {
 	t.Parallel()
 
@@ -874,7 +1023,7 @@ func TestTraceChain(t *testing.T) {
 				t.Fatalf("unexpected result length, have %d want %d", have, want)
 			}
 			for _, trace := range result.Traces {
-				trace.TxHash = common.Hash{}
+				trace.TxHash = &common.Hash{}
 				blob, _ := json.Marshal(trace)
 				if have, want := string(blob), single; have != want {
 					t.Fatalf("unexpected tracing result, have\n%v\nwant:\n%v", have, want)
