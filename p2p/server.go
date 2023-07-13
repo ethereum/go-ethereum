@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"golang.org/x/exp/slices"
@@ -644,11 +645,8 @@ func (srv *Server) setupListening() error {
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	tcp, isTCP := listener.Addr().(*net.TCPAddr)
 	if isTCP && !tcp.IP.IsLoopback() {
-		srv.portMappingRegister <- &portMapping{
-			protocol: "TCP",
-			name:     "ethereum p2p",
-			port:     tcp.Port,
-		}
+		srv.localnode.Set(enr.TCP(tcp.Port))
+		srv.portMappingRegister <- &portMapping{protocol: "TCP", name: "ethereum p2p", port: tcp.Port}
 	}
 
 	srv.loopWG.Add(1)
