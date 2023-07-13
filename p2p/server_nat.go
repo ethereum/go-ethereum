@@ -130,9 +130,9 @@ func (srv *Server) portMappingLoop() {
 				return
 			}
 			// Here, we either failed to get the external IP, or it has changed.
-			// Ensure port mappings are refreshed in case we have moved to a new network.
 			lastExtIP = ip
 			srv.localnode.SetStaticIP(ip)
+			// Ensure port mappings are refreshed in case we have moved to a new network.
 			for _, m := range mappings {
 				m.nextTime = srv.clock.Now()
 			}
