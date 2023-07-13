@@ -182,8 +182,6 @@ func (srv *Server) portMappingLoop() {
 					srv.localnode.SetFallbackUDP(m.extPort)
 				}
 			}
-
 		}
-
 	}
 }
