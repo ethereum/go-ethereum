@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -78,6 +79,14 @@ type txPool interface {
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+
+	// SubscribeNewLocalTxsEvent should return an event subscription of
+	// NewTxsEvent and send events to the given channel.
+	SubscribeNewLocalTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+
+	// SubscribeNewRemoteTxsEvent should return an event subscription of
+	// NewTxsEvent and send events to the given channel.
+	SubscribeNewRemoteTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -112,9 +121,11 @@ type handler struct {
 	peers        *peerSet
 	merger       *consensus.Merger
 
+	localsBroadcaster *localTxHandler
+
 	eventMux      *event.TypeMux
-	txsCh         chan core.NewTxsEvent
-	txsSub        event.Subscription
+	remoteTxsCh   chan core.NewTxsEvent
+	remoteTxsSub  event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
 	requiredBlocks map[uint64]common.Hash
@@ -149,6 +160,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerDoneCh:  make(chan struct{}),
 		handlerStartCh: make(chan struct{}),
 	}
+	h.localsBroadcaster = newLocalsTxBroadcaster(h.txpool, h.chain, h.peers)
+
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
 		// block is ahead, so snap sync was enabled for this node at a certain point.
@@ -377,6 +390,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
+	fmt.Println("registerPeer")
+
 	// Register the peer locally
 	if err := h.peers.registerPeer(peer, snap); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
@@ -523,8 +538,8 @@ func (h *handler) Start(maxPeers int) {
 
 	// broadcast transactions
 	h.wg.Add(1)
-	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+	h.remoteTxsCh = make(chan core.NewTxsEvent, txChanSize)
+	h.remoteTxsSub = h.txpool.SubscribeNewRemoteTxsEvent(h.remoteTxsCh)
 	go h.txBroadcastLoop()
 
 	// broadcast mined blocks
@@ -539,11 +554,16 @@ func (h *handler) Start(maxPeers int) {
 	// start peer handler tracker
 	h.wg.Add(1)
 	go h.protoTracker()
+
+	h.wg.Add(1)
+	go h.localsBroadcaster.Run(&h.wg)
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
+	h.remoteTxsSub.Unsubscribe()  // quits txBroadcastLoop
 	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+
+	h.localsBroadcaster.Stop()
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -667,9 +687,9 @@ func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
 	for {
 		select {
-		case event := <-h.txsCh:
+		case event := <-h.remoteTxsCh:
 			h.BroadcastTransactions(event.Txs)
-		case <-h.txsSub.Err():
+		case <-h.remoteTxsSub.Err():
 			return
 		}
 	}

@@ -122,6 +122,14 @@ func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 	return p.txFeed.Subscribe(ch)
 }
 
+func (p *testTxPool) SubscribeNewLocalTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	panic("not implemented")
+}
+
+func (p *testTxPool) SubscribeNewRemoteTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	panic("not implemented")
+}
+
 // testHandler is a live implementation of the Ethereum protocol handler, just
 // preinitialized with some sane testing defaults and the transaction pool mocked
 // out.

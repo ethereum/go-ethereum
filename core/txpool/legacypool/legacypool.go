@@ -203,14 +203,16 @@ func (config *Config) sanitize() Config {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type LegacyPool struct {
-	config      Config
-	chainconfig *params.ChainConfig
-	chain       BlockChain
-	gasTip      atomic.Pointer[big.Int]
-	txFeed      event.Feed
-	scope       event.SubscriptionScope
-	signer      types.Signer
-	mu          sync.RWMutex
+	config       Config
+	chainconfig  *params.ChainConfig
+	chain        BlockChain
+	gasTip       atomic.Pointer[big.Int]
+	txFeed       event.Feed
+	localTxFeed  event.Feed
+	remoteTxFeed event.Feed
+	scope        event.SubscriptionScope
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	currentHead   atomic.Pointer[types.Header] // Current head of the blockchain
 	currentState  *state.StateDB               // Current state in the blockchain head
@@ -412,6 +414,14 @@ func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 // starts sending event to the given channel.
 func (pool *LegacyPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+}
+
+func (pool *LegacyPool) SubscribeLocalTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.localTxFeed.Subscribe(ch))
+}
+
+func (pool *LegacyPool) SubscribeRemoteTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.remoteTxFeed.Subscribe(ch))
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
@@ -1239,11 +1249,22 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		events[addr].Put(tx)
 	}
 	if len(events) > 0 {
-		var txs []*types.Transaction
-		for _, set := range events {
-			txs = append(txs, set.Flatten()...)
+		var allTxs, localTxs, remoteTxs []*types.Transaction
+		for sender, set := range events {
+			if pool.locals.contains(sender) {
+				localTxs = append(localTxs, set.Flatten()...)
+			} else {
+				remoteTxs = append(remoteTxs, set.Flatten()...)
+			}
+			allTxs = append(allTxs, set.Flatten()...)
 		}
-		pool.txFeed.Send(core.NewTxsEvent{Txs: txs})
+		if len(localTxs) > 0 {
+			pool.localTxFeed.Send(core.NewTxsEvent{Txs: localTxs})
+		}
+		if len(remoteTxs) > 0 {
+			pool.remoteTxFeed.Send(core.NewTxsEvent{Txs: remoteTxs})
+		}
+		pool.txFeed.Send(core.NewTxsEvent{Txs: allTxs})
 	}
 }
 

@@ -44,6 +44,11 @@ var (
 	timeout = 20 * time.Second
 )
 
+// publicKey returns the rlpx secp256k1 public key of the connection
+func (c *Conn) publicKey() []byte {
+	return crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
+}
+
 // dial attempts to dial the given node and perform a handshake,
 // returning the created Conn if successful.
 func (s *Suite) dial() (*Conn, error) {

@@ -86,6 +86,14 @@ type SubPool interface {
 	// SubscribeTransactions subscribes to new transaction events.
 	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
 
+	// SubscribeRemoteTransactions subscribes to new transaction events for
+	// transactions that don't originate from local accounts
+	SubscribeRemoteTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+
+	// SubscribeRemoteTransactions subscribes to new transaction events for
+	// transactions that originate from local accounts
+	SubscribeLocalTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+
 	// Nonce returns the next nonce of an account, with all transactions executable
 	// by the pool already applied on top.
 	Nonce(addr common.Address) uint64

@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -28,7 +29,8 @@ import (
 // Suite represents a structure used to test a node's conformance
 // to the eth protocol.
 type Suite struct {
-	Dest *enode.Node
+	Dest    *enode.Node
+	backend ethapi.Backend
 
 	chain     *Chain
 	fullChain *Chain
@@ -44,13 +46,15 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 	}
 	return &Suite{
 		Dest:      dest,
-		chain:     chain.Shorten(1000),
+		chain:     chain.Shorten(1501),
 		fullChain: chain,
 	}, nil
 }
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
+		{Name: "TestLocalTxBasic", Fn: s.TestLocalTxBasic},
+		{Name: "TestLocalTxReplacement", Fn: s.TestLocalTxReplacement},
 		// status
 		{Name: "TestStatus", Fn: s.TestStatus},
 		// get block headers

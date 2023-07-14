@@ -19,7 +19,19 @@
     "alloc": {
         "71562b71999873db5b286df957af199ec94617f7": {
             "balance": "0xffffffffffffffffffffffffff"
-        }
+        },
+	"61b2a3a23bb1e2d72137aca9b4f369cfa14587d9": {
+            "balance": "0xffffffffffffffffffffffffff"
+	},
+	"838cbb0F0d03a584424fbD7Dee0d5B477D0842d5": {
+            "balance": "0xffffffffffffffffffffffffff"
+	},
+	"77Ae4623584B415d43e30023De865E76Cc8E6368": {
+            "balance": "0xffffffffffffffffffffffffff"
+	},
+	"0xd6B2256831441D591fEfCa0D47d77ca0521e6f0e": {
+            "balance": "0xffffffffffffffffffffffffff"
+	}
     },
     "number": "0x0",
     "gasUsed": "0x0",

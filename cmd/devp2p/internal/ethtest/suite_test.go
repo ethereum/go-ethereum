@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -35,13 +36,14 @@ var (
 )
 
 func TestEthSuite(t *testing.T) {
-	geth, err := runGeth()
+	geth, backend, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
 	defer geth.Close()
 
 	suite, err := NewSuite(geth.Server().Self(), fullchainFile, genesisFile)
+	suite.backend = backend
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
@@ -56,7 +58,7 @@ func TestEthSuite(t *testing.T) {
 }
 
 func TestSnapSuite(t *testing.T) {
-	geth, err := runGeth()
+	geth, _, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
@@ -77,8 +79,9 @@ func TestSnapSuite(t *testing.T) {
 }
 
 // runGeth creates and starts a geth node
-func runGeth() (*node.Node, error) {
+func runGeth() (*node.Node, ethapi.Backend, error) {
 	stack, err := node.New(&node.Config{
+		//JWTSecret: make([]byte, 32),
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:0",
 			NoDiscovery: true,
@@ -87,25 +90,25 @@ func runGeth() (*node.Node, error) {
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	err = setupGeth(stack)
+	backend, err := setupGeth(stack)
 	if err != nil {
 		stack.Close()
-		return nil, err
+		return nil, nil, err
 	}
 	if err = stack.Start(); err != nil {
 		stack.Close()
-		return nil, err
+		return nil, nil, err
 	}
-	return stack, nil
+	return stack, backend, nil
 }
 
-func setupGeth(stack *node.Node) error {
+func setupGeth(stack *node.Node) (ethapi.Backend, error) {
 	chain, err := loadChain(halfchainFile, genesisFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	backend, err := eth.New(stack, &ethconfig.Config{
@@ -118,9 +121,9 @@ func setupGeth(stack *node.Node) error {
 		SnapshotCache:  10,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
-	return err
+	return backend.APIBackend, err
 }
