@@ -819,7 +819,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		})
 	}
 
-	// Third, Get penalties list
+	// Get penalties list
 	penalties = append(penalties, header.Penalties...)
 	// check last 5 epochs to find penalize masternodes
 	for i := 1; i <= common.LimitPenaltyEpoch; i++ {
@@ -837,12 +837,22 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	penaltyList = common.ExtractAddressFromBytes(penalties)
 
 	// map slashing status
-	for _, pen := range penaltyList {
-		if coinbaseAddress == pen {
-			result[fieldStatus] = statusSlashed
-			return result, nil
+	total := len(masternodes)
+	for _, candidate := range candidates {
+		for _, pen := range penaltyList {
+			if candidate.Address == pen {
+				if coinbaseAddress == pen {
+					result[fieldStatus] = statusSlashed
+					return result, nil
+				}
+				total++
+				if total >= maxMasternodes {
+					return result, nil
+				}
+			}
 		}
 	}
+
 	return result, nil
 }
 
