@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -294,6 +295,18 @@ func (st *StateTransition) preCheck() error {
 			if msg.GasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
 				return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
 					msg.From.Hex(), msg.GasFeeCap, st.evm.Context.BaseFee)
+			}
+		}
+	}
+	// Check the blob version validity
+	if msg.BlobHashes != nil {
+		if len(msg.BlobHashes) == 0 {
+			return errors.New("blob transaction missing blob hashes")
+		}
+		for i, hash := range msg.BlobHashes {
+			if hash[0] != params.BlobTxHashVersion {
+				return fmt.Errorf("blob %d hash version mismatch (have %d, supported %d)",
+					i, hash[0], params.BlobTxHashVersion)
 			}
 		}
 	}

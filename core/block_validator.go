@@ -88,6 +88,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		blobs += len(tx.BlobHashes())
 
 		// Validate the data blobs individually too
+		// These checks are now duplicated in state_transition.go.
+		// TODO remove them from here?
 		if tx.Type() == types.BlobTxType {
 			if len(tx.BlobHashes()) == 0 {
 				return errors.New("no-blob blob transaction present in block body")
