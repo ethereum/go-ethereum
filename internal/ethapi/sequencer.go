@@ -3,22 +3,40 @@ package ethapi
 import (
 	"context"
 	"fmt"
+	"os"
 
 	client "github.com/astriaorg/go-sequencer-client"
 	sqproto "github.com/astriaorg/go-sequencer-client/proto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const rollupChainID = "ethereum"
+const (
+	defaultChainID               = "ethereum"
+	defaultTendermintRPCEndpoint = "http://localhost:26657"
+)
 
 func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
+	var (
+		chainID, tendermintRPCEndpoint string
+	)
+
+	envChainId := os.Getenv("CHAIN_ID")
+	if envChainId == "" {
+		chainID = defaultChainID
+	}
+
+	envTendermintRPCEndpoint := os.Getenv("TENDERMINT_RPC_ENDPOINT")
+	if envTendermintRPCEndpoint == "" {
+		tendermintRPCEndpoint = defaultTendermintRPCEndpoint
+	}
+
 	signer, err := client.GenerateSigner()
 	if err != nil {
 		return err
 	}
 
 	// default tendermint RPC endpoint
-	c, err := client.NewClient("http://localhost:26657")
+	c, err := client.NewClient(tendermintRPCEndpoint)
 	if err != nil {
 		return err
 	}
@@ -29,7 +47,7 @@ func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
 			{
 				Value: &sqproto.Action_SequenceAction{
 					SequenceAction: &sqproto.SequenceAction{
-						ChainId: []byte(rollupChainID),
+						ChainId: []byte(chainID),
 						Data:    txBytes,
 					},
 				},
