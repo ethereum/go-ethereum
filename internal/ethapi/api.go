@@ -878,6 +878,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 			return result, err
 		}
 		candidatesAddresses := state.GetCandidates(statedb)
+		candidates = make([]utils.Masternode, 0, len(candidatesAddresses))
 		for _, address := range candidatesAddresses {
 			v := state.GetCandidateCap(statedb, address)
 			candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
@@ -889,15 +890,8 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		result[fieldSuccess] = false
 		return result, err
 	}
-	// First, set all candidate to propose
-	for _, candidate := range candidates {
-		candidatesStatusMap[candidate.Address.String()] = map[string]interface{}{
-			fieldStatus:   statusProposed,
-			fieldCapacity: candidate.Stake,
-		}
-	}
 
-	// Second, Find candidates that have masternode status
+	// Find candidates that have masternode status
 	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
 		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
@@ -908,6 +902,15 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	} else {
 		log.Error("Undefined XDPoS consensus engine")
 	}
+
+	// Set all candidate to propose
+	for _, candidate := range candidates {
+		candidatesStatusMap[candidate.Address.String()] = map[string]interface{}{
+			fieldStatus:   statusProposed,
+			fieldCapacity: candidate.Stake,
+		}
+	}
+
 	// Set masternode status
 	for _, masternode := range masternodes {
 		if candidatesStatusMap[masternode.String()] != nil {
@@ -915,7 +918,20 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		}
 	}
 
-	// Third, Get penalties list
+	var maxMasternodes int
+	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+		maxMasternodes = common.MaxMasternodesV2
+	} else {
+		maxMasternodes = common.MaxMasternodes
+	}
+
+	if len(candidates) > maxMasternodes {
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].Stake.Cmp(candidates[j].Stake) > 0
+		})
+	}
+
+	// Get penalties list
 	penalties = append(penalties, header.Penalties...)
 	// check last 5 epochs to find penalize masternodes
 	for i := 1; i <= common.LimitPenaltyEpoch; i++ {
