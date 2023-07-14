@@ -28,6 +28,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		Value                []string              `json:"value"`
 		PrivateKey           hexutil.Bytes         `json:"secretKey"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
+		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerDataGas,omitempty"`
 	}
 	var enc stTransaction
 	enc.GasPrice = (*math.HexOrDecimal256)(s.GasPrice)
@@ -46,6 +47,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.Value = s.Value
 	enc.PrivateKey = s.PrivateKey
 	enc.BlobVersionedHashes = s.BlobVersionedHashes
+	enc.BlobGasFeeCap = (*math.HexOrDecimal256)(s.BlobGasFeeCap)
 	return json.Marshal(&enc)
 }
 
@@ -63,6 +65,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		Value                []string              `json:"value"`
 		PrivateKey           *hexutil.Bytes        `json:"secretKey"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
+		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerDataGas,omitempty"`
 	}
 	var dec stTransaction
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -103,6 +106,9 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BlobVersionedHashes != nil {
 		s.BlobVersionedHashes = dec.BlobVersionedHashes
+	}
+	if dec.BlobGasFeeCap != nil {
+		s.BlobGasFeeCap = (*big.Int)(dec.BlobGasFeeCap)
 	}
 	return nil
 }

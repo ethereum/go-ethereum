@@ -63,7 +63,7 @@ func TestState(t *testing.T) {
 	for _, dir := range []string{
 		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP1153-transientStorage"),
 		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP5656-MCOPY"),
-		//filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP4844-blobtransactions"),
+		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP4844-blobtransactions"),
 		stateTestDir,
 		legacyStateTestDir,
 		benchmarksDir,
