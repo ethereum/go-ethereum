@@ -193,6 +193,9 @@ func IsHexAddress(s string) bool {
 	return len(s) == 2*AddressLength && isHex(s)
 }
 
+// IsZero returns if a address is empty
+func (a Address) IsZero() bool { return a == Address{} }
+
 // Get the string representation of the underlying address
 func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
