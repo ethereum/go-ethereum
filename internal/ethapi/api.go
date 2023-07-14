@@ -851,7 +851,6 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		fieldSuccess: true,
 	}
 	epochConfig := s.b.ChainConfig().XDPoS.Epoch
-	candidatesStatusMap := map[string]map[string]interface{}{}
 
 	checkpointNumber, epochNumber = s.GetPreviousCheckpointFromEpoch(ctx, epoch)
 	result[fieldEpoch] = epochNumber.Int64()
@@ -903,7 +902,8 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		log.Error("Undefined XDPoS consensus engine")
 	}
 
-	// Set all candidate to propose
+	// Set all candidate to statusProposed
+	candidatesStatusMap := make(map[string]map[string]interface{}, len(candidates))
 	for _, candidate := range candidates {
 		candidatesStatusMap[candidate.Address.String()] = map[string]interface{}{
 			fieldStatus:   statusProposed,
@@ -911,10 +911,17 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		}
 	}
 
-	// Set masternode status
+	// Set masternodes to statusMasternode
 	for _, masternode := range masternodes {
-		if candidatesStatusMap[masternode.String()] != nil {
-			candidatesStatusMap[masternode.String()][fieldStatus] = statusMasternode
+		key := masternode.String()
+		if candidatesStatusMap[key] != nil {
+			candidatesStatusMap[key][fieldStatus] = statusMasternode
+		} else {
+			candidatesStatusMap[key] = map[string]interface{}{
+				fieldStatus:   statusMasternode,
+				fieldCapacity: -1,
+			}
+			log.Warn("Masternode is not candidate", "masternode", key, "checkpointNumber", checkpointNumber, "epoch", epoch, "epochNumber", epochNumber)
 		}
 	}
 
@@ -923,6 +930,11 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		maxMasternodes = common.MaxMasternodesV2
 	} else {
 		maxMasternodes = common.MaxMasternodes
+	}
+
+	if len(masternodes) >= maxMasternodes {
+		result[fieldCandidates] = candidatesStatusMap
+		return result, nil
 	}
 
 	if len(candidates) > maxMasternodes {
