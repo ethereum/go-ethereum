@@ -1016,7 +1016,7 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 		return []utils.Masternode{}, err
 	}
 
-	var candidatesWithStakeInfo []utils.Masternode
+	candidatesWithStakeInfo := make([]utils.Masternode, 0, len(candidates))
 
 	for _, candidate := range candidates {
 		if !candidate.IsZero() {
@@ -1026,12 +1026,6 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 			}
 
 			candidatesWithStakeInfo = append(candidatesWithStakeInfo, utils.Masternode{Address: candidate, Stake: v})
-		}
-
-		if len(candidatesWithStakeInfo) > 0 {
-			sort.Slice(candidatesWithStakeInfo, func(i, j int) bool {
-				return candidatesWithStakeInfo[i].Stake.Cmp(candidatesWithStakeInfo[j].Stake) >= 0
-			})
 		}
 	}
 
