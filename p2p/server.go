@@ -195,6 +195,9 @@ type Server struct {
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
 
+	// This is read by the NAT port mapping loop.
+	portMappingRegister chan *portMapping
+
 	// Channels into the run loop.
 	quit                    chan struct{}
 	addtrusted              chan *enode.Node
@@ -483,6 +486,8 @@ func (srv *Server) Start() (err error) {
 	if err := srv.setupLocalNode(); err != nil {
 		return err
 	}
+	srv.setupPortMapping()
+
 	if srv.ListenAddr != "" {
 		if err := srv.setupListening(); err != nil {
 			return err
@@ -520,24 +525,6 @@ func (srv *Server) setupLocalNode() error {
 		for _, e := range p.Attributes {
 			srv.localnode.Set(e)
 		}
-	}
-	switch srv.NAT.(type) {
-	case nil:
-		// No NAT interface, do nothing.
-	case nat.ExtIP:
-		// ExtIP doesn't block, set the IP right away.
-		ip, _ := srv.NAT.ExternalIP()
-		srv.localnode.SetStaticIP(ip)
-	default:
-		// Ask the router about the IP. This takes a while and blocks startup,
-		// do it in the background.
-		srv.loopWG.Add(1)
-		go func() {
-			defer srv.loopWG.Done()
-			if ip, err := srv.NAT.ExternalIP(); err == nil {
-				srv.localnode.SetStaticIP(ip)
-			}
-		}()
 	}
 	return nil
 }
@@ -656,14 +643,15 @@ func (srv *Server) setupListening() error {
 	srv.ListenAddr = listener.Addr().String()
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
-	if tcp, ok := listener.Addr().(*net.TCPAddr); ok {
+	tcp, isTCP := listener.Addr().(*net.TCPAddr)
+	if isTCP {
 		srv.localnode.Set(enr.TCP(tcp.Port))
-		if !tcp.IP.IsLoopback() && srv.NAT != nil {
-			srv.loopWG.Add(1)
-			go func() {
-				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
-				srv.loopWG.Done()
-			}()
+		if !tcp.IP.IsLoopback() && !tcp.IP.IsPrivate() {
+			srv.portMappingRegister <- &portMapping{
+				protocol: "TCP",
+				name:     "ethereum p2p",
+				port:     tcp.Port,
+			}
 		}
 	}
 
@@ -688,18 +676,17 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	srv.log.Debug("UDP listener up", "addr", realaddr)
-	if srv.NAT != nil {
-		if !realaddr.IP.IsLoopback() {
-			srv.loopWG.Add(1)
-			go func() {
-				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-				srv.loopWG.Done()
-			}()
+	laddr := conn.LocalAddr().(*net.UDPAddr)
+	srv.localnode.SetFallbackUDP(laddr.Port)
+	srv.log.Debug("UDP listener up", "addr", laddr)
+	if !laddr.IP.IsLoopback() && !laddr.IP.IsPrivate() {
+		srv.portMappingRegister <- &portMapping{
+			protocol: "UDP",
+			name:     "ethereum peer discovery",
+			port:     laddr.Port,
 		}
 	}
-	srv.localnode.SetFallbackUDP(realaddr.Port)
+
 	return conn, nil
 }
 
