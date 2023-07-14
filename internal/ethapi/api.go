@@ -954,8 +954,8 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	penaltyList = common.ExtractAddressFromBytes(penalties)
 
 	var topCandidates []utils.Masternode
-	if len(candidates) > common.MaxMasternodes {
-		topCandidates = candidates[:common.MaxMasternodes]
+	if len(candidates) > maxMasternodes {
+		topCandidates = candidates[:maxMasternodes]
 	} else {
 		topCandidates = candidates
 	}
