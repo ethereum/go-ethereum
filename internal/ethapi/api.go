@@ -965,20 +965,19 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	}
 	penaltyList = common.ExtractAddressFromBytes(penalties)
 
-	var topCandidates []utils.Masternode
-	if len(candidates) > maxMasternodes {
-		topCandidates = candidates[:maxMasternodes]
-	} else {
-		topCandidates = candidates
-	}
-	// check penalties from checkpoint headers and modify status of a node to SLASHED if it's in top 150 candidates
-	// if it's SLASHED but it's out of top 150, the status should be still PROPOSED
-	for _, pen := range penaltyList {
-		for _, candidate := range topCandidates {
-			if candidate.Address == pen && candidatesStatusMap[pen.String()] != nil {
+	// check penalties from checkpoint headers and modify status of a node to SLASHED if it's in top maxMasternodes candidates.
+	// if it's SLASHED but it's out of top maxMasternodes, the status should be still PROPOSED.
+	total := len(masternodes)
+	for _, candidate := range candidates {
+		for _, pen := range penaltyList {
+			if candidate.Address == pen {
 				candidatesStatusMap[pen.String()][fieldStatus] = statusSlashed
+				total++
+				if total >= maxMasternodes {
+					result[fieldCandidates] = candidatesStatusMap
+					return result, nil
+				}
 			}
-			penalties = append(penalties, block.Penalties()...)
 		}
 	}
 
