@@ -66,7 +66,7 @@ func (NilResettingTimer) Snapshot() ResettingTimer {
 }
 
 // Time is a no-op.
-func (NilResettingTimer) Time(func()) {}
+func (NilResettingTimer) Time(f func()) { f() }
 
 // Update is a no-op.
 func (NilResettingTimer) Update(time.Duration) {}
