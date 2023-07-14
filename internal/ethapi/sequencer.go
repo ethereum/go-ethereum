@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	defaultChainID               = "ethereum"
-	defaultTendermintRPCEndpoint = "http://localhost:26657"
+	defaultChainID             = "ethereum"
+	defaultCometbftRPCEndpoint = "http://localhost:26657"
 )
 
 func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
 	var (
-		chainID, tendermintRPCEndpoint string
+		chainID, cometbftRPCEndpoint string
 	)
 
 	envChainId := os.Getenv("CHAIN_ID")
@@ -25,9 +25,9 @@ func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
 		chainID = defaultChainID
 	}
 
-	envTendermintRPCEndpoint := os.Getenv("TENDERMINT_RPC_ENDPOINT")
-	if envTendermintRPCEndpoint == "" {
-		tendermintRPCEndpoint = defaultTendermintRPCEndpoint
+	envCometbftRPCEndpoint := os.Getenv("COMETBFT_RPC_ENDPOINT")
+	if envCometbftRPCEndpoint == "" {
+		cometbftRPCEndpoint = defaultCometbftRPCEndpoint
 	}
 
 	signer, err := client.GenerateSigner()
@@ -35,8 +35,8 @@ func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
 		return err
 	}
 
-	// default tendermint RPC endpoint
-	c, err := client.NewClient(tendermintRPCEndpoint)
+	// default cometbft RPC endpoint
+	c, err := client.NewClient(cometbftRPCEndpoint)
 	if err != nil {
 		return err
 	}
