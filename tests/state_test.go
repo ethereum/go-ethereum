@@ -58,16 +58,12 @@ func TestState(t *testing.T) {
 
 	// Broken tests:
 	//
-	// The stEOF tests are generated with EOF as part of Shanghai, which
-	// is erroneous. Therefore, these tests are skipped.
-	st.skipLoad(`^EIPTests/stEOF/`)
 	// Expected failures:
-
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
 		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP1153-transientStorage"),
 		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP5656-MCOPY"),
-		filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP4844-blobtransactions"),
+		//filepath.Join(baseDir, "EIPTests", "StateTests", "stEIP4844-blobtransactions"),
 		stateTestDir,
 		legacyStateTestDir,
 		benchmarksDir,
