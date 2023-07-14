@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -108,20 +109,18 @@ func main() {
 		utils.Fatalf("-ListenUDP: %v", err)
 	}
 
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-		}
-		if ext, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+	db, _ := enode.OpenDB("")
+	ln := enode.NewLocalNode(db, nodeKey)
+
+	listenerAddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil && !listenerAddr.IP.IsLoopback() {
+		natAddr := doPortMapping(natm, ln, listenerAddr)
+		if natAddr != nil {
+			listenerAddr = natAddr
 		}
 	}
 
-	printNotice(&nodeKey.PublicKey, *realaddr)
-
-	db, _ := enode.OpenDB("")
-	ln := enode.NewLocalNode(db, nodeKey)
+	printNotice(&nodeKey.PublicKey, *listenerAddr)
 	cfg := discover.Config{
 		PrivateKey:  nodeKey,
 		NetRestrict: restrictList,
@@ -147,4 +146,61 @@ func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
 	fmt.Println(n.URLv4())
 	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")
 	fmt.Println("We recommend using a regular node as bootstrap node for production deployments.")
+}
+
+func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *net.UDPAddr {
+	const (
+		protocol = "udp"
+		name     = "ethereum discovery"
+	)
+	newLogger := func(external int, internal int) log.Logger {
+		return log.New("proto", protocol, "extport", external, "intport", internal, "interface", natm)
+	}
+
+	var (
+		intport    = addr.Port
+		extaddr    = &net.UDPAddr{IP: addr.IP, Port: addr.Port}
+		mapTimeout = nat.DefaultMapTimeout
+		log        = newLogger(addr.Port, intport)
+	)
+	addMapping := func() {
+		// Get the external address.
+		var err error
+		extaddr.IP, err = natm.ExternalIP()
+		if err != nil {
+			log.Debug("Couldn't get external IP", "err", err)
+			return
+		}
+		// Create the mapping.
+		p, err := natm.AddMapping(protocol, extaddr.Port, intport, name, mapTimeout)
+		if err != nil {
+			log.Debug("Couldn't add port mapping", "err", err)
+			return
+		}
+		if p != uint16(extaddr.Port) {
+			extaddr.Port = int(p)
+			log = newLogger(extaddr.Port, intport)
+			log.Info("NAT mapped alternative port")
+		} else {
+			log.Info("NAT mapped port")
+		}
+		// Update IP/port information of the local node.
+		ln.SetStaticIP(extaddr.IP)
+		ln.SetFallbackUDP(extaddr.Port)
+	}
+
+	// Perform mapping once, synchronously.
+	log.Info("Attempting port mapping")
+	addMapping()
+
+	// Refresh the mapping periodically.
+	go func() {
+		refresh := time.NewTimer(mapTimeout)
+		for range refresh.C {
+			addMapping()
+			refresh.Reset(mapTimeout)
+		}
+	}()
+
+	return extaddr
 }

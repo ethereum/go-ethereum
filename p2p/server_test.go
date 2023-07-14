@@ -24,6 +24,8 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -223,6 +225,14 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 	defer srv1.Stop()
 	srv2.Start()
 	defer srv2.Stop()
+
+	s := strings.Split(srv2.ListenAddr, ":")
+	if len(s) != 2 {
+		t.Fatal("invalid ListenAddr")
+	}
+	if port, err := strconv.Atoi(s[1]); err == nil {
+		srv2.localnode.Set(enr.TCP(uint16(port)))
+	}
 
 	if !syncAddPeer(srv1, srv2.Self()) {
 		t.Fatal("peer not connected")
