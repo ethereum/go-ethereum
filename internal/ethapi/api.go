@@ -1008,11 +1008,12 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 	var candidatesWithStakeInfo []utils.Masternode
 
 	for _, candidate := range candidates {
-		v, err := validator.GetCandidateCap(opts, candidate)
-		if err != nil {
-			return []utils.Masternode{}, err
-		}
-		if candidate.String() != "xdc0000000000000000000000000000000000000000" {
+		if !candidate.IsZero() {
+			v, err := validator.GetCandidateCap(opts, candidate)
+			if err != nil {
+				return []utils.Masternode{}, err
+			}
+
 			candidatesWithStakeInfo = append(candidatesWithStakeInfo, utils.Masternode{Address: candidate, Stake: v})
 		}
 
@@ -1022,6 +1023,7 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 			})
 		}
 	}
+
 	return candidatesWithStakeInfo, nil
 }
 
