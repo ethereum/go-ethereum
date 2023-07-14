@@ -332,7 +332,7 @@ func newFlatCall(input *callFrame) *flatCallFrame {
 
 func newFlatSelfdestruct(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
-		Type: "selfdestruct",
+		Type: "suicide",
 		Action: flatCallAction{
 			SelfDestructed: &input.From,
 			Balance:        input.Value,
