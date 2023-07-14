@@ -113,7 +113,7 @@ type stTransaction struct {
 	GasLimit             []uint64            `json:"gasLimit"`
 	Value                []string            `json:"value"`
 	PrivateKey           []byte              `json:"secretKey"`
-	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes",omitempty`
+	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
 }
 
 type stTransactionMarshaling struct {

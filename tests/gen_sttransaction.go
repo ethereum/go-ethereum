@@ -27,7 +27,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		GasLimit             []math.HexOrDecimal64 `json:"gasLimit"`
 		Value                []string              `json:"value"`
 		PrivateKey           hexutil.Bytes         `json:"secretKey"`
-		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes",omitempty`
+		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
 	}
 	var enc stTransaction
 	enc.GasPrice = (*math.HexOrDecimal256)(s.GasPrice)
@@ -62,7 +62,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		GasLimit             []math.HexOrDecimal64 `json:"gasLimit"`
 		Value                []string              `json:"value"`
 		PrivateKey           *hexutil.Bytes        `json:"secretKey"`
-		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes",omitempty`
+		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
 	}
 	var dec stTransaction
 	if err := json.Unmarshal(input, &dec); err != nil {
