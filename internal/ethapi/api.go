@@ -773,24 +773,19 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		maxMasternodes = common.MaxMasternodes
 	}
 
-	isTopCandidate := false
-	// check penalties from checkpoint headers and modify status of a node to SLASHED if it's in top 150 candidates
-	// if it's SLASHED but it's out of top 150, the status should be still PROPOSED
+	// check penalties from checkpoint headers and modify status of a node to SLASHED if it's in top maxMasternodes candidates.
+	// if it's SLASHED but it's out of top maxMasternodes, the status should be still PROPOSED.
+	isCandidate := false
 	for i := 0; i < len(candidates); i++ {
 		if coinbaseAddress == candidates[i].Address {
-			if i < maxMasternodes {
-				isTopCandidate = true
-			}
+			isCandidate = true
 			result[fieldStatus] = statusProposed
 			result[fieldCapacity] = candidates[i].Stake
 			break
 		}
 	}
-	if !isTopCandidate {
-		return result, nil
-	}
 
-	// Second, Find candidates that have masternode status
+	// Get masternode list
 	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
 		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
@@ -801,12 +796,21 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	} else {
 		log.Error("Undefined XDPoS consensus engine")
 	}
-	// Set masternode status
+
+	// Set to statusMasternode if it is masternode
 	for _, masternode := range masternodes {
 		if coinbaseAddress == masternode {
 			result[fieldStatus] = statusMasternode
+			if !isCandidate {
+				result[fieldCapacity] = -1
+				log.Warn("Find non-candidate masternode", "masternode", masternode.String(), "checkpointNumber", checkpointNumber, "epoch", epoch, "epochNumber", epochNumber)
+			}
 			return result, nil
 		}
+	}
+
+	if !isCandidate || len(masternodes) >= maxMasternodes {
+		return result, nil
 	}
 
 	if len(candidates) > maxMasternodes {
