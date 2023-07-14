@@ -205,6 +205,7 @@ func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes)
 	return nil
 }
 
+// TODO: figure out the timing here
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
