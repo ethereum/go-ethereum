@@ -2,14 +2,15 @@ package lendingstate
 
 import (
 	"fmt"
+	"math/big"
+	"strconv"
+	"time"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/globalsign/mgo/bson"
-	"math/big"
-	"strconv"
-	"time"
 )
 
 const (
@@ -243,7 +244,7 @@ func (l *LendingItem) VerifyLendingSide() error {
 }
 
 func (l *LendingItem) VerifyCollateral(state *state.StateDB) error {
-	if l.CollateralToken.String() == EmptyAddress || l.CollateralToken.String() == l.LendingToken.String() {
+	if l.CollateralToken.IsZero() || l.CollateralToken == l.LendingToken {
 		return fmt.Errorf("invalid collateral %s", l.CollateralToken.Hex())
 	}
 	validCollateral := false
@@ -329,7 +330,7 @@ func (l *LendingItem) EncodedSide() *big.Int {
 	return big.NewInt(1)
 }
 
-//verify signatures
+// verify signatures
 func (l *LendingItem) VerifyLendingSignature() error {
 	V := big.NewInt(int64(l.Signature.V))
 	R := l.Signature.R.Big()
