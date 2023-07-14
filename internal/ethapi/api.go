@@ -754,6 +754,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			return result, err
 		}
 		candidatesAddresses := state.GetCandidates(statedb)
+		candidates = make([]utils.Masternode, 0, len(candidatesAddresses))
 		for _, address := range candidatesAddresses {
 			v := state.GetCandidateCap(statedb, address)
 			candidates = append(candidates, utils.Masternode{Address: address, Stake: v})
@@ -764,6 +765,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		result[fieldSuccess] = false
 		return result, err
 	}
+
 	var maxMasternodes int
 	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
@@ -805,6 +807,12 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			result[fieldStatus] = statusMasternode
 			return result, nil
 		}
+	}
+
+	if len(candidates) > maxMasternodes {
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].Stake.Cmp(candidates[j].Stake) > 0
+		})
 	}
 
 	// Third, Get penalties list
