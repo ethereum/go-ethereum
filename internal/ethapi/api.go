@@ -901,7 +901,9 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if block == nil || err != nil {
-		return nil, err
+		// When the block doesn't exist, the RPC method should return JSON null
+		// as per specification.
+		return nil, nil
 	}
 	receipts, err := s.b.GetReceipts(ctx, block.Hash())
 	if err != nil {
