@@ -88,7 +88,7 @@ type stateObject struct {
 	deleted bool
 
 	// Flag whether the object was created in the current transaction
-	created   bool 
+	created bool
 }
 
 // empty returns whether the account is considered empty.
