@@ -301,9 +301,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 		},
 		{
-			name: "Suicide",
+			name: "SelfDestruct",
 			fn: func(a testAction, s *StateDB) {
-				s.Suicide(addr)
+				s.SelfDestruct(addr)
 			},
 		},
 		{
@@ -453,7 +453,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		}
 		// Check basic accessor methods.
 		checkeq("Exist", state.Exist(addr), checkstate.Exist(addr))
-		checkeq("HasSuicided", state.HasSuicided(addr), checkstate.HasSuicided(addr))
+		checkeq("HasSelfdestructed", state.HasSelfDestructed(addr), checkstate.HasSelfDestructed(addr))
 		checkeq("GetBalance", state.GetBalance(addr), checkstate.GetBalance(addr))
 		checkeq("GetNonce", state.GetNonce(addr), checkstate.GetNonce(addr))
 		checkeq("GetCode", state.GetCode(addr), checkstate.GetCode(addr))
@@ -727,7 +727,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state, _ = New(root, state.db, state.snaps)
 
 	// Simulate self-destructing in one transaction, then create-reverting in another
-	state.Suicide(addr)
+	state.SelfDestruct(addr)
 	state.Finalise(true)
 
 	id := state.Snapshot()
