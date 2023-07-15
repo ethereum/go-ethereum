@@ -293,7 +293,7 @@ func enable4844(jt *JumpTable) {
 	}
 }
 
-// enable4844 applies EIP-6780 (deactivate SELFDESTRUCT)
+// enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
 		execute:     opSelfdestruct6780,
