@@ -48,23 +48,24 @@ func TestState(t *testing.T) {
 	st.slow(`^stStaticCall/static_Return50000`)
 	st.slow(`^stSystemOperationsTest/CallRecursiveBomb`)
 	st.slow(`^stTransactionTest/Opcodes_TransactionInit`)
-
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
 	st.skipLoad(`.*vmPerformance/loop.*`)
-
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Broken tests:
-	//
-	// The stEOF tests are generated with EOF as part of Shanghai, which
-	// is erroneous. Therefore, these tests are skipped.
-	st.skipLoad(`^EIPTests/stEOF/`)
+	// EOF is not part of cancun
+	st.skipLoad(`^stEOF/`)
+
 	// Expected failures:
+	// These EIP-4844 tests need to be regenerated.
+	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")
+	st.fails(`stEIP4844-blobtransactions/opcodeBlobhBounds.json`, "test has incorrect state root")
 
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
+		filepath.Join(baseDir, "EIPTests", "StateTests"),
 		stateTestDir,
 		legacyStateTestDir,
 		benchmarksDir,

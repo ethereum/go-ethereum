@@ -117,6 +117,7 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
 				if dump && s != nil {
+					s, _ = state.New(*result.Root, s.Database(), nil)
 					dump := s.RawDump(nil)
 					result.State = &dump
 				}

@@ -100,4 +100,8 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrBlobFeeCapTooLow is returned if the transaction fee cap is less than the
+	// data gas fee of the block.
+	ErrBlobFeeCapTooLow = errors.New("max fee per data gas less than block data gas fee")
 )
