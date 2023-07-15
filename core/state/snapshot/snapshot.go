@@ -266,7 +266,7 @@ func (t *Tree) Disable() {
 			}
 			// Layer should be inactive now, mark it as stale
 			layer.lock.Lock()
-			layer.stale = true
+			layer.stale.Store(true)
 			layer.lock.Unlock()
 
 		case *diffLayer:
@@ -537,12 +537,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	rawdb.DeleteSnapshotRoot(batch)
 
 	// Mark the original base as stale as we're going to create a new wrapper
-	base.lock.Lock()
-	if base.stale {
+	if base.stale.Swap(true) {
 		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
 	}
-	base.stale = true
-	base.lock.Unlock()
 
 	// Destroy all the destructed accounts from the database
 	for hash := range bottom.destructSet {
@@ -720,7 +717,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 			}
 			// Layer should be inactive now, mark it as stale
 			layer.lock.Lock()
-			layer.stale = true
+			layer.stale.Store(true)
 			layer.lock.Unlock()
 
 		case *diffLayer:

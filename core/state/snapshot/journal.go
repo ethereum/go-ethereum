@@ -205,13 +205,13 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
 		}
 	}
+
+	if dl.stale.Load() {
+		return common.Hash{}, ErrSnapshotStale
+	}
 	// Ensure the layer didn't get stale
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
-
-	if dl.stale {
-		return common.Hash{}, ErrSnapshotStale
-	}
 	// Ensure the generator stats is written even if none was ran this cycle
 	journalProgress(dl.diskdb, dl.genMarker, stats)
 

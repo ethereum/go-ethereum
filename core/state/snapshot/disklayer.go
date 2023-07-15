@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"sync"
+	"sync/atomic"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,7 +37,7 @@ type diskLayer struct {
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
-	stale bool        // Signals that the layer became stale (state progressed)
+	stale atomic.Bool // Signals that the layer became stale (state progressed)
 
 	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
 	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
@@ -58,10 +59,7 @@ func (dl *diskLayer) Parent() snapshot {
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diskLayer) Stale() bool {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	return dl.stale
+	return dl.stale.Load()
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -84,14 +82,13 @@ func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
 func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale.Load() {
 		return nil, ErrSnapshotStale
 	}
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
 	if dl.genMarker != nil && bytes.Compare(hash[:], dl.genMarker) > 0 {
@@ -127,7 +124,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale.Load() {
 		return nil, ErrSnapshotStale
 	}
 	key := append(accountHash[:], storageHash[:]...)
