@@ -35,7 +35,7 @@ import (
 const (
 	wsReadBuffer       = 1024
 	wsWriteBuffer      = 1024
-	wsPingInterval     = 30 * time.Second
+	wsPingInterval     = (wsPongTimeout * 9) / 10
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
 	wsMessageSizeLimit = 32 * 1024 * 1024
