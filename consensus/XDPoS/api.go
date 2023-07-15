@@ -41,6 +41,7 @@ type V2BlockInfo struct {
 	ParentHash common.Hash
 	Committed  bool
 	Miner      common.Hash
+	Timestamp  *big.Int
 	EncodedRLP string
 	Error      string
 }
@@ -209,6 +210,7 @@ func (api *API) GetV2BlockByHeader(header *types.Header, uncle bool) *V2BlockInf
 		Round:      round,
 		Committed:  committed,
 		Miner:      header.Coinbase.Hash(),
+		Timestamp:  header.Time,
 		EncodedRLP: base64.StdEncoding.EncodeToString(encodeBytes),
 	}
 	return block
