@@ -478,6 +478,7 @@ func (g *Genesis) ToBlock() *types.Block {
 		}
 		if conf.IsCancun(num, g.Timestamp) {
 			head.ExcessDataGas = g.ExcessDataGas
+			head.DataGasUsed = g.DataGasUsed
 			if head.ExcessDataGas == nil {
 				head.ExcessDataGas = new(uint64)
 			}
