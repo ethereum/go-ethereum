@@ -88,6 +88,10 @@ test_histogram {quantile="0.9999"} 0
 # TYPE test_meter gauge
 test_meter 9999999
 
+test_meter {rate="1"} 0
+test_meter {rate="5"} 0
+test_meter {rate="15"} 0
+test_meter {rate="mean"} 0
 # TYPE test_timer_count counter
 test_timer_count 6
 
