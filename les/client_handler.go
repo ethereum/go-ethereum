@@ -17,9 +17,6 @@
 package les
 
 import (
-	"context"
-	"math/big"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -27,68 +24,37 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
-	ulc        *ulc
 	forkFilter forkid.Filter
-	fetcher    *lightFetcher
-	downloader *downloader.Downloader
 	backend    *LightEthereum
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
-
-	// Hooks used in the testing
-	syncStart func(header *types.Header) // Hook called when the syncing is started
-	syncEnd   func(header *types.Header) // Hook called when the syncing is done
 }
 
-func newClientHandler(ulcServers []string, ulcFraction int, backend *LightEthereum) *clientHandler {
+func newClientHandler(backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
 		forkFilter: forkid.NewFilter(backend.blockchain),
 		backend:    backend,
 		closeCh:    make(chan struct{}),
 	}
-	if ulcServers != nil {
-		ulc, err := newULC(ulcServers, ulcFraction)
-		if err != nil {
-			log.Error("Failed to initialize ultra light client")
-		}
-		handler.ulc = ulc
-		log.Info("Enable ultra light client mode")
-	}
-	handler.fetcher = newLightFetcher(backend.blockchain, backend.engine, backend.peers, handler.ulc, backend.chainDb, backend.reqDist, handler.synchronise)
-	handler.downloader = downloader.New(0, backend.chainDb, backend.eventMux, nil, backend.blockchain, handler.removePeer)
-	handler.backend.peers.subscribe((*downloaderPeerNotify)(handler))
 	return handler
-}
-
-func (h *clientHandler) start() {
-	h.fetcher.start()
 }
 
 func (h *clientHandler) stop() {
 	close(h.closeCh)
-	h.downloader.Terminate()
-	h.fetcher.stop()
 	h.wg.Wait()
 }
 
 // runPeer is the p2p protocol run function for the given version.
 func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	trusted := false
-	if h.ulc != nil {
-		trusted = h.ulc.trusted(p.ID())
-	}
-	peer := newServerPeer(int(version), h.backend.config.NetworkId, trusted, p, newMeteredMsgWriter(rw, int(version)))
+	peer := newServerPeer(int(version), h.backend.config.NetworkId, false, p, newMeteredMsgWriter(rw, int(version)))
 	defer peer.close()
 	h.wg.Add(1)
 	defer h.wg.Done()
@@ -135,12 +101,6 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
-
-	// Discard all the announces after the transition
-	// Also discarding initial signal to prevent syncing during testing.
-	if !(noInitAnnounce || h.backend.merger.TDDReached()) {
-		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
-	}
 
 	// Mark the peer starts to be served.
 	p.serving.Store(true)
@@ -206,11 +166,6 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 
 			// Update peer head information first and then notify the announcement
 			p.updateHead(req.Hash, req.Number, req.Td)
-
-			// Discard all the announces after the transition
-			if !h.backend.merger.TDDReached() {
-				h.fetcher.announce(p, &req)
-			}
 		}
 	case msg.Code == BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
@@ -221,28 +176,13 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		headers := resp.Headers
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		p.answeredRequest(resp.ReqID)
 
-		// Filter out the explicitly requested header by the retriever
-		if h.backend.retriever.requested(resp.ReqID) {
-			deliverMsg = &Msg{
-				MsgType: MsgBlockHeaders,
-				ReqID:   resp.ReqID,
-				Obj:     resp.Headers,
-			}
-		} else {
-			// Filter out any explicitly requested headers, deliver the rest to the downloader
-			filter := len(headers) == 1
-			if filter {
-				headers = h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
-			}
-			if len(headers) != 0 || !filter {
-				if err := h.downloader.DeliverHeaders(p.id, headers); err != nil {
-					log.Debug("Failed to deliver headers", "err", err)
-				}
-			}
+		deliverMsg = &Msg{
+			MsgType: MsgBlockHeaders,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Headers,
 		}
 	case msg.Code == BlockBodiesMsg:
 		p.Log().Trace("Received block bodies response")
@@ -365,118 +305,4 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		}
 	}
 	return nil
-}
-
-func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.unregister(id)
-}
-
-type peerConnection struct {
-	handler *clientHandler
-	peer    *serverPeer
-}
-
-func (pc *peerConnection) Head() (common.Hash, *big.Int) {
-	return pc.peer.HeadAndTd()
-}
-
-func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	rq := &distReq{
-		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*serverPeer)
-			return peer.getRequestCost(GetBlockHeadersMsg, amount)
-		},
-		canSend: func(dp distPeer) bool {
-			return dp.(*serverPeer) == pc.peer
-		},
-		request: func(dp distPeer) func() {
-			reqID := rand.Uint64()
-			peer := dp.(*serverPeer)
-			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.requestHeadersByHash(reqID, origin, amount, skip, reverse) }
-		},
-	}
-	_, ok := <-pc.handler.backend.reqDist.queue(rq)
-	if !ok {
-		return light.ErrNoPeers
-	}
-	return nil
-}
-
-func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	rq := &distReq{
-		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*serverPeer)
-			return peer.getRequestCost(GetBlockHeadersMsg, amount)
-		},
-		canSend: func(dp distPeer) bool {
-			return dp.(*serverPeer) == pc.peer
-		},
-		request: func(dp distPeer) func() {
-			reqID := rand.Uint64()
-			peer := dp.(*serverPeer)
-			cost := peer.getRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.requestHeadersByNumber(reqID, origin, amount, skip, reverse) }
-		},
-	}
-	_, ok := <-pc.handler.backend.reqDist.queue(rq)
-	if !ok {
-		return light.ErrNoPeers
-	}
-	return nil
-}
-
-// RetrieveSingleHeaderByNumber requests a single header by the specified block
-// number. This function will wait the response until it's timeout or delivered.
-func (pc *peerConnection) RetrieveSingleHeaderByNumber(context context.Context, number uint64) (*types.Header, error) {
-	reqID := rand.Uint64()
-	rq := &distReq{
-		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*serverPeer)
-			return peer.getRequestCost(GetBlockHeadersMsg, 1)
-		},
-		canSend: func(dp distPeer) bool {
-			return dp.(*serverPeer) == pc.peer
-		},
-		request: func(dp distPeer) func() {
-			peer := dp.(*serverPeer)
-			cost := peer.getRequestCost(GetBlockHeadersMsg, 1)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.requestHeadersByNumber(reqID, number, 1, 0, false) }
-		},
-	}
-	var header *types.Header
-	if err := pc.handler.backend.retriever.retrieve(context, reqID, rq, func(peer distPeer, msg *Msg) error {
-		if msg.MsgType != MsgBlockHeaders {
-			return errInvalidMessageType
-		}
-		headers := msg.Obj.([]*types.Header)
-		if len(headers) != 1 {
-			return errInvalidEntryCount
-		}
-		header = headers[0]
-		return nil
-	}, nil); err != nil {
-		return nil, err
-	}
-	return header, nil
-}
-
-// downloaderPeerNotify implements peerSetNotify
-type downloaderPeerNotify clientHandler
-
-func (d *downloaderPeerNotify) registerPeer(p *serverPeer) {
-	h := (*clientHandler)(d)
-	pc := &peerConnection{
-		handler: h,
-		peer:    p,
-	}
-	h.downloader.RegisterLightPeer(p.id, eth.ETH66, pc)
-}
-
-func (d *downloaderPeerNotify) unregisterPeer(p *serverPeer) {
-	h := (*clientHandler)(d)
-	h.downloader.UnregisterPeer(p.id)
 }
