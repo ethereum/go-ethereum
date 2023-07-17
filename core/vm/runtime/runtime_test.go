@@ -679,30 +679,30 @@ func TestColdAccountAccessCost(t *testing.T) {
 func TestRuntimeJSTracer(t *testing.T) {
 	jsTracers := []string{
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
-	step: function() { this.steps++}, 
-	fault: function() {}, 
-	result: function() { 
-		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
-	}, 
-	enter: function(frame) { 
-		this.enters++; 
+	step: function() { this.steps++},
+	fault: function() {},
+	result: function() {
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",")
+	},
+	enter: function(frame) {
+		this.enters++;
 		this.enterGas = frame.getGas();
-	}, 
-	exit: function(res) { 
-		this.exits++; 
+	},
+	exit: function(res) {
+		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`,
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
-	fault: function() {}, 
-	result: function() { 
-		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
-	}, 
-	enter: function(frame) { 
-		this.enters++; 
+	fault: function() {},
+	result: function() {
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",")
+	},
+	enter: function(frame) {
+		this.enters++;
 		this.enterGas = frame.getGas();
-	}, 
-	exit: function(res) { 
-		this.exits++; 
+	},
+	exit: function(res) {
+		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`}
 	tests := []struct {
