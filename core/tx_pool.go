@@ -632,7 +632,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// cost == V + GP * GL
 	balance := pool.currentState.GetBalance(from)
 	cost := tx.Cost()
-	minGasPrice := common.MinGasPrice
+	var number *big.Int = nil
+	if pool.chain.CurrentHeader() != nil {
+		number = pool.chain.CurrentHeader().Number
+	}
+	minGasPrice := common.GetMinGasPrice(number)
 	feeCapacity := big.NewInt(0)
 
 	if tx.To() != nil {
