@@ -169,6 +169,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	log.Info("ForkchoiceUpdatedV1 called")
 	if payloadAttributes != nil {
 		if payloadAttributes.Withdrawals != nil {
 			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
@@ -399,6 +400,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.ExecutableData, error) {
+	log.Info("GetPayloadV1 called")
 	data, err := api.getPayload(payloadID)
 	if err != nil {
 		return nil, err

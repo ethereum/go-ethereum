@@ -163,36 +163,31 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Construct a payload object for return.
 	payload := newPayload(empty, args.Id())
 
-	// Spin up a routine for updating the payload in background. This strategy
-	// can maximum the revenue for including transactions with highest fee.
-	go func() {
-		// Setup the timer for re-building the payload. The initial clock is kept
-		// for triggering process immediately.
-		timer := time.NewTimer(0)
-		defer timer.Stop()
+	// Setup the timer for re-building the payload. The initial clock is kept
+	// for triggering process immediately.
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 
-		// Setup the timer for terminating the process if SECONDS_PER_SLOT (12s in
-		// the Mainnet configuration) have passed since the point in time identified
-		// by the timestamp parameter.
-		endTimer := time.NewTimer(time.Second * 12)
+	// Setup the timer for terminating the process if payload building exceeds 5 seconds.
+	// This should be much longer than normal payload building should take.
+	endTimer := time.NewTimer(time.Second * 5)
 
-		for {
-			select {
-			case <-timer.C:
-				start := time.Now()
-				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
-				if err == nil {
-					payload.update(block, fees, time.Since(start))
-				}
-				timer.Reset(w.recommit)
-			case <-payload.stop:
-				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
-				return
-			case <-endTimer.C:
-				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
-				return
+	// TODO: figure out if timeout case can be removed
+	for {
+		select {
+		case <-timer.C:
+			start := time.Now()
+			block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
+			if err == nil {
+				payload.update(block, fees, time.Since(start))
 			}
+			timer.Reset(w.recommit)
+		case <-payload.stop:
+			log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+			return payload, nil
+		case <-endTimer.C:
+			log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
+			return payload, nil
 		}
-	}()
-	return payload, nil
+	}
 }
