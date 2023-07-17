@@ -16,16 +16,12 @@ const (
 )
 
 func sendTransactionToSequencer(ctx context.Context, txBytes []byte) error {
-	var (
-		chainID, cometbftRPCEndpoint string
-	)
-
-	chainID = os.Getenv("CHAIN_ID")
+	chainID := os.Getenv("CHAIN_ID")
 	if chainID == "" {
 		chainID = defaultChainID
 	}
 
-	cometbftRPCEndpoint = os.Getenv("COMETBFT_RPC_ENDPOINT")
+	cometbftRPCEndpoint := os.Getenv("COMETBFT_RPC_ENDPOINT")
 	if cometbftRPCEndpoint == "" {
 		cometbftRPCEndpoint = defaultCometbftRPCEndpoint
 	}
