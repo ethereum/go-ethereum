@@ -386,8 +386,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	_bor.SetHeimdallClient(h)
 
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 	// to := int64(block.Header().Time)
 
 	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
@@ -425,8 +424,7 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	defer _bor.Close()
 
 	// A. Insert blocks for 0th sprint
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 
 	// B.1 Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
@@ -525,8 +523,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	_bor.SetHeimdallClient(h)
 
 	// Insert blocks for 0th sprint
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 
 	var currentValidators []*valset.Validator
 
@@ -702,8 +699,7 @@ func TestSignerNotFound(t *testing.T) {
 
 	_bor.SetHeimdallClient(h)
 
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 
 	// random signer account that is not a part of the validator set
 	const signer = "3714d99058cd64541433d59c6b391555b2fd9b54629c2b717a6c9c00d1127b6b"
@@ -802,7 +798,7 @@ func TestEIP1559Transition(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -1095,7 +1091,7 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -1116,8 +1112,7 @@ func TestJaipurFork(t *testing.T) {
 	_bor := engine.(*bor.Bor)
 	defer _bor.Close()
 
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 
 	res, _ := loadSpanFromFile(t)
 
