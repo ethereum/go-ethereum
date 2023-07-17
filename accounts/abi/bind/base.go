@@ -128,7 +128,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = XDPoSChain.CallMsg{From: opts.From, To: &c.address, Data: input, GasPrice: common.MinGasPrice, Gas: uint64(4200000)}
+		msg    = XDPoSChain.CallMsg{From: opts.From, To: &c.address, Data: input, GasPrice: common.MinGasPrice50x, Gas: uint64(4200000)}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
