@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -322,7 +323,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData)
+		block, err := engine.ExecutableDataToBlock(*execData, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -364,7 +365,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData)
+		block, err := engine.ExecutableDataToBlock(*execData, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -996,7 +997,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				t.Fatal(testErr)
 			}
 		}
-		block, err := engine.ExecutableDataToBlock(*execData)
+		block, err := engine.ExecutableDataToBlock(*execData, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -1518,4 +1519,39 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 		}
 	}
 	return reflect.DeepEqual(a.Withdrawals, b.Withdrawals)
+}
+
+func TestBlockToPayloadWithBlobs(t *testing.T) {
+	header := types.Header{}
+	var txs []*types.Transaction
+
+	inner := types.BlobTx{
+		BlobHashes: make([]common.Hash, 1),
+	}
+
+	txs = append(txs, types.NewTx(&inner))
+
+	blobs := make([]kzg4844.Blob, 1)
+	commitments := make([]kzg4844.Commitment, 1)
+	proofs := make([]kzg4844.Proof, 1)
+
+	block := types.NewBlock(&header, txs, nil, nil, trie.NewStackTrie(nil))
+	envelope := engine.BlockToExecutableData(block, nil, blobs, commitments, proofs)
+	var want int
+	for _, tx := range txs {
+		want += len(tx.BlobHashes())
+	}
+	if got := len(envelope.BlobsBundle.Commitments); got != want {
+		t.Fatalf("invalid number of commitments: got %v, want %v", got, want)
+	}
+	if got := len(envelope.BlobsBundle.Proofs); got != want {
+		t.Fatalf("invalid number of proofs: got %v, want %v", got, want)
+	}
+	if got := len(envelope.BlobsBundle.Blobs); got != want {
+		t.Fatalf("invalid number of blobs: got %v, want %v", got, want)
+	}
+	_, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, make([]common.Hash, 1))
+	if err != nil {
+		t.Error(err)
+	}
 }
