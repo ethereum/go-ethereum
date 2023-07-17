@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -37,6 +38,15 @@ const (
 	TxStatusQueued
 	TxStatusPending
 	TxStatusIncluded
+)
+
+var (
+	// reservationsGaugeName is the prefix of a per-subpool address reservation
+	// metric.
+	//
+	// This is mostly a sanity metric to ensure there's no bug that would make
+	// some subpool hog all the reservations due to mis-accounting.
+	reservationsGaugeName = "txpool/reservations"
 )
 
 // BlockChain defines the minimal set of methods needed to back a tx pool with
@@ -78,7 +88,7 @@ func New(gasTip *big.Int, chain BlockChain, subpools []SubPool) (*TxPool, error)
 		quit:         make(chan chan error),
 	}
 	for i, subpool := range subpools {
-		if err := subpool.Init(gasTip, head, pool.reserver(subpool)); err != nil {
+		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool)); err != nil {
 			for j := i - 1; j >= 0; j-- {
 				subpools[j].Close()
 			}
@@ -93,7 +103,7 @@ func New(gasTip *big.Int, chain BlockChain, subpools []SubPool) (*TxPool, error)
 // assign/deassign addresses to/from subpools. This can ensure that at any point
 // in time, only a single subpool is able to manage an account, avoiding cross
 // subpool eviction issues and nonce conflicts.
-func (p *TxPool) reserver(subpool SubPool) AddressReserver {
+func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 	return func(addr common.Address, reserve bool) error {
 		p.reserveLock.Lock()
 		defer p.reserveLock.Unlock()
@@ -110,6 +120,10 @@ func (p *TxPool) reserver(subpool SubPool) AddressReserver {
 				return errors.New("address already reserved")
 			}
 			p.reservations[addr] = subpool
+			if metrics.Enabled {
+				m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
+				metrics.GetOrRegisterGauge(m, nil).Inc(1)
+			}
 			return nil
 		}
 		// Ensure subpools only attempt to unreserve their own owned addresses,
@@ -123,6 +137,10 @@ func (p *TxPool) reserver(subpool SubPool) AddressReserver {
 			return errors.New("address not owned")
 		}
 		delete(p.reservations, addr)
+		if metrics.Enabled {
+			m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
+			metrics.GetOrRegisterGauge(m, nil).Dec(1)
+		}
 		return nil
 	}
 }

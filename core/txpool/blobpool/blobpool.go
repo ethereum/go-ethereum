@@ -951,7 +951,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 		}
 	}
 	log.Debug("Blobpool tip threshold updated", "tip", tip)
-	pooltipGague.Update(tip.Int64())
+	pooltipGauge.Update(tip.Int64())
 	p.updateStorageMetrics()
 }
 

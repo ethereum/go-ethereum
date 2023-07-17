@@ -61,6 +61,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/urfave/cli/v2 v2.24.1
+	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.9.0
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
 	golang.org/x/sync v0.3.0

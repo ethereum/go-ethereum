@@ -60,9 +60,9 @@ var (
 	basefeeGauge = metrics.NewRegisteredGauge("blobpool/basefee", nil)
 	blobfeeGauge = metrics.NewRegisteredGauge("blobpool/blobfee", nil)
 
-	// pooltipGague is the configurable miner tip to permit a transaction into
+	// pooltipGauge is the configurable miner tip to permit a transaction into
 	// the pool.
-	pooltipGague = metrics.NewRegisteredGauge("blobpool/pooltip", nil)
+	pooltipGauge = metrics.NewRegisteredGauge("blobpool/pooltip", nil)
 
 	// addwait/time, resetwait/time and getwait/time track the rough health of
 	// the pool and wether or not it's capable of keeping up with the load from
