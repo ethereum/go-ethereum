@@ -662,6 +662,7 @@ func TestMulticallV1(t *testing.T) {
 		Calls        []callRes
 	}
 	var testSuite = []struct {
+		name             string
 		blocks           []CallBatch
 		tag              rpc.BlockNumberOrHash
 		includeTransfers *bool
@@ -672,7 +673,8 @@ func TestMulticallV1(t *testing.T) {
 		// First value transfer OK after state override.
 		// Second one should succeed because of first transfer.
 		{
-			tag: latest,
+			name: "simple",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
@@ -707,7 +709,8 @@ func TestMulticallV1(t *testing.T) {
 			}},
 		}, {
 			// State build-up over blocks.
-			tag: latest,
+			name: "simple-multi-block",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
@@ -777,7 +780,8 @@ func TestMulticallV1(t *testing.T) {
 			}},
 		}, {
 			// Block overrides should work, each call is simulated on a different block number
-			tag: latest,
+			name: "block-overrides",
+			tag:  latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(11)),
@@ -833,7 +837,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Block numbers must be in order.
 		{
-			tag: latest,
+			name: "block-number-order",
+			tag:  latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
@@ -864,7 +869,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
 		{
-			tag: latest,
+			name: "storage-contract",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
@@ -905,7 +911,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Test logs output.
 		{
-			tag: latest,
+			name: "logs",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
@@ -946,7 +953,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Test ecrecover override
 		{
-			tag: latest,
+			name: "ecrecover-override",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
@@ -1009,7 +1017,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Test ether transfers.
 		{
-			tag: latest,
+			name: "transfer-logs",
+			tag:  latest,
 			blocks: []CallBatch{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{
@@ -1063,7 +1072,8 @@ func TestMulticallV1(t *testing.T) {
 		},
 		// Tests selfdestructed contract.
 		{
-			tag: latest,
+			name: "selfdestruct",
+			tag:  latest,
 			blocks: []CallBatch{{
 				Calls: []TransactionArgs{{
 					From: &accounts[0].addr,
@@ -1111,37 +1121,37 @@ func TestMulticallV1(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		opts := multicallOpts{Blocks: tc.blocks}
-		if tc.includeTransfers != nil && *tc.includeTransfers {
-			opts.TraceTransfers = true
-		}
-		result, err := api.MulticallV1(context.Background(), opts, tc.tag)
-		if tc.expectErr != nil {
-			if err == nil {
-				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
-				continue
+		t.Run(tc.name, func(t *testing.T) {
+			opts := multicallOpts{Blocks: tc.blocks}
+			if tc.includeTransfers != nil && *tc.includeTransfers {
+				opts.TraceTransfers = true
 			}
-			if !errors.Is(err, tc.expectErr) {
-				// Second try
-				if !reflect.DeepEqual(err, tc.expectErr) {
-					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+			result, err := api.MulticallV1(context.Background(), opts, tc.tag)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Fatalf("test %d: want error %v, have nothing", i, tc.expectErr)
 				}
+				if !errors.Is(err, tc.expectErr) {
+					// Second try
+					if !reflect.DeepEqual(err, tc.expectErr) {
+						t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+					}
+				}
+				return
 			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
-			continue
-		}
-		// Turn result into res-struct
-		var have []blockRes
-		resBytes, _ := json.Marshal(result)
-		if err := json.Unmarshal(resBytes, &have); err != nil {
-			t.Fatalf("failed to unmarshal result: %v", err)
-		}
-		if !reflect.DeepEqual(have, tc.want) {
-			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, tc.want)
-		}
+			if err != nil {
+				t.Fatalf("test %d: want no error, have %v", i, err)
+			}
+			// Turn result into res-struct
+			var have []blockRes
+			resBytes, _ := json.Marshal(result)
+			if err := json.Unmarshal(resBytes, &have); err != nil {
+				t.Fatalf("failed to unmarshal result: %v", err)
+			}
+			if !reflect.DeepEqual(have, tc.want) {
+				t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, tc.want)
+			}
+		})
 	}
 }
 
