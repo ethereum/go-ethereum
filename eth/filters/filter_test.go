@@ -106,6 +106,51 @@ func BenchmarkFilters(b *testing.B) {
 	}
 }
 
+func BenchmarkFilterLogs(b *testing.B) {
+	var logs []*types.Log
+	addrs := []common.Address{{0x01}, {0x02}, {0x03}, {0x04}}
+	topics := [][]common.Hash{{{0x01}}, {{0x01}, {0x02}}, {{0x01}, {0x03}}, {{0x01}, {0x02}, {0x03}, {0x04}}}
+	for i := 1; i <= 10; i++ {
+		for j := 0; j < 100; j++ {
+			logs = append(logs, &types.Log{
+				BlockNumber: uint64(i),
+				Index:       uint(j),
+				Address:     addrs[i*j%4],
+				Topics:      topics[i*j%4],
+			})
+		}
+	}
+	testCases := []struct {
+		from      *big.Int
+		to        *big.Int
+		addresses []common.Address
+		topics    [][]common.Hash
+		want      int
+	}{
+		0:  {from: nil, to: nil, want: 1000},
+		1:  {from: big.NewInt(0), to: nil, want: 1000},
+		2:  {from: nil, to: big.NewInt(8), want: 800},
+		3:  {from: big.NewInt(0), to: big.NewInt(1), want: 100},
+		4:  {from: big.NewInt(0), to: big.NewInt(10), want: 1000},
+		5:  {from: big.NewInt(5), to: big.NewInt(10), want: 600},
+		6:  {from: big.NewInt(0), to: big.NewInt(10), addresses: []common.Address{{0x01}}, want: 475},
+		7:  {from: big.NewInt(0), to: big.NewInt(10), addresses: []common.Address{{0x01}, {0x03}}, want: 750},
+		8:  {from: big.NewInt(5), to: big.NewInt(6), addresses: []common.Address{{0x01}}, want: 75},
+		9:  {from: big.NewInt(0), to: big.NewInt(10), topics: [][]common.Hash{{{0x01}}}, want: 1000},
+		10: {from: big.NewInt(2), to: big.NewInt(5), topics: [][]common.Hash{{{0x01}, {0x04}}}, want: 400},
+		11: {from: big.NewInt(3), to: big.NewInt(8), topics: [][]common.Hash{{{0x02}}, {{0x01}, {0x04}}, {{0x03}, {0x04}}}, want: 0},
+	}
+
+	for n := 0; n < b.N; n++ {
+		for i, tc := range testCases {
+			have := filterLogs(logs, tc.from, tc.to, tc.addresses, tc.topics)
+			if len(have) != tc.want {
+				b.Errorf("test case %d: have %d logs, want %d", i, len(have), tc.want)
+			}
+		}
+	}
+}
+
 func TestFilters(t *testing.T) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
