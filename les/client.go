@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
-	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/vflux"
 	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
 	"github.com/ethereum/go-ethereum/light"
@@ -64,7 +63,6 @@ type LightEthereum struct {
 	blockchain         *light.LightChain
 	serverPool         *vfc.ServerPool
 	serverPoolIterator enode.Iterator
-	pruner             *pruner
 	merger             *consensus.Merger
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
@@ -146,7 +144,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if leth.udpEnabled {
 		prenegQuery = leth.prenegQuery
 	}
-	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
+	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, nil, requestList)
 	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
@@ -170,9 +168,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.chtIndexer.Start(leth.blockchain)
 	leth.bloomIndexer.Start(leth.blockchain)
 
-	// Start a light chain pruner to delete useless historical data.
-	leth.pruner = newPruner(chainDb, leth.chtIndexer, leth.bloomTrieIndexer)
-
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -191,7 +186,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
-	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, leth)
+	leth.handler = newClientHandler(leth)
 	leth.netRPCService = ethapi.NewNetAPI(leth.p2pServer, leth.config.NetworkId)
 
 	// Register the backend on the node
@@ -299,9 +294,6 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Namespace: "eth",
 			Service:   &LightDummyAPI{},
 		}, {
-			Namespace: "eth",
-			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
-		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,
 		}, {
@@ -315,13 +307,12 @@ func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *LightEthereum) Merger() *consensus.Merger          { return s.merger }
+func (s *LightEthereum) BlockChain() *light.LightChain { return s.blockchain }
+func (s *LightEthereum) TxPool() *light.TxPool         { return s.txPool }
+func (s *LightEthereum) Engine() consensus.Engine      { return s.engine }
+func (s *LightEthereum) LesVersion() int               { return int(ClientProtocolVersions[0]) }
+func (s *LightEthereum) EventMux() *event.TypeMux      { return s.eventMux }
+func (s *LightEthereum) Merger() *consensus.Merger     { return s.merger }
 
 // Protocols returns all the currently configured network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
@@ -354,7 +345,6 @@ func (s *LightEthereum) Start() error {
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
-	s.handler.start()
 
 	return nil
 }
@@ -374,7 +364,6 @@ func (s *LightEthereum) Stop() error {
 	s.handler.stop()
 	s.txPool.Stop()
 	s.engine.Close()
-	s.pruner.close()
 	s.eventMux.Stop()
 	// Clean shutdown marker as the last thing before closing db
 	s.shutdownTracker.Stop()
