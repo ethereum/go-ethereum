@@ -962,28 +962,23 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 // GetPreviousCheckpointFromEpoch returns header of the previous checkpoint
 func (s *PublicBlockChainAPI) GetPreviousCheckpointFromEpoch(ctx context.Context, epochNum rpc.EpochNumber) (rpc.BlockNumber, rpc.EpochNumber) {
 	var checkpointNumber uint64
+	epoch := s.b.ChainConfig().XDPoS.Epoch
 
-	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
-		currentCheckpointNumber, epochNumber, err := engine.GetCurrentEpochSwitchBlock(s.chainReader, s.b.CurrentBlock().Number())
-		if err != nil {
-			log.Error("[GetPreviousCheckpointFromEpoch] Error while trying to get current epoch switch block information", "Block", s.b.CurrentBlock(), "Error", err)
+	if epochNum == rpc.LatestEpochNumber {
+		blockNumer := s.b.CurrentBlock().Number().Uint64()
+		diff := blockNumer % epoch
+		// checkpoint number
+		checkpointNumber = blockNumer - diff
+		epochNum = rpc.EpochNumber(checkpointNumber / epoch)
+		if diff > 0 {
+			epochNum += 1
 		}
-		if epochNum == rpc.LatestEpochNumber {
-			checkpointNumber = currentCheckpointNumber
-			epochNum = rpc.EpochNumber(epochNumber)
-		} else if epochNum < 2 {
-			checkpointNumber = 0
-		} else {
-			blockNumberBeforeCurrentEpochSwitch := currentCheckpointNumber - 1
-			checkpointNumber, _, err = engine.GetCurrentEpochSwitchBlock(s.chainReader, big.NewInt(int64(blockNumberBeforeCurrentEpochSwitch)))
-			if err != nil {
-				log.Error("[GetPreviousCheckpointFromEpoch] Error while trying to get last epoch switch block information", "Number", blockNumberBeforeCurrentEpochSwitch, "Error", err)
-			}
-		}
-		return rpc.BlockNumber(checkpointNumber), epochNum
+	} else if epochNum < 2 {
+		checkpointNumber = 0
 	} else {
-		panic("[GetPreviousCheckpointFromEpoch] Error while trying to get XDPoS consensus engine")
+		checkpointNumber = epoch * (uint64(epochNum) - 1)
 	}
+	return rpc.BlockNumber(checkpointNumber), epochNum
 }
 
 // getCandidatesFromSmartContract returns all candidates with their capacities at the current time
