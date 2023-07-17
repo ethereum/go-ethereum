@@ -358,29 +358,6 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-// topicFilter checks if the given log topics match the filter topics.
-// It returns true if there is a match, false otherwise.
-//
-// So the full logic is:
-// - Wildcard filter topics (empty) always match
-// - If any non-wildcard filter topic does NOT match, the function returns false
-// - Otherwise, it returns true
-func topicFilter(topics [][]common.Hash, filter func(i int, topic common.Hash) bool) bool {
-	for i, sub := range topics {
-		match := len(sub) == 0 // empty rule set == wildcard
-		for _, topic := range sub {
-			if filter(i, topic) {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return false
-		}
-	}
-	return true
-}
-
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
 	var (
@@ -427,6 +404,30 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 	return ret
 }
 
+// topicFilter checks if the given log topics match the filter topics.
+// It returns true if there is a match, false otherwise.
+//
+// So the full logic is:
+// - Wildcard filter topics (empty) always match
+// - If any non-wildcard filter topic does NOT match, the function returns false
+// - Otherwise, it returns true
+func topicFilter(topics [][]common.Hash, filter func(i int, topic common.Hash) bool) bool {
+	for i, sub := range topics {
+		match := len(sub) == 0 // empty rule set == wildcard
+		for _, topic := range sub {
+			if filter(i, topic) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
+}
+
+// bloomFilter checks if the given address and topics match the block bloom
 func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
 	if len(addresses) > 0 {
 		var included bool
@@ -441,9 +442,5 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 		}
 	}
 
-	if !topicFilter(topics, func(i int, topic common.Hash) bool { return types.BloomLookup(bloom, topic) }) {
-		return false
-	}
-
-	return true
+	return topicFilter(topics, func(i int, topic common.Hash) bool { return types.BloomLookup(bloom, topic) })
 }
