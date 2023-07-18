@@ -946,8 +946,11 @@ func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.P
 				state.SetBalance(*account.MoveTo, state.GetBalance(addr))
 				state.SetNonce(*account.MoveTo, state.GetNonce(addr))
 				state.SetCode(*account.MoveTo, state.GetCode(addr))
-				// TODO: copy storage over
-				//state.SetState(*account.MoveTo, state.GetState(addr))
+				// Copy storage over
+				state.ForEachStorage(addr, func(key, value common.Hash) bool {
+					state.SetState(*account.MoveTo, key, value)
+					return true
+				})
 				// Clear source storage
 				state.SetStorage(addr, map[common.Hash]common.Hash{})
 				if precompiles[*account.MoveTo] != nil {
