@@ -544,7 +544,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			delete(p.lookup, txs[0].hash)
 
 			// Included transactions blobs need to be moved to the limbo
-			if filled && inclusions != nil {
+			if inclusions != nil {
 				p.offload(addr, txs[0].nonce, txs[0].id, inclusions)
 			}
 			txs = txs[1:]
@@ -651,6 +651,11 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
 			}
 		}
+	}
+	// Included cheap transactions might have left the remaining ones better from
+	// an eviction point, fix any potential issues in the heap.
+	if _, ok := p.index[addr]; ok && inclusions != nil {
+		heap.Fix(p.evict, p.evict.index[addr])
 	}
 }
 
