@@ -869,6 +869,10 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 // just reorged out - into the pool. The transaction is assumed valid (having
 // been in the chain), thus the only validation needed is nonce sorting and over-
 // draft checks after injection.
+//
+// Note, the method will not initialize the eviction cache values as those will
+// be done once for all transactions belonging to an account after all individual
+// transactions are injected back into the pool.
 func (p *BlobPool) reinject(addr common.Address, tx *types.Transaction) {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
