@@ -943,6 +943,8 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					} else {
 						delete(p.index, addr)
 						delete(p.spent, addr)
+
+						heap.Remove(p.evict, p.evict.index[addr])
 						p.reserve(addr, false)
 					}
 					// Clear out the transactions from the data store

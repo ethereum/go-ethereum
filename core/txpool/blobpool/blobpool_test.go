@@ -361,7 +361,7 @@ func TestOpenDrops(t *testing.T) {
 			gapped[id] = struct{}{}
 		}
 	}
-	// Insert a sequence of transactions with a gapped starting nonce to veirfy
+	// Insert a sequence of transactions with a gapped starting nonce to verify
 	// that the entire set will get dropped.
 	var (
 		dangler, _ = crypto.GenerateKey()
@@ -404,18 +404,37 @@ func TestOpenDrops(t *testing.T) {
 			overlapped[id] = struct{}{}
 		}
 	}
-	// Insert a sequence of transactions with an underpriced in between to verify
-	// that it and anything newly gapped will get evicted (case 4)
+	// Insert a sequence of transactions with an underpriced first to verify that
+	// the entire set will get dropped (case 4).
 	var (
-		pricer, _ = crypto.GenerateKey()
-		outpriced = make(map[uint64]struct{})
+		underpayer, _ = crypto.GenerateKey()
+		underpaid     = make(map[uint64]struct{})
+	)
+	for i := 0; i < 5; i++ { // make #0 underpriced
+		var tx *types.Transaction
+		if i == 0 {
+			tx = makeTx(uint64(i), 0, 0, 0, underpayer)
+		} else {
+			tx = makeTx(uint64(i), 1, 1, 1, underpayer)
+		}
+		blob, _ := rlp.EncodeToBytes(&blobTx{Tx: tx})
+
+		id, _ := store.Put(blob)
+		underpaid[id] = struct{}{}
+	}
+
+	// Insert a sequence of transactions with an underpriced in between to verify
+	// that it and anything newly gapped will get evicted (case 4).
+	var (
+		outpricer, _ = crypto.GenerateKey()
+		outpriced    = make(map[uint64]struct{})
 	)
 	for i := 0; i < 5; i++ { // make #2 underpriced
 		var tx *types.Transaction
 		if i == 2 {
-			tx = makeTx(uint64(i), 0, 0, 0, pricer)
+			tx = makeTx(uint64(i), 0, 0, 0, outpricer)
 		} else {
-			tx = makeTx(uint64(i), 1, 1, 1, pricer)
+			tx = makeTx(uint64(i), 1, 1, 1, outpricer)
 		}
 		blob, _ := rlp.EncodeToBytes(&blobTx{Tx: tx})
 
@@ -476,7 +495,8 @@ func TestOpenDrops(t *testing.T) {
 	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3)
 	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), big.NewInt(1000000))
 	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2)
-	statedb.AddBalance(crypto.PubkeyToAddress(pricer.PublicKey), big.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), big.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), big.NewInt(1000000))
 	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), big.NewInt(1000000))
 	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), big.NewInt(1000000))
 	statedb.Commit(true)
@@ -512,6 +532,10 @@ func TestOpenDrops(t *testing.T) {
 					t.Errorf("overlapped transaction remained in storage: %d", tx.id)
 				} else if _, ok := gapped[tx.id]; ok {
 					t.Errorf("gapped transaction remained in storage: %d", tx.id)
+				} else if _, ok := underpaid[tx.id]; ok {
+					t.Errorf("underpaid transaction remained in storage: %d", tx.id)
+				} else if _, ok := outpriced[tx.id]; ok {
+					t.Errorf("outpriced transaction remained in storage: %d", tx.id)
 				} else if _, ok := exceeded[tx.id]; ok {
 					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.id)
 				} else if _, ok := overdrafted[tx.id]; ok {
