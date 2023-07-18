@@ -873,6 +873,7 @@ type OverrideAccount struct {
 	Balance   **hexutil.Big                `json:"balance"`
 	State     *map[common.Hash]common.Hash `json:"state"`
 	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
+	MoveTo    *common.Address              `json:"moveTo"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -884,6 +885,80 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		return nil
 	}
 	for addr, account := range *diff {
+		// Override account nonce.
+		if account.Nonce != nil {
+			state.SetNonce(addr, uint64(*account.Nonce))
+		}
+		// Override account(contract) code.
+		if account.Code != nil {
+			state.SetCode(addr, *account.Code)
+		}
+		// Override account balance.
+		if account.Balance != nil {
+			state.SetBalance(addr, (*big.Int)(*account.Balance))
+		}
+		if account.State != nil && account.StateDiff != nil {
+			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+		}
+		// Replace entire state if caller requires.
+		if account.State != nil {
+			state.SetStorage(addr, *account.State)
+		}
+		// Apply state diff into specified accounts.
+		if account.StateDiff != nil {
+			for key, value := range *account.StateDiff {
+				state.SetState(addr, key, value)
+			}
+		}
+	}
+	// Now finalize the changes. Finalize is normally performed between transactions.
+	// By using finalize, the overrides are semantically behaving as
+	// if they were created in a transaction just before the tracing occur.
+	state.Finalise(false)
+	return nil
+}
+
+// ApplyMulticall overrides the fields of specified accounts into the given state.
+func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.PrecompiledContracts) error {
+	if diff == nil {
+		return nil
+	}
+	for addr, account := range *diff {
+		p, isPrecompile := precompiles[addr]
+		// The MoveTo feature makes it possible to replace precompiles and EVM
+		// contracts in all the following configurations:
+		// 1. Precompile -> Precompile
+		// 2. Precompile -> EVM contract
+		// 3. EVM contract -> Precompile
+		// 4. EVM contract -> EVM contract
+		if account.MoveTo != nil {
+			if isPrecompile {
+				// Clear destination account which may be an EVM contract.
+				if !state.Empty(*account.MoveTo) {
+					state.SetCode(*account.MoveTo, nil)
+					state.SetNonce(*account.MoveTo, 0)
+					state.SetBalance(*account.MoveTo, big.NewInt(0))
+					state.SetStorage(*account.MoveTo, map[common.Hash]common.Hash{})
+				}
+				// If destination is a precompile, it will be simply replaced.
+				precompiles[*account.MoveTo] = p
+			} else {
+				state.SetBalance(*account.MoveTo, state.GetBalance(addr))
+				state.SetNonce(*account.MoveTo, state.GetNonce(addr))
+				state.SetCode(*account.MoveTo, state.GetCode(addr))
+				// TODO: copy storage over
+				//state.SetState(*account.MoveTo, state.GetState(addr))
+				// Clear source storage
+				state.SetStorage(addr, map[common.Hash]common.Hash{})
+				if precompiles[*account.MoveTo] != nil {
+					delete(precompiles, *account.MoveTo)
+				}
+			}
+		}
+		if isPrecompile {
+			// Now that the contract is moved it can be deleted.
+			delete(precompiles, addr)
+		}
 		// Override account nonce.
 		if account.Nonce != nil {
 			state.SetNonce(addr, uint64(*account.Nonce))
@@ -1013,16 +1088,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true})
+	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true}, nil)
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config) (*core.ExecutionResult, error) {
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(gp.Gas(), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
 	evm, vmError := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
+	if precompiles != nil {
+		evm.SetPrecompiles(precompiles)
+	}
 
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -1170,9 +1248,12 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		globalGasCap = s.b.RPCGasCap()
 		gp           = new(core.GasPool).AddGas(globalGasCap)
 		prevNumber   = header.Number.Uint64()
+		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		rules        = s.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
+		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
 	)
 	for bi, block := range blocks {
-		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
 		if block.BlockOverrides != nil {
 			block.BlockOverrides.Apply(&blockContext)
 		}
@@ -1182,7 +1263,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		}
 		prevNumber = blockContext.BlockNumber.Uint64()
 		// State overrides are applied prior to execution of a block
-		if err := block.StateOverrides.Apply(state); err != nil {
+		if err := block.StateOverrides.ApplyMulticall(state, precompiles); err != nil {
 			return nil, err
 		}
 		// ECRecover replacement code will be fetched from statedb and executed as a normal EVM bytecode.
@@ -1211,7 +1292,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			if opts.TraceTransfers {
 				vmConfig.Tracer = newTracer()
 			}
-			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig)
+			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles)
 			if err != nil {
 				results[bi].Calls[i] = callResult{Error: err.Error(), Status: hexutil.Uint64(types.ReceiptStatusFailed)}
 				continue

@@ -1018,17 +1018,19 @@ func TestMulticallV1(t *testing.T) {
 						// }
 						Code: hex2Bytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
 					},
+					common.BytesToAddress([]byte{0x01}): OverrideAccount{
+						// Yul code that returns the address of the caller.
+						// object "Test" {
+						//    code {
+						//        let c := caller()
+						//        mstore(0, c)
+						//        return(0xc, 0x14)
+						//    }
+						// }
+						Code: hex2Bytes("33806000526014600cf3"),
+					},
 				},
 				BlockOverrides: &BlockOverrides{},
-				// Yul code that returns the address of the caller.
-				// object "Test" {
-				//    code {
-				//        let c := caller()
-				//        mstore(0, c)
-				//        return(0xc, 0x14)
-				//    }
-				// }
-				ECRecoverOverride: hex2Bytes("33806000526014600cf3"),
 				Calls: []TransactionArgs{{
 					From: &randomAccounts[0].addr,
 					To:   &randomAccounts[2].addr,

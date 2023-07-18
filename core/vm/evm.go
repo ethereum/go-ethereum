@@ -123,22 +123,16 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
-	switch {
-	case evm.chainRules.IsBerlin:
-		evm.precompiles = PrecompiledContractsBerlin.Copy()
-	case evm.chainRules.IsIstanbul:
-		evm.precompiles = PrecompiledContractsIstanbul.Copy()
-	case evm.chainRules.IsByzantium:
-		evm.precompiles = PrecompiledContractsByzantium.Copy()
-	default:
-		evm.precompiles = PrecompiledContractsHomestead.Copy()
-	}
-	// ECRecoverCode can be set only through RPC calls
-	if config.DisableECRecover {
-		delete(evm.precompiles, common.BytesToAddress([]byte{1}))
-	}
+	evm.precompiles = ActivePrecompiledContracts(evm.chainRules)
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
+}
+
+// SetPrecompiles sets the precompiled contracts for the EVM.
+// This method is only used through RPC calls.
+// It is not thread-safe.
+func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
+	evm.precompiles = precompiles
 }
 
 // Reset resets the EVM with a new transaction context.Reset
