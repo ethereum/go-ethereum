@@ -303,8 +303,9 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
+	dataGasPrice := big.NewInt(920)
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, txs)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, dataGasPrice, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
@@ -501,6 +502,9 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.ContractAddress = common.Address{0xff, 0xff, 0x33}
 	cpy.GasUsed = 0xffffffff
 	cpy.Logs = clearComputedFieldsOnLogs(receipt.Logs)
+	cpy.EffectiveGasPrice = big.NewInt(0)
+	cpy.DataGasUsed = 0
+	cpy.DataGasPrice = big.NewInt(0)
 	return &cpy
 }
 
