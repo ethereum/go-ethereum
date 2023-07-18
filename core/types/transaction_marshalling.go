@@ -187,17 +187,17 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		itx.Data = *dec.Input
 
-		// sig R
+		// signature R
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
 		itx.R = (*big.Int)(dec.R)
-		// sig S
+		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
 		itx.S = (*big.Int)(dec.S)
-		// sig V
+		// signature V
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
@@ -240,17 +240,17 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			itx.AccessList = *dec.AccessList
 		}
 
-		// sig R
+		// signature R
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
 		itx.R = (*big.Int)(dec.R)
-		// sig S
+		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
 		itx.S = (*big.Int)(dec.S)
-		// sig V
+		// signature V
 		itx.V, err = dec.yParityValue()
 		if err != nil {
 			return err
@@ -300,17 +300,17 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			itx.AccessList = *dec.AccessList
 		}
 
-		// sig R
+		// signature R
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
 		itx.R = (*big.Int)(dec.R)
-		// sig S
+		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
 		itx.S = (*big.Int)(dec.S)
-		// sig V
+		// signature V
 		itx.V, err = dec.yParityValue()
 		if err != nil {
 			return err
@@ -370,7 +370,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		itx.BlobHashes = dec.BlobVersionedHashes
 
-		// sig R
+		// signature R
 		var ok bool
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
@@ -379,7 +379,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if !ok {
 			return errors.New("'r' value overflows uint256")
 		}
-		// sig S
+		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
@@ -387,7 +387,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if !ok {
 			return errors.New("'s' value overflows uint256")
 		}
-		// sig V
+		// signature V
 		vbig, err := dec.yParityValue()
 		if err != nil {
 			return err
