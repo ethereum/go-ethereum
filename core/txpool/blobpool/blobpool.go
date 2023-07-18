@@ -336,9 +336,19 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 	p.reserve = reserve
 
 	var (
-		queuedir = filepath.Join(p.config.Datadir, pendingTransactionStore)
-		limbodir = filepath.Join(p.config.Datadir, limboedTransactionStore)
+		queuedir string
+		limbodir string
 	)
+	if p.config.Datadir != "" {
+		queuedir = filepath.Join(p.config.Datadir, pendingTransactionStore)
+		if err := os.MkdirAll(queuedir, 0700); err != nil {
+			return err
+		}
+		limbodir = filepath.Join(p.config.Datadir, limboedTransactionStore)
+		if err := os.MkdirAll(limbodir, 0700); err != nil {
+			return err
+		}
+	}
 	state, err := p.chain.StateAt(head.Root)
 	if err != nil {
 		return err
@@ -351,9 +361,6 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 		if p.parseTransaction(id, size, blob) != nil {
 			fails = append(fails, id)
 		}
-	}
-	if err := os.MkdirAll(queuedir, 0700); err != nil {
-		return err
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotter(), index)
 	if err != nil {

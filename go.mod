@@ -2,6 +2,10 @@ module github.com/ethereum/go-ethereum
 
 go 1.19
 
+replace (
+	github.com/holiman/billy => /Users/karalabe/work/sources/github.com/holiman/billy
+)
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/VictoriaMetrics/fastcache v1.6.0

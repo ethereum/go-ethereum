@@ -18,7 +18,6 @@ package blobpool
 
 import (
 	"errors"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -64,9 +63,6 @@ func newLimbo(datadir string) (*limbo, error) {
 		if l.parseBlob(id, data) != nil {
 			fails = append(fails, id)
 		}
-	}
-	if err := os.MkdirAll(datadir, 0700); err != nil {
-		return nil, err
 	}
 	store, err := billy.Open(billy.Options{Path: datadir}, newSlotter(), index)
 	if err != nil {
