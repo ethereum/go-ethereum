@@ -7,7 +7,7 @@ require (
 	github.com/BurntSushi/toml v1.1.0
 	github.com/JekaMas/crand v1.0.1
 	github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d
-	github.com/JekaMas/workerpool v1.1.5
+	github.com/JekaMas/workerpool v1.1.8
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.1.1

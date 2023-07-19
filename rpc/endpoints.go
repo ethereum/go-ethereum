@@ -27,7 +27,7 @@ import (
 func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
 	// Register all the APIs exposed by the services.
 	var (
-		handler    = NewServer(0, 0)
+		handler    = NewServer("", 0, 0) // we can skip reporting ipc metrics, hence empty service name
 		regMap     = make(map[string]struct{})
 		registered []string
 	)
