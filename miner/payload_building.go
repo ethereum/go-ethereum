@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -84,7 +83,7 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 }
 
 // update updates the full-block with latest built version.
-func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.Duration) {
+func (payload *Payload) update(block *types.Block, fees *big.Int) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -103,7 +102,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(), "hash", block.Hash(),
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther,
-			"root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
+			"root", block.Root())
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
@@ -160,39 +159,17 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Construct a payload object for return.
+	// Construct a payload object for updating the block.
 	payload := newPayload(empty, args.Id())
 
-	// Spin up a routine for updating the payload in background. This strategy
-	// can maximum the revenue for including transactions with highest fee.
-	go func() {
-		// Setup the timer for re-building the payload. The initial clock is kept
-		// for triggering process immediately.
-		timer := time.NewTimer(0)
-		defer timer.Stop()
-
-		// Setup the timer for terminating the process if SECONDS_PER_SLOT (12s in
-		// the Mainnet configuration) have passed since the point in time identified
-		// by the timestamp parameter.
-		endTimer := time.NewTimer(time.Second * 12)
-
-		for {
-			select {
-			case <-timer.C:
-				start := time.Now()
-				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
-				if err == nil {
-					payload.update(block, fees, time.Since(start))
-				}
-				timer.Reset(w.recommit)
-			case <-payload.stop:
-				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
-				return
-			case <-endTimer.C:
-				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
-				return
-			}
-		}
-	}()
-	return payload, nil
+	// Get the block to update with the payload
+	block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
+	if err == nil {
+		payload.update(block, fees)
+		log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+		return payload, nil
+	} else {
+		log.Info("Stopping work on payload", "id", payload.id, "reason", "failed to retrieve payload")
+		return payload, nil
+	}
 }

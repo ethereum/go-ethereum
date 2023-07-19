@@ -7,7 +7,6 @@ package execution
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -62,14 +61,13 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 		Random:                common.Hash{},
 		SuggestedFeeRecipient: common.Address{},
 	}
+
 	fcStartResp, err := s.consensus.ForkchoiceUpdatedV1(*startForkChoice, payloadAttributes)
 	if err != nil {
 		return nil, err
 	}
 
-	// super janky but this is what the payload builder requires :/ (miner.worker.buildPayload())
-	// we should probably just execute + store the block directly instead of using the engine api.
-	time.Sleep(time.Second)
+	// TODO: we should probably just execute + store the block directly instead of using the engine api.
 	payloadResp, err := s.consensus.GetPayloadV1(*fcStartResp.PayloadID)
 	if err != nil {
 		log.Error("failed to call GetPayloadV1", "err", err)
