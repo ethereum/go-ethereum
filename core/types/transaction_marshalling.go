@@ -59,13 +59,11 @@ func (tx *txJSON) yParityValue() (*big.Int, error) {
 		if val != 0 && val != 1 {
 			return nil, errors.New("'yParity' field must be 0 or 1")
 		}
-		yparity := new(big.Int).SetUint64(val)
-		if tx.V != nil {
-			if tx.V.ToInt().Cmp(yparity) != 0 {
-				return nil, errors.New("'v' and 'yParity' fields do not match")
-			}
+		bigval := new(big.Int).SetUint64(val)
+		if tx.V != nil && tx.V.ToInt().Cmp(bigval) != 0 {
+			return nil, errors.New("'v' and 'yParity' fields do not match")
 		}
-		return yparity, nil
+		return bigval, nil
 	}
 	if tx.V != nil {
 		return tx.V.ToInt(), nil
@@ -315,7 +313,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return err
 		}
-
 		if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
 			return err
 		}
