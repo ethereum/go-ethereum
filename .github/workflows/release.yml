@@ -49,10 +49,10 @@ jobs:
           chmod u+x $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
           $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
           tar cvfz $ARCHIVE_FILE_NAME.tar.gz $ARCHIVE_FILE_NAME
-          - uses: actions/upload-artifact@v3
-          with:
-            name: derelay-artifact
-            path: $ARCHIVE_FILE_NAME.tar.gz
+      - uses: actions/upload-artifact@v3
+        with:
+          name: go-ethereum-artifact
+          path: $ARCHIVE_FILE_NAME.tar.gz
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.2.3
