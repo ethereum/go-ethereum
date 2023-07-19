@@ -2,6 +2,7 @@ package rawdb
 
 import (
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -10,13 +11,11 @@ import (
 
 func TestReadBlockRowConsumption(t *testing.T) {
 	l2BlockHash := common.BigToHash(big.NewInt(10))
-	rc := types.RowConsumption{
-		Rows: 11,
-	}
+	rc := types.RowConsumption{types.SubCircuitRowConsumption{CircuitName: "aa", Rows: 12}, types.SubCircuitRowConsumption{CircuitName: "bb", Rows: 100}}
 	db := NewMemoryDatabase()
 	WriteBlockRowConsumption(db, l2BlockHash, rc)
 	got := ReadBlockRowConsumption(db, l2BlockHash)
-	if got == nil || got.Rows != rc.Rows {
+	if got == nil || !reflect.DeepEqual(rc, *got) {
 		t.Fatal("RowConsumption mismatch", "expected", rc, "got", got)
 	}
 }

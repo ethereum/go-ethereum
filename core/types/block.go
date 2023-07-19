@@ -418,3 +418,8 @@ func (b *Block) CountL2Tx() int {
 }
 
 type Blocks []*Block
+
+type BlockWithRowConsumption struct {
+	*Block
+	*RowConsumption
+}

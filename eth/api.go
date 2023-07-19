@@ -682,7 +682,7 @@ func (api *ScrollAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, fullT
 	fields["totalDifficulty"] = (*hexutil.Big)(api.eth.APIBackend.GetTd(ctx, b.Hash()))
 	rc := rawdb.ReadBlockRowConsumption(api.eth.ChainDb(), b.Hash())
 	if rc != nil {
-		fields["rowConsumption"] = hexutil.Uint64(rc.Rows)
+		fields["rowConsumption"] = rc
 	} else {
 		fields["rowConsumption"] = nil
 	}

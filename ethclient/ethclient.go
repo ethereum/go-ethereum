@@ -337,12 +337,104 @@ func (ec *Client) GetBlockTraceByNumber(ctx context.Context, number *big.Int) (*
 	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getBlockTraceByNumberOrHash", toBlockNumArg(number))
 }
 
+type rpcRowConsumption struct {
+	RowConsumption types.RowConsumption `json:"rowConsumption"`
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (r *rpcRowConsumption) UnmarshalJSON(input []byte) error {
+	type rpcRowConsumption struct {
+		RowConsumption types.RowConsumption `json:"rowConsumption"`
+	}
+	var dec rpcRowConsumption
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.RowConsumption == nil {
+		return errors.New("missing required field 'RowConsumption' for rpcRowConsumption")
+	}
+	r.RowConsumption = dec.RowConsumption
+	return nil
+}
+
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
-func (ec *Client) GetBlockByHash(ctx context.Context, blockHash common.Hash, inclTx bool) (map[string]interface{}, error) {
-	block := make(map[string]interface{})
-	err := ec.c.CallContext(ctx, &block, "scroll_getBlockByHash", blockHash, inclTx)
-	return block, err
+func (ec *Client) GetBlockByHash(ctx context.Context, blockHash common.Hash) (*types.BlockWithRowConsumption, error) {
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "scroll_getBlockByHash", blockHash, true)
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, ethereum.NotFound
+	}
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcBlock
+	var rpcRc rpcRowConsumption
+	var rc *types.RowConsumption
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &rpcRc); err != nil {
+		// don't return error here if there is no RowConsumption data, because many l2geth nodes will not have this data
+		// instead of error l2_watcher and other services that require RowConsumption should check it
+		rc = nil
+	} else {
+		rc = &rpcRc.RowConsumption
+	}
+	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
+	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
+		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+	}
+	if head.UncleHash != types.EmptyUncleHash && len(body.UncleHashes) == 0 {
+		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+	}
+	if head.TxHash == types.EmptyRootHash && len(body.Transactions) > 0 {
+		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+	}
+	if head.TxHash != types.EmptyRootHash && len(body.Transactions) == 0 {
+		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+	}
+	// Load uncles because they are not included in the block response.
+	var uncles []*types.Header
+	if len(body.UncleHashes) > 0 {
+		uncles = make([]*types.Header, len(body.UncleHashes))
+		reqs := make([]rpc.BatchElem, len(body.UncleHashes))
+		for i := range reqs {
+			reqs[i] = rpc.BatchElem{
+				Method: "eth_getUncleByBlockHashAndIndex",
+				Args:   []interface{}{body.Hash, hexutil.EncodeUint64(uint64(i))},
+				Result: &uncles[i],
+			}
+		}
+		if err := ec.c.BatchCallContext(ctx, reqs); err != nil {
+			return nil, err
+		}
+		for i := range reqs {
+			if reqs[i].Error != nil {
+				return nil, reqs[i].Error
+			}
+			if uncles[i] == nil {
+				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
+			}
+		}
+	}
+	// Fill the sender cache of transactions in the block.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		if tx.From != nil {
+			setSenderFromServer(tx.tx, *tx.From, body.Hash)
+		}
+		txs[i] = tx.tx
+	}
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+	return &types.BlockWithRowConsumption{
+		Block:          block,
+		RowConsumption: rc,
+	}, nil
 }
 
 // SubscribeNewBlockTrace subscribes to block execution trace when a new block is created.
