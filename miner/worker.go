@@ -1172,7 +1172,7 @@ mainloop:
 	}
 
 	// nolint:nestif
-	if EnableMVHashMap {
+	if EnableMVHashMap && w.isRunning() {
 		close(chDeps)
 		depsWg.Wait()
 

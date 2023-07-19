@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
@@ -40,7 +41,14 @@ const (
 	nodesSeed2     = 0x4567299
 )
 
+var signingKeyForTesting, _ = crypto.ToECDSA(hexutil.MustDecode("0xdc599867fc513f8f5e2c2c9c489cde5e71362d1d9ec6e693e0de063236ed1240"))
+
 func TestClientSyncTree(t *testing.T) {
+	nodes := []string{
+		"enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA",
+		"enr:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI",
+		"enr:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o",
+	}
 	r := mapResolver{
 		"n":                            "enrtree-root:v1 e=JWXYDBPXYWG6FX3GMDIBFA6CJ4 l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=1 sig=o908WmNp7LibOfPsr4btQwatZJ5URBr2ZAuxvK4UWHlsB9sUOTJQaGAlLPVAhM__XJesCHxLISo94z5Z2a463gA",
 		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
@@ -50,7 +58,7 @@ func TestClientSyncTree(t *testing.T) {
 		"MHTDO6TMUBRIA2XWG5LUDACK24.n": "enr:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o",
 	}
 	var (
-		wantNodes = testNodes(0x29452, 3)
+		wantNodes = sortByID(parseNodes(nodes))
 		wantLinks = []string{"enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org"}
 		wantSeq   = uint(1)
 	)
@@ -62,7 +70,7 @@ func TestClientSyncTree(t *testing.T) {
 		t.Fatal("sync error:", err)
 	}
 
-	if !reflect.DeepEqual(sortByID(stree.Nodes()), sortByID(wantNodes)) {
+	if !reflect.DeepEqual(sortByID(stree.Nodes()), wantNodes) {
 		t.Errorf("wrong nodes in synced tree:\nhave %v\nwant %v", spew.Sdump(stree.Nodes()), spew.Sdump(wantNodes))
 	}
 
@@ -389,7 +397,7 @@ func makeTestTree(domain string, nodes []*enode.Node, links []string) (*Tree, st
 		panic(err)
 	}
 
-	url, err := tree.Sign(testKey(signingKeySeed), domain)
+	url, err := tree.Sign(signingKeyForTesting, domain)
 	if err != nil {
 		panic(err)
 	}
@@ -462,4 +470,19 @@ func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, err
 		return []string{record}, nil
 	}
 	return nil, errors.New("not found")
+}
+
+func parseNodes(rec []string) []*enode.Node {
+	ns := make([]*enode.Node, 0, len(rec))
+
+	for _, r := range rec {
+		var n enode.Node
+		if err := n.UnmarshalText([]byte(r)); err != nil {
+			panic(err)
+		}
+
+		ns = append(ns, &n)
+	}
+
+	return ns
 }

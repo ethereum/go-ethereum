@@ -56,18 +56,24 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer(executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+func NewServer(service string, executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+	reportEpStats := true
+	if service == "" || service == "test" {
+		reportEpStats = false
+	}
+
 	server := &Server{
 		idgen:         randomIDGenerator(),
 		codecs:        mapset.NewSet(),
 		run:           1,
-		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout),
+		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
 	}
 
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
 	server.RegisterName(MetadataApi, rpcService)
+
 	return server
 }
 
@@ -166,6 +172,9 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 // requests to finish, then closes all codecs which will cancel pending requests and
 // subscriptions.
 func (s *Server) Stop() {
+	// Stop the execution pool
+	s.executionPool.Stop()
+
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")
 		s.codecs.Each(func(c interface{}) bool {
