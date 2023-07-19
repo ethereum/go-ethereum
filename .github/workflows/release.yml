@@ -12,10 +12,11 @@ env:
   ARCHIVE_BUCKET: debank-build-artifacts
   ARCHIVE_FILE_PREFIX: downloads/ethereum
   AWS_REGION: ap-northeast-1
+  IMAGE: debankdocker/go-ethereum
 
 jobs:
   release-artifacts:
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
@@ -66,7 +67,7 @@ jobs:
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path:  ${{ env.BUILT_BINARY_PATH }}/${{ env.BUILT_BINARY_NAME }}
-          asset_name: derelay-linux
+          asset_name: go-ethereum
           asset_content_type: application/octet-stream
 
       - name: Upload Linux release binary tarbal
