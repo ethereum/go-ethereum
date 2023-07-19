@@ -15,7 +15,7 @@ env:
 
 jobs:
   release-artifacts:
-    runs-on: [self-hosted, general]
+    runs-on: [self-hosted]
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
@@ -50,3 +50,65 @@ jobs:
           chmod u+x $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME
           $ARCHIVE_FILE_NAME/$BUILT_BINARY_NAME version
           tar cvfz $ARCHIVE_FILE_NAME.tar.gz $ARCHIVE_FILE_NAME
+          - uses: actions/upload-artifact@v3
+          with:
+            name: derelay-artifact
+            path: $ARCHIVE_FILE_NAME.tar.gz
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.3
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      - name: Upload Linux release binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path:  ${{ env.BUILT_BINARY_PATH }}/${{ env.BUILT_BINARY_NAME }}
+          asset_name: derelay-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux release binary tarbal
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ${{ env.ARCHIVE_FILE_NAME }}.tar.gz
+          asset_name: ${{ env.ARCHIVE_FILE_NAME }}.tar.gz
+          asset_content_type: application/gzip
+
+  make-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dettack
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=raw,value=${{ github.sha }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile.debank
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
