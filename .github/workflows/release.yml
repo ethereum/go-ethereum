@@ -9,9 +9,6 @@ on:
 env:
   BUILT_BINARY_PATH: build/bin
   BUILT_BINARY_NAME: geth
-  ARCHIVE_BUCKET: debank-build-artifacts
-  ARCHIVE_FILE_PREFIX: downloads/ethereum
-  AWS_REGION: ap-northeast-1
   IMAGE: debankdocker/go-ethereum
 
 jobs:
@@ -93,6 +90,8 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -102,7 +101,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
-            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ env.RELEASE_VERSION }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
