@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -29,7 +30,7 @@ func (p *Printer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (p *Printer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	//fmt.Printf("CaptureState: pc=%v, op=%v, gas=%v, cost=%v, scope=%v, rData=%v, depth=%v, err=%v\n", pc, op, gas, cost, scope, rData, depth, err)
+	//fmt.Printf("CaptureState: pc=%v, op=%v, gas=%v, cost=%v, scope=%v, rData=%s, depth=%v, err=%v\n", pc, op, gas, cost, scope, hexutil.Bytes(rData), depth, err)
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -78,7 +79,7 @@ func (p *Printer) OnBlockEnd(td *big.Int, err error) {
 	fmt.Printf("OnBlockEnd: td=%v, err=%v\n", td, err)
 }
 
-func (p *Printer) OnGenesisBlock(b *types.Block) {
+func (p *Printer) OnGenesisBlock(b *types.Block, _ core.GenesisAlloc) {
 	fmt.Printf("OnGenesisBlock: b=%v\n", b.NumberU64())
 }
 

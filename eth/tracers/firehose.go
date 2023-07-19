@@ -252,33 +252,19 @@ func (f *Firehose) OnBlockStart(b *types.Block) {
 }
 
 func (f *Firehose) OnBlockEnd(td *big.Int, err error) {
-	// OnBlockEnd can be called while a transaction/call is still in progress, so must only assert that we are in a block
-	f.ensureInBlock()
-
 	if err == nil {
-		// No reset, next step is either OnBlockValidationError (skip and reset) or OnBlockWritten (flush and reset)
+		f.ensureInBlockAndNotInTrx()
+
 		f.block.Header.TotalDifficulty = pbeth.BigIntFromNative(td)
+		f.printBlockToFirehose(f.block)
 	} else {
-		// OnBlockEnd with error means that we could have been in any state
-		f.resetBlock()
-		f.resetTransaction()
-		f.resetCall()
+		// An error occurred, could have happen in transaction/call context, we must not check if in trx, only check in block
+		f.ensureInBlock()
 	}
-}
-
-func (f *Firehose) OnBlockValidationError(block *types.Block, err error) {
-	f.ensureInBlockAndNotInTrx()
-
-	fmt.Fprintf(os.Stderr, "OnBlockValidationError: b=%v, err=%v\n", block.NumberU64(), err)
-	f.resetBlock()
-}
-
-func (f *Firehose) OnBlockWritten() {
-	f.ensureInBlockAndNotInTrx()
-
-	f.printBlockToFirehose(f.block)
 
 	f.resetBlock()
+	f.resetTransaction()
+	f.resetCall()
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {

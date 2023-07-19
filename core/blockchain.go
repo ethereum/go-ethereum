@@ -160,7 +160,7 @@ type BlockchainLogger interface {
 	state.StateLogger
 	OnBlockStart(*types.Block)
 	OnBlockEnd(td *big.Int, err error)
-	OnGenesisBlock(*types.Block)
+	OnGenesisBlock(*types.Block, GenesisAlloc)
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -1834,6 +1834,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			return it.index, err
 		}
+
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
