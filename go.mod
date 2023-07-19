@@ -2,10 +2,6 @@ module github.com/ethereum/go-ethereum
 
 go 1.19
 
-replace (
-	github.com/holiman/billy => /Users/karalabe/work/sources/github.com/holiman/billy
-)
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/VictoriaMetrics/fastcache v1.6.0
@@ -40,7 +36,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/go-bexpr v0.1.10
-	github.com/holiman/billy v0.0.0-20230616073924-97ff6efa2b93
+	github.com/holiman/billy v0.0.0-20230718173358-1c7e68d277a7
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.3
 	github.com/huin/goupnp v1.0.3
