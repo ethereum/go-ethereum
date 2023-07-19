@@ -949,11 +949,11 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 			// check for dependencies for block number > 4
 			if block.NumberU64() <= 4 {
-				if block.TxDependency() != nil {
+				if block.GetTxDependency() != nil {
 					b.Fatalf("dependency not nil")
 				}
 			} else {
-				deps := block.TxDependency()
+				deps := block.GetTxDependency()
 				if len(deps[0]) != 0 {
 					b.Fatalf("wrong dependency")
 				}
