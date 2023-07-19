@@ -200,8 +200,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'v' in transaction")
 		}
 		itx.V = (*big.Int)(dec.V)
-		if err := sanityCheckSignature(itx.V, itx.R, itx.S, true); err != nil {
-			return err
+		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, true); err != nil {
+				return err
+			}
 		}
 
 	case AccessListTxType:
@@ -253,8 +255,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return err
 		}
-		if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
-			return err
+		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
+				return err
+			}
 		}
 
 	case DynamicFeeTxType:
@@ -313,8 +317,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return err
 		}
-		if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
-			return err
+		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
+				return err
+			}
 		}
 
 	case BlobTxType:
@@ -393,8 +399,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if !ok {
 			return errors.New("'v' value overflows uint256")
 		}
-		if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
-			return err
+		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+			if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
+				return err
+			}
 		}
 
 	default:
