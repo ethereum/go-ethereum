@@ -35,7 +35,6 @@ jobs:
 
       - name: Make binaries
         run: |
-          git config --global url."https://${{ steps.generate-token.outputs.token }}:x-oauth-basic@github.com/DeBankDeFi".insteadOf "https://github.com/DeBankDeFi"
           make
 
       - name: Set env
