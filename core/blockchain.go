@@ -158,9 +158,11 @@ var defaultCacheConfig = &CacheConfig{
 type BlockchainLogger interface {
 	vm.EVMLogger
 	state.StateLogger
-	OnBlockStart(*types.Block)
-	OnBlockEnd(td *big.Int, err error)
-	OnGenesisBlock(*types.Block, GenesisAlloc)
+	// OnBlockStart is called before executing `block`.
+	// `td` is the total difficulty prior to `block`.
+	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
+	OnBlockEnd(err error)
+	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -1761,7 +1763,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+					config := bc.vmConfig
+					config.Tracer = nil
+
+					bc.prefetcher.Prefetch(followup, throwaway, config, &followupInterrupt)
 
 					blockPrefetchExecuteTimer.Update(time.Since(start))
 					if followupInterrupt.Load() {
@@ -1775,14 +1780,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		pstart := time.Now()
 
 		if bc.logger != nil {
-			bc.logger.OnBlockStart(block)
+			td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
 		}
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
 			if bc.logger != nil {
-				bc.logger.OnBlockEnd(new(big.Int), err)
+				bc.logger.OnBlockEnd(err)
 			}
 			return it.index, err
 		}
@@ -1793,7 +1799,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
 			if bc.logger != nil {
-				bc.logger.OnBlockEnd(new(big.Int), err)
+				bc.logger.OnBlockEnd(err)
 			}
 			return it.index, err
 		}
@@ -1830,7 +1836,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		followupInterrupt.Store(true)
 		if err != nil {
 			if bc.logger != nil {
-				bc.logger.OnBlockEnd(new(big.Int), err)
+				bc.logger.OnBlockEnd(err)
 			}
 			return it.index, err
 		}
@@ -1852,9 +1858,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		stats.report(chain, it.index, dirty, setHead)
 
 		if bc.logger != nil {
-			td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			td.Add(td, block.Difficulty())
-			bc.logger.OnBlockEnd(td, nil)
+			bc.logger.OnBlockEnd(nil)
 		}
 
 		if !setHead {
