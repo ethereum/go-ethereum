@@ -17,6 +17,7 @@
 package blobpool
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
@@ -672,7 +673,8 @@ func TestOpenHeap(t *testing.T) {
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
 
-	// Insert a few transactions from a few accounts
+	// Insert a few transactions from a few accounts. To remove randomness from
+	// the heap oinitialization, use a determinsitic account/tx/priority ordering.
 	var (
 		key1, _ = crypto.GenerateKey()
 		key2, _ = crypto.GenerateKey()
@@ -681,8 +683,18 @@ func TestOpenHeap(t *testing.T) {
 		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
-
-		tx1 = makeTx(0, 1, 1000, 100, key1)
+	)
+	if bytes.Compare(addr1[:], addr2[:]) > 0 {
+		key1, addr1, key2, addr2 = key2, addr2, key1, addr1
+	}
+	if bytes.Compare(addr1[:], addr3[:]) > 0 {
+		key1, addr1, key3, addr3 = key3, addr3, key1, addr1
+	}
+	if bytes.Compare(addr2[:], addr3[:]) > 0 {
+		key2, addr2, key3, addr3 = key3, addr3, key2, addr2
+	}
+	var (
+		tx1 = makeTx(0, 1, 1000, 90, key1)
 		tx2 = makeTx(0, 1, 800, 70, key2)
 		tx3 = makeTx(0, 1, 1500, 110, key3)
 
