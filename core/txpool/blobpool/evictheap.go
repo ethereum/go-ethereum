@@ -121,7 +121,7 @@ func (h *evictHeap) Push(x any) {
 // Pop implements heap.Interface, removing and returning the last element of the
 // heap.
 //
-// Note, use `heap.Pop`, not `priceheap.Pop`. This method is used by Go's heap,
+// Note, use `heap.Pop`, not `evictHeap.Pop`. This method is used by Go's heap,
 // to provide the functionality, it does not embed it.
 func (h *evictHeap) Pop() any {
 	// Remove the last element from the heap

@@ -949,6 +949,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					// Clear out the dropped transactions from the index
 					if i > 0 {
 						p.index[addr] = txs[:i]
+						heap.Fix(p.evict, p.evict.index[addr])
 					} else {
 						delete(p.index, addr)
 						delete(p.spent, addr)
@@ -1164,6 +1165,11 @@ func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kz
 		offset = int(tx.Nonce() - next)
 		newacc = false
 	)
+	var oldEvictionExecFeeJumps, oldEvictionBlobFeeJumps float64
+	if txs, ok := p.index[from]; ok {
+		oldEvictionExecFeeJumps = txs[len(txs)-1].evictionExecFeeJumps
+		oldEvictionBlobFeeJumps = txs[len(txs)-1].evictionBlobFeeJumps
+	}
 	if len(p.index[from]) > offset {
 		// Transaction replaces a previously queued one
 		prev := p.index[from][offset]
@@ -1193,12 +1199,8 @@ func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kz
 	// Recompute the rolling eviction fields. In case of a replacement, this will
 	// recompute all subsequent fields. In case of an append, this will only do
 	// the fresh calculation.
-	var (
-		txs = p.index[from]
+	txs := p.index[from]
 
-		oldEvictionExecFeeJumps = txs[len(txs)-1].evictionExecFeeJumps
-		oldEvictionBlobFeeJumps = txs[len(txs)-1].evictionBlobFeeJumps
-	)
 	for i := offset; i < len(txs); i++ {
 		// The first transaction will always use itself
 		if i == 0 {
@@ -1225,8 +1227,7 @@ func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kz
 	// Update the eviction heap with the new information:
 	//   - If the transaction is from a new account, add it to the heap
 	//   - If the account had a singleton tx replaced, update the heap (new price caps)
-	//   - If the account had it's last tx updated or appended to, update heap iff lower than prev
-	//   - If the account had an internal tx updated, compare old tail price caps with new ones
+	//   - If the account has a transaction replaced or appended, update the heap if significantly changed
 	switch {
 	case newacc:
 		heap.Push(p.evict, from)
@@ -1234,17 +1235,9 @@ func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kz
 	case len(txs) == 1: // 1 tx and not a new acc, must be replacement
 		heap.Fix(p.evict, p.evict.index[from])
 
-	case offset == len(txs)-1: // either append or last tx replacement
-		evictionExecFeeDiff := txs[offset-1].evictionExecFeeJumps - txs[offset].evictionExecFeeJumps
-		evictionBlobFeeDiff := txs[offset-1].evictionBlobFeeJumps - txs[offset].evictionBlobFeeJumps
-
-		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 { // no need for math.Abs, monotonic decreasing
-			heap.Fix(p.evict, p.evict.index[from])
-		}
-
-	default: // no new account, no singleton tx, no last update; must be internal replacement
-		evictionExecFeeDiff := oldEvictionExecFeeJumps - txs[offset].evictionExecFeeJumps
-		evictionBlobFeeDiff := oldEvictionBlobFeeJumps - txs[offset].evictionBlobFeeJumps
+	default: // replacement or new append
+		evictionExecFeeDiff := oldEvictionExecFeeJumps - txs[len(txs)-1].evictionExecFeeJumps
+		evictionBlobFeeDiff := oldEvictionBlobFeeJumps - txs[len(txs)-1].evictionBlobFeeJumps
 
 		if math.Abs(evictionExecFeeDiff) > 0.001 || math.Abs(evictionBlobFeeDiff) > 0.001 { // need math.Abs, can go up and down
 			heap.Fix(p.evict, p.evict.index[from])
