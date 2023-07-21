@@ -1155,7 +1155,10 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.H
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-
 // commit states.
-func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+//
+// The associated block number of the state transition is also provided
+// for more chain context.
+func (s *StateDB) Commit(blockNumber uint64, deleteEmptyObjects bool) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1276,7 +1279,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			Storages:   s.storagesOrigin,
 			Incomplete: incomplete,
 		}
-		if err := s.db.TrieDB().Update(root, origin, nodes, set); err != nil {
+		if err := s.db.TrieDB().Update(root, origin, blockNumber, nodes, set); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
