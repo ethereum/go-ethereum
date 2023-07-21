@@ -107,10 +107,10 @@ func ipcEndpoint(ipcPath, datadir string) string {
 // but windows require pipes to sit in "\\.\pipe\". Therefore, to run several
 // nodes simultaneously, we need to distinguish between them, which we do by
 // the pipe filename instead of folder.
-var nextIPC = uint32(0)
+var nextIPC atomic.Uint32
 
 func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
-	ipcName := fmt.Sprintf("geth-%d.ipc", atomic.AddUint32(&nextIPC, 1))
+	ipcName := fmt.Sprintf("geth-%d.ipc", nextIPC.Add(1))
 	args = append([]string{"--networkid=42", "--port=0", "--authrpc.port", "0", "--ipcpath", ipcName}, args...)
 	t.Logf("Starting %v with rpc: %v", name, args)
 
