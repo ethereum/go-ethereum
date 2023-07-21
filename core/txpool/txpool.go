@@ -420,9 +420,7 @@ func (pool *TxPool) loop() {
 
 		// Handle stats reporting ticks
 		case <-report.C:
-			pool.mu.RLock()
 			pending, queued := pool.stats()
-			pool.mu.RUnlock()
 			stales := int(pool.priced.stales.Load())
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
@@ -566,9 +564,6 @@ func (pool *TxPool) Nonce(addr common.Address) uint64 {
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (pool *TxPool) Stats() (int, int) {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
 	return pool.stats()
 }
 
@@ -598,9 +593,6 @@ func (pool *TxPool) stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	pool.pendingMu.RLock()
 
 	pending := make(map[common.Address]types.Transactions, len(pool.pending))
@@ -610,9 +602,14 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	pool.pendingMu.RUnlock()
 
 	queued := make(map[common.Address]types.Transactions, len(pool.queue))
+
+	pool.mu.RLock()
+
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
+
+	pool.mu.RUnlock()
 
 	return pending, queued
 }
