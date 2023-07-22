@@ -101,12 +101,10 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 		return nil, err
 	}
 	if n != nil {
-		// Hit node in disk cache which resides in disk layer
 		dirtyHitMeter.Mark(1)
 		dirtyReadMeter.Mark(int64(len(n.Blob)))
 		return n.Blob, nil
 	}
-	// If we're in the disk layer, all diff layers missed
 	dirtyMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
@@ -144,9 +142,9 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	return nBlob, nil
 }
 
-// update returns a new diff layer on top with the given dirty node set.
-func (dl *diskLayer) update(stateRoot common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
-	return newDiffLayer(dl, stateRoot, id, nodes, states)
+// update returns a new diff layer on top with the given state set.
+func (dl *diskLayer) update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+	return newDiffLayer(dl, stateRoot, id, blockNumber, nodes, states)
 }
 
 // commit merges the given bottom-most diff layer into the node buffer
@@ -178,7 +176,9 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	}
 	rawdb.WriteStateID(dl.db.diskdb, bottom.root(), bottom.stateID())
 
-	// Persist the content in disk layer if there are too many nodes cached.
+	// Construct a new disk layer by merging the nodes from the provided
+	// diff layer, and flush the content in disk layer if there are too
+	// many nodes cached.
 	ndl := newDiskLayer(bottom.rootHash, bottom.id, dl.db, dl.buffer.commit(bottom.nodes))
 	err := ndl.buffer.flush(ndl.db.diskdb, ndl.db.cleans, ndl.id, force)
 	if err != nil {
@@ -187,12 +187,14 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	return ndl, nil
 }
 
-// revert applies the given reverse diff by reverting the disk layer
-// and return a newly constructed disk layer.
+// revert applies the given state history and return a reverted disk layer.
 func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer, error) {
 	if h.meta.root != dl.root() {
 		return nil, errUnexpectedHistory
 	}
+	// Reject if the provided state history is incomplete. It's due to
+	// a large construct SELF-DESTRUCT which can't be handled because
+	// of memory limitation.
 	if len(h.meta.incomplete) > 0 {
 		return nil, errors.New("incomplete state history")
 	}
@@ -219,7 +221,7 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 			return nil, err
 		}
 	} else {
-		// Reset the clean cache before mutating disk state.
+		// Reset the clean cache before mutating persistent state.
 		if dl.db.cleans != nil {
 			dl.db.cleans.Reset()
 		}
@@ -234,8 +236,8 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.buffer), nil
 }
 
-// setCacheSize sets the dirty cache size to the provided value.
-func (dl *diskLayer) setCacheSize(size int) error {
+// setBufferSize sets the node buffer size to the provided value.
+func (dl *diskLayer) setBufferSize(size int) error {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 

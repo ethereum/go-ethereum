@@ -102,7 +102,7 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 		current, exist := b.nodes[owner]
 		if !exist {
 			// Allocate a new map for the subset instead of claiming it directly
-			// from the passed one to avoid potential concurrent map read/write.
+			// from the passed map to avoid potential concurrent map read/write.
 			// The nodes belong to original diff layer are still accessible even
 			// after merging, thus the ownership of nodes map should still belong
 			// to original layer and any mutation on it should be prevented.
@@ -132,10 +132,9 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 }
 
 // revert is the reverse operation of commit. It also merges the provided nodes
-// into the nodebuffer, the difference is that the provided node set should roll
-// back the changes made by the last state transition. The provided nodes don't
-// belong to any live layer which are generated inflight, safe to take the ownership
-// if necessary.
+// into the nodebuffer, the difference is that the provided node set should
+// revert the changes made by the last state transition. The provided nodes don't
+// belong to any live layer, safe to take the ownership if necessary.
 func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error {
 	// Short circuit if no embedded state transition to revert.
 	if b.layers == 0 {
@@ -143,7 +142,7 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 	}
 	b.layers -= 1
 
-	// Reset the entire buffer is only single transition left.
+	// Reset the entire buffer is only a single transition left.
 	if b.layers == 0 {
 		b.reset()
 		return nil
@@ -164,7 +163,7 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 				// marked as dirty because of node collapse and expansion.
 				//
 				// In case of database rollback, don't panic if this "clean"
-				// node occurs which is not present in nodeBuffer.
+				// node occurs which is not present in buffer.
 				var nhash common.Hash
 				if owner == (common.Hash{}) {
 					_, nhash = rawdb.ReadAccountTrieNode(db, []byte(path))

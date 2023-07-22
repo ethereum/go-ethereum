@@ -49,7 +49,7 @@ type journalNode struct {
 }
 
 // journalNodes represents a list trie nodes belong to a single
-// contract or the main account trie.
+// account or the main trie.
 type journalNodes struct {
 	Owner common.Hash
 	Nodes []journalNode
@@ -93,7 +93,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 		return nil, errMissDiskRoot
 	}
 	// The journal is not matched with persistent state, discard them.
-	// It can happen that Geth crashes without persisting the journal.
+	// It can happen that geth crashes without persisting the journal.
 	if !bytes.Equal(root.Bytes(), diskRoot.Bytes()) {
 		return nil, fmt.Errorf("%w want %x got %x", errUnmatchedJournal, root, diskRoot)
 	}
@@ -102,7 +102,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Load all the layer diffs from the journal
+	// Load all the diff layers from the journal
 	head, err := db.loadDiffLayer(base, r)
 	if err != nil {
 		return nil, err
@@ -117,35 +117,46 @@ func (db *Database) loadLayers() layer {
 	_, root := rawdb.ReadAccountTrieNode(db.diskdb, nil)
 	root = types.TrieRootHash(root)
 
-	// Load the in-memory diff layers by resolving the journal
+	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
 	if err == nil {
 		return head
 	}
-	// Journal is not matched(or missing) with the in-disk state, discard it.
-	// Display log for discarding journal, but try to avoid showing useless
-	// information when the db is created from scratch.
+	// Journal is not matched(or missing) with the persistent state, discard
+	// it. Display log for discarding journal, but try to avoid showing
+	// useless information when the db is created from scratch.
 	if !(root == types.EmptyRootHash && errors.Is(err, errMissJournal)) {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
-	// Construct the entire layer tree with the single in-disk state.
+	// Return single layer with persistent state.
 	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, newNodeBuffer(db.bufferSize, nil, 0))
 }
 
-// loadDiskLayer reads the binary blob from the layer journal, reconstructing a new
-// disk layer on it.
+// loadDiskLayer reads the binary blob from the layer journal, reconstructing
+// a new disk layer on it.
 func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	// Resolve disk layer root
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
 		return nil, fmt.Errorf("load disk root: %v", err)
 	}
+	// Resolve the state id of disk layer, it can be different
+	// with the persistent id tracked in disk, the id distance
+	// is the number of transitions aggregated in disk layer.
+	var id uint64
+	if err := r.Decode(&id); err != nil {
+		return nil, fmt.Errorf("load state id: %v", err)
+	}
+	stored := rawdb.ReadPersistentStateID(db.diskdb)
+	if stored > id {
+		return nil, fmt.Errorf("invalid state id, stored %d resolved %d", stored, id)
+	}
 	// Resolve nodes cached in node buffer
 	var encoded []journalNodes
 	if err := r.Decode(&encoded); err != nil {
 		return nil, fmt.Errorf("load disk accounts: %v", err)
 	}
-	var nodes = make(map[common.Hash]map[string]*trienode.Node)
+	nodes := make(map[common.Hash]map[string]*trienode.Node)
 	for _, entry := range encoded {
 		subset := make(map[string]*trienode.Node)
 		for _, n := range entry.Nodes {
@@ -156,15 +167,6 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 			}
 		}
 		nodes[entry.Owner] = subset
-	}
-	// Resolve the state id of disk layer
-	var id uint64
-	if err := r.Decode(&id); err != nil {
-		return nil, fmt.Errorf("load state id: %v", err)
-	}
-	stored := rawdb.ReadPersistentStateID(db.diskdb)
-	if stored > id {
-		return nil, fmt.Errorf("invalid state id, stored %d resolved %d", stored, id)
 	}
 	// Calculate the internal state transitions by id difference.
 	base := newDiskLayer(root, id, db, newNodeBuffer(db.bufferSize, nodes, id-stored))
@@ -183,7 +185,11 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		}
 		return nil, fmt.Errorf("load diff root: %v", err)
 	}
-	// Read trie nodes from journal
+	var blockNumber uint64
+	if err := r.Decode(&blockNumber); err != nil {
+		return nil, fmt.Errorf("load block number: %v", err)
+	}
+	// Read in-memory trie nodes from journal
 	var encoded []journalNodes
 	if err := r.Decode(&encoded); err != nil {
 		return nil, fmt.Errorf("load diff nodes: %v", err)
@@ -228,11 +234,11 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		}
 		storages[jstorage.Account] = set
 	}
-	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, nodes, triestate.New(accounts, storages, incomplete)), r)
+	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, blockNumber, nodes, triestate.New(accounts, storages, incomplete)), r)
 }
 
-// Journal terminates any in-progress layer generation, also implicitly pushing
-// the progress into the database.
+// Journal marshals the un-flushed trie nodes along with layer meta data into
+// provided byte buffer.
 func (dl *diskLayer) journal(buffer *bytes.Buffer) error {
 	// Ensure the layer didn't get stale
 	if dl.isStale() {
@@ -242,7 +248,11 @@ func (dl *diskLayer) journal(buffer *bytes.Buffer) error {
 	if err := rlp.Encode(buffer, dl.rootHash); err != nil {
 		return err
 	}
-	// Step two, write all accumulated nodes into the journal
+	// Step two, write the corresponding state id into the journal
+	if err := rlp.Encode(buffer, dl.id); err != nil {
+		return err
+	}
+	// Step three, write all unwritten nodes into the journal
 	nodes := make([]journalNodes, 0, len(dl.buffer.nodes))
 	for owner, subset := range dl.buffer.nodes {
 		entry := journalNodes{Owner: owner}
@@ -252,10 +262,6 @@ func (dl *diskLayer) journal(buffer *bytes.Buffer) error {
 		nodes = append(nodes, entry)
 	}
 	if err := rlp.Encode(buffer, nodes); err != nil {
-		return err
-	}
-	// Step three, write the corresponding state id into the journal
-	if err := rlp.Encode(buffer, dl.id); err != nil {
 		return err
 	}
 	log.Debug("Journaled disk layer", "root", dl.rootHash, "nodes", len(dl.buffer.nodes))
@@ -276,7 +282,10 @@ func (dl *diffLayer) journal(buffer *bytes.Buffer) error {
 	if err := rlp.Encode(buffer, dl.rootHash); err != nil {
 		return err
 	}
-	// Write the accumulated nodes into buffer
+	if err := rlp.Encode(buffer, dl.blockNumber); err != nil {
+		return err
+	}
+	// Write the accumulated trie nodes into buffer
 	nodes := make([]journalNodes, 0, len(dl.nodes))
 	for owner, subset := range dl.nodes {
 		entry := journalNodes{Owner: owner}
@@ -312,6 +321,6 @@ func (dl *diffLayer) journal(buffer *bytes.Buffer) error {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return err
 	}
-	log.Debug("Journaled diff layer", "root", dl.rootHash, "parent", dl.parentLayer.root(), "nodes", len(dl.nodes))
+	log.Debug("Journaled diff layer", "root", dl.rootHash, "parent", dl.parentLayer.root(), "id", dl.id, "blockNumber", dl.blockNumber, "nodes", len(dl.nodes))
 	return nil
 }

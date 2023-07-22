@@ -65,7 +65,7 @@ import (
 const (
 	accountIndexSize = common.AddressLength + 13 // The length of encoded account index
 	storageIndexSize = common.HashLength + 5     // The length of encoded slot index
-	historyMetaSize  = 1 + 2*common.HashLength   // The length of fixed size part of meta object
+	historyMetaSize  = 9 + 2*common.HashLength   // The length of fixed size part of meta object
 
 	stateHistoryVersion = uint8(0) // initial version of state history structure.
 )
@@ -124,10 +124,11 @@ func (i *slotIndex) decode(blob []byte) {
 
 // meta describes the meta data of state history object.
 type meta struct {
-	version    uint8            // version tag of history object
-	parent     common.Hash      // prev-state root before the state transition
-	root       common.Hash      // post-state root after the state transition
-	incomplete []common.Address // list of address hashes whose storage set is incomplete
+	version     uint8            // version tag of history object
+	parent      common.Hash      // prev-state root before the state transition
+	root        common.Hash      // post-state root after the state transition
+	blockNumber uint64           // associated block number
+	incomplete  []common.Address // list of address whose storage set is incomplete
 }
 
 // encode packs the meta object into byte stream.
@@ -135,7 +136,8 @@ func (m *meta) encode() []byte {
 	buf := make([]byte, historyMetaSize+len(m.incomplete)*common.AddressLength)
 	buf[0] = m.version
 	copy(buf[1:1+common.HashLength], m.parent.Bytes())
-	copy(buf[1+common.HashLength:historyMetaSize], m.root.Bytes())
+	copy(buf[1+common.HashLength:1+2*common.HashLength], m.root.Bytes())
+	binary.BigEndian.PutUint64(buf[1+2*common.HashLength:historyMetaSize], m.blockNumber)
 	for i, h := range m.incomplete {
 		copy(buf[i*common.AddressLength+historyMetaSize:], h.Bytes())
 	}
@@ -157,7 +159,8 @@ func (m *meta) decode(blob []byte) error {
 		}
 		m.version = blob[0]
 		m.parent = common.BytesToHash(blob[1 : 1+common.HashLength])
-		m.root = common.BytesToHash(blob[1+common.HashLength : historyMetaSize])
+		m.root = common.BytesToHash(blob[1+common.HashLength : 1+2*common.HashLength])
+		m.blockNumber = binary.BigEndian.Uint64(blob[1+2*common.HashLength : historyMetaSize])
 		for pos := historyMetaSize; pos < len(blob); {
 			m.incomplete = append(m.incomplete, common.BytesToAddress(blob[pos:pos+common.AddressLength]))
 			pos += common.AddressLength
@@ -182,7 +185,7 @@ type history struct {
 }
 
 // newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, states *triestate.Set) *history {
+func newHistory(root common.Hash, parent common.Hash, blockNumber uint64, states *triestate.Set) *history {
 	var (
 		accountList []common.Address
 		storageList = make(map[common.Address][]common.Hash)
@@ -206,10 +209,11 @@ func newHistory(root common.Hash, parent common.Hash, states *triestate.Set) *hi
 
 	return &history{
 		meta: &meta{
-			version:    stateHistoryVersion,
-			incomplete: incomplete,
-			parent:     parent,
-			root:       root,
+			version:     stateHistoryVersion,
+			parent:      parent,
+			root:        root,
+			blockNumber: blockNumber,
+			incomplete:  incomplete,
 		},
 		accounts:    states.Accounts,
 		accountList: accountList,
@@ -450,7 +454,7 @@ func writeStateHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer, limit ui
 		err   error
 		n     int
 		start = time.Now()
-		h     = newHistory(dl.rootHash, dl.parent().root(), dl.states)
+		h     = newHistory(dl.rootHash, dl.parent().root(), dl.blockNumber, dl.states)
 	)
 	accountData, storageData, accountIndex, storageIndex := h.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))
@@ -469,7 +473,7 @@ func writeStateHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer, limit ui
 	historyDataSizeMeter.Mark(int64(dataSize))
 	historyIndexSizeMeter.Mark(int64(indexSize))
 	historyBuildTimeMeter.UpdateSince(start)
-	log.Debug("Stored state history", "id", dl.stateID(), "data", dataSize, "index", indexSize, "pruned", n, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Stored state history", "id", dl.stateID(), "blockNumber", dl.blockNumber, "data", dataSize, "index", indexSize, "pruned", n, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -481,7 +485,7 @@ func checkHistories(freezer *rawdb.ResettableFreezer, start, count uint64, check
 		if number > 10000 {
 			number = 10000 // split the big read into small chunks
 		}
-		blobs, err := rawdb.ReadStateHistoryMetaList(freezer, start, number, number*historyMetaSize)
+		blobs, err := rawdb.ReadStateHistoryMetaList(freezer, start, number)
 		if err != nil {
 			return err
 		}

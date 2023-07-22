@@ -189,8 +189,8 @@ func ReadStateHistoryMeta(db ethdb.AncientReaderOp, id uint64) []byte {
 // start position and count. Compute the position of state history in freezer by
 // minus one since the id of first state history starts from one(zero for initial
 // state).
-func ReadStateHistoryMetaList(db ethdb.AncientReaderOp, start uint64, count uint64, limit uint64) ([][]byte, error) {
-	return db.AncientRange(stateHistoryMeta, start-1, count, limit)
+func ReadStateHistoryMetaList(db ethdb.AncientReaderOp, start uint64, count uint64) ([][]byte, error) {
+	return db.AncientRange(stateHistoryMeta, start-1, count, 0)
 }
 
 // ReadStateAccountIndex retrieves the state root corresponding to the specified

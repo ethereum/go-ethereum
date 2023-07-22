@@ -115,7 +115,7 @@ func newTester(t *testing.T) *tester {
 			parent = obj.roots[len(obj.roots)-1]
 		}
 		root, nodes, states := obj.generate(parent)
-		if err := db.Update(root, parent, nodes, states); err != nil {
+		if err := db.Update(root, parent, uint64(i), nodes, states); err != nil {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 		obj.roots = append(obj.roots, root)

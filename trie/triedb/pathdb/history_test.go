@@ -49,7 +49,7 @@ func randomStateSet(n int) *triestate.Set {
 }
 
 func makeHistory() *history {
-	return newHistory(testutil.RandomHash(), types.EmptyRootHash, randomStateSet(3))
+	return newHistory(testutil.RandomHash(), types.EmptyRootHash, 0, randomStateSet(3))
 }
 
 func makeHistories(n int) []*history {
@@ -59,7 +59,7 @@ func makeHistories(n int) []*history {
 	)
 	for i := 0; i < n; i++ {
 		root := testutil.RandomHash()
-		h := newHistory(root, parent, randomStateSet(3))
+		h := newHistory(root, parent, uint64(i), randomStateSet(3))
 		parent = root
 		result = append(result, h)
 	}

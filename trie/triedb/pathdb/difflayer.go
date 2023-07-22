@@ -27,24 +27,25 @@ import (
 )
 
 // diffLayer represents a collection of modifications made to the in-memory tries
-// after running a block on top.
+// along with associated state changes after running a block on top.
 //
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
-	rootHash common.Hash                               // Root hash to which this layer diff belongs to
-	id       uint64                                    // Corresponding state id
-	nodes    map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
-	states   *triestate.Set                            // Associated state change set for building history
-	memory   uint64                                    // Approximate guess as to how much memory we use
+	rootHash    common.Hash                               // Root hash to which this layer diff belongs to
+	id          uint64                                    // Corresponding state id
+	blockNumber uint64                                    // Associated block number
+	nodes       map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
+	states      *triestate.Set                            // Associated state change set for building history
+	memory      uint64                                    // Approximate guess as to how much memory we use
 
 	parentLayer layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock        sync.RWMutex // Lock used to protect parent
 }
 
 // newDiffLayer creates a new diff on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func newDiffLayer(parent layer, root common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
 	var (
 		size  int64
 		count int
@@ -52,6 +53,7 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, nodes map[common.Ha
 	dl := &diffLayer{
 		rootHash:    root,
 		id:          id,
+		blockNumber: blockNumber,
 		nodes:       nodes,
 		states:      states,
 		parentLayer: parent,
@@ -69,7 +71,7 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, nodes map[common.Ha
 	dirtyWriteMeter.Mark(size)
 	diffLayerNodesMeter.Mark(int64(count))
 	diffLayerSizeMeter.Mark(int64(dl.memory))
-	log.Debug("Created new diff layer", "id", id, "nodes", count, "size", common.StorageSize(dl.memory))
+	log.Debug("Created new diff layer", "id", id, "blockNumber", blockNumber, "nodes", count, "size", common.StorageSize(dl.memory))
 	return dl
 }
 
@@ -138,8 +140,8 @@ func (dl *diffLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 
 // Update creates a new layer on top of the existing layer tree with the specified
 // data items.
-func (dl *diffLayer) update(stateRoot common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
-	return newDiffLayer(dl, stateRoot, id, nodes, states)
+func (dl *diffLayer) update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+	return newDiffLayer(dl, stateRoot, id, blockNumber, nodes, states)
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.

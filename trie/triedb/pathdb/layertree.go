@@ -86,7 +86,7 @@ func (tree *layerTree) len() int {
 }
 
 // add inserts a new layer into the tree if it can be linked to an existing old parent.
-func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, blockNumber uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -101,7 +101,7 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, nodes *trie
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
 	}
-	l := parent.update(root, parent.stateID()+1, nodes.Flatten(), states)
+	l := parent.update(root, parent.stateID()+1, blockNumber, nodes.Flatten(), states)
 
 	tree.lock.Lock()
 	tree.layers[l.rootHash] = l
@@ -196,8 +196,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	return nil
 }
 
-// bottom returns the bottom-most layer in this tree. The returned
-// layer can be diskLayer or nil if something corrupted.
+// bottom returns the bottom-most disk layer in this tree.
 func (tree *layerTree) bottom() *diskLayer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()

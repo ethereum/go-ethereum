@@ -55,7 +55,7 @@ type layer interface {
 	// the given dirty trie node set. The deleted trie nodes are also included.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	update(stateRoot common.Hash, id uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer
+	update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer
 
 	// journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the layer without
@@ -165,7 +165,7 @@ func (db *Database) Reader(root common.Hash) (layer, error) {
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
-func (db *Database) Update(root common.Hash, parentRoot common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parentRoot common.Hash, blockNumber uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -174,7 +174,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, nodes *trie
 	if db.readOnly {
 		return errSnapshotReadOnly
 	}
-	if err := db.tree.add(root, parentRoot, nodes, states); err != nil {
+	if err := db.tree.add(root, parentRoot, blockNumber, nodes, states); err != nil {
 		return err
 	}
 	// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -259,9 +259,8 @@ func (db *Database) Reset(root common.Hash) error {
 	if db.readOnly {
 		return errSnapshotReadOnly
 	}
-	root = types.TrieRootHash(root)
-
 	batch := db.diskdb.NewBatch()
+	root = types.TrieRootHash(root)
 	if root == types.EmptyRootHash {
 		// Empty state is requested as the target, nuke out
 		// the root node and leave all others as dangling.
@@ -274,11 +273,11 @@ func (db *Database) Reset(root common.Hash) error {
 			return fmt.Errorf("state is mismatched, local %x target %x", hash, root)
 		}
 	}
-	// Mark the disk layer as stale since state in disk is mutated.
+	// Mark the disk layer as stale before applying any mutation.
 	db.tree.bottom().markStale()
 
 	// Drop the stale state journal in persistent database
-	// and revert the head state indicator back to zero.
+	// and reset the persistent state id back to zero.
 	rawdb.DeleteTrieJournal(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
@@ -290,8 +289,7 @@ func (db *Database) Reset(root common.Hash) error {
 			return err
 		}
 	}
-	ndl := newDiskLayer(root, 0, db, newNodeBuffer(db.bufferSize, nil, 0))
-	db.tree.reset(ndl)
+	db.tree.reset(newDiskLayer(root, 0, db, newNodeBuffer(db.bufferSize, nil, 0)))
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
@@ -305,7 +303,7 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 
 	// Short circuit if rollback operation is not supported.
 	if db.readOnly || db.freezer == nil {
-		return errors.New("state revert is non-supported")
+		return errors.New("state rollback is non-supported")
 	}
 	// Short circuit if the target state is not recoverable.
 	root = types.TrieRootHash(root)
@@ -413,13 +411,13 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	return inited
 }
 
-// SetCacheSize sets the dirty cache size to the provided value(in mega-bytes).
-func (db *Database) SetCacheSize(size int) error {
+// SetBufferSize sets the node buffer size to the provided value(in mega-bytes).
+func (db *Database) SetBufferSize(size int) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	db.bufferSize = size * 1024 * 1024
-	return db.tree.bottom().setCacheSize(db.bufferSize)
+	return db.tree.bottom().setBufferSize(db.bufferSize)
 }
 
 // Scheme returns the node scheme used in the database.
