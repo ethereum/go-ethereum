@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/supplydelta"
+	"github.com/ethereum/go-ethereum/core/supply"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -1401,7 +1401,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if parent == nil {
 			log.Error("Failed to retrieve parent for supply delta", "err", err)
 		} else {
-			supplyDelta, err := supplydelta.SupplyDelta(block, parent, bc.stateCache.TrieDB(), bc.chainConfig)
+			supplyDelta, err := supply.Delta(block, parent, bc.stateCache.TrieDB(), bc.chainConfig)
 			if err != nil {
 				log.Error("Failed to record Ether supply delta", "err", err)
 			} else {

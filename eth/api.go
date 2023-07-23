@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/supplydelta"
+	"github.com/ethereum/go-ethereum/core/supply"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -97,7 +97,7 @@ func (api *EthereumAPI) SupplyDelta(ctx context.Context, from uint64) (*rpc.Subs
 		crawled := rawdb.ReadSupplyDelta(api.e.chainDb, block.NumberU64(), block.Hash())
 
 		// Calculate the subsidy from the block's contents
-		fixedReward, unclesReward, burn, withdrawals := supplydelta.Subsidy(block, config)
+		fixedReward, unclesReward, burn, withdrawals := supply.Subsidy(block, config)
 		_ = withdrawals
 
 		// Calculate the difference between the "calculated" and "crawled" supply delta
