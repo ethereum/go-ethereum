@@ -1169,19 +1169,19 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 //
 // This logic should not hold for local transactions, unless the local tracking
 // mechanism is disabled.
+
+// nolint : paralleltest
 func TestQueueTimeLimiting(t *testing.T) {
-	t.Parallel()
 	testQueueTimeLimiting(t, false)
 }
+
+// nolint : paralleltest
 func TestQueueTimeLimitingNoLocals(t *testing.T) {
-	t.Parallel()
 	testQueueTimeLimiting(t, true)
 }
 
-// nolint:gocognit
+// nolint:gocognit,thelper
 func testQueueTimeLimiting(t *testing.T, nolocals bool) {
-	t.Helper()
-
 	// Reduce the eviction interval to a testable amount
 	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
 	evictionInterval = time.Millisecond * 100
