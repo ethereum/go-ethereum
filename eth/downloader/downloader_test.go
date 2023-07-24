@@ -1926,11 +1926,14 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 			tester.newPeer("peer", protocol, chain.blocks[1:])
 
 			// Build the local chain segment if it's required
+			// nolint:govet
 			if c.local > 0 {
+				// nolint:govet
 				_, _ = tester.chain.InsertChain(chain.blocks[1 : c.local+1])
 			}
 
 			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+				// nolint:govet
 				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
 			}
 			select {

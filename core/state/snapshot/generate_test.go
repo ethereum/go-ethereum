@@ -189,6 +189,7 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 	}
 }
 
+// nolint:unparam
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
 	id := trie.StorageTrieID(stateRoot, owner, common.Hash{})
 
