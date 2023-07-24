@@ -1,12 +1,12 @@
 module github.com/ethereum/go-ethereum
 
-go 1.19
+go 1.20
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/BurntSushi/toml v1.2.0
 	github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d
-	github.com/JekaMas/workerpool v1.1.5
+	github.com/JekaMas/workerpool v1.1.8
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.1.1
@@ -151,6 +151,10 @@ require (
 require (
 	github.com/btcsuite/btcd v0.22.3 // indirect
 	github.com/gammazero/deque v0.2.1 // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.0.2 // indirect
+	github.com/xdg-go/stringprep v1.0.2 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/oauth2 v0.3.0 // indirect
 )
@@ -167,7 +171,7 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310 // indirect
-	github.com/aws/aws-sdk-go v1.29.15 // indirect
+	github.com/aws/aws-sdk-go v1.34.28 // indirect
 	github.com/bartekn/go-bip39 v0.0.0-20171116152956-a05967ea095d // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b // indirect
@@ -222,10 +226,8 @@ require (
 	github.com/tendermint/crypto v0.0.0-20191022145703-50d29ede1e15 // indirect
 	github.com/tendermint/go-amino v0.15.0 // indirect
 	github.com/tendermint/iavl v0.12.4 // indirect
-	github.com/tendermint/tendermint v0.32.7
+	github.com/tendermint/tendermint v0.32.10
 	github.com/tendermint/tm-db v0.2.0 // indirect
-	github.com/xdg/scram v1.0.3 // indirect
-	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/zclconf/go-cty v1.8.0 // indirect
 	github.com/zondax/hid v0.9.0 // indirect
 	go.mongodb.org/mongo-driver v1.3.0 // indirect
@@ -242,6 +244,8 @@ replace github.com/cosmos/cosmos-sdk => github.com/maticnetwork/cosmos-sdk v0.37
 
 replace github.com/tendermint/tendermint => github.com/maticnetwork/tendermint v0.26.0-dev0.0.20220923185258-3e7c7f86ce9f
 
-replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v0.2.18-0.20220922050621-c91d4ca1fa4f
+replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v0.4.0
 
 replace github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
+
+replace go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.5.1

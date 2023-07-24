@@ -815,8 +815,7 @@ func signer(c *cli.Context) error {
 		vhosts := utils.SplitAndTrim(c.String(utils.HTTPVirtualHostsFlag.Name))
 		cors := utils.SplitAndTrim(c.String(utils.HTTPCORSDomainFlag.Name))
 
-		srv := rpc.NewServer(0, 0)
-
+		srv := rpc.NewServer("", 0, 0)
 		err := node.RegisterApis(rpcAPI, []string{"account"}, srv)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)

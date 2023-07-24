@@ -39,6 +39,7 @@ func (s *Server) ServeListener(l net.Listener) error {
 
 		s.executionPool.Submit(context.Background(), func() error {
 			s.ServeCodec(NewCodec(conn), 0)
+			s.executionPool.processed.Add(1)
 			return nil
 		})
 	}

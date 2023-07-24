@@ -57,12 +57,17 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer(executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+func NewServer(service string, executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+	reportEpStats := true
+	if service == "" || service == "test" {
+		reportEpStats = false
+	}
+
 	server := &Server{
 		idgen:         randomIDGenerator(),
 		codecs:        make(map[ServerCodec]struct{}),
 		run:           1,
-		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout),
+		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
 	}
 
 	// Register the default service providing meta information about the RPC service such
@@ -185,6 +190,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 func (s *Server) Stop() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	// Stop the execution pool
+	s.executionPool.Stop()
 
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")

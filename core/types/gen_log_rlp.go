@@ -13,14 +13,11 @@ func (obj *rlpLog) EncodeRLP(_w io.Writer) error {
 	_tmp0 := w.List()
 	w.WriteBytes(obj.Address[:])
 	_tmp1 := w.List()
-
 	for _, _tmp2 := range obj.Topics {
 		w.WriteBytes(_tmp2[:])
 	}
-
 	w.ListEnd(_tmp1)
 	w.WriteBytes(obj.Data)
 	w.ListEnd(_tmp0)
-
 	return w.Flush()
 }

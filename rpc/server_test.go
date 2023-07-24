@@ -29,7 +29,7 @@ import (
 )
 
 func TestServerRegisterName(t *testing.T) {
-	server := NewServer(0, 0)
+	server := NewServer("test", 0, 0)
 	service := new(testService)
 
 	if err := server.RegisterName("test", service); err != nil {

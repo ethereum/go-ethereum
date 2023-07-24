@@ -150,7 +150,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 				return nil, err
 			}
 
-			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
+			validatorBytes := header.GetValidatorBytes(s.config)
 
 			// get validators from headers and use that for new validator set
 			newVals, _ := valset.ParseValidators(validatorBytes)

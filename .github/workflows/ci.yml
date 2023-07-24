@@ -29,7 +29,7 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.19.x
+            go-version: 1.20.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -98,7 +98,7 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.18.x
+            go-version: 1.20.x
 
         - name: Checkout matic-cli
           uses: actions/checkout@v3

@@ -13,7 +13,7 @@ jobs:
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - lint
       git:
@@ -28,7 +28,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -45,7 +45,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -62,7 +62,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -87,7 +87,7 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -145,7 +145,7 @@ jobs:
         - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
 
         # Install Go to allow building with
-        - curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.20.5.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -159,7 +159,7 @@ jobs:
     - stage: build
       if: type = push
       os: osx
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-osx
         - GO111MODULE=on
@@ -174,7 +174,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
@@ -185,7 +185,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
@@ -220,7 +220,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-purge
         - GO111MODULE=on
@@ -234,7 +234,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:

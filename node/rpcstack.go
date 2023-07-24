@@ -325,7 +325,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 
 	// Create RPC server and handler.
-	srv := rpc.NewServer(config.executionPoolSize, config.executionPoolRequestTimeout)
+	srv := rpc.NewServer("http", config.executionPoolSize, config.executionPoolRequestTimeout)
 	srv.SetRPCBatchLimit(h.RPCBatchLimit)
 
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
@@ -361,7 +361,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
 	// Create RPC server and handler.
-	srv := rpc.NewServer(config.executionPoolSize, config.executionPoolRequestTimeout)
+	srv := rpc.NewServer("ws", config.executionPoolSize, config.executionPoolRequestTimeout)
 	srv.SetRPCBatchLimit(h.RPCBatchLimit)
 
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {

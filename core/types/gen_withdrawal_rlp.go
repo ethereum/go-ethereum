@@ -16,6 +16,5 @@ func (obj *Withdrawal) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Address[:])
 	w.WriteUint64(obj.Amount)
 	w.ListEnd(_tmp0)
-
 	return w.Flush()
 }

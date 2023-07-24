@@ -25,12 +25,11 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   common.Address `json:"contractAddress"`
 		GasUsed           hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
-		EffectiveGasPrice *hexutil.Big   `json:"effectiveGasPrice,omitempty"`
+		EffectiveGasPrice *big.Int       `json:"effectiveGasPrice"`
 		BlockHash         common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big   `json:"blockNumber,omitempty"`
 		TransactionIndex  hexutil.Uint   `json:"transactionIndex"`
 	}
-
 	var enc Receipt
 	enc.Type = hexutil.Uint64(r.Type)
 	enc.PostState = r.PostState
@@ -41,11 +40,10 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.TxHash = r.TxHash
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = hexutil.Uint64(r.GasUsed)
-	enc.EffectiveGasPrice = (*hexutil.Big)(r.EffectiveGasPrice)
+	enc.EffectiveGasPrice = r.EffectiveGasPrice
 	enc.BlockHash = r.BlockHash
 	enc.BlockNumber = (*hexutil.Big)(r.BlockNumber)
 	enc.TransactionIndex = hexutil.Uint(r.TransactionIndex)
-
 	return json.Marshal(&enc)
 }
 
@@ -61,76 +59,58 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		TxHash            *common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   *common.Address `json:"contractAddress"`
 		GasUsed           *hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
-		EffectiveGasPrice *hexutil.Big    `json:"effectiveGasPrice,omitempty"`
+		EffectiveGasPrice *big.Int        `json:"effectiveGasPrice"`
 		BlockHash         *common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big    `json:"blockNumber,omitempty"`
 		TransactionIndex  *hexutil.Uint   `json:"transactionIndex"`
 	}
-
 	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-
 	if dec.Type != nil {
 		r.Type = uint8(*dec.Type)
 	}
-
 	if dec.PostState != nil {
 		r.PostState = *dec.PostState
 	}
-
 	if dec.Status != nil {
 		r.Status = uint64(*dec.Status)
 	}
-
 	if dec.CumulativeGasUsed == nil {
 		return errors.New("missing required field 'cumulativeGasUsed' for Receipt")
 	}
-
 	r.CumulativeGasUsed = uint64(*dec.CumulativeGasUsed)
-
 	if dec.Bloom == nil {
 		return errors.New("missing required field 'logsBloom' for Receipt")
 	}
-
 	r.Bloom = *dec.Bloom
-
 	if dec.Logs == nil {
 		return errors.New("missing required field 'logs' for Receipt")
 	}
-
 	r.Logs = dec.Logs
-
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionHash' for Receipt")
 	}
-
 	r.TxHash = *dec.TxHash
 	if dec.ContractAddress != nil {
 		r.ContractAddress = *dec.ContractAddress
 	}
-
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for Receipt")
 	}
-
 	r.GasUsed = uint64(*dec.GasUsed)
 	if dec.EffectiveGasPrice != nil {
-		r.EffectiveGasPrice = (*big.Int)(dec.EffectiveGasPrice)
+		r.EffectiveGasPrice = dec.EffectiveGasPrice
 	}
-
 	if dec.BlockHash != nil {
 		r.BlockHash = *dec.BlockHash
 	}
-
 	if dec.BlockNumber != nil {
 		r.BlockNumber = (*big.Int)(dec.BlockNumber)
 	}
-
 	if dec.TransactionIndex != nil {
 		r.TransactionIndex = uint(*dec.TransactionIndex)
 	}
-
 	return nil
 }

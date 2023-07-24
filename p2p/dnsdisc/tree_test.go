@@ -94,10 +94,9 @@ func TestParseEntry(t *testing.T) {
 		// Links
 		{
 			input: "enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
-			e: &linkEntry{
-				str:    "AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
-				domain: "nodes.example.org",
-				pubkey: &signingKeyForTesting.PublicKey,
+			e: &linkEntry{"AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
+				"nodes.example.org",
+				&signingKeyForTesting.PublicKey,
 			},
 		},
 		{

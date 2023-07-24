@@ -32,6 +32,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -51,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -655,9 +657,9 @@ func (w *worker) mainLoop(ctx context.Context) {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			if w.isRunning() {
-				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
-			}
+			//nolint:contextcheck
+			w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+
 		case req := <-w.getWorkCh:
 			block, fees, err := w.generateWork(req.ctx, req.params)
 			req.result <- &newPayloadResult{
@@ -725,7 +727,12 @@ func (w *worker) mainLoop(ctx context.Context) {
 					txs[acc] = append(txs[acc], tx)
 				}
 
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, cmath.FromBig(w.current.header.BaseFee))
+				var baseFee *uint256.Int
+				if w.current.header.BaseFee != nil {
+					baseFee = cmath.FromBig(w.current.header.BaseFee)
+				}
+
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, baseFee)
 				tcount := w.current.tcount
 
 				//nolint:contextcheck
@@ -1055,13 +1062,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 	var depsWg sync.WaitGroup
 
-	var EnableMVHashMap bool
-
-	if w.chainConfig.Bor.IsParallelUniverse(env.header.Number) {
-		EnableMVHashMap = true
-	} else {
-		EnableMVHashMap = false
-	}
+	EnableMVHashMap := false
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {
@@ -1209,9 +1210,14 @@ mainloop:
 	}
 
 	// nolint:nestif
-	if EnableMVHashMap {
+	if EnableMVHashMap && w.isRunning() {
 		close(chDeps)
 		depsWg.Wait()
+
+		var blockExtraData types.BlockExtraData
+
+		tempVanity := env.header.Extra[:types.ExtraVanityLength]
+		tempSeal := env.header.Extra[len(env.header.Extra)-types.ExtraSealLength:]
 
 		if len(mvReadMapList) > 0 {
 			tempDeps := make([][]uint64, len(mvReadMapList))
@@ -1237,14 +1243,32 @@ mainloop:
 				}
 			}
 
+			if err := rlp.DecodeBytes(env.header.Extra[types.ExtraVanityLength:len(env.header.Extra)-types.ExtraSealLength], &blockExtraData); err != nil {
+				log.Error("error while decoding block extra data", "err", err)
+				return err
+			}
+
 			if delayFlag {
-				env.header.TxDependency = tempDeps
+				blockExtraData.TxDependency = tempDeps
 			} else {
-				env.header.TxDependency = nil
+				blockExtraData.TxDependency = nil
 			}
 		} else {
-			env.header.TxDependency = nil
+			blockExtraData.TxDependency = nil
 		}
+
+		blockExtraDataBytes, err := rlp.EncodeToBytes(blockExtraData)
+		if err != nil {
+			log.Error("error while encoding block extra data: %v", err)
+			return err
+		}
+
+		env.header.Extra = []byte{}
+
+		env.header.Extra = append(tempVanity, blockExtraDataBytes...)
+
+		env.header.Extra = append(env.header.Extra, tempSeal...)
+
 	}
 
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -1554,7 +1578,12 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		var txs *types.TransactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.LocalTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			txs = types.NewTransactionsByPriceAndNonce(env.signer, localTxs, cmath.FromBig(env.header.BaseFee))
+			var baseFee *uint256.Int
+			if env.header.BaseFee != nil {
+				baseFee = cmath.FromBig(env.header.BaseFee)
+			}
+
+			txs = types.NewTransactionsByPriceAndNonce(env.signer, localTxs, baseFee)
 
 			tracing.SetAttributes(
 				span,
@@ -1577,7 +1606,12 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		var txs *types.TransactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.RemoteTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			txs = types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, cmath.FromBig(env.header.BaseFee))
+			var baseFee *uint256.Int
+			if env.header.BaseFee != nil {
+				baseFee = cmath.FromBig(env.header.BaseFee)
+			}
+
+			txs = types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, baseFee)
 
 			tracing.SetAttributes(
 				span,
