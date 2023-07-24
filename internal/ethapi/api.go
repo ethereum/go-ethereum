@@ -919,6 +919,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 }
 
 // ApplyMulticall overrides the fields of specified accounts into the given state.
+// TODO: consider MoveTo by address mapping
 func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.PrecompiledContracts) error {
 	if diff == nil {
 		return nil
@@ -947,6 +948,7 @@ func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.P
 				state.SetNonce(*account.MoveTo, state.GetNonce(addr))
 				state.SetCode(*account.MoveTo, state.GetCode(addr))
 				// Copy storage over
+				// TODO: Use snaps
 				state.ForEachStorage(addr, func(key, value common.Hash) bool {
 					state.SetState(*account.MoveTo, key, value)
 					return true
