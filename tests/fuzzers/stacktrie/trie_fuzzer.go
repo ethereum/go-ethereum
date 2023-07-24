@@ -176,7 +176,7 @@ func (f *fuzzer) fuzz() int {
 		panic(err)
 	}
 	if nodes != nil {
-		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes), nil)
+		dbA.Update(rootA, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false)

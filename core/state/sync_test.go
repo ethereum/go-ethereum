@@ -64,13 +64,13 @@ func makeTestState() (ethdb.Database, Database, common.Hash, []*testAccount) {
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
 				hash := crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j})
-				obj.SetState(sdb, hash, hash)
+				obj.SetState(hash, hash)
 			}
 		}
 		state.updateStateObject(obj)
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(false)
+	root, _ := state.Commit(0, false)
 
 	// Return the generated state
 	return db, sdb, root, accounts
