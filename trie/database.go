@@ -118,7 +118,7 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
-func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if db.config != nil && db.config.OnCommit != nil {
 		db.config.OnCommit(states)
 	}

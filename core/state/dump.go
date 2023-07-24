@@ -173,11 +173,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
-			account.Code = obj.Code(s.db)
+			account.Code = obj.Code()
 		}
 		if !conf.SkipStorage {
 			account.Storage = make(map[common.Hash]string)
-			tr, err := obj.getTrie(s.db)
+			tr, err := obj.getTrie()
 			if err != nil {
 				log.Error("Failed to load storage trie", "err", err)
 				continue

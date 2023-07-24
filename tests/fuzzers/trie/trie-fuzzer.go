@@ -170,7 +170,7 @@ func runRandTest(rt randTest) error {
 				return err
 			}
 			if nodes != nil {
-				if err := triedb.Update(hash, origin, trienode.NewWithNodeSet(nodes), nil); err != nil {
+				if err := triedb.Update(hash, origin, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 					return err
 				}
 			}
