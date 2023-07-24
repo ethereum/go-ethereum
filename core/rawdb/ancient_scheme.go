@@ -42,6 +42,7 @@ var chainFreezerNoSnappy = map[string]bool{
 	ChainFreezerBodiesTable:     false,
 	ChainFreezerReceiptTable:    false,
 	ChainFreezerDifficultyTable: true,
+	freezerBorReceiptTable:      false,
 }
 
 // The list of identifiers of ancient stores.

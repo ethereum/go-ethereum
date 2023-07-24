@@ -1169,19 +1169,19 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 //
 // This logic should not hold for local transactions, unless the local tracking
 // mechanism is disabled.
+
+// nolint : paralleltest
 func TestQueueTimeLimiting(t *testing.T) {
-	t.Parallel()
 	testQueueTimeLimiting(t, false)
 }
+
+// nolint : paralleltest
 func TestQueueTimeLimitingNoLocals(t *testing.T) {
-	t.Parallel()
 	testQueueTimeLimiting(t, true)
 }
 
-// nolint:gocognit
+// nolint:gocognit,thelper
 func testQueueTimeLimiting(t *testing.T, nolocals bool) {
-	t.Helper()
-
 	// Reduce the eviction interval to a testable amount
 	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
 	evictionInterval = time.Millisecond * 100
@@ -2383,7 +2383,7 @@ func TestDeduplication(t *testing.T) {
 
 	errs := pool.AddRemotesSync(firsts)
 
-	if len(errs) != 0 {
+	if len(errs) != len(firsts) {
 		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), 0)
 	}
 
@@ -2405,7 +2405,7 @@ func TestDeduplication(t *testing.T) {
 
 	// Try to add all of them now and ensure previous ones error out as knowns
 	errs = pool.AddRemotesSync(txs)
-	if len(errs) != 0 {
+	if len(errs) != len(txs) {
 		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), 0)
 	}
 

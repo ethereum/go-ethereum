@@ -135,15 +135,6 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	b.addTx(bc, vm.Config{}, tx)
-	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	b.txs = append(b.txs, tx)
-	b.receipts = append(b.receipts, receipt)
 }
 
 // AddTxWithVMConfig adds a transaction to the generated block. If no coinbase has

@@ -41,7 +41,14 @@
       "eip155Block": 10,
       "eip158Block": 10,
       "ethash": {},
-      "homesteadBlock": 0
+      "homesteadBlock": 0,
+      "bor": {
+        "validatorContract": "0x0000000000000000000000000000000000001000",
+        "stateReceiverContract": "0x0000000000000000000000000000000000001001",
+        "burntContract": {
+          "0": "0x00000000000000000000000000000000000000000"
+        }
+      }
     },
     "difficulty": "3509749784",
     "extraData": "0x4554482e45544846414e532e4f52472d4641313738394444",

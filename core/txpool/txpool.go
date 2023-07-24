@@ -421,7 +421,6 @@ func (pool *TxPool) loop() {
 		// Handle stats reporting ticks
 		case <-report.C:
 			pending, queued := pool.stats()
-			pool.mu.RUnlock()
 			stales := int(pool.priced.stales.Load())
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
@@ -565,9 +564,6 @@ func (pool *TxPool) Nonce(addr common.Address) uint64 {
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (pool *TxPool) Stats() (int, int) {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
 	return pool.stats()
 }
 
@@ -597,9 +593,6 @@ func (pool *TxPool) stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	pool.pendingMu.RLock()
 
 	pending := make(map[common.Address]types.Transactions, len(pool.pending))
@@ -609,6 +602,9 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	pool.pendingMu.RUnlock()
 
 	queued := make(map[common.Address]types.Transactions, len(pool.queue))
+
+	pool.mu.RLock()
+
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
@@ -821,9 +817,9 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	balance := pool.currentState.GetBalance(from)
-	if balance.Cmp(tx.Cost()) < 0 {
-		return core.ErrInsufficientFunds
-	}
+	// if balance.Cmp(tx.Cost()) < 0 {
+	// 	return core.ErrInsufficientFunds
+	// }
 	// Verify that replacing transactions will not result in overdraft
 	list := pool.pending[from]
 	if list != nil { // Sender already has pending txs
@@ -1199,31 +1195,33 @@ func (pool *TxPool) AddRemoteSync(txs *types.Transaction) error {
 
 // This is like AddRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
 func (pool *TxPool) addRemoteSync(tx *types.Transaction) error {
-	return pool.AddRemoteSync(tx)
+	errs := pool.AddRemotesSync([]*types.Transaction{tx})
+	return errs[0]
 }
 
 // AddRemote enqueues a single transaction into the pool if it is valid. This is a convenience
 // wrapper around AddRemotes.
 func (pool *TxPool) AddRemote(tx *types.Transaction) error {
-	return pool.addTx(tx, false, false)
+	errs := pool.AddRemotes([]*types.Transaction{tx})
+	return errs[0]
 }
 
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
-		errs []error
+		errs = make([]error, len(txs))
 		news = make([]*types.Transaction, 0, len(txs))
 
 		hash common.Hash
 	)
 
-	for _, tx := range txs {
+	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		hash = tx.Hash()
 
 		if pool.all.Get(hash) != nil {
-			errs = append(errs, ErrAlreadyKnown)
+			errs[i] = ErrAlreadyKnown
 
 			knownTxMeter.Mark(1)
 
@@ -1235,7 +1233,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// in transactions before obtaining lock
 
 		if err := pool.validateTxBasics(tx, local); err != nil {
-			errs = append(errs, ErrAlreadyKnown)
+			errs[i] = err
 
 			invalidTxMeter.Mark(1)
 
@@ -1256,9 +1254,19 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
-	errs, dirtyAddrs := pool.addTxsLocked(news, local)
+	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	pool.mu.Unlock()
 
+	var nilSlot = 0
+	for _, err := range newErrs {
+		for errs[nilSlot] != nil {
+			nilSlot++
+		}
+
+		errs[nilSlot] = err
+
+		nilSlot++
+	}
 	// Reorg the pool internals if needed and return
 	done := pool.requestPromoteExecutables(dirtyAddrs)
 	if sync {

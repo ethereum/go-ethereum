@@ -907,7 +907,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Assemble block
-	block := types.NewBlock(header, txs, nil, receipts, new(trie.Trie))
+	block := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 
 	// set state sync
 	bc := chain.(core.BorStateSyncer)

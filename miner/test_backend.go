@@ -5,19 +5,19 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts" // nolint:typecheck
-	"github.com/ethereum/go-ethereum/consensus/bor"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
 	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts" // nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
@@ -122,7 +122,7 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 
 	genesis := gspec.MustCommit(db)
 
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), &core.CacheConfig{TrieDirtyDisabled: true}, &gspec, nil, engine, vm.Config{}, nil, nil, nil)
+	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, &gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	txpool := txpool.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it

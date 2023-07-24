@@ -541,7 +541,8 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 		return nil, err
 	}
 
-	ret := make([]*Log, len(logs))
+	// nolint:prealloc
+	var ret []*Log
 	// Select tx logs from all block logs
 	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) >= t.index })
 	for ix < len(logs) && uint64(logs[ix].TxIndex) == t.index {

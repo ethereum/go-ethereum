@@ -189,8 +189,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		gpoParams.Default = config.Miner.GasPrice
 	}
 
-	ethereum.APIBackend.gpo = gasprice.NewOracle(ethereum.APIBackend, gpoParams)
-
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
 	if config.OverrideShanghai != nil {
@@ -257,6 +255,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	} else {
 		ethereum.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
 	}
+
+	ethereum.APIBackend.gpo = gasprice.NewOracle(ethereum.APIBackend, gpoParams)
 
 	if err != nil {
 		return nil, err
@@ -530,17 +530,17 @@ func (s *Ethereum) StartMining(threads int) error {
 
 				cli.Authorize(eb, wallet.SignData)
 			}
-		}
 
-		if bor, ok := s.engine.(*bor.Bor); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
+			if bor, ok := s.engine.(*bor.Bor); ok {
+				wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+				if wallet == nil || err != nil {
+					log.Error("Etherbase account unavailable locally", "err", err)
 
-				return fmt.Errorf("signer missing: %v", err)
+					return fmt.Errorf("signer missing: %v", err)
+				}
+
+				bor.Authorize(eb, wallet.SignData)
 			}
-
-			bor.Authorize(eb, wallet.SignData)
 		}
 
 		// If mining is started, we can disable the transaction rejection mechanism

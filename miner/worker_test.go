@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -45,38 +44,39 @@ import (
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
 
-func init() {
-	testTxPoolConfig = txpool.DefaultConfig
-	testTxPoolConfig.Journal = ""
-	ethashChainConfig = new(params.ChainConfig)
-	*ethashChainConfig = *params.TestChainConfig
-	cliqueChainConfig = new(params.ChainConfig)
-	*cliqueChainConfig = *params.TestChainConfig
-	cliqueChainConfig.Clique = &params.CliqueConfig{
-		Period: 10,
-		Epoch:  30000,
-	}
+// TODO(raneet10): Duplicate initialization from miner/test_backend.go . Recheck whether we need both
+// func init() {
+// 	testTxPoolConfig = txpool.DefaultConfig
+// 	testTxPoolConfig.Journal = ""
+// 	ethashChainConfig = new(params.ChainConfig)
+// 	*ethashChainConfig = *params.TestChainConfig
+// 	cliqueChainConfig = new(params.ChainConfig)
+// 	*cliqueChainConfig = *params.TestChainConfig
+// 	cliqueChainConfig.Clique = &params.CliqueConfig{
+// 		Period: 10,
+// 		Epoch:  30000,
+// 	}
 
-	signer := types.LatestSigner(params.TestChainConfig)
-	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		ChainID:  params.TestChainConfig.ChainID,
-		Nonce:    0,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	pendingTxs = append(pendingTxs, tx1)
+// 	signer := types.LatestSigner(params.TestChainConfig)
+// 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
+// 		ChainID:  params.TestChainConfig.ChainID,
+// 		Nonce:    0,
+// 		To:       &testUserAddress,
+// 		Value:    big.NewInt(1000),
+// 		Gas:      params.TxGas,
+// 		GasPrice: big.NewInt(params.InitialBaseFee),
+// 	})
+// 	pendingTxs = append(pendingTxs, tx1)
 
-	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
-		Nonce:    1,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	newTxs = append(newTxs, tx2)
-}
+// 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+// 		Nonce:    1,
+// 		To:       &testUserAddress,
+// 		Value:    big.NewInt(1000),
+// 		Gas:      params.TxGas,
+// 		GasPrice: big.NewInt(params.InitialBaseFee),
+// 	})
+// 	newTxs = append(newTxs, tx2)
+// }
 
 // newTestWorker creates a new test worker with the given parameters.
 // nolint:unparam
@@ -707,7 +707,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
@@ -735,9 +735,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 		txs = append(txs, tx)
 	}
 
-	if err := b.TxPool().AddRemotes(txs); err != nil {
-		t.Fatal(err)
-	}
+	b.TxPool().AddRemotes(txs)
 
 	// Start mining!
 	w.start()
@@ -763,7 +761,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
@@ -783,9 +781,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 		txs = append(txs, tx)
 	}
 
-	if err := b.TxPool().AddRemotes(txs); err != nil {
-		t.Fatal(err)
-	}
+	b.TxPool().AddRemotes(txs)
 
 	// Start mining!
 	w.start()

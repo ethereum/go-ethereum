@@ -63,7 +63,7 @@ func newTester(t *testing.T) *downloadTester {
 }
 
 // newTester creates a new downloader test mocker.
-func newTesterWithNotification(t *testing.T, _ func()) *downloadTester {
+func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	t.Helper()
 
 	freezer := t.TempDir()
@@ -95,7 +95,7 @@ func newTesterWithNotification(t *testing.T, _ func()) *downloadTester {
 	}
 
 	//nolint: staticcheck
-	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, nil, whitelist.NewService(10))
+	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, success, whitelist.NewService(10))
 
 	return tester
 }
@@ -1860,8 +1860,6 @@ func TestCheckpointEnforcement67Light(t *testing.T) {
 }
 
 func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
-	t.Parallel()
-
 	// Create a new tester with a particular hard coded checkpoint block
 	tester := newTester(t)
 	defer tester.terminate()
@@ -1901,7 +1899,6 @@ func TestBeaconSync66Snap(t *testing.T) {
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Helper()
-	t.Parallel()
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	var cases = []struct {

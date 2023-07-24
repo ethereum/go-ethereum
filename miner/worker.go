@@ -1678,7 +1678,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	}()
 
 	if !noempty && w.interruptCommitFlag {
-		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().TxHash)
+		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
 		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
 		// nolint : staticcheck
 		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)

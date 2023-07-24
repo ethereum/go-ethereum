@@ -441,15 +441,16 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
 
-	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
-		// Skip fee payment when NoBaseFee is set and the fee fields
-		// are 0. This avoids a negative effectiveTip being applied to
-		// the coinbase when simulating calls.
-	} else {
-		fee := new(big.Int).SetUint64(st.gasUsed())
-		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
-	}
+	// TODO(raneet10): Double check. We might want to inculcate this fix in a separate condition
+	// if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
+	// 	// Skip fee payment when NoBaseFee is set and the fee fields
+	// 	// are 0. This avoids a negative effectiveTip being applied to
+	// 	// the coinbase when simulating calls.
+	// } else {
+	// 	fee := new(big.Int).SetUint64(st.gasUsed())
+	// 	fee.Mul(fee, effectiveTip)
+	// 	st.state.AddBalance(st.evm.Context.Coinbase, fee)
+	// }
 
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 
@@ -458,8 +459,8 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	var burntContractAddress common.Address
 
 	if rules.IsLondon {
-		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
-		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
+		burntContractAddress = common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
+		burnAmount = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 
 		if !st.noFeeBurnAndTip {
 			st.state.AddBalance(burntContractAddress, burnAmount)

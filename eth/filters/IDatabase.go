@@ -26,7 +26,6 @@ type MockDatabaseMockRecorder struct {
 func NewMockDatabase(ctrl *gomock.Controller) *MockDatabase {
 	mock := &MockDatabase{ctrl: ctrl}
 	mock.recorder = &MockDatabaseMockRecorder{mock}
-
 	return mock
 }
 
@@ -41,7 +40,6 @@ func (m *MockDatabase) Ancient(arg0 string, arg1 uint64) ([]byte, error) {
 	ret := m.ctrl.Call(m, "Ancient", arg0, arg1)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -51,13 +49,27 @@ func (mr *MockDatabaseMockRecorder) Ancient(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ancient", reflect.TypeOf((*MockDatabase)(nil).Ancient), arg0, arg1)
 }
 
+// AncientDatadir mocks base method.
+func (m *MockDatabase) AncientDatadir() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AncientDatadir")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AncientDatadir indicates an expected call of AncientDatadir.
+func (mr *MockDatabaseMockRecorder) AncientDatadir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AncientDatadir", reflect.TypeOf((*MockDatabase)(nil).AncientDatadir))
+}
+
 // AncientRange mocks base method.
 func (m *MockDatabase) AncientRange(arg0 string, arg1, arg2, arg3 uint64) ([][]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AncientRange", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([][]byte)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -73,7 +85,6 @@ func (m *MockDatabase) AncientSize(arg0 string) (uint64, error) {
 	ret := m.ctrl.Call(m, "AncientSize", arg0)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -89,7 +100,6 @@ func (m *MockDatabase) Ancients() (uint64, error) {
 	ret := m.ctrl.Call(m, "Ancients")
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -104,7 +114,6 @@ func (m *MockDatabase) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -119,7 +128,6 @@ func (m *MockDatabase) Compact(arg0, arg1 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Compact", arg0, arg1)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -134,7 +142,6 @@ func (m *MockDatabase) Delete(arg0 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", arg0)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -150,7 +157,6 @@ func (m *MockDatabase) Get(arg0 []byte) ([]byte, error) {
 	ret := m.ctrl.Call(m, "Get", arg0)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -166,7 +172,6 @@ func (m *MockDatabase) Has(arg0 []byte) (bool, error) {
 	ret := m.ctrl.Call(m, "Has", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -182,7 +187,6 @@ func (m *MockDatabase) HasAncient(arg0 string, arg1 uint64) (bool, error) {
 	ret := m.ctrl.Call(m, "HasAncient", arg0, arg1)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -197,7 +201,6 @@ func (m *MockDatabase) MigrateTable(arg0 string, arg1 func([]byte) ([]byte, erro
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MigrateTable", arg0, arg1)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -213,7 +216,6 @@ func (m *MockDatabase) ModifyAncients(arg0 func(ethdb.AncientWriteOp) error) (in
 	ret := m.ctrl.Call(m, "ModifyAncients", arg0)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -228,7 +230,6 @@ func (m *MockDatabase) NewBatch() ethdb.Batch {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewBatch")
 	ret0, _ := ret[0].(ethdb.Batch)
-
 	return ret0
 }
 
@@ -243,7 +244,6 @@ func (m *MockDatabase) NewBatchWithSize(arg0 int) ethdb.Batch {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewBatchWithSize", arg0)
 	ret0, _ := ret[0].(ethdb.Batch)
-
 	return ret0
 }
 
@@ -258,7 +258,6 @@ func (m *MockDatabase) NewIterator(arg0, arg1 []byte) ethdb.Iterator {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewIterator", arg0, arg1)
 	ret0, _ := ret[0].(ethdb.Iterator)
-
 	return ret0
 }
 
@@ -274,7 +273,6 @@ func (m *MockDatabase) NewSnapshot() (ethdb.Snapshot, error) {
 	ret := m.ctrl.Call(m, "NewSnapshot")
 	ret0, _ := ret[0].(ethdb.Snapshot)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -289,7 +287,6 @@ func (m *MockDatabase) Put(arg0, arg1 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Put", arg0, arg1)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -300,11 +297,10 @@ func (mr *MockDatabaseMockRecorder) Put(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // ReadAncients mocks base method.
-func (m *MockDatabase) ReadAncients(arg0 func(ethdb.AncientReader) error) error {
+func (m *MockDatabase) ReadAncients(arg0 func(ethdb.AncientReaderOp) error) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadAncients", arg0)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -320,7 +316,6 @@ func (m *MockDatabase) Stat(arg0 string) (string, error) {
 	ret := m.ctrl.Call(m, "Stat", arg0)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -335,7 +330,6 @@ func (m *MockDatabase) Sync() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sync")
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -351,7 +345,6 @@ func (m *MockDatabase) Tail() (uint64, error) {
 	ret := m.ctrl.Call(m, "Tail")
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -366,7 +359,6 @@ func (m *MockDatabase) TruncateHead(arg0 uint64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TruncateHead", arg0)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
@@ -381,7 +373,6 @@ func (m *MockDatabase) TruncateTail(arg0 uint64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TruncateTail", arg0)
 	ret0, _ := ret[0].(error)
-
 	return ret0
 }
 
