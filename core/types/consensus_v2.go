@@ -112,6 +112,7 @@ func (e *ExtraFields_v2) EncodeToBytes() ([]byte, error) {
 
 type EpochSwitchInfo struct {
 	Penalties                  []common.Address
+	Standbynodes               []common.Address
 	Masternodes                []common.Address
 	EpochSwitchBlockInfo       *BlockInfo
 	EpochSwitchParentBlockInfo *BlockInfo

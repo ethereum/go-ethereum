@@ -62,13 +62,15 @@ type SignerTypes struct {
 }
 
 type MasternodesStatus struct {
-	Number         uint64
-	Round          types.Round
-	MasternodesLen int
-	Masternodes    []common.Address
-	PenaltyLen     int
-	Penalty        []common.Address
-	Error          error
+	Number          uint64
+	Round           types.Round
+	MasternodesLen  int
+	Masternodes     []common.Address
+	PenaltyLen      int
+	Penalty         []common.Address
+	StandbynodesLen int
+	Standbynodes    []common.Address
+	Error           error
 }
 
 type MessageStatus map[string]map[string]SignerTypes
@@ -144,14 +146,17 @@ func (api *API) GetMasternodesByNumber(number *rpc.BlockNumber) MasternodesStatu
 
 	masterNodes := api.XDPoS.EngineV2.GetMasternodes(api.chain, header)
 	penalties := api.XDPoS.EngineV2.GetPenalties(api.chain, header)
+	standbynodes := api.XDPoS.EngineV2.GetStandbynodes(api.chain, header)
 
 	info := MasternodesStatus{
-		Number:         header.Number.Uint64(),
-		Round:          round,
-		MasternodesLen: len(masterNodes),
-		Masternodes:    masterNodes,
-		PenaltyLen:     len(penalties),
-		Penalty:        penalties,
+		Number:          header.Number.Uint64(),
+		Round:           round,
+		MasternodesLen:  len(masterNodes),
+		Masternodes:     masterNodes,
+		PenaltyLen:      len(penalties),
+		Penalty:         penalties,
+		StandbynodesLen: len(standbynodes),
+		Standbynodes:    standbynodes,
 	}
 	return info
 }
