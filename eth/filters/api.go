@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -293,16 +294,7 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 	if from < 0 {
 		return errInvalidFromBlock
 	}
-	go func() {
-		// do historical sync first
-		_, err := api.histLogs(notifier, rpcSub, int64(from), crit)
-		if err != nil {
-			return
-		}
-		// then subscribe from the header
-		api.liveLogs(notifier, rpcSub, crit)
-	}()
-	return nil
+	return api.histLogs(notifier, rpcSub, int64(from), crit)
 }
 
 // liveLogs only retrieves live logs
@@ -334,76 +326,63 @@ func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit F
 }
 
 // histLogs retrieves the logs older than current header.
-func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from int64, crit FilterCriteria) (int64, error) {
-	// The original request ctx will be canceled as soon as the parent goroutine
-	// returns a subscription. Use a new context instead.
+func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from int64, crit FilterCriteria) error {
+	// Subscribe the Live logs
+	// if an ChainReorg occurred,
+	// we will first recv the old chain's deleted logs in descending order,
+	// and then the new chain's added logs in descending order
+	// see core/blockchain.go#reorg(oldHead *types.Header, newHead *types.Block) for more details
+	// if an reorg happened between `from` and `to`, we will need to think about some scenarios:
+	// 1. if a reorg occurs after the currently delivered block, then because this is happening in the future, has nothing to do with the current historical sync, we can just ignore it.
+	// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
 	var (
-		ctx, cancel = context.WithCancel(context.Background())
-		reorgLogsCh = make(chan []*types.Log)
+		liveLogs = make(chan []*types.Log)
+		histLogs = make(chan []*types.Log)
+		histErr  = make(chan error)
+		reorged  atomic.Bool
 	)
-	defer cancel()
+	liveLogsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), liveLogs)
+	if err != nil {
+		return err
+	}
 
-	for {
-		// Get the latest block header.
-		header := api.sys.backend.CurrentHeader()
-		if header == nil {
-			return 0, errors.New("unexpected error: no header block found")
-		}
-		head := header.Number.Int64()
-		if from >= head {
-			return head, nil
-		}
+	go func() {
+		histErr <- api.doHistLogs(from, crit, &reorged, histLogs)
+	}()
 
-		// Do historical sync beginning at `from` to head.
-		f := api.sys.NewRangeFilter(from, head, crit.Addresses, crit.Topics)
-		logChan, errChan := f.rangeLogsAsync(ctx)
-
-		// Subscribe the ChainReorg logs
-		// if an ChainReorg occurred,
-		// we will first recv the old chain's deleted logs in descending order,
-		// and then the new chain's added logs in descending order
-		// see core/blockchain.go#reorg(oldHead *types.Header, newHead *types.Block) for more details
-		// if an reorg happened between `from` and `to`, we will need to think about some scenarios:
-		// 1. if a reorg occurs after the currently delivered block, then because this is happening in the future, has nothing to do with the current historical sync, we can just ignore it.
-		// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
-		query := ethereum.FilterQuery{FromBlock: big.NewInt(from), ToBlock: big.NewInt(head), Addresses: crit.Addresses, Topics: crit.Topics}
-		reorgLogsSub, err := api.events.SubscribeLogs(query, reorgLogsCh)
-		if err != nil {
-			return 0, err
-		}
-
+	// Compose and notify the logs from liveLogs and histLogs
+	go func() {
 		var (
 			delivered  uint64
-			reorged    bool
 			reorgBlock uint64
+			liveOnly   bool
 		)
-	FORLOOP:
 		for {
 			select {
-			case <-notifier.Closed():
-				reorgLogsSub.Unsubscribe()
-				return 0, errConnectDropped
-			case err := <-rpcSub.Err(): // client send an unsubscribe request
-				reorgLogsSub.Unsubscribe()
-				return 0, err
-			case log := <-logChan:
-				// TODO: deliver all logs of the current block when we detect a reorg
-				if reorged {
-					logger.Debug("reorged, dropping log from old chain", "log", log)
-					cancel()
+			case err := <-histErr:
+				if err != nil {
+					liveLogsSub.Unsubscribe()
+					return
+				}
+				// else historical logs are all delivered, let's switch to live mode
+				liveOnly = true
+				histLogs = nil
+			case logs := <-liveLogs:
+				if len(logs) == 0 {
 					continue
 				}
-				delivered = log.BlockNumber
-				notifier.Notify(rpcSub.ID, &log)
-			case logs := <-reorgLogsCh:
-				if len(logs) == 0 {
+				if liveOnly {
+					for _, log := range logs {
+						log := log
+						notifier.Notify(rpcSub.ID, &log)
+					}
 					continue
 				}
 				if reorgBlock == 0 {
 					reorgBlock = logs[0].BlockNumber
-					reorged = reorgBlock <= delivered
+					reorged.Store(reorgBlock <= delivered)
 				}
-				if !reorged {
+				if !reorged.Load() {
 					continue
 				}
 				if logs[0].Removed {
@@ -423,11 +402,66 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 						notifier.Notify(rpcSub.ID, &log)
 					}
 				}
+			case logs := <-histLogs:
+				for _, log := range logs {
+					log := log
+					delivered = log.BlockNumber
+					notifier.Notify(rpcSub.ID, &log)
+				}
+			case <-rpcSub.Err(): // client send an unsubscribe request
+				liveLogsSub.Unsubscribe()
+				return
+			case <-notifier.Closed(): // connection dropped
+				liveLogsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return nil
+}
+
+// doHistLogs retrieves the logs older than current header.
+func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, reorged *atomic.Bool, histLogs chan<- []*types.Log) error {
+	// The original request ctx will be canceled as soon as the parent goroutine
+	// returns a subscription. Use a new context instead.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for {
+		// Get the latest block header.
+		header := api.sys.backend.CurrentHeader()
+		if header == nil {
+			return errors.New("unexpected error: no header block found")
+		}
+		head := header.Number.Int64()
+		if from >= head {
+			return nil
+		}
+
+		// Do historical sync beginning at `from` to head.
+		f := api.sys.NewRangeFilter(from, head, crit.Addresses, crit.Topics)
+		logsCh, errChan := f.rangeLogsAsync(ctx)
+
+	FORLOOP:
+		for {
+			select {
+			case log := <-logsCh:
+				// TODO: deliver all logs of the current block when we detect a reorg
+				if reorged.Load() {
+					logger.Debug("reorged, dropping log from old chain", "log", log)
+					cancel()
+					continue
+				}
+				histLogs <- []*types.Log{log}
 			case err := <-errChan:
 				// Range filter is done or error, let's also stop the reorgLogs subscribe
-				reorgLogsSub.Unsubscribe()
 				if err != nil {
-					return 0, err
+					if err != context.Canceled {
+						logger.Error("error while fetching historical logs", "err", err)
+						return err
+					}
+					return nil
 				}
 				break FORLOOP
 			}
