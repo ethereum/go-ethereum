@@ -596,8 +596,7 @@ func TestOutOfTurnSigning(t *testing.T) {
 	_bor.SetSpanner(spanner)
 	_bor.SetHeimdallClient(h)
 
-	db := init.ethereum.ChainDb()
-	block := init.genesis.ToBlock(db)
+	block := init.genesis.ToBlock()
 
 	setDifficulty := func(header *types.Header) {
 		if IsSprintStart(header.Number.Uint64()) {
