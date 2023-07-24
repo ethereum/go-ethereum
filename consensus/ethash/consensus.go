@@ -488,7 +488,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards.
 func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
 	// Accumulate any block and uncle rewards
-	accumulateRewards(chain.Config(), state, header, uncles)
+	applyRewards(chain.Config(), state, header, uncles)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -543,10 +543,19 @@ var (
 	big32 = big.NewInt(32)
 )
 
-// AccumulateRewards credits the coinbase of the given block with the mining
-// reward. The total reward consists of the static block reward and rewards for
-// included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+// applyRewards credits the coinbase of the given block with the mining reward.
+func applyRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	f := func(h *types.Header, amt *big.Int) {
+		state.AddBalance(h.Coinbase, amt)
+	}
+	AccumulateRewards(config, header, uncles, f, f)
+}
+
+// AccumulateRewards is a generic function that allows the caller to decide how
+// to apply rewards. The total reward consists of the static block reward and
+// rewards for included uncles. The coinbase of each uncle block is also
+// rewarded.
+func AccumulateRewards(config *params.ChainConfig, header *types.Header, uncles []*types.Header, accUncleReward, accTotalReward func(*types.Header, *big.Int)) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {
@@ -563,10 +572,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
+		accUncleReward(uncle, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
+	accTotalReward(header, reward)
 }

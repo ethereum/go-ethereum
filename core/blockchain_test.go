@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/supply"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -4339,5 +4340,83 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
+	}
+
+}
+
+func TestDelta(t *testing.T) {
+	var (
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		funds   = big.NewInt(params.Ether)
+		gspec   = &Genesis{
+			Config: params.AllEthashProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				// The address 0xAAAA self-destructs
+				aa: {
+					Code: []byte{
+						byte(vm.ADDRESS),
+						byte(vm.SELFDESTRUCT),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(41),
+				},
+			},
+		}
+	)
+
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+
+		// One transaction to 0xAAAA
+		txdata := &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     0,
+			To:        &aa,
+			Value:     common.Big1,
+			Gas:       50000,
+			GasFeeCap: newGwei(5),
+			GasTipCap: big.NewInt(2),
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+		b.AddWithdrawal(&types.Withdrawal{Amount: 1337})
+	})
+
+	var (
+		parent = gspec.ToBlock().Header()
+		block  = blocks[0]
+	)
+
+	got, err := supply.Delta(parent, block.Header(), trie.NewDatabase(db))
+	if err != nil {
+		t.Fatalf("failed to calculate delta: %v", err)
+	}
+
+	// Calculate delta, w/o self-destructs
+	coinbaseReward, _, burn, withdrawals := supply.Subsidy(block, gspec.Config)
+
+	want := new(big.Int)
+	want.Add(want, coinbaseReward)
+	want.Add(want, withdrawals)
+	want.Sub(want, burn)
+
+	// Now account for self-destructed amount.
+	want.Sub(want, big.NewInt(42))
+
+	if want.Cmp(got) != 0 {
+		t.Fatalf("incorrect delta calculated: want %d, got %d", want, got)
 	}
 }

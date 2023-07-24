@@ -1401,12 +1401,26 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		if parent == nil {
 			log.Error("Failed to retrieve parent for supply delta", "err", err)
 		} else {
-			supplyDelta, err := supply.Delta(block, parent, bc.stateCache.TrieDB(), bc.chainConfig)
+			start := time.Now()
+
+			supplyDelta, err := supply.Delta(parent, block.Header(), bc.stateCache.TrieDB())
 			if err != nil {
 				log.Error("Failed to record Ether supply delta", "err", err)
 			} else {
 				rawdb.WriteSupplyDelta(bc.db, block.NumberU64(), block.Hash(), supplyDelta)
 			}
+
+			// Calculate the block coinbaseReward based on chain rules and progression.
+			coinbaseReward, unclesReward, burn, withdrawals := supply.Subsidy(block, bc.chainConfig)
+
+			// Calculate the difference between the "calculated" and "crawled" supply delta.
+			diff := new(big.Int).Set(supplyDelta)
+			diff.Sub(diff, coinbaseReward)
+			diff.Sub(diff, unclesReward)
+			diff.Sub(diff, withdrawals)
+			diff.Add(diff, burn)
+
+			log.Info("Calculated supply delta for block", "number", block.Number(), "hash", block.Hash(), "supplydelta", supplyDelta, "coinbasereward", coinbaseReward, "unclesreward", unclesReward, "burn", burn, "withdrawals", withdrawals, "diff", diff, "elapsed", time.Since(start))
 		}
 	}
 	return nil

@@ -19,37 +19,31 @@ package supply
 import (
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// Delta calculates the Ether delta across two state tries. That is, the
+// Delta calculates the ether delta across two state tries. That is, the
 // issuance minus the ether destroyed.
-func Delta(block *types.Block, parent *types.Header, db *trie.Database, config *params.ChainConfig) (*big.Int, error) {
-	var (
-		supplyDelta = new(big.Int)
-		start       = time.Now()
-	)
-	// Open the two tries.
-	if block.ParentHash() != parent.Hash() {
-		return nil, fmt.Errorf("parent hash mismatch: have %s, want %s", block.ParentHash().Hex(), parent.Hash().Hex())
-	}
-	src, err := trie.New(trie.StateTrieID(parent.Root), db)
+func Delta(src, dst *types.Header, db *trie.Database) (*big.Int, error) {
+	// Open src and dst tries.
+	srcTrie, err := trie.New(trie.StateTrieID(src.Root), db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open source trie: %v", err)
 	}
-	dst, err := trie.New(trie.StateTrieID(block.Root()), db)
+	dstTrie, err := trie.New(trie.StateTrieID(dst.Root), db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open destination trie: %v", err)
 	}
+
+	delta := new(big.Int)
+
 	// Gather all the changes across from source to destination.
-	fwdDiffIt, _ := trie.NewDifferenceIterator(src.MustNodeIterator(nil), dst.MustNodeIterator(nil))
+	fwdDiffIt, _ := trie.NewDifferenceIterator(srcTrie.MustNodeIterator(nil), dstTrie.MustNodeIterator(nil))
 	fwdIt := trie.NewIterator(fwdDiffIt)
 
 	for fwdIt.Next() {
@@ -57,82 +51,55 @@ func Delta(block *types.Block, parent *types.Header, db *trie.Database, config *
 		if err := rlp.DecodeBytes(fwdIt.Value, acc); err != nil {
 			panic(err)
 		}
-		supplyDelta.Add(supplyDelta, acc.Balance)
+		delta.Add(delta, acc.Balance)
 	}
 	// Gather all the changes across from destination to source.
-	rewDiffIt, _ := trie.NewDifferenceIterator(dst.MustNodeIterator(nil), src.MustNodeIterator(nil))
-	rewIt := trie.NewIterator(rewDiffIt)
+	revDiffIt, _ := trie.NewDifferenceIterator(dstTrie.MustNodeIterator(nil), srcTrie.MustNodeIterator(nil))
+	revIt := trie.NewIterator(revDiffIt)
 
-	for rewIt.Next() {
+	for revIt.Next() {
 		acc := new(types.StateAccount)
-		if err := rlp.DecodeBytes(rewIt.Value, acc); err != nil {
+		if err := rlp.DecodeBytes(revIt.Value, acc); err != nil {
 			panic(err)
 		}
-		supplyDelta.Sub(supplyDelta, acc.Balance)
+		delta.Sub(delta, acc.Balance)
 	}
-	// Calculate the block fixedReward based on chain rules and progression.
-	fixedReward, unclesReward, burn, withdrawals := Subsidy(block, config)
 
-	// Calculate the difference between the "calculated" and "crawled" supply
-	// delta.
-	diff := new(big.Int).Set(supplyDelta)
-	diff.Sub(diff, fixedReward)
-	diff.Sub(diff, unclesReward)
-	diff.Add(diff, burn)
-
-	log.Info("Calculated supply delta for block", "number", block.Number(), "hash", block.Hash(), "supplydelta", supplyDelta, "fixedreward", fixedReward, "unclesreward", unclesReward, "burn", burn, "withdrawals", withdrawals, "diff", diff, "elapsed", time.Since(start))
-	return supplyDelta, nil
+	return delta, nil
 }
 
-// Subsidy calculates the block mining (fixed) and uncle subsidy as well as the
-// 1559 burn solely based on header fields. This method is a very accurate
-// approximation of the true supply delta, but cannot take into account Ether
-// burns via selfdestructs, so it will always be ever so slightly off.
-func Subsidy(block *types.Block, config *params.ChainConfig) (fixedReward *big.Int, unclesReward *big.Int, burn *big.Int, withdrawals *big.Int) {
-	// Calculate the block rewards based on chain rules and progression.
-	fixedReward = new(big.Int)
-	unclesReward = new(big.Int)
-	withdrawals = new(big.Int)
-
-	// Select the correct block reward based on chain progression.
-	if config.Ethash != nil {
-		if block.Difficulty().BitLen() != 0 {
-			fixedReward = ethash.FrontierBlockReward
-			if config.IsByzantium(block.Number()) {
-				fixedReward = ethash.ByzantiumBlockReward
-			}
-			if config.IsConstantinople(block.Number()) {
-				fixedReward = ethash.ConstantinopleBlockReward
-			}
+// Subsidy calculates the coinbase subsidy and uncle subsidy as well as the
+// EIP-1559 burn. This method is a very accurate approximation of the true
+// supply delta, but cannot take into account ether burns via selfdestructs, so
+// it will always be slightly off.
+func Subsidy(block *types.Block, config *params.ChainConfig) (*big.Int, *big.Int, *big.Int, *big.Int) {
+	var (
+		coinbaseReward = new(big.Int)
+		unclesReward   = new(big.Int)
+		withdrawals    = new(big.Int)
+	)
+	// If block is ethash, calculate the coinbase and uncle rewards.
+	if config.Ethash != nil && block.Difficulty().BitLen() != 0 {
+		accCoinbase := func(h *types.Header, amt *big.Int) {
+			coinbaseReward.Add(coinbaseReward, amt)
 		}
-		// Accumulate the rewards for included uncles.
-		var (
-			big8  = big.NewInt(8)
-			big32 = big.NewInt(32)
-			r     = new(big.Int)
-		)
-		for _, uncle := range block.Uncles() {
-			// Add the reward for the side blocks.
-			r.Add(uncle.Number, big8)
-			r.Sub(r, block.Number())
-			r.Mul(r, fixedReward)
-			r.Div(r, big8)
-			unclesReward.Add(unclesReward, r)
-
-			// Add the reward for accumulating the side blocks.
-			r.Div(fixedReward, big32)
-			unclesReward.Add(unclesReward, r)
+		accUncles := func(h *types.Header, amt *big.Int) {
+			unclesReward.Add(unclesReward, amt)
 		}
+		ethash.AccumulateRewards(config, block.Header(), block.Uncles(), accCoinbase, accUncles)
 	}
 	// Calculate the burn based on chain rules and progression.
-	burn = new(big.Int)
+	burn := new(big.Int)
 	if block.BaseFee() != nil {
 		burn = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	}
-
+	// Sum up withdrawals.
 	for _, w := range block.Withdrawals() {
-		withdrawals.Add(withdrawals, big.NewInt(int64(w.Amount)))
+		withdrawals.Add(withdrawals, newGwei(w.Amount))
 	}
+	return coinbaseReward, unclesReward, burn, withdrawals
+}
 
-	return fixedReward, unclesReward, burn, withdrawals
+func newGwei(n uint64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(int64(n)), big.NewInt(params.GWei))
 }
