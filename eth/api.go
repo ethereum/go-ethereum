@@ -82,42 +82,42 @@ func (api *EthereumAPI) SupplyDelta(ctx context.Context, from uint64) (*rpc.Subs
 
 	// Define an internal type for supply delta notifications
 	type supplyDeltaNotification struct {
-		Number       uint64      `json:"block"`
-		Hash         common.Hash `json:"hash"`
-		ParentHash   common.Hash `json:"parentHash"`
-		SupplyDelta  *big.Int    `json:"supplyDelta"`
-		FixedReward  *big.Int    `json:"fixedReward"`
-		UnclesReward *big.Int    `json:"unclesReward"`
-		Burn         *big.Int    `json:"burn"`
-		Destruct     *big.Int    `json:"destruct"`
+		Number      uint64      `json:"block"`
+		Hash        common.Hash `json:"hash"`
+		ParentHash  common.Hash `json:"parentHash"`
+		SupplyDelta *big.Int    `json:"supplyDelta"`
+		Reward      *big.Int    `json:"reward"`
+		Withdrawals *big.Int    `json:"withdrawals"`
+		Burn        *big.Int    `json:"burn"`
+		Destruct    *big.Int    `json:"destruct"`
 	}
 	// Define a method to convert a block into an supply delta notification
 	service := func(block *types.Block) {
 		// Retrieve the state-crawled supply delta - if available
 		crawled := rawdb.ReadSupplyDelta(api.e.chainDb, block.NumberU64(), block.Hash())
 
-		// Calculate the subsidy from the block's contents
-		fixedReward, unclesReward, burn, withdrawals := supply.Subsidy(block, config)
-		_ = withdrawals
+		// Calculate the issuance and burn from the block's contents
+		rewards, withdrawals := supply.Issuance(block, config)
+		burn := supply.Burn(block.Header())
 
 		// Calculate the difference between the "calculated" and "crawled" supply delta
 		var diff *big.Int
 		if crawled != nil {
 			diff = new(big.Int).Set(crawled)
-			diff.Sub(diff, fixedReward)
-			diff.Sub(diff, unclesReward)
+			diff.Sub(diff, rewards)
+			diff.Sub(diff, withdrawals)
 			diff.Add(diff, burn)
 		}
 		// Push the supply delta to the user
 		notifier.Notify(rpcSub.ID, &supplyDeltaNotification{
-			Number:       block.NumberU64(),
-			Hash:         block.Hash(),
-			ParentHash:   block.ParentHash(),
-			SupplyDelta:  crawled,
-			FixedReward:  fixedReward,
-			UnclesReward: unclesReward,
-			Burn:         burn,
-			Destruct:     diff,
+			Number:      block.NumberU64(),
+			Hash:        block.Hash(),
+			ParentHash:  block.ParentHash(),
+			SupplyDelta: crawled,
+			Reward:      rewards,
+			Withdrawals: withdrawals,
+			Burn:        burn,
+			Destruct:    diff,
 		})
 	}
 	go func() {
