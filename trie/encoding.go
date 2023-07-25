@@ -53,7 +53,7 @@ func hexToCompact(hex []byte) []byte {
 
 // hexToCompactInPlace places the compact key in input buffer, returning the length
 // needed for the representation
-func hexToCompactInPlace(hex []byte) int {
+func hexToCompactInPlace(hex []byte) []byte {
 	var (
 		hexLen    = len(hex) // length of the hex input
 		firstByte = byte(0)
@@ -77,7 +77,7 @@ func hexToCompactInPlace(hex []byte) int {
 		hex[bi] = hex[ni]<<4 | hex[ni+1]
 	}
 	hex[0] = firstByte
-	return binLen
+	return hex[:binLen]
 }
 
 func compactToHex(compact []byte) []byte {
