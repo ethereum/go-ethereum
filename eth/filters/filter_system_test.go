@@ -992,6 +992,9 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	expected = append(expected, liveLogs...)
 
 	// Calculate address balances
+	// We check with the balance instead of logs because there is a gap between the ChainReorg occurred and detected,
+	// so we can't fully control how many logs we'll receive.
+	// By checking the balance, we can test with the token transfer amount.
 	balanceDiffer := func(logs []*types.Log) map[common.Address]uint64 {
 		balances := make(map[common.Address]uint64)
 		for _, log := range logs {
