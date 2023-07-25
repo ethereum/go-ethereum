@@ -932,14 +932,14 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeTx := func(to int, value int, nonce int, b *core.BlockGen) *types.Transaction {
+	makeTx := func(to int, value int, b *core.BlockGen) *types.Transaction {
 		// transfer(address to, uint256 value)
 		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(to))).Hex()).String()[2:], common.BytesToHash([]byte{byte(value)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(nonce), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: b.TxNonce(addr), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
 		return tx
 	}
 	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+11, i, b)
+		tx := makeTx(i+1, i+11, b)
 		b.AddTx(tx)
 	})
 	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
@@ -961,14 +961,15 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 	newChain, _ := core.GenerateChain(genesis.Config, oldChain[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+103, 2+i, b)
+		tx := makeTx(i+1, i+103, b)
 		b.AddTx(tx)
 	})
+	logger.Info("oldChain/newChain", "oldChain", fmt.Sprintf("%d..%d", oldChain[0].Number(), oldChain[len(oldChain)-1].Number()), "newChain", fmt.Sprintf("%d..%d", newChain[0].Number(), newChain[len(newChain)-1].Number()))
 
 	// Generate pending block, logs for which
 	// will be sent to subscription feed.
 	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+21, i+6, b)
+		tx := makeTx(i+1, i+21, b)
 		b.AddTx(tx)
 	})
 	liveLogs := preceipts[0][0].Logs
@@ -1050,11 +1051,12 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 			select {
 			case log := <-notifier.c:
 				l := *log.(**types.Log)
+
 				fetched = append(fetched, l)
 				// We halt the sender by blocking Notify(). However sender will already prepare
 				// logs for next block and send as soon as Notify is released. So we do reorg
 				// one block earlier than we intend.
-				if l.BlockNumber == 2 {
+				if l.BlockNumber == 2 && l.Index == 0 {
 					// signal reorg
 					reorgSignal <- struct{}{}
 					// wait for reorg to happen
@@ -1066,11 +1068,11 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 		}
 
 		// for i, log := range fetched {
-		// 	logger.Debug("Flog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// 	logger.Debug("Flog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
 		// }
 		//
 		// for i, log := range expected {
-		// 	logger.Debug("Elog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// 	logger.Debug("Elog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
 		// }
 
 		fetchedBalance := balanceDiffer(fetched)
