@@ -380,13 +380,10 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					}
 					continue
 				}
-				// TODO: if reorg occured in more than once?
-				if reorgBlock == 0 {
-					reorgBlock = logs[0].BlockNumber
-					if reorgBlock <= delivered {
-						logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
-						reorged = true
-					}
+				reorgBlock = logs[0].BlockNumber
+				if reorgBlock <= delivered {
+					logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
+					reorged = true
 				}
 				if !reorged {
 					continue
