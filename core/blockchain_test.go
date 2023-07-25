@@ -4406,10 +4406,11 @@ func TestDelta(t *testing.T) {
 	}
 
 	// Calculate delta, w/o self-destructs
-	coinbaseReward, _, burn, withdrawals := supply.Subsidy(block, gspec.Config)
+	rewards, withdrawals := supply.Issuance(block, gspec.Config)
+	burn := supply.Burn(block.Header())
 
 	want := new(big.Int)
-	want.Add(want, coinbaseReward)
+	want.Add(want, rewards)
 	want.Add(want, withdrawals)
 	want.Sub(want, burn)
 

@@ -27,7 +27,7 @@ import (
 )
 
 // Supply crawls the state snapshot at a given header and gathers all the account
-// balances to sum into the total Ether supply.
+// balances to sum into the total ether supply.
 func Supply(header *types.Header, snaptree *snapshot.Tree) (*big.Int, error) {
 	accIt, err := snaptree.AccountIterator(header.Root, common.Hash{})
 	if err != nil {

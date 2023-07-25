@@ -39,7 +39,6 @@ func Delta(src, dst *types.Header, db *trie.Database) (*big.Int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open destination trie: %v", err)
 	}
-
 	delta := new(big.Int)
 
 	// Gather all the changes across from source to destination.
@@ -68,36 +67,35 @@ func Delta(src, dst *types.Header, db *trie.Database) (*big.Int, error) {
 	return delta, nil
 }
 
-// Subsidy calculates the coinbase subsidy and uncle subsidy as well as the
-// EIP-1559 burn. This method is a very accurate approximation of the true
-// supply delta, but cannot take into account ether burns via selfdestructs, so
-// it will always be slightly off.
-func Subsidy(block *types.Block, config *params.ChainConfig) (*big.Int, *big.Int, *big.Int, *big.Int) {
+// Issuance calculates the amount of ether issued by the protocol. There are
+// currently two ways for ether to be creates, the first is from block rewards
+// and the second is via withdrawals.
+func Issuance(block *types.Block, config *params.ChainConfig) (*big.Int, *big.Int) {
 	var (
-		coinbaseReward = new(big.Int)
-		unclesReward   = new(big.Int)
-		withdrawals    = new(big.Int)
+		rewards     = new(big.Int)
+		withdrawals = new(big.Int)
 	)
 	// If block is ethash, calculate the coinbase and uncle rewards.
 	if config.Ethash != nil && block.Difficulty().BitLen() != 0 {
-		accCoinbase := func(h *types.Header, amt *big.Int) {
-			coinbaseReward.Add(coinbaseReward, amt)
+		acc := func(h *types.Header, amt *big.Int) {
+			rewards.Add(rewards, amt)
 		}
-		accUncles := func(h *types.Header, amt *big.Int) {
-			unclesReward.Add(unclesReward, amt)
-		}
-		ethash.AccumulateRewards(config, block.Header(), block.Uncles(), accCoinbase, accUncles)
-	}
-	// Calculate the burn based on chain rules and progression.
-	burn := new(big.Int)
-	if block.BaseFee() != nil {
-		burn = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
+		ethash.AccumulateRewards(config, block.Header(), block.Uncles(), acc, acc)
 	}
 	// Sum up withdrawals.
 	for _, w := range block.Withdrawals() {
 		withdrawals.Add(withdrawals, newGwei(w.Amount))
 	}
-	return coinbaseReward, unclesReward, burn, withdrawals
+	return rewards, withdrawals
+}
+
+// Burn calculates the amount of ether burned due to EIP-1559 base fee.
+func Burn(header *types.Header) *big.Int {
+	burn := new(big.Int)
+	if header.BaseFee != nil {
+		burn = new(big.Int).Mul(new(big.Int).SetUint64(header.GasUsed), header.BaseFee)
+	}
+	return burn
 }
 
 func newGwei(n uint64) *big.Int {

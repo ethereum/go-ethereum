@@ -1411,16 +1411,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 
 			// Calculate the block coinbaseReward based on chain rules and progression.
-			coinbaseReward, unclesReward, burn, withdrawals := supply.Subsidy(block, bc.chainConfig)
+			rewards, withdrawals := supply.Issuance(block, bc.chainConfig)
+			burn := supply.Burn(block.Header())
 
 			// Calculate the difference between the "calculated" and "crawled" supply delta.
 			diff := new(big.Int).Set(supplyDelta)
-			diff.Sub(diff, coinbaseReward)
-			diff.Sub(diff, unclesReward)
+			diff.Sub(diff, rewards)
 			diff.Sub(diff, withdrawals)
 			diff.Add(diff, burn)
 
-			log.Info("Calculated supply delta for block", "number", block.Number(), "hash", block.Hash(), "supplydelta", supplyDelta, "coinbasereward", coinbaseReward, "unclesreward", unclesReward, "burn", burn, "withdrawals", withdrawals, "diff", diff, "elapsed", time.Since(start))
+			log.Info("Calculated supply delta for block", "number", block.Number(), "hash", block.Hash(), "supplydelta", supplyDelta, "rewards", rewards, "burn", burn, "withdrawals", withdrawals, "diff", diff, "elapsed", time.Since(start))
 		}
 	}
 	return nil
