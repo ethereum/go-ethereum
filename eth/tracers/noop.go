@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -73,7 +74,8 @@ func (*NoopTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
 func (*NoopTracer) CaptureTxEnd(receipt *types.Receipt) {}
 
-func (*NoopTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {}
+func (*NoopTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
+}
 
 func (*NoopTracer) OnNonceChange(a common.Address, prev, new uint64) {}
 

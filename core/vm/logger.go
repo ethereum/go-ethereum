@@ -45,3 +45,8 @@ type EVMLogger interface {
 	// Misc
 	OnGasConsumed(gas, amount uint64)
 }
+
+type EVMLoggerExtended interface {
+	CaptureCallStart(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureCallEnd(output []byte, gasUsed uint64, err error)
+}

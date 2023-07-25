@@ -36,7 +36,7 @@ func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
 	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, trie.NewDatabase(db)); err == nil {
+	if _, err := block.Commit(db, trie.NewDatabase(db), nil); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
 }

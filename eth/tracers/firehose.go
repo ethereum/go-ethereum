@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -373,7 +374,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	f.resetBlock()
 }
 
-func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int) {
+func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
 	f.ensureInBlockOrTrx()
 	// fmt.Fprintf(os.Stderr, "OnBalanceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
 }
