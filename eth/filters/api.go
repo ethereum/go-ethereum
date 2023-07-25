@@ -408,12 +408,11 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					}
 				}
 			case log := <-histLogs:
-				if reorged {
-					continue
+				// If ChainReorg is detected, we need to deliver the last block's full logs
+				if !reorged || delivered == log.BlockNumber {
+					delivered = log.BlockNumber
+					notifier.Notify(rpcSub.ID, &log)
 				}
-				// TODO: deliver the same block logs
-				delivered = log.BlockNumber
-				notifier.Notify(rpcSub.ID, &log)
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				liveLogsSub.Unsubscribe()
 				closeC <- struct{}{}
