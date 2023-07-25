@@ -70,6 +70,73 @@ const (
 	stateHistoryVersion = uint8(0) // initial version of state history structure.
 )
 
+// Each state history entire is consisted with five elements:
+//
+// # metadata
+//	This object contains a few meta fields, such as the associated state root,
+//  block number, version tag and so on. This object may contain an extra
+//  accountHash list which means the storage changes belong to these accounts
+//  are not complete due to large contract destruction. The incomplete history
+//  can not be used for rollback and serving archive state request.
+//
+// # account index
+//  This object contains some index information of account. For example, offset
+//  and length indicate the location of the data belonging to the account. Besides,
+//  storageOffset and storageNumber indicate the storage modification location
+//  belonging to the account.
+//
+//  The size of each account index is *fixed*, and all indexes are sorted
+//  lexicographically. Thus binary search can be performed to quickly locate a
+//  specific account.
+//
+// # account data
+//  Account data is a concatenated byte stream composed of all account data.
+//  The account data can be solved by the offset and length info indicated
+//  by corresponding account index.
+//
+//            fixed size
+//         ^             ^
+//        /               \
+//        +-----------------+-----------------+----------------+-----------------+
+//        | Account index 1 | Account index 2 |       ...      | Account index N |
+//        +-----------------+-----------------+----------------+-----------------+
+//        |
+//        |     length
+// offset |----------------+
+//        v                v
+//        +----------------+----------------+----------------+----------------+
+//        | Account data 1 | Account data 2 |       ...      | Account data N |
+//        +----------------+----------------+----------------+----------------+
+//
+// # storage index
+//  This object is similar with account index. It's also fixed size and contains
+//  the location info of storage slot data.
+//
+// # storage data
+//  Storage data is a concatenated byte stream composed of all storage slot data.
+//  The storage slot data can be solved by the location info indicated by
+//  corresponding account index and storage slot index.
+//
+///                    fixed size
+//                 ^             ^
+//                /               \
+//                +-----------------+-----------------+----------------+-----------------+
+//                | Account index 1 | Account index 2 |       ...      | Account index N |
+//                +-----------------+-----------------+----------------+-----------------+
+//                |
+//                |                    storage number
+// storage offset |-----------------------------------------------------+
+//                v                                                     v
+//                +-----------------+-----------------+-----------------+
+//                | storage index 1 | storage index 2 | storage index 3 |
+//                +-----------------+-----------------+-----------------+
+//                |     length
+//         offset |-------------+
+//                v             v
+//                +-------------+
+//                | slot data 1 |
+//                +-------------+
+
 // accountIndex describes the metadata belongs to an account.
 type accountIndex struct {
 	Address       common.Address // The address of account

@@ -205,7 +205,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 		ctx     = newCtx()
 		dirties = make(map[common.Hash]struct{})
 	)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		switch rand.Intn(opLen) {
 		case createAccountOp:
 			// account creation
