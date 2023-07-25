@@ -912,6 +912,42 @@ func makeTx(to int, value int, b *core.BlockGen) *types.Transaction {
 func i2h(i int) common.Hash            { return common.BigToHash(big.NewInt(int64(i))) }
 func a2h(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
 
+// calculateBalance calculates the address balances of all Transfer events
+// We check with the balance instead of logs because there is a gap between the ChainReorg occurred and detected,
+// so we can't fully control how many logs we'll receive.
+// By checking the balance, we can test with the token transfer amount.
+func calculateBalance(logs []*types.Log) map[common.Address]uint64 {
+	balances := make(map[common.Address]uint64)
+	for _, log := range logs {
+		log := log
+		from := common.BytesToAddress(log.Topics[1].Bytes())
+		to := common.BytesToAddress(log.Topics[2].Bytes())
+		amount := common.BytesToHash(log.Data).Big().Uint64()
+
+		if _, ok := balances[from]; !ok {
+			balances[from] = 0
+		}
+		if _, ok := balances[to]; !ok {
+			balances[to] = 0
+		}
+
+		if log.Removed { // revert
+			balances[from] += amount
+			balances[to] -= amount
+		} else {
+			balances[from] -= amount
+			balances[to] += amount
+		}
+	}
+	// Remove zero balances
+	for addr, balance := range balances {
+		if balance == 0 {
+			delete(balances, addr)
+		}
+	}
+	return balances
+}
+
 // TestLogsSubscriptionReorg tests that logs subscription works correctly in case of reorg.
 func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendingMaker func(i int, b *core.BlockGen), oldChainLen, newChainLen, forkAt, reorgAt int, expected []*types.Log) {
 	var (
@@ -973,42 +1009,7 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 
 	expected = append(expected, liveLogs...)
 
-	// Calculate address balances
-	// We check with the balance instead of logs because there is a gap between the ChainReorg occurred and detected,
-	// so we can't fully control how many logs we'll receive.
-	// By checking the balance, we can test with the token transfer amount.
-	balanceDiffer := func(logs []*types.Log) map[common.Address]uint64 {
-		balances := make(map[common.Address]uint64)
-		for _, log := range logs {
-			log := log
-			from := common.BytesToAddress(log.Topics[1].Bytes())
-			to := common.BytesToAddress(log.Topics[2].Bytes())
-			amount := common.BytesToHash(log.Data).Big().Uint64()
-
-			if _, ok := balances[from]; !ok {
-				balances[from] = 0
-			}
-			if _, ok := balances[to]; !ok {
-				balances[to] = 0
-			}
-
-			if log.Removed { // revert
-				balances[from] += amount
-				balances[to] -= amount
-			} else {
-				balances[from] -= amount
-				balances[to] += amount
-			}
-		}
-		// Remove zero balances
-		for addr, balance := range balances {
-			if balance == 0 {
-				delete(balances, addr)
-			}
-		}
-		return balances
-	}
-	expectedBalance := balanceDiffer(expected)
+	expectedBalance := calculateBalance(expected)
 
 	// Subscribe to logs
 	var (
@@ -1056,7 +1057,7 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 		// 	logger.Debug("Elog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
 		// }
 
-		fetchedBalance := balanceDiffer(fetched)
+		fetchedBalance := calculateBalance(fetched)
 		if len(fetchedBalance) != len(expectedBalance) {
 			errc <- fmt.Errorf("invalid number of balances, have %d, want %d", len(fetchedBalance), len(expectedBalance))
 			logger.Info("balance diff", "fetched", fetchedBalance, "expected", expectedBalance)
