@@ -932,10 +932,14 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
+	makeTx := func(to int, value int, nonce int, b *core.BlockGen) *types.Transaction {
 		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(to))).Hex()).String()[2:], common.BytesToHash([]byte{byte(value)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(nonce), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		return tx
+	}
+	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+11, i, b)
 		b.AddTx(tx)
 	})
 	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
@@ -957,19 +961,15 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 	newChain, _ := core.GenerateChain(genesis.Config, oldChain[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
-		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 103)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(2 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		tx := makeTx(i+1, i+103, 2+i, b)
 		b.AddTx(tx)
 	})
 
 	// Generate pending block, logs for which
 	// will be sent to subscription feed.
-	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
-		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 21)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(6 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
-		gen.AddTx(tx)
+	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, i+6, b)
+		b.AddTx(tx)
 	})
 	liveLogs := preceipts[0][0].Logs
 
