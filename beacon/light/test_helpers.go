@@ -17,8 +17,9 @@
 package light
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
-	"math/rand"
+	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
@@ -73,7 +74,7 @@ func GenerateTestCheckpoint(period uint64, committee *types.SerializedSyncCommit
 
 func makeBitmask(signerCount int) (bitmask [params.SyncCommitteeBitmaskSize]byte) {
 	for i := 0; i < params.SyncCommitteeSize; i++ {
-		if rand.Intn(params.SyncCommitteeSize-i) < signerCount {
+		if mrand.Intn(params.SyncCommitteeSize-i) < signerCount {
 			bitmask[i/8] += byte(1) << (i & 7)
 			signerCount--
 		}
