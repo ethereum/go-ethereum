@@ -366,6 +366,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					return
 				}
 				// Else historical logs are all delivered, let's switch to live mode
+				logger.Info("History logs delivery finished, and now enter into live mode", "delivered", delivered)
 				liveOnly = true
 				histLogs = nil
 			case logs := <-liveLogs:
@@ -441,7 +442,8 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 			return errors.New("unexpected error: no header block found")
 		}
 		head := header.Number.Int64()
-		if from >= head {
+		if from > head {
+			logger.Info("Finish historical sync", "from", from, "head", head)
 			return nil
 		}
 
@@ -459,7 +461,7 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 			case err := <-errChan:
 				// Range filter is done or error, let's also stop the reorgLogs subscribe
 				if err != nil {
-					logger.Error("error while fetching historical logs", "err", err)
+					logger.Error("Error while fetching historical logs", "err", err)
 					return err
 				}
 				break FORLOOP
