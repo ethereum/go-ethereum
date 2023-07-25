@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	logger "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -892,7 +893,7 @@ func TestLogsSubscription(t *testing.T) {
 	}
 }
 
-// TestLogsSubscription tests if a rpc subscription receives the correct logs
+// TestLogsSubscriptionReorg tests the behavior of the filter system when a reorganization occurs.
 func TestLogsSubscriptionReorg(t *testing.T) {
 	t.Parallel()
 
@@ -931,7 +932,7 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocks, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
+	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
 		// transfer(address to, uint256 value)
 		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
@@ -951,41 +952,78 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	bc.SubscribeLogsEvent(bcLogsFeed)
 	bc.SubscribeRemovedLogsEvent(bcRmLogsFeed)
 
-	_, err = bc.InsertChain(blocks)
+	_, err = bc.InsertChain(oldChain)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reorgChain, _ := core.GenerateChain(genesis.Config, blocks[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
+	newChain, _ := core.GenerateChain(genesis.Config, oldChain[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
 		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 1000)}).String()[2:])
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 103)}).String()[2:])
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(2 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
 		b.AddTx(tx)
 	})
 
 	// Generate pending block, logs for which
 	// will be sent to subscription feed.
-	_, preceipts := core.GenerateChain(genesis.Config, reorgChain[len(reorgChain)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
 		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 21)}).String()[2:])
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(6 + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
 		gen.AddTx(tx)
 	})
 	liveLogs := preceipts[0][0].Logs
 
 	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
+	a2h := func(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
+	c2h := func(bs []*types.Block, i int) common.Hash { return bs[i].Transactions()[0].Hash() }
 	expected := []*types.Log{
 		// Original chain until block 3
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, BlockHash: blocks[0].Hash(), TxHash: blocks[0].Transactions()[0].Hash()},
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, BlockHash: blocks[1].Hash(), TxHash: blocks[1].Transactions()[0].Hash()},
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, BlockHash: oldChain[0].Hash(), TxHash: c2h(oldChain, 0)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, BlockHash: oldChain[1].Hash(), TxHash: c2h(oldChain, 1)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: oldChain[2].Hash(), TxHash: c2h(oldChain, 2)},
 		// Removed log for block 3
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash(), Removed: true},
-		// New logs for 3 onwards
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(3)}, Data: i2h(1003).Bytes(), BlockNumber: 3, BlockHash: reorgChain[0].Hash(), TxHash: reorgChain[0].Transactions()[0].Hash()},
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(4)}, Data: i2h(1004).Bytes(), BlockNumber: 4, BlockHash: reorgChain[1].Hash(), TxHash: reorgChain[1].Transactions()[0].Hash()},
-		{Address: contract, Topics: []common.Hash{topic, common.HexToHash(addr.Hex()), i2h(5)}, Data: i2h(1005).Bytes(), BlockNumber: 5, BlockHash: reorgChain[2].Hash(), TxHash: reorgChain[2].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: oldChain[2].Hash(), TxHash: c2h(oldChain, 2), Removed: true},
+		// New logs for 4 onwards
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, BlockHash: newChain[0].Hash(), TxHash: c2h(newChain, 0)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, BlockHash: newChain[1].Hash(), TxHash: c2h(newChain, 1)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, BlockHash: newChain[2].Hash(), TxHash: c2h(newChain, 2)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, BlockHash: newChain[3].Hash(), TxHash: c2h(newChain, 3)},
 	}
 	expected = append(expected, liveLogs...)
+
+	// Calculate address balances
+	balanceDiffer := func(logs []*types.Log) map[common.Address]uint64 {
+		balances := make(map[common.Address]uint64)
+		for _, log := range logs {
+			log := log
+			from := common.BytesToAddress(log.Topics[1].Bytes())
+			to := common.BytesToAddress(log.Topics[2].Bytes())
+			amount := common.BytesToHash(log.Data).Big().Uint64()
+
+			if _, ok := balances[from]; !ok {
+				balances[from] = 0
+			}
+			if _, ok := balances[to]; !ok {
+				balances[to] = 0
+			}
+
+			if log.Removed { // revert
+				balances[from] += amount
+				balances[to] -= amount
+			} else {
+				balances[from] -= amount
+				balances[to] += amount
+			}
+		}
+		// Remove zero balances
+		for addr, balance := range balances {
+			if balance == 0 {
+				delete(balances, addr)
+			}
+		}
+		return balances
+	}
+	expectedBalance := balanceDiffer(expected)
 
 	// Subscribe to logs
 	var (
@@ -1024,22 +1062,36 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 			}
 		}
 
-		if len(fetched) != len(expected) {
-			errc <- fmt.Errorf("invalid number of logs, want %d log(s), got %d", len(expected), len(fetched))
+		fetchedBalance := balanceDiffer(fetched)
+
+		for i, log := range fetched {
+			logger.Info("Flog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		}
+
+		for i, log := range expected {
+			logger.Info("Elog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		}
+		if len(fetchedBalance) != len(expectedBalance) {
+			errc <- fmt.Errorf("invalid number of balances, have %d, want %d", len(fetchedBalance), len(expectedBalance))
+			logger.Info("balance diff", "fetched", fetchedBalance, "expected", expectedBalance)
 			return
 		}
 
-		for l := range fetched {
-			have, want := fetched[l], expected[l]
-			if !reflect.DeepEqual(have, want) {
-				errc <- fmt.Errorf("invalid log on index %d have: %+v want: %+v\n", l, have, want)
-				return
+		diffBalance := make(map[common.Address]struct{ have, want uint64 })
+		for addr, balance := range expectedBalance {
+			if fetchedBalance[addr] != balance {
+				diffBalance[addr] = struct{ have, want uint64 }{fetchedBalance[addr], balance}
 			}
 		}
+		if len(diffBalance) > 0 {
+			errc <- fmt.Errorf("invalid balance detected: %+v\n", diffBalance)
+			return
+		}
+
 		errc <- nil
 	}()
 	<-reorgSignal
-	if n, err := bc.InsertChain(reorgChain); err != nil {
+	if n, err := bc.InsertChain(newChain); err != nil {
 		t.Fatalf("failed to insert forked chain at %d: %v", n, err)
 	}
 	reorgSignal <- struct{}{}
