@@ -893,22 +893,33 @@ func TestLogsSubscription(t *testing.T) {
 	}
 }
 
-// TestLogsSubscriptionReorg tests the behavior of the filter system when a reorganization occurs.
-func TestLogsSubscriptionReorg(t *testing.T) {
-	t.Parallel()
+var (
+	signer   = types.HomesteadSigner{}
+	key, _   = crypto.GenerateKey()
+	addr     = crypto.PubkeyToAddress(key.PublicKey)
+	contract = common.HexToAddress("0000000000000000000000000000000000031ec7")
+	// Transfer(address indexed from, address indexed to, uint256 value);
+	topic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+)
 
+func makeTx(to int, value int, b *core.BlockGen) *types.Transaction {
+	// transfer(address to, uint256 value)
+	data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(to))).Hex()).String()[2:], common.BytesToHash([]byte{byte(value)}).String()[2:])
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: b.TxNonce(addr), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+	return tx
+}
+
+func i2h(i int) common.Hash            { return common.BigToHash(big.NewInt(int64(i))) }
+func a2h(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
+
+func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendingMaker func(i int, b *core.BlockGen), expected []*types.Log) {
 	var (
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{})
 		api          = NewFilterAPI(sys, false)
-		signer       = types.HomesteadSigner{}
-		key, _       = crypto.GenerateKey()
-		addr         = crypto.PubkeyToAddress(key.PublicKey)
-		contract     = common.HexToAddress("0000000000000000000000000000000000031ec7")
-		// Transfer(address indexed from, address indexed to, uint256 value);
-		topic   = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
+		genesis      = &core.Genesis{
+			Config:   params.TestChainConfig,
+			GasLimit: 10000000000000,
 			Alloc: core.GenesisAlloc{
 				// // SPDX-License-Identifier: GPL-3.0
 				// pragma solidity >=0.7.0 <0.9.0;
@@ -932,18 +943,7 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeTx := func(to int, value int, b *core.BlockGen) *types.Transaction {
-		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(to))).Hex()).String()[2:], common.BytesToHash([]byte{byte(value)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: b.TxNonce(addr), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
-		return tx
-	}
-	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
-		for j := 0; j < 5; j++ {
-			tx := makeTx(i+j+1, i+11, b)
-			b.AddTx(tx)
-		}
-	})
+	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, oldChainMaker)
 	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
 	if err != nil {
 		t.Fatal(err)
@@ -962,41 +962,14 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newChain, _ := core.GenerateChain(genesis.Config, oldChain[1], ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+103, b)
-		b.AddTx(tx)
-	})
+	newChain, _ := core.GenerateChain(genesis.Config, oldChain[1], ethash.NewFaker(), db, 4, newChainMaker)
 	logger.Info("oldChain/newChain", "oldChain", fmt.Sprintf("%d..%d", oldChain[0].Number(), oldChain[len(oldChain)-1].Number()), "newChain", fmt.Sprintf("%d..%d", newChain[0].Number(), newChain[len(newChain)-1].Number()))
 
 	// Generate pending block, logs for which
 	// will be sent to subscription feed.
-	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+21, b)
-		b.AddTx(tx)
-	})
+	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, pendingMaker)
 	liveLogs := preceipts[0][0].Logs
 
-	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
-	a2h := func(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
-	expected := []*types.Log{
-		// Original chain until block 3
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 1},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 2},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 3},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 4},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 1},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 2},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 3},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(6)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 4},
-
-		// New logs for 4 onwards
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
-	}
 	expected = append(expected, liveLogs...)
 
 	// Calculate address balances
@@ -1119,4 +1092,108 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
+}
+
+// TestLogsSubscriptionReorg tests the behavior of the filter system when a reorganization occurs.
+func TestLogsSubscriptionReorg1(t *testing.T) {
+	t.Parallel()
+
+	expected := []*types.Log{
+		// Original chain until block 3
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 1},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 2},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 3},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 4},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 1},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 2},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 3},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(6)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 4},
+
+		// New logs for 4 onwards
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
+	}
+	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+		for j := 0; j < 5; j++ {
+			tx := makeTx(i+j+1, i+11, b)
+			b.AddTx(tx)
+		}
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+103, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, b)
+		b.AddTx(tx)
+	}, expected)
+}
+
+// TestLogsSubscriptionReorged tests the behavior of the filter system when a reorganization occurs.
+func TestLogsSubscriptionReorged2(t *testing.T) {
+	t.Parallel()
+
+	expected := []*types.Log{
+		// Original chain until block 3
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
+
+		// New logs for 4 onwards
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
+	}
+	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+11, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+103, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, b)
+		b.AddTx(tx)
+	}, expected)
+}
+
+func TestLogsSubscriptionReorg3(t *testing.T) {
+	t.Parallel()
+
+	txs := 520
+	expected := []*types.Log{}
+	// oldChain
+	for blknum := 1; blknum <= 2; blknum++ {
+		for i := 0; i < txs; i++ {
+			expected = append(expected, &types.Log{
+				Address: contract,
+				Topics:  []common.Hash{topic, a2h(addr), i2h(blknum + i)}, Data: i2h(10 + blknum).Bytes(),
+				BlockNumber: uint64(blknum),
+				Index:       uint(i),
+			})
+		}
+	}
+	expected = append(
+		expected,
+		// newChain
+		[]*types.Log{
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
+		}...,
+	)
+	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+		for j := 0; j < txs; j++ {
+			tx := makeTx(i+j+1, i+11, b)
+			b.AddTx(tx)
+		}
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+103, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, b)
+		b.AddTx(tx)
+	}, expected)
 }
