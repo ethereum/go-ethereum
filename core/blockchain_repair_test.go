@@ -1757,6 +1757,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	datadir := t.TempDir()
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: datadir,
 	})
@@ -1833,6 +1834,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: datadir,
 	})
@@ -1892,6 +1894,7 @@ func TestIssue23496(t *testing.T) {
 	datadir := t.TempDir()
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: datadir,
 	})
@@ -1956,6 +1959,7 @@ func TestIssue23496(t *testing.T) {
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: datadir,
 	})

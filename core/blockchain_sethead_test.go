@@ -1957,6 +1957,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	datadir := t.TempDir()
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: datadir,
 	})
