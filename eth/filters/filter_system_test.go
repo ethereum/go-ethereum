@@ -1062,15 +1062,15 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 			}
 		}
 
+		// for i, log := range fetched {
+		// 	logger.Debug("Flog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// }
+		//
+		// for i, log := range expected {
+		// 	logger.Debug("Elog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// }
+
 		fetchedBalance := balanceDiffer(fetched)
-
-		for i, log := range fetched {
-			logger.Info("Flog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
-		}
-
-		for i, log := range expected {
-			logger.Info("Elog", "i", i, "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
-		}
 		if len(fetchedBalance) != len(expectedBalance) {
 			errc <- fmt.Errorf("invalid number of balances, have %d, want %d", len(fetchedBalance), len(expectedBalance))
 			logger.Info("balance diff", "fetched", fetchedBalance, "expected", expectedBalance)
