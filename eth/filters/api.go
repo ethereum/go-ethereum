@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -337,9 +336,9 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
 	var (
 		liveLogs = make(chan []*types.Log)
-		histLogs = make(chan []*types.Log)
-		histErr  = make(chan error)
-		reorged  atomic.Bool
+		histLogs = make(chan *types.Log)
+		histDone = make(chan error)
+		closeC   = make(chan struct{})
 	)
 	liveLogsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), liveLogs)
 	if err != nil {
@@ -347,7 +346,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	}
 
 	go func() {
-		histErr <- api.doHistLogs(from, crit, &reorged, histLogs)
+		histDone <- api.doHistLogs(from, crit, histLogs, closeC)
 	}()
 
 	// Compose and notify the logs from liveLogs and histLogs
@@ -356,15 +355,17 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			delivered  uint64
 			reorgBlock uint64
 			liveOnly   bool
+			reorged    bool
 		)
 		for {
 			select {
-			case err := <-histErr:
+			case err := <-histDone:
 				if err != nil {
+					logger.Warn("History logs delivery failed", "err", err)
 					liveLogsSub.Unsubscribe()
 					return
 				}
-				// else historical logs are all delivered, let's switch to live mode
+				// Else historical logs are all delivered, let's switch to live mode
 				liveOnly = true
 				histLogs = nil
 			case logs := <-liveLogs:
@@ -378,11 +379,15 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					}
 					continue
 				}
+				// TODO: if reorg occured in more than once?
 				if reorgBlock == 0 {
 					reorgBlock = logs[0].BlockNumber
-					reorged.Store(reorgBlock <= delivered)
+					if reorgBlock <= delivered {
+						logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
+						reorged = true
+					}
 				}
-				if !reorged.Load() {
+				if !reorged {
 					continue
 				}
 				if logs[0].Removed {
@@ -402,17 +407,20 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 						notifier.Notify(rpcSub.ID, &log)
 					}
 				}
-			case logs := <-histLogs:
-				for _, log := range logs {
-					log := log
-					delivered = log.BlockNumber
-					notifier.Notify(rpcSub.ID, &log)
+			case log := <-histLogs:
+				if reorged {
+					continue
 				}
+				// TODO: deliver the same block logs
+				delivered = log.BlockNumber
+				notifier.Notify(rpcSub.ID, &log)
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				liveLogsSub.Unsubscribe()
+				closeC <- struct{}{}
 				return
 			case <-notifier.Closed(): // connection dropped
 				liveLogsSub.Unsubscribe()
+				closeC <- struct{}{}
 				return
 			}
 		}
@@ -421,12 +429,11 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	return nil
 }
 
-// doHistLogs retrieves the logs older than current header.
-func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, reorged *atomic.Bool, histLogs chan<- []*types.Log) error {
+// doHistLogs retrieves the logs older than current header, and forward them to the histLogs channel.
+func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<- *types.Log, closeC chan struct{}) error {
 	// The original request ctx will be canceled as soon as the parent goroutine
 	// returns a subscription. Use a new context instead.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	for {
 		// Get the latest block header.
@@ -446,22 +453,15 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, reorged *atomi
 	FORLOOP:
 		for {
 			select {
+			case <-closeC:
+				return nil
 			case log := <-logsCh:
-				// TODO: deliver all logs of the current block when we detect a reorg
-				if reorged.Load() {
-					logger.Debug("reorged, dropping log from old chain", "log", log)
-					cancel()
-					continue
-				}
-				histLogs <- []*types.Log{log}
+				histLogs <- log
 			case err := <-errChan:
 				// Range filter is done or error, let's also stop the reorgLogs subscribe
 				if err != nil {
-					if err != context.Canceled {
-						logger.Error("error while fetching historical logs", "err", err)
-						return err
-					}
-					return nil
+					logger.Error("error while fetching historical logs", "err", err)
+					return err
 				}
 				break FORLOOP
 			}
