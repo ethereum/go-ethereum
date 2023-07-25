@@ -939,8 +939,10 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 		return tx
 	}
 	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 5, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+11, b)
-		b.AddTx(tx)
+		for j := 0; j < 5; j++ {
+			tx := makeTx(i+j+1, i+11, b)
+			b.AddTx(tx)
+		}
 	})
 	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
 	if err != nil {
@@ -976,19 +978,24 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 
 	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
 	a2h := func(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
-	c2h := func(bs []*types.Block, i int) common.Hash { return bs[i].Transactions()[0].Hash() }
 	expected := []*types.Log{
 		// Original chain until block 3
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, BlockHash: oldChain[0].Hash(), TxHash: c2h(oldChain, 0)},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, BlockHash: oldChain[1].Hash(), TxHash: c2h(oldChain, 1)},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: oldChain[2].Hash(), TxHash: c2h(oldChain, 2)},
-		// Removed log for block 3
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(13).Bytes(), BlockNumber: 3, BlockHash: oldChain[2].Hash(), TxHash: c2h(oldChain, 2), Removed: true},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 1},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 2},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 3},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 4},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 1},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 2},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(5)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 3},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(6)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 4},
+
 		// New logs for 4 onwards
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, BlockHash: newChain[0].Hash(), TxHash: c2h(newChain, 0)},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, BlockHash: newChain[1].Hash(), TxHash: c2h(newChain, 1)},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, BlockHash: newChain[2].Hash(), TxHash: c2h(newChain, 2)},
-		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, BlockHash: newChain[3].Hash(), TxHash: c2h(newChain, 3)},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
 	}
 	expected = append(expected, liveLogs...)
 
@@ -1068,7 +1075,7 @@ func TestLogsSubscriptionReorg(t *testing.T) {
 		}
 
 		// for i, log := range fetched {
-		// 	logger.Debug("Flog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// 	logger.Info("Flog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
 		// }
 		//
 		// for i, log := range expected {
