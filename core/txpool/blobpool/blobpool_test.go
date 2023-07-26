@@ -486,6 +486,22 @@ func TestOpenDrops(t *testing.T) {
 			overdrafted[id] = struct{}{}
 		}
 	}
+	// Insert a sequence of transactions overflowing the account cap to verify
+	// that part of the set will get invalidated.
+	var (
+		overcapper, _ = crypto.GenerateKey()
+		overcapped    = make(map[uint64]struct{})
+	)
+	for nonce := uint64(0); nonce < maxTxsPerAccount+3; nonce++ {
+		blob, _ := rlp.EncodeToBytes(&blobTx{Tx: makeTx(nonce, 1, 1, 1, overcapper)})
+
+		id, _ := store.Put(blob)
+		if nonce < maxTxsPerAccount {
+			valids[id] = struct{}{}
+		} else {
+			overcapped[id] = struct{}{}
+		}
+	}
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
@@ -500,6 +516,7 @@ func TestOpenDrops(t *testing.T) {
 	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), big.NewInt(1000000))
 	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), big.NewInt(1000000))
 	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), big.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), big.NewInt(10000000))
 	statedb.Commit(true)
 
 	chain := &testBlockChain{
@@ -541,6 +558,8 @@ func TestOpenDrops(t *testing.T) {
 					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.id)
 				} else if _, ok := overdrafted[tx.id]; ok {
 					t.Errorf("partially overdrafted transaction remained in storage: %d", tx.id)
+				} else if _, ok := overcapped[tx.id]; ok {
+					t.Errorf("overcapped transaction remained in storage: %d", tx.id)
 				} else {
 					alive[tx.id] = struct{}{}
 				}
@@ -978,6 +997,105 @@ func TestAdd(t *testing.T) {
 					from: "alice",
 					tx:   makeUnsignedTx(2, 1, 1, 1),
 					err:  core.ErrInsufficientFunds,
+				},
+			},
+		},
+		// Transactions should only be accepted into the pool if the total count
+		// from the same account doesn't overflow the pool limits
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			adds: []addtx{
+				{ // New account, no previous txs, 16 slots left: accept nonce 0
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 1 pooled tx, 15 slots left: accept nonce 1
+					from: "alice",
+					tx:   makeUnsignedTx(1, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 2 pooled tx, 14 slots left: accept nonce 2
+					from: "alice",
+					tx:   makeUnsignedTx(2, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 3 pooled tx, 13 slots left: accept nonce 3
+					from: "alice",
+					tx:   makeUnsignedTx(3, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 4 pooled tx, 12 slots left: accept nonce 4
+					from: "alice",
+					tx:   makeUnsignedTx(4, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 5 pooled tx, 11 slots left: accept nonce 5
+					from: "alice",
+					tx:   makeUnsignedTx(5, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 6 pooled tx, 10 slots left: accept nonce 6
+					from: "alice",
+					tx:   makeUnsignedTx(6, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 7 pooled tx, 9 slots left: accept nonce 7
+					from: "alice",
+					tx:   makeUnsignedTx(7, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 8 pooled tx, 8 slots left: accept nonce 8
+					from: "alice",
+					tx:   makeUnsignedTx(8, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 9 pooled tx, 7 slots left: accept nonce 9
+					from: "alice",
+					tx:   makeUnsignedTx(9, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 10 pooled tx, 6 slots left: accept nonce 10
+					from: "alice",
+					tx:   makeUnsignedTx(10, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 11 pooled tx, 5 slots left: accept nonce 11
+					from: "alice",
+					tx:   makeUnsignedTx(11, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 12 pooled tx, 4 slots left: accept nonce 12
+					from: "alice",
+					tx:   makeUnsignedTx(12, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 13 pooled tx, 3 slots left: accept nonce 13
+					from: "alice",
+					tx:   makeUnsignedTx(13, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 14 pooled tx, 2 slots left: accept nonce 14
+					from: "alice",
+					tx:   makeUnsignedTx(14, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 15 pooled tx, 1 slots left: accept nonce 15
+					from: "alice",
+					tx:   makeUnsignedTx(15, 1, 1, 1),
+					err:  nil,
+				},
+				{ // New account, 16 pooled tx, 0 slots left: accept nonce 15 replacement
+					from: "alice",
+					tx:   makeUnsignedTx(15, 10, 10, 10),
+					err:  nil,
+				},
+				{ // New account, 16 pooled tx, 0 slots left: reject nonce 16 with overcap
+					from: "alice",
+					tx:   makeUnsignedTx(16, 1, 1, 1),
+					err:  txpool.ErrAccountLimitExceeded,
 				},
 			},
 		},

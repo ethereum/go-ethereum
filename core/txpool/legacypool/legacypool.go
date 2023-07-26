@@ -601,6 +601,16 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 		State: pool.currentState,
 
 		FirstNonceGap: nil, // Pool allows arbitrary arrival order, don't invalidate nonce gaps
+		UsedAndLeftSlots: func(addr common.Address) (int, int) {
+			var have int
+			if list := pool.pending[addr]; list != nil {
+				have += list.Len()
+			}
+			if list := pool.queue[addr]; list != nil {
+				have += list.Len()
+			}
+			return have, math.MaxInt
+		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if list := pool.pending[addr]; list != nil {
 				return list.totalcost

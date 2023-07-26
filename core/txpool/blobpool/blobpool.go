@@ -65,6 +65,14 @@ const (
 	// limit can never hurt.
 	txMaxSize = 1024 * 1024
 
+	// maxTxsPerAccount is the maximum number of blob transactions admitted from
+	// a single account. The limit is enforced to minimize the DoS potential of
+	// a private tx cancelling publicly propagated blobs.
+	//
+	// Note, transactions resurrected by a reorg are also subject to this limit,
+	// so pushing it down too agressively might make resurrections non-functional.
+	maxTxsPerAccount = 16
+
 	// pendingTransactionStore is the subfolder containing the currently queued
 	// blob transactions.
 	pendingTransactionStore = "queue"
@@ -164,6 +172,13 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 //     already propagated (future) blob txs (cumulative fee); b) nonce-gapped blob
 //     txs are disallowed; c) the presence of blob transactions exclude non-blob
 //     transactions.
+//
+//   - Malicious cancellations are possible. Although the pool might prevent txs
+//     that cancel blobs, blocks might contain such transaction (malicious miner
+//     or flashbotter). The pool should cap the total number of blob transactions
+//     per account as to prevent propagating too much data before cancelling it
+//     via a normal transaction. It should nonetheless be high enough to support
+//     resurrecting reorged transactions. Perhaps 4-16.
 //
 //   - Local txs are meaningless. Mining pools historically used local transactions
 //     for payouts or for backdoor deals. With 1559 in place, the basefee usually
@@ -652,6 +667,36 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			}
 		}
 	}
+	// Sanity check that no account can have more queued transactions than the
+	// DoS protection threshold.
+	if len(txs) > maxTxsPerAccount {
+		// Evict the highest nonce transactions until the pending set falls under
+		// the account's transaction cap
+		var (
+			ids    []uint64
+			nonces []uint64
+		)
+		for len(txs) > maxTxsPerAccount {
+			last := txs[len(txs)-1]
+			txs[len(txs)-1] = nil
+			txs = txs[:len(txs)-1]
+
+			ids = append(ids, last.id)
+			nonces = append(nonces, last.nonce)
+
+			p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], last.costCap)
+			p.stored -= uint64(last.size)
+			delete(p.lookup, last.hash)
+		}
+		p.index[addr] = txs
+
+		log.Warn("Dropping overcapped blob transactions", "from", addr, "kept", len(txs), "drop", nonces, "ids", ids)
+		for _, id := range ids {
+			if err := p.store.Delete(id); err != nil {
+				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+			}
+		}
+	}
 	// Included cheap transactions might have left the remaining ones better from
 	// an eviction point, fix any potential issues in the heap.
 	if _, ok := p.index[addr]; ok && inclusions != nil {
@@ -997,6 +1042,13 @@ func (p *BlobPool) validateTx(tx *types.Transaction, blobs []kzg4844.Blob, commi
 			// be the next nonce shifted by however many transactions we already
 			// have pooled.
 			return p.state.GetNonce(addr) + uint64(len(p.index[addr]))
+		},
+		UsedAndLeftSlots: func(addr common.Address) (int, int) {
+			have := len(p.index[addr])
+			if have >= maxTxsPerAccount {
+				return have, 0
+			}
+			return have, maxTxsPerAccount - have
 		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if spent := p.spent[addr]; spent != nil {
