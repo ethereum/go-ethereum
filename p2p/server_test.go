@@ -24,6 +24,8 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,6 +226,14 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 	srv2.Start()
 	defer srv2.Stop()
 
+	s := strings.Split(srv2.ListenAddr, ":")
+	if len(s) != 2 {
+		t.Fatal("invalid ListenAddr")
+	}
+	if port, err := strconv.Atoi(s[1]); err == nil {
+		srv2.localnode.Set(enr.TCP(uint16(port)))
+	}
+
 	if !syncAddPeer(srv1, srv2.Self()) {
 		t.Fatal("peer not connected")
 	}
@@ -370,8 +380,6 @@ func TestServerSetupConn(t *testing.T) {
 		clientkey, srvkey = newkey(), newkey()
 		clientpub         = &clientkey.PublicKey
 		srvpub            = &srvkey.PublicKey
-		fooErr            = errors.New("foo")
-		readErr           = errors.New("read error")
 	)
 	tests := []struct {
 		dontstart bool
@@ -389,10 +397,10 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: errServerStopped,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: readErr},
+			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: errEncHandshakeError},
 			flags:        inboundConn,
 			wantCalls:    "doEncHandshake,close,",
-			wantCloseErr: readErr,
+			wantCloseErr: errEncHandshakeError,
 		},
 		{
 			tt:           &setupTransport{pubkey: clientpub, phs: protoHandshake{ID: randomID().Bytes()}},
@@ -402,11 +410,11 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: DiscUnexpectedIdentity,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: fooErr},
+			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: errProtoHandshakeError},
 			dialDest:     enode.NewV4(clientpub, nil, 0, 0),
 			flags:        dynDialedConn,
 			wantCalls:    "doEncHandshake,doProtoHandshake,close,",
-			wantCloseErr: fooErr,
+			wantCloseErr: errProtoHandshakeError,
 		},
 		{
 			tt:           &setupTransport{pubkey: srvpub, phs: protoHandshake{ID: crypto.FromECDSAPub(srvpub)[1:]}},

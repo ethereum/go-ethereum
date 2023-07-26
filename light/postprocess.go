@@ -214,10 +214,13 @@ func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) e
 
 // Commit implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Commit() error {
-	root, nodes := c.trie.Commit(false)
+	root, nodes, err := c.trie.Commit(false)
+	if err != nil {
+		return err
+	}
 	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
-		if err := c.triedb.Update(root, c.originRoot, trienode.NewWithNodeSet(nodes)); err != nil {
+		if err := c.triedb.Update(root, c.originRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 			return err
 		}
 		if err := c.triedb.Commit(root, false); err != nil {
@@ -225,7 +228,6 @@ func (c *ChtIndexerBackend) Commit() error {
 		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	var err error
 	c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 	if err != nil {
 		return err
@@ -465,10 +467,13 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			return terr
 		}
 	}
-	root, nodes := b.trie.Commit(false)
+	root, nodes, err := b.trie.Commit(false)
+	if err != nil {
+		return err
+	}
 	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
-		if err := b.triedb.Update(root, b.originRoot, trienode.NewWithNodeSet(nodes)); err != nil {
+		if err := b.triedb.Update(root, b.originRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 			return err
 		}
 		if err := b.triedb.Commit(root, false); err != nil {
@@ -476,7 +481,6 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	var err error
 	b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 	if err != nil {
 		return err

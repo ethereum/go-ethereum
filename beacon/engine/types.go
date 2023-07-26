@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -61,6 +62,8 @@ type ExecutableData struct {
 	BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte            `json:"transactions"  gencodec:"required"`
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
+	DataGasUsed   *uint64             `json:"dataGasUsed"`
+	ExcessDataGas *uint64             `json:"excessDataGas"`
 }
 
 // JSON type overrides for executableData.
@@ -73,6 +76,8 @@ type executableDataMarshaling struct {
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
+	DataGasUsed   *hexutil.Uint64
+	ExcessDataGas *hexutil.Uint64
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
@@ -80,6 +85,13 @@ type executableDataMarshaling struct {
 type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+}
+
+type BlobsBundleV1 struct {
+	Commitments []hexutil.Bytes `json:"commitments"`
+	Proofs      []hexutil.Bytes `json:"proofs"`
+	Blobs       []hexutil.Bytes `json:"blobs"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -152,14 +164,15 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
 //
-//	len(extraData) <= 32
-//	uncleHash = emptyUncleHash
-//	difficulty = 0
+//		len(extraData) <= 32
+//		uncleHash = emptyUncleHash
+//		difficulty = 0
+//	 	if versionedHashes != nil, versionedHashes match to blob transactions
 //
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
-func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
+func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -173,6 +186,18 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	// Check that baseFeePerGas is not negative or too big
 	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
+	}
+	var blobHashes []common.Hash
+	for _, tx := range txs {
+		blobHashes = append(blobHashes, tx.BlobHashes()...)
+	}
+	if len(blobHashes) != len(versionedHashes) {
+		return nil, fmt.Errorf("invalid number of versionedHashes: %v blobHashes: %v", versionedHashes, blobHashes)
+	}
+	for i := 0; i < len(blobHashes); i++ {
+		if blobHashes[i] != versionedHashes[i] {
+			return nil, fmt.Errorf("invalid versionedHash at %v: %v blobHashes: %v", i, versionedHashes, blobHashes)
+		}
 	}
 	// Only set withdrawalsRoot if it is non-nil. This allows CLs to use
 	// ExecutableData before withdrawals are enabled by marshaling
@@ -199,6 +224,8 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		Extra:           params.ExtraData,
 		MixDigest:       params.Random,
 		WithdrawalsHash: withdrawalsRoot,
+		ExcessDataGas:   params.ExcessDataGas,
+		DataGasUsed:     params.DataGasUsed,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
@@ -209,7 +236,7 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadEnvelope {
+func BlockToExecutableData(block *types.Block, fees *big.Int, blobs []kzg4844.Blob, commitments []kzg4844.Commitment, proofs []kzg4844.Proof) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
@@ -226,8 +253,20 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 		Withdrawals:   block.Withdrawals(),
+		DataGasUsed:   block.DataGasUsed(),
+		ExcessDataGas: block.ExcessDataGas(),
 	}
-	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
+	blobsBundle := BlobsBundleV1{
+		Commitments: make([]hexutil.Bytes, 0),
+		Blobs:       make([]hexutil.Bytes, 0),
+		Proofs:      make([]hexutil.Bytes, 0),
+	}
+	for i := range blobs {
+		blobsBundle.Blobs = append(blobsBundle.Blobs, hexutil.Bytes(blobs[i][:]))
+		blobsBundle.Commitments = append(blobsBundle.Commitments, hexutil.Bytes(commitments[i][:]))
+		blobsBundle.Proofs = append(blobsBundle.Proofs, hexutil.Bytes(proofs[i][:]))
+	}
+	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &blobsBundle}
 }
 
 // ExecutionPayloadBodyV1 is used in the response to GetPayloadBodiesByHashV1 and GetPayloadBodiesByRangeV1

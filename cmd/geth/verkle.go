@@ -74,7 +74,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 	switch node := root.(type) {
 	case *verkle.InternalNode:
 		for i, child := range node.Children() {
-			childC := child.ComputeCommitment().Bytes()
+			childC := child.Commit().Bytes()
 
 			childS, err := resolver(childC[:])
 			if bytes.Equal(childC[:], zero[:]) {
@@ -86,7 +86,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 			// depth is set to 0, the tree isn't rebuilt so it's not a problem
 			childN, err := verkle.ParseNode(childS, 0, childC[:])
 			if err != nil {
-				return fmt.Errorf("decode error child %x in db: %w", child.ComputeCommitment().Bytes(), err)
+				return fmt.Errorf("decode error child %x in db: %w", child.Commitment().Bytes(), err)
 			}
 			if err := checkChildren(childN, resolver); err != nil {
 				return fmt.Errorf("%x%w", i, err) // write the path to the erroring node
@@ -100,7 +100,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 				return nil
 			}
 		}
-		return errors.New("Both balance and nonce are 0")
+		return errors.New("both balance and nonce are 0")
 	case verkle.Empty:
 		// nothing to do
 	default:

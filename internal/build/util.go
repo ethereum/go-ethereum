@@ -197,6 +197,9 @@ func FindMainPackages(dir string) []string {
 	}
 	for _, cmd := range cmds {
 		pkgdir := filepath.Join(dir, cmd.Name())
+		if !cmd.IsDir() {
+			continue
+		}
 		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
 		if err != nil {
 			log.Fatal(err)

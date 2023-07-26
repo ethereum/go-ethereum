@@ -18,10 +18,10 @@ package trienode
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/exp/slices"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
@@ -100,12 +100,14 @@ func NewNodeSet(owner common.Hash) *NodeSet {
 // ForEachWithOrder iterates the nodes with the order from bottom to top,
 // right to left, nodes with the longest path will be iterated first.
 func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
-	var paths sort.StringSlice
+	var paths []string
 	for path := range set.Nodes {
 		paths = append(paths, path)
 	}
 	// Bottom-up, longest path first
-	sort.Sort(sort.Reverse(paths))
+	slices.SortFunc(paths, func(a, b string) bool {
+		return a > b // Sort in reverse order
+	})
 	for _, path := range paths {
 		callback(path, set.Nodes[path].Unwrap())
 	}
@@ -119,6 +121,26 @@ func (set *NodeSet) AddNode(path []byte, n *WithPrev) {
 		set.updates += 1
 	}
 	set.Nodes[string(path)] = n
+}
+
+// Merge adds a set of nodes into the set.
+func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*WithPrev) error {
+	if set.Owner != owner {
+		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, owner)
+	}
+	for path, node := range nodes {
+		prev, ok := set.Nodes[path]
+		if ok {
+			// overwrite happens, revoke the counter
+			if prev.IsDeleted() {
+				set.deletes -= 1
+			} else {
+				set.updates -= 1
+			}
+		}
+		set.AddNode([]byte(path), node)
+	}
+	return nil
 }
 
 // AddLeaf adds the provided leaf node into set. TODO(rjl493456442) how can
@@ -188,9 +210,9 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
-	_, present := set.Sets[other.Owner]
+	subset, present := set.Sets[other.Owner]
 	if present {
-		return fmt.Errorf("duplicate trie for owner %#x", other.Owner)
+		return subset.Merge(other.Owner, other.Nodes)
 	}
 	set.Sets[other.Owner] = other
 	return nil

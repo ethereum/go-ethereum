@@ -86,8 +86,8 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			err error
 			t   state.Trie
 		)
-		if len(req.Id.AccKey) > 0 {
-			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToHash(req.Id.AccKey), req.Id.Root)
+		if len(req.Id.AccountAddress) > 0 {
+			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToAddress(req.Id.AccountAddress), req.Id.Root)
 		} else {
 			t, err = odr.serverState.OpenTrie(req.Id.Root)
 		}
@@ -95,7 +95,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			panic(err)
 		}
 		nodes := NewNodeSet()
-		t.Prove(req.Key, 0, nodes)
+		t.Prove(req.Key, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
 		req.Data = rawdb.ReadCode(odr.sdb, req.Hash)
