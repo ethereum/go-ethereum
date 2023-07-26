@@ -61,9 +61,15 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
+	cfg := &params.ChainConfig{
+		ChainID:        big.NewInt(1),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(2),
+		HomesteadBlock: new(big.Int),
+	}
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(cfg, filterSystem, false),
 	}})
 
 	// Import the test chain.
