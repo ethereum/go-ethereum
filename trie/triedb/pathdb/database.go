@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -41,29 +42,31 @@ const maxDiffLayers = 128
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
 type layer interface {
-	// Node retrieves the trie node with the node info. No error will be returned
-	// if the node is not found.
+	// Node retrieves the trie node with the node info. An error will be returned
+	// if the read operation exits abnormally. For example, if the layer is already
+	// stale, or the associated state is regarded as corrupted. Notably, no error
+	// will be returned if the requested node is not found in database.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 
-	// root returns the root hash for which this layer was made.
-	root() common.Hash
+	// rootHash returns the root hash for which this layer was made.
+	rootHash() common.Hash
 
-	// parent returns the subsequent layer of it, or nil if the base was reached.
-	parent() layer
+	// stateID returns the associated state id of layer.
+	stateID() uint64
+
+	// parentLayer returns the subsequent layer of it, or nil if the disk was reached.
+	parentLayer() layer
 
 	// update creates a new layer on top of the existing layer diff tree with
-	// the given dirty trie node set. The deleted trie nodes are also included.
+	// the provided dirty trie nodes along with the state change set.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer
+	update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer
 
 	// journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the layer without
 	// flattening everything down (bad for reorgs).
-	journal(buffer *bytes.Buffer) error
-
-	// stateID returns the associated state id of layer.
-	stateID() uint64
+	journal(w io.Writer) error
 }
 
 // Config contains the settings for database.
@@ -131,13 +134,13 @@ func New(diskdb ethdb.Database, cleans *fastcache.Cache, config *Config) *Databa
 	if ancient, err := diskdb.AncientDatadir(); err == nil && ancient != "" && !db.readOnly {
 		freezer, err := rawdb.NewStateHistoryFreezer(ancient, false)
 		if err != nil {
-			log.Crit("Failed to open trie history freezer", "err", err)
+			log.Crit("Failed to open state history freezer", "err", err)
 		}
 		db.freezer = freezer
 
 		// Truncate the extra state histories above in freezer in case
 		// it's not aligned with the disk layer.
-		pruned, err := truncateFromHead(freezer, db.tree.bottom().stateID())
+		pruned, err := truncateFromHead(db.diskdb, freezer, db.tree.bottom().stateID())
 		if err != nil {
 			log.Crit("Failed to truncate extra state histories", "err", err)
 		}
@@ -165,7 +168,7 @@ func (db *Database) Reader(root common.Hash) (layer, error) {
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
-func (db *Database) Update(root common.Hash, parentRoot common.Hash, blockNumber uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -174,7 +177,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, blockNumber
 	if db.readOnly {
 		return errSnapshotReadOnly
 	}
-	if err := db.tree.add(root, parentRoot, blockNumber, nodes, states); err != nil {
+	if err := db.tree.add(root, parentRoot, block, nodes, states); err != nil {
 		return err
 	}
 	// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -276,6 +279,10 @@ func (db *Database) Reset(root common.Hash) error {
 	// Mark the disk layer as stale before applying any mutation.
 	db.tree.bottom().markStale()
 
+	// Reset the clean cache before applying mutation to disk.
+	if db.cleans != nil {
+		db.cleans.Reset()
+	}
 	// Drop the stale state journal in persistent database
 	// and reset the persistent state id back to zero.
 	rawdb.DeleteTrieJournal(batch)
@@ -283,7 +290,10 @@ func (db *Database) Reset(root common.Hash) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	// Clean up all state histories in freezer.
+	// Clean up all state histories in freezer. Theoretically
+	// all root->id mappings should be removed as well. Since
+	// mappings can be huge and might take a while to clear
+	// them, just leave them in disk and wait for overwriting.
 	if db.freezer != nil {
 		if err := db.freezer.Reset(); err != nil {
 			return err
@@ -316,8 +326,8 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 		start = time.Now()
 		dl    = db.tree.bottom()
 	)
-	for dl.root() != root {
-		h, err := readHistory(db.freezer, dl.id)
+	for dl.rootHash() != root {
+		h, err := readHistory(db.freezer, dl.stateID())
 		if err != nil {
 			return err
 		}
@@ -334,7 +344,7 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	_, err := truncateFromHead(db.freezer, dl.id)
+	_, err := truncateFromHead(db.diskdb, db.freezer, dl.stateID())
 	if err != nil {
 		return err
 	}
@@ -346,23 +356,24 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 func (db *Database) Recoverable(root common.Hash) bool {
 	// Ensure the requested state is a known state.
 	root = types.TrieRootHash(root)
-	id, exist := rawdb.ReadStateID(db.diskdb, root)
-	if !exist {
+	id := rawdb.ReadStateID(db.diskdb, root)
+	if id == nil {
 		return false
 	}
 	// Recoverable state must below the disk layer. The recoverable
 	// state only refers the state that is currently not available,
 	// but can be restored by applying state history.
 	dl := db.tree.bottom()
-	if id >= dl.stateID() {
+	if *id >= dl.stateID() {
 		return false
 	}
 	// Ensure the requested state is a canonical state and all state
-	// history from id+1 until disk layer are present and complete.
+	// histories from id+1 until disk layer(in another word, histories
+	// in range [id+1, disklayer.ID]) are present and complete.
 	parent := root
-	err := checkHistories(db.freezer, id+1, dl.stateID()-id, func(m *meta) error {
+	err := checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
 		if m.parent != parent {
-			return errors.New("corrupted state history")
+			return errors.New("unexpected state history")
 		}
 		if len(m.incomplete) > 0 {
 			return errors.New("incomplete state history")
@@ -404,19 +415,19 @@ func (db *Database) Size() (size common.StorageSize) {
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	var inited bool
 	db.tree.forEach(func(layer layer) {
-		if layer.root() != types.EmptyRootHash {
+		if layer.rootHash() != types.EmptyRootHash {
 			inited = true
 		}
 	})
 	return inited
 }
 
-// SetBufferSize sets the node buffer size to the provided value(in mega-bytes).
+// SetBufferSize sets the node buffer size to the provided value(in bytes).
 func (db *Database) SetBufferSize(size int) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.bufferSize = size * 1024 * 1024
+	db.bufferSize = size
 	return db.tree.bottom().setBufferSize(db.bufferSize)
 }
 

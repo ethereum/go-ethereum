@@ -28,27 +28,27 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// hasher is a test utility for computing root hash of a batch of state elements.
-// The hash algorithm is to sort all the elements in lexicographical order, concat
-// the key and value in turn, and perform hash calculation on the concatenated
-// bytes. Except the root hash, a nodeset will be returned once Commit is called,
-// which contains all the changes made to hasher.
-type hasher struct {
+// testHasher is a test utility for computing root hash of a batch of state
+// elements. The hash algorithm is to sort all the elements in lexicographical
+// order, concat the key and value in turn, and perform hash calculation on
+// the concatenated bytes. Except the root hash, a nodeset will be returned
+// once Commit is called, which contains all the changes made to hasher.
+type testHasher struct {
 	owner   common.Hash            // owner identifier
 	root    common.Hash            // original root
 	dirties map[common.Hash][]byte // dirty states
 	cleans  map[common.Hash][]byte // clean states
 }
 
-// newHasher constructs a hasher object with provided states.
-func newHasher(owner common.Hash, root common.Hash, cleans map[common.Hash][]byte) (*hasher, error) {
+// newTestHasher constructs a hasher object with provided states.
+func newTestHasher(owner common.Hash, root common.Hash, cleans map[common.Hash][]byte) (*testHasher, error) {
 	if cleans == nil {
 		cleans = make(map[common.Hash][]byte)
 	}
 	if got, _ := hash(cleans); got != root {
 		return nil, fmt.Errorf("state root mismatched, want: %x, got: %x", root, got)
 	}
-	return &hasher{
+	return &testHasher{
 		owner:   owner,
 		root:    root,
 		dirties: make(map[common.Hash][]byte),
@@ -57,7 +57,7 @@ func newHasher(owner common.Hash, root common.Hash, cleans map[common.Hash][]byt
 }
 
 // Get returns the value for key stored in the trie.
-func (h *hasher) Get(key []byte) ([]byte, error) {
+func (h *testHasher) Get(key []byte) ([]byte, error) {
 	hash := common.BytesToHash(key)
 	val, ok := h.dirties[hash]
 	if ok {
@@ -67,20 +67,20 @@ func (h *hasher) Get(key []byte) ([]byte, error) {
 }
 
 // Update associates key with value in the trie.
-func (h *hasher) Update(key, value []byte) error {
+func (h *testHasher) Update(key, value []byte) error {
 	h.dirties[common.BytesToHash(key)] = common.CopyBytes(value)
 	return nil
 }
 
 // Delete removes any existing value for key from the trie.
-func (h *hasher) Delete(key []byte) error {
+func (h *testHasher) Delete(key []byte) error {
 	h.dirties[common.BytesToHash(key)] = nil
 	return nil
 }
 
 // Commit computes the new hash of the states and returns the set with all
 // state changes.
-func (h *hasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
+func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	var (
 		nodes = make(map[common.Hash][]byte)
 		set   = trienode.NewNodeSet(h.owner)
@@ -147,10 +147,10 @@ func newHashLoader(accounts map[common.Hash][]byte, storages map[common.Hash]map
 
 // OpenTrie opens the main account trie.
 func (l *hashLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
-	return newHasher(common.Hash{}, root, l.accounts)
+	return newTestHasher(common.Hash{}, root, l.accounts)
 }
 
 // OpenStorageTrie opens the storage trie of an account.
 func (l *hashLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
-	return newHasher(addrHash, root, l.storages[addrHash])
+	return newTestHasher(addrHash, root, l.storages[addrHash])
 }

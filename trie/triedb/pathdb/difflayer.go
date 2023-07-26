@@ -33,30 +33,30 @@ import (
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
-	rootHash    common.Hash                               // Root hash to which this layer diff belongs to
-	id          uint64                                    // Corresponding state id
-	blockNumber uint64                                    // Associated block number
-	nodes       map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
-	states      *triestate.Set                            // Associated state change set for building history
-	memory      uint64                                    // Approximate guess as to how much memory we use
+	root   common.Hash                               // Root hash to which this layer diff belongs to
+	id     uint64                                    // Corresponding state id
+	block  uint64                                    // Associated block number
+	nodes  map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
+	states *triestate.Set                            // Associated state change set for building history
+	memory uint64                                    // Approximate guess as to how much memory we use
 
-	parentLayer layer        // Parent layer modified by this one, never nil, **can be changed**
-	lock        sync.RWMutex // Lock used to protect parent
+	parent layer        // Parent layer modified by this one, never nil, **can be changed**
+	lock   sync.RWMutex // Lock used to protect parent
 }
 
-// newDiffLayer creates a new diff on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+// newDiffLayer creates a new diff layer on top of an existing layer.
+func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
 	var (
 		size  int64
 		count int
 	)
 	dl := &diffLayer{
-		rootHash:    root,
-		id:          id,
-		blockNumber: blockNumber,
-		nodes:       nodes,
-		states:      states,
-		parentLayer: parent,
+		root:   root,
+		id:     id,
+		block:  block,
+		nodes:  nodes,
+		states: states,
+		parent: parent,
 	}
 	for _, subset := range nodes {
 		for path, n := range subset {
@@ -71,26 +71,28 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, blockNumber uint64,
 	dirtyWriteMeter.Mark(size)
 	diffLayerNodesMeter.Mark(int64(count))
 	diffLayerSizeMeter.Mark(int64(dl.memory))
-	log.Debug("Created new diff layer", "id", id, "blockNumber", blockNumber, "nodes", count, "size", common.StorageSize(dl.memory))
+	log.Debug("Created new diff layer", "id", id, "block", block, "nodes", count, "size", common.StorageSize(dl.memory))
 	return dl
 }
 
-// Root returns the root hash of corresponding state.
-func (dl *diffLayer) root() common.Hash {
-	return dl.rootHash
+// rootHash implements the layer interface, returning the root hash of
+// corresponding state.
+func (dl *diffLayer) rootHash() common.Hash {
+	return dl.root
 }
 
-// ID returns the state id represented by layer.
+// stateID implements the layer interface, returning the state id of the layer.
 func (dl *diffLayer) stateID() uint64 {
 	return dl.id
 }
 
-// Parent returns the subsequent layer of a diff layer.
-func (dl *diffLayer) parent() layer {
+// parentLayer implements the layer interface, returning the subsequent
+// layer of the diff layer.
+func (dl *diffLayer) parentLayer() layer {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
-	return dl.parentLayer
+	return dl.parent
 }
 
 // node retrieves the node with provided node information. It's the internal
@@ -110,13 +112,7 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 			// If the trie node is not hash matched, or marked as removed,
 			// bubble up an error here. It shouldn't happen at all.
 			if n.Hash != hash {
-				return nil, &UnexpectedNodeError{
-					typ:      "diff",
-					expected: hash,
-					hash:     n.Hash,
-					owner:    owner,
-					path:     path,
-				}
+				return nil, newUnexpectedNodeError("diff", hash, n.Hash, owner, path)
 			}
 			dirtyHitMeter.Mark(1)
 			dirtyNodeHitDepthHist.Update(int64(depth))
@@ -125,28 +121,28 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 		}
 	}
 	// Trie node unknown to this layer, resolve from parent
-	if diff, ok := dl.parentLayer.(*diffLayer); ok {
+	if diff, ok := dl.parent.(*diffLayer); ok {
 		return diff.node(owner, path, hash, depth+1)
 	}
 	// Failed to resolve through diff layers, fallback to disk layer
-	return dl.parentLayer.Node(owner, path, hash)
+	return dl.parent.Node(owner, path, hash)
 }
 
-// Node retrieves the trie node blob with the provided node information. No error
-// will be returned if the node is not found.
+// Node implements the layer interface, retrieving the trie node blob with the
+// provided node information. No error will be returned if the node is not found.
 func (dl *diffLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	return dl.node(owner, path, hash, 0)
 }
 
-// Update creates a new layer on top of the existing layer tree with the specified
-// data items.
-func (dl *diffLayer) update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
-	return newDiffLayer(dl, stateRoot, id, blockNumber, nodes, states)
+// update implements the layer interface, creating a new layer on top of the
+// existing layer tree with the specified data items.
+func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.
 func (dl *diffLayer) persist(force bool) (layer, error) {
-	if parent, ok := dl.parent().(*diffLayer); ok {
+	if parent, ok := dl.parentLayer().(*diffLayer); ok {
 		// Hold the lock to prevent any read operation until the new
 		// parent is linked correctly.
 		dl.lock.Lock()
@@ -159,7 +155,7 @@ func (dl *diffLayer) persist(force bool) (layer, error) {
 			dl.lock.Unlock()
 			return nil, err
 		}
-		dl.parentLayer = result
+		dl.parent = result
 		dl.lock.Unlock()
 	}
 	return diffToDisk(dl, force)
@@ -168,9 +164,9 @@ func (dl *diffLayer) persist(force bool) (layer, error) {
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
 func diffToDisk(layer *diffLayer, force bool) (layer, error) {
-	disk, ok := layer.parent().(*diskLayer)
+	disk, ok := layer.parentLayer().(*diskLayer)
 	if !ok {
-		panic(fmt.Sprintf("unknown layer type: %T", layer.parent()))
+		panic(fmt.Sprintf("unknown layer type: %T", layer.parentLayer()))
 	}
 	return disk.commit(layer, force)
 }

@@ -36,7 +36,7 @@ import (
 )
 
 func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
-	h, err := newHasher(addrHash, root, cleans)
+	h, err := newTestHasher(addrHash, root, cleans)
 	if err != nil {
 		panic(fmt.Errorf("failed to create hasher, err: %w", err))
 	}
@@ -362,7 +362,7 @@ func (t *tester) verifyHistory() error {
 func (t *tester) bottomIndex() int {
 	bottom := t.db.tree.bottom()
 	for i := 0; i < len(t.roots); i++ {
-		if t.roots[i] == bottom.root() {
+		if t.roots[i] == bottom.rootHash() {
 			return i
 		}
 	}
@@ -458,8 +458,8 @@ func TestReset(t *testing.T) {
 	if tester.db.tree.len() != 1 {
 		t.Fatalf("Extra layer kept %d", tester.db.tree.len())
 	}
-	if tester.db.tree.bottom().root() != types.EmptyRootHash {
-		t.Fatalf("Root hash is not matched exp %x got %x", types.EmptyRootHash, tester.db.tree.bottom().root())
+	if tester.db.tree.bottom().rootHash() != types.EmptyRootHash {
+		t.Fatalf("Root hash is not matched exp %x got %x", types.EmptyRootHash, tester.db.tree.bottom().rootHash())
 	}
 }
 
@@ -472,7 +472,7 @@ func TestCommit(t *testing.T) {
 	if tester.db.tree.len() != 1 {
 		t.Fatal("Layer tree structure is invalid")
 	}
-	if tester.db.tree.bottom().root() != tester.lastHash() {
+	if tester.db.tree.bottom().rootHash() != tester.lastHash() {
 		t.Fatal("Layer tree structure is invalid")
 	}
 	// Verify states

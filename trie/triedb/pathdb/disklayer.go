@@ -23,44 +23,47 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"golang.org/x/crypto/sha3"
 )
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	rootHash common.Hash  // Immutable, root hash of the base layer
-	id       uint64       // Immutable, corresponding state id
-	db       *Database    // Path-based trie database
-	buffer   *nodebuffer  // Node buffer to aggregate writes.
-	stale    bool         // Signals that the layer became stale (state progressed)
-	lock     sync.RWMutex // Lock used to protect stale flag
+	root   common.Hash  // Immutable, root hash to which this layer was made for
+	id     uint64       // Immutable, corresponding state id
+	db     *Database    // Path-based trie database
+	buffer *nodebuffer  // Node buffer to aggregate writes
+	stale  bool         // Signals that the layer became stale (state progressed)
+	lock   sync.RWMutex // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
 func newDiskLayer(root common.Hash, id uint64, db *Database, buffer *nodebuffer) *diskLayer {
 	return &diskLayer{
-		rootHash: root,
-		id:       id,
-		db:       db,
-		buffer:   buffer,
+		root:   root,
+		id:     id,
+		db:     db,
+		buffer: buffer,
 	}
 }
 
-// root returns root hash of corresponding state.
-func (dl *diskLayer) root() common.Hash {
-	return dl.rootHash
+// root implements the layer interface, returning root hash of corresponding state.
+func (dl *diskLayer) rootHash() common.Hash {
+	return dl.root
 }
 
-// parent always returns nil as there's no layer below the disk.
-func (dl *diskLayer) parent() layer {
-	return nil
-}
-
-// stateID returns the state id of disk layer.
+// stateID implements the layer interface, returning the state id of disk layer.
 func (dl *diskLayer) stateID() uint64 {
 	return dl.id
+}
+
+// parent implements the layer interface, returning nil as there's no layer
+// below the disk.
+func (dl *diskLayer) parentLayer() layer {
+	return nil
 }
 
 // isStale return whether this layer has become stale (was flattened across) or if
@@ -83,8 +86,8 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
-// Node retrieves the trie node with the provided node info. No error will be
-// returned if the node is not found.
+// Node implements the layer interface, retrieving the trie node with the
+// provided node info. No error will be returned if the node is not found.
 func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
@@ -108,8 +111,15 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	dirtyMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
+	key := append(owner.Bytes(), path...)
 	if dl.db.cleans != nil {
-		if blob := dl.db.cleans.Get(nil, hash.Bytes()); len(blob) > 0 {
+		if blob := dl.db.cleans.Get(nil, key); len(blob) > 0 {
+			h := newHasher()
+			defer h.release()
+
+			if got := h.hash(blob); got != hash {
+				return nil, newUnexpectedNodeError("clean", hash, got, owner, path)
+			}
 			cleanHitMeter.Mark(1)
 			cleanReadMeter.Mark(int64(len(blob)))
 			return blob, nil
@@ -127,24 +137,19 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
 	if nHash != hash {
-		return nil, &UnexpectedNodeError{
-			typ:      "disk",
-			expected: hash,
-			hash:     nHash,
-			owner:    owner,
-			path:     path,
-		}
+		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path)
 	}
 	if dl.db.cleans != nil && len(nBlob) > 0 {
-		dl.db.cleans.Set(hash.Bytes(), nBlob)
+		dl.db.cleans.Set(key, nBlob)
 		cleanWriteMeter.Mark(int64(len(nBlob)))
 	}
 	return nBlob, nil
 }
 
-// update returns a new diff layer on top with the given state set.
-func (dl *diskLayer) update(stateRoot common.Hash, id uint64, blockNumber uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
-	return newDiffLayer(dl, stateRoot, id, blockNumber, nodes, states)
+// update implements the layer interface, returning a new diff layer on top
+// with the given state set.
+func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
 // commit merges the given bottom-most diff layer into the node buffer
@@ -159,7 +164,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// corresponding states(journal), the stored state history will
 	// be truncated in the next restart.
 	if dl.db.freezer != nil {
-		err := writeStateHistory(dl.db.freezer, bottom, dl.db.config.StateLimit)
+		err := writeHistory(dl.db.diskdb, dl.db.freezer, bottom, dl.db.config.StateLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -172,14 +177,14 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// in the same chain blocks are not adjacent but have the same
 	// root.
 	if dl.id == 0 {
-		rawdb.WriteStateID(dl.db.diskdb, dl.rootHash, 0)
+		rawdb.WriteStateID(dl.db.diskdb, dl.root, 0)
 	}
-	rawdb.WriteStateID(dl.db.diskdb, bottom.root(), bottom.stateID())
+	rawdb.WriteStateID(dl.db.diskdb, bottom.rootHash(), bottom.stateID())
 
 	// Construct a new disk layer by merging the nodes from the provided
 	// diff layer, and flush the content in disk layer if there are too
 	// many nodes cached.
-	ndl := newDiskLayer(bottom.rootHash, bottom.id, dl.db, dl.buffer.commit(bottom.nodes))
+	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.buffer.commit(bottom.nodes))
 	err := ndl.buffer.flush(ndl.db.diskdb, ndl.db.cleans, ndl.id, force)
 	if err != nil {
 		return nil, err
@@ -189,7 +194,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 // revert applies the given state history and return a reverted disk layer.
 func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer, error) {
-	if h.meta.root != dl.root() {
+	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
 	}
 	// Reject if the provided state history is incomplete. It's due to
@@ -214,20 +219,20 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 
 	dl.stale = true
 
-	// Revert embedded states in the node buffer first if it's not empty.
+	// State change may be applied to node buffer, or the persistent
+	// state, depends on if node buffer is empty or not. If the node
+	// buffer is not empty, it means that the state transition that
+	// needs to be reverted is not yet written and cached in node
+	// buffer, otherwise, it must be flushed and manipulate persistent
+	// state directly.
 	if !dl.buffer.empty() {
 		err := dl.buffer.revert(dl.db.diskdb, nodes)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// Reset the clean cache before mutating persistent state.
-		if dl.db.cleans != nil {
-			dl.db.cleans.Reset()
-		}
-		// Apply the state changes in disk state.
 		batch := dl.db.diskdb.NewBatch()
-		writeNodes(batch, nodes, nil)
+		writeNodes(batch, nodes, dl.db.cleans)
 		rawdb.WritePersistentStateID(batch, dl.id-1)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write states", "err", err)
@@ -256,4 +261,23 @@ func (dl *diskLayer) size() common.StorageSize {
 		return 0
 	}
 	return common.StorageSize(dl.buffer.size)
+}
+
+// hasher is used to compute the sha256 hash of the provided data.
+type hasher struct{ sha crypto.KeccakState }
+
+var hasherPool = sync.Pool{
+	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+}
+
+func newHasher() *hasher {
+	return hasherPool.Get().(*hasher)
+}
+
+func (h *hasher) hash(data []byte) common.Hash {
+	return crypto.HashData(h.sha, data)
+}
+
+func (h *hasher) release() {
+	hasherPool.Put(h)
 }

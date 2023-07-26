@@ -77,13 +77,7 @@ func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*tr
 		return nil, nil
 	}
 	if n.Hash != hash {
-		return nil, &UnexpectedNodeError{
-			typ:      "cache",
-			expected: hash,
-			hash:     n.Hash,
-			owner:    owner,
-			path:     path,
-		}
+		return nil, newUnexpectedNodeError("dirty", hash, n.Hash, owner, path)
 	}
 	return n, nil
 }
@@ -106,11 +100,12 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 			// The nodes belong to original diff layer are still accessible even
 			// after merging, thus the ownership of nodes map should still belong
 			// to original layer and any mutation on it should be prevented.
-			b.nodes[owner] = make(map[string]*trienode.Node)
+			current = make(map[string]*trienode.Node)
 			for path, n := range subset {
-				b.nodes[owner][path] = n
+				current[path] = n
 				delta += int64(len(n.Blob) + len(path))
 			}
+			b.nodes[owner] = current
 			continue
 		}
 		for path, n := range subset {
@@ -118,14 +113,15 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 				delta += int64(len(n.Blob) + len(path))
 			} else {
 				delta += int64(len(n.Blob) - len(orig.Blob))
-				overwrite += 1
+				overwrite++
 				overwriteSize += int64(len(orig.Blob) + len(path))
 			}
-			b.nodes[owner][path] = n
+			current[path] = n
 		}
+		b.nodes[owner] = current
 	}
 	b.updateSize(delta)
-	b.layers += 1
+	b.layers++
 	gcNodesMeter.Mark(overwrite)
 	gcSizeMeter.Mark(overwriteSize)
 	return b
@@ -133,16 +129,15 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 
 // revert is the reverse operation of commit. It also merges the provided nodes
 // into the nodebuffer, the difference is that the provided node set should
-// revert the changes made by the last state transition. The provided nodes don't
-// belong to any live layer, safe to take the ownership if necessary.
+// revert the changes made by the last state transition.
 func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error {
 	// Short circuit if no embedded state transition to revert.
 	if b.layers == 0 {
 		return errStateUnrecoverable
 	}
-	b.layers -= 1
+	b.layers--
 
-	// Reset the entire buffer is only a single transition left.
+	// Reset the entire buffer if only a single transition left.
 	if b.layers == 0 {
 		b.reset()
 		return nil
@@ -154,7 +149,7 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 			panic(fmt.Sprintf("non-existent subset (%x)", owner))
 		}
 		for path, n := range subset {
-			cur, ok := current[path]
+			orig, ok := current[path]
 			if !ok {
 				// There is a special case in MPT that one child is removed from
 				// a fullNode which only has two children, and then a new child
@@ -176,13 +171,8 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 				}
 				panic(fmt.Sprintf("non-existent node (%x %v) blob: %v", owner, path, crypto.Keccak256Hash(n.Blob).Hex()))
 			}
-			if len(n.Blob) == 0 {
-				current[path] = trienode.NewDeleted()
-				delta -= int64(len(cur.Blob))
-			} else {
-				current[path] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
-				delta += int64(len(n.Blob)) - int64(len(cur.Blob))
-			}
+			current[path] = n
+			delta += int64(len(n.Blob)) - int64(len(orig.Blob))
 		}
 	}
 	b.updateSize(delta)
@@ -198,7 +188,7 @@ func (b *nodebuffer) updateSize(delta int64) {
 	}
 	s := b.size
 	b.size = 0
-	log.Error("Invalid buffer size", "prev", common.StorageSize(s), "delta", common.StorageSize(delta))
+	log.Error("Invalid pathdb buffer size", "prev", common.StorageSize(s), "delta", common.StorageSize(delta))
 }
 
 // reset cleans up the disk cache.
@@ -229,7 +219,7 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	// Ensure the target state id is aligned with the internal counter.
 	head := rawdb.ReadPersistentStateID(db)
 	if head+b.layers != id {
-		return fmt.Errorf("disk has invalid state id %d, want %d", id, head+b.layers)
+		return fmt.Errorf("buffer layers (%d) cannot be applied on top of persisted state id (%d) to reach requested state id (%d)", b.layers, head, id)
 	}
 	var (
 		start = time.Now()
@@ -237,18 +227,23 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	)
 	nodes := writeNodes(batch, b.nodes, clean)
 	rawdb.WritePersistentStateID(batch, id)
+
+	// Flush all mutations in a single batch
+	size := batch.ValueSize()
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	commitSizeMeter.Mark(int64(batch.ValueSize()))
+	commitSizeMeter.Mark(int64(size))
 	commitNodesMeter.Mark(int64(nodes))
 	commitTimeTimer.UpdateSince(start)
-	log.Debug("Persisted nodes", "number", len(b.nodes), "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Persisted pathdb nodes", "nodes", len(b.nodes), "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	b.reset()
 	return nil
 }
 
 // writeNodes writes the trie nodes into the provided database batch.
+// Note this function will also inject all the newly written nodes
+// into clean cache.
 func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.Node, clean *fastcache.Cache) (total int) {
 	for owner, subset := range nodes {
 		for path, n := range subset {
@@ -258,15 +253,18 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 				} else {
 					rawdb.DeleteStorageTrieNode(batch, owner, []byte(path))
 				}
-				continue
-			}
-			if owner == (common.Hash{}) {
-				rawdb.WriteAccountTrieNode(batch, []byte(path), n.Blob)
+				if clean != nil {
+					clean.Del(append(owner.Bytes(), path...))
+				}
 			} else {
-				rawdb.WriteStorageTrieNode(batch, owner, []byte(path), n.Blob)
-			}
-			if clean != nil {
-				clean.Set(n.Hash.Bytes(), n.Blob)
+				if owner == (common.Hash{}) {
+					rawdb.WriteAccountTrieNode(batch, []byte(path), n.Blob)
+				} else {
+					rawdb.WriteStorageTrieNode(batch, owner, []byte(path), n.Blob)
+				}
+				if clean != nil {
+					clean.Set(append(owner.Bytes(), path...), n.Blob)
+				}
 			}
 		}
 		total += len(subset)

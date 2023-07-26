@@ -96,12 +96,13 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadStateID retrieves the state id with the provided state root.
-func ReadStateID(db ethdb.KeyValueReader, root common.Hash) (uint64, bool) {
+func ReadStateID(db ethdb.KeyValueReader, root common.Hash) *uint64 {
 	data, err := db.Get(stateIDKey(root))
 	if err != nil || len(data) == 0 {
-		return 0, false
+		return nil
 	}
-	return binary.BigEndian.Uint64(data), true
+	number := binary.BigEndian.Uint64(data)
+	return &number
 }
 
 // WriteStateID writes the provided state lookup to database.
@@ -157,20 +158,6 @@ func DeleteTrieJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(trieJournalKey); err != nil {
 		log.Crit("Failed to remove tries journal", "err", err)
 	}
-}
-
-// WriteStateHistory writes the provided state history to database. Compute the
-// position of state history in freezer by minus one since the id of first state
-// history starts from one(zero for initial state).
-func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		op.AppendRaw(stateHistoryMeta, id-1, meta)
-		op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex)
-		op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex)
-		op.AppendRaw(stateHistoryAccountData, id-1, accounts)
-		op.AppendRaw(stateHistoryStorageData, id-1, storages)
-		return nil
-	})
 }
 
 // ReadStateHistoryMeta retrieves the metadata corresponding to the specified
@@ -235,4 +222,45 @@ func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64) []byte {
 		return nil
 	}
 	return blob
+}
+
+// ReadStateHistory retrieves the state history from database with provided id.
+// Compute the position of state history in freezer by minus one since the id
+// of first state history starts from one(zero for initial state).
+func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []byte, []byte, []byte, error) {
+	meta, err := db.Ancient(stateHistoryMeta, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	accountIndex, err := db.Ancient(stateHistoryAccountIndex, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	storageIndex, err := db.Ancient(stateHistoryStorageIndex, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	accountData, err := db.Ancient(stateHistoryAccountData, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	storageData, err := db.Ancient(stateHistoryStorageData, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return meta, accountIndex, storageIndex, accountData, storageData, nil
+}
+
+// WriteStateHistory writes the provided state history to database. Compute the
+// position of state history in freezer by minus one since the id of first state
+// history starts from one(zero for initial state).
+func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
+	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		op.AppendRaw(stateHistoryMeta, id-1, meta)
+		op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex)
+		op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex)
+		op.AppendRaw(stateHistoryAccountData, id-1, accounts)
+		op.AppendRaw(stateHistoryStorageData, id-1, storages)
+		return nil
+	})
 }

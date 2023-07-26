@@ -19,28 +19,28 @@ package pathdb
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
-	cleanHitMeter   = metrics.NewRegisteredMeter("triedb/clean/hit", nil)
-	cleanMissMeter  = metrics.NewRegisteredMeter("triedb/clean/miss", nil)
-	cleanReadMeter  = metrics.NewRegisteredMeter("triedb/clean/read", nil)
-	cleanWriteMeter = metrics.NewRegisteredMeter("triedb/clean/write", nil)
+	cleanHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/hit", nil)
+	cleanMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/miss", nil)
+	cleanReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/read", nil)
+	cleanWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/write", nil)
 
-	dirtyHitMeter         = metrics.NewRegisteredMeter("triedb/dirty/hit", nil)
-	dirtyMissMeter        = metrics.NewRegisteredMeter("triedb/dirty/miss", nil)
-	dirtyReadMeter        = metrics.NewRegisteredMeter("triedb/dirty/read", nil)
-	dirtyWriteMeter       = metrics.NewRegisteredMeter("triedb/dirty/write", nil)
-	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("triedb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+	dirtyHitMeter         = metrics.NewRegisteredMeter("pathdb/dirty/hit", nil)
+	dirtyMissMeter        = metrics.NewRegisteredMeter("pathdb/dirty/miss", nil)
+	dirtyReadMeter        = metrics.NewRegisteredMeter("pathdb/dirty/read", nil)
+	dirtyWriteMeter       = metrics.NewRegisteredMeter("pathdb/dirty/write", nil)
+	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	commitTimeTimer  = metrics.NewRegisteredTimer("triedb/commit/time", nil)
-	commitNodesMeter = metrics.NewRegisteredMeter("triedb/commit/nodes", nil)
-	commitSizeMeter  = metrics.NewRegisteredMeter("triedb/commit/size", nil)
+	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
+	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
+	commitSizeMeter  = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
-	gcNodesMeter = metrics.NewRegisteredMeter("triedb/gc/nodes", nil)
-	gcSizeMeter  = metrics.NewRegisteredMeter("triedb/gc/size", nil)
+	gcNodesMeter = metrics.NewRegisteredMeter("pathdb/gc/nodes", nil)
+	gcSizeMeter  = metrics.NewRegisteredMeter("pathdb/gc/bytes", nil)
 
-	diffLayerSizeMeter  = metrics.NewRegisteredMeter("triedb/diff/size", nil)
-	diffLayerNodesMeter = metrics.NewRegisteredMeter("triedb/diff/nodes", nil)
+	diffLayerSizeMeter  = metrics.NewRegisteredMeter("pathdb/diff/bytes", nil)
+	diffLayerNodesMeter = metrics.NewRegisteredMeter("pathdb/diff/nodes", nil)
 
-	historyBuildTimeMeter = metrics.NewRegisteredTimer("triedb/history/time", nil)
-	historyDataSizeMeter  = metrics.NewRegisteredMeter("triedb/history/size/data", nil)
-	historyIndexSizeMeter = metrics.NewRegisteredMeter("triedb/history/size/index", nil)
+	historyBuildTimeMeter = metrics.NewRegisteredTimer("pathdb/history/time", nil)
+	historyDataSizeMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
+	historyIndexSizeMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
 )

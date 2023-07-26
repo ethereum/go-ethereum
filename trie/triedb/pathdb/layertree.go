@@ -52,18 +52,18 @@ func (tree *layerTree) reset(head layer) {
 
 	var layers = make(map[common.Hash]layer)
 	for head != nil {
-		layers[head.root()] = head
-		head = head.parent()
+		layers[head.rootHash()] = head
+		head = head.parentLayer()
 	}
 	tree.layers = layers
 }
 
 // get retrieves a layer belonging to the given state root.
-func (tree *layerTree) get(stateRoot common.Hash) layer {
+func (tree *layerTree) get(root common.Hash) layer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	return tree.layers[types.TrieRootHash(stateRoot)]
+	return tree.layers[types.TrieRootHash(root)]
 }
 
 // forEach iterates the stored layers inside and applies the
@@ -86,7 +86,7 @@ func (tree *layerTree) len() int {
 }
 
 // add inserts a new layer into the tree if it can be linked to an existing old parent.
-func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, blockNumber uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -101,19 +101,16 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, blockNumber
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
 	}
-	l := parent.update(root, parent.stateID()+1, blockNumber, nodes.Flatten(), states)
+	l := parent.update(root, parent.stateID()+1, block, nodes.Flatten(), states)
 
 	tree.lock.Lock()
-	tree.layers[l.rootHash] = l
+	tree.layers[l.rootHash()] = l
 	tree.lock.Unlock()
 	return nil
 }
 
 // cap traverses downwards the diff tree until the number of allowed diff layers
 // are crossed. All diffs beyond the permitted number are flattened downwards.
-// An optional reserve set can be provided to prevent the specified diff layers
-// from being flattened. Note that this may prevent the diff layers from being
-// written to disk and eventually leads to out-of-memory.
 func (tree *layerTree) cap(root common.Hash, layers int) error {
 	// Retrieve the head layer to cap from
 	root = types.TrieRootHash(root)
@@ -135,13 +132,13 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			return err
 		}
 		// Replace the entire layer tree with the flat base
-		tree.layers = map[common.Hash]layer{base.root(): base}
+		tree.layers = map[common.Hash]layer{base.rootHash(): base}
 		return nil
 	}
 	// Dive until we run out of layers or reach the persistent database
 	for i := 0; i < layers-1; i++ {
 		// If we still have diff layers below, continue down
-		if parent, ok := diff.parent().(*diffLayer); ok {
+		if parent, ok := diff.parentLayer().(*diffLayer); ok {
 			diff = parent
 		} else {
 			// Diff stack too shallow, return without modifications
@@ -150,7 +147,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
-	switch parent := diff.parent().(type) {
+	switch parent := diff.parentLayer().(type) {
 	case *diskLayer:
 		return nil
 
@@ -164,8 +161,8 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			diff.lock.Unlock()
 			return err
 		}
-		tree.layers[base.root()] = base
-		diff.parentLayer = base
+		tree.layers[base.rootHash()] = base
+		diff.parent = base
 
 		diff.lock.Unlock()
 
@@ -176,7 +173,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	children := make(map[common.Hash][]common.Hash)
 	for root, layer := range tree.layers {
 		if dl, ok := layer.(*diffLayer); ok {
-			parent := dl.parent().root()
+			parent := dl.parentLayer().rootHash()
 			children[parent] = append(children[parent], root)
 		}
 	}
@@ -210,8 +207,8 @@ func (tree *layerTree) bottom() *diskLayer {
 		current = layer
 		break
 	}
-	for current.parent() != nil {
-		current = current.parent()
+	for current.parentLayer() != nil {
+		current = current.parentLayer()
 	}
 	return current.(*diskLayer)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -103,60 +104,74 @@ func TestEncodeDecodeMeta(t *testing.T) {
 	}
 }
 
-func checkHistory(t *testing.T, freezer *rawdb.ResettableFreezer, id uint64, exist bool) {
+func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, id uint64, root common.Hash, exist bool) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if exist && len(blob) == 0 {
-		t.Errorf("Failed to load trie history, %d", id)
+		t.Fatalf("Failed to load trie history, %d", id)
 	}
 	if !exist && len(blob) != 0 {
-		t.Errorf("Unexpected trie history, %d", id)
+		t.Fatalf("Unexpected trie history, %d", id)
+	}
+	if exist && rawdb.ReadStateID(db, root) == nil {
+		t.Fatalf("Root->ID mapping is not found, %d", id)
+	}
+	if !exist && rawdb.ReadStateID(db, root) != nil {
+		t.Fatalf("Unexpected root->ID mapping, %d", id)
 	}
 }
 
-func checkHistoriesInRange(t *testing.T, freezer *rawdb.ResettableFreezer, from, to uint64, exist bool) {
-	for i := from; i <= to; i += 1 {
-		checkHistory(t, freezer, i, exist)
+func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, from, to uint64, roots []common.Hash, exist bool) {
+	for i, j := from, 0; i <= to; i, j = i+1, j+1 {
+		checkHistory(t, db, freezer, i, roots[j], exist)
 	}
 }
 
 func TestTruncateHeadHistory(t *testing.T) {
 	var (
+		roots      []common.Hash
 		hs         = makeHistories(10)
+		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = openFreezer(t.TempDir(), false)
 	)
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
+		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
+		roots = append(roots, hs[i].meta.root)
 	}
 	for size := len(hs); size > 0; size-- {
-		pruned, err := truncateFromHead(freezer, uint64(size-1))
+		pruned, err := truncateFromHead(db, freezer, uint64(size-1))
 		if err != nil {
 			t.Fatalf("Failed to truncate from head %v", err)
 		}
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
-		checkHistoriesInRange(t, freezer, uint64(size), uint64(10), false)
-		checkHistoriesInRange(t, freezer, uint64(1), uint64(size-1), true)
+		checkHistoriesInRange(t, db, freezer, uint64(size), uint64(10), roots[size-1:10], false)
+		checkHistoriesInRange(t, db, freezer, uint64(1), uint64(size-1), roots[:size-1], true)
 	}
 }
 
 func TestTruncateTailHistory(t *testing.T) {
 	var (
+		roots      []common.Hash
 		hs         = makeHistories(10)
+		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = openFreezer(t.TempDir(), false)
 	)
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
+		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
+		roots = append(roots, hs[i].meta.root)
 	}
 	for newTail := 1; newTail < len(hs); newTail++ {
-		pruned, _ := truncateFromTail(freezer, uint64(newTail))
+		pruned, _ := truncateFromTail(db, freezer, uint64(newTail))
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
-		checkHistoriesInRange(t, freezer, uint64(1), uint64(newTail), false)
-		checkHistoriesInRange(t, freezer, uint64(newTail+1), uint64(10), true)
+		checkHistoriesInRange(t, db, freezer, uint64(1), uint64(newTail), roots[:newTail], false)
+		checkHistoriesInRange(t, db, freezer, uint64(newTail+1), uint64(10), roots[newTail:], true)
 	}
 }
 
@@ -180,22 +195,27 @@ func TestTruncateTailHistories(t *testing.T) {
 	}
 	for _, c := range cases {
 		var (
+			roots      []common.Hash
 			hs         = makeHistories(10)
+			db         = rawdb.NewMemoryDatabase()
 			freezer, _ = openFreezer(t.TempDir(), false)
 		)
 		for i := 0; i < len(hs); i++ {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 			rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
+			rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
+			roots = append(roots, hs[i].meta.root)
 		}
-		pruned, _ := truncateFromTail(freezer, uint64(10)-c.limit)
+		pruned, _ := truncateFromTail(db, freezer, uint64(10)-c.limit)
 		if pruned != c.expPruned {
 			t.Error("Unexpected pruned items", "want", c.expPruned, "got", pruned)
 		}
 		if c.empty {
-			checkHistoriesInRange(t, freezer, uint64(1), uint64(10), false)
+			checkHistoriesInRange(t, db, freezer, uint64(1), uint64(10), roots, false)
 		} else {
-			checkHistoriesInRange(t, freezer, uint64(1), c.maxPruned, false)
-			checkHistory(t, freezer, c.minUnpruned, true)
+			tail := 10 - int(c.limit)
+			checkHistoriesInRange(t, db, freezer, uint64(1), c.maxPruned, roots[:tail], false)
+			checkHistoriesInRange(t, db, freezer, c.minUnpruned, uint64(10), roots[tail:], true)
 		}
 	}
 }
