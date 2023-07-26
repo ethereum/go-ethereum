@@ -106,7 +106,7 @@ func (l *JSONLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	l.env = env
 }
 
-func (l *JSONLogger) CaptureTxEnd(receipt *types.Receipt) {}
+func (l *JSONLogger) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
 func (*JSONLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
 

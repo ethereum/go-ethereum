@@ -176,8 +176,11 @@ func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	}
 }
 
-func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt) {
+func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	if !t.config.DiffMode {
+		return
+	}
+	if err != nil {
 		return
 	}
 

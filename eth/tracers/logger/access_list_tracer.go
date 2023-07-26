@@ -174,7 +174,7 @@ func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 func (*AccessListTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
-func (*AccessListTracer) CaptureTxEnd(receipt *types.Receipt) {}
+func (*AccessListTracer) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
 func (*AccessListTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {}
 

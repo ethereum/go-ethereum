@@ -207,8 +207,8 @@ func (t *flatCallTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
-func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt) {
-	t.tracer.CaptureTxEnd(receipt)
+func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+	t.tracer.CaptureTxEnd(receipt, err)
 }
 
 // GetResult returns an empty json object.

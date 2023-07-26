@@ -269,7 +269,14 @@ func (l *StructLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	l.env = env
 }
 
-func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt) {
+func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		// Don't override vm error
+		if l.err == nil {
+			l.err = err
+		}
+		return
+	}
 	l.usedGas = receipt.GasUsed
 }
 
@@ -417,7 +424,7 @@ func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 func (*mdLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
-func (*mdLogger) CaptureTxEnd(receipt *types.Receipt) {}
+func (*mdLogger) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
 func (*mdLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
 

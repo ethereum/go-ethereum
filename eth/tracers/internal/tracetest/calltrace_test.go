@@ -156,7 +156,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
+			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
@@ -382,7 +382,7 @@ func TestInternals(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 		}
-		tc.tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
+		tc.tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 		// Retrieve the trace result and compare against the expected
 		res, err := tc.tracer.GetResult()
 		if err != nil {

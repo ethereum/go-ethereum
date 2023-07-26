@@ -31,7 +31,7 @@ import (
 type EVMLogger interface {
 	// Transaction level
 	CaptureTxStart(evm *EVM, tx *types.Transaction)
-	CaptureTxEnd(receipt *types.Receipt)
+	CaptureTxEnd(receipt *types.Receipt, err error)
 	// Top call frame
 	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureEnd(output []byte, gasUsed uint64, err error)

@@ -119,7 +119,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)
 	}
-	tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
+	tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 
 	// Retrieve the trace result and compare against the etalon
 	res, err := tracer.GetResult()

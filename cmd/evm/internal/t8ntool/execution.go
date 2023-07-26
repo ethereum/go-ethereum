@@ -191,6 +191,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
+			tracer.CaptureTxEnd(nil, err)
 			continue
 		}
 		includedTxs = append(includedTxs, tx)
@@ -232,7 +233,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
-			tracer.CaptureTxEnd(receipt)
+			tracer.CaptureTxEnd(receipt, nil)
 		}
 
 		txIndex++

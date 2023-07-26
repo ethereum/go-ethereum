@@ -792,7 +792,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		statedb.SetTxContext(tx.Hash(), i)
 		vmConf.Tracer.CaptureTxStart(vmenv, tx)
 		vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		vmConf.Tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas})
+		vmConf.Tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
 		if writer != nil {
 			writer.Flush()
 		}
@@ -976,10 +976,11 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	tracer.CaptureTxStart(vmenv, tx)
 	res, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit))
 	if err != nil {
+		tracer.CaptureTxEnd(nil, err)
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
 	r := &types.Receipt{GasUsed: res.UsedGas}
-	tracer.CaptureTxEnd(r)
+	tracer.CaptureTxEnd(r, nil)
 	return tracer.GetResult()
 }
 
