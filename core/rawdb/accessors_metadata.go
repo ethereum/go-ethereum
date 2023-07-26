@@ -81,6 +81,12 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
+// HasGenesisStateSpec determines if the genesis state specification based on the
+// given genesis (block-)hash exists in the database
+func HasGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) bool {
+	return len(ReadGenesisStateSpec(db, blockhash)) > 0
+}
+
 // ReadGenesisStateSpec retrieves the genesis state specification based on the
 // given genesis (block-)hash.
 func ReadGenesisStateSpec(db ethdb.KeyValueReader, blockhash common.Hash) []byte {

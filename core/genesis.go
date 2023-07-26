@@ -167,45 +167,68 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 			return err
 		}
 	}
-	// Marshal the genesis state specification and persist.
-	blob, err := json.Marshal(ga)
+
+	if err := writeGenesisStateSpec(db, blockhash, *ga); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writeGenesisStateSpec marshals the genesis state specification and persist to database.
+func writeGenesisStateSpec(db ethdb.Database, blockhash common.Hash, alloc GenesisAlloc) error {
+	blob, err := json.Marshal(alloc)
 	if err != nil {
 		return err
 	}
+
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
 	return nil
+}
+
+func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc GenesisAlloc, found bool, err error) {
+	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
+	if len(blob) != 0 {
+		if err := alloc.UnmarshalJSON(blob); err != nil {
+			return nil, true, err
+		}
+
+		return alloc, true, nil
+	}
+
+	// Genesis allocation is missing and there are several possibilities:
+	// the node is legacy which doesn't persist the genesis allocation or
+	// the persisted allocation is just lost.
+	// - supported networks(mainnet, testnets), recover with defined allocations
+	// - private network, can't recover
+	var genesis *Genesis
+	switch blockhash {
+	case params.MainnetGenesisHash:
+		genesis = DefaultGenesisBlock()
+	case params.GoerliGenesisHash:
+		genesis = DefaultGoerliGenesisBlock()
+	case params.SepoliaGenesisHash:
+		genesis = DefaultSepoliaGenesisBlock()
+	}
+	if genesis != nil {
+		return genesis.Alloc, true, nil
+	}
+
+	return nil, false, nil
 }
 
 // CommitGenesisState loads the stored genesis state with the given block
 // hash and commits it into the provided trie database.
 func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
-	var alloc GenesisAlloc
-	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
-	if len(blob) != 0 {
-		if err := alloc.UnmarshalJSON(blob); err != nil {
-			return err
-		}
-	} else {
-		// Genesis allocation is missing and there are several possibilities:
-		// the node is legacy which doesn't persist the genesis allocation or
-		// the persisted allocation is just lost.
-		// - supported networks(mainnet, testnets), recover with defined allocations
-		// - private network, can't recover
-		var genesis *Genesis
-		switch blockhash {
-		case params.MainnetGenesisHash:
-			genesis = DefaultGenesisBlock()
-		case params.GoerliGenesisHash:
-			genesis = DefaultGoerliGenesisBlock()
-		case params.SepoliaGenesisHash:
-			genesis = DefaultSepoliaGenesisBlock()
-		}
-		if genesis != nil {
-			alloc = genesis.Alloc
-		} else {
-			return errors.New("not found")
-		}
+	alloc, found, err := getGenesisState(db, blockhash)
+	if err != nil {
+		return err
 	}
+
+	if !found {
+		return nil
+	}
+
 	return alloc.flush(db, triedb, blockhash, nil)
 }
 
@@ -382,10 +405,19 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
 		return newcfg, stored, compatErr
 	}
+
 	// Don't overwrite if the old is identical to the new
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}
+
+	// We only write genesis alloc if the `genesis` is non-nil, which happen on blockchain boot and custom network.
+	if genesis != nil && !rawdb.HasGenesisStateSpec(db, stored) {
+		if err := writeGenesisStateSpec(db, stored, genesis.Alloc); err != nil {
+			return newcfg, stored, fmt.Errorf("write genesis state spec: %w", err)
+		}
+	}
+
 	return newcfg, stored, nil
 }
 
@@ -517,6 +549,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 	if err := g.Alloc.flush(db, triedb, block.Hash(), bcLogger); err != nil {
 		return nil, err
 	}
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
