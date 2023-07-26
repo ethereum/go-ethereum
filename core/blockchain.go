@@ -408,6 +408,34 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 
+	if bc.logger != nil && bc.CurrentBlock().Number.Uint64() == 0 {
+		rawAlloc, found := rawdb.ReadGenesisAlloc(bc.db)
+		if !found {
+			return nil, fmt.Errorf("live blockchain tracer requires genesis alloc to be set, use 'geth init' to set it")
+		}
+
+		alloc := make(GenesisAlloc, len(rawAlloc))
+		for _, account := range rawAlloc {
+			var storage map[common.Hash]common.Hash
+			if len(account.Storage) > 0 {
+				storage = make(map[common.Hash]common.Hash, len(account.Storage))
+				for _, entry := range account.Storage {
+					storage[entry.Key] = entry.Value
+				}
+			}
+
+			alloc[account.Address] = GenesisAccount{
+				Balance:    account.Balance,
+				Code:       account.Code,
+				Storage:    storage,
+				Nonce:      account.Nonce,
+				PrivateKey: account.PrivateKey,
+			}
+		}
+
+		bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+	}
+
 	// Load any existing snapshot, regenerating it if loading failed
 	if bc.cacheConfig.SnapshotLimit > 0 {
 		// If the chain was rewound past the snapshot persistent layer (causing
