@@ -273,7 +273,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// - the coinbase suicided, or
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
-	statedb.AddBalance(block.Coinbase(), new(big.Int))
+	statedb.AddBalance(block.Coinbase(), new(big.Int), 0x0)
 	// Commit block
 	statedb.Commit(config.IsEIP158(block.Number()))
 	// And _now_ get the state root
@@ -291,7 +291,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance)
+		statedb.SetBalance(addr, a.Balance, 0x0)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}

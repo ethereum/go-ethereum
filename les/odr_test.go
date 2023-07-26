@@ -130,7 +130,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(bankAddr)
-				from.SetBalance(math.MaxBig256)
+				from.SetBalance(math.MaxBig256, 0x0)
 
 				msg := &core.Message{
 					From:              from.Address(),
@@ -156,7 +156,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(bankAddr, math.MaxBig256)
+			state.SetBalance(bankAddr, math.MaxBig256, 0x0)
 			msg := &core.Message{
 				From:              bankAddr,
 				To:                &testContractAddr,
