@@ -36,10 +36,11 @@ type Firehose struct {
 	outputBuffer *bytes.Buffer
 
 	// Block state
-	inBlock      *atomic.Bool
-	block        *pbeth.Block
-	blockBaseFee *big.Int
-	blockOrdinal *Ordinal
+	inBlock       *atomic.Bool
+	block         *pbeth.Block
+	blockBaseFee  *big.Int
+	blockOrdinal  *Ordinal
+	blockLogIndex uint32
 
 	// Transaction state
 	inTransaction *atomic.Bool
@@ -47,6 +48,7 @@ type Firehose struct {
 
 	// Call state
 	callStack               *CallStack
+	deferredCallState       *DeferredCallState
 	latestCallStartSuicided bool
 }
 
@@ -58,31 +60,34 @@ func NewFirehoseLogger() *Firehose {
 	return &Firehose{
 		outputBuffer: bytes.NewBuffer(make([]byte, 0, 100*1024*1024)),
 
-		inBlock:      atomic.NewBool(false),
-		blockOrdinal: &Ordinal{},
+		inBlock:       atomic.NewBool(false),
+		blockOrdinal:  &Ordinal{},
+		blockLogIndex: 0,
 
 		inTransaction: atomic.NewBool(false),
 
 		callStack:               &CallStack{},
+		deferredCallState:       &DeferredCallState{},
 		latestCallStartSuicided: false,
 	}
 }
 
+// resetBlock resets the block state only, do not reset transaction or call state
 func (f *Firehose) resetBlock() {
 	f.inBlock.Store(false)
 	f.block = nil
 	f.blockBaseFee = nil
 	f.blockOrdinal.Reset()
-	// f.blockLogIndex = 0
+	f.blockLogIndex = 0
 }
 
+// resetTransaction resets the transaction state and the call state in one shot
 func (f *Firehose) resetTransaction() {
 	f.inTransaction.Store(false)
-}
 
-func (f *Firehose) resetCall() {
 	f.callStack.Reset()
 	f.latestCallStartSuicided = false
+	f.deferredCallState.Reset()
 }
 
 func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.Header, safe *types.Header) {
@@ -120,7 +125,6 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 	f.resetBlock()
 	f.resetTransaction()
-	f.resetCall()
 
 	firehoseDebug("block end")
 }
@@ -173,9 +177,7 @@ func (f *Firehose) CaptureTxEnd(receipt *types.Receipt) {
 
 	f.block.TransactionTraces = append(f.block.TransactionTraces, f.completeTransaction(receipt))
 
-	// We also reset call, because a transaction failure can happen in which case it's possible the call was not closed
 	f.resetTransaction()
-	f.resetCall()
 
 	firehoseDebug("trx end")
 }
@@ -220,7 +222,7 @@ func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// Instrumentation at the opcode level, we don't use it
+	// Instrumentation at the opcode level, we don't use it in Firehose
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -259,7 +261,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	firehoseDebug("call start source=%s type=%s", source, callType)
 	f.ensureInBlockAndInTrx()
 
-	f.callStack.Push(&pbeth.Call{
+	call := &pbeth.Call{
 		BeginOrdinal: f.blockOrdinal.Next(),
 		CallType:     callType,
 		Depth:        0,
@@ -268,7 +270,13 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Input:        input,
 		Value:        pbeth.BigIntFromNative(value),
 		GasLimit:     gas,
-	})
+	}
+
+	if err := f.deferredCallState.MaybePopulateCallAndReset(source, call); err != nil {
+		panic(err)
+	}
+
+	f.callStack.Push(call)
 }
 
 func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error) {
@@ -367,6 +375,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 		}
 	}
 
+	// Ordering matters here, we must set the end ordinal of the call before the transaction
 	rootCall.EndOrdinal = f.blockOrdinal.Next()
 	rootTrx.EndOrdinal = f.blockOrdinal.Next()
 
@@ -375,32 +384,144 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 }
 
 func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
+	if reason == state.BalanceChangeUnspecified {
+		// We ignore those, if they are mislabelled, too bad so particular attention needs to be ported to this
+		return
+	}
+
 	f.ensureInBlockOrTrx()
-	// fmt.Fprintf(os.Stderr, "OnBalanceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
+
+	change := &pbeth.BalanceChange{
+		Ordinal:  f.blockOrdinal.Next(),
+		Address:  a.Bytes(),
+		OldValue: pbeth.BigIntFromNative(prev),
+		NewValue: pbeth.BigIntFromNative(new),
+		Reason:   balanceChangeReasonFromChain(reason),
+	}
+
+	if change.Reason == pbeth.BalanceChange_REASON_UNKNOWN {
+		panic(fmt.Errorf("unknown balance change reason %s from code %d not accepted here", change.Reason, reason))
+	}
+
+	if f.inTransaction.Load() {
+		activeCall := f.callStack.Peek()
+
+		// There is an initial transfer happening will the call is not yet started, we track it manually
+		if activeCall == nil {
+			f.deferredCallState.balanceChanges = append(f.deferredCallState.balanceChanges, change)
+			return
+		}
+
+		activeCall.BalanceChanges = append(activeCall.BalanceChanges, change)
+	} else {
+		f.block.BalanceChanges = append(f.block.BalanceChanges, change)
+	}
 }
 
 func (f *Firehose) OnNonceChange(a common.Address, prev, new uint64) {
-	// fmt.Fprintf(os.Stderr, "OnNonceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
+	f.ensureInBlockAndInTrx()
+
+	activeCall := f.callStack.Peek()
+	change := &pbeth.NonceChange{
+		Address:  a.Bytes(),
+		OldValue: prev,
+		NewValue: new,
+		Ordinal:  f.blockOrdinal.Next(),
+	}
+
+	// There is an initial nonce change happening when the call is not yet started, we track it manually
+	if activeCall == nil {
+		f.deferredCallState.nonceChanges = append(f.deferredCallState.nonceChanges, change)
+		return
+	}
+
+	activeCall.NonceChanges = append(activeCall.NonceChanges, change)
 }
 
 func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-	// fmt.Fprintf(os.Stderr, "OnCodeChange: a=%v, prevCodeHash=%v, prev=%s, codeHash=%v, code=%s\n", a, prevCodeHash, hexutil.Bytes(prev), codeHash, hexutil.Bytes(code))
+	f.ensureInBlockOrTrx()
+
+	change := &pbeth.CodeChange{
+		Address: a.Bytes(),
+		OldHash: prevCodeHash.Bytes(),
+		OldCode: prev,
+		NewHash: codeHash.Bytes(),
+		NewCode: code,
+		Ordinal: f.blockOrdinal.Next(),
+	}
+
+	if f.inTransaction.Load() {
+		activeCall := f.callStack.Peek()
+		if activeCall == nil {
+			f.panicNotInState("caller expected to be in call state but we were not, this is a bug")
+		}
+
+		activeCall.CodeChanges = append(activeCall.CodeChanges, change)
+	} else {
+		f.block.CodeChanges = append(f.block.CodeChanges, change)
+	}
 }
 
 func (f *Firehose) OnStorageChange(a common.Address, k, prev, new common.Hash) {
-	// fmt.Fprintf(os.Stderr, "OnStorageChange: a=%v, k=%v, prev=%v, new=%v\n", a, k, prev, new)
+	f.ensureInBlockAndInTrxAndInCall()
+
+	activeCall := f.callStack.Peek()
+	activeCall.StorageChanges = append(activeCall.StorageChanges, &pbeth.StorageChange{
+		Address:  a.Bytes(),
+		Key:      k.Bytes(),
+		OldValue: prev.Bytes(),
+		NewValue: new.Bytes(),
+		Ordinal:  f.blockOrdinal.Next(),
+	})
 }
 
 func (f *Firehose) OnLog(l *types.Log) {
-	// fmt.Fprintf(os.Stderr, "OnLog: l=%v\n", l)
+	f.ensureInBlockAndInTrxAndInCall()
+
+	topics := make([][]byte, len(l.Topics))
+	for i, topic := range l.Topics {
+		topics[i] = topic.Bytes()
+	}
+
+	activeCall := f.callStack.Peek()
+	activeCall.Logs = append(activeCall.Logs, &pbeth.Log{
+		Address:    l.Address.Bytes(),
+		Topics:     topics,
+		Data:       l.Data,
+		Index:      uint32(l.TxIndex),
+		BlockIndex: f.blockLogIndex,
+		Ordinal:    f.blockOrdinal.Next(),
+	})
+
+	f.blockLogIndex++
 }
 
 func (f *Firehose) OnNewAccount(a common.Address) {
-	// fmt.Fprintf(os.Stderr, "OnNewAccount: a=%v\n", a)
+	f.ensureInBlockAndInTrxAndInCall()
+
+	activeCall := f.callStack.Peek()
+	activeCall.AccountCreations = append(activeCall.AccountCreations, &pbeth.AccountCreation{
+		Account: a.Bytes(),
+		Ordinal: f.blockOrdinal.Next(),
+	})
 }
 
 func (f *Firehose) OnGasConsumed(gas, amount uint64) {
-	// fmt.Fprintf(os.Stderr, "OnGasConsumed: gas=%v, amount=%v\n", gas, amount)
+	f.ensureInBlockAndInTrx()
+
+	activeCall := f.callStack.Peek()
+	change := &pbeth.GasChange{
+		OldValue: gas,
+		NewValue: gas + amount,
+	}
+
+	// There is an initial gas consumption happening will the call is not yet started, we track it manually
+	if activeCall == nil {
+		f.deferredCallState.gasChanges = append(f.deferredCallState.gasChanges, change)
+		return
+	}
+
+	activeCall.GasChanges = append(activeCall.GasChanges, change)
 }
 
 func (f *Firehose) ensureInBlock() {
@@ -677,6 +798,44 @@ func newAccessListFromChain(accessList types.AccessList) (out []*pbeth.AccessTup
 	return
 }
 
+func balanceChangeReasonFromChain(reason state.BalanceChangeReason) pbeth.BalanceChange_Reason {
+	switch reason {
+	case state.BalanceChangeRewardMineUncle:
+		return pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE
+	case state.BalanceChangeRewardMineBlock:
+		return pbeth.BalanceChange_REASON_REWARD_MINE_BLOCK
+	case state.BalanceChangeDaoRefundContract:
+		return pbeth.BalanceChange_REASON_DAO_REFUND_CONTRACT
+	case state.BalanceChangeDaoAdjustBalance:
+		return pbeth.BalanceChange_REASON_DAO_ADJUST_BALANCE
+	case state.BalanceChangeTransfer:
+		return pbeth.BalanceChange_REASON_TRANSFER
+	case state.BalanceChangeGenesisBalance:
+		return pbeth.BalanceChange_REASON_GENESIS_BALANCE
+	case state.BalanceChangeGasBuy:
+		return pbeth.BalanceChange_REASON_GAS_BUY
+	case state.BalanceChangeRewardTransactionFee:
+		return pbeth.BalanceChange_REASON_REWARD_TRANSACTION_FEE
+	case state.BalanceChangeGasRefund:
+		return pbeth.BalanceChange_REASON_GAS_REFUND
+	case state.BalanceChangeTouchAccount:
+		return pbeth.BalanceChange_REASON_TOUCH_ACCOUNT
+	case state.BalanceChangeSuicideRefund:
+		return pbeth.BalanceChange_REASON_SUICIDE_REFUND
+	case state.BalanceChangeSuicideWithdraw:
+		return pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW
+	case state.BalanceChangeBurn:
+		return pbeth.BalanceChange_REASON_BURN
+	case state.BalanceChangeWithdrawal:
+		return pbeth.BalanceChange_REASON_WITHDRAWAL
+
+	case state.BalanceChangeUnspecified:
+		return pbeth.BalanceChange_REASON_UNKNOWN
+	}
+
+	panic(fmt.Errorf("unknown tracer balance change reason value '%d', check state.BalanceChangeReason so see to which constant it refers to", reason))
+}
+
 func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType:
@@ -722,6 +881,9 @@ func firehoseDebug(msg string, args ...interface{}) {
 		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 	}
 }
+
+// Ignore unused, we keep it around for debugging purposes
+var _ = firehoseDebugPrintStack
 
 func firehoseDebugPrintStack() {
 	if isFirehoseDebugEnabled {
@@ -801,6 +963,43 @@ func (s *CallStack) Peek() *pbeth.Call {
 	}
 
 	return s.stack[len(s.stack)-1]
+}
+
+// DeferredCallState is a helper struct that can be used to accumulate call's state
+// that is recorded before the Call has been started. This happens on the "starting"
+// portion of the call/created.
+type DeferredCallState struct {
+	balanceChanges []*pbeth.BalanceChange
+	gasChanges     []*pbeth.GasChange
+	nonceChanges   []*pbeth.NonceChange
+}
+
+func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth.Call) error {
+	if d.IsEmpty() {
+		return nil
+	}
+
+	if source != "root" {
+		return fmt.Errorf("unexpected source for deferred call state, expected root but got %s, deferred call's state are always produced on the 'root' call", source)
+	}
+
+	call.BalanceChanges = d.balanceChanges
+	call.GasChanges = d.gasChanges
+	call.NonceChanges = d.nonceChanges
+
+	d.Reset()
+
+	return nil
+}
+
+func (d *DeferredCallState) IsEmpty() bool {
+	return len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0
+}
+
+func (d *DeferredCallState) Reset() {
+	d.balanceChanges = nil
+	d.gasChanges = nil
+	d.nonceChanges = nil
 }
 
 func errorView(err error) _errorView {
