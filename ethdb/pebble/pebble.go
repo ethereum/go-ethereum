@@ -279,7 +279,7 @@ func (d *Database) Put(key []byte, value []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.Set(key, value, pebble.NoSync)
+	return d.db.Set(key, value, pebble.Sync)
 }
 
 // Delete removes the key from the key-value store.
@@ -535,7 +535,7 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
-	return b.b.Commit(pebble.NoSync)
+	return b.b.Commit(pebble.Sync)
 }
 
 // Reset resets the batch for reuse.

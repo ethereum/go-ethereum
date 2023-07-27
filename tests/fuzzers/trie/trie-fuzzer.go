@@ -165,9 +165,12 @@ func runRandTest(rt randTest) error {
 		case opHash:
 			tr.Hash()
 		case opCommit:
-			hash, nodes := tr.Commit(false)
+			hash, nodes, err := tr.Commit(false)
+			if err != nil {
+				return err
+			}
 			if nodes != nil {
-				if err := triedb.Update(hash, origin, trienode.NewWithNodeSet(nodes)); err != nil {
+				if err := triedb.Update(hash, origin, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 					return err
 				}
 			}
@@ -179,7 +182,7 @@ func runRandTest(rt randTest) error {
 			origin = hash
 		case opItercheckhash:
 			checktr := trie.NewEmpty(triedb)
-			it := trie.NewIterator(tr.NodeIterator(nil))
+			it := trie.NewIterator(tr.MustNodeIterator(nil))
 			for it.Next() {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
@@ -187,7 +190,7 @@ func runRandTest(rt randTest) error {
 				return errors.New("hash mismatch in opItercheckhash")
 			}
 		case opProve:
-			rt[i].err = tr.Prove(step.key, 0, proofDb{})
+			rt[i].err = tr.Prove(step.key, proofDb{})
 		}
 		// Abort the test on error.
 		if rt[i].err != nil {

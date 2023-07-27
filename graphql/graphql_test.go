@@ -438,18 +438,12 @@ func createNode(t *testing.T) *node.Node {
 
 func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
 	ethConf := &ethconfig.Config{
-		Genesis:                 gspec,
-		NetworkId:               1337,
-		TrieCleanCache:          5,
-		TrieCleanCacheJournal:   "triecache",
-		TrieCleanCacheRejournal: 60 * time.Minute,
-		TrieDirtyCache:          5,
-		TrieTimeout:             60 * time.Minute,
-		SnapshotCache:           5,
-	}
-	ethBackend, err := eth.New(stack, ethConf)
-	if err != nil {
-		t.Fatalf("could not create eth backend: %v", err)
+		Genesis:        gspec,
+		NetworkId:      1337,
+		TrieCleanCache: 5,
+		TrieDirtyCache: 5,
+		TrieTimeout:    60 * time.Minute,
+		SnapshotCache:  5,
 	}
 	var engine consensus.Engine = ethash.NewFaker()
 	if shanghai {
@@ -457,8 +451,14 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		chainCfg := gspec.Config
 		chainCfg.TerminalTotalDifficultyPassed = true
 		chainCfg.TerminalTotalDifficulty = common.Big0
-		shanghaiTime := uint64(0)
+		// GenerateChain will increment timestamps by 10.
+		// Shanghai upgrade at block 1.
+		shanghaiTime := uint64(5)
 		chainCfg.ShanghaiTime = &shanghaiTime
+	}
+	ethBackend, err := eth.New(stack, ethConf)
+	if err != nil {
+		t.Fatalf("could not create eth backend: %v", err)
 	}
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),

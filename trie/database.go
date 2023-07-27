@@ -18,22 +18,22 @@ package trie
 
 import (
 	"errors"
-	"runtime"
-	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // Config defines all necessary options for database.
 type Config struct {
-	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
-	Journal   string // Journal of clean cache to survive node restarts
-	Preimages bool   // Flag whether the preimage of trie key is recorded
+	Cache     int  // Memory allowance (MB) to use for caching trie nodes in memory
+	Preimages bool // Flag whether the preimage of trie key is recorded
+
+	// Testing hooks
+	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -79,11 +79,7 @@ type Database struct {
 func prepare(diskdb ethdb.Database, config *Config) *Database {
 	var cleans *fastcache.Cache
 	if config != nil && config.Cache > 0 {
-		if config.Journal == "" {
-			cleans = fastcache.New(config.Cache * 1024 * 1024)
-		} else {
-			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
-		}
+		cleans = fastcache.New(config.Cache * 1024 * 1024)
 	}
 	var preimages *preimageStore
 	if config != nil && config.Preimages {
@@ -113,8 +109,8 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 }
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
-// Nil is returned in case the state is not available.
-func (db *Database) Reader(blockRoot common.Hash) Reader {
+// An error will be returned if the requested state is not available.
+func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 	return db.backend.(*hashdb.Database).Reader(blockRoot)
 }
 
@@ -122,7 +118,10 @@ func (db *Database) Reader(blockRoot common.Hash) Reader {
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
-func (db *Database) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+	if db.config != nil && db.config.OnCommit != nil {
+		db.config.OnCommit(states)
+	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
@@ -168,49 +167,14 @@ func (db *Database) Scheme() string {
 // It is meant to be called when closing the blockchain object, so that all
 // resources held can be released correctly.
 func (db *Database) Close() error {
-	if db.preimages != nil {
-		db.preimages.commit(true)
-	}
+	db.WritePreimages()
 	return db.backend.Close()
 }
 
-// saveCache saves clean state cache to given directory path
-// using specified CPU cores.
-func (db *Database) saveCache(dir string, threads int) error {
-	if db.cleans == nil {
-		return nil
-	}
-	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
-
-	start := time.Now()
-	err := db.cleans.SaveToFileConcurrent(dir, threads)
-	if err != nil {
-		log.Error("Failed to persist clean trie cache", "error", err)
-		return err
-	}
-	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
-}
-
-// SaveCache atomically saves fast cache data to the given dir using all
-// available CPU cores.
-func (db *Database) SaveCache(dir string) error {
-	return db.saveCache(dir, runtime.GOMAXPROCS(0))
-}
-
-// SaveCachePeriodically atomically saves fast cache data to the given dir with
-// the specified interval. All dump operation will only use a single CPU core.
-func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			db.saveCache(dir, 1)
-		case <-stopCh:
-			return
-		}
+// WritePreimages flushes all accumulated preimages to disk forcibly.
+func (db *Database) WritePreimages() {
+	if db.preimages != nil {
+		db.preimages.commit(true)
 	}
 }
 

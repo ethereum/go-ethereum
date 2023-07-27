@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,21 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build darwin || dragonfly || freebsd || linux || nacl || netbsd || openbsd || solaris
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
+package catalyst
 
-package rpc
+import (
+	"context"
 
-/*
-#include <sys/un.h>
-
-int max_socket_path_size() {
-struct sockaddr_un s;
-return sizeof(s.sun_path);
-}
-*/
-import "C"
-
-var (
-	max_path_size = C.max_socket_path_size()
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
+
+type api struct {
+	simBeacon *SimulatedBeacon
+}
+
+func (a *api) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
+	return a.simBeacon.withdrawals.add(withdrawal)
+}
+
+func (a *api) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
+	a.simBeacon.setFeeRecipient(feeRecipient)
+}

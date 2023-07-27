@@ -256,7 +256,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	if origin == nil {
 		origin = common.Hash{}.Bytes()
 	}
-	if err := tr.Prove(origin, 0, proof); err != nil {
+	if err := tr.Prove(origin, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
 		return &proofResult{
 			keys:     keys,
@@ -267,7 +267,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 		}, nil
 	}
 	if last != nil {
-		if err := tr.Prove(last, 0, proof); err != nil {
+		if err := tr.Prove(last, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
 			return &proofResult{
 				keys:     keys,
@@ -361,9 +361,12 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes := snapTrie.Commit(false)
+		root, nodes, err := snapTrie.Commit(false)
+		if err != nil {
+			return false, nil, err
+		}
 		if nodes != nil {
-			tdb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+			tdb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 			tdb.Commit(root, false)
 		}
 		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
@@ -382,8 +385,6 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	}
 	var (
 		trieMore       bool
-		nodeIt         = tr.NodeIterator(origin)
-		iter           = trie.NewIterator(nodeIt)
 		kvkeys, kvvals = result.keys, result.vals
 
 		// counters
@@ -397,7 +398,12 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		start    = time.Now()
 		internal time.Duration
 	)
+	nodeIt, err := tr.NodeIterator(origin)
+	if err != nil {
+		return false, nil, err
+	}
 	nodeIt.AddResolver(resolver)
+	iter := trie.NewIterator(nodeIt)
 
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {

@@ -117,7 +117,7 @@ func (b *benchmarkProofsOrCode) request(peer *serverPeer, index int) error {
 	key := make([]byte, 32)
 	crand.Read(key)
 	if b.code {
-		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccountAddress: key}})
 	}
 	return peer.requestProofs(0, []ProofReq{{BHash: b.headHash, Key: key}})
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package downloader
+package snap
 
-import "github.com/ethereum/go-ethereum/core/types"
+import (
+	metrics "github.com/ethereum/go-ethereum/metrics"
+)
 
-type DoneEvent struct {
-	Latest *types.Header
-}
-type StartEvent struct{}
-type FailedEvent struct{ Err error }
+var (
+	ingressRegistrationErrorName = "eth/protocols/snap/ingress/registration/error"
+	egressRegistrationErrorName  = "eth/protocols/snap/egress/registration/error"
+
+	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
+	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
+)
