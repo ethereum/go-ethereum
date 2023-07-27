@@ -70,7 +70,7 @@ const (
 	// a private tx cancelling publicly propagated blobs.
 	//
 	// Note, transactions resurrected by a reorg are also subject to this limit,
-	// so pushing it down too agressively might make resurrections non-functional.
+	// so pushing it down too aggressively might make resurrections non-functional.
 	maxTxsPerAccount = 16
 
 	// pendingTransactionStore is the subfolder containing the currently queued
