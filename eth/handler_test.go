@@ -101,7 +101,7 @@ func (p *testTxPool) Add(txs []*txpool.Transaction, local bool, sync bool) []err
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*types.Transaction {
+func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -113,7 +113,19 @@ func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*types.Trans
 	for _, batch := range batches {
 		sort.Sort(types.TxByNonce(batch))
 	}
-	return batches
+	pending := make(map[common.Address][]*txpool.LazyTransaction)
+	for addr, batch := range batches {
+		for _, tx := range batch {
+			pending[addr] = append(pending[addr], &txpool.LazyTransaction{
+				Hash:      tx.Hash(),
+				Tx:        &txpool.Transaction{Tx: tx},
+				Time:      tx.Time(),
+				GasFeeCap: tx.GasFeeCap(),
+				GasTipCap: tx.GasTipCap(),
+			})
+		}
+	}
+	return pending
 }
 
 // SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
