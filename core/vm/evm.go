@@ -408,10 +408,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if evm.depth == 0 {
 			tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
-			defer tracer.CaptureEnd(ret, gas-leftOverGas, err)
+			defer func(startGas uint64) {
+				tracer.CaptureEnd(ret, startGas-leftOverGas, err)
+			}(gas)
 		} else {
 			tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
-			defer tracer.CaptureExit(ret, gas-leftOverGas, err)
+			defer func(startGas uint64) {
+				tracer.CaptureExit(ret, startGas-leftOverGas, err)
+			}(gas)
 		}
 	}
 
@@ -486,7 +490,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
-	leftOverGas = contract.Gas
 	return ret, address, contract.Gas, err
 }
 
