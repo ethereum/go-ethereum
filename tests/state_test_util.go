@@ -114,7 +114,7 @@ type stTransaction struct {
 	Value                []string            `json:"value"`
 	PrivateKey           []byte              `json:"secretKey"`
 	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
-	BlobGasFeeCap        *big.Int            `json:"maxFeePerDataGas,omitempty"`
+	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
 }
 
 type stTransactionMarshaling struct {

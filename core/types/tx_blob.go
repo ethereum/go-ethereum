@@ -35,7 +35,7 @@ type BlobTx struct {
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
-	BlobFeeCap *uint256.Int // a.k.a. maxFeePerDataGas
+	BlobFeeCap *uint256.Int // a.k.a. maxFeePerBlobGas
 	BlobHashes []common.Hash
 
 	// Signature values
@@ -105,7 +105,7 @@ func (tx *BlobTx) gasPrice() *big.Int        { return tx.GasFeeCap.ToBig() }
 func (tx *BlobTx) value() *big.Int           { return tx.Value.ToBig() }
 func (tx *BlobTx) nonce() uint64             { return tx.Nonce }
 func (tx *BlobTx) to() *common.Address       { tmp := tx.To; return &tmp }
-func (tx *BlobTx) blobGas() uint64           { return params.BlobTxDataGasPerBlob * uint64(len(tx.BlobHashes)) }
+func (tx *BlobTx) blobGas() uint64           { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
 func (tx *BlobTx) blobGasFeeCap() *big.Int   { return tx.BlobFeeCap.ToBig() }
 func (tx *BlobTx) blobHashes() []common.Hash { return tx.BlobHashes }
 

@@ -53,7 +53,7 @@ const (
 	// maxBlobsPerTransaction is the maximum number of blobs a single transaction
 	// is allowed to contain. Whilst the spec states it's unlimited, the block
 	// data slots are protocol bound, which implicitly also limit this.
-	maxBlobsPerTransaction = params.BlobTxMaxDataGasPerBlock / params.BlobTxDataGasPerBlob
+	maxBlobsPerTransaction = params.BlobTxMaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
@@ -400,10 +400,10 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 	}
 	var (
 		basefee = uint256.MustFromBig(misc.CalcBaseFee(p.chain.Config(), p.head))
-		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinDataGasprice))
+		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
-	if p.head.ExcessDataGas != nil {
-		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessDataGas))
+	if p.head.ExcessBlobGas != nil {
+		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessBlobGas))
 	}
 	p.evict = newPriceHeap(basefee, blobfee, &p.index)
 
@@ -773,10 +773,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
 		basefee = uint256.MustFromBig(misc.CalcBaseFee(p.chain.Config(), newHead))
-		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinDataGasprice))
+		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
-	if newHead.ExcessDataGas != nil {
-		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*newHead.ExcessDataGas))
+	if newHead.ExcessBlobGas != nil {
+		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*newHead.ExcessBlobGas))
 	}
 	p.evict.reinit(basefee, blobfee, false)
 

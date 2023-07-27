@@ -58,6 +58,9 @@ func TestState(t *testing.T) {
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
 
+	// EIP-4844 tests need to be regenerated due to the data-to-blob rename
+	st.skipLoad(`^stEIP4844-blobtransactions/`)
+
 	// Expected failures:
 	// These EIP-4844 tests need to be regenerated.
 	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")

@@ -402,14 +402,14 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
 		var pExcess, pUsed = uint64(0), uint64(0)
-		if parent.ExcessDataGas() != nil {
-			pExcess = *parent.ExcessDataGas()
-			pUsed = *parent.DataGasUsed()
+		if parent.ExcessBlobGas() != nil {
+			pExcess = *parent.ExcessBlobGas()
+			pUsed = *parent.BlobGasUsed()
 		}
-		excess := eip4844.CalcExcessDataGas(pExcess, pUsed)
-		used := uint64(nBlobs * params.BlobTxDataGasPerBlob)
-		header.ExcessDataGas = &excess
-		header.DataGasUsed = &used
+		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
+		header.ExcessBlobGas = &excess
+		header.BlobGasUsed = &used
 	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number, header.Time) {
