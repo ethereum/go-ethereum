@@ -7,7 +7,7 @@ This test contains testcases for EIP-2930, which uses transactions with access l
 The alloc portion contains one contract (`0x000000000000000000000000000000000000aaaa`), containing the 
 following code: `0x5854505854`: `PC ;SLOAD; POP; PC; SLOAD`.
 
-Essentialy, this contract does `SLOAD(0)` and `SLOAD(3)`.
+Essentially, this contract does `SLOAD(0)` and `SLOAD(3)`.
 
 The alloc also contains some funds on `0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b`. 
 
@@ -33,7 +33,7 @@ dir=./testdata/8 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json 
 
 ```
 
-Simlarly, we can provide the input transactions via `stdin` instead of as file: 
+Similarly, we can provide the input transactions via `stdin` instead of as file: 
 
 ```
 dir=./testdata/8 \

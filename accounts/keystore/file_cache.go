@@ -40,7 +40,7 @@ type fileCache struct {
 func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, error) {
 	t0 := time.Now()
 
-	// List all the failes from the keystore folder
+	// List all the fails from the keystore folder
 	files, err := ioutil.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
