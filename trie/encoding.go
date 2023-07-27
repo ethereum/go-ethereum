@@ -51,8 +51,7 @@ func hexToCompact(hex []byte) []byte {
 	return buf
 }
 
-// hexToCompactInPlace places the compact key in input buffer, returning the length
-// needed for the representation
+// hexToCompactInPlace places the compact key in input buffer, returning the compacted key.
 func hexToCompactInPlace(hex []byte) []byte {
 	var (
 		hexLen    = len(hex) // length of the hex input
