@@ -166,6 +166,11 @@ type ValidationOptionsWithState struct {
 	// nonce gaps will be ignored and permitted.
 	FirstNonceGap func(addr common.Address) uint64
 
+	// UsedAndLeftSlots is a mandatory callback to retrieve the number of tx slots
+	// used and the number still permitted for an account. New transactions will
+	// be rejected once the number of remaining slots reaches zero.
+	UsedAndLeftSlots func(addr common.Address) (int, int)
+
 	// ExistingExpenditure is a mandatory callback to retrieve the cummulative
 	// cost of the already pooled transactions to check for overdrafts.
 	ExistingExpenditure func(addr common.Address) *big.Int
@@ -219,6 +224,12 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		need := new(big.Int).Add(spent, cost)
 		if balance.Cmp(need) < 0 {
 			return fmt.Errorf("%w: balance %v, queued cost %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, spent, cost, new(big.Int).Sub(need, balance))
+		}
+		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
+		// overflow the number of permitted transactions from a single accoun
+		// (i.e. max cancellable via out-of-bound transaction).
+		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
+			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
 		}
 	}
 	return nil

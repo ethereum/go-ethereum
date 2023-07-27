@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -36,26 +35,14 @@ const (
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (h *handler) syncTransactions(p *eth.Peer) {
-	// Assemble the set of transaction to broadcast or announce to the remote
-	// peer. Fun fact, this is quite an expensive operation as it needs to sort
-	// the transactions if the sorting is not cached yet. However, with a random
-	// order, insertions could overflow the non-executable queues and get dropped.
-	//
-	// TODO(karalabe): Figure out if we could get away with random order somehow
-	var txs types.Transactions
-	pending := h.txpool.Pending(false)
-	for _, batch := range pending {
-		txs = append(txs, batch...)
+	var hashes []common.Hash
+	for _, batch := range h.txpool.Pending(false) {
+		for _, tx := range batch {
+			hashes = append(hashes, tx.Hash)
+		}
 	}
-	if len(txs) == 0 {
+	if len(hashes) == 0 {
 		return
-	}
-	// The eth/65 protocol introduces proper transaction announcements, so instead
-	// of dripping transactions across multiple peers, just send the entire list as
-	// an announcement and let the remote side decide what they need (likely nothing).
-	hashes := make([]common.Hash, len(txs))
-	for i, tx := range txs {
-		hashes[i] = tx.Hash()
 	}
 	p.AsyncSendPooledTransactionHashes(hashes)
 }

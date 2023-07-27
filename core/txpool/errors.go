@@ -34,6 +34,10 @@ var (
 	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
 
+	// ErrAccountLimitExceeded is returned if a transaction would exceed the number
+	// allowed by a pool for a single account.
+	ErrAccountLimitExceeded = errors.New("account limit exceeded")
+
 	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
 	// maximum allowance of the current block.
 	ErrGasLimit = errors.New("exceeds block gas limit")
