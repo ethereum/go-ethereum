@@ -29,6 +29,10 @@ func ApplyBeaconRoot(header *types.Header, state *state.StateDB) {
 	timeKey, time, rootKey, root := calcBeaconRootIndices(header)
 	state.SetState(params.BeaconRootsStorageAddress, timeKey, time)
 	state.SetState(params.BeaconRootsStorageAddress, rootKey, root)
+	// We also need to ensure that the BeaconRoot address has nonzero nonce.
+	if state.GetNonce(params.BeaconRootsStorageAddress) == 0 {
+		state.SetNonce(params.BeaconRootsStorageAddress, 1)
+	}
 }
 
 func calcBeaconRootIndices(header *types.Header) (timeKey, time, rootKey, root common.Hash) {

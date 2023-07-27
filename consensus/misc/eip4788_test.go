@@ -17,51 +17,47 @@
 package misc
 
 import (
-	"math/big"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestCalcBeaconRootIndices(t *testing.T) {
-	tests := []struct {
-		Header  types.Header
-		TimeKey common.Hash
-		Time    common.Hash
-		RootKey common.Hash
-		Root    common.Hash
-	}{
-		{
-			Header:  types.Header{Time: 0, BeaconRoot: &common.Hash{1}},
-			TimeKey: common.Hash{},
-			Time:    common.Hash{},
-			RootKey: common.BigToHash(big.NewInt(int64(params.HistoricalRootsModulus))),
-			Root:    common.Hash{1},
-		},
-		{
-			Header:  types.Header{Time: 120265298769267, BeaconRoot: &common.Hash{0xff, 0xfe, 0xfc}},
-			TimeKey: common.BytesToHash([]byte{0xf5, 0x73}),                         // 120265298769267 % params.HistoricalRootsModulus
-			Time:    common.BytesToHash([]byte{0x6D, 0x61, 0x72, 0x69, 0x75, 0x73}), // 120265298769267 -> hex
-			RootKey: common.BytesToHash([]byte{0x02, 0x75, 0x73}),                   // params.HistoricalRootsModulus + 0xf5 0x73
-			Root:    common.Hash{0xff, 0xfe, 0xfc},
-		},
-	}
+type tcInput struct {
+	HeaderTime       uint64
+	HeaderBeaconRoot common.Hash
 
-	for _, test := range tests {
-		timeKey, time, rootKey, root := calcBeaconRootIndices(&test.Header)
-		if timeKey != test.TimeKey {
-			t.Fatalf("invalid time key: got %v want %v", timeKey, test.TimeKey)
+	TimeKey common.Hash
+	Time    common.Hash
+	RootKey common.Hash
+	Root    common.Hash
+}
+
+func TestCalcBeaconRootIndices(t *testing.T) {
+	data, err := os.ReadFile("./testdata/eip4788_beaconroot.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tests []tcInput
+	if err := json.Unmarshal(data, &tests); err != nil {
+		t.Fatal(err)
+	}
+	for i, tc := range tests {
+		header := types.Header{Time: tc.HeaderTime, BeaconRoot: &tc.HeaderBeaconRoot}
+		haveTimeKey, haveTime, haveRootKey, haveRoot := calcBeaconRootIndices(&header)
+		if haveTimeKey != tc.TimeKey {
+			t.Errorf("test %d: invalid time key: \nhave %v\nwant %v", i, haveTimeKey, tc.TimeKey)
 		}
-		if time != test.Time {
-			t.Fatalf("invalid time: got %v want %v", time, test.Time)
+		if haveTime != tc.Time {
+			t.Errorf("test %d: invalid time: \nhave %v\nwant %v", i, haveTime, tc.Time)
 		}
-		if rootKey != test.RootKey {
-			t.Fatalf("invalid time key: got %v want %v", rootKey, test.RootKey)
+		if haveRootKey != tc.RootKey {
+			t.Errorf("test %d: invalid root key: \nhave %v\nwant %v", i, haveRootKey, tc.RootKey)
 		}
-		if root != test.Root {
-			t.Fatalf("invalid time key: got %v want %v", root, test.Root)
+		if haveRoot != tc.Root {
+			t.Errorf("test %d: invalid root: \nhave %v\nwant %v", i, haveRoot, tc.Root)
 		}
 	}
 }
