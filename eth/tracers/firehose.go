@@ -234,11 +234,17 @@ func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// Instrumentation at the opcode level, we don't use it in Firehose
+	if activeCall := f.callStack.Peek(); activeCall != nil && activeCall.CallType != pbeth.CallType_CREATE {
+		activeCall.ExecutedCode = true
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
 func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+	if activeCall := f.callStack.Peek(); activeCall != nil && activeCall.CallType != pbeth.CallType_CREATE {
+		activeCall.ExecutedCode = true
+	}
+
 	// FIXME: Maybe we will need this to properly track status failed/reverted of
 }
 
@@ -320,12 +326,14 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	f.ensureInBlockAndInTrxAndInCall()
 
 	call := f.callStack.Pop()
-	call.ReturnData = output
 	call.GasConsumed = gasUsed
 
+	// For create call, we do not save the returned value which is the actual contract's code
+	if call.CallType != pbeth.CallType_CREATE {
+		call.ReturnData = output
+	}
+
 	// FIXME: Unset field for now, need to ensure they are tracked somewere
-	// call.
-	// call.ExecutedCode
 	// call.StateReverted
 
 	if err != nil {
