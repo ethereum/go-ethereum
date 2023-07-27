@@ -284,6 +284,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.WithdrawalsHash = new(common.Hash)
 		*cpy.WithdrawalsHash = *h.WithdrawalsHash
 	}
+	if h.ExcessDataGas != nil {
+		cpy.ExcessDataGas = new(uint64)
+		*cpy.ExcessDataGas = *h.ExcessDataGas
+	}
+	if h.DataGasUsed != nil {
+		cpy.DataGasUsed = new(uint64)
+		*cpy.DataGasUsed = *h.DataGasUsed
+	}
 	return &cpy
 }
 

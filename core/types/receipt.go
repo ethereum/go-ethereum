@@ -63,6 +63,8 @@ type Receipt struct {
 	ContractAddress   common.Address `json:"contractAddress"`
 	GasUsed           uint64         `json:"gasUsed" gencodec:"required"`
 	EffectiveGasPrice *big.Int       `json:"effectiveGasPrice"` // required, but tag omitted for backwards compatibility
+	DataGasUsed       uint64         `json:"dataGasUsed,omitempty"`
+	DataGasPrice      *big.Int       `json:"dataGasPrice,omitempty"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
@@ -313,7 +315,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, time uint64, baseFee *big.Int, txs []*Transaction) error {
+func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, time uint64, baseFee *big.Int, dataGasPrice *big.Int, txs []*Transaction) error {
 	signer := MakeSigner(config, new(big.Int).SetUint64(number), time)
 
 	logIndex := uint(0)
@@ -324,8 +326,13 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		// The transaction type and hash can be retrieved from the transaction itself
 		rs[i].Type = txs[i].Type()
 		rs[i].TxHash = txs[i].Hash()
-
 		rs[i].EffectiveGasPrice = txs[i].inner.effectiveGasPrice(new(big.Int), baseFee)
+
+		// EIP-4844 blob transaction fields
+		if txs[i].Type() == BlobTxType {
+			rs[i].DataGasUsed = txs[i].BlobGas()
+			rs[i].DataGasPrice = dataGasPrice
+		}
 
 		// block location fields
 		rs[i].BlockHash = hash
