@@ -48,8 +48,9 @@ type Firehose struct {
 	blockLogIndex uint32
 
 	// Transaction state
-	inTransaction *atomic.Bool
-	transaction   *pbeth.TransactionTrace
+	inTransaction       *atomic.Bool
+	transaction         *pbeth.TransactionTrace
+	transactionLogIndex uint32
 
 	// Call state
 	callStack               *CallStack
@@ -69,7 +70,8 @@ func NewFirehoseLogger() *Firehose {
 		blockOrdinal:  &Ordinal{},
 		blockLogIndex: 0,
 
-		inTransaction: atomic.NewBool(false),
+		inTransaction:       atomic.NewBool(false),
+		transactionLogIndex: 0,
 
 		callStack:               &CallStack{},
 		deferredCallState:       &DeferredCallState{},
@@ -89,6 +91,7 @@ func (f *Firehose) resetBlock() {
 // resetTransaction resets the transaction state and the call state in one shot
 func (f *Firehose) resetTransaction() {
 	f.inTransaction.Store(false)
+	f.transactionLogIndex = 0
 
 	f.callStack.Reset()
 	f.latestCallStartSuicided = false
@@ -194,6 +197,10 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 		return i.Index < j.Index
 	})
 
+	if !f.deferredCallState.IsEmpty() {
+		f.deferredCallState.MaybePopulateCallAndReset("root", f.transaction.Calls[0])
+	}
+
 	// Receipt can be nil if an error occurred during the transaction execution, right now we don't have it
 	if receipt != nil {
 		f.transaction.Index = uint32(receipt.TransactionIndex)
@@ -286,11 +293,18 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		call.BeginOrdinal = 0
 	}
 
+	if callType == pbeth.CallType_CREATE {
+		// Replicates a previous bug in Firehose instrumentation where create calls input is always
+		// set to `nil` (this was done on purpose but it missed the fact that we are missing the
+		// actual input data of the constuctor call, if present and invoked).
+		call.Input = nil
+	}
+
 	f.callStack.Push(call)
 }
 
 func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error) {
-	firehoseDebug("call end source=%s err=%s", source, errorView(err))
+	firehoseDebug("call end source=%s output=%s gasUsed=%d err=%s", source, outputView(output), gasUsed, errorView(err))
 
 	if f.latestCallStartSuicided {
 		if source != "child" {
@@ -326,7 +340,16 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 }
 
 // CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {
+	f.ensureInBlockAndInTrxAndInCall()
+
+	activeCall := f.callStack.Peek()
+	if activeCall.KeccakPreimages == nil {
+		activeCall.KeccakPreimages = make(map[string]string)
+	}
+
+	activeCall.KeccakPreimages[hex.EncodeToString(hash.Bytes())] = hex.EncodeToString(data)
+}
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	// FIXME: Re-implement by actualling callin `OnBlockStart/OnTrxStart/CaptureStart` etc.
@@ -548,11 +571,12 @@ func (f *Firehose) OnLog(l *types.Log) {
 		Address:    l.Address.Bytes(),
 		Topics:     topics,
 		Data:       l.Data,
-		Index:      uint32(l.TxIndex),
-		BlockIndex: f.blockLogIndex,
+		Index:      f.transactionLogIndex,
+		BlockIndex: uint32(l.Index),
 		Ordinal:    f.blockOrdinal.Next(),
 	})
 
+	f.transactionLogIndex++
 	f.blockLogIndex++
 }
 
@@ -569,10 +593,15 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 func (f *Firehose) OnGasConsumed(gas, amount uint64) {
 	f.ensureInBlockAndInTrx()
 
+	if amount == 0 {
+		return
+	}
+
 	activeCall := f.callStack.Peek()
 	change := &pbeth.GasChange{
 		OldValue: gas,
 		NewValue: gas + amount,
+		Ordinal:  f.blockOrdinal.Next(),
 	}
 
 	// There is an initial gas consumption happening will the call is not yet started, we track it manually
@@ -810,7 +839,7 @@ func newTxReceiptFromChain(receipt *types.Receipt) (out *pbeth.TransactionReceip
 	if len(receipt.Logs) > 0 {
 		out.Logs = make([]*pbeth.Log, len(receipt.Logs))
 		for i, log := range receipt.Logs {
-			out.Logs = append(out.Logs, &pbeth.Log{
+			out.Logs[i] = &pbeth.Log{
 				Address: log.Address.Bytes(),
 				Topics: func() [][]byte {
 					if len(log.Topics) == 0 {
@@ -829,7 +858,7 @@ func newTxReceiptFromChain(receipt *types.Receipt) (out *pbeth.TransactionReceip
 
 				// FIXME: Fix ordinal for logs in receipt!
 				// Ordinal: uint64,
-			})
+			}
 		}
 	}
 
@@ -978,11 +1007,13 @@ func (o *Ordinal) Next() (out uint64) {
 type CallStack struct {
 	index uint32
 	stack []*pbeth.Call
+	depth int
 }
 
 func (s *CallStack) Reset() {
 	s.index = 0
 	s.stack = s.stack[:0]
+	s.depth = 0
 }
 
 func (s *CallStack) HasActiveCall() bool {
@@ -995,6 +1026,9 @@ func (s *CallStack) HasActiveCall() bool {
 func (s *CallStack) Push(call *pbeth.Call) {
 	s.index++
 	call.Index = s.index
+
+	call.Depth = uint32(s.depth)
+	s.depth++
 
 	// If a current call is active, it's the parent of this call
 	if parent := s.Peek(); parent != nil {
@@ -1011,6 +1045,8 @@ func (s *CallStack) Pop() (out *pbeth.Call) {
 
 	out = s.stack[len(s.stack)-1]
 	s.stack = s.stack[:len(s.stack)-1]
+	s.depth--
+
 	return
 }
 
@@ -1042,9 +1078,10 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 		return fmt.Errorf("unexpected source for deferred call state, expected root but got %s, deferred call's state are always produced on the 'root' call", source)
 	}
 
-	call.BalanceChanges = d.balanceChanges
-	call.GasChanges = d.gasChanges
-	call.NonceChanges = d.nonceChanges
+	// We must happen because it's populated at beginning of the call as well as at the very end
+	call.BalanceChanges = append(call.BalanceChanges, d.balanceChanges...)
+	call.GasChanges = append(call.GasChanges, d.gasChanges...)
+	call.NonceChanges = append(call.NonceChanges, d.nonceChanges...)
 
 	d.Reset()
 
@@ -1098,6 +1135,16 @@ func (b inputView) String() string {
 	// Contract input starts with pre-defined chracters AFAIK, we could show them more nicely
 
 	return fmt.Sprintf("%d bytes", len(rest))
+}
+
+type outputView []byte
+
+func (b outputView) String() string {
+	if len(b) == 0 {
+		return "<empty>"
+	}
+
+	return fmt.Sprintf("%d bytes", len(b))
 }
 
 type receiptView types.Receipt
