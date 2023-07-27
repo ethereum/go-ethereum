@@ -26,8 +26,8 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		ContractAddress   common.Address `json:"contractAddress"`
 		GasUsed           hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
 		EffectiveGasPrice *hexutil.Big   `json:"effectiveGasPrice"`
-		DataGasUsed       uint64         `json:"dataGasUsed,omitempty"`
-		DataGasPrice      *big.Int       `json:"dataGasPrice,omitempty"`
+		BlobGasUsed       uint64         `json:"blobGasUsed,omitempty"`
+		BlobGasPrice      *big.Int       `json:"blobGasPrice,omitempty"`
 		BlockHash         common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big   `json:"blockNumber,omitempty"`
 		TransactionIndex  hexutil.Uint   `json:"transactionIndex"`
@@ -43,8 +43,8 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = hexutil.Uint64(r.GasUsed)
 	enc.EffectiveGasPrice = (*hexutil.Big)(r.EffectiveGasPrice)
-	enc.DataGasUsed = r.DataGasUsed
-	enc.DataGasPrice = r.DataGasPrice
+	enc.BlobGasUsed = r.BlobGasUsed
+	enc.BlobGasPrice = r.BlobGasPrice
 	enc.BlockHash = r.BlockHash
 	enc.BlockNumber = (*hexutil.Big)(r.BlockNumber)
 	enc.TransactionIndex = hexutil.Uint(r.TransactionIndex)
@@ -64,8 +64,8 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		ContractAddress   *common.Address `json:"contractAddress"`
 		GasUsed           *hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
 		EffectiveGasPrice *hexutil.Big    `json:"effectiveGasPrice"`
-		DataGasUsed       *uint64         `json:"dataGasUsed,omitempty"`
-		DataGasPrice      *big.Int        `json:"dataGasPrice,omitempty"`
+		BlobGasUsed       *uint64         `json:"blobGasUsed,omitempty"`
+		BlobGasPrice      *big.Int        `json:"blobGasPrice,omitempty"`
 		BlockHash         *common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big    `json:"blockNumber,omitempty"`
 		TransactionIndex  *hexutil.Uint   `json:"transactionIndex"`
@@ -109,11 +109,11 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	if dec.EffectiveGasPrice != nil {
 		r.EffectiveGasPrice = (*big.Int)(dec.EffectiveGasPrice)
 	}
-	if dec.DataGasUsed != nil {
-		r.DataGasUsed = *dec.DataGasUsed
+	if dec.BlobGasUsed != nil {
+		r.BlobGasUsed = *dec.BlobGasUsed
 	}
-	if dec.DataGasPrice != nil {
-		r.DataGasPrice = dec.DataGasPrice
+	if dec.BlobGasPrice != nil {
+		r.BlobGasPrice = dec.BlobGasPrice
 	}
 	if dec.BlockHash != nil {
 		r.BlockHash = *dec.BlockHash

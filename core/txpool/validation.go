@@ -116,8 +116,8 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 		if len(hashes) == 0 {
 			return fmt.Errorf("blobless blob transaction")
 		}
-		if len(hashes) > params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob {
-			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob)
+		if len(hashes) > params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
+			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
 		}
 		if len(blobs) != len(hashes) {
 			return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(blobs), len(hashes))
