@@ -229,7 +229,14 @@ func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 
 // CaptureTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
-func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt) {
+func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		// Don't override vm error
+		if _, ok := t.ctx["error"]; !ok {
+			t.ctx["error"] = t.vm.ToValue(err.Error())
+		}
+		return
+	}
 	t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
 }
 

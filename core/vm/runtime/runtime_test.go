@@ -811,7 +811,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
 	}
-	depressedCode := []byte{
+	suicideCode := []byte{
 		byte(vm.PUSH1), 0xaa,
 		byte(vm.SELFDESTRUCT),
 	}
@@ -824,7 +824,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
-			statedb.SetCode(common.HexToAddress("0xff"), depressedCode)
+			statedb.SetCode(common.HexToAddress("0xff"), suicideCode)
 
 			tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
 			if err != nil {

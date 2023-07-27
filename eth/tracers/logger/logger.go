@@ -269,7 +269,14 @@ func (l *StructLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	l.env = env
 }
 
-func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt) {
+func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		// Don't override vm error
+		if l.err == nil {
+			l.err = err
+		}
+		return
+	}
 	l.usedGas = receipt.GasUsed
 }
 
@@ -417,7 +424,7 @@ func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 func (*mdLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
-func (*mdLogger) CaptureTxEnd(receipt *types.Receipt) {}
+func (*mdLogger) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
 func (*mdLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
 
@@ -452,6 +459,7 @@ type StructLogRes struct {
 	Depth         int                `json:"depth"`
 	Error         string             `json:"error,omitempty"`
 	Stack         *[]string          `json:"stack,omitempty"`
+	ReturnData    string             `json:"returnData,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
@@ -476,6 +484,9 @@ func formatLogs(logs []StructLog) []StructLogRes {
 				stack[i] = stackValue.Hex()
 			}
 			formatted[index].Stack = &stack
+		}
+		if trace.ReturnData != nil && len(trace.ReturnData) > 0 {
+			formatted[index].ReturnData = hexutil.Bytes(trace.ReturnData).String()
 		}
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)

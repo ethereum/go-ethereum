@@ -72,7 +72,7 @@ func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 func (*NoopTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
 
-func (*NoopTracer) CaptureTxEnd(receipt *types.Receipt) {}
+func (*NoopTracer) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
 func (*NoopTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
 }

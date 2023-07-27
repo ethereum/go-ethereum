@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -49,7 +50,7 @@ const (
 
 var (
 	// Test chain configurations
-	testTxPoolConfig  txpool.Config
+	testTxPoolConfig  legacypool.Config
 	ethashChainConfig *params.ChainConfig
 	cliqueChainConfig *params.ChainConfig
 
@@ -62,7 +63,7 @@ var (
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
 
 	// Test transactions
-	pendingTxs []*types.Transaction
+	pendingTxs []*txpool.Transaction
 	newTxs     []*types.Transaction
 
 	testConfig = &Config{
@@ -72,7 +73,7 @@ var (
 )
 
 func init() {
-	testTxPoolConfig = txpool.DefaultConfig
+	testTxPoolConfig = legacypool.DefaultConfig
 	testTxPoolConfig.Journal = ""
 	ethashChainConfig = new(params.ChainConfig)
 	*ethashChainConfig = *params.TestChainConfig
@@ -92,7 +93,7 @@ func init() {
 		Gas:      params.TxGas,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
-	pendingTxs = append(pendingTxs, tx1)
+	pendingTxs = append(pendingTxs, &txpool.Transaction{Tx: tx1})
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
 		Nonce:    1,
@@ -132,10 +133,13 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	if err != nil {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}
+	pool := legacypool.New(testTxPoolConfig, chain)
+	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), chain, []txpool.SubPool{pool})
+
 	return &testWorkerBackend{
 		db:      db,
 		chain:   chain,
-		txPool:  txpool.New(testTxPoolConfig, chainConfig, chain),
+		txPool:  txpool,
 		genesis: gspec,
 	}
 }
@@ -156,7 +160,7 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-	backend.txPool.AddLocals(pendingTxs)
+	backend.txPool.Add(pendingTxs, true, false)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
@@ -190,8 +194,8 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true))
-		b.txPool.AddLocal(b.newRandomTx(false))
+		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(true)}}, true, false)
+		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(false)}}, true, false)
 
 		select {
 		case ev := <-sub.Chan():

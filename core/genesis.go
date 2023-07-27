@@ -59,10 +59,12 @@ type Genesis struct {
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
-	Number     uint64      `json:"number"`
-	GasUsed    uint64      `json:"gasUsed"`
-	ParentHash common.Hash `json:"parentHash"`
-	BaseFee    *big.Int    `json:"baseFeePerGas"`
+	Number        uint64      `json:"number"`
+	GasUsed       uint64      `json:"gasUsed"`
+	ParentHash    common.Hash `json:"parentHash"`
+	BaseFee       *big.Int    `json:"baseFeePerGas"` // EIP-1559
+	ExcessDataGas *uint64     `json:"excessDataGas"` // EIP-4844
+	DataGasUsed   *uint64     `json:"dataGasUsed"`   // EIP-4844
 }
 
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
@@ -96,6 +98,9 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	genesis.Difficulty = genesisHeader.Difficulty
 	genesis.Mixhash = genesisHeader.MixDigest
 	genesis.Coinbase = genesisHeader.Coinbase
+	genesis.BaseFee = genesisHeader.BaseFee
+	genesis.ExcessDataGas = genesisHeader.ExcessDataGas
+	genesis.DataGasUsed = genesisHeader.DataGasUsed
 
 	return &genesis, nil
 }
@@ -132,7 +137,7 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	return statedb.Commit(false)
+	return statedb.Commit(0, false)
 }
 
 // flush is very similar with deriveHash, but the main difference is
@@ -152,7 +157,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root, err := statedb.Commit(false)
+	root, err := statedb.Commit(0, false)
 	if err != nil {
 		return err
 	}
@@ -215,15 +220,17 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce      math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
-	ExtraData  hexutil.Bytes
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Difficulty *math.HexOrDecimal256
-	BaseFee    *math.HexOrDecimal256
-	Alloc      map[common.UnprefixedAddress]GenesisAccount
+	Nonce         math.HexOrDecimal64
+	Timestamp     math.HexOrDecimal64
+	ExtraData     hexutil.Bytes
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Number        math.HexOrDecimal64
+	Difficulty    *math.HexOrDecimal256
+	Alloc         map[common.UnprefixedAddress]GenesisAccount
+	BaseFee       *math.HexOrDecimal256
+	ExcessDataGas *math.HexOrDecimal64
+	DataGasUsed   *math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -267,6 +274,7 @@ func (e *GenesisMismatchError) Error() string {
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
 	OverrideCancun *uint64
+	OverrideVerkle *uint64
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -294,6 +302,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		if config != nil {
 			if overrides != nil && overrides.OverrideCancun != nil {
 				config.CancunTime = overrides.OverrideCancun
+			}
+			if overrides != nil && overrides.OverrideVerkle != nil {
+				config.VerkleTime = overrides.OverrideVerkle
 			}
 		}
 	}
@@ -471,9 +482,22 @@ func (g *Genesis) ToBlock() *types.Block {
 		}
 	}
 	var withdrawals []*types.Withdrawal
-	if g.Config != nil && g.Config.IsShanghai(big.NewInt(int64(g.Number)), g.Timestamp) {
-		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
-		withdrawals = make([]*types.Withdrawal, 0)
+	if conf := g.Config; conf != nil {
+		num := big.NewInt(int64(g.Number))
+		if conf.IsShanghai(num, g.Timestamp) {
+			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
+			withdrawals = make([]*types.Withdrawal, 0)
+		}
+		if conf.IsCancun(num, g.Timestamp) {
+			head.ExcessDataGas = g.ExcessDataGas
+			head.DataGasUsed = g.DataGasUsed
+			if head.ExcessDataGas == nil {
+				head.ExcessDataGas = new(uint64)
+			}
+			if head.DataGasUsed == nil {
+				head.DataGasUsed = new(uint64)
+			}
+		}
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
 }
@@ -607,21 +631,16 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
-func DeveloperGenesisBlock(period uint64, gasLimit uint64, faucet common.Address) *Genesis {
+func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
-	config := *params.AllCliqueProtocolChanges
-	config.Clique = &params.CliqueConfig{
-		Period: period,
-		Epoch:  config.Clique.Epoch,
-	}
+	config := *params.AllDevChainProtocolChanges
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
 		Config:     &config,
-		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Difficulty: big.NewInt(1),
+		Difficulty: big.NewInt(0),
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256

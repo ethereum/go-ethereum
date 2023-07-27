@@ -112,7 +112,7 @@ func (h *httpServer) setListenAddr(host string, port int) error {
 	}
 
 	h.host, h.port = host, port
-	h.endpoint = fmt.Sprintf("%s:%d", host, port)
+	h.endpoint = net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	return nil
 }
 

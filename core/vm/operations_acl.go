@@ -235,7 +235,7 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
 		}
-		if refundsEnabled && !evm.StateDB.HasSuicided(contract.Address()) {
+		if refundsEnabled && !evm.StateDB.HasSelfDestructed(contract.Address()) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 		}
 		return gas, nil

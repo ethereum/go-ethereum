@@ -176,7 +176,7 @@ func (f *Firehose) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	}
 }
 
-func (f *Firehose) CaptureTxEnd(receipt *types.Receipt) {
+func (f *Firehose) CaptureTxEnd(receipt *types.Receipt, err error) {
 	firehoseDebug("trx ending")
 	f.ensureInBlockAndInTrx()
 

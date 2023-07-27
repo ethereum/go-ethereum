@@ -123,9 +123,9 @@ func (t *muxTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	}
 }
 
-func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt) {
+func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	for _, t := range t.tracers {
-		t.CaptureTxEnd(receipt)
+		t.CaptureTxEnd(receipt, err)
 	}
 }
 

@@ -62,7 +62,11 @@ func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 
 }
 
-func (p *Printer) CaptureTxEnd(receipt *types.Receipt) {
+func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		fmt.Printf("CaptureTxEnd err: %v\n", err)
+		return
+	}
 	buf, err := json.Marshal(receipt)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)

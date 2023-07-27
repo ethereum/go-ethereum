@@ -108,11 +108,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
-	var receipt *types.Receipt
+	var (
+		receipt *types.Receipt
+		err     error
+	)
 	if evm.Config.Tracer != nil {
 		evm.Config.Tracer.CaptureTxStart(evm, tx)
 		defer func() {
-			evm.Config.Tracer.CaptureTxEnd(receipt)
+			evm.Config.Tracer.CaptureTxEnd(receipt, err)
 		}()
 	}
 	// Create a new context to be used in the EVM environment.
@@ -170,6 +173,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{BlobHashes: tx.BlobHashes()}, statedb, config, cfg)
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }

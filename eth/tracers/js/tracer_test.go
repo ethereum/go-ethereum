@@ -79,7 +79,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
 	// Rest gas assumes no refund
-	tracer.CaptureTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas})
+	tracer.CaptureTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -181,10 +181,11 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+	tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}))
 	tracer.CaptureStart(common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
 	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
@@ -205,7 +206,8 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+		tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}))
 		tracer.CaptureStart(common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
 		tracer.CaptureEnd(nil, 0, nil)
 		ret, err := tracer.GetResult()

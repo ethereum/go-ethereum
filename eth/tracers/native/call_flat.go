@@ -207,8 +207,8 @@ func (t *flatCallTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
-func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt) {
-	t.tracer.CaptureTxEnd(receipt)
+func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+	t.tracer.CaptureTxEnd(receipt, err)
 }
 
 // GetResult returns an empty json object.
@@ -250,7 +250,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	case vm.CREATE, vm.CREATE2:
 		frame = newFlatCreate(input)
 	case vm.SELFDESTRUCT:
-		frame = newFlatSuicide(input)
+		frame = newFlatSelfdestruct(input)
 	case vm.CALL, vm.STATICCALL, vm.CALLCODE, vm.DELEGATECALL:
 		frame = newFlatCall(input)
 	default:
@@ -332,7 +332,7 @@ func newFlatCall(input *callFrame) *flatCallFrame {
 	}
 }
 
-func newFlatSuicide(input *callFrame) *flatCallFrame {
+func newFlatSelfdestruct(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: "suicide",
 		Action: flatCallAction{

@@ -200,7 +200,11 @@ func (t *callTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	t.gasLimit = tx.Gas()
 }
 
-func (t *callTracer) CaptureTxEnd(receipt *types.Receipt) {
+func (t *callTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+	// Error happened during tx validation.
+	if err != nil {
+		return
+	}
 	t.callstack[0].GasUsed = receipt.GasUsed
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
