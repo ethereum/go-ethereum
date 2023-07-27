@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"go.uber.org/atomic"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -30,6 +32,9 @@ import (
 var isFirehoseDebugEnabled = os.Getenv("GETH_FIREHOSE_TRACER_DEBUG") != ""
 
 var _ core.BlockchainLogger = (*Firehose)(nil)
+
+var emptyAddress = common.Address{}.Bytes()
+var emptyHash = common.Hash{}.Bytes()
 
 type Firehose struct {
 	// Global state
@@ -99,7 +104,7 @@ func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.He
 	f.block = &pbeth.Block{
 		Hash:   b.Hash().Bytes(),
 		Number: b.Number().Uint64(),
-		Header: newBlockHeaderFromChainBlock(b, pbeth.BigIntFromNative(new(big.Int).Add(td, b.Difficulty()))),
+		Header: newBlockHeaderFromChainBlock(b, firehoseBigIntFromNative(new(big.Int).Add(td, b.Difficulty()))),
 		Size:   b.Size(),
 		Ver:    3,
 	}
@@ -159,11 +164,11 @@ func (f *Firehose) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 		Nonce:                tx.Nonce(),
 		GasLimit:             tx.Gas(),
 		GasPrice:             gasPrice(tx, f.blockBaseFee),
-		Value:                pbeth.BigIntFromNative(tx.Value()),
+		Value:                firehoseBigIntFromNative(tx.Value()),
 		Input:                tx.Data(),
-		V:                    pbeth.BigIntFromNative(v).Bytes,
-		R:                    pbeth.BigIntFromNative(r).Bytes,
-		S:                    pbeth.BigIntFromNative(s).Bytes,
+		V:                    emptyBytesToNil(v.Bytes()),
+		R:                    emptyBytesToNil(r.Bytes()),
+		S:                    emptyBytesToNil(s.Bytes()),
 		Type:                 transactionTypeFromChainTxType(tx.Type()),
 		AccessList:           newAccessListFromChain(tx.AccessList()),
 		MaxFeePerGas:         maxFeePerGas(tx),
@@ -268,12 +273,17 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Caller:       from.Bytes(),
 		Address:      to.Bytes(),
 		Input:        input,
-		Value:        pbeth.BigIntFromNative(value),
+		Value:        firehoseBigIntFromNative(value),
 		GasLimit:     gas,
 	}
 
 	if err := f.deferredCallState.MaybePopulateCallAndReset(source, call); err != nil {
 		panic(err)
+	}
+
+	if source == "root" {
+		// Re-do a current existing bug where the BeginOrdinal of the root call is always 0
+		call.BeginOrdinal = 0
 	}
 
 	f.callStack.Push(call)
@@ -301,7 +311,6 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 
 	// FIXME: Unset field for now, need to ensure they are tracked somewere
 	// call.
-	// call.AccountCreations
 	// call.ExecutedCode
 	// call.StateReverted
 
@@ -320,19 +329,32 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+	// FIXME: Re-implement by actualling callin `OnBlockStart/OnTrxStart/CaptureStart` etc.
 	block := &pbeth.Block{
 		Hash:   b.Hash().Bytes(),
 		Number: b.Number().Uint64(),
-		Header: newBlockHeaderFromChainBlock(b, pbeth.BigIntFromNative(b.Difficulty())),
+		Header: newBlockHeaderFromChainBlock(b, firehoseBigIntFromNative(b.Difficulty())),
 		TransactionTraces: []*pbeth.TransactionTrace{
 			{
 				BeginOrdinal: f.blockOrdinal.Next(),
+				Hash:         emptyHash,
+				From:         emptyAddress,
+				To:           emptyAddress,
 				Receipt: &pbeth.TransactionReceipt{
 					StateRoot: b.Root().Bytes(),
+					LogsBloom: types.Bloom{}.Bytes(),
 				},
+				Status: pbeth.TransactionTraceStatus_SUCCEEDED,
 				Calls: []*pbeth.Call{
 					{
-						BeginOrdinal: f.blockOrdinal.Next(),
+						// It seems we never properly set the BeginOrdinal/EndOrdinal of the root call of the genesis block
+						BeginOrdinal: 0,
+						EndOrdinal:   0,
+
+						CallType: pbeth.CallType_CALL,
+						Caller:   emptyAddress,
+						Address:  emptyAddress,
+						Index:    1,
 					},
 				},
 			},
@@ -344,43 +366,81 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	rootTrx := block.TransactionTraces[0]
 	rootCall := rootTrx.Calls[0]
 
-	for addr, account := range alloc {
+	sortedAddrs := make([]common.Address, len(alloc))
+	i := 0
+	for addr := range alloc {
+		sortedAddrs[i] = addr
+		i++
+	}
+
+	sort.Slice(sortedAddrs, func(i, j int) bool {
+		return bytes.Compare(sortedAddrs[i][:], sortedAddrs[j][:]) <= -1
+	})
+
+	for _, addr := range sortedKeys(alloc) {
+		account := alloc[addr]
+
+		rootCall.AccountCreations = append(rootCall.AccountCreations, &pbeth.AccountCreation{
+			Account: addr.Bytes(),
+			Ordinal: f.blockOrdinal.Next(),
+		})
+
 		rootCall.BalanceChanges = append(rootCall.BalanceChanges, &pbeth.BalanceChange{
 			Address:  addr.Bytes(),
-			NewValue: pbeth.BigIntFromNative(account.Balance),
+			NewValue: firehoseBigIntFromNative(account.Balance),
 			Reason:   pbeth.BalanceChange_REASON_GENESIS_BALANCE,
 			Ordinal:  f.blockOrdinal.Next(),
 		})
 
-		rootCall.CodeChanges = append(rootCall.CodeChanges, &pbeth.CodeChange{
-			Address: addr.Bytes(),
-			NewCode: account.Code,
-			NewHash: crypto.Keccak256(account.Code),
-			Ordinal: f.blockOrdinal.Next(),
-		})
+		if len(account.Code) > 0 {
+			rootCall.CodeChanges = append(rootCall.CodeChanges, &pbeth.CodeChange{
+				Address: addr.Bytes(),
+				NewCode: account.Code,
+				NewHash: crypto.Keccak256(account.Code),
+				Ordinal: f.blockOrdinal.Next(),
+			})
+		}
 
-		rootCall.NonceChanges = append(rootCall.NonceChanges, &pbeth.NonceChange{
-			Address:  addr.Bytes(),
-			NewValue: account.Nonce,
-			Ordinal:  f.blockOrdinal.Next(),
-		})
+		if account.Nonce > 0 {
+			rootCall.NonceChanges = append(rootCall.NonceChanges, &pbeth.NonceChange{
+				Address:  addr.Bytes(),
+				OldValue: 0,
+				NewValue: account.Nonce,
+				Ordinal:  f.blockOrdinal.Next(),
+			})
+		}
 
-		for key, value := range account.Storage {
+		// This is bad, we were not sorting the storage changes before! Not a big deal,
+		// just make it harder for verifiability of previous blocks, they are now sorted.
+		for _, key := range sortedKeys(account.Storage) {
 			rootCall.StorageChanges = append(rootCall.StorageChanges, &pbeth.StorageChange{
 				Address:  addr.Bytes(),
 				Key:      key.Bytes(),
-				NewValue: value.Bytes(),
+				NewValue: account.Storage[key].Bytes(),
 				Ordinal:  f.blockOrdinal.Next(),
 			})
 		}
 	}
 
 	// Ordering matters here, we must set the end ordinal of the call before the transaction
-	rootCall.EndOrdinal = f.blockOrdinal.Next()
 	rootTrx.EndOrdinal = f.blockOrdinal.Next()
 
 	f.printBlockToFirehose(block)
 	f.resetBlock()
+}
+
+type bytesGetter interface {
+	comparable
+	Bytes() []byte
+}
+
+func sortedKeys[K bytesGetter, V any](m map[K]V) []K {
+	keys := maps.Keys(m)
+	slices.SortFunc(keys, func(i, j K) bool {
+		return bytes.Compare(i.Bytes(), j.Bytes()) == -1
+	})
+
+	return keys
 }
 
 func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
@@ -394,8 +454,8 @@ func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason 
 	change := &pbeth.BalanceChange{
 		Ordinal:  f.blockOrdinal.Next(),
 		Address:  a.Bytes(),
-		OldValue: pbeth.BigIntFromNative(prev),
-		NewValue: pbeth.BigIntFromNative(new),
+		OldValue: firehoseBigIntFromNative(prev),
+		NewValue: firehoseBigIntFromNative(new),
 		Reason:   balanceChangeReasonFromChain(reason),
 	}
 
@@ -674,7 +734,7 @@ func newBlockHeaderFromChainBlock(b *types.Block, td *pbeth.BigInt) *pbeth.Block
 		TransactionsRoot: b.TxHash().Bytes(),
 		ReceiptRoot:      b.ReceiptHash().Bytes(),
 		LogsBloom:        b.Bloom().Bytes(),
-		Difficulty:       pbeth.BigIntFromNative(b.Difficulty()),
+		Difficulty:       firehoseBigIntFromNative(b.Difficulty()),
 		TotalDifficulty:  td,
 		GasLimit:         b.GasLimit(),
 		GasUsed:          b.GasUsed(),
@@ -682,7 +742,7 @@ func newBlockHeaderFromChainBlock(b *types.Block, td *pbeth.BigInt) *pbeth.Block
 		ExtraData:        b.Extra(),
 		MixHash:          b.MixDigest().Bytes(),
 		Nonce:            b.Nonce(),
-		BaseFeePerGas:    pbeth.BigIntFromNative(b.BaseFee()),
+		BaseFeePerGas:    firehoseBigIntFromNative(b.BaseFee()),
 		WithdrawalsRoot:  withdrawalsHashBytes,
 	}
 }
@@ -842,7 +902,7 @@ func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 		return nil
 
 	case types.DynamicFeeTxType, types.BlobTxType:
-		return pbeth.BigIntFromNative(tx.GasFeeCap())
+		return firehoseBigIntFromNative(tx.GasFeeCap())
 	}
 
 	panic(errUnhandledTransactionType("maxFeePerGas", tx.Type()))
@@ -854,7 +914,7 @@ func maxPriorityFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 		return nil
 
 	case types.DynamicFeeTxType, types.BlobTxType:
-		return pbeth.BigIntFromNative(tx.GasTipCap())
+		return firehoseBigIntFromNative(tx.GasTipCap())
 	}
 
 	panic(errUnhandledTransactionType("maxPriorityFeePerGas", tx.Type()))
@@ -863,14 +923,14 @@ func maxPriorityFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType:
-		return pbeth.BigIntFromNative(tx.GasPrice())
+		return firehoseBigIntFromNative(tx.GasPrice())
 
 	case types.DynamicFeeTxType, types.BlobTxType:
 		if baseFee == nil {
-			return pbeth.BigIntFromNative(tx.GasPrice())
+			return firehoseBigIntFromNative(tx.GasPrice())
 		}
 
-		return pbeth.BigIntFromNative(math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap()))
+		return firehoseBigIntFromNative(math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap()))
 	}
 
 	panic(errUnhandledTransactionType("gasPrice", tx.Type()))
@@ -910,10 +970,9 @@ func (o *Ordinal) Reset() {
 // Next gives you the next sequential ordinal value that you should
 // use to assign to your exeuction trace (block, transaction, call, etc).
 func (o *Ordinal) Next() (out uint64) {
-	out = o.value
 	o.value++
 
-	return out
+	return o.value
 }
 
 type CallStack struct {
@@ -934,8 +993,8 @@ func (s *CallStack) HasActiveCall() bool {
 // assigned by this method which knowns how to find the parent call and deal with
 // it.
 func (s *CallStack) Push(call *pbeth.Call) {
-	call.Index = s.index
 	s.index++
+	call.Index = s.index
 
 	// If a current call is active, it's the parent of this call
 	if parent := s.Peek(); parent != nil {
@@ -1049,4 +1108,20 @@ func (r *receiptView) String() string {
 	}
 
 	return fmt.Sprintf("[status=%d, gasUsed=%d, logs=%d]", r.Status, r.GasUsed, len(r.Logs))
+}
+
+func emptyBytesToNil(in []byte) []byte {
+	if len(in) == 0 {
+		return nil
+	}
+
+	return in
+}
+
+func firehoseBigIntFromNative(in *big.Int) *pbeth.BigInt {
+	if in == nil || in.Sign() == 0 {
+		return nil
+	}
+
+	return &pbeth.BigInt{Bytes: in.Bytes()}
 }
