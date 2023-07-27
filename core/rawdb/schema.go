@@ -188,11 +188,11 @@ func accountSnapshotKey(hash common.Hash) []byte {
 
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
-	res := make([]byte, 1+len(accountHash)*2)
-	res[0] = SnapshotStoragePrefix[0]
-	copy(res[1:], accountHash[:])
-	copy(res[1+len(accountHash):], storageHash[:])
-	return res
+	buf := make([]byte, len(SnapshotStoragePrefix)+common.HashLength+common.HashLength)
+	n := copy(buf, SnapshotStoragePrefix)
+	n += copy(buf[n:], accountHash.Bytes())
+	copy(buf[n:], storageHash.Bytes())
+	return buf
 }
 
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
@@ -251,11 +251,11 @@ func accountTrieNodeKey(path []byte) []byte {
 
 // storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.
 func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
-	res := make([]byte, 1+len(accountHash)+len(path))
-	res[0] = trieNodeStoragePrefix[0]
-	copy(res[1:], accountHash[:])
-	copy(res[1+len(accountHash):], path)
-	return res
+	buf := make([]byte, len(trieNodeStoragePrefix)+common.HashLength+len(path))
+	n := copy(buf, trieNodeStoragePrefix)
+	n += copy(buf[n:], accountHash.Bytes())
+	copy(buf[n:], path)
+	return buf
 }
 
 // IsLegacyTrieNode reports whether a provided database entry is a legacy trie
