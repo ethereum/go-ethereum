@@ -25,8 +25,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec/v2"
-	btc_ecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	dcrec "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	dcr_ecdsa "github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
@@ -39,16 +39,16 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return bytes, err
 }
 
-func sigToPub(hash, sig []byte) (*btcec.PublicKey, error) {
+func sigToPub(hash, sig []byte) (*dcrec.PublicKey, error) {
 	if len(sig) != SignatureLength {
 		return nil, errors.New("invalid signature")
 	}
-	// Convert to btcec input format with 'recovery id' v at the beginning.
+	// Convert to dcrec input format with 'recovery id' v at the beginning.
 	btcsig := make([]byte, SignatureLength)
 	btcsig[0] = sig[RecoveryIDOffset] + 27
 	copy(btcsig[1:], sig)
 
-	pub, _, err := btc_ecdsa.RecoverCompact(btcsig, hash)
+	pub, _, err := dcr_ecdsa.RecoverCompact(btcsig, hash)
 	return pub, err
 }
 
@@ -73,19 +73,16 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	if len(hash) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
-	if prv.Curve != btcec.S256() {
+	if prv.Curve != dcrec.S256() {
 		return nil, errors.New("private key curve is not secp256k1")
 	}
-	// ecdsa.PrivateKey -> btcec.PrivateKey
-	var priv btcec.PrivateKey
+	// ecdsa.PrivateKey -> dcrec.PrivateKey
+	var priv dcrec.PrivateKey
 	if overflow := priv.Key.SetByteSlice(prv.D.Bytes()); overflow || priv.Key.IsZero() {
 		return nil, errors.New("invalid private key")
 	}
 	defer priv.Zero()
-	sig, err := btc_ecdsa.SignCompact(&priv, hash, false) // ref uncompressed pubkey
-	if err != nil {
-		return nil, err
-	}
+	sig := dcr_ecdsa.SignCompact(&priv, hash, false) // ref uncompressed pubkey
 	// Convert to Ethereum signature format with 'recovery id' v at the end.
 	v := sig[0] - 27
 	copy(sig, sig[1:])
@@ -100,19 +97,19 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 	if len(signature) != 64 {
 		return false
 	}
-	var r, s btcec.ModNScalar
+	var r, s dcrec.ModNScalar
 	if r.SetByteSlice(signature[:32]) {
 		return false // overflow
 	}
 	if s.SetByteSlice(signature[32:]) {
 		return false
 	}
-	sig := btc_ecdsa.NewSignature(&r, &s)
-	key, err := btcec.ParsePubKey(pubkey)
+	sig := dcr_ecdsa.NewSignature(&r, &s)
+	key, err := dcrec.ParsePubKey(pubkey)
 	if err != nil {
 		return false
 	}
-	// Reject malleable signatures. libsecp256k1 does this check but btcec doesn't.
+	// Reject malleable signatures. libsecp256k1 does this check but dcrec doesn't.
 	if s.IsOverHalfOrder() {
 		return false
 	}
@@ -124,7 +121,7 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 	if len(pubkey) != 33 {
 		return nil, errors.New("invalid compressed public key length")
 	}
-	key, err := btcec.ParsePubKey(pubkey)
+	key, err := dcrec.ParsePubKey(pubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -139,14 +136,14 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 // when constructing a PrivateKey.
 func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
 	// NOTE: the coordinates may be validated with
-	// btcec.ParsePubKey(FromECDSAPub(pubkey))
-	var x, y btcec.FieldVal
+	// dcrec.ParsePubKey(FromECDSAPub(pubkey))
+	var x, y dcrec.FieldVal
 	x.SetByteSlice(pubkey.X.Bytes())
 	y.SetByteSlice(pubkey.Y.Bytes())
-	return btcec.NewPublicKey(&x, &y).SerializeCompressed()
+	return dcrec.NewPublicKey(&x, &y).SerializeCompressed()
 }
 
 // S256 returns an instance of the secp256k1 curve.
 func S256() elliptic.Curve {
-	return btcec.S256()
+	return dcrec.S256()
 }
