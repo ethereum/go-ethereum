@@ -4341,7 +4341,6 @@ func TestEIP3651(t *testing.T) {
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
-
 }
 
 func TestDelta(t *testing.T) {
