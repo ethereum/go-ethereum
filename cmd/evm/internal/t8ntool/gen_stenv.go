@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -33,6 +34,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
+		ExcessBlobGas    *hexutil.Uint64                     `json:"excessBlobGas,omitempty"`
 	}
 	var enc stEnv
 	enc.Coinbase = common.UnprefixedAddress(s.Coinbase)
@@ -51,6 +53,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = s.Withdrawals
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
 	enc.ParentUncleHash = s.ParentUncleHash
+	enc.ExcessBlobGas = (*hexutil.Uint64)(s.ExcessBlobGas)
 	return json.Marshal(&enc)
 }
 
@@ -73,6 +76,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee          *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash  *common.Hash                        `json:"parentUncleHash"`
+		ExcessBlobGas    *hexutil.Uint64                     `json:"excessBlobGas,omitempty"`
 	}
 	var dec stEnv
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -129,6 +133,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ParentUncleHash != nil {
 		s.ParentUncleHash = *dec.ParentUncleHash
+	}
+	if dec.ExcessBlobGas != nil {
+		s.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
 	}
 	return nil
 }

@@ -17,10 +17,12 @@
 package t8ntool
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -82,6 +84,7 @@ type stEnv struct {
 	Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 	BaseFee          *big.Int                            `json:"currentBaseFee,omitempty"`
 	ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
+	ExcessBlobGas    *uint64                             `json:"excessBlobGas,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -97,6 +100,7 @@ type stEnvMarshaling struct {
 	Timestamp        math.HexOrDecimal64
 	ParentTimestamp  math.HexOrDecimal64
 	BaseFee          *math.HexOrDecimal256
+	ExcessBlobGas    *hexutil.Uint64
 }
 
 type rejectedTx struct {
@@ -153,6 +157,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
+	// If excessBlobGas is defined, add it to the vmContext.
+	if pre.Env.ExcessBlobGas != nil {
+		vmContext.ExcessBlobGas = pre.Env.ExcessBlobGas
+	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
@@ -162,6 +170,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 
 	for i, tx := range txs {
+		if tx.Type() == types.BlobTxType && vmContext.ExcessBlobGas == nil {
+			return nil, nil, errors.New("blob tx encountered without field excessBlobGas")
+		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
