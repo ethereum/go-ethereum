@@ -17,7 +17,6 @@
 package pathdb
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
@@ -211,52 +209,6 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 		return errSnapshotReadOnly
 	}
 	return db.tree.cap(root, 0)
-}
-
-// Journal commits an entire diff hierarchy to disk into a single journal entry.
-// This is meant to be used during shutdown to persist the layer without
-// flattening everything down (bad for reorgs). And this function will mark the
-// database as read-only to prevent all following mutation to disk.
-func (db *Database) Journal(root common.Hash) error {
-	// Retrieve the head layer to journal from.
-	l := db.tree.get(root)
-	if l == nil {
-		return fmt.Errorf("triedb layer [%#x] missing", root)
-	}
-	// Run the journaling
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	// Short circuit if the database is in read only mode.
-	if db.readOnly {
-		return errSnapshotReadOnly
-	}
-	// Firstly write out the metadata of journal
-	journal := new(bytes.Buffer)
-	if err := rlp.Encode(journal, journalVersion); err != nil {
-		return err
-	}
-	// The stored state in disk might be empty, convert the
-	// root to emptyRoot in this case.
-	_, diskroot := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-	diskroot = types.TrieRootHash(diskroot)
-
-	// Secondly write out the state root in disk, ensure all layers
-	// on top are continuous with disk.
-	if err := rlp.Encode(journal, diskroot); err != nil {
-		return err
-	}
-	// Finally write out the journal of each layer in reverse order.
-	if err := l.journal(journal); err != nil {
-		return err
-	}
-	// Store the journal into the database and return
-	rawdb.WriteTrieJournal(db.diskdb, journal.Bytes())
-
-	// Set the db in read only mode to reject all following mutations
-	db.readOnly = true
-	log.Info("Stored journal in triedb", "disk", diskroot, "size", common.StorageSize(journal.Len()))
-	return nil
 }
 
 // Reset rebuilds the database with the specified state as the base.

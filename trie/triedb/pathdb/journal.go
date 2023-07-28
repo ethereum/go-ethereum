@@ -149,12 +149,12 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	}
 	stored := rawdb.ReadPersistentStateID(db.diskdb)
 	if stored > id {
-		return nil, fmt.Errorf("invalid state id, stored %d resolved %d", stored, id)
+		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
 	}
 	// Resolve nodes cached in node buffer
 	var encoded []journalNodes
 	if err := r.Decode(&encoded); err != nil {
-		return nil, fmt.Errorf("load disk accounts: %v", err)
+		return nil, fmt.Errorf("load disk nodes: %v", err)
 	}
 	nodes := make(map[common.Hash]map[string]*trienode.Node)
 	for _, entry := range encoded {
@@ -240,8 +240,11 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 // journal implements the layer interface, marshaling the un-flushed trie nodes
 // along with layer meta data into provided byte buffer.
 func (dl *diskLayer) journal(w io.Writer) error {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
 	// Ensure the layer didn't get stale
-	if dl.isStale() {
+	if dl.stale {
 		return errSnapshotStale
 	}
 	// Step one, write the disk root into the journal.
@@ -264,7 +267,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := rlp.Encode(w, nodes); err != nil {
 		return err
 	}
-	log.Debug("Journaled disk layer", "root", dl.root, "nodes", len(dl.buffer.nodes))
+	log.Debug("Journaled pathdb disk layer", "root", dl.root, "nodes", len(dl.buffer.nodes))
 	return nil
 }
 
@@ -321,6 +324,52 @@ func (dl *diffLayer) journal(w io.Writer) error {
 	if err := rlp.Encode(w, storage); err != nil {
 		return err
 	}
-	log.Debug("Journaled diff layer", "root", dl.root, "parentLayer", dl.parent.rootHash(), "id", dl.stateID(), "block", dl.block, "nodes", len(dl.nodes))
+	log.Debug("Journaled pathdb diff layer", "root", dl.root, "parent", dl.parent.rootHash(), "id", dl.stateID(), "block", dl.block, "nodes", len(dl.nodes))
+	return nil
+}
+
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
+// This is meant to be used during shutdown to persist the layer without
+// flattening everything down (bad for reorgs). And this function will mark the
+// database as read-only to prevent all following mutation to disk.
+func (db *Database) Journal(root common.Hash) error {
+	// Retrieve the head layer to journal from.
+	l := db.tree.get(root)
+	if l == nil {
+		return fmt.Errorf("triedb layer [%#x] missing", root)
+	}
+	// Run the journaling
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Short circuit if the database is in read only mode.
+	if db.readOnly {
+		return errSnapshotReadOnly
+	}
+	// Firstly write out the metadata of journal
+	journal := new(bytes.Buffer)
+	if err := rlp.Encode(journal, journalVersion); err != nil {
+		return err
+	}
+	// The stored state in disk might be empty, convert the
+	// root to emptyRoot in this case.
+	_, diskroot := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	diskroot = types.TrieRootHash(diskroot)
+
+	// Secondly write out the state root in disk, ensure all layers
+	// on top are continuous with disk.
+	if err := rlp.Encode(journal, diskroot); err != nil {
+		return err
+	}
+	// Finally write out the journal of each layer in reverse order.
+	if err := l.journal(journal); err != nil {
+		return err
+	}
+	// Store the journal into the database and return
+	rawdb.WriteTrieJournal(db.diskdb, journal.Bytes())
+
+	// Set the db in read only mode to reject all following mutations
+	db.readOnly = true
+	log.Info("Stored journal in triedb", "disk", diskroot, "size", common.StorageSize(journal.Len()))
 	return nil
 }
