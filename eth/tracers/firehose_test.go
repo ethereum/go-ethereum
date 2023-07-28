@@ -49,7 +49,7 @@ func TestFirehoseCallStack_Push(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &CallStack{}
+			s := NewCallStack()
 
 			for _, action := range tt.actions {
 				action(t, s)

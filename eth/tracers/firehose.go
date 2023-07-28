@@ -30,6 +30,7 @@ import (
 )
 
 var isFirehoseDebugEnabled = os.Getenv("GETH_FIREHOSE_TRACER_DEBUG") != ""
+var isFirehoseTracerEnabled = os.Getenv("GETH_FIREHOSE_TRACER_TRACE") != ""
 
 var _ core.BlockchainLogger = (*Firehose)(nil)
 
@@ -51,6 +52,7 @@ type Firehose struct {
 	inTransaction       *atomic.Bool
 	transaction         *pbeth.TransactionTrace
 	transactionLogIndex uint32
+	isPrecompiledAddr   func(addr common.Address) bool
 
 	// Call state
 	callStack               *CallStack
@@ -73,8 +75,8 @@ func NewFirehoseLogger() *Firehose {
 		inTransaction:       atomic.NewBool(false),
 		transactionLogIndex: 0,
 
-		callStack:               &CallStack{},
-		deferredCallState:       &DeferredCallState{},
+		callStack:               NewCallStack(),
+		deferredCallState:       NewDeferredCallState(),
 		latestCallStartSuicided: false,
 	}
 }
@@ -92,6 +94,7 @@ func (f *Firehose) resetBlock() {
 func (f *Firehose) resetTransaction() {
 	f.inTransaction.Store(false)
 	f.transactionLogIndex = 0
+	f.isPrecompiledAddr = nil
 
 	f.callStack.Reset()
 	f.latestCallStartSuicided = false
@@ -137,13 +140,15 @@ func (f *Firehose) OnBlockEnd(err error) {
 	firehoseDebug("block end")
 }
 
-func (f *Firehose) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
-	firehoseDebug("trx start hash=%s type=%d input=%s", tx.Hash(), tx.Type(), inputView(tx.Data()))
+func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction) {
+	firehoseDebug("trx start hash=%s type=%d gas=%d input=%s", tx.Hash(), tx.Type(), tx.Gas(), inputView(tx.Data()))
+
 	f.ensureInBlockAndNotInTrxAndNotInCall()
 
 	f.inTransaction.Store(true)
+	f.isPrecompiledAddr = evm.IsPrecompileAddr
 
-	signer := types.MakeSigner(env.ChainConfig(), env.Context.BlockNumber, env.Context.Time)
+	signer := types.MakeSigner(evm.ChainConfig(), evm.Context.BlockNumber, evm.Context.Time)
 
 	from, err := types.Sender(signer, tx)
 	if err != nil {
@@ -152,7 +157,7 @@ func (f *Firehose) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 
 	var to common.Address
 	if tx.To() == nil {
-		to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
+		to = crypto.CreateAddress(from, evm.StateDB.GetNonce(from))
 	} else {
 		to = *tx.To()
 	}
@@ -185,6 +190,8 @@ func (f *Firehose) CaptureTxEnd(receipt *types.Receipt, err error) {
 
 	f.block.TransactionTraces = append(f.block.TransactionTraces, f.completeTransaction(receipt))
 
+	// The reset must be done as the very last thing as the CallStack needs to be
+	// properly populated for the `completeTransaction` call above to complete correctly.
 	f.resetTransaction()
 
 	firehoseDebug("trx end")
@@ -193,12 +200,15 @@ func (f *Firehose) CaptureTxEnd(receipt *types.Receipt, err error) {
 func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.TransactionTrace {
 	firehoseDebug("completing transaction call_count=%d receipt=%s", len(f.transaction.Calls), (*receiptView)(receipt))
 
+	// Sorting needs to happen first, before we populate the state reverted
 	slices.SortFunc(f.transaction.Calls, func(i, j *pbeth.Call) bool {
 		return i.Index < j.Index
 	})
 
+	rootCall := f.transaction.Calls[0]
+
 	if !f.deferredCallState.IsEmpty() {
-		f.deferredCallState.MaybePopulateCallAndReset("root", f.transaction.Calls[0])
+		f.deferredCallState.MaybePopulateCallAndReset("root", rootCall)
 	}
 
 	// Receipt can be nil if an error occurred during the transaction execution, right now we don't have it
@@ -207,19 +217,56 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 		f.transaction.GasUsed = receipt.GasUsed
 		f.transaction.Receipt = newTxReceiptFromChain(receipt)
 		f.transaction.Status = transactionStatusFromChainTxReceipt(receipt.Status)
-	} else {
-		// FIXME: How are we going to decide about a reverted transaction?
-		f.transaction.Status = pbeth.TransactionTraceStatus_FAILED
 	}
 
-	// FIXME: There should always be a Call in a transaction, maybe we need to synthetize one here, need to check
-	if len(f.transaction.Calls) > 0 {
-		f.transaction.ReturnData = f.transaction.Calls[0].ReturnData
+	// It's possible that the transaction was reverted, but we still have a receipt, in that case, we must
+	// check the root call
+	if rootCall.StatusReverted {
+		f.transaction.Status = pbeth.TransactionTraceStatus_REVERTED
 	}
 
+	// Order is important, we must populate the state reverted before we remove the log block index
+	f.populateStateReverted()
+	f.removeLogBlockIndexOnStateRevertedCalls()
+
+	// I think this was never used in Firehose instrumentation actually
+	// f.transaction.ReturnData = rootCall.ReturnData
 	f.transaction.EndOrdinal = f.blockOrdinal.Next()
 
 	return f.transaction
+}
+
+func (f *Firehose) populateStateReverted() {
+	// Calls are ordered by execution index. So the algo is quite simple.
+	// We loop through the flat calls, at each call, if the parent is present
+	// and reverted, the current call is reverted. Otherwise, if the current call
+	// is failed, the state is reverted. In all other cases, we simply continue
+	// our iteration loop.
+	//
+	// This works because we see the parent before its children, and since we
+	// trickle down the state reverted value down the children, checking the parent
+	// of a call will always tell us if the whole chain of parent/child should
+	// be reverted
+	//
+	calls := f.transaction.Calls
+	for _, call := range f.transaction.Calls {
+		var parent *pbeth.Call
+		if call.ParentIndex > 0 {
+			parent = calls[call.ParentIndex-1]
+		}
+
+		call.StateReverted = (parent != nil && parent.StateReverted) || call.StatusFailed
+	}
+}
+
+func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
+	for _, call := range f.transaction.Calls {
+		if call.StateReverted {
+			for _, log := range call.Logs {
+				log.BlockIndex = 0
+			}
+		}
+	}
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -234,18 +281,28 @@ func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	if activeCall := f.callStack.Peek(); activeCall != nil && activeCall.CallType != pbeth.CallType_CREATE {
-		activeCall.ExecutedCode = true
-	}
+	f.captureInterpreterStep(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-	if activeCall := f.callStack.Peek(); activeCall != nil && activeCall.CallType != pbeth.CallType_CREATE {
-		activeCall.ExecutedCode = true
+func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+	f.captureInterpreterStep(pc, op, gas, cost, scope, nil, depth, err)
+}
+
+func (f *Firehose) captureInterpreterStep(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, rData []byte, depth int, err error) {
+	activeCall := f.callStack.Peek()
+	if activeCall == nil {
+		return
 	}
 
-	// FIXME: Maybe we will need this to properly track status failed/reverted of
+	// Firehose model don't today flag contract creation as having executed code. But it we
+	// keep like that for backward compatibility.
+	//
+	// However, if at some point we bump to fixes the small bug here and there, we should
+	// actually flag contract creation as having executed code only if a constructor was called.
+	if activeCall.CallType != pbeth.CallType_CREATE {
+		activeCall.ExecutedCode = true
+	}
 }
 
 func (f *Firehose) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
@@ -276,8 +333,16 @@ func (f *Firehose) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (f *Firehose) callStart(source string, callType pbeth.CallType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	firehoseDebug("call start source=%s type=%s", source, callType)
+	firehoseDebug("call start source=%s index=%d type=%s input=%s", source, f.callStack.NextIndex(), callType, inputView(input))
 	f.ensureInBlockAndInTrx()
+
+	// First to avoid paying the `bytes.Clone` below
+	if callType == pbeth.CallType_CREATE {
+		// Replicates a previous bug in Firehose instrumentation where create calls input is always
+		// set to `nil` (this was done on purpose but it missed the fact that we are missing the
+		// actual input data of the constuctor call, if present and invoked).
+		input = nil
+	}
 
 	call := &pbeth.Call{
 		BeginOrdinal: f.blockOrdinal.Next(),
@@ -285,7 +350,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Depth:        0,
 		Caller:       from.Bytes(),
 		Address:      to.Bytes(),
-		Input:        input,
+		Input:        bytes.Clone(input),
 		Value:        firehoseBigIntFromNative(value),
 		GasLimit:     gas,
 	}
@@ -299,18 +364,11 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		call.BeginOrdinal = 0
 	}
 
-	if callType == pbeth.CallType_CREATE {
-		// Replicates a previous bug in Firehose instrumentation where create calls input is always
-		// set to `nil` (this was done on purpose but it missed the fact that we are missing the
-		// actual input data of the constuctor call, if present and invoked).
-		call.Input = nil
-	}
-
 	f.callStack.Push(call)
 }
 
 func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error) {
-	firehoseDebug("call end source=%s output=%s gasUsed=%d err=%s", source, outputView(output), gasUsed, errorView(err))
+	firehoseDebug("call end source=%s index=%d output=%s gasUsed=%d err=%s", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err))
 
 	if f.latestCallStartSuicided {
 		if source != "child" {
@@ -330,16 +388,21 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 
 	// For create call, we do not save the returned value which is the actual contract's code
 	if call.CallType != pbeth.CallType_CREATE {
-		call.ReturnData = output
-	}
+		call.ReturnData = bytes.Clone(output)
 
-	// FIXME: Unset field for now, need to ensure they are tracked somewere
-	// call.StateReverted
+		// Pre-compiled addresses always execute code
+		if f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
+			call.ExecutedCode = true
+		}
+	}
 
 	if err != nil {
 		call.FailureReason = err.Error()
 		call.StatusFailed = true
-		call.StatusReverted = errors.Is(err, vm.ErrExecutionReverted)
+
+		// We also treat ErrInsufficientBalance and ErrDepth as reverted in Firehose model
+		// because they do not cost any gas.
+		call.StatusReverted = errors.Is(err, vm.ErrExecutionReverted) || errors.Is(err, vm.ErrInsufficientBalance) || errors.Is(err, vm.ErrDepth)
 	}
 
 	call.EndOrdinal = f.blockOrdinal.Next()
@@ -605,10 +668,12 @@ func (f *Firehose) OnGasConsumed(gas, amount uint64) {
 		return
 	}
 
+	firehoseTrace("gas consumed before=%d after=%d", gas, gas-amount)
+
 	activeCall := f.callStack.Peek()
 	change := &pbeth.GasChange{
 		OldValue: gas,
-		NewValue: gas + amount,
+		NewValue: gas - amount,
 		Ordinal:  f.blockOrdinal.Next(),
 	}
 
@@ -979,6 +1044,12 @@ func firehoseDebug(msg string, args ...interface{}) {
 	}
 }
 
+func firehoseTrace(msg string, args ...interface{}) {
+	if isFirehoseTracerEnabled {
+		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
+	}
+}
+
 // Ignore unused, we keep it around for debugging purposes
 var _ = firehoseDebugPrintStack
 
@@ -1018,6 +1089,10 @@ type CallStack struct {
 	depth int
 }
 
+func NewCallStack() *CallStack {
+	return &CallStack{}
+}
+
 func (s *CallStack) Reset() {
 	s.index = 0
 	s.stack = s.stack[:0]
@@ -1044,6 +1119,18 @@ func (s *CallStack) Push(call *pbeth.Call) {
 	}
 
 	s.stack = append(s.stack, call)
+}
+
+func (s *CallStack) ActiveIndex() uint32 {
+	if len(s.stack) == 0 {
+		return 0
+	}
+
+	return s.stack[len(s.stack)-1].Index
+}
+
+func (s *CallStack) NextIndex() uint32 {
+	return s.index + 1
 }
 
 func (s *CallStack) Pop() (out *pbeth.Call) {
@@ -1075,6 +1162,10 @@ type DeferredCallState struct {
 	balanceChanges []*pbeth.BalanceChange
 	gasChanges     []*pbeth.GasChange
 	nonceChanges   []*pbeth.NonceChange
+}
+
+func NewDeferredCallState() *DeferredCallState {
+	return &DeferredCallState{}
 }
 
 func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth.Call) error {
