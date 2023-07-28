@@ -38,6 +38,11 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
+func (evm *EVM) IsPrecompileAddr(addr common.Address) bool {
+	_, isPrecompile := evm.precompile(addr)
+	return isPrecompile
+}
+
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
