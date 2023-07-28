@@ -117,12 +117,14 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 			h := newHasher()
 			defer h.release()
 
-			if got := h.hash(blob); got != hash {
-				return nil, newUnexpectedNodeError("clean", hash, got, owner, path)
+			got := h.hash(blob)
+			if got == hash {
+				cleanHitMeter.Mark(1)
+				cleanReadMeter.Mark(int64(len(blob)))
+				return blob, nil
 			}
-			cleanHitMeter.Mark(1)
-			cleanReadMeter.Mark(int64(len(blob)))
-			return blob, nil
+			cleanFalseMeter.Mark(1)
+			log.Error("Unexpected trie node in clean cache", "owner", owner, "path", path, "expect", hash, "got", got)
 		}
 		cleanMissMeter.Mark(1)
 	}

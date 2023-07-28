@@ -21,6 +21,7 @@ import "github.com/ethereum/go-ethereum/metrics"
 var (
 	cleanHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/hit", nil)
 	cleanMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/miss", nil)
+	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
 	cleanReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/read", nil)
 	cleanWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/write", nil)
 
