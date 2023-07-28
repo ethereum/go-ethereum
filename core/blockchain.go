@@ -256,7 +256,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if vmConfig.Tracer != nil {
 		l, ok := vmConfig.Tracer.(BlockchainLogger)
 		if !ok {
-			return nil, fmt.Errorf("only extended tracers are supported for live mode")
+			return nil, errors.New("only extended tracers are supported for live mode")
 		}
 		logger = l
 	}
