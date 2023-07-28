@@ -155,13 +155,13 @@ block is used.
 			},
 			{
 				Name:     "crawl-supply",
-				Usage:    "Calculate the Ether supply at a specific block",
+				Usage:    "Calculate the ether supply at a specific block",
 				Action:   crawlSupply,
 				Category: "MISCELLANEOUS COMMANDS",
 				Flags:    flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot crawl-supply
-will traverse the whole state from the given root and accumulate all the Ether
+will traverse the whole state from the given root and accumulate all the ether
 balances to calculate the total supply.
 `,
 			},

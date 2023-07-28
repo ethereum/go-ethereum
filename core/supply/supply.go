@@ -36,6 +36,7 @@ func Supply(header *types.Header, snaptree *snapshot.Tree) (*big.Int, error) {
 	defer accIt.Release()
 
 	log.Info("Ether supply counting started", "block", header.Number, "hash", header.Hash(), "root", header.Root)
+
 	var (
 		start    = time.Now()
 		logged   = time.Now()
@@ -50,13 +51,11 @@ func Supply(header *types.Header, snaptree *snapshot.Tree) (*big.Int, error) {
 		supply.Add(supply, account.Balance)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Ether supply counting in progress", "at", accIt.Hash(),
-				"accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Ether supply counting in progress", "at", accIt.Hash(), "accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}
-	log.Info("Ether supply counting complete", "block", header.Number, "hash", header.Hash(), "root", header.Root,
-		"accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Ether supply counting complete", "block", header.Number, "hash", header.Hash(), "root", header.Root, "accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return supply, nil
 }
