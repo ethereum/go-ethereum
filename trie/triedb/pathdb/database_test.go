@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -99,7 +98,7 @@ type tester struct {
 func newTester(t *testing.T) *tester {
 	var (
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir()+fmt.Sprint(rand.Int63()), "", false)
-		db      = New(disk, fastcache.New(256*1024), &Config{DirtySize: 256 * 1024})
+		db      = New(disk, &Config{CleanSize: 256 * 1024, DirtySize: 256 * 1024})
 		obj     = &tester{
 			db:           db,
 			preimages:    make(map[common.Hash]common.Address),
@@ -491,7 +490,7 @@ func TestJournal(t *testing.T) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, fastcache.New(2*1024*1024), nil)
+	tester.db = New(tester.db.diskdb, nil)
 
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
@@ -522,7 +521,7 @@ func TestCorruptedJournal(t *testing.T) {
 	rawdb.WriteTrieJournal(tester.db.diskdb, blob)
 
 	// Verify states, all not-yet-written states should be discarded
-	tester.db = New(tester.db.diskdb, fastcache.New(2*1024*1024), nil)
+	tester.db = New(tester.db.diskdb, nil)
 	for i := 0; i < len(tester.roots); i++ {
 		if tester.roots[i] == root {
 			if err := tester.verifyState(root); err != nil {

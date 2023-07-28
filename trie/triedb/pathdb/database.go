@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -72,13 +71,26 @@ type layer interface {
 // Config contains the settings for database.
 type Config struct {
 	StateLimit uint64 // Number of recent blocks to maintain state history for
+	CleanSize  int    // Maximum memory allowance (in bytes) for caching clean nodes
 	DirtySize  int    // Maximum memory allowance (in bytes) for caching dirty nodes
 	ReadOnly   bool   // Flag whether the database is opened in read only mode.
 }
 
+var (
+	// defaultCleanSize is the default memory allowance of clean cache.
+	defaultCleanSize = 16 * 1024 * 1024
+
+	// defaultBufferSize is the default memory allowance of node buffer
+	// that aggregates the writes from above until it's flushed into the
+	// disk. Do not increase the buffer size arbitrarily, otherwise the
+	// system pause time will increase when the database writes happen.
+	defaultBufferSize = 128 * 1024 * 1024
+)
+
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
 	StateLimit: params.FullImmutabilityThreshold,
+	CleanSize:  defaultCleanSize,
 	DirtySize:  defaultBufferSize,
 }
 
@@ -101,7 +113,6 @@ type Database struct {
 	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
 	config     *Config                  // Configuration for database
 	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
-	cleans     *fastcache.Cache         // GC friendly memory cache of clean node RLPs
 	tree       *layerTree               // The group for all known layers
 	freezer    *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
 	lock       sync.RWMutex             // Lock to prevent mutations from happening at the same time
@@ -110,7 +121,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, cleans *fastcache.Cache, config *Config) *Database {
+func New(diskdb ethdb.Database, config *Config) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -119,7 +130,6 @@ func New(diskdb ethdb.Database, cleans *fastcache.Cache, config *Config) *Databa
 		bufferSize: config.DirtySize,
 		config:     config,
 		diskdb:     diskdb,
-		cleans:     cleans,
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
@@ -279,10 +289,6 @@ func (db *Database) Reset(root common.Hash) error {
 	// Mark the disk layer as stale before applying any mutation.
 	db.tree.bottom().markStale()
 
-	// Reset the clean cache before applying mutation to disk.
-	if db.cleans != nil {
-		db.cleans.Reset()
-	}
 	// Drop the stale state journal in persistent database
 	// and reset the persistent state id back to zero.
 	rawdb.DeleteTrieJournal(batch)
@@ -299,7 +305,7 @@ func (db *Database) Reset(root common.Hash) error {
 			return err
 		}
 	}
-	db.tree.reset(newDiskLayer(root, 0, db, newNodeBuffer(db.bufferSize, nil, 0)))
+	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0)))
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }

@@ -29,14 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-var (
-	// defaultBufferSize is the default memory limitation of the node buffer
-	// that aggregates the writes from above until it's flushed into the disk.
-	// Do not increase the buffer size arbitrarily, otherwise the system pause
-	// time will increase when the database writes happen.
-	defaultBufferSize = 128 * 1024 * 1024
-)
-
 // nodebuffer is a collection of modified trie nodes to aggregate the disk
 // write. The content of the nodebuffer must be checked before diving into
 // disk (since it basically is not-yet-written data).

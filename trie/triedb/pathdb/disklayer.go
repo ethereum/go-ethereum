@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,20 +33,28 @@ import (
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	root   common.Hash  // Immutable, root hash to which this layer was made for
-	id     uint64       // Immutable, corresponding state id
-	db     *Database    // Path-based trie database
-	buffer *nodebuffer  // Node buffer to aggregate writes
-	stale  bool         // Signals that the layer became stale (state progressed)
-	lock   sync.RWMutex // Lock used to protect stale flag
+	root   common.Hash      // Immutable, root hash to which this layer was made for
+	id     uint64           // Immutable, corresponding state id
+	db     *Database        // Path-based trie database
+	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
+	buffer *nodebuffer      // Node buffer to aggregate writes
+	stale  bool             // Signals that the layer became stale (state progressed)
+	lock   sync.RWMutex     // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, buffer *nodebuffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.Cache, buffer *nodebuffer) *diskLayer {
+	// Initialize a clean cache if the memory allowance is not zero
+	// or reuse the provided cache if it is not nil (inherited from
+	// the original disk layer).
+	if cleans == nil && db.config.CleanSize != 0 {
+		cleans = fastcache.New(db.config.CleanSize)
+	}
 	return &diskLayer{
 		root:   root,
 		id:     id,
 		db:     db,
+		cleans: cleans,
 		buffer: buffer,
 	}
 }
@@ -112,8 +121,8 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 
 	// Try to retrieve the trie node from the clean memory cache
 	key := cacheKey(owner, path)
-	if dl.db.cleans != nil {
-		if blob := dl.db.cleans.Get(nil, key); len(blob) > 0 {
+	if dl.cleans != nil {
+		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
 			h := newHasher()
 			defer h.release()
 
@@ -141,8 +150,8 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	if nHash != hash {
 		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path)
 	}
-	if dl.db.cleans != nil && len(nBlob) > 0 {
-		dl.db.cleans.Set(key, nBlob)
+	if dl.cleans != nil && len(nBlob) > 0 {
+		dl.cleans.Set(key, nBlob)
 		cleanWriteMeter.Mark(int64(len(nBlob)))
 	}
 	return nBlob, nil
@@ -186,8 +195,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Construct a new disk layer by merging the nodes from the provided
 	// diff layer, and flush the content in disk layer if there are too
 	// many nodes cached.
-	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.buffer.commit(bottom.nodes))
-	err := ndl.buffer.flush(ndl.db.diskdb, ndl.db.cleans, ndl.id, force)
+	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.cleans, dl.buffer.commit(bottom.nodes))
+	err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force)
 	if err != nil {
 		return nil, err
 	}
@@ -234,13 +243,13 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 		}
 	} else {
 		batch := dl.db.diskdb.NewBatch()
-		writeNodes(batch, nodes, dl.db.cleans)
+		writeNodes(batch, nodes, dl.cleans)
 		rawdb.WritePersistentStateID(batch, dl.id-1)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write states", "err", err)
 		}
 	}
-	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.buffer), nil
+	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.cleans, dl.buffer), nil
 }
 
 // setBufferSize sets the node buffer size to the provided value.
@@ -251,7 +260,7 @@ func (dl *diskLayer) setBufferSize(size int) error {
 	if dl.stale {
 		return errSnapshotStale
 	}
-	return dl.buffer.setSize(size, dl.db.diskdb, dl.db.cleans, dl.id)
+	return dl.buffer.setSize(size, dl.db.diskdb, dl.cleans, dl.id)
 }
 
 // size returns the approximate size of cached nodes in the disk layer.
