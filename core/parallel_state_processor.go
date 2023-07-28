@@ -50,7 +50,7 @@ type ParallelStateProcessor struct {
 	engine consensus.Engine    // Consensus engine used for block rewards
 }
 
-// NewParallelStateProcessor NewStateProcessor initialises a new StateProcessor.
+// NewParallelStateProcessor initialises a new StateProcessor.
 func NewParallelStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *ParallelStateProcessor {
 	return &ParallelStateProcessor{
 		config: config,

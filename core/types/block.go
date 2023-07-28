@@ -97,11 +97,6 @@ type Header struct {
 	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
 	ExcessDataGas *big.Int `json:"excessDataGas" rlp:"optional"`
 
-	// length of TxDependency          ->   n (n = number of transactions in the block)
-	// length of TxDependency[i]       ->   k (k = a whole number)
-	// k elements in TxDependency[i]   ->   transaction indexes on which transaction i is dependent on
-	TxDependency [][]uint64 `json:"txDependency" rlp:"optional"`
-
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
 		// Random was added during the merge and contains the BeaconState randomness
@@ -319,15 +314,6 @@ func CopyHeader(h *Header) *Header {
 	if h.WithdrawalsHash != nil {
 		cpy.WithdrawalsHash = new(common.Hash)
 		*cpy.WithdrawalsHash = *h.WithdrawalsHash
-	}
-
-	if len(h.TxDependency) > 0 {
-		cpy.TxDependency = make([][]uint64, len(h.TxDependency))
-
-		for i, dep := range h.TxDependency {
-			cpy.TxDependency[i] = make([]uint64, len(dep))
-			copy(cpy.TxDependency[i], dep)
-		}
 	}
 
 	return &cpy

@@ -34,7 +34,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		BaseFee         *hexutil.Big   `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash *common.Hash   `json:"withdrawalsRoot" rlp:"optional"`
 		ExcessDataGas   *big.Int       `json:"excessDataGas" rlp:"optional"`
-		TxDependency    [][]uint64     `json:"txDependency" rlp:"optional"`
 		Hash            common.Hash    `json:"hash"`
 	}
 	var enc Header
@@ -56,7 +55,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 	enc.WithdrawalsHash = h.WithdrawalsHash
 	enc.ExcessDataGas = h.ExcessDataGas
-	enc.TxDependency = h.TxDependency
 	enc.Hash = h.Hash()
 	return json.Marshal(&enc)
 }
@@ -82,7 +80,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		BaseFee         *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
 		ExcessDataGas   *big.Int        `json:"excessDataGas" rlp:"optional"`
-		TxDependency    [][]uint64      `json:"txDependency" rlp:"optional"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -153,9 +150,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessDataGas != nil {
 		h.ExcessDataGas = dec.ExcessDataGas
-	}
-	if dec.TxDependency != nil {
-		h.TxDependency = dec.TxDependency
 	}
 	return nil
 }
