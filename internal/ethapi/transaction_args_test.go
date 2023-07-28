@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -255,6 +256,7 @@ func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 }
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
+func (b *backendMock) Config() *ethconfig.Config        { panic("not supported") }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }

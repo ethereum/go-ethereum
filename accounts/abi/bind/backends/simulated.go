@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -919,6 +920,10 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
+	panic("not supported")
+}
+
+func (fb *filterBackend) Config() *ethconfig.Config {
 	panic("not supported")
 }
 

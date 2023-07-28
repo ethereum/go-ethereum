@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/blocktest"
@@ -206,6 +207,7 @@ type testBackend struct {
 	db      ethdb.Database
 	chain   *core.BlockChain
 	pending *types.Block
+	config  *ethconfig.Config
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -230,7 +232,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	backend := &testBackend{db: db, chain: chain}
+	backend := &testBackend{db: db, chain: chain, config: &ethconfig.Config{EnableSupplyDeltaRecording: true}}
 	return backend
 }
 
@@ -379,6 +381,7 @@ func (b testBackend) TxPoolContentFrom(addr common.Address) ([]*types.Transactio
 func (b testBackend) SubscribeNewTxsEvent(events chan<- core.NewTxsEvent) event.Subscription {
 	panic("implement me")
 }
+func (b testBackend) Config() *ethconfig.Config        { return b.config }
 func (b testBackend) ChainConfig() *params.ChainConfig { return b.chain.Config() }
 func (b testBackend) Engine() consensus.Engine         { return b.chain.Engine() }
 func (b testBackend) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {

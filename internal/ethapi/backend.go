@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -84,6 +85,7 @@ type Backend interface {
 	TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
+	Config() *ethconfig.Config
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 
@@ -99,30 +101,33 @@ type Backend interface {
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
 
-func GetAPIs(apiBackend Backend) []rpc.API {
+func GetAPIs(backend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
 			Namespace: "eth",
-			Service:   NewEthereumAPI(apiBackend),
+			Service:   NewEthereumAPI(backend),
 		}, {
 			Namespace: "eth",
-			Service:   NewBlockChainAPI(apiBackend),
+			Service:   NewBlockChainAPI(backend),
 		}, {
 			Namespace: "eth",
-			Service:   NewTransactionAPI(apiBackend, nonceLock),
+			Service:   NewTransactionAPI(backend, nonceLock),
 		}, {
 			Namespace: "txpool",
-			Service:   NewTxPoolAPI(apiBackend),
+			Service:   NewTxPoolAPI(backend),
 		}, {
 			Namespace: "debug",
-			Service:   NewDebugAPI(apiBackend),
+			Service:   NewDebugAPI(backend),
 		}, {
 			Namespace: "eth",
-			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
+			Service:   NewEthereumAccountAPI(backend.AccountManager()),
 		}, {
 			Namespace: "personal",
-			Service:   NewPersonalAccountAPI(apiBackend, nonceLock),
+			Service:   NewPersonalAccountAPI(backend, nonceLock),
+		}, {
+			Namespace: "geth",
+			Service:   NewGethAPI(backend),
 		},
 	}
 }
