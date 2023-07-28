@@ -123,7 +123,7 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 	b.updateSize(delta)
 	b.layers++
 	gcNodesMeter.Mark(overwrite)
-	gcSizeMeter.Mark(overwriteSize)
+	gcBytesMeter.Mark(overwriteSize)
 	return b
 }
 
@@ -233,7 +233,7 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	commitSizeMeter.Mark(int64(size))
+	commitBytesMeter.Mark(int64(size))
 	commitNodesMeter.Mark(int64(nodes))
 	commitTimeTimer.UpdateSince(start)
 	log.Debug("Persisted pathdb nodes", "nodes", len(b.nodes), "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
@@ -254,7 +254,7 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 					rawdb.DeleteStorageTrieNode(batch, owner, []byte(path))
 				}
 				if clean != nil {
-					clean.Del(append(owner.Bytes(), path...))
+					clean.Del(cacheKey(owner, []byte(path)))
 				}
 			} else {
 				if owner == (common.Hash{}) {
@@ -263,11 +263,19 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 					rawdb.WriteStorageTrieNode(batch, owner, []byte(path), n.Blob)
 				}
 				if clean != nil {
-					clean.Set(append(owner.Bytes(), path...), n.Blob)
+					clean.Set(cacheKey(owner, []byte(path)), n.Blob)
 				}
 			}
 		}
 		total += len(subset)
 	}
 	return total
+}
+
+// cacheKey constructs the unique key of clean cache.
+func cacheKey(owner common.Hash, path []byte) []byte {
+	if owner == (common.Hash{}) {
+		return path
+	}
+	return append(owner.Bytes(), path...)
 }

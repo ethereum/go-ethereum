@@ -538,8 +538,8 @@ func writeHistory(db ethdb.KeyValueStore, freezer *rawdb.ResettableFreezer, dl *
 			return err
 		}
 	}
-	historyDataSizeMeter.Mark(int64(dataSize))
-	historyIndexSizeMeter.Mark(int64(indexSize))
+	historyDataBytesMeter.Mark(int64(dataSize))
+	historyIndexBytesMeter.Mark(int64(indexSize))
 	historyBuildTimeMeter.UpdateSince(start)
 	log.Debug("Stored state history", "id", dl.stateID(), "block", dl.block, "data", dataSize, "index", indexSize, "pruned", n, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil

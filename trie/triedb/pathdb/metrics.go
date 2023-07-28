@@ -33,15 +33,15 @@ var (
 
 	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
-	commitSizeMeter  = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
+	commitBytesMeter = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
 	gcNodesMeter = metrics.NewRegisteredMeter("pathdb/gc/nodes", nil)
-	gcSizeMeter  = metrics.NewRegisteredMeter("pathdb/gc/bytes", nil)
+	gcBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/bytes", nil)
 
-	diffLayerSizeMeter  = metrics.NewRegisteredMeter("pathdb/diff/bytes", nil)
+	diffLayerBytesMeter = metrics.NewRegisteredMeter("pathdb/diff/bytes", nil)
 	diffLayerNodesMeter = metrics.NewRegisteredMeter("pathdb/diff/nodes", nil)
 
-	historyBuildTimeMeter = metrics.NewRegisteredTimer("pathdb/history/time", nil)
-	historyDataSizeMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
-	historyIndexSizeMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
+	historyBuildTimeMeter  = metrics.NewRegisteredTimer("pathdb/history/time", nil)
+	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
+	historyIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
 )

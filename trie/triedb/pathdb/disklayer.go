@@ -111,7 +111,7 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	dirtyMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
-	key := append(owner.Bytes(), path...)
+	key := cacheKey(owner, path)
 	if dl.db.cleans != nil {
 		if blob := dl.db.cleans.Get(nil, key); len(blob) > 0 {
 			h := newHasher()
