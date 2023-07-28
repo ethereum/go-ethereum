@@ -328,11 +328,8 @@ func (st *StateTransition) preCheck() error {
 
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if st.blobGasUsed() > 0 {
-			if st.evm.Context.ExcessBlobGas == nil {
-				// programming error
-				panic("missing field excess data gas")
-			}
 			// Check that the user is paying at least the current blob fee
+			// ExcessBlobGas must not be nil, which is checked in eip4844.VerifyEIP4844Header
 			blobFee := eip4844.CalcBlobFee(*st.evm.Context.ExcessBlobGas)
 			if st.msg.BlobGasFeeCap.Cmp(blobFee) < 0 {
 				return fmt.Errorf("%w: address %v have %v want %v", ErrBlobFeeCapTooLow, st.msg.From.Hex(), st.msg.BlobGasFeeCap, blobFee)
