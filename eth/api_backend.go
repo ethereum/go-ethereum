@@ -90,7 +90,6 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 			return nil, errors.New("safe block not found")
 		}
 		return block, nil
-
 	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 }
