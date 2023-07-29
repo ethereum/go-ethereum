@@ -113,6 +113,52 @@ func TestWebsocketLargeCall(t *testing.T) {
 	}
 }
 
+// This test checks whether the wsMessageSizeLimit option is obeyed.
+func TestWebsocketLargeRead(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = newTestServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"*"}))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	testLimit := func(limit int64) {
+		opts := []ClientOption{}
+		if limit >= 0 {
+			opts = append(opts, WithWebsocketMessageSizeLimit(limit))
+		} else {
+			limit = wsMessageSizeLimit
+		}
+		client, err := DialOptions(context.Background(), wsURL, opts...)
+		if err != nil {
+			t.Fatalf("can't dial: %v", err)
+		}
+		defer client.Close()
+
+		// Remove some bytes for json encoding overhead.
+		underLimit := int(limit - 128)
+		var res string
+		err = client.Call(&res, "test_repeat", "A", underLimit)
+		if err != nil {
+			t.Fatalf("unexpected error with limit %d: %v", limit, err)
+		}
+		if len(res) != underLimit || strings.Count(res, "A") != underLimit {
+			t.Fatal("incorrect data")
+		}
+
+		err = client.Call(&res, "test_repeat", "A", limit+1)
+		if err == nil || err != websocket.ErrReadLimit {
+			t.Fatalf("wrong error with limit %d: %v expecting %v", limit, err, websocket.ErrReadLimit)
+		}
+	}
+
+	testLimit(-1)
+	testLimit(wsMessageSizeLimit * 2)
+}
+
 func TestWebsocketPeerInfo(t *testing.T) {
 	var (
 		s     = newTestServer()

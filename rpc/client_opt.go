@@ -35,6 +35,7 @@ type clientConfig struct {
 
 	// WebSocket options
 	wsDialer *websocket.Dialer
+    wsMessageSizeLimit *int64
 
 	// RPC handler options
 	idgen              func() ID
@@ -63,6 +64,14 @@ func (fn optionFunc) applyOption(opt *clientConfig) {
 func WithWebsocketDialer(dialer websocket.Dialer) ClientOption {
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.wsDialer = &dialer
+	})
+}
+
+// WithWebsocketMessageSizeLimit configures the websocket message size limit used by the RPC
+// client.
+func WithWebsocketMessageSizeLimit(messageSizeLimit int64) ClientOption {
+	return optionFunc(func(cfg *clientConfig) {
+		cfg.wsMessageSizeLimit = &messageSizeLimit
 	})
 }
 
