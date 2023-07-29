@@ -34,8 +34,8 @@ type clientConfig struct {
 	httpAuth    HTTPAuth
 
 	// WebSocket options
-	wsDialer *websocket.Dialer
-    wsMessageSizeLimit *int64
+	wsDialer           *websocket.Dialer
+	wsMessageSizeLimit *int64
 
 	// RPC handler options
 	idgen              func() ID

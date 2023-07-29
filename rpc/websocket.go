@@ -60,7 +60,7 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 			log.Debug("WebSocket upgrade failed", "err", err)
 			return
 		}
-        cfg := &clientConfig{}
+		cfg := &clientConfig{}
 		codec := newWebsocketCodec(conn, cfg, r.Host, r.Header)
 		s.ServeCodec(codec, 0)
 	})
@@ -284,11 +284,11 @@ type websocketCodec struct {
 }
 
 func newWebsocketCodec(conn *websocket.Conn, cfg *clientConfig, host string, req http.Header) ServerCodec {
-    if cfg.wsMessageSizeLimit != nil {
-        conn.SetReadLimit(*cfg.wsMessageSizeLimit)
-    } else {
-	    conn.SetReadLimit(wsMessageSizeLimit)
-    }
+	if cfg.wsMessageSizeLimit != nil {
+		conn.SetReadLimit(*cfg.wsMessageSizeLimit)
+	} else {
+		conn.SetReadLimit(wsMessageSizeLimit)
+	}
 	conn.SetPongHandler(func(appData string) error {
 		conn.SetReadDeadline(time.Time{})
 		return nil
