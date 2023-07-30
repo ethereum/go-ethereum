@@ -160,9 +160,12 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
 		cfg.Eth.NetworkId = 51
 		common.RelayerRegistrationSMC = common.RelayerRegistrationSMCTestnet
-		common.TIPTRC21Fee = common.TIPXDCXTestnet
 		common.TIPTRC21Fee = common.TIPTRC21FeeTestnet
 		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
+	}
+
+	if ctx.GlobalBool(utils.Enable0xPrefixFlag.Name) {
+		common.Enable0xPrefix = true
 	}
 
 	// Rewound

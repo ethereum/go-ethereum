@@ -474,11 +474,13 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		}
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, balacne, block.Number())
+		// Set nonce to fix issue #256
+		msg.SetNonce(statedb.GetNonce(*tx.From()))
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
 		vmenv := vm.NewEVM(vmctx, statedb, XDCxState, api.config, vm.Config{})
 		owner := common.Address{}
-		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
+		if _, _, _, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
 			failed = err
 			break
 		}
@@ -634,7 +636,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	vmenv := vm.NewEVM(vmctx, statedb, nil, api.config, vm.Config{Debug: true, Tracer: tracer})
 
 	owner := common.Address{}
-	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
+	ret, gas, failed, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}

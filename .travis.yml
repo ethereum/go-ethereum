@@ -24,15 +24,6 @@ env:
 
 jobs:
   include:
-  # TODO: temporary turn off linting to help fix all the tests. We will turn it back on once the branch is stable
-  # - stage: Lint
-  #   sudo: false
-  #   go: '1.14.x'
-  #   git:
-  #     submodules: false
-  #     script:
-  #       - go run build/ci.go lint
-
   - stage: Tests
     os: linux
     dist: bionic

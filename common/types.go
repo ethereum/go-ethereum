@@ -250,8 +250,11 @@ func (a *Address) Set(other Address) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	// Handle '0x' or 'xdc' prefix here.
-	// return hexutil.Bytes(a[:]).MarshalText()
-	return hexutil.Bytes(a[:]).MarshalXDCText()
+	if (Enable0xPrefix) {
+		return hexutil.Bytes(a[:]).MarshalText()
+	} else {
+		return hexutil.Bytes(a[:]).MarshalXDCText()
+	}
 }
 
 // UnmarshalText parses a hash in hex syntax.
