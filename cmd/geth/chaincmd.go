@@ -418,7 +418,7 @@ func exportOverlayPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack)
+	chain, _ := utils.MakeChain(ctx, stack, true)
 
 	start := time.Now()
 	if err := utils.ExportOverlayPreimages(chain, ctx.Args().First()); err != nil {

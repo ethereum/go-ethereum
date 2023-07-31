@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -394,9 +393,9 @@ func ExportOverlayPreimages(chain *core.BlockChain, fn string) error {
 		return fmt.Errorf("failed to open statedb: %w", err)
 	}
 
-	mptRoot := chain.CurrentBlock().Root()
+	mptRoot := chain.CurrentBlock().Root
 
-	accIt, err := statedb.Snaps().AccountIterator(mptRoot, common.Hash{})
+	accIt, err := chain.Snapshots().AccountIterator(mptRoot, common.Hash{})
 	if err != nil {
 		return err
 	}
@@ -404,7 +403,7 @@ func ExportOverlayPreimages(chain *core.BlockChain, fn string) error {
 
 	count := 0
 	for accIt.Next() {
-		acc, err := snapshot.FullAccount(accIt.Account())
+		acc, err := types.FullAccount(accIt.Account())
 		if err != nil {
 			return fmt.Errorf("invalid account encountered during traversal: %s", err)
 		}
@@ -416,8 +415,8 @@ func ExportOverlayPreimages(chain *core.BlockChain, fn string) error {
 			return fmt.Errorf("failed to write addr preimage: %w", err)
 		}
 
-		if acc.HasStorage() {
-			stIt, err := statedb.Snaps().StorageIterator(mptRoot, accIt.Hash(), common.Hash{})
+		if acc.Root == types.EmptyRootHash {
+			stIt, err := chain.Snapshots().StorageIterator(mptRoot, accIt.Hash(), common.Hash{})
 			if err != nil {
 				return fmt.Errorf("failed to create storage iterator: %w", err)
 			}
