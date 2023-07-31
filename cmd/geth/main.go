@@ -325,7 +325,7 @@ func geth(ctx *cli.Context) error {
 	}
 
 	// Automatically set GOMAXPROCS to match Linux container CPU quota.
-	maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
+	maxprocs.Set()
 
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
