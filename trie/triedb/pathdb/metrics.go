@@ -21,7 +21,6 @@ import "github.com/ethereum/go-ethereum/metrics"
 var (
 	cleanHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/hit", nil)
 	cleanMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/miss", nil)
-	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
 	cleanReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/read", nil)
 	cleanWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/write", nil)
 
@@ -30,6 +29,10 @@ var (
 	dirtyReadMeter        = metrics.NewRegisteredMeter("pathdb/dirty/read", nil)
 	dirtyWriteMeter       = metrics.NewRegisteredMeter("pathdb/dirty/write", nil)
 	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
+	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
+	diskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", nil)
 
 	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)

@@ -112,6 +112,8 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 			// If the trie node is not hash matched, or marked as removed,
 			// bubble up an error here. It shouldn't happen at all.
 			if n.Hash != hash {
+				dirtyFalseMeter.Mark(1)
+				log.Error("Unexpected trie node in diff layer", "owner", owner, "path", path, "expect", hash, "got", n.Hash)
 				return nil, newUnexpectedNodeError("diff", hash, n.Hash, owner, path)
 			}
 			dirtyHitMeter.Mark(1)

@@ -122,6 +122,12 @@ func newTester(t *testing.T) *tester {
 	return obj
 }
 
+func (t *tester) release() {
+	if t.db != nil {
+		t.db.Close()
+	}
+}
+
 func (t *tester) randAccount() (common.Address, []byte) {
 	for addrHash, account := range t.accounts {
 		return t.preimages[addrHash], account
@@ -371,6 +377,8 @@ func (t *tester) bottomIndex() int {
 func TestDatabaseRollback(t *testing.T) {
 	// Verify state histories
 	tester := newTester(t)
+	defer tester.release()
+
 	if err := tester.verifyHistory(); err != nil {
 		t.Fatalf("Invalid state history, err: %v", err)
 	}
@@ -397,6 +405,8 @@ func TestDatabaseRecoverable(t *testing.T) {
 		tester = newTester(t)
 		index  = tester.bottomIndex()
 	)
+	defer tester.release()
+
 	var cases = []struct {
 		root   common.Hash
 		expect bool
@@ -434,6 +444,8 @@ func TestReset(t *testing.T) {
 		tester = newTester(t)
 		index  = tester.bottomIndex()
 	)
+	defer tester.release()
+
 	// Reset database to unknown target, should reject it
 	if err := tester.db.Reset(testutil.RandomHash()); err == nil {
 		t.Fatal("Failed to reject invalid reset")
@@ -464,6 +476,8 @@ func TestReset(t *testing.T) {
 
 func TestCommit(t *testing.T) {
 	tester := newTester(t)
+	defer tester.release()
+
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
 		t.Fatalf("Failed to cap database, err: %v", err)
 	}
@@ -486,6 +500,8 @@ func TestCommit(t *testing.T) {
 
 func TestJournal(t *testing.T) {
 	tester := newTester(t)
+	defer tester.release()
+
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
@@ -511,8 +527,9 @@ func TestCorruptedJournal(t *testing.T) {
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
-	tester.db.Close()
+	defer tester.release()
 
+	tester.db.Close()
 	_, root := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
 
 	// Mutate the journal in disk, it should be regarded as invalid

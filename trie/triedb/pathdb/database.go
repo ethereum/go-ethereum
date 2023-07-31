@@ -235,14 +235,14 @@ func (db *Database) Reset(root common.Hash) error {
 		// action is applied.
 		_, hash := rawdb.ReadAccountTrieNode(db.diskdb, nil)
 		if hash != root {
-			return fmt.Errorf("state is mismatched, local %x target %x", hash, root)
+			return fmt.Errorf("state is mismatched, local: %x, target: %x", hash, root)
 		}
 	}
 	// Mark the disk layer as stale before applying any mutation.
 	db.tree.bottom().markStale()
 
-	// Drop the stale state journal in persistent database
-	// and reset the persistent state id back to zero.
+	// Drop the stale state journal in persistent database and
+	// reset the persistent state id back to zero.
 	rawdb.DeleteTrieJournal(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
@@ -257,7 +257,10 @@ func (db *Database) Reset(root common.Hash) error {
 			return err
 		}
 	}
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0)))
+	// Re-construct a new disk layer backed by persistent state
+	// with **empty clean cache and node buffer**.
+	dl := newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0))
+	db.tree.reset(dl)
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
@@ -326,10 +329,9 @@ func (db *Database) Recoverable(root common.Hash) bool {
 		return false
 	}
 	// Ensure the requested state is a canonical state and all state
-	// histories from id+1 until disk layer(in another word, histories
-	// in range [id+1, disklayer.ID]) are present and complete.
+	// histories in range [id+1, disklayer.ID] are present and complete.
 	parent := root
-	err := checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
+	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
 		if m.parent != parent {
 			return errors.New("unexpected state history")
 		}
@@ -338,8 +340,7 @@ func (db *Database) Recoverable(root common.Hash) bool {
 		}
 		parent = m.root
 		return nil
-	})
-	return err == nil
+	}) == nil
 }
 
 // Close closes the trie database and the held freezer.

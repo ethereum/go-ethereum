@@ -148,6 +148,8 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
 	if nHash != hash {
+		diskFalseMeter.Mark(1)
+		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
 		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path)
 	}
 	if dl.cleans != nil && len(nBlob) > 0 {
@@ -194,7 +196,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 	// Construct a new disk layer by merging the nodes from the provided
 	// diff layer, and flush the content in disk layer if there are too
-	// many nodes cached.
+	// many nodes cached. The clean cache is inherited from the original
+	// disk layer for reusing.
 	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.cleans, dl.buffer.commit(bottom.nodes))
 	err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force)
 	if err != nil {
@@ -233,9 +236,8 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 	// State change may be applied to node buffer, or the persistent
 	// state, depends on if node buffer is empty or not. If the node
 	// buffer is not empty, it means that the state transition that
-	// needs to be reverted is not yet written and cached in node
-	// buffer, otherwise, it must be flushed and manipulate persistent
-	// state directly.
+	// needs to be reverted is not yet flushed and cached in node
+	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
 		err := dl.buffer.revert(dl.db.diskdb, nodes)
 		if err != nil {
