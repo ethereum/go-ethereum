@@ -117,10 +117,10 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 
 // finalize evicts all blobs belonging to a recently finalized block or older.
 func (l *limbo) finalize(final *types.Header) {
-	// Just in case there's no final block yet (network not yet merged, weird
-	// restart, sethead, etc), fail gracefully.
+	// Just in case there's no final block yet (syncing, network not yet merged,
+	// weird restart, sethead, etc), skip the eviction silently.
 	if final == nil {
-		log.Error("Nil finalized block cannot evict old blobs")
+		log.Debug("Nil finalized block cannot evict old blobs")
 		return
 	}
 	for block, ids := range l.groups {
