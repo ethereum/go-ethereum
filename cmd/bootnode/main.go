@@ -108,6 +108,7 @@ func main() {
 	if err != nil {
 		utils.Fatalf("-ListenUDP: %v", err)
 	}
+	defer conn.Close()
 
 	db, _ := enode.OpenDB("")
 	ln := enode.NewLocalNode(db, nodeKey)
