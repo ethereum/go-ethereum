@@ -571,7 +571,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		f.lock.Unlock()
 
-		// Send an error if too frequent funding, othewise a success
+		// Send an error if too frequent funding, otherwise a success
 		if !fund {
 			if err = sendError(wsconn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(time.Until(timeout)))); err != nil { // nolint: gosimple
 				log.Warn("Failed to send funding error to client", "err", err)
@@ -694,7 +694,7 @@ func (f *faucet) loop() {
 			f.lock.RUnlock()
 		}
 	}()
-	// Wait for various events and assing to the appropriate background threads
+	// Wait for various events and assign to the appropriate background threads
 	for {
 		select {
 		case head := <-heads:

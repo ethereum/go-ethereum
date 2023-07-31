@@ -58,7 +58,7 @@ func TestURLMarshalJSON(t *testing.T) {
 
 	json, err := url.MarshalJSON()
 	if err != nil {
-		t.Errorf("unexpcted error: %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 
 	if string(json) != "\"https://ethereum.org\"" {
@@ -71,7 +71,7 @@ func TestURLUnmarshalJSON(t *testing.T) {
 
 	err := url.UnmarshalJSON([]byte("\"https://ethereum.org\""))
 	if err != nil {
-		t.Errorf("unexpcted error: %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 
 	if url.Scheme != "https" {

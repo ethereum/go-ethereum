@@ -336,7 +336,7 @@ func setDefaultMumbaiGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.SyncMode = downloader.FullSync
 	config.Eth.NetworkId = 80001
 	config.Eth.Miner.GasCeil = 20000000
-	//--miner.gastarget is depreceated, No longed used
+	//--miner.gastarget is deprecated, No longed used
 	config.Eth.TxPool.NoLocals = true
 	config.Eth.TxPool.AccountSlots = 16
 	config.Eth.TxPool.GlobalSlots = 131072
@@ -359,7 +359,7 @@ func setDefaultBorMainnetGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.SyncMode = downloader.FullSync
 	config.Eth.NetworkId = 137
 	config.Eth.Miner.GasCeil = 20000000
-	//--miner.gastarget is depreceated, No longed used
+	//--miner.gastarget is deprecated, No longed used
 	config.Eth.TxPool.NoLocals = true
 	config.Eth.TxPool.AccountSlots = 16
 	config.Eth.TxPool.GlobalSlots = 131072

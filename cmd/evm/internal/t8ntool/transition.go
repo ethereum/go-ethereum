@@ -328,7 +328,7 @@ func Transition(ctx *cli.Context) error {
 	}
 
 	body, _ := rlp.EncodeToBytes(txs)
-	// Dump the excution result
+	// Dump the execution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
 

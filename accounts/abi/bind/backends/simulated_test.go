@@ -868,7 +868,7 @@ func TestTransactionInBlock(t *testing.T) {
 
 	transaction, err = sim.TransactionInBlock(bgCtx, lastBlock.Hash(), uint(0))
 	if err != nil {
-		t.Errorf("could not get transaction in the lastest block with hash %v: %v", lastBlock.Hash().String(), err)
+		t.Errorf("could not get transaction in the latest block with hash %v: %v", lastBlock.Hash().String(), err)
 	}
 
 	if signedTx.Hash().String() != transaction.Hash().String() {
