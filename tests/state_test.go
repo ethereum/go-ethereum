@@ -35,7 +35,24 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 )
 
-func TestState(t *testing.T) {
+func TestStateCurrent(t *testing.T) {
+	testState(t, stateTestDir)
+}
+
+func TestStateLegacy(t *testing.T) {
+	// For Istanbul, older tests were moved into LegacyTests
+	testState(t, legacyStateTestDir)
+}
+
+func TestStateBenchmarks(t *testing.T) {
+	testState(t, benchmarksDir)
+}
+
+func TestStateFuture(t *testing.T) {
+	testState(t, filepath.Join(baseDir, "EIPTests", "StateTests"))
+}
+
+func testState(t *testing.T, dir string) {
 	t.Parallel()
 
 	st := new(testMatcher)
@@ -66,38 +83,30 @@ func TestState(t *testing.T) {
 	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")
 	st.fails(`stEIP4844-blobtransactions/opcodeBlobhBounds.json`, "test has incorrect state root")
 
-	// For Istanbul, older tests were moved into LegacyTests
-	for _, dir := range []string{
-		filepath.Join(baseDir, "EIPTests", "StateTests"),
-		stateTestDir,
-		legacyStateTestDir,
-		benchmarksDir,
-	} {
-		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
-			for _, subtest := range test.Subtests() {
-				subtest := subtest
-				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+	st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
+		for _, subtest := range test.Subtests() {
+			subtest := subtest
+			key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
-				t.Run(key+"/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, _, err := test.Run(subtest, vmconfig, false)
-						return st.checkFailure(t, err)
-					})
+			t.Run(key+"/trie", func(t *testing.T) {
+				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+					_, _, err := test.Run(subtest, vmconfig, false)
+					return st.checkFailure(t, err)
 				})
-				t.Run(key+"/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
-								return err
-							}
+			})
+			t.Run(key+"/snap", func(t *testing.T) {
+				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+					snaps, statedb, err := test.Run(subtest, vmconfig, true)
+					if snaps != nil && statedb != nil {
+						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+							return err
 						}
-						return st.checkFailure(t, err)
-					})
+					}
+					return st.checkFailure(t, err)
 				})
-			}
-		})
-	}
+			})
+		}
+	})
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
