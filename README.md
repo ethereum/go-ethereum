@@ -91,7 +91,7 @@ them using your favourite package manager. Once the dependencies are installed, 
 - After your changes are committed to your GitHub fork, submit a pull request (PR) to the `master` branch of the `maticnetwork/bor` repo
 - In your PR description, reference the issue it resolves (see [linking a pull request to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword))
   - ex. `Updates out of date content [Fixes #1234]`
-- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/zdwkdvMNY2)?
+- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/0xpolygon)?
 
 ### Wait for review
 
