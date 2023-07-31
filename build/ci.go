@@ -299,6 +299,8 @@ func doTest(cmdline []string) {
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 	gotest := tc.Go("test", "-tags=ckzg")
+	// CI needs a bit more time for the statetests (default 10m).
+	gotest.Args = append(gotest.Args, "-timeout=20m")
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
