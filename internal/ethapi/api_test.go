@@ -656,7 +656,8 @@ func TestMulticallV1(t *testing.T) {
 				cac: {Balance: big.NewInt(params.Ether), Code: common.Hex2Bytes("610dad80ff")},
 			},
 		}
-		n10hash = crypto.Keccak256Hash([]byte{0xa}).Hex()
+		n10hash       = crypto.Keccak256Hash([]byte{0xa}).Hex()
+		sha256Address = common.BytesToAddress([]byte{0x02})
 	)
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
@@ -1051,6 +1052,61 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 		},
+		// Test moving the sha256 precompile.
+		{
+			name: "precompile-move",
+			tag:  latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					sha256Address: OverrideAccount{
+						// Yul code that returns the calldata.
+						// object "Test" {
+						//    code {
+						//        let size := calldatasize() // Get the size of the calldata
+						//
+						//        // Allocate memory to store the calldata
+						//        let memPtr := msize()
+						//
+						//        // Copy calldata to memory
+						//        calldatacopy(memPtr, 0, size)
+						//
+						//        // Return the calldata from memory
+						//        return(memPtr, size)
+						//    }
+						// }
+						Code:   hex2Bytes("365981600082378181f3"),
+						MoveTo: &randomAccounts[2].addr,
+					},
+				},
+				Calls: []TransactionArgs{{
+					From:  &randomAccounts[0].addr,
+					To:    &randomAccounts[2].addr,
+					Input: hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
+				}, {
+					From:  &randomAccounts[0].addr,
+					To:    &sha256Address,
+					Input: hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
+				}},
+			}},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         n10hash,
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xa58c",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
+					GasUsed:     "0x52dc",
+					Logs:        []types.Log{},
+					Status:      "0x1",
+				}, {
+					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000001",
+					GasUsed:     "0x52b0",
+					Logs:        []types.Log{},
+					Status:      "0x1",
+				}},
+			}},
+		},
 		// Test ether transfers.
 		{
 			name: "transfer-logs",
@@ -1218,7 +1274,7 @@ func newRPCBalance(balance *big.Int) **hexutil.Big {
 }
 
 func hex2Bytes(str string) *hexutil.Bytes {
-	rpcBytes := hexutil.Bytes(common.Hex2Bytes(str))
+	rpcBytes := hexutil.Bytes(common.FromHex(str))
 	return &rpcBytes
 }
 
