@@ -290,18 +290,9 @@ func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 func (f *Firehose) captureInterpreterStep(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, rData []byte, depth int, err error) {
-	activeCall := f.callStack.Peek()
-	if activeCall == nil {
-		return
-	}
-
-	// Firehose model don't today flag contract creation as having executed code. But it we
-	// keep like that for backward compatibility.
-	//
-	// However, if at some point we bump to fixes the small bug here and there, we should
-	// actually flag contract creation as having executed code only if a constructor was called.
-	if activeCall.CallType != pbeth.CallType_CREATE {
+	if activeCall := f.callStack.Peek(); activeCall != nil && !activeCall.ExecutedCode {
 		activeCall.ExecutedCode = true
+		firehoseDebug("setting active call executed code to true")
 	}
 }
 
@@ -389,11 +380,28 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	// For create call, we do not save the returned value which is the actual contract's code
 	if call.CallType != pbeth.CallType_CREATE {
 		call.ReturnData = bytes.Clone(output)
+	}
 
-		// Pre-compiled addresses always execute code
-		if f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
-			call.ExecutedCode = true
-		}
+	// At this point, `call.ExecutedCode`` is tied to `EVMInterpreter#Run` execution (in `core/vm/interpreter.go`)
+	// and is `true` if the run/loop of the interpreter executed.
+	//
+	// This means that if `false` the interpreter did not run at all and we would had emitted a
+	// `account_without_code` event in the old Firehose patch which you have set `call.ExecutecCode`
+	// to false
+	//
+	// For precompiled address however, interpreter does not run so determine  there was a bug in Firehose instrumentation where we would
+	if call.ExecutedCode || f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
+		// In this case, we are sure that some code executed. This translates in the old Firehose instrumentation
+		// that it would have **never** emitted an `account_without_code`.
+		//
+		// When no `account_without_code` was executed in the previous Firehose instrumentation,
+		// the `call.ExecutedCode` defaulted to the condition below
+		call.ExecutedCode = call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
+	} else {
+		// In all other cases, we are sure that no code executed. This translates in the old Firehose instrumentation
+		// that it would have emitted an `account_without_code` and it would have then forced set the `call.ExecutedCode`
+		// to `false`.
+		call.ExecutedCode = false
 	}
 
 	if err != nil {
@@ -653,6 +661,10 @@ func (f *Firehose) OnLog(l *types.Log) {
 
 func (f *Firehose) OnNewAccount(a common.Address) {
 	f.ensureInBlockAndInTrxAndInCall()
+
+	if f.isPrecompiledAddr(a) {
+		return
+	}
 
 	activeCall := f.callStack.Peek()
 	activeCall.AccountCreations = append(activeCall.AccountCreations, &pbeth.AccountCreation{
