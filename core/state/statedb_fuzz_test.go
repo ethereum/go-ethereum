@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -171,11 +172,11 @@ func (test *stateTest) String() string {
 func (test *stateTest) run() bool {
 	var (
 		roots       []common.Hash
-		accountList []map[common.Hash][]byte
-		storageList []map[common.Hash]map[common.Hash][]byte
+		accountList []map[common.Address][]byte
+		storageList []map[common.Address]map[common.Hash][]byte
 		onCommit    = func(states *triestate.Set) {
-			accountList = append(accountList, copyAccounts(states.Accounts))
-			storageList = append(storageList, copyStorages(states.Storages))
+			accountList = append(accountList, copySet(states.Accounts))
+			storageList = append(storageList, copy2DSet(states.Storages))
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = trie.NewDatabaseWithConfig(disk, &trie.Config{OnCommit: onCommit})
@@ -235,8 +236,9 @@ func (test *stateTest) run() bool {
 // - the account was indeed not present in trie
 // - the account is present in new trie, nil->nil is regarded as invalid
 // - the slots transition is correct
-func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addrHash common.Hash, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, slots map[common.Hash][]byte) error {
 	// Verify account change
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
 	if err != nil {
 		return err
@@ -285,8 +287,9 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 // - the account was indeed present in trie
 // - the account in old trie matches the provided value
 // - the slots transition is correct
-func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addrHash common.Hash, origin []byte, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
 	// Verify account change
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
 	if err != nil {
 		return err
@@ -338,7 +341,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, 
 	return nil
 }
 
-func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Database, accountsOrigin map[common.Hash][]byte, storagesOrigin map[common.Hash]map[common.Hash][]byte) error {
+func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Database, accountsOrigin map[common.Address][]byte, storagesOrigin map[common.Address]map[common.Hash][]byte) error {
 	otr, err := trie.New(trie.StateTrieID(root), db)
 	if err != nil {
 		return err
@@ -347,12 +350,12 @@ func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Datab
 	if err != nil {
 		return err
 	}
-	for addrHash, account := range accountsOrigin {
+	for addr, account := range accountsOrigin {
 		var err error
 		if len(account) == 0 {
-			err = test.verifyAccountCreation(next, db, otr, ntr, addrHash, storagesOrigin[addrHash])
+			err = test.verifyAccountCreation(next, db, otr, ntr, addr, storagesOrigin[addr])
 		} else {
-			err = test.verifyAccountUpdate(next, db, otr, ntr, addrHash, accountsOrigin[addrHash], storagesOrigin[addrHash])
+			err = test.verifyAccountUpdate(next, db, otr, ntr, addr, accountsOrigin[addr], storagesOrigin[addr])
 		}
 		if err != nil {
 			return err
