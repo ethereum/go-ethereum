@@ -11,7 +11,13 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 )
 
-// ZktrieDatabase Database adaptor imple zktrie.ZktrieDatbase
+// ZktrieDatabase Database adaptor implements zktrie.ZktrieDatbase
+// It also reverses the bit order of the key being persisted.
+// This ensures that the adjacent leaf in zktrie maintains minimal
+// distance when persisted with dictionary order in LevelDB.
+// Consequently, this optimizes the snapshot operation, allowing it
+// to iterate through adjacent leaves at a reduced cost.
+
 type ZktrieDatabase struct {
 	db     *Database
 	prefix []byte
@@ -29,6 +35,7 @@ func NewZktrieDatabaseFromTriedb(db *Database) *ZktrieDatabase {
 
 // Put saves a key:value into the Storage
 func (l *ZktrieDatabase) Put(k, v []byte) error {
+	k = bitReverse(k)
 	l.db.lock.Lock()
 	l.db.rawDirties.Put(Concat(l.prefix, k[:]), v)
 	l.db.lock.Unlock()
@@ -37,6 +44,7 @@ func (l *ZktrieDatabase) Put(k, v []byte) error {
 
 // Get retrieves a value from a key in the Storage
 func (l *ZktrieDatabase) Get(key []byte) ([]byte, error) {
+	key = bitReverse(key)
 	concatKey := Concat(l.prefix, key[:])
 	l.db.lock.RLock()
 	value, ok := l.db.rawDirties.Get(concatKey)
@@ -78,7 +86,7 @@ func (l *ZktrieDatabase) Iterate(f func([]byte, []byte) (bool, error)) error {
 	iter := l.db.diskdb.NewIterator(l.prefix, nil)
 	defer iter.Release()
 	for iter.Next() {
-		localKey := iter.Key()[len(l.prefix):]
+		localKey := bitReverse(iter.Key()[len(l.prefix):])
 		if cont, err := f(localKey, iter.Value()); err != nil {
 			return err
 		} else if !cont {
@@ -108,4 +116,55 @@ func (l *ZktrieDatabase) List(limit int) ([]KV, error) {
 		return true, nil
 	})
 	return ret, err
+}
+
+func bitReverseForNibble(b byte) byte {
+	switch b {
+	case 0:
+		return 0
+	case 1:
+		return 8
+	case 2:
+		return 4
+	case 3:
+		return 12
+	case 4:
+		return 2
+	case 5:
+		return 10
+	case 6:
+		return 6
+	case 7:
+		return 14
+	case 8:
+		return 1
+	case 9:
+		return 9
+	case 10:
+		return 5
+	case 11:
+		return 13
+	case 12:
+		return 3
+	case 13:
+		return 11
+	case 14:
+		return 7
+	case 15:
+		return 15
+	default:
+		panic("unexpected input")
+	}
+}
+
+func bitReverse(inp []byte) (out []byte) {
+
+	l := len(inp)
+	out = make([]byte, l)
+
+	for i, b := range inp {
+		out[l-i-1] = bitReverseForNibble(b&15)<<4 + bitReverseForNibble(b>>4)
+	}
+
+	return
 }
