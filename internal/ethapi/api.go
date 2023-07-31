@@ -1215,8 +1215,8 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 }
 
 type multicallOpts struct {
-	Blocks         []CallBatch
-	TraceTransfers bool
+	BlockStateCalls []CallBatch
+	TraceTransfers  bool
 }
 
 // MulticallV1 executes series of transactions on top of a base state.
@@ -1236,7 +1236,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 	var (
 		cancel  context.CancelFunc
 		timeout = s.b.RPCEVMTimeout()
-		blocks  = opts.Blocks
+		blocks  = opts.BlockStateCalls
 	)
 	if timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, timeout)

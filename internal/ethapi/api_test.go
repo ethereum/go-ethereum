@@ -1214,7 +1214,7 @@ func TestMulticallV1(t *testing.T) {
 
 	for i, tc := range testSuite {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := multicallOpts{Blocks: tc.blocks}
+			opts := multicallOpts{BlockStateCalls: tc.blocks}
 			if tc.includeTransfers != nil && *tc.includeTransfers {
 				opts.TraceTransfers = true
 			}
