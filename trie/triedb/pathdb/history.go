@@ -378,8 +378,10 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 	// - account is sorted in order in byte stream
 	// - account data is strictly encoded with no gap inside
 	// - account data is not out-of-slice
-	if bytes.Compare(r.lastAccount.Bytes(), index.address.Bytes()) >= 0 {
-		return accountIndex{}, nil, errors.New("account is not in order")
+	if r.lastAccount != (common.Address{}) { // zero address is possible
+		if bytes.Compare(r.lastAccount.Bytes(), index.address.Bytes()) >= 0 {
+			return accountIndex{}, nil, errors.New("account is not in order")
+		}
 	}
 	if index.offset != r.lastAccountRead {
 		return accountIndex{}, nil, errors.New("account data buffer is gaped")
