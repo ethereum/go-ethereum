@@ -22,7 +22,7 @@ import "github.com/ethereum/go-ethereum/common"
 // The value refers to the original content of state before the transition
 // is made. Nil means that the state was not present previously.
 type Set struct {
-	Accounts   map[common.Hash][]byte                 // Mutated account set, nil means the account was not present
-	Storages   map[common.Hash]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
-	Incomplete map[common.Hash]struct{}               // Indicator whether the storage slot is incomplete due to large deletion
+	Accounts   map[common.Address][]byte                 // Mutated account set, nil means the account was not present
+	Storages   map[common.Address]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
+	Incomplete map[common.Address]struct{}               // Indicator whether the storage slot is incomplete due to large deletion
 }
