@@ -39,13 +39,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"go.uber.org/automaxprocs/maxprocs"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
-
-	// Automatically set GOMAXPROCS to match Linux container CPU quota.
-	_ "go.uber.org/automaxprocs"
 
 	"github.com/urfave/cli/v2"
 )
@@ -325,6 +323,9 @@ func geth(ctx *cli.Context) error {
 	if args := ctx.Args().Slice(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
+
+	// Automatically set GOMAXPROCS to match Linux container CPU quota.
+	maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
 
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
