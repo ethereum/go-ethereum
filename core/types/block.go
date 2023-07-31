@@ -91,7 +91,7 @@ type Header struct {
 	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
 	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
 
-  	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
+	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	BeaconRoot *common.Hash `json:"beaconRoot" rlp:"optional"`
 }
 
@@ -379,6 +379,10 @@ func (b *Block) BlobGasUsed() *uint64 {
 		*blobGasUsed = *b.header.BlobGasUsed
 	}
 	return blobGasUsed
+}
+
+func (b *Block) BeaconRoot() *common.Hash {
+	return b.header.BeaconRoot
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
