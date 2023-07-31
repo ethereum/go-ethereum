@@ -48,20 +48,20 @@ type journalNode struct {
 	Blob []byte // RLP-encoded trie node blob, nil means the node is deleted
 }
 
-// journalNodes represents a list trie nodes belong to a single
-// account or the main trie.
+// journalNodes represents a list trie nodes belong to a single account
+// or the main account trie.
 type journalNodes struct {
 	Owner common.Hash
 	Nodes []journalNode
 }
 
-// journalAccounts represents a list accounts belonging to the layer
+// journalAccounts represents a list accounts belong to the layer.
 type journalAccounts struct {
 	Addresses []common.Address
-	Accounts  [][]byte // Nil means the account was not present
+	Accounts  [][]byte
 }
 
-// journalStorage represents a list slot changes belong to an account.
+// journalStorage represents a list of storage slots belong to an account.
 type journalStorage struct {
 	Incomplete bool
 	Account    common.Address
@@ -122,7 +122,7 @@ func (db *Database) loadLayers() layer {
 	if err == nil {
 		return head
 	}
-	// Journal is not matched(or missing) with the persistent state, discard
+	// journal is not matched(or missing) with the persistent state, discard
 	// it. Display log for discarding journal, but try to avoid showing
 	// useless information when the db is created from scratch.
 	if !(root == types.EmptyRootHash && errors.Is(err, errMissJournal)) {
@@ -215,24 +215,27 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		incomplete = make(map[common.Address]struct{})
 	)
 	if err := r.Decode(&jaccounts); err != nil {
-		return nil, fmt.Errorf("load diff states: %v", err)
+		return nil, fmt.Errorf("load diff accounts: %v", err)
 	}
 	for i, addr := range jaccounts.Addresses {
 		accounts[addr] = jaccounts.Accounts[i]
 	}
-	for _, jstorage := range jstorages {
+	if err := r.Decode(&jstorages); err != nil {
+		return nil, fmt.Errorf("load diff storages: %v", err)
+	}
+	for _, entry := range jstorages {
 		set := make(map[common.Hash][]byte)
-		for i, h := range jstorage.Hashes {
-			if len(jstorage.Slots[i]) > 0 {
-				set[h] = jstorage.Slots[i]
+		for i, h := range entry.Hashes {
+			if len(entry.Slots[i]) > 0 {
+				set[h] = entry.Slots[i]
 			} else {
 				set[h] = nil
 			}
 		}
-		if jstorage.Incomplete {
-			incomplete[jstorage.Account] = struct{}{}
+		if entry.Incomplete {
+			incomplete[entry.Account] = struct{}{}
 		}
-		storages[jstorage.Account] = set
+		storages[entry.Account] = set
 	}
 	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, block, nodes, triestate.New(accounts, storages, incomplete)), r)
 }
@@ -277,7 +280,7 @@ func (dl *diffLayer) journal(w io.Writer) error {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
-	// Journal the parent first
+	// journal the parent first
 	if err := dl.parent.journal(w); err != nil {
 		return err
 	}
@@ -301,12 +304,12 @@ func (dl *diffLayer) journal(w io.Writer) error {
 		return err
 	}
 	// Write the accumulated state changes into buffer
-	var jaccounts journalAccounts
+	var jacct journalAccounts
 	for addr, account := range dl.states.Accounts {
-		jaccounts.Addresses = append(jaccounts.Addresses, addr)
-		jaccounts.Accounts = append(jaccounts.Accounts, account)
+		jacct.Addresses = append(jacct.Addresses, addr)
+		jacct.Accounts = append(jacct.Accounts, account)
 	}
-	if err := rlp.Encode(w, jaccounts); err != nil {
+	if err := rlp.Encode(w, jacct); err != nil {
 		return err
 	}
 	storage := make([]journalStorage, 0, len(dl.states.Storages))

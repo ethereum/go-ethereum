@@ -259,8 +259,8 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 		storageList = make(map[common.Address][]common.Hash)
 		incomplete  []common.Address
 	)
-	for hash := range states.Accounts {
-		accountList = append(accountList, hash)
+	for addr := range states.Accounts {
+		accountList = append(accountList, addr)
 	}
 	slices.SortFunc(accountList, func(a, b common.Address) bool { return a.Less(b) })
 

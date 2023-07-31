@@ -39,11 +39,11 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 	if err != nil {
 		panic(fmt.Errorf("failed to create hasher, err: %w", err))
 	}
-	for hash, val := range dirties {
+	for key, val := range dirties {
 		if len(val) == 0 {
-			h.Delete(hash.Bytes())
+			h.Delete(key.Bytes())
 		} else {
-			h.Update(hash.Bytes(), val)
+			h.Update(key.Bytes(), val)
 		}
 	}
 	return h.Commit(false)

@@ -99,7 +99,7 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	slotmap := al.slots[idx]
 	if _, ok := slotmap[slot]; !ok {
 		slotmap[slot] = struct{}{}
-		// Journal add slot change
+		// journal add slot change
 		return false, true
 	}
 	// No changes required
