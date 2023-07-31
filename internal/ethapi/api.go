@@ -1180,10 +1180,9 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 
 // CallBatch is a batch of calls to be simulated sequentially.
 type CallBatch struct {
-	BlockOverrides    *BlockOverrides
-	StateOverrides    *StateOverride
-	ECRecoverOverride *hexutil.Bytes // Override bytecode for ecrecover precompile.
-	Calls             []TransactionArgs
+	BlockOverrides *BlockOverrides
+	StateOverrides *StateOverride
+	Calls          []TransactionArgs
 }
 
 type blockResult struct {
@@ -1271,10 +1270,6 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		if err := block.StateOverrides.ApplyMulticall(state, precompiles); err != nil {
 			return nil, err
 		}
-		// ECRecover replacement code will be fetched from statedb and executed as a normal EVM bytecode.
-		if block.ECRecoverOverride != nil {
-			state.SetCode(common.BytesToAddress([]byte{1}), *block.ECRecoverOverride)
-		}
 		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		results[bi] = blockResult{
 			Number:       hexutil.Uint64(blockContext.BlockNumber.Uint64()),
@@ -1291,9 +1286,6 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			txhash := common.BigToHash(big.NewInt(int64(i)))
 			state.SetTxContext(txhash, i)
 			vmConfig := &vm.Config{NoBaseFee: true}
-			if block.ECRecoverOverride != nil {
-				vmConfig.DisableECRecover = true
-			}
 			if opts.TraceTransfers {
 				vmConfig.Tracer = newTracer()
 			}
