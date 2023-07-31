@@ -120,9 +120,9 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return engine.BlockToExecutableData(payload.full, payload.fullFees)
+		return engine.BlockToExecutableData(payload.full, payload.fullFees, nil, nil, nil)
 	}
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, nil, nil)
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
@@ -131,11 +131,11 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0))
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, nil, nil)
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
-// It's only used in tests.
+// Don't call Resolve until ResolveFull returns, otherwise it might block forever.
 func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
@@ -146,9 +146,18 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 			return nil
 		default:
 		}
+		// Wait the full payload construction. Note it might block
+		// forever if Resolve is called in the meantime which
+		// terminates the background construction process.
 		payload.cond.Wait()
 	}
-	return engine.BlockToExecutableData(payload.full, payload.fullFees)
+	// Terminate the background payload construction
+	select {
+	case <-payload.stop:
+	default:
+		close(payload.stop)
+	}
+	return engine.BlockToExecutableData(payload.full, payload.fullFees, nil, nil, nil)
 }
 
 // buildPayload builds the payload according to the provided parameters.

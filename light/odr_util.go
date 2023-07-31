@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -175,7 +176,13 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), block.Transactions()); err != nil {
+		var blobGasPrice *big.Int
+		excessBlobGas := block.ExcessBlobGas()
+		if excessBlobGas != nil {
+			blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
+		}
+
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, block.Transactions()); err != nil {
 			return nil, err
 		}
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)

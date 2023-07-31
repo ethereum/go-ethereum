@@ -16,6 +16,10 @@
 
 package les
 
+// Note: these tests are disabled now because they cannot work with the old sync
+// mechanism removed but will be useful again once the PoS ultralight mode is implemented
+
+/*
 import (
 	"context"
 	"testing"
@@ -122,3 +126,4 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	}
 	test(5)
 }
+*/

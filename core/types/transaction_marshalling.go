@@ -37,7 +37,7 @@ type txJSON struct {
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	MaxFeePerDataGas     *hexutil.Big    `json:"maxFeePerDataGas,omitempty"`
+	MaxFeePerBlobGas     *hexutil.Big    `json:"maxFeePerBlobGas,omitempty"`
 	Value                *hexutil.Big    `json:"value"`
 	Input                *hexutil.Bytes  `json:"input"`
 	AccessList           *AccessList     `json:"accessList,omitempty"`
@@ -106,7 +106,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
 		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap.ToBig())
 		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap.ToBig())
-		enc.MaxFeePerDataGas = (*hexutil.Big)(itx.BlobFeeCap.ToBig())
+		enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.BlobFeeCap.ToBig())
 		enc.Value = (*hexutil.Big)(itx.Value.ToBig())
 		enc.Input = (*hexutil.Bytes)(&itx.Data)
 		enc.AccessList = &itx.AccessList
@@ -309,10 +309,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
 		itx.GasFeeCap = uint256.MustFromBig((*big.Int)(dec.MaxFeePerGas))
-		if dec.MaxFeePerDataGas == nil {
-			return errors.New("missing required field 'maxFeePerDataGas' for txdata")
+		if dec.MaxFeePerBlobGas == nil {
+			return errors.New("missing required field 'maxFeePerBlobGas' for txdata")
 		}
-		itx.BlobFeeCap = uint256.MustFromBig((*big.Int)(dec.MaxFeePerDataGas))
+		itx.BlobFeeCap = uint256.MustFromBig((*big.Int)(dec.MaxFeePerBlobGas))
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -268,16 +269,16 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	// Verify the existence / non-existence of excessDataGas
+	// Verify the existence / non-existence of excessBlobGas
 	cancun := chain.Config().IsCancun(header.Number, header.Time)
-	if !cancun && header.ExcessDataGas != nil {
-		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
+	if !cancun && header.ExcessBlobGas != nil {
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
 	}
-	if !cancun && header.DataGasUsed != nil {
-		return fmt.Errorf("invalid dataGasUsed: have %d, expected nil", header.DataGasUsed)
+	if !cancun && header.BlobGasUsed != nil {
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
 	}
 	if cancun {
-		if err := misc.VerifyEIP4844Header(parent, header); err != nil {
+		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
 			return err
 		}
 	}

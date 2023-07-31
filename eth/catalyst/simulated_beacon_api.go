@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package downloader
+package catalyst
 
-import "github.com/ethereum/go-ethereum/core/types"
+import (
+	"context"
 
-type DoneEvent struct {
-	Latest *types.Header
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+type api struct {
+	simBeacon *SimulatedBeacon
 }
-type StartEvent struct{}
-type FailedEvent struct{ Err error }
+
+func (a *api) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
+	return a.simBeacon.withdrawals.add(withdrawal)
+}
+
+func (a *api) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
+	a.simBeacon.setFeeRecipient(feeRecipient)
+}

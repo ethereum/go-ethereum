@@ -84,24 +84,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
 	for _, tx := range block.Transactions() {
-		// Count the number of blobs to validate against the header's dataGasUsed
+		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
-
-		// Validate the data blobs individually too
-		if tx.Type() == types.BlobTxType {
-			if len(tx.BlobHashes()) == 0 {
-				return errors.New("no-blob blob transaction present in block body")
-			}
-			for _, hash := range tx.BlobHashes() {
-				if hash[0] != params.BlobTxHashVersion {
-					return fmt.Errorf("blob hash version mismatch (have %d, supported %d)", hash[0], params.BlobTxHashVersion)
-				}
-			}
-		}
+		// The individual checks for blob validity (version-check + not empty)
+		// happens in the state_transition check.
 	}
-	if header.DataGasUsed != nil {
-		if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.DataGasUsed, blobs*params.BlobTxDataGasPerBlob)
+	if header.BlobGasUsed != nil {
+		if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
 		}
 	} else {
 		if blobs > 0 {

@@ -116,8 +116,8 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 		if len(hashes) == 0 {
 			return fmt.Errorf("blobless blob transaction")
 		}
-		if len(hashes) > params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob {
-			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxDataGasPerBlock/params.BlobTxDataGasPerBlob)
+		if len(hashes) > params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
+			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
 		}
 		if len(blobs) != len(hashes) {
 			return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(blobs), len(hashes))
@@ -165,6 +165,11 @@ type ValidationOptionsWithState struct {
 	// set, nonce gaps will be checked and forbidden. If this method is not set,
 	// nonce gaps will be ignored and permitted.
 	FirstNonceGap func(addr common.Address) uint64
+
+	// UsedAndLeftSlots is a mandatory callback to retrieve the number of tx slots
+	// used and the number still permitted for an account. New transactions will
+	// be rejected once the number of remaining slots reaches zero.
+	UsedAndLeftSlots func(addr common.Address) (int, int)
 
 	// ExistingExpenditure is a mandatory callback to retrieve the cummulative
 	// cost of the already pooled transactions to check for overdrafts.
@@ -219,6 +224,12 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		need := new(big.Int).Add(spent, cost)
 		if balance.Cmp(need) < 0 {
 			return fmt.Errorf("%w: balance %v, queued cost %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, spent, cost, new(big.Int).Sub(need, balance))
+		}
+		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
+		// overflow the number of permitted transactions from a single accoun
+		// (i.e. max cancellable via out-of-bound transaction).
+		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
+			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
 		}
 	}
 	return nil

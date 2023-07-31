@@ -85,13 +85,13 @@ type Header struct {
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
 	WithdrawalsHash *common.Hash `json:"withdrawalsRoot" rlp:"optional"`
 
-	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
-	ExcessDataGas *uint64 `json:"excessDataGas" rlp:"optional"`
+	// BlobGasUsed was added by EIP-4844 and is ignored in legacy headers.
+	BlobGasUsed *uint64 `json:"blobGasUsed" rlp:"optional"`
 
-	// DataGasUsed was added by EIP-4844 and is ignored in legacy headers.
-	DataGasUsed *uint64 `json:"dataGasUsed" rlp:"optional"`
+	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
+	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
 
-	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
+  	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	BeaconRoot *common.Hash `json:"beaconRoot" rlp:"optional"`
 }
 
@@ -105,8 +105,8 @@ type headerMarshaling struct {
 	Extra         hexutil.Bytes
 	BaseFee       *hexutil.Big
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	ExcessDataGas *hexutil.Uint64
-	DataGasUsed   *hexutil.Uint64
+	BlobGasUsed   *hexutil.Uint64
+	ExcessBlobGas *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -287,6 +287,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.WithdrawalsHash = new(common.Hash)
 		*cpy.WithdrawalsHash = *h.WithdrawalsHash
 	}
+	if h.ExcessBlobGas != nil {
+		cpy.ExcessBlobGas = new(uint64)
+		*cpy.ExcessBlobGas = *h.ExcessBlobGas
+	}
+	if h.BlobGasUsed != nil {
+		cpy.BlobGasUsed = new(uint64)
+		*cpy.BlobGasUsed = *h.BlobGasUsed
+	}
 	return &cpy
 }
 
@@ -355,22 +363,22 @@ func (b *Block) Withdrawals() Withdrawals {
 	return b.withdrawals
 }
 
-func (b *Block) ExcessDataGas() *uint64 {
-	var excessDataGas *uint64
-	if b.header.ExcessDataGas != nil {
-		excessDataGas = new(uint64)
-		*excessDataGas = *b.header.ExcessDataGas
+func (b *Block) ExcessBlobGas() *uint64 {
+	var excessBlobGas *uint64
+	if b.header.ExcessBlobGas != nil {
+		excessBlobGas = new(uint64)
+		*excessBlobGas = *b.header.ExcessBlobGas
 	}
-	return excessDataGas
+	return excessBlobGas
 }
 
-func (b *Block) DataGasUsed() *uint64 {
-	var dataGasUsed *uint64
-	if b.header.DataGasUsed != nil {
-		dataGasUsed = new(uint64)
-		*dataGasUsed = *b.header.DataGasUsed
+func (b *Block) BlobGasUsed() *uint64 {
+	var blobGasUsed *uint64
+	if b.header.BlobGasUsed != nil {
+		blobGasUsed = new(uint64)
+		*blobGasUsed = *b.header.BlobGasUsed
 	}
-	return dataGasUsed
+	return blobGasUsed
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
