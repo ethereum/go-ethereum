@@ -62,13 +62,14 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		return stateDb.RawDump(opts), nil
 	}
 	var header *types.Header
-	if blockNr == rpc.LatestBlockNumber {
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		header = api.eth.blockchain.CurrentBlock()
-	} else if blockNr == rpc.FinalizedBlockNumber {
+	case rpc.FinalizedBlockNumber:
 		header = api.eth.blockchain.CurrentFinalBlock()
-	} else if blockNr == rpc.SafeBlockNumber {
+	case rpc.SafeBlockNumber:
 		header = api.eth.blockchain.CurrentSafeBlock()
-	} else {
+	default:
 		block := api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
@@ -146,13 +147,14 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			}
 		} else {
 			var header *types.Header
-			if number == rpc.LatestBlockNumber {
+			switch number {
+			case rpc.LatestBlockNumber:
 				header = api.eth.blockchain.CurrentBlock()
-			} else if number == rpc.FinalizedBlockNumber {
+			case rpc.FinalizedBlockNumber:
 				header = api.eth.blockchain.CurrentFinalBlock()
-			} else if number == rpc.SafeBlockNumber {
+			case rpc.SafeBlockNumber:
 				header = api.eth.blockchain.CurrentSafeBlock()
-			} else {
+			default:
 				block := api.eth.blockchain.GetBlockByNumber(uint64(number))
 				if block == nil {
 					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
