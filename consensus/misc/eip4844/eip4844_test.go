@@ -30,19 +30,19 @@ func TestCalcExcessBlobGas(t *testing.T) {
 		blobs  uint64
 		want   uint64
 	}{
-		// The excess data gas should not increase from zero if the used blob
+		// The excess blob gas should not increase from zero if the used blob
 		// slots are below - or equal - to the target.
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, 0},
 
-		// If the target data gas is exceeded, the excessBlobGas should increase
+		// If the target blob gas is exceeded, the excessBlobGas should increase
 		// by however much it was overshot
 		{0, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob},
 		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob + 1},
 		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 2, 2*params.BlobTxBlobGasPerBlob + 1},
 
-		// The excess data gas should decrease by however much the target was
+		// The excess blob gas should decrease by however much the target was
 		// under-shot, capped at zero.
 		{params.BlobTxTargetBlobGasPerBlock, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, params.BlobTxTargetBlobGasPerBlock},
 		{params.BlobTxTargetBlobGasPerBlock, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, params.BlobTxBlobGasPerBlob},
@@ -52,7 +52,7 @@ func TestCalcExcessBlobGas(t *testing.T) {
 	for _, tt := range tests {
 		result := CalcExcessBlobGas(tt.excess, tt.blobs*params.BlobTxBlobGasPerBlob)
 		if result != tt.want {
-			t.Errorf("excess data gas mismatch: have %v, want %v", result, tt.want)
+			t.Errorf("excess blob gas mismatch: have %v, want %v", result, tt.want)
 		}
 	}
 }
