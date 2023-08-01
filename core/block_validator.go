@@ -91,7 +91,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	}
 	if header.BlobGasUsed != nil {
 		if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
+			return fmt.Errorf("blob gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
 		}
 	} else {
 		if blobs > 0 {
