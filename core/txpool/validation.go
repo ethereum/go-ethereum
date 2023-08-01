@@ -208,6 +208,9 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		balance = opts.State.GetBalance(from)
 		cost    = tx.Cost()
 	)
+	if balance.Sign() == 0 {
+		return fmt.Errorf("%w: balance 0", core.ErrInsufficientFunds)
+	}
 	if balance.Cmp(cost) < 0 {
 		return fmt.Errorf("%w: balance %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, cost, new(big.Int).Sub(cost, balance))
 	}
