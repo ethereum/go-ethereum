@@ -304,6 +304,10 @@ func (f *Firehose) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 		f.ensureInCall()
 		f.callStack.Peek().Suicide = true
 
+		if value.Sign() != 0 {
+			f.OnBalanceChange(from, value, common.Big0, state.BalanceChangeSuicideWithdraw)
+		}
+
 		// The next CaptureExit must be ignored, this variable will make the next CaptureExit to be ignored
 		f.latestCallStartSuicided = true
 		return
