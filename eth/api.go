@@ -698,3 +698,13 @@ func (api *ScrollAPI) GetBlockByHash(ctx context.Context, hash common.Hash, full
 	}
 	return nil, err
 }
+
+// GetBlockByNumber returns the requested block. When fullTx is true all transactions in the block are returned in full
+// detail, otherwise only the transaction hash is returned.
+func (api *ScrollAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
+	block, err := api.eth.APIBackend.BlockByNumber(ctx, number)
+	if block != nil {
+		return api.rpcMarshalBlock(ctx, block, fullTx)
+	}
+	return nil, err
+}

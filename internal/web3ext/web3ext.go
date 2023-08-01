@@ -881,6 +881,12 @@ web3._extend({
 			params: 2,
 			inputFormatter: [null, function (val) { return !!val; }]
 		}),
+		new web3._extend.Method({
+			name: 'getBlockByNumber',
+			call: 'scroll_getBlockByNumber',
+			params: 2,
+			inputFormatter: [null, function (val) { return !!val; }]
+		}),
 	],
 	properties:
 	[

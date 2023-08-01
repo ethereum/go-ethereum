@@ -357,11 +357,16 @@ func (r *rpcRowConsumption) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
-// detail, otherwise only the transaction hash is returned.
-func (ec *Client) GetBlockByHash(ctx context.Context, blockHash common.Hash) (*types.BlockWithRowConsumption, error) {
+// GetBlockByNumberOrHash returns the requested block
+func (ec *Client) GetBlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.BlockWithRowConsumption, error) {
 	var raw json.RawMessage
-	err := ec.c.CallContext(ctx, &raw, "scroll_getBlockByHash", blockHash, true)
+	var err error
+	if number, ok := blockNrOrHash.Number(); ok {
+		err = ec.c.CallContext(ctx, &raw, "scroll_getBlockByNumber", number, true)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		err = ec.c.CallContext(ctx, &raw, "scroll_getBlockByHash", hash, true)
+	}
 	if err != nil {
 		return nil, err
 	} else if len(raw) == 0 {
