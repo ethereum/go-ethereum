@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -69,9 +70,20 @@ func makeHistories(n int) []*history {
 
 func TestEncodeDecodeHistory(t *testing.T) {
 	var (
+		m   meta
 		dec history
 		obj = makeHistory()
 	)
+	// check if meta data can be correctly encode/decode
+	blob := obj.meta.encode()
+	if err := m.decode(blob); err != nil {
+		t.Fatalf("Failed to decode %v", err)
+	}
+	if !reflect.DeepEqual(&m, obj.meta) {
+		t.Fatal("meta is mismatched")
+	}
+
+	// check if account/storage data can be correctly encode/decode
 	accountData, storageData, accountIndexes, storageIndexes := obj.encode()
 	if err := dec.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
 		t.Fatalf("Failed to decode, err: %v", err)
@@ -87,20 +99,6 @@ func TestEncodeDecodeHistory(t *testing.T) {
 	}
 	if !compareStorageList(dec.storageList, obj.storageList) {
 		t.Fatal("storage list is mismatched")
-	}
-}
-
-func TestEncodeDecodeMeta(t *testing.T) {
-	var (
-		dec meta
-		h   = makeHistory()
-	)
-	blob := h.meta.encode()
-	if err := dec.decode(blob); err != nil {
-		t.Fatalf("Failed to decode %v", err)
-	}
-	if !reflect.DeepEqual(&dec, h.meta) {
-		t.Fatal("meta is mismatched")
 	}
 }
 
@@ -133,6 +131,8 @@ func TestTruncateHeadHistory(t *testing.T) {
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = openFreezer(t.TempDir(), false)
 	)
+	defer freezer.Close()
+
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
@@ -147,7 +147,7 @@ func TestTruncateHeadHistory(t *testing.T) {
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
-		checkHistoriesInRange(t, db, freezer, uint64(size), uint64(10), roots[size-1:10], false)
+		checkHistoriesInRange(t, db, freezer, uint64(size), uint64(10), roots[size-1:], false)
 		checkHistoriesInRange(t, db, freezer, uint64(1), uint64(size-1), roots[:size-1], true)
 	}
 }
@@ -159,6 +159,8 @@ func TestTruncateTailHistory(t *testing.T) {
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = openFreezer(t.TempDir(), false)
 	)
+	defer freezer.Close()
+
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
@@ -193,13 +195,15 @@ func TestTruncateTailHistories(t *testing.T) {
 			10, 0, 0, 1, false,
 		},
 	}
-	for _, c := range cases {
+	for i, c := range cases {
 		var (
 			roots      []common.Hash
 			hs         = makeHistories(10)
 			db         = rawdb.NewMemoryDatabase()
-			freezer, _ = openFreezer(t.TempDir(), false)
+			freezer, _ = openFreezer(t.TempDir()+fmt.Sprintf("%d", i), false)
 		)
+		defer freezer.Close()
+
 		for i := 0; i < len(hs); i++ {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 			rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)

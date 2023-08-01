@@ -524,11 +524,11 @@ func TestJournal(t *testing.T) {
 
 func TestCorruptedJournal(t *testing.T) {
 	tester := newTester(t)
+	defer tester.release()
+
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
-	defer tester.release()
-
 	tester.db.Close()
 	_, root := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
 

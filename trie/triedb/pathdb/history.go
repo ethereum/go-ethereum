@@ -338,10 +338,10 @@ type decoder struct {
 	accountIndexes []byte // the buffer for concatenated account index
 	storageIndexes []byte // the buffer for concatenated storage index
 
-	lastAccount       common.Address // the address of last resolved account
-	lastAccountRead   uint32         // the read-cursor position of account data
-	lastSlotIndexRead uint32         // the read-cursor position of storage slot index
-	lastSlotDataRead  uint32         // the read-cursor position of storage slot data
+	lastAccount       *common.Address // the address of last resolved account
+	lastAccountRead   uint32          // the read-cursor position of account data
+	lastSlotIndexRead uint32          // the read-cursor position of storage slot index
+	lastSlotDataRead  uint32          // the read-cursor position of storage slot data
 }
 
 // verify validates the provided byte streams for decoding state history. A few
@@ -378,7 +378,7 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 	// - account is sorted in order in byte stream
 	// - account data is strictly encoded with no gap inside
 	// - account data is not out-of-slice
-	if r.lastAccount != (common.Address{}) { // zero address is possible
+	if r.lastAccount != nil { // zero address is possible
 		if bytes.Compare(r.lastAccount.Bytes(), index.address.Bytes()) >= 0 {
 			return accountIndex{}, nil, errors.New("account is not in order")
 		}
@@ -392,7 +392,7 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 	}
 	data := r.accountData[index.offset:last]
 
-	r.lastAccount = index.address
+	r.lastAccount = &index.address
 	r.lastAccountRead = last
 
 	return index, data, nil
