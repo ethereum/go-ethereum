@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -109,7 +109,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		mid := new(big.Int).Add(lo, hi)
 		mid.Div(mid, big.NewInt(2))
 
-		if misc.CalcBaseFee(bc.config, &types.Header{
+		if eip1559.CalcBaseFee(bc.config, &types.Header{
 			Number:   blockNumber,
 			GasLimit: gasLimit,
 			GasUsed:  0,
