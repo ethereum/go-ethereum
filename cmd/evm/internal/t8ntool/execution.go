@@ -47,18 +47,19 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot       common.Hash           `json:"stateRoot"`
-	TxRoot          common.Hash           `json:"txRoot"`
-	ReceiptRoot     common.Hash           `json:"receiptsRoot"`
-	LogsHash        common.Hash           `json:"logsHash"`
-	Bloom           types.Bloom           `json:"logsBloom"        gencodec:"required"`
-	Receipts        types.Receipts        `json:"receipts"`
-	Rejected        []*rejectedTx         `json:"rejected,omitempty"`
-	Difficulty      *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
-	GasUsed         math.HexOrDecimal64   `json:"gasUsed"`
-	BaseFee         *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
-	WithdrawalsRoot *common.Hash          `json:"withdrawalsRoot,omitempty"`
-	ExcessBlobGas   *math.HexOrDecimal64  `json:"excessBlobGas,omitempty"`
+	StateRoot            common.Hash           `json:"stateRoot"`
+	TxRoot               common.Hash           `json:"txRoot"`
+	ReceiptRoot          common.Hash           `json:"receiptsRoot"`
+	LogsHash             common.Hash           `json:"logsHash"`
+	Bloom                types.Bloom           `json:"logsBloom"        gencodec:"required"`
+	Receipts             types.Receipts        `json:"receipts"`
+	Rejected             []*rejectedTx         `json:"rejected,omitempty"`
+	Difficulty           *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
+	GasUsed              math.HexOrDecimal64   `json:"gasUsed"`
+	BaseFee              *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
+	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
+	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"currentBlobGasUsed,omitempty"`
 }
 
 type ommer struct {
@@ -181,7 +182,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-
+	var blobGasUsed uint64
 	for i, tx := range txs {
 		if tx.Type() == types.BlobTxType && vmContext.ExcessBlobGas == nil {
 			errMsg := "blob tx used but field env.ExcessBlobGas missing"
@@ -217,6 +218,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
 			continue
+		}
+		if tx.Type() == types.BlobTxType {
+			blobGasUsed += params.BlobTxBlobGasPerBlob
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
@@ -314,7 +318,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.WithdrawalsRoot = &h
 	}
 	if vmContext.ExcessBlobGas != nil {
-		execRs.ExcessBlobGas = (*math.HexOrDecimal64)(vmContext.ExcessBlobGas)
+		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(vmContext.ExcessBlobGas)
+		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.
