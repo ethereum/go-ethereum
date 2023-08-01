@@ -197,6 +197,7 @@ func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *
 	// Refresh the mapping periodically.
 	go func() {
 		refresh := time.NewTimer(mapTimeout)
+		defer refresh.Stop()
 		for range refresh.C {
 			addMapping()
 			refresh.Reset(mapTimeout)
