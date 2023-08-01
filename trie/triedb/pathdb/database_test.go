@@ -97,7 +97,7 @@ type tester struct {
 
 func newTester(t *testing.T) *tester {
 	var (
-		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir()+fmt.Sprint(rand.Int63()), "", false)
+		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{CleanSize: 256 * 1024, DirtySize: 256 * 1024})
 		obj     = &tester{
 			db:           db,
@@ -123,9 +123,8 @@ func newTester(t *testing.T) *tester {
 }
 
 func (t *tester) release() {
-	if t.db != nil {
-		t.db.Close()
-	}
+	t.db.Close()
+	t.db.diskdb.Close()
 }
 
 func (t *tester) randAccount() (common.Address, []byte) {
