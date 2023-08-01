@@ -243,6 +243,7 @@ func init() {
 	)
 
 	app.Before = func(ctx *cli.Context) error {
+		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
 		flags.MigrateGlobalFlags(ctx)
 		return debug.Setup(ctx)
 	}
@@ -323,9 +324,6 @@ func geth(ctx *cli.Context) error {
 	if args := ctx.Args().Slice(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
-
-	// Automatically set GOMAXPROCS to match Linux container CPU quota.
-	maxprocs.Set()
 
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
