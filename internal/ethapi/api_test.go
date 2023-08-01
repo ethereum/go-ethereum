@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -355,6 +356,40 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 			TrieDirtyDisabled: true, // Archive mode
 		}
 	)
+	// Generate blocks for testing
+	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
+	txlookupLimit := uint64(0)
+	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	backend := &testBackend{db: db, chain: chain}
+	return backend
+}
+
+func newTestBackendPostMerged(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+	var (
+		merger      = consensus.NewMerger(rawdb.NewMemoryDatabase())
+		engine      = beacon.New(ethash.NewFaker())
+		cacheConfig = &core.CacheConfig{
+			TrieCleanLimit:    256,
+			TrieDirtyLimit:    256,
+			TrieTimeLimit:     5 * time.Minute,
+			SnapshotLimit:     0,
+			TrieDirtyDisabled: true, // Archive mode
+		}
+	)
+
+	merger.ReachTTD()
+	merger.FinalizePoS()
+
+	// Set the terminal total difficulty in the config
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+	gspec.Config.TerminalTotalDifficultyPassed = true
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -1767,7 +1802,11 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	// Initialize test accounts
+	newUint64 := func(val uint64) *uint64 { return &val }
+
+	config := *params.TestChainConfig
+	config.ShanghaiTime = newUint64(0)
+	config.CancunTime = newUint64(0)
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -1775,7 +1814,9 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
 		genesis    = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config:        &config,
+			ExcessBlobGas: newUint64(0),
+			BlobGasUsed:   newUint64(0),
 			Alloc: core.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
@@ -1795,7 +1836,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
 		txHashes = make([]common.Hash, genBlocks)
 	)
-	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	backend := newTestBackendPostMerged(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		var (
 			tx  *types.Transaction
 			err error
@@ -1834,6 +1875,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
 		}
+		b.SetPoS()
 	})
 	return backend, txHashes
 }
