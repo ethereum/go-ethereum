@@ -217,7 +217,7 @@ type LegacyPool struct {
 	pendingNonces *noncer                      // Pending state tracking virtual nonces
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
-	journal *journal    // journal of local transaction to back up to disk
+	journal *journal    // Journal of local transaction to back up to disk
 
 	reserve txpool.AddressReserver       // Address reserver to ensure exclusivity across subpools
 	pending map[common.Address]*list     // All currently processable transactions

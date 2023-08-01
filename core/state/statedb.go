@@ -118,7 +118,7 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// journal of state modifications. This is the backbone of
+	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
 	validRevisions []revision

@@ -153,7 +153,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 			log.Crit("Failed to truncate extra state histories", "err", err)
 		}
 		if pruned != 0 {
-			log.Info("Truncated extra state histories", "number", pruned)
+			log.Warn("Truncated extra state histories", "number", pruned)
 		}
 	}
 	log.Warn("Path-based state scheme is an experimental feature")
@@ -283,7 +283,6 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 	}
 	// Apply the state histories upon the disk layer in order.
 	var (
-		batch = db.diskdb.NewBatch()
 		start = time.Now()
 		dl    = db.tree.bottom()
 	)
@@ -301,10 +300,7 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 		// disk layer won't be accessible from outside.
 		db.tree.reset(dl)
 	}
-	rawdb.DeleteTrieJournal(batch)
-	if err := batch.Write(); err != nil {
-		return err
-	}
+	rawdb.DeleteTrieJournal(db.diskdb)
 	_, err := truncateFromHead(db.diskdb, db.freezer, dl.stateID())
 	if err != nil {
 		return err

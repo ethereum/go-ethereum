@@ -222,7 +222,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 // Journal writes the memory layer contents into a buffer to be stored in the
 // database as the snapshot journal.
 func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
-	// journal the parent first
+	// Journal the parent first
 	base, err := dl.parent.Journal(buffer)
 	if err != nil {
 		return common.Hash{}, err
