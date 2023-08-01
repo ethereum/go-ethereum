@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -38,16 +38,10 @@ func newTestServer() *Server {
 }
 
 func sequentialIDGenerator() func() ID {
-	var (
-		mu      sync.Mutex
-		counter uint64
-	)
+	var counter atomic.Uint64
 	return func() ID {
-		mu.Lock()
-		defer mu.Unlock()
-		counter++
 		id := make([]byte, 8)
-		binary.BigEndian.PutUint64(id, counter)
+		binary.BigEndian.PutUint64(id, counter.Add(1))
 		return encodeID(id)
 	}
 }
