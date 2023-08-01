@@ -40,7 +40,7 @@ type GlogHandler struct {
 	origin Handler // The origin handler this wraps
 
 	level     atomic.Uint32 // Current log level, atomically accessible
-	override  atomic.Uint32 // Flag whether overrides are used, atomically accessible
+	override  atomic.Bool   // Flag whether overrides are used, atomically accessible
 	backtrace atomic.Uint32 // Flag whether backtrace location is set
 
 	patterns  []pattern       // Current list of patterns to override with
@@ -138,7 +138,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 
 	h.patterns = filter
 	h.siteCache = make(map[uintptr]Lvl)
-	h.override.Store(uint32(len(filter)))
+	h.override.Store(len(filter) != 0)
 
 	return nil
 }
@@ -202,7 +202,7 @@ func (h *GlogHandler) Log(r *Record) error {
 		return h.origin.Log(r)
 	}
 	// If no local overrides are present, fast track skipping
-	if h.override.Load() == 0 {
+	if h.override.Load() {
 		return nil
 	}
 	// Check callsite cache for previously calculated log levels

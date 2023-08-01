@@ -33,15 +33,15 @@ var locationTrims = []string{
 // format output.
 func PrintOrigins(print bool) {
 	if print {
-		locationEnabled.Store(1)
+		locationEnabled.Store(true)
 	} else {
-		locationEnabled.Store(0)
+		locationEnabled.Store(false)
 	}
 }
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
 // should append the log locations too when printing entries.
-var locationEnabled atomic.Uint32
+var locationEnabled atomic.Bool
 
 // locationLength is the maxmimum path length encountered, which all logs are
 // padded to to aid in alignment.
@@ -109,7 +109,7 @@ func TerminalFormat(usecolor bool) Format {
 
 		b := &bytes.Buffer{}
 		lvl := r.Lvl.AlignedString()
-		if locationEnabled.Load() != 0 {
+		if locationEnabled.Load() {
 			// Log origin printing was requested, format the location path and line number
 			location := fmt.Sprintf("%+v", r.Call)
 			for _, prefix := range locationTrims {
