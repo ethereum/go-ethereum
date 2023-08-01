@@ -677,6 +677,7 @@ func TestMulticallV1(t *testing.T) {
 		randomAccounts   = newAccounts(4)
 		latest           = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		includeTransfers = true
+		validation       = true
 	)
 	type callRes struct {
 		ReturnValue string `json:"return"`
@@ -701,6 +702,7 @@ func TestMulticallV1(t *testing.T) {
 		blocks           []CallBatch
 		tag              rpc.BlockNumberOrHash
 		includeTransfers *bool
+		validation       *bool
 		expectErr        error
 		want             []blockRes
 	}{
@@ -1210,6 +1212,33 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 		},
+		// Enable validation checks.
+		{
+			name: "validation-checks",
+			tag:  latest,
+			blocks: []CallBatch{{
+				Calls: []TransactionArgs{{
+					From:  &accounts[2].addr,
+					To:    &cac,
+					Nonce: newUint64(2),
+				}},
+			}},
+			validation: &validation,
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         n10hash,
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x0",
+				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x0",
+					Logs:        []types.Log{},
+					Status:      "0x0",
+					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 10000000)", accounts[2].addr),
+				}},
+			}},
+		},
 	}
 
 	for i, tc := range testSuite {
@@ -1217,6 +1246,9 @@ func TestMulticallV1(t *testing.T) {
 			opts := multicallOpts{BlockStateCalls: tc.blocks}
 			if tc.includeTransfers != nil && *tc.includeTransfers {
 				opts.TraceTransfers = true
+			}
+			if tc.validation != nil && *tc.validation {
+				opts.Validation = true
 			}
 			result, err := api.MulticallV1(context.Background(), opts, tc.tag)
 			if tc.expectErr != nil {
@@ -1276,6 +1308,11 @@ func newRPCBalance(balance *big.Int) **hexutil.Big {
 func hex2Bytes(str string) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(common.FromHex(str))
 	return &rpcBytes
+}
+
+func newUint64(v uint64) *hexutil.Uint64 {
+	rpcUint64 := hexutil.Uint64(v)
+	return &rpcUint64
 }
 
 // testHasher is the helper tool for transaction/receipt list hashing.

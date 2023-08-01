@@ -1093,12 +1093,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true}, nil)
+	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true}, nil, false)
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts) (*core.ExecutionResult, error) {
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, validate bool) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(gp.Gas(), header.BaseFee)
+	msg, err := args.ToMessage(gp.Gas(), header.BaseFee, !validate)
 	if err != nil {
 		return nil, err
 	}
@@ -1217,6 +1217,7 @@ func (r *callResult) MarshalJSON() ([]byte, error) {
 type multicallOpts struct {
 	BlockStateCalls []CallBatch
 	TraceTransfers  bool
+	Validation      bool
 }
 
 // MulticallV1 executes series of transactions on top of a base state.
@@ -1289,7 +1290,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			if opts.TraceTransfers {
 				vmConfig.Tracer = newTracer()
 			}
-			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles)
+			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
 				results[bi].Calls[i] = callResult{Error: err.Error(), Status: hexutil.Uint64(types.ReceiptStatusFailed)}
 				continue
@@ -1722,7 +1723,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
+		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee, true)
 		if err != nil {
 			return nil, 0, nil, err
 		}

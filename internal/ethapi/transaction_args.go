@@ -200,7 +200,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*core.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, skipChecks bool) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -259,6 +259,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.Value != nil {
 		value = args.Value.ToInt()
 	}
+	var nonce uint64
+	if args.Nonce != nil {
+		nonce = uint64(*args.Nonce)
+	}
 	data := args.data()
 	var accessList types.AccessList
 	if args.AccessList != nil {
@@ -268,13 +272,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		From:              addr,
 		To:                args.To,
 		Value:             value,
+		Nonce:             nonce,
 		GasLimit:          gas,
 		GasPrice:          gasPrice,
 		GasFeeCap:         gasFeeCap,
 		GasTipCap:         gasTipCap,
 		Data:              data,
 		AccessList:        accessList,
-		SkipAccountChecks: true,
+		SkipAccountChecks: skipChecks,
 	}
 	return msg, nil
 }
