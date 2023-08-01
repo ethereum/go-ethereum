@@ -24,9 +24,14 @@ import (
 
 // Reader wraps the Node method of a backing trie store.
 type Reader interface {
-	// Node retrieves the RLP-encoded trie node blob with the provided trie
-	// identifier, node path and the corresponding node hash. No error will
-	// be returned if the node is not found.
+	// Node retrieves the trie node blob with the provided trie identifier, node path and
+	// the corresponding node hash. No error will be returned if the node is not found.
+	//
+	// When looking up nodes in the account trie, 'owner' is the zero hash. For contract
+	// storage trie nodes, 'owner' is the hash of the account address that containing the
+	// storage.
+	//
+	// TODO(rjl493456442): remove the 'hash' parameter, it's redundant in PBSS.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 
