@@ -1134,6 +1134,8 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
+// DoEstimateGas estimates the gas needed to execute a specific transaction.
+// Note, the flag noBaseFee indicating whether to skip the base fee check
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64, noBaseFee bool) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
