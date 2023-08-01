@@ -122,7 +122,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	}
 	baseFee := lo
 
-	// The excess data gas at 2^27 translates into a blob fee higher than mainnet
+	// The excess blob gas at 2^27 translates into a blob fee higher than mainnet
 	// ether existence, use that as a cap for the tests.
 	lo = new(big.Int)
 	hi = new(big.Int).Exp(big.NewInt(2), big.NewInt(27), nil)

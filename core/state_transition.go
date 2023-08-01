@@ -467,7 +467,7 @@ func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gasRemaining
 }
 
-// blobGasUsed returns the amount of data gas used by the message.
+// blobGasUsed returns the amount of blob gas used by the message.
 func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
