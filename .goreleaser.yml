@@ -103,11 +103,6 @@ nfpms:
     scripts:
       postinstall: builder/files/bor-post-install.sh
 
-    overrides:
-      rpm:
-        replacements:
-          amd64: x86_64
-
 snapshot:
   name_template: "{{ .Tag }}.next"
 
