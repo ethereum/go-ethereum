@@ -350,6 +350,9 @@ type JsonRPCConfig struct {
 	HttpTimeout *HttpTimeouts `hcl:"timeouts,block" toml:"timeouts,block"`
 
 	AllowUnprotectedTxs bool `hcl:"allow-unprotected-txs,optional" toml:"allow-unprotected-txs,optional"`
+
+	// EnablePersonal enables the deprecated personal namespace.
+	EnablePersonal bool `hcl:"enabledeprecatedpersonal,optional" toml:"enabledeprecatedpersonal,optional"`
 }
 
 type AUTHConfig struct {
@@ -662,6 +665,7 @@ func DefaultConfig() *Config {
 			TxFeeCap:            ethconfig.Defaults.RPCTxFeeCap,
 			RPCEVMTimeout:       ethconfig.Defaults.RPCEVMTimeout,
 			AllowUnprotectedTxs: false,
+			EnablePersonal:      false,
 			Http: &APIConfig{
 				Enabled:                     false,
 				Port:                        8545,
@@ -1280,6 +1284,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		Version:               params.VersionWithCommit(gitCommit, gitDate),
 		IPCPath:               ipcPath,
 		AllowUnprotectedTxs:   c.JsonRPC.AllowUnprotectedTxs,
+		EnablePersonal:        c.JsonRPC.EnablePersonal,
 		P2P: p2p.Config{
 			MaxPeers:        int(c.P2P.MaxPeers),
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),

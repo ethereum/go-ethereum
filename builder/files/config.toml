@@ -81,6 +81,7 @@ syncmode = "full"
 #   evmtimeout = "5s"
 #   txfeecap = 5.0
 #   allow-unprotected-txs = false
+#   enabledeprecatedpersonal = false
 #   [jsonrpc.http]
 #     enabled = false
 #     port = 8545
