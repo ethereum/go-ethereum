@@ -346,9 +346,8 @@ type testBackend struct {
 	pending *types.Block
 }
 
-func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
 	var (
-		engine      = ethash.NewFaker()
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:    256,
 			TrieDirtyLimit:    256,
@@ -357,40 +356,6 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 			TrieDirtyDisabled: true, // Archive mode
 		}
 	)
-	// Generate blocks for testing
-	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	txlookupLimit := uint64(0)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-
-	backend := &testBackend{db: db, chain: chain}
-	return backend
-}
-
-func newTestBackendPostMerged(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
-	var (
-		merger      = consensus.NewMerger(rawdb.NewMemoryDatabase())
-		engine      = beacon.New(ethash.NewFaker())
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:    256,
-			TrieDirtyLimit:    256,
-			TrieTimeLimit:     5 * time.Minute,
-			SnapshotLimit:     0,
-			TrieDirtyDisabled: true, // Archive mode
-		}
-	)
-
-	merger.ReachTTD()
-	merger.FinalizePoS()
-
-	// Set the terminal total difficulty in the config
-	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-	gspec.Config.TerminalTotalDifficultyPassed = true
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -586,7 +551,7 @@ func TestEstimateGas(t *testing.T) {
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -689,7 +654,7 @@ func TestCall(t *testing.T) {
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -1110,7 +1075,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		}
 		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, []*types.Withdrawal{withdrawal}, blocktest.NewHasher())
 	)
-	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+	backend := newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -1837,7 +1802,11 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
 		txHashes = make([]common.Hash, genBlocks)
 	)
-	backend := newTestBackendPostMerged(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+
+	// Set the terminal total difficulty in the config
+	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+	genesis.Config.TerminalTotalDifficultyPassed = true
+	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
 			tx  *types.Transaction
 			err error
