@@ -184,6 +184,7 @@ func TestAdaptorGetMasternodesV2(t *testing.T) {
 
 	// block 901 is the first v2 block, and is treated as epoch switch block
 	err := blockchain.InsertBlock(currentBlock)
+	adaptor.Initial(blockchain, currentBlock.Header())
 	assert.Nil(t, err)
 	masternodes1 := adaptor.GetMasternodes(blockchain, currentBlock.Header())
 	assert.Equal(t, 5, len(masternodes1))
@@ -216,6 +217,8 @@ func TestGetCurrentEpochSwitchBlock(t *testing.T) {
 	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil, "")
 	err = blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
+	adaptor.Initial(blockchain, currentBlock.Header())
+
 	currentCheckpointNumber, epochNum, err = adaptor.GetCurrentEpochSwitchBlock(blockchain, currentBlock.Number())
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(901), currentCheckpointNumber)

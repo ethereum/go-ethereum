@@ -43,6 +43,8 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
+	adaptor.Initial(blockchain, currentBlockHeader)
+
 	// Less then Mine Period
 	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.Nil(t, err)
