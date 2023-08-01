@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ type (
 	Pong struct {
 		// This field should mirror the UDP envelope address
 		// of the ping packet, which provides a way to discover the
-		// the external address (after NAT).
+		// external address (after NAT).
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
@@ -86,23 +86,23 @@ type (
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrRequest queries for the remote node's record.
+	// ENRRequest queries for the remote node's record.
 	ENRRequest struct {
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
-	// enrResponse is the reply to enrRequest.
+	// ENRResponse is the reply to ENRRequest.
 	ENRResponse struct {
-		ReplyTok []byte // Hash of the enrRequest packet.
+		ReplyTok []byte // Hash of the ENRRequest packet.
 		Record   enr.Record
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 )
 
-// This number is the maximum number of neighbor nodes in a Neighbors packet.
+// MaxNeighbors is the maximum number of neighbor nodes in a Neighbors packet.
 const MaxNeighbors = 12
 
 // This code computes the MaxNeighbors constant value.
@@ -157,12 +157,14 @@ func NewEndpoint(addr *net.UDPAddr, tcpPort uint16) Endpoint {
 	} else if ip6 := addr.IP.To16(); ip6 != nil {
 		ip = ip6
 	}
+
 	return Endpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
 type Packet interface {
-	// packet name and type for logging purposes.
+	// Name is the name of the package, for logging purposes.
 	Name() string
+	// Kind is the packet type, for logging purposes.
 	Kind() byte
 }
 
@@ -210,17 +212,21 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 	if len(input) < headSize+1 {
 		return nil, Pubkey{}, nil, ErrPacketTooSmall
 	}
+
 	hash, sig, sigdata := input[:macSize], input[macSize:headSize], input[headSize:]
 	shouldhash := crypto.Keccak256(input[macSize:])
+
 	if !bytes.Equal(hash, shouldhash) {
 		return nil, Pubkey{}, nil, ErrBadHash
 	}
+
 	fromKey, err := recoverNodeKey(crypto.Keccak256(input[headSize:]), sig)
 	if err != nil {
 		return nil, fromKey, hash, err
 	}
 
 	var req Packet
+
 	switch ptype := sigdata[0]; ptype {
 	case PingPacket:
 		req = new(Ping)
@@ -237,8 +243,10 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 	default:
 		return nil, fromKey, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
+
 	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
 	err = s.Decode(req)
+
 	return req, fromKey, hash, err
 }
 
@@ -247,18 +255,23 @@ func Encode(priv *ecdsa.PrivateKey, req Packet) (packet, hash []byte, err error)
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(req.Kind())
+
 	if err := rlp.Encode(b, req); err != nil {
 		return nil, nil, err
 	}
+
 	packet = b.Bytes()
+
 	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	copy(packet[macSize:], sig)
 	// Add the hash to the front. Note: this doesn't protect the packet in any way.
 	hash = crypto.Keccak256(packet[macSize:])
 	copy(packet, hash)
+
 	return packet, hash, nil
 }
 
@@ -268,15 +281,19 @@ func recoverNodeKey(hash, sig []byte) (key Pubkey, err error) {
 	if err != nil {
 		return key, err
 	}
+
 	copy(key[:], pubkey[1:])
+
 	return key, nil
 }
 
 // EncodePubkey encodes a secp256k1 public key.
 func EncodePubkey(key *ecdsa.PublicKey) Pubkey {
 	var e Pubkey
+
 	math.ReadBits(key.X, e[:len(e)/2])
 	math.ReadBits(key.Y, e[len(e)/2:])
+
 	return e
 }
 
@@ -286,8 +303,10 @@ func DecodePubkey(curve elliptic.Curve, e Pubkey) (*ecdsa.PublicKey, error) {
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])
 	p.Y.SetBytes(e[half:])
+
 	if !p.Curve.IsOnCurve(p.X, p.Y) {
 		return nil, ErrBadPoint
 	}
+
 	return p, nil
 }

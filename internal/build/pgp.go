@@ -38,6 +38,7 @@ func PGPSignFile(input string, output string, pgpkey string) error {
 	if err != nil {
 		return err
 	}
+
 	if len(keys) != 1 {
 		return fmt.Errorf("key count mismatch: have %d, want %d", len(keys), 1)
 	}
@@ -64,8 +65,10 @@ func PGPKeyID(pgpkey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if len(keys) != 1 {
 		return "", fmt.Errorf("key count mismatch: have %d, want %d", len(keys), 1)
 	}
+
 	return keys[0].PrimaryKey.KeyIdString(), nil
 }

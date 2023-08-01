@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package utils
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -58,21 +58,26 @@ func (lt *limTest) request(n *ltNode) {
 		address string
 		id      enode.ID
 	)
+
 	if n.addr >= 0 {
 		address = string([]byte{byte(n.addr)})
 	} else {
 		var b [32]byte
+
 		rand.Read(b[:])
 		address = string(b[:])
 	}
+
 	if n.id >= 0 {
 		id = enode.ID{byte(n.id)}
 	} else {
 		rand.Read(id[:])
 	}
+
 	lt.runCount++
 	n.runCount++
 	cch := lt.limiter.Add(id, address, n.value, n.cost)
+
 	go func() {
 		lt.results <- ltResult{n, <-cch}
 	}()
@@ -83,8 +88,10 @@ func (lt *limTest) moreRequests(n *ltNode) {
 	if maxStart != 0 {
 		n.lastTotalCost = lt.totalCost
 	}
+
 	for n.reqMax > n.runCount && maxStart > 0 {
 		lt.request(n)
+
 		maxStart--
 	}
 }
@@ -92,12 +99,14 @@ func (lt *limTest) moreRequests(n *ltNode) {
 func (lt *limTest) process() {
 	res := <-lt.results
 	lt.runCount--
+
 	res.node.runCount--
 	if res.ch != nil {
 		res.node.served++
 		if res.node.exp != 0 {
 			lt.expCost += res.node.cost
 		}
+
 		lt.totalCost += res.node.cost
 		close(res.ch)
 	} else {
@@ -160,41 +169,53 @@ func TestLimiter(t *testing.T) {
 	for _, test := range limTests {
 		lt.expCost, lt.totalCost = 0, 0
 		iterCount := 10000
+
 		for j := 0; j < ltRounds; j++ {
 			// try to reach expected target range in multiple rounds with increasing iteration counts
 			last := j == ltRounds-1
+
 			for _, n := range test {
 				lt.request(n)
 			}
+
 			for i := 0; i < iterCount; i++ {
 				lt.process()
+
 				for _, n := range test {
 					lt.moreRequests(n)
 				}
 			}
+
 			for lt.runCount > 0 {
 				lt.process()
 			}
+
 			if spamRatio := 1 - float64(lt.expCost)/float64(lt.totalCost); spamRatio > 0.5*(1+ltTolerance) {
 				t.Errorf("Spam ratio too high (%f)", spamRatio)
 			}
+
 			fail, success := false, true
+
 			for _, n := range test {
 				if n.exp != 0 {
 					if n.dropped > 0 {
 						t.Errorf("Dropped %d requests of non-spam node", n.dropped)
+
 						fail = true
 					}
+
 					r := float64(n.served) * float64(n.cost) / float64(lt.expCost)
 					if r < n.exp*(1-ltTolerance) || r > n.exp*(1+ltTolerance) {
 						if last {
 							// print error only if the target is still not reached in the last round
 							t.Errorf("Request ratio (%f) does not match expected value (%f)", r, n.exp)
 						}
+
 						success = false
 					}
 				}
 			}
+
 			if fail || success {
 				break
 			}
@@ -202,5 +223,6 @@ func TestLimiter(t *testing.T) {
 			iterCount *= 2
 		}
 	}
+
 	lt.limiter.Stop()
 }

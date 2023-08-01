@@ -81,6 +81,7 @@ func OpenDB(path string) (*DB, error) {
 	if path == "" {
 		return newMemoryDB()
 	}
+
 	return newPersistentDB(path)
 }
 
@@ -90,6 +91,7 @@ func newMemoryDB() (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &DB{lvl: db, quit: make(chan struct{})}, nil
 }
 
@@ -97,10 +99,12 @@ func newMemoryDB() (*DB, error) {
 // also flushing its contents in case of a version mismatch.
 func newPersistentDB(path string) (*DB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
+
 	db, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(path, nil)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -122,12 +126,15 @@ func newPersistentDB(path string) (*DB, error) {
 		// Version present, flush if different
 		if !bytes.Equal(blob, currentVer) {
 			db.Close()
+
 			if err = os.RemoveAll(path); err != nil {
 				return nil, err
 			}
+
 			return newPersistentDB(path)
 		}
 	}
+
 	return &DB{lvl: db, quit: make(chan struct{})}, nil
 }
 
@@ -136,6 +143,7 @@ func nodeKey(id ID) []byte {
 	key := append([]byte(dbNodePrefix), id[:]...)
 	key = append(key, ':')
 	key = append(key, dbDiscoverRoot...)
+
 	return key
 }
 
@@ -144,8 +152,10 @@ func splitNodeKey(key []byte) (id ID, rest []byte) {
 	if !bytes.HasPrefix(key, []byte(dbNodePrefix)) {
 		return ID{}, nil
 	}
+
 	item := key[len(dbNodePrefix):]
 	copy(id[:], item[:len(id)])
+
 	return id, item[len(id)+1:]
 }
 
@@ -155,6 +165,7 @@ func nodeItemKey(id ID, ip net.IP, field string) []byte {
 	if ip16 == nil {
 		panic(fmt.Errorf("invalid IP (length %d)", len(ip)))
 	}
+
 	return bytes.Join([][]byte{nodeKey(id), ip16, []byte(field)}, []byte{':'})
 }
 
@@ -165,15 +176,18 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	if string(key) == dbDiscoverRoot {
 		return id, nil, ""
 	}
+
 	key = key[len(dbDiscoverRoot)+1:]
 	// Split out the IP.
 	ip = key[:16]
 	if ip4 := ip.To4(); ip4 != nil {
 		ip = ip4
 	}
+
 	key = key[16+1:]
 	// Field is the remainder of key.
 	field = string(key)
+
 	return id, ip, field
 }
 
@@ -192,6 +206,7 @@ func localItemKey(id ID, field string) []byte {
 	key := append([]byte(dbLocalPrefix), id[:]...)
 	key = append(key, ':')
 	key = append(key, field...)
+
 	return key
 }
 
@@ -201,10 +216,12 @@ func (db *DB) fetchInt64(key []byte) int64 {
 	if err != nil {
 		return 0
 	}
+
 	val, read := binary.Varint(blob)
 	if read <= 0 {
 		return 0
 	}
+
 	return val
 }
 
@@ -212,6 +229,7 @@ func (db *DB) fetchInt64(key []byte) int64 {
 func (db *DB) storeInt64(key []byte, n int64) error {
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutVarint(blob, n)]
+
 	return db.lvl.Put(key, blob, nil)
 }
 
@@ -221,7 +239,9 @@ func (db *DB) fetchUint64(key []byte) uint64 {
 	if err != nil {
 		return 0
 	}
+
 	val, _ := binary.Uvarint(blob)
+
 	return val
 }
 
@@ -229,6 +249,7 @@ func (db *DB) fetchUint64(key []byte) uint64 {
 func (db *DB) storeUint64(key []byte, n uint64) error {
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutUvarint(blob, n)]
+
 	return db.lvl.Put(key, blob, nil)
 }
 
@@ -238,6 +259,7 @@ func (db *DB) Node(id ID) *Node {
 	if err != nil {
 		return nil
 	}
+
 	return mustDecodeNode(id[:], blob)
 }
 
@@ -248,6 +270,7 @@ func mustDecodeNode(id, data []byte) *Node {
 	}
 	// Restore node id cache.
 	copy(node.id[:], id)
+
 	return node
 }
 
@@ -256,13 +279,16 @@ func (db *DB) UpdateNode(node *Node) error {
 	if node.Seq() < db.NodeSeq(node.ID()) {
 		return nil
 	}
+
 	blob, err := rlp.EncodeToBytes(&node.r)
 	if err != nil {
 		return err
 	}
+
 	if err := db.lvl.Put(nodeKey(node.ID()), blob, nil); err != nil {
 		return err
 	}
+
 	return db.storeUint64(nodeItemKey(node.ID(), zeroIP, dbNodeSeq), node.Seq())
 }
 
@@ -277,6 +303,7 @@ func (db *DB) Resolve(n *Node) *Node {
 	if n.Seq() > db.NodeSeq(n.ID()) {
 		return n
 	}
+
 	return db.Node(n.ID())
 }
 
@@ -288,6 +315,7 @@ func (db *DB) DeleteNode(id ID) {
 func deleteRange(db *leveldb.DB, prefix []byte) {
 	it := db.NewIterator(util.BytesPrefix(prefix), nil)
 	defer it.Release()
+
 	for it.Next() {
 		db.Delete(it.Key(), nil)
 	}
@@ -311,6 +339,7 @@ func (db *DB) ensureExpirer() {
 func (db *DB) expirer() {
 	tick := time.NewTicker(dbCleanupCycle)
 	defer tick.Stop()
+
 	for {
 		select {
 		case <-tick.C:
@@ -326,6 +355,7 @@ func (db *DB) expirer() {
 func (db *DB) expireNodes() {
 	it := db.lvl.NewIterator(util.BytesPrefix([]byte(dbNodePrefix)), nil)
 	defer it.Release()
+
 	if !it.Next() {
 		return
 	}
@@ -335,6 +365,7 @@ func (db *DB) expireNodes() {
 		youngestPong int64
 		atEnd        = false
 	)
+
 	for !atEnd {
 		id, ip, field := splitNodeItemKey(it.Key())
 		if field == dbNodePong {
@@ -342,19 +373,23 @@ func (db *DB) expireNodes() {
 			if time > youngestPong {
 				youngestPong = time
 			}
+
 			if time < threshold {
 				// Last pong from this IP older than threshold, remove fields belonging to it.
 				deleteRange(db.lvl, nodeItemKey(id, ip, ""))
 			}
 		}
+
 		atEnd = !it.Next()
 		nextID, _ := splitNodeKey(it.Key())
+
 		if atEnd || nextID != id {
 			// We've moved beyond the last entry of the current ID.
 			// Remove everything if there was no recent enough pong.
 			if youngestPong > 0 && youngestPong < threshold {
 				deleteRange(db.lvl, nodeKey(id))
 			}
+
 			youngestPong = 0
 		}
 	}
@@ -366,6 +401,7 @@ func (db *DB) LastPingReceived(id ID, ip net.IP) time.Time {
 	if ip = ip.To16(); ip == nil {
 		return time.Time{}
 	}
+
 	return time.Unix(db.fetchInt64(nodeItemKey(id, ip, dbNodePing)), 0)
 }
 
@@ -374,6 +410,7 @@ func (db *DB) UpdateLastPingReceived(id ID, ip net.IP, instance time.Time) error
 	if ip = ip.To16(); ip == nil {
 		return errInvalidIP
 	}
+
 	return db.storeInt64(nodeItemKey(id, ip, dbNodePing), instance.Unix())
 }
 
@@ -384,6 +421,7 @@ func (db *DB) LastPongReceived(id ID, ip net.IP) time.Time {
 	}
 	// Launch expirer
 	db.ensureExpirer()
+
 	return time.Unix(db.fetchInt64(nodeItemKey(id, ip, dbNodePong)), 0)
 }
 
@@ -392,6 +430,7 @@ func (db *DB) UpdateLastPongReceived(id ID, ip net.IP, instance time.Time) error
 	if ip = ip.To16(); ip == nil {
 		return errInvalidIP
 	}
+
 	return db.storeInt64(nodeItemKey(id, ip, dbNodePong), instance.Unix())
 }
 
@@ -400,6 +439,7 @@ func (db *DB) FindFails(id ID, ip net.IP) int {
 	if ip = ip.To16(); ip == nil {
 		return 0
 	}
+
 	return int(db.fetchInt64(nodeItemKey(id, ip, dbNodeFindFails)))
 }
 
@@ -408,6 +448,7 @@ func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 	if ip = ip.To16(); ip == nil {
 		return errInvalidIP
 	}
+
 	return db.storeInt64(nodeItemKey(id, ip, dbNodeFindFails), int64(fails))
 }
 
@@ -416,6 +457,7 @@ func (db *DB) FindFailsV5(id ID, ip net.IP) int {
 	if ip = ip.To16(); ip == nil {
 		return 0
 	}
+
 	return int(db.fetchInt64(v5Key(id, ip, dbNodeFindFails)))
 }
 
@@ -424,6 +466,7 @@ func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
 	if ip = ip.To16(); ip == nil {
 		return errInvalidIP
 	}
+
 	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
 }
 
@@ -434,6 +477,7 @@ func (db *DB) localSeq(id ID) uint64 {
 	if seq := db.fetchUint64(localItemKey(id, dbLocalSeq)); seq > 0 {
 		return seq
 	}
+
 	return nowMilliseconds()
 }
 
@@ -451,6 +495,7 @@ func (db *DB) QuerySeeds(n int, maxAge time.Duration) []*Node {
 		it    = db.lvl.NewIterator(nil, nil)
 		id    ID
 	)
+
 	defer it.Release()
 
 seek:
@@ -478,6 +523,7 @@ seek:
 		}
 		nodes = append(nodes, n)
 	}
+
 	return nodes
 }
 
@@ -489,12 +535,14 @@ func nextNode(it iterator.Iterator) *Node {
 		if string(rest) != dbDiscoverRoot {
 			continue
 		}
+
 		return mustDecodeNode(id[:], it.Value())
 	}
+
 	return nil
 }
 
-// close flushes and closes the database files.
+// Close flushes and closes the database files.
 func (db *DB) Close() {
 	close(db.quit)
 	db.lvl.Close()

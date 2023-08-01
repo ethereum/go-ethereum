@@ -25,8 +25,10 @@ var precomputed = [10][16]byte{
 	{10, 8, 7, 1, 2, 4, 6, 5, 15, 9, 3, 13, 11, 14, 12, 0},
 }
 
+// nolint:unused,deadcode
 func hashBlocksGeneric(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte) {
 	var m [16]uint64
+
 	c0, c1 := c[0], c[1]
 
 	for i := 0; i < len(blocks); {
@@ -34,12 +36,15 @@ func hashBlocksGeneric(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte) {
 		if c0 < BlockSize {
 			c1++
 		}
+
 		for j := range m {
 			m[j] = binary.LittleEndian.Uint64(blocks[i:])
 			i += 8
 		}
+
 		fGeneric(h, &m, c0, c1, flag, 12)
 	}
+
 	c[0], c[1] = c0, c1
 }
 
@@ -169,6 +174,7 @@ func fGeneric(h *[8]uint64, m *[16]uint64, c0, c1 uint64, flag uint64, rounds ui
 		v4 ^= v9
 		v4 = bits.RotateLeft64(v4, -63)
 	}
+
 	h[0] ^= v0 ^ v8
 	h[1] ^= v1 ^ v9
 	h[2] ^= v2 ^ v10

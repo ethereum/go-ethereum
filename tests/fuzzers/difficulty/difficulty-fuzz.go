@@ -30,7 +30,6 @@ import (
 type fuzzer struct {
 	input     io.Reader
 	exhausted bool
-	debugging bool
 }
 
 func (f *fuzzer) read(size int) []byte {
@@ -38,17 +37,21 @@ func (f *fuzzer) read(size int) []byte {
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
 func (f *fuzzer) readSlice(min, max int) []byte {
 	var a uint16
+
 	binary.Read(f.input, binary.LittleEndian, &a)
 	size := min + int(a)%(max-min)
+
 	out := make([]byte, size)
 	if _, err := f.input.Read(out); err != nil {
 		f.exhausted = true
 	}
+
 	return out
 }
 
@@ -56,29 +59,35 @@ func (f *fuzzer) readUint64(min, max uint64) uint64 {
 	if min == max {
 		return min
 	}
+
 	var a uint64
 	if err := binary.Read(f.input, binary.LittleEndian, &a); err != nil {
 		f.exhausted = true
 	}
+
 	a = min + a%(max-min)
+
 	return a
 }
 func (f *fuzzer) readBool() bool {
 	return f.read(1)[0]&0x1 == 0
 }
 
-// The function must return
-// 1 if the fuzzer should increase priority of the
-//    given input during subsequent fuzzing (for example, the input is lexically
-//    correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0  otherwise
+// Fuzz function must return
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
 // other values are reserved for future use.
 func Fuzz(data []byte) int {
 	f := fuzzer{
 		input:     bytes.NewReader(data),
 		exhausted: false,
 	}
+
 	return f.fuzz()
 }
 
@@ -98,6 +107,7 @@ func (f *fuzzer) fuzz() int {
 		if diff.Cmp(minDifficulty) < 0 {
 			diff.Set(minDifficulty)
 		}
+
 		header.Difficulty = diff
 	}
 	// Number can range between 0 and up to 32 bytes (but not so that the child exceeds it)
@@ -130,16 +140,18 @@ func (f *fuzzer) fuzz() int {
 		bigFn  calculator
 		u256Fn calculator
 	}{
-		{ethash.FrontierDifficultyCalulator, ethash.CalcDifficultyFrontierU256},
-		{ethash.HomesteadDifficultyCalulator, ethash.CalcDifficultyHomesteadU256},
+		{ethash.FrontierDifficultyCalculator, ethash.CalcDifficultyFrontierU256},
+		{ethash.HomesteadDifficultyCalculator, ethash.CalcDifficultyHomesteadU256},
 		{ethash.DynamicDifficultyCalculator(bombDelay), ethash.MakeDifficultyCalculatorU256(bombDelay)},
 	} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)
+
 		if want.Cmp(have) != 0 {
 			panic(fmt.Sprintf("pair %d: want %x have %x\nparent.Number: %x\np.Time: %x\nc.Time: %x\nBombdelay: %v\n", i, want, have,
 				header.Number, header.Time, time, bombDelay))
 		}
 	}
+
 	return 1
 }

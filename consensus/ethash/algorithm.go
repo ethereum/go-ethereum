@@ -55,6 +55,7 @@ func cacheSize(block uint64) uint64 {
 	if epoch < maxEpoch {
 		return cacheSizes[epoch]
 	}
+
 	return calcCacheSize(epoch)
 }
 
@@ -66,6 +67,7 @@ func calcCacheSize(epoch int) uint64 {
 	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * hashBytes
 	}
+
 	return size
 }
 
@@ -76,6 +78,7 @@ func datasetSize(block uint64) uint64 {
 	if epoch < maxEpoch {
 		return datasetSizes[epoch]
 	}
+
 	return calcDatasetSize(epoch)
 }
 
@@ -87,6 +90,7 @@ func calcDatasetSize(epoch int) uint64 {
 	for !new(big.Int).SetUint64(size / mixBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * mixBytes
 	}
+
 	return size
 }
 
@@ -104,11 +108,14 @@ func makeHasher(h hash.Hash) hasher {
 		hash.Hash
 		Read([]byte) (int, error)
 	}
+
 	rh, ok := h.(readerHash)
 	if !ok {
 		panic("can't find Read method on hash")
 	}
+
 	outputLen := rh.Size()
+
 	return func(dest []byte, data []byte) {
 		rh.Reset()
 		rh.Write(data)
@@ -123,10 +130,12 @@ func seedHash(block uint64) []byte {
 	if block < epochLength {
 		return seed
 	}
+
 	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
 	for i := 0; i < int(block/epochLength); i++ {
 		keccak256(seed, seed)
 	}
+
 	return seed
 }
 
@@ -148,6 +157,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 		if elapsed > 3*time.Second {
 			logFn = logger.Info
 		}
+
 		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
 	}()
 	// Convert our destination slice to a byte buffer
@@ -163,7 +173,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	rows := int(size) / hashBytes
 
 	// Start a monitoring goroutine to report progress on low end devices
-	var progress uint32
+	var progress atomic.Uint32
 
 	done := make(chan struct{})
 	defer close(done)
@@ -174,7 +184,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/(cacheRounds+1), "elapsed", common.PrettyDuration(time.Since(start)))
+				logger.Info("Generating ethash verification cache", "percentage", progress.Load()*100/uint32(rows)/(cacheRounds+1), "elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
 	}()
@@ -183,9 +193,10 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 
 	// Sequentially produce the initial dataset
 	keccak512(cache, seed)
+
 	for offset := uint64(hashBytes); offset < size; offset += hashBytes {
 		keccak512(cache[offset:], cache[offset-hashBytes:offset])
-		atomic.AddUint32(&progress, 1)
+		progress.Add(1)
 	}
 	// Use a low-round version of randmemohash
 	temp := make([]byte, hashBytes)
@@ -197,10 +208,11 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 				dstOff = j * hashBytes
 				xorOff = (binary.LittleEndian.Uint32(cache[dstOff:]) % uint32(rows)) * hashBytes
 			)
+
 			bitutil.XORBytes(temp, cache[srcOff:srcOff+hashBytes], cache[xorOff:xorOff+hashBytes])
 			keccak512(cache[dstOff:], temp)
 
-			atomic.AddUint32(&progress, 1)
+			progress.Add(1)
 		}
 	}
 	// Swap the byte order on big endian systems and return
@@ -241,6 +253,7 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 	mix := make([]byte, hashBytes)
 
 	binary.LittleEndian.PutUint32(mix, cache[(index%rows)*hashWords]^index)
+
 	for i := 1; i < hashWords; i++ {
 		binary.LittleEndian.PutUint32(mix[i*4:], cache[(index%rows)*hashWords+uint32(i)])
 	}
@@ -260,7 +273,9 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 	for i, val := range intMix {
 		binary.LittleEndian.PutUint32(mix[i*4:], val)
 	}
+
 	keccak512(mix, mix)
+
 	return mix
 }
 
@@ -278,6 +293,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 		if elapsed > 3*time.Second {
 			logFn = logger.Info
 		}
+
 		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
 	}()
 
@@ -297,9 +313,11 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	size := uint64(len(dataset))
 
 	var pend sync.WaitGroup
+
 	pend.Add(threads)
 
-	var progress uint64
+	var progress atomic.Uint64
+
 	for i := 0; i < threads; i++ {
 		go func(id int) {
 			defer pend.Done()
@@ -310,20 +328,23 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 			// Calculate the data segment this thread should generate
 			batch := (size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads))
 			first := uint64(id) * batch
+
 			limit := first + batch
 			if limit > size/hashBytes {
 				limit = size / hashBytes
 			}
 			// Calculate the dataset segment
 			percent := size / hashBytes / 100
+
 			for index := first; index < limit; index++ {
 				item := generateDatasetItem(cache, uint32(index), keccak512)
 				if swapped {
 					swap(item)
 				}
+
 				copy(dataset[index*hashBytes:], item)
 
-				if status := atomic.AddUint64(&progress, 1); status%percent == 0 {
+				if status := progress.Add(1); status%percent == 0 {
 					logger.Info("Generating DAG in progress", "percentage", (status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
 				}
 			}
@@ -339,7 +360,7 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(size / mixBytes)
 
-	// Combine header+nonce into a 64 byte seed
+	// Combine header+nonce into a 40 byte seed
 	seed := make([]byte, 40)
 	copy(seed, hash)
 	binary.LittleEndian.PutUint64(seed[32:], nonce)
@@ -366,12 +387,14 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 	for i := 0; i < len(mix); i += 4 {
 		mix[i/4] = fnv(fnv(fnv(mix[i], mix[i+1]), mix[i+2]), mix[i+3])
 	}
+
 	mix = mix[:len(mix)/4]
 
 	digest := make([]byte, common.HashLength)
 	for i, val := range mix {
 		binary.LittleEndian.PutUint32(digest[i*4:], val)
 	}
+
 	return digest, crypto.Keccak256(append(seed, digest...))
 }
 
@@ -388,8 +411,10 @@ func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]b
 		for i := 0; i < len(data); i++ {
 			data[i] = binary.LittleEndian.Uint32(rawData[i*4:])
 		}
+
 		return data
 	}
+
 	return hashimoto(hash, nonce, size, lookup)
 }
 
@@ -401,6 +426,7 @@ func hashimotoFull(dataset []uint32, hash []byte, nonce uint64) ([]byte, []byte)
 		offset := index * hashWords
 		return dataset[offset : offset+hashWords]
 	}
+
 	return hashimoto(hash, nonce, uint64(len(dataset))*4, lookup)
 }
 

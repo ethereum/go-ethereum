@@ -65,8 +65,10 @@ func (b *readBuffer) read(r io.Reader, n int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	b.end += rn
 	b.data = b.data[:offset+n]
+
 	return b.data[offset : offset+n], nil
 }
 
@@ -75,6 +77,7 @@ func (b *readBuffer) grow(n int) {
 	if cap(b.data)-b.end >= n {
 		return
 	}
+
 	need := n - (cap(b.data) - b.end)
 	offset := len(b.data)
 	b.data = append(b.data[:cap(b.data)], make([]byte, need)...)
@@ -94,6 +97,7 @@ func (b *writeBuffer) reset() {
 func (b *writeBuffer) appendZero(n int) []byte {
 	offset := len(b.data)
 	b.data = append(b.data, make([]byte, n)...)
+
 	return b.data[offset : offset+n]
 }
 
@@ -120,8 +124,10 @@ func growslice(b []byte, wantLength int) []byte {
 	if len(b) >= wantLength {
 		return b
 	}
+
 	if cap(b) >= wantLength {
 		return b[:cap(b)]
 	}
+
 	return make([]byte, wantLength)
 }

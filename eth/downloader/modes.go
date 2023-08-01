@@ -70,5 +70,6 @@ func (mode *SyncMode) UnmarshalText(text []byte) error {
 	default:
 		return fmt.Errorf(`unknown sync mode %q, want "full", "snap" or "light"`, text)
 	}
+
 	return nil
 }

@@ -66,12 +66,13 @@ func NewWithCap(size int) *Database {
 }
 
 // Close deallocates the internal map and ensures any consecutive data access op
-// failes with an error.
+// fails with an error.
 func (db *Database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	db.db = nil
+
 	return nil
 }
 
@@ -83,7 +84,9 @@ func (db *Database) Has(key []byte) (bool, error) {
 	if db.db == nil {
 		return false, errMemorydbClosed
 	}
+
 	_, ok := db.db[string(key)]
+
 	return ok, nil
 }
 
@@ -95,9 +98,11 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if db.db == nil {
 		return nil, errMemorydbClosed
 	}
+
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
+
 	return nil, errMemorydbNotFound
 }
 
@@ -109,7 +114,9 @@ func (db *Database) Put(key []byte, value []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
+
 	db.db[string(key)] = common.CopyBytes(value)
+
 	return nil
 }
 
@@ -121,7 +128,9 @@ func (db *Database) Delete(key []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
+
 	delete(db.db, string(key))
+
 	return nil
 }
 
@@ -159,16 +168,20 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		if !strings.HasPrefix(key, pr) {
 			continue
 		}
+
 		if key >= st {
 			keys = append(keys, key)
 		}
 	}
 	// Sort the items and retrieve the associated values
 	sort.Strings(keys)
+
 	for _, key := range keys {
 		values = append(values, db.db[key])
 	}
+
 	return &iterator{
+		index:  -1,
 		keys:   keys,
 		values: values,
 	}
@@ -223,6 +236,7 @@ type batch struct {
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
 	b.size += len(key) + len(value)
+
 	return nil
 }
 
@@ -230,6 +244,7 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
 	b.size += len(key)
+
 	return nil
 }
 
@@ -248,8 +263,10 @@ func (b *batch) Write() error {
 			delete(b.db.db, string(keyvalue.key))
 			continue
 		}
+
 		b.db.db[string(keyvalue.key)] = keyvalue.value
 	}
+
 	return nil
 }
 
@@ -266,12 +283,15 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			if err := w.Delete(keyvalue.key); err != nil {
 				return err
 			}
+
 			continue
 		}
+
 		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -279,7 +299,7 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 // value store. Internally it is a deep copy of the entire iterated state,
 // sorted by keys.
 type iterator struct {
-	inited bool
+	index  int
 	keys   []string
 	values [][]byte
 }
@@ -287,17 +307,14 @@ type iterator struct {
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
 func (it *iterator) Next() bool {
-	// If the iterator was not yet initialized, do it now
-	if !it.inited {
-		it.inited = true
-		return len(it.keys) > 0
+	// Short circuit if iterator is already exhausted in the forward direction.
+	if it.index >= len(it.keys) {
+		return false
 	}
-	// Iterator already initialize, advance it
-	if len(it.keys) > 0 {
-		it.keys = it.keys[1:]
-		it.values = it.values[1:]
-	}
-	return len(it.keys) > 0
+
+	it.index += 1
+
+	return it.index < len(it.keys)
 }
 
 // Error returns any accumulated error. Exhausting all the key/value pairs
@@ -310,26 +327,30 @@ func (it *iterator) Error() error {
 // should not modify the contents of the returned slice, and its contents may
 // change on the next call to Next.
 func (it *iterator) Key() []byte {
-	if len(it.keys) > 0 {
-		return []byte(it.keys[0])
+	// Short circuit if iterator is not in a valid position
+	if it.index < 0 || it.index >= len(it.keys) {
+		return nil
 	}
-	return nil
+
+	return []byte(it.keys[it.index])
 }
 
 // Value returns the value of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its contents
 // may change on the next call to Next.
 func (it *iterator) Value() []byte {
-	if len(it.values) > 0 {
-		return it.values[0]
+	// Short circuit if iterator is not in a valid position
+	if it.index < 0 || it.index >= len(it.keys) {
+		return nil
 	}
-	return nil
+
+	return it.values[it.index]
 }
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
 func (it *iterator) Release() {
-	it.keys, it.values = nil, nil
+	it.index, it.keys, it.values = -1, nil, nil
 }
 
 // snapshot wraps a batch of key-value entries deep copied from the in-memory
@@ -348,6 +369,7 @@ func newSnapshot(db *Database) *snapshot {
 	for key, val := range db.db {
 		copied[key] = common.CopyBytes(val)
 	}
+
 	return &snapshot{db: copied}
 }
 
@@ -360,7 +382,9 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 	if snap.db == nil {
 		return false, errSnapshotReleased
 	}
+
 	_, ok := snap.db[string(key)]
+
 	return ok, nil
 }
 
@@ -373,9 +397,11 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if snap.db == nil {
 		return nil, errSnapshotReleased
 	}
+
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
+
 	return nil, errMemorydbNotFound
 }
 

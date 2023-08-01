@@ -32,6 +32,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		ParentHash common.Hash                                 `json:"parentHash"`
 		BaseFee    *math.HexOrDecimal256                       `json:"baseFeePerGas"`
 	}
+
 	var enc Genesis
 	enc.Config = g.Config
 	enc.Nonce = math.HexOrDecimal64(g.Nonce)
@@ -41,16 +42,19 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.Difficulty = (*math.HexOrDecimal256)(g.Difficulty)
 	enc.Mixhash = g.Mixhash
 	enc.Coinbase = g.Coinbase
+
 	if g.Alloc != nil {
 		enc.Alloc = make(map[common.UnprefixedAddress]GenesisAccount, len(g.Alloc))
 		for k, v := range g.Alloc {
 			enc.Alloc[common.UnprefixedAddress(k)] = v
 		}
 	}
+
 	enc.Number = math.HexOrDecimal64(g.Number)
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHash = g.ParentHash
 	enc.BaseFee = (*math.HexOrDecimal256)(g.BaseFee)
+
 	return json.Marshal(&enc)
 }
 
@@ -71,54 +75,71 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		ParentHash *common.Hash                                `json:"parentHash"`
 		BaseFee    *math.HexOrDecimal256                       `json:"baseFeePerGas"`
 	}
+
 	var dec Genesis
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.Config != nil {
 		g.Config = dec.Config
 	}
+
 	if dec.Nonce != nil {
 		g.Nonce = uint64(*dec.Nonce)
 	}
+
 	if dec.Timestamp != nil {
 		g.Timestamp = uint64(*dec.Timestamp)
 	}
+
 	if dec.ExtraData != nil {
 		g.ExtraData = *dec.ExtraData
 	}
+
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for Genesis")
 	}
+
 	g.GasLimit = uint64(*dec.GasLimit)
+
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Genesis")
 	}
+
 	g.Difficulty = (*big.Int)(dec.Difficulty)
 	if dec.Mixhash != nil {
 		g.Mixhash = *dec.Mixhash
 	}
+
 	if dec.Coinbase != nil {
 		g.Coinbase = *dec.Coinbase
 	}
+
 	if dec.Alloc == nil {
 		return errors.New("missing required field 'alloc' for Genesis")
 	}
+
 	g.Alloc = make(GenesisAlloc, len(dec.Alloc))
 	for k, v := range dec.Alloc {
 		g.Alloc[common.Address(k)] = v
 	}
+
 	if dec.Number != nil {
 		g.Number = uint64(*dec.Number)
 	}
+
 	if dec.GasUsed != nil {
 		g.GasUsed = uint64(*dec.GasUsed)
 	}
+
 	if dec.ParentHash != nil {
 		g.ParentHash = *dec.ParentHash
 	}
+
 	if dec.BaseFee != nil {
 		g.BaseFee = (*big.Int)(dec.BaseFee)
 	}
+
 	return nil
 }

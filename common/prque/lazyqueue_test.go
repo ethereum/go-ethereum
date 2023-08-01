@@ -48,6 +48,7 @@ func testMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	i := a.(*lazyItem)
 	dt := until - i.last
 	i.maxp = i.p + int64(float64(dt)*testAvgRate)
+
 	return i.maxp
 }
 
@@ -56,7 +57,6 @@ func testSetIndex(a interface{}, i int) {
 }
 
 func TestLazyQueue(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	clock := &mclock.Simulated{}
 	q := NewLazyQueue(testSetIndex, testPriority, testMaxPriority, clock, testQueueRefresh)
 
@@ -70,6 +70,7 @@ func TestLazyQueue(t *testing.T) {
 		if items[i].p > maxPri {
 			maxPri = items[i].p
 		}
+
 		items[i].index = -1
 		q.Push(&items[i])
 	}
@@ -79,10 +80,13 @@ func TestLazyQueue(t *testing.T) {
 		wg     sync.WaitGroup
 		stopCh = make(chan chan struct{})
 	)
+
 	defer wg.Wait()
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for {
 			select {
 			case <-clock.After(testQueueRefresh):
@@ -97,15 +101,19 @@ func TestLazyQueue(t *testing.T) {
 
 	for c := 0; c < testSteps; c++ {
 		i := rand.Intn(testItems)
+
 		lock.Lock()
+
 		items[i].p += rand.Int63n(testPriorityStep*2-1) + 1
 		if items[i].p > maxPri {
 			maxPri = items[i].p
 		}
+
 		items[i].last = clock.Now()
 		if items[i].p > items[i].maxp {
 			q.Update(items[i].index)
 		}
+
 		if rand.Intn(100) == 0 {
 			p := q.PopItem().(*lazyItem)
 			if p.p != maxPri {
@@ -113,6 +121,7 @@ func TestLazyQueue(t *testing.T) {
 				close(stopCh)
 				t.Fatalf("incorrect item (best known priority %d, popped %d)", maxPri, p.p)
 			}
+
 			q.Push(p)
 		}
 		lock.Unlock()

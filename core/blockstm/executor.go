@@ -446,11 +446,14 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 			if len(pe.estimateDeps[tx]) > 0 {
 				estimate = pe.estimateDeps[tx][len(pe.estimateDeps[tx])-1]
 			}
+
 			addedDependencies = pe.execTasks.addDependencies(estimate, tx)
+
 			newEstimate := estimate + (estimate+tx)/2
 			if newEstimate >= tx {
 				newEstimate = tx - 1
 			}
+
 			pe.estimateDeps[tx] = append(pe.estimateDeps[tx], newEstimate)
 		}
 
@@ -459,6 +462,7 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 		if !addedDependencies {
 			pe.execTasks.pushPending(tx)
 		}
+
 		pe.txIncarnations[tx]++
 		pe.diagExecAbort[tx]++
 		pe.cntAbort++
@@ -495,6 +499,7 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 		pe.validateTasks.pushPending(tx)
 		pe.execTasks.markComplete(tx)
+
 		pe.diagExecSuccess[tx]++
 		pe.cntSuccess++
 
@@ -519,6 +524,7 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 			pe.validateTasks.markComplete(tx)
 		} else {
 			pe.cntValidationFail++
+
 			pe.diagExecAbort[tx]++
 			for _, v := range pe.lastTxIO.AllWriteSet(tx) {
 				pe.mvh.MarkEstimate(v.Path, tx)

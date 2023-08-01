@@ -54,6 +54,7 @@ func getShortHostname() string {
 			shortHostName = host
 		}
 	}
+
 	return shortHostName
 }
 
@@ -61,16 +62,21 @@ func openTSDB(c *OpenTSDBConfig) error {
 	shortHostname := getShortHostname()
 	now := time.Now().Unix()
 	du := float64(c.DurationUnit)
+
 	conn, err := net.DialTCP("tcp", nil, c.Addr)
 	if nil != err {
 		return err
 	}
+
 	defer conn.Close()
 	w := bufio.NewWriter(conn)
+
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
 		case Counter:
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
+		case CounterFloat64:
+			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
 		case Gauge:
 			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
 		case GaugeFloat64:
@@ -115,5 +121,6 @@ func openTSDB(c *OpenTSDBConfig) error {
 		}
 		w.Flush()
 	})
+
 	return nil
 }

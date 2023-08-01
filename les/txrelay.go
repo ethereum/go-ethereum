@@ -45,6 +45,7 @@ func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
 		stop:      make(chan struct{}),
 	}
 	ps.subscribe(r)
+
 	return r
 }
 
@@ -60,6 +61,7 @@ func (ltrx *lesTxRelay) registerPeer(p *serverPeer) {
 	if p.onlyAnnounce {
 		return
 	}
+
 	ltrx.peerList = append(ltrx.peerList, p)
 }
 
@@ -87,25 +89,31 @@ func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
 
 	for _, tx := range txs {
 		hash := tx.Hash()
+
 		_, ok := ltrx.txSent[hash]
 		if !ok {
 			ltrx.txSent[hash] = tx
 			ltrx.txPending[hash] = struct{}{}
 		}
+
 		if len(ltrx.peerList) > 0 {
 			cnt := count
 			pos := ltrx.peerStartPos
+
 			for {
 				peer := ltrx.peerList[pos]
 				sendTo[peer] = append(sendTo[peer], tx)
+
 				cnt--
 				if cnt == 0 {
 					break // sent it to the desired number of peers
 				}
+
 				pos++
 				if pos == len(ltrx.peerList) {
 					pos = 0
 				}
+
 				if pos == ltrx.peerStartPos {
 					break // tried all available peers
 				}
@@ -134,6 +142,7 @@ func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
 				return func() { peer.sendTxs(reqID, len(ll), enc) }
 			},
 		}
+
 		go ltrx.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, ltrx.stop)
 	}
 }
@@ -160,10 +169,12 @@ func (ltrx *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	if len(ltrx.txPending) > 0 {
 		txs := make(types.Transactions, len(ltrx.txPending))
 		i := 0
+
 		for hash := range ltrx.txPending {
 			txs[i] = ltrx.txSent[hash]
 			i++
 		}
+
 		ltrx.send(txs, 1)
 	}
 }

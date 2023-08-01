@@ -44,7 +44,7 @@ Three things can happen:
 3. Anything else; other return values [*], method not implemented or exception occurred during processing. This means
 that the operation will continue to manual processing, via the regular UI method chosen by the user.
 
-[*] Note: Future version of the ruleset may use more complex json-based returnvalues, making it possible to not
+[*] Note: Future version of the ruleset may use more complex json-based return values, making it possible to not
 only respond Approve/Reject/Manual, but also modify responses. For example, choose to list only one, but not all
 accounts in a list-request. The points above will continue to hold for non-json based responses ("Approve"/"Reject").
 
@@ -117,9 +117,11 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		return nil, fmt.Errorf("failed to load bootstrap js: %v", err)
 	}
+
 	return r, nil
 }
 
@@ -142,6 +144,7 @@ func TestListRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	resp, _ := r.ApproveListing(&core.ListRequest{
 		Accounts: accs,
 		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
@@ -152,7 +155,6 @@ func TestListRequest(t *testing.T) {
 }
 
 func TestSignTxRequest(t *testing.T) {
-
 	js := `
 	function ApproveTx(r){
 		console.log("transaction.from", r.transaction.from);
@@ -168,18 +170,22 @@ func TestSignTxRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	to, err := mixAddr("000000000000000000000000000000000000dead")
 	if err != nil {
 		t.Error(err)
 		return
 	}
+
 	from, err := mixAddr("0000000000000000000000000000000000001337")
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
+
 	t.Logf("to %v", to.Address().String())
+
 	resp, err := r.ApproveTx(&core.SignTxRequest{
 		Transaction: apitypes.SendTxArgs{
 			From: *from,
@@ -190,6 +196,7 @@ func TestSignTxRequest(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	if !resp.Approved {
 		t.Errorf("Expected check to resolve to 'Approve'")
 	}
@@ -243,19 +250,21 @@ func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
-//TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
+// TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
 func TestForwarding(t *testing.T) {
-
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
+
 	r, err := NewRuleEvaluator(ui, jsBackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		t.Fatalf("Failed to load bootstrap js: %v", err)
 	}
+
 	r.ApproveSignData(nil)
 	r.ApproveTx(nil)
 	r.ApproveNewAccount(nil)
@@ -268,11 +277,8 @@ func TestForwarding(t *testing.T) {
 
 	expCalls := 6
 	if len(ui.calls) != expCalls {
-
 		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
-
 	}
-
 }
 
 func TestMissingFunc(t *testing.T) {
@@ -292,14 +298,14 @@ func TestMissingFunc(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected missing method to yield error'")
 	}
+
 	if approved {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
-	t.Logf("Err %v", err)
 
+	t.Logf("Err %v", err)
 }
 func TestStorage(t *testing.T) {
-
 	js := `
 	function testStorage(){
 		storage.put("mykey", "myvalue")
@@ -327,6 +333,7 @@ func TestStorage(t *testing.T) {
 		return a
 	}
 `
+
 	r, err := initRuleEngine(js)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -338,17 +345,19 @@ func TestStorage(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	retval := v.ToString().String()
 
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
+
 	exp := `myvaluea,list[object Object]{"an":"object"}`
 	if retval != exp {
 		t.Errorf("Unexpected data, expected '%v', got '%v'", exp, retval)
 	}
-	t.Logf("Err %v", err)
 
+	t.Logf("Err %v", err)
 }
 
 const ExampleTxWindow = `
@@ -442,15 +451,16 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			Gas:      gas,
 		},
 		Callinfo: []apitypes.ValidationInfo{
-			{Typ: "Warning", Message: "All your base are bellong to us"},
+			{Typ: "Warning", Message: "All your base are belong to us"},
 		},
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	}
 }
 
 func dummyTxWithV(value uint64) *core.SignTxRequest {
-	v := big.NewInt(0).SetUint64(value)
+	v := new(big.Int).SetUint64(value)
 	h := hexutil.Big(*v)
+
 	return dummyTx(h)
 }
 
@@ -459,6 +469,7 @@ func dummySigned(value *big.Int) *types.Transaction {
 	gas := uint64(21000)
 	gasPrice := big.NewInt(2000000)
 	data := make([]byte, 0)
+
 	return types.NewTransaction(3, to, value, gas, gasPrice, data)
 }
 
@@ -469,15 +480,17 @@ func TestLimitWindow(t *testing.T) {
 		return
 	}
 	// 0.3 ether: 429D069189E0000 wei
-	v := big.NewInt(0).SetBytes(common.Hex2Bytes("0429D069189E0000"))
+	v := new(big.Int).SetBytes(common.Hex2Bytes("0429D069189E0000"))
 	h := hexutil.Big(*v)
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
 		unsigned := dummyTx(h)
+
 		resp, err := r.ApproveTx(unsigned)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
+
 		if !resp.Approved {
 			t.Errorf("Expected check to resolve to 'Approve'")
 		}
@@ -544,11 +557,10 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 }
 
-//TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
+// TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
 func TestContextIsCleared(t *testing.T) {
-
 	js := `
 	function ApproveTx(){
 		if (typeof foobar == 'undefined') {
@@ -564,23 +576,26 @@ func TestContextIsCleared(t *testing.T) {
 	}
 	`
 	ui := &dontCallMe{t}
+
 	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage())
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
+
 	if err = r.Init(js); err != nil {
 		t.Fatalf("Failed to load bootstrap js: %v", err)
 	}
+
 	tx := dummyTxWithV(0)
 	r1, _ := r.ApproveTx(tx)
 	r2, _ := r.ApproveTx(tx)
+
 	if r1.Approved != r2.Approved {
 		t.Errorf("Expected execution context to be cleared between executions")
 	}
 }
 
 func TestSignData(t *testing.T) {
-
 	js := `function ApproveListing(){
     return "Approve"
 }
@@ -594,11 +609,13 @@ function ApproveSignData(r){
     }
     // Otherwise goes to manual processing
 }`
+
 	r, err := initRuleEngine(js)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
+
 	message := "baz bazonk foo"
 	hash, rawdata := accounts.TextAndHash([]byte(message))
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
@@ -612,6 +629,7 @@ function ApproveSignData(r){
 			Value: message,
 		},
 	}
+
 	resp, err := r.ApproveSignData(&core.SignDataRequest{
 		Address:  *addr,
 		Messages: nvt,
@@ -622,6 +640,7 @@ function ApproveSignData(r){
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
+
 	if !resp.Approved {
 		t.Fatalf("Expected approved")
 	}

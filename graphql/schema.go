@@ -137,9 +137,16 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
-        #Envelope transaction support
+        # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
+        # Raw is the canonical encoding of the transaction.
+        # For legacy transactions, it returns the RLP encoding.
+        # For EIP-2718 typed transactions, it returns the type and payload.
+        raw: Bytes!
+        # RawReceipt is the canonical encoding of the receipt. For post EIP-2718 typed transactions
+        # this is equivalent to TxType || ReceiptEncoding.
+        rawReceipt: Bytes!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
@@ -235,6 +242,10 @@ const schema string = `
         # EstimateGas estimates the amount of gas that will be required for
         # successful execution of a transaction at the current block's state.
         estimateGas(data: CallData!): Long!
+        # RawHeader is the RLP encoding of the block's header.
+        rawHeader: Bytes!
+        # Raw is the RLP encoding of the block.
+        raw: Bytes!
     }
 
     # CallData represents the data associated with a local contract call.

@@ -26,7 +26,7 @@ for:
       - go run build/ci.go lint
       - go run build/ci.go install -dlgo
     test_script:
-      - go run build/ci.go test -dlgo -coverage
+      - go run build/ci.go test -dlgo
 
   # linux/386 is disabled.
   - matrix:
@@ -54,4 +54,4 @@ for:
       - go run build/ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
-      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -coverage
+      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC%

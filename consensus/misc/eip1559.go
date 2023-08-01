@@ -35,8 +35,9 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
 	if !config.IsLondon(parent.Number) {
-		parentGasLimit = parent.GasLimit * params.ElasticityMultiplier
+		parentGasLimit = parent.GasLimit * config.ElasticityMultiplier()
 	}
+
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}
@@ -48,8 +49,9 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	expectedBaseFee := CalcBaseFee(config, parent)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-			expectedBaseFee, header.BaseFee, parent.BaseFee, parent.GasUsed)
+			header.BaseFee, expectedBaseFee, parent.BaseFee, parent.GasUsed)
 	}
+
 	return nil
 }
 
@@ -60,42 +62,42 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
-	var (
-		parentGasTarget                = parent.GasLimit / params.ElasticityMultiplier
-		parentGasTargetBig             = new(big.Int).SetUint64(parentGasTarget)
-		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
-		baseFeeChangeDenominator       = new(big.Int).SetUint64(baseFeeChangeDenominatorUint64)
-	)
+	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)
 	}
+
+	var (
+		num                            = new(big.Int)
+		denom                          = new(big.Int)
+		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
+	)
+
 	if parent.GasUsed > parentGasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
-		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed - parentGasTarget)
-		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := math.BigMax(
-			x.Div(y, baseFeeChangeDenominator),
-			common.Big1,
-		)
+		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		num.SetUint64(parent.GasUsed - parentGasTarget)
+		num.Mul(num, parent.BaseFee)
+		num.Div(num, denom.SetUint64(parentGasTarget))
+		num.Div(num, denom.SetUint64(baseFeeChangeDenominatorUint64))
+		baseFeeDelta := math.BigMax(num, common.Big1)
 
-		return x.Add(parent.BaseFee, baseFeeDelta)
+		return num.Add(parent.BaseFee, baseFeeDelta)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		gasUsedDelta := new(big.Int).SetUint64(parentGasTarget - parent.GasUsed)
-		x := new(big.Int).Mul(parent.BaseFee, gasUsedDelta)
-		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
+		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		num.SetUint64(parentGasTarget - parent.GasUsed)
+		num.Mul(num, parent.BaseFee)
+		num.Div(num, denom.SetUint64(parentGasTarget))
+		num.Div(num, denom.SetUint64(baseFeeChangeDenominatorUint64))
+		baseFee := num.Sub(parent.BaseFee, num)
 
-		return math.BigMax(
-			x.Sub(parent.BaseFee, baseFeeDelta),
-			common.Big0,
-		)
+		return math.BigMax(baseFee, common.Big0)
 	}
 }
 
-// CalcBaseFee calculates the basefee of the header.
+// CalcBaseFeeUint calculates the base fee of the header.
 func CalcBaseFeeUint(config *params.ChainConfig, parent *types.Header) *uint256.Int {
 	var (
 		initialBaseFeeUint             = uint256.NewInt(params.InitialBaseFee)

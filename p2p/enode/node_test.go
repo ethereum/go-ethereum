@@ -38,6 +38,7 @@ func TestPythonInterop(t *testing.T) {
 	if err := rlp.DecodeBytes(pyRecord, &r); err != nil {
 		t.Fatalf("can't decode: %v", err)
 	}
+
 	n, err := New(ValidSchemes, &r)
 	if err != nil {
 		t.Fatalf("can't verify record: %v", err)
@@ -49,12 +50,15 @@ func TestPythonInterop(t *testing.T) {
 		wantIP  = enr.IPv4{127, 0, 0, 1}
 		wantUDP = enr.UDP(30303)
 	)
+
 	if n.Seq() != wantSeq {
 		t.Errorf("wrong seq: got %d, want %d", n.Seq(), wantSeq)
 	}
+
 	if n.ID() != wantID {
 		t.Errorf("wrong id: got %x, want %x", n.ID(), wantID)
 	}
+
 	want := map[enr.Entry]interface{}{new(enr.IPv4): &wantIP, new(enr.UDP): &wantUDP}
 	for k, v := range want {
 		desc := fmt.Sprintf("loading key %q", k.ENRKey())
@@ -72,6 +76,7 @@ func TestHexID(t *testing.T) {
 	if id1 != ref {
 		t.Errorf("wrong id1\ngot  %v\nwant %v", id1[:], ref[:])
 	}
+
 	if id2 != ref {
 		t.Errorf("wrong id2\ngot  %v\nwant %v", id2[:], ref[:])
 	}
@@ -90,6 +95,7 @@ func TestID_textEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(text, []byte(hex)) {
 		t.Fatalf("text encoding did not match\nexpected: %s\ngot:      %s", hex, text)
 	}
@@ -98,6 +104,7 @@ func TestID_textEncoding(t *testing.T) {
 	if err := id.UnmarshalText(text); err != nil {
 		t.Fatal(err)
 	}
+
 	if *id != ref {
 		t.Fatalf("text decoding did not match\nexpected: %s\ngot:      %s", ref, id)
 	}
@@ -108,6 +115,7 @@ func TestID_distcmp(t *testing.T) {
 		tbig := new(big.Int).SetBytes(target[:])
 		abig := new(big.Int).SetBytes(a[:])
 		bbig := new(big.Int).SetBytes(b[:])
+
 		return new(big.Int).Xor(tbig, abig).Cmp(new(big.Int).Xor(tbig, bbig))
 	}
 	if err := quick.CheckEqual(DistCmp, distcmpBig, nil); err != nil {
@@ -120,6 +128,7 @@ func TestID_distcmp(t *testing.T) {
 func TestID_distcmpEqual(t *testing.T) {
 	base := ID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	x := ID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+
 	if DistCmp(base, x, x) != 0 {
 		t.Errorf("DistCmp(base, x, x) != 0")
 	}

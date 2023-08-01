@@ -30,10 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
-var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
-)
-
 // consoleOutput is an override for the console.log and console.error methods to
 // stream the output into the configured output stream instead of stdout.
 func consoleOutput(call goja.FunctionCall) goja.Value {
@@ -41,7 +37,9 @@ func consoleOutput(call goja.FunctionCall) goja.Value {
 	for _, argument := range call.Arguments {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}
+
 	fmt.Fprintln(os.Stderr, strings.Join(output, " "))
+
 	return goja.Undefined()
 }
 
@@ -63,6 +61,7 @@ func NewRuleEvaluator(next core.UIClientAPI, jsbackend storage.Storage) (*rulese
 	return c, nil
 }
 func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
+	r.next.RegisterUIServer(api)
 	// TODO, make it possible to query from js
 }
 
@@ -71,7 +70,6 @@ func (r *rulesetUI) Init(javascriptRules string) error {
 	return nil
 }
 func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error) {
-
 	// Instantiate a fresh vm engine every time
 	vm := goja.New()
 
@@ -89,21 +87,24 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error
 		} else {
 			r.storage.Put(key, val)
 		}
+
 		return goja.Null()
 	})
 	storageObj.Set("get", func(call goja.FunctionCall) goja.Value {
 		goval, _ := r.storage.Get(call.Argument(0).String())
 		jsval := vm.ToValue(goval)
+
 		return jsval
 	})
 	vm.Set("storage", storageObj)
 
 	// Load bootstrap libraries
-	script, err := goja.Compile("bignumber.js", string(BigNumber_JS), true)
+	script, err := goja.Compile("bignumber.js", deps.BigNumberJS, true)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
 		return goja.Undefined(), err
 	}
+
 	vm.RunProgram(script)
 
 	// Run the actual rule implementation
@@ -130,6 +131,7 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error
 	} else {
 		call = fmt.Sprintf("%v()", jsfunc)
 	}
+
 	return vm.RunString(call)
 }
 
@@ -137,11 +139,13 @@ func (r *rulesetUI) checkApproval(jsfunc string, jsarg []byte, err error) (bool,
 	if err != nil {
 		return false, err
 	}
+
 	v, err := r.execute(jsfunc, string(jsarg))
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)
 		return false, err
 	}
+
 	result := v.ToString().String()
 	if result == "Approve" {
 		log.Info("Op approved")
@@ -150,12 +154,14 @@ func (r *rulesetUI) checkApproval(jsfunc string, jsarg []byte, err error) (bool,
 		log.Info("Op rejected")
 		return false, nil
 	}
+
 	return false, fmt.Errorf("unknown response")
 }
 
 func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveTx", jsonreq, err)
+
 	if err != nil {
 		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveTx(request)
@@ -167,19 +173,23 @@ func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 				Approved:    true},
 			nil
 	}
+
 	return core.SignTxResponse{Approved: false}, err
 }
 
 func (r *rulesetUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveSignData", jsonreq, err)
+
 	if err != nil {
 		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveSignData(request)
 	}
+
 	if approved {
 		return core.SignDataResponse{Approved: true}, nil
 	}
+
 	return core.SignDataResponse{Approved: false}, err
 }
 
@@ -191,13 +201,16 @@ func (r *rulesetUI) OnInputRequired(info core.UserInputRequest) (core.UserInputR
 func (r *rulesetUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
+
 	if err != nil {
 		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveListing(request)
 	}
+
 	if approved {
 		return core.ListResponse{Accounts: request.Accounts}, nil
 	}
+
 	return core.ListResponse{}, err
 }
 
@@ -223,7 +236,9 @@ func (r *rulesetUI) OnSignerStartup(info core.StartupInfo) {
 		log.Warn("failed marshalling data", "data", info)
 		return
 	}
+
 	r.next.OnSignerStartup(info)
+
 	_, err = r.execute("OnSignerStartup", string(jsonInfo))
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)
@@ -236,6 +251,7 @@ func (r *rulesetUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 		log.Warn("failed marshalling transaction", "tx", tx)
 		return
 	}
+
 	_, err = r.execute("OnApprovedTx", string(jsonTx))
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)

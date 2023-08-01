@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type stateTest struct {
@@ -35,19 +36,22 @@ type stateTest struct {
 func newStateTest() *stateTest {
 	db := rawdb.NewMemoryDatabase()
 	sdb, _ := New(common.Hash{}, NewDatabase(db), nil)
+
 	return &stateTest{db: db, state: sdb}
 }
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil)
+	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil)
 	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
+
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -85,6 +89,7 @@ func TestDump(t *testing.T) {
         }
     }
 }`
+
 	if got != want {
 		t.Errorf("DumpToCollector mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
@@ -103,6 +108,7 @@ func TestNull(t *testing.T) {
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty current value, got %x", value)
 	}
+
 	if value := s.state.GetCommittedState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty committed value, got %x", value)
 	}
@@ -110,7 +116,9 @@ func TestNull(t *testing.T) {
 
 func TestSnapshot(t *testing.T) {
 	stateobjaddr := common.BytesToAddress([]byte("aa"))
+
 	var storageaddr common.Hash
+
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
 	s := newStateTest()
@@ -129,15 +137,18 @@ func TestSnapshot(t *testing.T) {
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
 		t.Errorf("wrong storage value %v, want %v", v, data1)
 	}
+
 	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
 	}
 
 	// revert up to the genesis state and ensure correct content
 	s.state.RevertToSnapshot(genesis)
+
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong storage value %v, want %v", v, common.Hash{})
 	}
+
 	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
 	}
@@ -153,6 +164,7 @@ func TestSnapshot2(t *testing.T) {
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
+
 	var storageaddr common.Hash
 
 	data0 := common.BytesToHash([]byte{17})
@@ -208,18 +220,23 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
+
 	if so0.Balance().Cmp(so1.Balance()) != 0 {
 		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
 	}
+
 	if so0.Nonce() != so1.Nonce() {
 		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
 	}
+
 	if so0.data.Root != so1.data.Root {
 		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
 	}
+
 	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
 		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
 	}
+
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
@@ -227,24 +244,29 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if len(so1.dirtyStorage) != len(so0.dirtyStorage) {
 		t.Errorf("Dirty storage size mismatch: have %d, want %d", len(so1.dirtyStorage), len(so0.dirtyStorage))
 	}
+
 	for k, v := range so1.dirtyStorage {
 		if so0.dirtyStorage[k] != v {
 			t.Errorf("Dirty storage key %x mismatch: have %v, want %v", k, so0.dirtyStorage[k], v)
 		}
 	}
+
 	for k, v := range so0.dirtyStorage {
 		if so1.dirtyStorage[k] != v {
 			t.Errorf("Dirty storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
+
 	if len(so1.originStorage) != len(so0.originStorage) {
 		t.Errorf("Origin storage size mismatch: have %d, want %d", len(so1.originStorage), len(so0.originStorage))
 	}
+
 	for k, v := range so1.originStorage {
 		if so0.originStorage[k] != v {
 			t.Errorf("Origin storage key %x mismatch: have %v, want %v", k, so0.originStorage[k], v)
 		}
 	}
+
 	for k, v := range so0.originStorage {
 		if so1.originStorage[k] != v {
 			t.Errorf("Origin storage key %x mismatch: have %v, want none.", k, v)

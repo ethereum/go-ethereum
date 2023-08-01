@@ -67,11 +67,14 @@ func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSes
 	if err != nil {
 		return nil, err
 	}
+
 	cardPublic, err := crypto.UnmarshalPubkey(keyData)
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshal public key from card: %v", err)
 	}
+
 	secret, _ := key.Curve.ScalarMult(cardPublic.X, cardPublic.Y, key.D.Bytes())
+
 	return &SecureChannelSession{
 		card:      card,
 		secret:    secret.Bytes(),
@@ -108,6 +111,7 @@ func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
 	md.Reset()
 	md.Write(secretHash[:])
 	md.Write(cardChallenge)
+
 	response, err = s.pair(pairP1LastStep, md.Sum(nil))
 	if err != nil {
 		return err
@@ -132,9 +136,11 @@ func (s *SecureChannelSession) Unpair() error {
 	if err != nil {
 		return err
 	}
+
 	s.PairingKey = nil
 	// Close channel
 	s.iv = nil
+
 	return nil
 }
 
@@ -177,8 +183,9 @@ func (s *SecureChannelSession) mutuallyAuthenticate() error {
 	if err != nil {
 		return err
 	}
+
 	if response.Sw1 != 0x90 || response.Sw2 != 0x00 {
-		return fmt.Errorf("got unexpected response from MUTUALLY_AUTHENTICATE: 0x%x%x", response.Sw1, response.Sw2)
+		return fmt.Errorf("got unexpected response from MUTUALLY_AUTHENTICATE: %#x%x", response.Sw1, response.Sw2)
 	}
 
 	if len(response.Data) != scSecretLength {
@@ -222,6 +229,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	if err != nil {
 		return nil, err
 	}
+
 	meta := [16]byte{cla, ins, p1, p2, byte(len(data) + scBlockSize)}
 	if err = s.updateIV(meta[:], data); err != nil {
 		return nil, err
@@ -245,6 +253,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	rmeta := [16]byte{byte(len(response.Data))}
 	rmac := response.Data[:len(s.iv)]
 	rdata := response.Data[len(s.iv):]
+
 	plainData, err := s.decryptAPDU(rdata)
 	if err != nil {
 		return nil, err
@@ -253,6 +262,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	if err = s.updateIV(rmeta[:], rdata); err != nil {
 		return nil, err
 	}
+
 	if !bytes.Equal(s.iv, rmac) {
 		return nil, fmt.Errorf("invalid MAC in response")
 	}
@@ -261,7 +271,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	rapdu.deserialize(plainData)
 
 	if rapdu.Sw1 != sw1Ok {
-		return nil, fmt.Errorf("unexpected response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
+		return nil, fmt.Errorf("unexpected response status Cla=%#x, Ins=%#x, Sw=%#x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
 	}
 
 	return rapdu, nil
@@ -272,6 +282,7 @@ func (s *SecureChannelSession) encryptAPDU(data []byte) ([]byte, error) {
 	if len(data) > maxPayloadSize {
 		return nil, fmt.Errorf("payload of %d bytes exceeds maximum of %d", len(data), maxPayloadSize)
 	}
+
 	data = pad(data, 0x80)
 
 	ret := make([]byte, len(data))
@@ -280,8 +291,10 @@ func (s *SecureChannelSession) encryptAPDU(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	crypter := cipher.NewCBCEncrypter(a, s.iv)
 	crypter.CryptBlocks(ret, data)
+
 	return ret, nil
 }
 
@@ -290,6 +303,7 @@ func pad(data []byte, terminator byte) []byte {
 	padded := make([]byte, (len(data)/16+1)*16)
 	copy(padded, data)
 	padded[len(data)] = terminator
+
 	return padded
 }
 
@@ -304,6 +318,7 @@ func (s *SecureChannelSession) decryptAPDU(data []byte) ([]byte, error) {
 
 	crypter := cipher.NewCBCDecrypter(a, s.iv)
 	crypter.CryptBlocks(ret, data)
+
 	return unpad(ret, 0x80)
 }
 
@@ -319,6 +334,7 @@ func unpad(data []byte, terminator byte) ([]byte, error) {
 			return nil, fmt.Errorf("expected end of padding, got %d", data[len(data)-i])
 		}
 	}
+
 	return nil, fmt.Errorf("expected end of padding, got 0")
 }
 
@@ -326,14 +342,17 @@ func unpad(data []byte, terminator byte) ([]byte, error) {
 // each message exchanged.
 func (s *SecureChannelSession) updateIV(meta, data []byte) error {
 	data = pad(data, 0)
+
 	a, err := aes.NewCipher(s.sessionMacKey)
 	if err != nil {
 		return err
 	}
+
 	crypter := cipher.NewCBCEncrypter(a, make([]byte, 16))
 	crypter.CryptBlocks(meta, meta)
 	crypter.CryptBlocks(data, data)
 	// The first 16 bytes of the last block is the MAC
 	s.iv = data[len(data)-32 : len(data)-16]
+
 	return nil
 }

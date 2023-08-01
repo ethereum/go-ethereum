@@ -1,3 +1,19 @@
+// Copyright 2021 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -17,17 +33,21 @@ func TestRoundtrip(t *testing.T) {
 		"0xc780c0c1c0825208",
 	} {
 		var out strings.Builder
+
 		err := rlpToText(bytes.NewReader(common.FromHex(want)), &out)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		text := out.String()
+
 		rlpBytes, err := textToRlp(strings.NewReader(text))
 		if err != nil {
 			t.Errorf("test %d: error %v", i, err)
 			continue
 		}
-		have := fmt.Sprintf("0x%x", rlpBytes)
+
+		have := fmt.Sprintf("%#x", rlpBytes)
 		if have != want {
 			t.Errorf("test %d: have\n%v\nwant:\n%v\n", i, have, want)
 		}
@@ -39,6 +59,7 @@ func TestTextToRlp(t *testing.T) {
 		text string
 		want string
 	}
+
 	cases := []tc{
 		{
 			text: `[
@@ -58,6 +79,7 @@ func TestTextToRlp(t *testing.T) {
 			t.Errorf("test %d: error %v", i, err)
 			continue
 		}
+
 		if hexutil.Encode(have) != tc.want {
 			t.Errorf("test %d:\nhave %v\nwant %v", i, hexutil.Encode(have), tc.want)
 		}

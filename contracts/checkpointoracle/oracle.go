@@ -17,7 +17,8 @@
 // Package checkpointoracle is a an on-chain light client checkpoint oracle.
 package checkpointoracle
 
-//go:generate abigen --sol contract/oracle.sol --pkg contract --out contract/oracle.go
+//go:generate solc contract/oracle.sol --combined-json bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc,metadata,hashes --optimize -o ./ --overwrite
+//go:generate go run ../../cmd/abigen --pkg contract --out contract/oracle.go --combined-json ./combined.json
 
 import (
 	"errors"
@@ -41,6 +42,7 @@ func NewCheckpointOracle(contractAddr common.Address, backend bind.ContractBacke
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracle{address: contractAddr, contract: c}, nil
 }
 
@@ -65,11 +67,13 @@ func (oracle *CheckpointOracle) LookupCheckpointEvents(blockLogs [][]*types.Log,
 			if err != nil {
 				continue
 			}
+
 			if event.Index == section && event.CheckpointHash == hash {
 				votes = append(votes, event)
 			}
 		}
 	}
+
 	return votes
 }
 
@@ -84,13 +88,16 @@ func (oracle *CheckpointOracle) RegisterCheckpoint(opts *bind.TransactOpts, inde
 		s [][32]byte
 		v []uint8
 	)
+
 	for i := 0; i < len(sigs); i++ {
 		if len(sigs[i]) != 65 {
 			return nil, errors.New("invalid signature")
 		}
+
 		r = append(r, common.BytesToHash(sigs[i][:32]))
 		s = append(s, common.BytesToHash(sigs[i][32:64]))
 		v = append(v, sigs[i][64])
 	}
+
 	return oracle.contract.SetCheckpoint(opts, rnum, rhash, common.BytesToHash(hash), index, v, r, s)
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -83,9 +83,11 @@ func newHashMAC(cipher cipher.Block, h hash.Hash) hashMAC {
 	if cipher.BlockSize() != len(m.aesBuffer) {
 		panic(fmt.Errorf("invalid MAC cipher block size %d", cipher.BlockSize()))
 	}
+
 	if h.Size() != len(m.hashBuffer) {
 		panic(fmt.Errorf("invalid MAC digest size %d", h.Size()))
 	}
+
 	return m
 }
 
@@ -137,25 +139,31 @@ func (c *Conn) Read() (code uint64, data []byte, wireSize int, err error) {
 	if err != nil {
 		return 0, nil, 0, err
 	}
+
 	code, data, err = rlp.SplitUint64(frame)
 	if err != nil {
 		return 0, nil, 0, fmt.Errorf("invalid message code: %v", err)
 	}
+
 	wireSize = len(data)
 
 	// If snappy is enabled, verify and decompress message.
 	if c.snappyReadBuffer != nil {
 		var actualSize int
+
 		actualSize, err = snappy.DecodedLen(data)
 		if err != nil {
 			return code, nil, 0, err
 		}
+
 		if actualSize > maxUint24 {
 			return code, nil, 0, errPlainMessageTooLarge
 		}
+
 		c.snappyReadBuffer = growslice(c.snappyReadBuffer, actualSize)
 		data, err = snappy.Decode(c.snappyReadBuffer, data)
 	}
+
 	return code, data, wireSize, err
 }
 
@@ -194,6 +202,7 @@ func (h *sessionState) readFrame(conn io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	wantFrameMAC := h.ingressMAC.computeFrame(frame)
 	if !hmac.Equal(wantFrameMAC, frameMAC) {
 		return nil, errors.New("bad frame MAC")
@@ -201,6 +210,7 @@ func (h *sessionState) readFrame(conn io.Reader) ([]byte, error) {
 
 	// Decrypt the frame data.
 	h.dec.XORKeyStream(frame, frame)
+
 	return frame[:fsize], nil
 }
 
@@ -212,9 +222,11 @@ func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 	if c.session == nil {
 		panic("can't WriteMsg before handshake")
 	}
+
 	if len(data) > maxUint24 {
 		return 0, errPlainMessageTooLarge
 	}
+
 	if c.snappyWriteBuffer != nil {
 		// Ensure the buffer has sufficient size.
 		// Package snappy will allocate its own buffer if the provided
@@ -225,6 +237,7 @@ func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 
 	wireSize := uint32(len(data))
 	err := c.session.writeFrame(c.conn, code, data)
+
 	return wireSize, err
 }
 
@@ -236,6 +249,7 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 	if fsize > maxUint24 {
 		return errPlainMessageTooLarge
 	}
+
 	header := h.wbuf.appendZero(16)
 	putUint24(uint32(fsize), header)
 	copy(header[3:], zeroHeader)
@@ -248,9 +262,11 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 	offset := len(h.wbuf.data)
 	h.wbuf.data = rlp.AppendUint64(h.wbuf.data, code)
 	h.wbuf.Write(data)
+
 	if padding := fsize % 16; padding > 0 {
 		h.wbuf.appendZero(16 - padding)
 	}
+
 	framedata := h.wbuf.data[offset:]
 	h.enc.XORKeyStream(framedata, framedata)
 
@@ -258,6 +274,7 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 	h.wbuf.Write(h.egressMAC.computeFrame(framedata))
 
 	_, err := conn.Write(h.wbuf.data)
+
 	return err
 }
 
@@ -271,6 +288,7 @@ func (m *hashMAC) computeHeader(header []byte) []byte {
 func (m *hashMAC) computeFrame(framedata []byte) []byte {
 	m.hash.Write(framedata)
 	seed := m.hash.Sum(m.seedBuffer[:0])
+
 	return m.compute(seed, seed[:16])
 }
 
@@ -287,11 +305,14 @@ func (m *hashMAC) compute(sum1, seed []byte) []byte {
 	}
 
 	m.cipher.Encrypt(m.aesBuffer[:], sum1)
+
 	for i := range m.aesBuffer {
 		m.aesBuffer[i] ^= seed[i]
 	}
+
 	m.hash.Write(m.aesBuffer[:])
 	sum2 := m.hash.Sum(m.hashBuffer[:0])
+
 	return sum2[:16]
 }
 
@@ -303,17 +324,21 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 		err error
 		h   handshakeState
 	)
+
 	if c.dialDest != nil {
 		sec, err = h.runInitiator(c.conn, prv, c.dialDest)
 	} else {
 		sec, err = h.runRecipient(c.conn, prv)
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	c.InitWithSecrets(sec)
 	c.session.rbuf = h.rbuf
 	c.session.wbuf = h.wbuf
+
 	return sec.remote, err
 }
 
@@ -323,10 +348,12 @@ func (c *Conn) InitWithSecrets(sec Secrets) {
 	if c.session != nil {
 		panic("can't handshake twice")
 	}
+
 	macc, err := aes.NewCipher(sec.MAC)
 	if err != nil {
 		panic("invalid MAC secret: " + err.Error())
 	}
+
 	encc, err := aes.NewCipher(sec.AES)
 	if err != nil {
 		panic("invalid AES secret: " + err.Error())
@@ -413,10 +440,12 @@ type authRespV4 struct {
 // prv is the local client's private key.
 func (h *handshakeState) runRecipient(conn io.ReadWriter, prv *ecdsa.PrivateKey) (s Secrets, err error) {
 	authMsg := new(authMsgV4)
+
 	authPacket, err := h.readMsg(authMsg, prv, conn)
 	if err != nil {
 		return s, err
 	}
+
 	if err := h.handleAuthMsg(authMsg, prv); err != nil {
 		return s, err
 	}
@@ -425,10 +454,12 @@ func (h *handshakeState) runRecipient(conn io.ReadWriter, prv *ecdsa.PrivateKey)
 	if err != nil {
 		return s, err
 	}
+
 	authRespPacket, err := h.sealEIP8(authRespMsg)
 	if err != nil {
 		return s, err
 	}
+
 	if _, err = conn.Write(authRespPacket); err != nil {
 		return s, err
 	}
@@ -442,6 +473,7 @@ func (h *handshakeState) handleAuthMsg(msg *authMsgV4, prv *ecdsa.PrivateKey) er
 	if err != nil {
 		return err
 	}
+
 	h.initNonce = msg.Nonce[:]
 	h.remote = rpub
 
@@ -459,12 +491,16 @@ func (h *handshakeState) handleAuthMsg(msg *authMsgV4, prv *ecdsa.PrivateKey) er
 	if err != nil {
 		return err
 	}
+
 	signedMsg := xor(token, h.initNonce)
+
 	remoteRandomPub, err := crypto.Ecrecover(signedMsg, msg.Signature[:])
 	if err != nil {
 		return err
 	}
+
 	h.remoteRandomPub, _ = importPublicKey(remoteRandomPub)
+
 	return nil
 }
 
@@ -489,9 +525,11 @@ func (h *handshakeState) secrets(auth, authResp []byte) (Secrets, error) {
 	mac1 := sha3.NewLegacyKeccak256()
 	mac1.Write(xor(s.MAC, h.respNonce))
 	mac1.Write(auth)
+
 	mac2 := sha3.NewLegacyKeccak256()
 	mac2.Write(xor(s.MAC, h.initNonce))
 	mac2.Write(authResp)
+
 	if h.initiator {
 		s.EgressMAC, s.IngressMAC = mac1, mac2
 	} else {
@@ -519,6 +557,7 @@ func (h *handshakeState) runInitiator(conn io.ReadWriter, prv *ecdsa.PrivateKey,
 	if err != nil {
 		return s, err
 	}
+
 	authPacket, err := h.sealEIP8(authMsg)
 	if err != nil {
 		return s, err
@@ -529,10 +568,12 @@ func (h *handshakeState) runInitiator(conn io.ReadWriter, prv *ecdsa.PrivateKey,
 	}
 
 	authRespMsg := new(authRespV4)
+
 	authRespPacket, err := h.readMsg(authRespMsg, prv, conn)
 	if err != nil {
 		return s, err
 	}
+
 	if err := h.handleAuthResp(authRespMsg); err != nil {
 		return s, err
 	}
@@ -544,6 +585,7 @@ func (h *handshakeState) runInitiator(conn io.ReadWriter, prv *ecdsa.PrivateKey,
 func (h *handshakeState) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) {
 	// Generate random initiator nonce.
 	h.initNonce = make([]byte, shaLen)
+
 	_, err := rand.Read(h.initNonce)
 	if err != nil {
 		return nil, err
@@ -559,7 +601,9 @@ func (h *handshakeState) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	signed := xor(token, h.initNonce)
+
 	signature, err := crypto.Sign(signed, h.randomPrivKey.ExportECDSA())
 	if err != nil {
 		return nil, err
@@ -570,12 +614,14 @@ func (h *handshakeState) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) 
 	copy(msg.InitiatorPubkey[:], crypto.FromECDSAPub(&prv.PublicKey)[1:])
 	copy(msg.Nonce[:], h.initNonce)
 	msg.Version = 4
+
 	return msg, nil
 }
 
 func (h *handshakeState) handleAuthResp(msg *authRespV4) (err error) {
 	h.respNonce = msg.Nonce[:]
 	h.remoteRandomPub, err = importPublicKey(msg.RandomPubkey[:])
+
 	return err
 }
 
@@ -590,6 +636,7 @@ func (h *handshakeState) makeAuthResp() (msg *authRespV4, err error) {
 	copy(msg.Nonce[:], h.respNonce)
 	copy(msg.RandomPubkey[:], exportPubkey(&h.randomPrivKey.PublicKey))
 	msg.Version = 4
+
 	return msg, nil
 }
 
@@ -603,6 +650,7 @@ func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Re
 	if err != nil {
 		return nil, err
 	}
+
 	size := binary.BigEndian.Uint16(prefix)
 
 	// Read the handshake packet.
@@ -610,6 +658,7 @@ func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Re
 	if err != nil {
 		return nil, err
 	}
+
 	dec, err := ecies.ImportECDSA(prv).Decrypt(packet, nil, prefix)
 	if err != nil {
 		return nil, err
@@ -618,6 +667,7 @@ func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Re
 	// trailing data (forward-compatibility).
 	s := rlp.NewStream(bytes.NewReader(dec), 0)
 	err = s.Decode(msg)
+
 	return h.rbuf.data[:len(prefix)+len(packet)], err
 }
 
@@ -637,12 +687,14 @@ func (h *handshakeState) sealEIP8(msg interface{}) ([]byte, error) {
 	binary.BigEndian.PutUint16(prefix, uint16(len(h.wbuf.data)+eciesOverhead))
 
 	enc, err := ecies.Encrypt(rand.Reader, h.remote, h.wbuf.data, nil, prefix)
+
 	return append(prefix, enc...), err
 }
 
 // importPublicKey unmarshals 512 bit public keys.
 func importPublicKey(pubKey []byte) (*ecies.PublicKey, error) {
 	var pubKey65 []byte
+
 	switch len(pubKey) {
 	case 64:
 		// add 'uncompressed key' flag
@@ -657,6 +709,7 @@ func importPublicKey(pubKey []byte) (*ecies.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return ecies.ImportECDSAPublic(pub), nil
 }
 
@@ -664,6 +717,7 @@ func exportPubkey(pub *ecies.PublicKey) []byte {
 	if pub == nil {
 		panic("nil pubkey")
 	}
+
 	return elliptic.Marshal(pub.Curve, pub.X, pub.Y)[1:]
 }
 
@@ -672,5 +726,6 @@ func xor(one, other []byte) (xor []byte) {
 	for i := 0; i < len(one); i++ {
 		xor[i] = one[i] ^ other[i]
 	}
+
 	return xor
 }

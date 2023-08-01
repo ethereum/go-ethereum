@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ type hasher struct {
 	sha      crypto.KeccakState
 	tmp      []byte
 	encbuf   rlp.EncoderBuffer
-	parallel bool // Whether to use paralallel threads when hashing
+	parallel bool // Whether to use parallel threads when hashing
 }
 
 // hasherPool holds pureHashers
@@ -48,6 +48,7 @@ var hasherPool = sync.Pool{
 func newHasher(parallel bool) *hasher {
 	h := hasherPool.Get().(*hasher)
 	h.parallel = parallel
+
 	return h
 }
 
@@ -74,15 +75,18 @@ func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
 		} else {
 			cached.flags.hash = nil
 		}
+
 		return hashed, cached
 	case *fullNode:
 		collapsed, cached := h.hashFullNodeChildren(n)
 		hashed = h.fullnodeToHash(collapsed, force)
+
 		if hn, ok := hashed.(hashNode); ok {
 			cached.flags.hash = hn
 		} else {
 			cached.flags.hash = nil
 		}
+
 		return hashed, cached
 	default:
 		// Value and hash nodes don't have children so they're left as were
@@ -105,6 +109,7 @@ func (h *hasher) hashShortNodeChildren(n *shortNode) (collapsed, cached *shortNo
 	case *fullNode, *shortNode:
 		collapsed.Val, cached.Val = h.hash(n.Val, false)
 	}
+
 	return collapsed, cached
 }
 
@@ -112,9 +117,12 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 	// Hash the full node's children, caching the newly hashed subtrees
 	cached = n.copy()
 	collapsed = n.copy()
+
 	if h.parallel {
 		var wg sync.WaitGroup
+
 		wg.Add(16)
+
 		for i := 0; i < 16; i++ {
 			go func(i int) {
 				hasher := newHasher(false)
@@ -123,6 +131,7 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 				} else {
 					collapsed.Children[i] = nilValueNode
 				}
+
 				returnHasherToPool(hasher)
 				wg.Done()
 			}(i)
@@ -137,6 +146,7 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 			}
 		}
 	}
+
 	return collapsed, cached
 }
 
@@ -151,6 +161,7 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
+
 	return h.hashData(enc)
 }
 
@@ -163,6 +174,7 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
+
 	return h.hashData(enc)
 }
 
@@ -171,28 +183,31 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 //
 // All node encoding must be done like this:
 //
-//     node.encode(h.encbuf)
-//     enc := h.encodedBytes()
+//	node.encode(h.encbuf)
+//	enc := h.encodedBytes()
 //
 // This convention exists because node.encode can only be inlined/escape-analyzed when
 // called on a concrete receiver type.
 func (h *hasher) encodedBytes() []byte {
 	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
 	h.encbuf.Reset(nil)
+
 	return h.tmp
 }
 
 // hashData hashes the provided data
 func (h *hasher) hashData(data []byte) hashNode {
 	n := make(hashNode, 32)
+
 	h.sha.Reset()
 	h.sha.Write(data)
 	h.sha.Read(n)
+
 	return n
 }
 
 // proofHash is used to construct trie proofs, and returns the 'collapsed'
-// node (for later RLP encoding) aswell as the hashed node -- unless the
+// node (for later RLP encoding) as well as the hashed node -- unless the
 // node is smaller than 32 bytes, in which case it will be returned as is.
 // This method does not do anything on value- or hash-nodes.
 func (h *hasher) proofHash(original node) (collapsed, hashed node) {

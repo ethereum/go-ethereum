@@ -21,7 +21,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-//*
+// *
 // Structure representing passphrase source
 type ApplySettings_PassphraseSourceType int32
 
@@ -46,6 +46,7 @@ var ApplySettings_PassphraseSourceType_value = map[string]int32{
 func (x ApplySettings_PassphraseSourceType) Enum() *ApplySettings_PassphraseSourceType {
 	p := new(ApplySettings_PassphraseSourceType)
 	*p = x
+
 	return p
 }
 
@@ -58,7 +59,9 @@ func (x *ApplySettings_PassphraseSourceType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = ApplySettings_PassphraseSourceType(value)
+
 	return nil
 }
 
@@ -66,7 +69,7 @@ func (ApplySettings_PassphraseSourceType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_0c720c20d27aa029, []int{4, 0}
 }
 
-//*
+// *
 // Type of recovery procedure. These should be used as bitmask, e.g.,
 // `RecoveryDeviceType_ScrambledWords | RecoveryDeviceType_Matrix`
 // listing every method supported by the host computer.
@@ -94,6 +97,7 @@ var RecoveryDevice_RecoveryDeviceType_value = map[string]int32{
 func (x RecoveryDevice_RecoveryDeviceType) Enum() *RecoveryDevice_RecoveryDeviceType {
 	p := new(RecoveryDevice_RecoveryDeviceType)
 	*p = x
+
 	return p
 }
 
@@ -106,7 +110,9 @@ func (x *RecoveryDevice_RecoveryDeviceType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = RecoveryDevice_RecoveryDeviceType(value)
+
 	return nil
 }
 
@@ -114,7 +120,7 @@ func (RecoveryDevice_RecoveryDeviceType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_0c720c20d27aa029, []int{17, 0}
 }
 
-//*
+// *
 // Type of Recovery Word request
 type WordRequest_WordRequestType int32
 
@@ -139,6 +145,7 @@ var WordRequest_WordRequestType_value = map[string]int32{
 func (x WordRequest_WordRequestType) Enum() *WordRequest_WordRequestType {
 	p := new(WordRequest_WordRequestType)
 	*p = x
+
 	return p
 }
 
@@ -151,7 +158,9 @@ func (x *WordRequest_WordRequestType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = WordRequest_WordRequestType(value)
+
 	return nil
 }
 
@@ -159,7 +168,7 @@ func (WordRequest_WordRequestType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_0c720c20d27aa029, []int{18, 0}
 }
 
-//*
+// *
 // Request: Reset device to default state and ask for device details
 // @start
 // @next Features
@@ -200,6 +209,7 @@ func (m *Initialize) GetState() []byte {
 	if m != nil {
 		return m.State
 	}
+
 	return nil
 }
 
@@ -207,10 +217,11 @@ func (m *Initialize) GetSkipPassphrase() bool {
 	if m != nil && m.SkipPassphrase != nil {
 		return *m.SkipPassphrase
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: Ask for device details (no device reset)
 // @start
 // @next Features
@@ -245,7 +256,7 @@ func (m *GetFeatures) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetFeatures proto.InternalMessageInfo
 
-//*
+// *
 // Response: Reports various information about the device
 // @end
 type Features struct {
@@ -310,6 +321,7 @@ func (m *Features) GetVendor() string {
 	if m != nil && m.Vendor != nil {
 		return *m.Vendor
 	}
+
 	return ""
 }
 
@@ -317,6 +329,7 @@ func (m *Features) GetMajorVersion() uint32 {
 	if m != nil && m.MajorVersion != nil {
 		return *m.MajorVersion
 	}
+
 	return 0
 }
 
@@ -324,6 +337,7 @@ func (m *Features) GetMinorVersion() uint32 {
 	if m != nil && m.MinorVersion != nil {
 		return *m.MinorVersion
 	}
+
 	return 0
 }
 
@@ -331,6 +345,7 @@ func (m *Features) GetPatchVersion() uint32 {
 	if m != nil && m.PatchVersion != nil {
 		return *m.PatchVersion
 	}
+
 	return 0
 }
 
@@ -338,6 +353,7 @@ func (m *Features) GetBootloaderMode() bool {
 	if m != nil && m.BootloaderMode != nil {
 		return *m.BootloaderMode
 	}
+
 	return false
 }
 
@@ -345,6 +361,7 @@ func (m *Features) GetDeviceId() string {
 	if m != nil && m.DeviceId != nil {
 		return *m.DeviceId
 	}
+
 	return ""
 }
 
@@ -352,6 +369,7 @@ func (m *Features) GetPinProtection() bool {
 	if m != nil && m.PinProtection != nil {
 		return *m.PinProtection
 	}
+
 	return false
 }
 
@@ -359,6 +377,7 @@ func (m *Features) GetPassphraseProtection() bool {
 	if m != nil && m.PassphraseProtection != nil {
 		return *m.PassphraseProtection
 	}
+
 	return false
 }
 
@@ -366,6 +385,7 @@ func (m *Features) GetLanguage() string {
 	if m != nil && m.Language != nil {
 		return *m.Language
 	}
+
 	return ""
 }
 
@@ -373,6 +393,7 @@ func (m *Features) GetLabel() string {
 	if m != nil && m.Label != nil {
 		return *m.Label
 	}
+
 	return ""
 }
 
@@ -380,6 +401,7 @@ func (m *Features) GetInitialized() bool {
 	if m != nil && m.Initialized != nil {
 		return *m.Initialized
 	}
+
 	return false
 }
 
@@ -387,6 +409,7 @@ func (m *Features) GetRevision() []byte {
 	if m != nil {
 		return m.Revision
 	}
+
 	return nil
 }
 
@@ -394,6 +417,7 @@ func (m *Features) GetBootloaderHash() []byte {
 	if m != nil {
 		return m.BootloaderHash
 	}
+
 	return nil
 }
 
@@ -401,6 +425,7 @@ func (m *Features) GetImported() bool {
 	if m != nil && m.Imported != nil {
 		return *m.Imported
 	}
+
 	return false
 }
 
@@ -408,6 +433,7 @@ func (m *Features) GetPinCached() bool {
 	if m != nil && m.PinCached != nil {
 		return *m.PinCached
 	}
+
 	return false
 }
 
@@ -415,6 +441,7 @@ func (m *Features) GetPassphraseCached() bool {
 	if m != nil && m.PassphraseCached != nil {
 		return *m.PassphraseCached
 	}
+
 	return false
 }
 
@@ -422,6 +449,7 @@ func (m *Features) GetFirmwarePresent() bool {
 	if m != nil && m.FirmwarePresent != nil {
 		return *m.FirmwarePresent
 	}
+
 	return false
 }
 
@@ -429,6 +457,7 @@ func (m *Features) GetNeedsBackup() bool {
 	if m != nil && m.NeedsBackup != nil {
 		return *m.NeedsBackup
 	}
+
 	return false
 }
 
@@ -436,6 +465,7 @@ func (m *Features) GetFlags() uint32 {
 	if m != nil && m.Flags != nil {
 		return *m.Flags
 	}
+
 	return 0
 }
 
@@ -443,6 +473,7 @@ func (m *Features) GetModel() string {
 	if m != nil && m.Model != nil {
 		return *m.Model
 	}
+
 	return ""
 }
 
@@ -450,6 +481,7 @@ func (m *Features) GetFwMajor() uint32 {
 	if m != nil && m.FwMajor != nil {
 		return *m.FwMajor
 	}
+
 	return 0
 }
 
@@ -457,6 +489,7 @@ func (m *Features) GetFwMinor() uint32 {
 	if m != nil && m.FwMinor != nil {
 		return *m.FwMinor
 	}
+
 	return 0
 }
 
@@ -464,6 +497,7 @@ func (m *Features) GetFwPatch() uint32 {
 	if m != nil && m.FwPatch != nil {
 		return *m.FwPatch
 	}
+
 	return 0
 }
 
@@ -471,6 +505,7 @@ func (m *Features) GetFwVendor() string {
 	if m != nil && m.FwVendor != nil {
 		return *m.FwVendor
 	}
+
 	return ""
 }
 
@@ -478,6 +513,7 @@ func (m *Features) GetFwVendorKeys() []byte {
 	if m != nil {
 		return m.FwVendorKeys
 	}
+
 	return nil
 }
 
@@ -485,6 +521,7 @@ func (m *Features) GetUnfinishedBackup() bool {
 	if m != nil && m.UnfinishedBackup != nil {
 		return *m.UnfinishedBackup
 	}
+
 	return false
 }
 
@@ -492,10 +529,11 @@ func (m *Features) GetNoBackup() bool {
 	if m != nil && m.NoBackup != nil {
 		return *m.NoBackup
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: clear session (removes cached PIN, passphrase, etc).
 // @start
 // @next Success
@@ -530,7 +568,7 @@ func (m *ClearSession) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ClearSession proto.InternalMessageInfo
 
-//*
+// *
 // Request: change language and/or label of the device
 // @start
 // @next Success
@@ -577,6 +615,7 @@ func (m *ApplySettings) GetLanguage() string {
 	if m != nil && m.Language != nil {
 		return *m.Language
 	}
+
 	return ""
 }
 
@@ -584,6 +623,7 @@ func (m *ApplySettings) GetLabel() string {
 	if m != nil && m.Label != nil {
 		return *m.Label
 	}
+
 	return ""
 }
 
@@ -591,6 +631,7 @@ func (m *ApplySettings) GetUsePassphrase() bool {
 	if m != nil && m.UsePassphrase != nil {
 		return *m.UsePassphrase
 	}
+
 	return false
 }
 
@@ -598,6 +639,7 @@ func (m *ApplySettings) GetHomescreen() []byte {
 	if m != nil {
 		return m.Homescreen
 	}
+
 	return nil
 }
 
@@ -605,6 +647,7 @@ func (m *ApplySettings) GetPassphraseSource() ApplySettings_PassphraseSourceType
 	if m != nil && m.PassphraseSource != nil {
 		return *m.PassphraseSource
 	}
+
 	return ApplySettings_ASK
 }
 
@@ -612,6 +655,7 @@ func (m *ApplySettings) GetAutoLockDelayMs() uint32 {
 	if m != nil && m.AutoLockDelayMs != nil {
 		return *m.AutoLockDelayMs
 	}
+
 	return 0
 }
 
@@ -619,10 +663,11 @@ func (m *ApplySettings) GetDisplayRotation() uint32 {
 	if m != nil && m.DisplayRotation != nil {
 		return *m.DisplayRotation
 	}
+
 	return 0
 }
 
-//*
+// *
 // Request: set flags of the device
 // @start
 // @next Success
@@ -663,10 +708,11 @@ func (m *ApplyFlags) GetFlags() uint32 {
 	if m != nil && m.Flags != nil {
 		return *m.Flags
 	}
+
 	return 0
 }
 
-//*
+// *
 // Request: Starts workflow for setting/changing/removing the PIN
 // @start
 // @next Success
@@ -707,10 +753,11 @@ func (m *ChangePin) GetRemove() bool {
 	if m != nil && m.Remove != nil {
 		return *m.Remove
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: Test if the device is alive, device sends back the message in Success response
 // @start
 // @next Success
@@ -753,6 +800,7 @@ func (m *Ping) GetMessage() string {
 	if m != nil && m.Message != nil {
 		return *m.Message
 	}
+
 	return ""
 }
 
@@ -760,6 +808,7 @@ func (m *Ping) GetButtonProtection() bool {
 	if m != nil && m.ButtonProtection != nil {
 		return *m.ButtonProtection
 	}
+
 	return false
 }
 
@@ -767,6 +816,7 @@ func (m *Ping) GetPinProtection() bool {
 	if m != nil && m.PinProtection != nil {
 		return *m.PinProtection
 	}
+
 	return false
 }
 
@@ -774,10 +824,11 @@ func (m *Ping) GetPassphraseProtection() bool {
 	if m != nil && m.PassphraseProtection != nil {
 		return *m.PassphraseProtection
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: Abort last operation that required user interaction
 // @start
 // @next Failure
@@ -812,7 +863,7 @@ func (m *Cancel) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Cancel proto.InternalMessageInfo
 
-//*
+// *
 // Request: Request a sample of random data generated by hardware RNG. May be used for testing.
 // @start
 // @next Entropy
@@ -853,10 +904,11 @@ func (m *GetEntropy) GetSize() uint32 {
 	if m != nil && m.Size != nil {
 		return *m.Size
 	}
+
 	return 0
 }
 
-//*
+// *
 // Response: Reply with random data generated by internal RNG
 // @end
 type Entropy struct {
@@ -895,10 +947,11 @@ func (m *Entropy) GetEntropy() []byte {
 	if m != nil {
 		return m.Entropy
 	}
+
 	return nil
 }
 
-//*
+// *
 // Request: Request device to wipe all sensitive data and settings
 // @start
 // @next Success
@@ -934,7 +987,7 @@ func (m *WipeDevice) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_WipeDevice proto.InternalMessageInfo
 
-//*
+// *
 // Request: Load seed and related internal settings from the computer
 // @start
 // @next Success
@@ -984,6 +1037,7 @@ func (m *LoadDevice) GetMnemonic() string {
 	if m != nil && m.Mnemonic != nil {
 		return *m.Mnemonic
 	}
+
 	return ""
 }
 
@@ -991,6 +1045,7 @@ func (m *LoadDevice) GetNode() *HDNodeType {
 	if m != nil {
 		return m.Node
 	}
+
 	return nil
 }
 
@@ -998,6 +1053,7 @@ func (m *LoadDevice) GetPin() string {
 	if m != nil && m.Pin != nil {
 		return *m.Pin
 	}
+
 	return ""
 }
 
@@ -1005,6 +1061,7 @@ func (m *LoadDevice) GetPassphraseProtection() bool {
 	if m != nil && m.PassphraseProtection != nil {
 		return *m.PassphraseProtection
 	}
+
 	return false
 }
 
@@ -1012,6 +1069,7 @@ func (m *LoadDevice) GetLanguage() string {
 	if m != nil && m.Language != nil {
 		return *m.Language
 	}
+
 	return Default_LoadDevice_Language
 }
 
@@ -1019,6 +1077,7 @@ func (m *LoadDevice) GetLabel() string {
 	if m != nil && m.Label != nil {
 		return *m.Label
 	}
+
 	return ""
 }
 
@@ -1026,6 +1085,7 @@ func (m *LoadDevice) GetSkipChecksum() bool {
 	if m != nil && m.SkipChecksum != nil {
 		return *m.SkipChecksum
 	}
+
 	return false
 }
 
@@ -1033,10 +1093,11 @@ func (m *LoadDevice) GetU2FCounter() uint32 {
 	if m != nil && m.U2FCounter != nil {
 		return *m.U2FCounter
 	}
+
 	return 0
 }
 
-//*
+// *
 // Request: Ask device to do initialization involving user interaction
 // @start
 // @next EntropyRequest
@@ -1088,6 +1149,7 @@ func (m *ResetDevice) GetDisplayRandom() bool {
 	if m != nil && m.DisplayRandom != nil {
 		return *m.DisplayRandom
 	}
+
 	return false
 }
 
@@ -1095,6 +1157,7 @@ func (m *ResetDevice) GetStrength() uint32 {
 	if m != nil && m.Strength != nil {
 		return *m.Strength
 	}
+
 	return Default_ResetDevice_Strength
 }
 
@@ -1102,6 +1165,7 @@ func (m *ResetDevice) GetPassphraseProtection() bool {
 	if m != nil && m.PassphraseProtection != nil {
 		return *m.PassphraseProtection
 	}
+
 	return false
 }
 
@@ -1109,6 +1173,7 @@ func (m *ResetDevice) GetPinProtection() bool {
 	if m != nil && m.PinProtection != nil {
 		return *m.PinProtection
 	}
+
 	return false
 }
 
@@ -1116,6 +1181,7 @@ func (m *ResetDevice) GetLanguage() string {
 	if m != nil && m.Language != nil {
 		return *m.Language
 	}
+
 	return Default_ResetDevice_Language
 }
 
@@ -1123,6 +1189,7 @@ func (m *ResetDevice) GetLabel() string {
 	if m != nil && m.Label != nil {
 		return *m.Label
 	}
+
 	return ""
 }
 
@@ -1130,6 +1197,7 @@ func (m *ResetDevice) GetU2FCounter() uint32 {
 	if m != nil && m.U2FCounter != nil {
 		return *m.U2FCounter
 	}
+
 	return 0
 }
 
@@ -1137,6 +1205,7 @@ func (m *ResetDevice) GetSkipBackup() bool {
 	if m != nil && m.SkipBackup != nil {
 		return *m.SkipBackup
 	}
+
 	return false
 }
 
@@ -1144,10 +1213,11 @@ func (m *ResetDevice) GetNoBackup() bool {
 	if m != nil && m.NoBackup != nil {
 		return *m.NoBackup
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: Perform backup of the device seed if not backed up using ResetDevice
 // @start
 // @next Success
@@ -1182,7 +1252,7 @@ func (m *BackupDevice) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_BackupDevice proto.InternalMessageInfo
 
-//*
+// *
 // Response: Ask for additional entropy from host computer
 // @next EntropyAck
 type EntropyRequest struct {
@@ -1216,7 +1286,7 @@ func (m *EntropyRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_EntropyRequest proto.InternalMessageInfo
 
-//*
+// *
 // Request: Provide additional entropy for seed generation function
 // @next Success
 type EntropyAck struct {
@@ -1255,10 +1325,11 @@ func (m *EntropyAck) GetEntropy() []byte {
 	if m != nil {
 		return m.Entropy
 	}
+
 	return nil
 }
 
-//*
+// *
 // Request: Start recovery workflow asking user for specific words of mnemonic
 // Used to recovery device safely even on untrusted computer.
 // @start
@@ -1310,6 +1381,7 @@ func (m *RecoveryDevice) GetWordCount() uint32 {
 	if m != nil && m.WordCount != nil {
 		return *m.WordCount
 	}
+
 	return 0
 }
 
@@ -1317,6 +1389,7 @@ func (m *RecoveryDevice) GetPassphraseProtection() bool {
 	if m != nil && m.PassphraseProtection != nil {
 		return *m.PassphraseProtection
 	}
+
 	return false
 }
 
@@ -1324,6 +1397,7 @@ func (m *RecoveryDevice) GetPinProtection() bool {
 	if m != nil && m.PinProtection != nil {
 		return *m.PinProtection
 	}
+
 	return false
 }
 
@@ -1331,6 +1405,7 @@ func (m *RecoveryDevice) GetLanguage() string {
 	if m != nil && m.Language != nil {
 		return *m.Language
 	}
+
 	return Default_RecoveryDevice_Language
 }
 
@@ -1338,6 +1413,7 @@ func (m *RecoveryDevice) GetLabel() string {
 	if m != nil && m.Label != nil {
 		return *m.Label
 	}
+
 	return ""
 }
 
@@ -1345,6 +1421,7 @@ func (m *RecoveryDevice) GetEnforceWordlist() bool {
 	if m != nil && m.EnforceWordlist != nil {
 		return *m.EnforceWordlist
 	}
+
 	return false
 }
 
@@ -1352,6 +1429,7 @@ func (m *RecoveryDevice) GetType() RecoveryDevice_RecoveryDeviceType {
 	if m != nil && m.Type != nil {
 		return *m.Type
 	}
+
 	return RecoveryDevice_RecoveryDeviceType_ScrambledWords
 }
 
@@ -1359,6 +1437,7 @@ func (m *RecoveryDevice) GetU2FCounter() uint32 {
 	if m != nil && m.U2FCounter != nil {
 		return *m.U2FCounter
 	}
+
 	return 0
 }
 
@@ -1366,10 +1445,11 @@ func (m *RecoveryDevice) GetDryRun() bool {
 	if m != nil && m.DryRun != nil {
 		return *m.DryRun
 	}
+
 	return false
 }
 
-//*
+// *
 // Response: Device is waiting for user to enter word of the mnemonic
 // Its position is shown only on device's internal display.
 // @next WordAck
@@ -1409,10 +1489,11 @@ func (m *WordRequest) GetType() WordRequest_WordRequestType {
 	if m != nil && m.Type != nil {
 		return *m.Type
 	}
+
 	return WordRequest_WordRequestType_Plain
 }
 
-//*
+// *
 // Request: Computer replies with word from the mnemonic
 // @next WordRequest
 // @next Success
@@ -1453,10 +1534,11 @@ func (m *WordAck) GetWord() string {
 	if m != nil && m.Word != nil {
 		return *m.Word
 	}
+
 	return ""
 }
 
-//*
+// *
 // Request: Set U2F counter
 // @start
 // @next Success
@@ -1496,6 +1578,7 @@ func (m *SetU2FCounter) GetU2FCounter() uint32 {
 	if m != nil && m.U2FCounter != nil {
 		return *m.U2FCounter
 	}
+
 	return 0
 }
 

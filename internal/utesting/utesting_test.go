@@ -48,9 +48,11 @@ func TestTest(t *testing.T) {
 	if results[0].Failed || results[0].Output != "" {
 		t.Fatalf("wrong result for successful test: %#v", results[0])
 	}
+
 	if !results[1].Failed || results[1].Output != "output\nfailed\n" {
 		t.Fatalf("wrong result for failing test: %#v", results[1])
 	}
+
 	if !results[2].Failed || !strings.HasPrefix(results[2].Output, "panic: oh no\n") {
 		t.Fatalf("wrong result for panicking test: %#v", results[2])
 	}
@@ -91,6 +93,7 @@ var outputTests = []Test{
 
 func TestOutput(t *testing.T) {
 	var buf bytes.Buffer
+
 	RunTests(outputTests, &buf)
 
 	want := regexp.MustCompile(`
@@ -117,6 +120,7 @@ $`[1:])
 
 func TestOutputTAP(t *testing.T) {
 	var buf bytes.Buffer
+
 	RunTAP(outputTests, &buf)
 
 	want := `

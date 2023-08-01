@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,7 +31,9 @@ type ExecQueue struct {
 func NewExecQueue(capacity int) *ExecQueue {
 	q := &ExecQueue{funcs: make([]func(), 0, capacity)}
 	q.cond = sync.NewCond(&q.mu)
+
 	go q.loop()
+
 	return q
 }
 
@@ -49,14 +51,17 @@ func (q *ExecQueue) waitNext(drop bool) (f func()) {
 		// dequeuing so len(q.funcs) includes the function that is running.
 		q.funcs = append(q.funcs[:0], q.funcs[1:]...)
 	}
+
 	for !q.isClosed() {
 		if len(q.funcs) > 0 {
 			f = q.funcs[0]
 			break
 		}
+
 		q.cond.Wait()
 	}
 	q.mu.Unlock()
+
 	return f
 }
 
@@ -69,18 +74,21 @@ func (q *ExecQueue) CanQueue() bool {
 	q.mu.Lock()
 	ok := !q.isClosed() && len(q.funcs) < cap(q.funcs)
 	q.mu.Unlock()
+
 	return ok
 }
 
 // Queue adds a function call to the execution Queue. Returns true if successful.
 func (q *ExecQueue) Queue(f func()) bool {
 	q.mu.Lock()
+
 	ok := !q.isClosed() && len(q.funcs) < cap(q.funcs)
 	if ok {
 		q.funcs = append(q.funcs, f)
 		q.cond.Signal()
 	}
 	q.mu.Unlock()
+
 	return ok
 }
 

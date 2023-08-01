@@ -19,16 +19,21 @@ func Write(r Registry, d time.Duration, w io.Writer) {
 // io.Writer.
 func WriteOnce(r Registry, w io.Writer) {
 	var namedMetrics namedMetricSlice
+
 	r.Each(func(name string, i interface{}) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
 
 	sort.Sort(namedMetrics)
+
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", metric.Count())
+		case CounterFloat64:
+			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
+			fmt.Fprintf(w, "  count:       %f\n", metric.Count())
 		case Gauge:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  value:       %9d\n", metric.Value())
@@ -42,6 +47,7 @@ func WriteOnce(r Registry, w io.Writer) {
 		case Histogram:
 			h := metric.Snapshot()
 			ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+
 			fmt.Fprintf(w, "histogram %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", h.Count())
 			fmt.Fprintf(w, "  min:         %9d\n", h.Min())
@@ -55,6 +61,7 @@ func WriteOnce(r Registry, w io.Writer) {
 			fmt.Fprintf(w, "  99.9%%:       %12.2f\n", ps[4])
 		case Meter:
 			m := metric.Snapshot()
+
 			fmt.Fprintf(w, "meter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", m.Count())
 			fmt.Fprintf(w, "  1-min rate:  %12.2f\n", m.Rate1())
@@ -64,6 +71,7 @@ func WriteOnce(r Registry, w io.Writer) {
 		case Timer:
 			t := metric.Snapshot()
 			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+
 			fmt.Fprintf(w, "timer %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", t.Count())
 			fmt.Fprintf(w, "  min:         %9d\n", t.Min())

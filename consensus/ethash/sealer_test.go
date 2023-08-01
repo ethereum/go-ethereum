@@ -19,7 +19,7 @@ package ethash
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -37,11 +37,13 @@ import (
 func TestRemoteNotify(t *testing.T) {
 	// Start a simple web server to capture notifications.
 	sink := make(chan [3]string)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		blob, err := ioutil.ReadAll(req.Body)
+		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
+
 		var work [3]string
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
@@ -68,9 +70,11 @@ func TestRemoteNotify(t *testing.T) {
 		if want := ethash.SealHash(header).Hex(); work[0] != want {
 			t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 		}
+
 		if want := common.BytesToHash(SeedHash(header.Number.Uint64())).Hex(); work[1] != want {
 			t.Errorf("work packet seed mismatch: have %s, want %s", work[1], want)
 		}
+
 		target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), header.Difficulty)
 		if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
 			t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
@@ -84,11 +88,13 @@ func TestRemoteNotify(t *testing.T) {
 func TestRemoteNotifyFull(t *testing.T) {
 	// Start a simple web server to capture notifications.
 	sink := make(chan map[string]interface{})
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		blob, err := ioutil.ReadAll(req.Body)
+		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
+
 		var work map[string]interface{}
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
@@ -103,6 +109,7 @@ func TestRemoteNotifyFull(t *testing.T) {
 		NotifyFull: true,
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
+
 	ethash := New(config, []string{server.URL}, false)
 	defer ethash.Close()
 
@@ -120,6 +127,7 @@ func TestRemoteNotifyFull(t *testing.T) {
 		if want := "0x" + strconv.FormatUint(header.Number.Uint64(), 16); work["number"] != want {
 			t.Errorf("pending block number mismatch: have %v, want %v", work["number"], want)
 		}
+
 		if want := "0x" + header.Difficulty.Text(16); work["difficulty"] != want {
 			t.Errorf("pending block difficulty mismatch: have %s, want %s", work["difficulty"], want)
 		}
@@ -133,11 +141,13 @@ func TestRemoteNotifyFull(t *testing.T) {
 func TestRemoteMultiNotify(t *testing.T) {
 	// Start a simple web server to capture notifications.
 	sink := make(chan [3]string, 64)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		blob, err := ioutil.ReadAll(req.Body)
+		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
+
 		var work [3]string
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
@@ -183,10 +193,11 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 	// Start a simple web server to capture notifications.
 	sink := make(chan map[string]interface{}, 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		blob, err := ioutil.ReadAll(req.Body)
+		blob, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Errorf("failed to read miner notification: %v", err)
 		}
+
 		var work map[string]interface{}
 		if err := json.Unmarshal(blob, &work); err != nil {
 			t.Errorf("failed to unmarshal miner notification: %v", err)
@@ -196,6 +207,7 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 
 	// Allowing the server to start listening.
 	time.Sleep(2 * time.Second)
+
 	defer server.Close()
 
 	// Create the custom ethash engine.
@@ -204,6 +216,7 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 		NotifyFull: true,
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
+
 	ethash := New(config, []string{server.URL}, false)
 	defer ethash.Close()
 
@@ -292,9 +305,11 @@ func TestStaleSubmission(t *testing.T) {
 				t.Error("error in sealing block")
 			}
 		}
+
 		if res := api.SubmitWork(fakeNonce, ethash.SealHash(c.headers[c.submitIndex]), fakeDigest); res != c.submitRes {
 			t.Errorf("case %d submit result mismatch, want %t, get %t", id+1, c.submitRes, res)
 		}
+
 		if !c.submitRes {
 			continue
 		}
@@ -303,15 +318,19 @@ func TestStaleSubmission(t *testing.T) {
 			if res.Header().Nonce != fakeNonce {
 				t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, fakeNonce, res.Header().Nonce)
 			}
+
 			if res.Header().MixDigest != fakeDigest {
 				t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, fakeDigest, res.Header().MixDigest)
 			}
+
 			if res.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
 				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
 			}
+
 			if res.Header().Number.Uint64() != c.headers[c.submitIndex].Number.Uint64() {
 				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Header().Number.Uint64())
 			}
+
 			if res.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
 				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
 			}

@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,10 +31,12 @@ func TestSimulatedAfter(t *testing.T) {
 		adv     = 11 * time.Minute
 		c       Simulated
 	)
+
 	c.Run(offset)
 
 	end := c.Now().Add(timeout)
 	ch := c.After(timeout)
+
 	for c.Now() < end.Add(-adv) {
 		c.Run(adv)
 		select {
@@ -61,18 +63,23 @@ func TestSimulatedAfterFunc(t *testing.T) {
 
 	called1 := false
 	timer1 := c.AfterFunc(100*time.Millisecond, func() { called1 = true })
+
 	if c.ActiveTimers() != 1 {
 		t.Fatalf("%d active timers, want one", c.ActiveTimers())
 	}
+
 	if fired := timer1.Stop(); !fired {
 		t.Fatal("Stop returned false even though timer didn't fire")
 	}
+
 	if c.ActiveTimers() != 0 {
 		t.Fatalf("%d active timers, want zero", c.ActiveTimers())
 	}
+
 	if called1 {
 		t.Fatal("timer 1 called")
 	}
+
 	if fired := timer1.Stop(); fired {
 		t.Fatal("Stop returned true after timer was already stopped")
 	}
@@ -80,13 +87,17 @@ func TestSimulatedAfterFunc(t *testing.T) {
 	called2 := false
 	timer2 := c.AfterFunc(100*time.Millisecond, func() { called2 = true })
 	c.Run(50 * time.Millisecond)
+
 	if called2 {
 		t.Fatal("timer 2 called")
 	}
+
 	c.Run(51 * time.Millisecond)
+
 	if !called2 {
 		t.Fatal("timer 2 not called")
 	}
+
 	if fired := timer2.Stop(); fired {
 		t.Fatal("Stop returned true after timer has fired")
 	}
@@ -98,6 +109,7 @@ func TestSimulatedSleep(t *testing.T) {
 		timeout = 1 * time.Hour
 		done    = make(chan AbsTime, 1)
 	)
+
 	go func() {
 		c.Sleep(timeout)
 		done <- c.Now()
@@ -121,6 +133,7 @@ func TestSimulatedTimerReset(t *testing.T) {
 		c       Simulated
 		timeout = 1 * time.Hour
 	)
+
 	timer := c.NewTimer(timeout)
 	c.Run(2 * timeout)
 	select {
@@ -149,8 +162,10 @@ func TestSimulatedTimerStop(t *testing.T) {
 		c       Simulated
 		timeout = 1 * time.Hour
 	)
+
 	timer := c.NewTimer(timeout)
 	c.Run(2 * timeout)
+
 	if timer.Stop() {
 		t.Errorf("Stop returned true for fired timer")
 	}

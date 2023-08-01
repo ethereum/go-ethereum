@@ -30,6 +30,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -41,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"gopkg.in/urfave/cli.v1"
 )
 
 const (
@@ -60,10 +61,12 @@ func Fatalf(format string, args ...interface{}) {
 	} else {
 		outf, _ := os.Stdout.Stat()
 		errf, _ := os.Stderr.Stat()
+
 		if outf != nil && errf != nil && os.SameFile(outf, errf) {
 			w = os.Stderr
 		}
 	}
+
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
 	os.Exit(1)
 }
@@ -72,26 +75,31 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
+
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 
-		minFreeDiskSpace := ethconfig.Defaults.TrieDirtyCache
-		if ctx.GlobalIsSet(MinFreeDiskSpaceFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(MinFreeDiskSpaceFlag.Name)
-		} else if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+		minFreeDiskSpace := 2 * ethconfig.Defaults.TrieDirtyCache // Default 2 * 256Mb
+		if ctx.IsSet(MinFreeDiskSpaceFlag.Name) {
+			minFreeDiskSpace = ctx.Int(MinFreeDiskSpaceFlag.Name)
+		} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
+			minFreeDiskSpace = 2 * ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 		}
+
 		if minFreeDiskSpace > 0 {
 			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024)
 		}
 
 		shutdown := func() {
 			log.Info("Got interrupt, shutting down...")
+
 			go stack.Close()
+
 			for i := 10; i > 0; i-- {
 				<-sigc
+
 				if i > 1 {
 					log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
 				}
@@ -124,14 +132,17 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 			log.Warn("Failed to get free disk space", "path", path, "err", err)
 			break
 		}
+
 		if freeSpace < freeDiskSpaceCritical {
-			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace))
+			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace), "path", path)
 			sigc <- syscall.SIGTERM
+
 			break
 		} else if freeSpace < 2*freeDiskSpaceCritical {
-			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
+			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical), "path", path)
 		}
-		time.Sleep(60 * time.Second)
+
+		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -140,15 +151,20 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
 	stop := make(chan struct{})
+
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	defer signal.Stop(interrupt)
 	defer close(interrupt)
+
 	go func() {
 		if _, ok := <-interrupt; ok {
 			log.Info("Interrupted during import, stopping at next batch")
 		}
+
 		close(stop)
 	}()
+
 	checkInterrupt := func() bool {
 		select {
 		case <-stop:
@@ -173,16 +189,19 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			return err
 		}
 	}
+
 	stream := rlp.NewStream(reader, 0)
 
 	// Run actual the import.
 	blocks := make(types.Blocks, importBatchSize)
 	n := 0
+
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
 		}
+
 		i := 0
 		for ; i < importBatchSize; i++ {
 			var b types.Block
@@ -196,9 +215,11 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 				i--
 				continue
 			}
+
 			blocks[i] = &b
 			n++
 		}
+
 		if i == 0 {
 			break
 		}
@@ -206,15 +227,18 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
 		}
+
 		missing := missingBlocks(chain, blocks[:i])
 		if len(missing) == 0 {
 			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())
 			continue
 		}
+
 		if _, err := chain.InsertChain(missing); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
+
 	return nil
 }
 
@@ -222,10 +246,11 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
-		if head.NumberU64() > block.NumberU64() {
+		if head.Number.Uint64() > block.NumberU64() {
 			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
 				return blocks[i:]
 			}
+
 			continue
 		}
 		// If we're above the chain head, state availability is a must
@@ -233,6 +258,7 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 			return blocks[i:]
 		}
 	}
+
 	return nil
 }
 
@@ -257,6 +283,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
+
 	log.Info("Exported blockchain", "file", fn)
 
 	return nil
@@ -283,7 +310,9 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
+
 	log.Info("Exported blockchain to", "file", fn)
+
 	return nil
 }
 
@@ -305,6 +334,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 	}
+
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk thrashing
@@ -318,6 +348,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			if err == io.EOF {
 				break
 			}
+
 			return err
 		}
 		// Accumulate the preimages and flush when enough ws gathered
@@ -331,6 +362,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	if len(preimages) > 0 {
 		rawdb.WritePreimages(db, preimages)
 	}
+
 	return nil
 }
 
@@ -362,6 +394,7 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 		}
 	}
 	log.Info("Exported preimages", "file", fn)
+
 	return nil
 }
 
@@ -400,6 +433,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 			return err
 		}
 	}
+
 	stream := rlp.NewStream(reader, 0)
 
 	// Read the header
@@ -407,12 +441,15 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 	if err := stream.Decode(&header); err != nil {
 		return fmt.Errorf("could not decode header: %v", err)
 	}
+
 	if header.Magic != exportMagic {
 		return errors.New("incompatible data, wrong magic")
 	}
+
 	if header.Version != 0 {
 		return fmt.Errorf("incompatible version %d, (support only 0)", header.Version)
 	}
+
 	log.Info("Importing data", "file", f, "type", header.Kind, "data age",
 		common.PrettyDuration(time.Since(time.Unix(int64(header.UnixTime), 0))))
 
@@ -423,28 +460,35 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		logged = time.Now()
 		batch  = db.NewBatch()
 	)
+
 	for {
 		// Read the next entry
 		var (
 			op       byte
 			key, val []byte
 		)
+
 		if err := stream.Decode(&op); err != nil {
 			if err == io.EOF {
 				break
 			}
+
 			return err
 		}
+
 		if err := stream.Decode(&key); err != nil {
 			return err
 		}
+
 		if err := stream.Decode(&val); err != nil {
 			return err
 		}
+
 		if count < startIndex {
 			count++
 			continue
 		}
+
 		switch op {
 		case OpBatchDel:
 			batch.Delete(key)
@@ -453,10 +497,12 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		default:
 			return fmt.Errorf("unknown op %d\n", op)
 		}
+
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return err
 			}
+
 			batch.Reset()
 		}
 		// Check interruption emitted by ctrl+c
@@ -466,15 +512,19 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 				if err := batch.Write(); err != nil {
 					return err
 				}
+
 				log.Info("External data import interrupted", "file", f, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+
 				return nil
 			default:
 			}
 		}
+
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
 			log.Info("Importing external data", "file", f, "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
+
 		count += 1
 	}
 	// Flush the last batch snapshot data
@@ -483,8 +533,10 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 			return err
 		}
 	}
+
 	log.Info("Imported chain data", "file", f, "count", count,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }
 
@@ -504,6 +556,7 @@ type ChainDataIterator interface {
 // in the file. If the suffix is 'gz', gzip compression is used.
 func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt chan struct{}) error {
 	log.Info("Exporting chain data", "file", fn, "kind", kind)
+
 	defer iter.Release()
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -533,20 +586,25 @@ func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt c
 		start  = time.Now()
 		logged = time.Now()
 	)
+
 	for {
 		op, key, val, ok := iter.Next()
 		if !ok {
 			break
 		}
+
 		if err := rlp.Encode(writer, op); err != nil {
 			return err
 		}
+
 		if err := rlp.Encode(writer, key); err != nil {
 			return err
 		}
+
 		if err := rlp.Encode(writer, val); err != nil {
 			return err
 		}
+
 		if count%1000 == 0 {
 			// Check interruption emitted by ctrl+c
 			select {
@@ -556,15 +614,19 @@ func ExportChaindata(fn string, kind string, iter ChainDataIterator, interrupt c
 				return nil
 			default:
 			}
+
 			if time.Since(logged) > 8*time.Second {
 				log.Info("Exporting chain data", "file", fn, "kind", kind,
 					"count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+
 				logged = time.Now()
 			}
 		}
+
 		count++
 	}
 	log.Info("Exported chain data", "file", fn, "kind", kind, "count", count,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }

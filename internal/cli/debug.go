@@ -234,6 +234,7 @@ func tarCZF(archive string, src, target string) error {
 		if err != nil {
 			return err
 		}
+
 		if !fi.Mode().IsRegular() {
 			return nil
 		}
@@ -248,6 +249,7 @@ func tarCZF(archive string, src, target string) error {
 		if target != "" {
 			path = filepath.Join([]string{target, path}...)
 		}
+
 		path = strings.TrimPrefix(path, string(filepath.Separator))
 
 		header.Name = path
@@ -267,6 +269,7 @@ func tarCZF(archive string, src, target string) error {
 		}
 
 		f.Close()
+
 		return nil
 	})
 }

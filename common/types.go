@@ -52,7 +52,9 @@ type Hash [HashLength]byte
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
 	var h Hash
+
 	h.SetBytes(b)
+
 	return h
 }
 
@@ -97,9 +99,11 @@ func (h Hash) Format(s fmt.State, c rune) {
 		if !s.Flag('#') {
 			hexb = hexb[2:]
 		}
+
 		if c == 'X' {
 			hexb = bytes.ToUpper(hexb)
 		}
+
 		fallthrough
 	case 'v', 's':
 		s.Write(hexb)
@@ -146,6 +150,7 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 	for i := len(h) - 1; i > m; i-- {
 		h[i] = byte(rand.Uint32())
 	}
+
 	return reflect.ValueOf(h)
 }
 
@@ -155,10 +160,13 @@ func (h *Hash) Scan(src interface{}) error {
 	if !ok {
 		return fmt.Errorf("can't scan %T into Hash", src)
 	}
+
 	if len(srcB) != HashLength {
 		return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(srcB), HashLength)
 	}
+
 	copy(h[:], srcB)
+
 	return nil
 }
 
@@ -179,6 +187,7 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	default:
 		err = fmt.Errorf("unexpected type %T for Hash", input)
 	}
+
 	return err
 }
 
@@ -204,7 +213,9 @@ type Address [AddressLength]byte
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToAddress(b []byte) Address {
 	var a Address
+
 	a.SetBytes(b)
+
 	return a
 }
 
@@ -222,6 +233,7 @@ func IsHexAddress(s string) bool {
 	if has0xPrefix(s) {
 		s = s[2:]
 	}
+
 	return len(s) == 2*AddressLength && isHex(s)
 }
 
@@ -230,6 +242,9 @@ func (a Address) Bytes() []byte { return a[:] }
 
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a Address) Hash() Hash { return BytesToHash(a[:]) }
+
+// Big converts an address to a big integer.
+func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -247,6 +262,7 @@ func (a *Address) checksumHex() []byte {
 	// compute checksum
 	sha := sha3.NewLegacyKeccak256()
 	sha.Write(buf[2:])
+
 	hash := sha.Sum(nil)
 	for i := 2; i < len(buf); i++ {
 		hashByte := hash[(i-2)/2]
@@ -255,17 +271,21 @@ func (a *Address) checksumHex() []byte {
 		} else {
 			hashByte &= 0xf
 		}
+
 		if buf[i] > '9' && hashByte > 7 {
 			buf[i] -= 32
 		}
 	}
+
 	return buf[:]
 }
 
 func (a Address) hex() []byte {
 	var buf [len(a)*2 + 2]byte
+
 	copy(buf[:2], "0x")
 	hex.Encode(buf[2:], a[:])
+
 	return buf[:]
 }
 
@@ -286,9 +306,11 @@ func (a Address) Format(s fmt.State, c rune) {
 		if !s.Flag('#') {
 			hex = hex[2:]
 		}
+
 		if c == 'X' {
 			hex = bytes.ToUpper(hex)
 		}
+
 		s.Write(hex)
 	case 'd':
 		fmt.Fprint(s, ([len(a)]byte)(a))
@@ -303,6 +325,7 @@ func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
 	}
+
 	copy(a[AddressLength-len(b):], b)
 }
 
@@ -327,10 +350,13 @@ func (a *Address) Scan(src interface{}) error {
 	if !ok {
 		return fmt.Errorf("can't scan %T into Address", src)
 	}
+
 	if len(srcB) != AddressLength {
 		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
 	}
+
 	copy(a[:], srcB)
+
 	return nil
 }
 
@@ -351,6 +377,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	default:
 		err = fmt.Errorf("unexpected type %T for Address", input)
 	}
+
 	return err
 }
 
@@ -384,7 +411,9 @@ func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
 	if !IsHexAddress(hexaddr) {
 		return nil, errors.New("invalid address")
 	}
+
 	a := FromHex(hexaddr)
+
 	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil
 }
 
@@ -393,14 +422,16 @@ func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
 	if err := hexutil.UnmarshalFixedJSON(addressT, input, ma.addr[:]); err != nil {
 		return err
 	}
+
 	return json.Unmarshal(input, &ma.original)
 }
 
 // MarshalJSON marshals the original value
-func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
+func (ma MixedcaseAddress) MarshalJSON() ([]byte, error) {
 	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
 		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
 	}
+
 	return json.Marshal(fmt.Sprintf("0x%s", ma.original))
 }
 
@@ -414,6 +445,7 @@ func (ma *MixedcaseAddress) String() string {
 	if ma.ValidChecksum() {
 		return fmt.Sprintf("%s [chksum ok]", ma.original)
 	}
+
 	return fmt.Sprintf("%s [chksum INVALID]", ma.original)
 }
 

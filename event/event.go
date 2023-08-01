@@ -54,6 +54,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 	sub := newsub(mux)
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
+
 	if mux.stopped {
 		// set the status to closed so that calling Unsubscribe after this
 		// call will short circuit.
@@ -63,18 +64,22 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 		if mux.subm == nil {
 			mux.subm = make(map[reflect.Type][]*TypeMuxSubscription)
 		}
+
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
 			oldsubs := mux.subm[rtyp]
+
 			if find(oldsubs, sub) != -1 {
 				panic(fmt.Sprintf("event: duplicate type %s in Subscribe", rtyp))
 			}
+
 			subs := make([]*TypeMuxSubscription, len(oldsubs)+1)
 			copy(subs, oldsubs)
 			subs[len(oldsubs)] = sub
 			mux.subm[rtyp] = subs
 		}
 	}
+
 	return sub
 }
 
@@ -86,16 +91,20 @@ func (mux *TypeMux) Post(ev interface{}) error {
 		Data: ev,
 	}
 	rtyp := reflect.TypeOf(ev)
+
 	mux.mutex.RLock()
 	if mux.stopped {
 		mux.mutex.RUnlock()
 		return ErrMuxClosed
 	}
+
 	subs := mux.subm[rtyp]
 	mux.mutex.RUnlock()
+
 	for _, sub := range subs {
 		sub.deliver(event)
 	}
+
 	return nil
 }
 
@@ -105,11 +114,13 @@ func (mux *TypeMux) Post(ev interface{}) error {
 func (mux *TypeMux) Stop() {
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
+
 	for _, subs := range mux.subm {
 		for _, sub := range subs {
 			sub.closewait()
 		}
 	}
+
 	mux.subm = nil
 	mux.stopped = true
 }
@@ -117,6 +128,7 @@ func (mux *TypeMux) Stop() {
 func (mux *TypeMux) del(s *TypeMuxSubscription) {
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
+
 	for typ, subs := range mux.subm {
 		if pos := find(subs, s); pos >= 0 {
 			if len(subs) == 1 {
@@ -134,6 +146,7 @@ func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
@@ -141,6 +154,7 @@ func posdelete(slice []*TypeMuxSubscription, pos int) []*TypeMuxSubscription {
 	news := make([]*TypeMuxSubscription, len(slice)-1)
 	copy(news[:pos], slice[:pos])
 	copy(news[pos:], slice[pos+1:])
+
 	return news
 }
 
@@ -162,6 +176,7 @@ type TypeMuxSubscription struct {
 
 func newsub(mux *TypeMux) *TypeMuxSubscription {
 	c := make(chan *TypeMuxEvent)
+
 	return &TypeMuxSubscription{
 		mux:     mux,
 		created: time.Now(),
@@ -183,15 +198,18 @@ func (s *TypeMuxSubscription) Unsubscribe() {
 func (s *TypeMuxSubscription) Closed() bool {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
+
 	return s.closed
 }
 
 func (s *TypeMuxSubscription) closewait() {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
+
 	if s.closed {
 		return
 	}
+
 	close(s.closing)
 	s.closed = true
 

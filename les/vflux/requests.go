@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ type (
 		Bias      uint64 // seconds
 		AddTokens []IntOrInf
 	}
-	// CapacityQueryReq is the encoding format of the response to the capacity query
+	// CapacityQueryReply is the encoding format of the response to the capacity query
 	CapacityQueryReply []uint64
 )
 
@@ -60,11 +60,13 @@ func (r *Requests) Add(service, name string, val interface{}) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
 	*r = append(*r, Request{
 		Service: service,
 		Name:    name,
 		Params:  enc,
 	})
+
 	return len(*r) - 1, nil
 }
 
@@ -73,6 +75,7 @@ func (r Replies) Get(i int, val interface{}) error {
 	if i < 0 || i >= len(r) {
 		return ErrNoReply
 	}
+
 	return rlp.DecodeBytes(r[i], val)
 }
 
@@ -102,6 +105,7 @@ func (i *IntOrInf) BigInt() *big.Int {
 	case IntMinusInf:
 		panic(nil)
 	}
+
 	return &big.Int{} // invalid type decodes to 0 value
 }
 
@@ -113,6 +117,7 @@ func (i *IntOrInf) Inf() int {
 	case IntMinusInf:
 		return -1
 	}
+
 	return 0 // invalid type decodes to 0 value
 }
 
@@ -136,6 +141,7 @@ func (i *IntOrInf) Int64() int64 {
 	case IntMinusInf:
 		return math.MinInt64
 	}
+
 	return 0 // invalid type decodes to 0 value
 }
 

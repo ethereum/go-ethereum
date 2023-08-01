@@ -36,6 +36,7 @@ func TestAutoDiscRace(t *testing.T) {
 		ip  net.IP
 		err error
 	}
+
 	results := make(chan rval, 50)
 	for i := 0; i < cap(results); i++ {
 		go func() {
@@ -46,6 +47,7 @@ func TestAutoDiscRace(t *testing.T) {
 
 	// Check that they all return the correct result within the deadline.
 	deadline := time.After(2 * time.Second)
+
 	for i := 0; i < cap(results); i++ {
 		select {
 		case <-deadline:
@@ -54,6 +56,7 @@ func TestAutoDiscRace(t *testing.T) {
 			if rval.err != nil {
 				t.Errorf("result %d: unexpected error: %v", i, rval.err)
 			}
+
 			wantIP := net.IP{33, 44, 55, 66}
 			if !rval.ip.Equal(wantIP) {
 				t.Errorf("result %d: got IP %v, want %v", i, rval.ip, wantIP)

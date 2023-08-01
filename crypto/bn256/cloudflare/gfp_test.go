@@ -12,6 +12,7 @@ func TestGFpNeg(t *testing.T) {
 	h := &gfP{}
 
 	gfpNeg(h, n)
+
 	if *h != *w {
 		t.Errorf("negation mismatch: have %#x, want %#x", *h, *w)
 	}
@@ -26,6 +27,7 @@ func TestGFpAdd(t *testing.T) {
 	h := &gfP{}
 
 	gfpAdd(h, a, b)
+
 	if *h != *w {
 		t.Errorf("addition mismatch: have %#x, want %#x", *h, *w)
 	}
@@ -40,6 +42,7 @@ func TestGFpSub(t *testing.T) {
 	h := &gfP{}
 
 	gfpSub(h, a, b)
+
 	if *h != *w {
 		t.Errorf("subtraction mismatch: have %#x, want %#x", *h, *w)
 	}
@@ -54,6 +57,7 @@ func TestGFpMul(t *testing.T) {
 	h := &gfP{}
 
 	gfpMul(h, a, b)
+
 	if *h != *w {
 		t.Errorf("multiplication mismatch: have %#x, want %#x", *h, *w)
 	}

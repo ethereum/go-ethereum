@@ -55,6 +55,7 @@ func TestKDF(t *testing.T) {
 
 	for _, test := range tests {
 		h := sha256.New()
+
 		k := concatKDF(h, []byte("input"), nil, test.length)
 		if !bytes.Equal(k, test.output) {
 			t.Fatalf("KDF: generated key %x does not match expected output %x", k, test.output)
@@ -78,6 +79,7 @@ func TestSharedKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	skLen := MaxSharedKeyLength(&prv1.PublicKey) / 2
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
@@ -112,12 +114,15 @@ func TestSharedKeyPadding(t *testing.T) {
 	if prv0.PublicKey.X.Cmp(x0) != 0 {
 		t.Errorf("mismatched prv0.X:\nhave: %x\nwant: %x\n", prv0.PublicKey.X.Bytes(), x0.Bytes())
 	}
+
 	if prv0.PublicKey.Y.Cmp(y0) != 0 {
 		t.Errorf("mismatched prv0.Y:\nhave: %x\nwant: %x\n", prv0.PublicKey.Y.Bytes(), y0.Bytes())
 	}
+
 	if prv1.PublicKey.X.Cmp(x1) != 0 {
 		t.Errorf("mismatched prv1.X:\nhave: %x\nwant: %x\n", prv1.PublicKey.X.Bytes(), x1.Bytes())
 	}
+
 	if prv1.PublicKey.Y.Cmp(y1) != 0 {
 		t.Errorf("mismatched prv1.Y:\nhave: %x\nwant: %x\n", prv1.PublicKey.Y.Bytes(), y1.Bytes())
 	}
@@ -177,7 +182,9 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
@@ -192,7 +199,9 @@ func BenchmarkGenSharedKeyS256(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
@@ -214,6 +223,7 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 
 	message := []byte("Hello, world.")
+
 	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -239,8 +249,10 @@ func TestDecryptShared2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	message := []byte("Hello, world.")
 	shared2 := []byte("shared data 2")
+
 	ct, err := Encrypt(rand.Reader, &prv.PublicKey, message, nil, shared2)
 	if err != nil {
 		t.Fatal(err)
@@ -251,6 +263,7 @@ func TestDecryptShared2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(pt, message) {
 		t.Fatal("ecies: plaintext doesn't match message")
 	}
@@ -259,6 +272,7 @@ func TestDecryptShared2(t *testing.T) {
 	if _, err = prv.Decrypt(ct, nil, nil); err == nil {
 		t.Fatal("ecies: decrypting without shared data didn't fail")
 	}
+
 	if _, err = prv.Decrypt(ct, nil, []byte("garbage")); err == nil {
 		t.Fatal("ecies: decrypting with incorrect shared data didn't fail")
 	}
@@ -316,6 +330,7 @@ func testParamSelection(t *testing.T, c testCase) {
 	}
 
 	message := []byte("Hello, world.")
+
 	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
 	if err != nil {
 		t.Fatalf("%s (%s)\n", err.Error(), c.Name)
@@ -334,7 +349,6 @@ func testParamSelection(t *testing.T, c testCase) {
 	if err == nil {
 		t.Fatalf("ecies: encryption should not have succeeded (%s)\n", c.Name)
 	}
-
 }
 
 // Ensure that the basic public key validation in the decryption operation
@@ -348,6 +362,7 @@ func TestBasicKeyValidation(t *testing.T) {
 	}
 
 	message := []byte("Hello, world.")
+
 	ct, err := Encrypt(rand.Reader, &prv.PublicKey, message, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -355,6 +370,7 @@ func TestBasicKeyValidation(t *testing.T) {
 
 	for _, b := range badBytes {
 		ct[0] = b
+
 		_, err := prv.Decrypt(ct, nil, nil)
 		if err != ErrInvalidPublicKey {
 			t.Fatal("ecies: validated an invalid key")
@@ -368,6 +384,7 @@ func TestBox(t *testing.T) {
 	pub2 := &prv2.PublicKey
 
 	message := []byte("Hello, world.")
+
 	ct, err := Encrypt(rand.Reader, pub2, message, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -377,9 +394,11 @@ func TestBox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(pt, message) {
 		t.Fatal("ecies: plaintext doesn't match message")
 	}
+
 	if _, err = prv1.Decrypt(ct, nil, nil); err == nil {
 		t.Fatal("ecies: encryption should not have succeeded")
 	}
@@ -418,6 +437,7 @@ func hexKey(prv string) *PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return ImportECDSA(key)
 }
 
@@ -426,5 +446,6 @@ func decode(s string) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return bytes
 }

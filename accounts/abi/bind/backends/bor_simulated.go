@@ -15,6 +15,7 @@ func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Has
 	if number == nil {
 		return nil, nil
 	}
+
 	receipt := rawdb.ReadRawBorReceipt(fb.db, hash, *number)
 	if receipt == nil {
 		return nil, nil

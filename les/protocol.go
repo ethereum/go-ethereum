@@ -45,7 +45,7 @@ var (
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
-// Number of implemented message corresponding to different protocol versions.
+// ProtocolLengths is the number of implemented message corresponding to different protocol versions.
 var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 24}
 
 const (
@@ -175,6 +175,7 @@ var (
 // service vector indices.
 func init() {
 	requestMapping = make(map[uint32]reqMapping)
+
 	for code, req := range requests {
 		cost := reqAvgTimeCost[code]
 		rm := reqMapping{len(requestList), -1}
@@ -183,6 +184,7 @@ func init() {
 			InitAmount: req.refBasketFirst,
 			InitValue:  float64(cost.baseCost + cost.reqCost),
 		})
+
 		if req.refBasketRest != 0 {
 			rm.rest = len(requestList)
 			requestList = append(requestList, vfc.RequestInfo{
@@ -191,6 +193,7 @@ func init() {
 				InitValue:  float64(cost.reqCost),
 			})
 		}
+
 		requestMapping[uint32(code)] = rm
 	}
 }
@@ -253,6 +256,7 @@ func (a *announceData) sanityCheck() error {
 	if tdlen := a.Td.BitLen(); tdlen > 100 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
+
 	return nil
 }
 
@@ -269,14 +273,18 @@ func (a *announceData) checkSignature(id enode.ID, update keyValueMap) error {
 	if err := update.get("sign", &sig); err != nil {
 		return err
 	}
+
 	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
+
 	recPubkey, err := crypto.SigToPub(crypto.Keccak256(rlp), sig)
 	if err != nil {
 		return err
 	}
+
 	if id == enode.PubkeyToIDV4(recPubkey) {
 		return nil
 	}
+
 	return errors.New("wrong signature")
 }
 
@@ -298,9 +306,11 @@ func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
 	if hn.Hash == (common.Hash{}) {
 		return rlp.Encode(w, hn.Number)
 	}
+
 	if hn.Number != 0 {
 		return fmt.Errorf("both origin hash (%x) and number (%d) provided", hn.Hash, hn.Number)
 	}
+
 	return rlp.Encode(w, hn.Hash)
 }
 
@@ -308,6 +318,7 @@ func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
 // into either a block hash or a block number.
 func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	_, size, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err

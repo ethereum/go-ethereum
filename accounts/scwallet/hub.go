@@ -34,7 +34,7 @@ package scwallet
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -88,18 +88,21 @@ type Hub struct {
 
 func (hub *Hub) readPairings() error {
 	hub.pairings = make(map[string]smartcardPairing)
+
 	pairingFile, err := os.Open(filepath.Join(hub.datadir, "smartcards.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
+
 		return err
 	}
 
-	pairingData, err := ioutil.ReadAll(pairingFile)
+	pairingData, err := io.ReadAll(pairingFile)
 	if err != nil {
 		return err
 	}
+
 	var pairings []smartcardPairing
 	if err := json.Unmarshal(pairingData, &pairings); err != nil {
 		return err
@@ -108,6 +111,7 @@ func (hub *Hub) readPairings() error {
 	for _, pairing := range pairings {
 		hub.pairings[string(pairing.PublicKey)] = pairing
 	}
+
 	return nil
 }
 
@@ -139,6 +143,7 @@ func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
 	if pairing, ok := hub.pairings[string(wallet.PublicKey)]; ok {
 		return &pairing
 	}
+
 	return nil
 }
 
@@ -148,6 +153,7 @@ func (hub *Hub) setPairing(wallet *Wallet, pairing *smartcardPairing) error {
 	} else {
 		hub.pairings[string(wallet.PublicKey)] = *pairing
 	}
+
 	return hub.writePairings()
 }
 
@@ -157,6 +163,7 @@ func NewHub(daemonPath string, scheme string, datadir string) (*Hub, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	hub := &Hub{
 		scheme:  scheme,
 		context: context,
@@ -167,7 +174,9 @@ func NewHub(daemonPath string, scheme string, datadir string) (*Hub, error) {
 	if err := hub.readPairings(); err != nil {
 		return nil, err
 	}
+
 	hub.refreshWallets()
+
 	return hub, nil
 }
 
@@ -184,7 +193,9 @@ func (hub *Hub) Wallets() []accounts.Wallet {
 	for _, wallet := range hub.wallets {
 		cpy = append(cpy, wallet)
 	}
+
 	sort.Sort(accounts.WalletsByURL(cpy))
+
 	return cpy
 }
 
@@ -225,8 +236,10 @@ func (hub *Hub) refreshWallets() {
 			if err := wallet.ping(); err == nil {
 				continue
 			}
+
 			wallet.Close()
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletDropped})
+
 			delete(hub.wallets, reader)
 		}
 		// New card detected, try to connect to it
@@ -235,10 +248,12 @@ func (hub *Hub) refreshWallets() {
 			log.Debug("Failed to open smart card", "reader", reader, "err", err)
 			continue
 		}
+
 		wallet := NewWallet(hub, card)
 		if err = wallet.connect(); err != nil {
 			log.Debug("Failed to connect to smart card", "reader", reader, "err", err)
 			card.Disconnect(pcsc.LeaveCard)
+
 			continue
 		}
 		// Card connected, start tracking in amongs the wallets
@@ -250,9 +265,11 @@ func (hub *Hub) refreshWallets() {
 		if _, ok := seen[reader]; !ok {
 			wallet.Close()
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletDropped})
+
 			delete(hub.wallets, reader)
 		}
 	}
+
 	hub.refreshed = time.Now()
 	hub.stateLock.Unlock()
 
@@ -276,6 +293,7 @@ func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 		hub.updating = true
 		go hub.updater()
 	}
+
 	return sub
 }
 
@@ -295,6 +313,7 @@ func (hub *Hub) updater() {
 		if hub.updateScope.Count() == 0 {
 			hub.updating = false
 			hub.stateLock.Unlock()
+
 			return
 		}
 		hub.stateLock.Unlock()

@@ -32,7 +32,7 @@ type reflectTest struct {
 
 var reflectTests = []reflectTest{
 	{
-		name: "OneToOneCorrespondance",
+		name: "OneToOneCorrespondence",
 		args: []string{"fieldA"},
 		struc: struct {
 			FieldA int `abi:"fieldA"`
@@ -181,6 +181,7 @@ func TestReflectNameToStruct(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
+
 				for fname := range test.want {
 					if m[fname] != test.want[fname] {
 						t.Fatalf("Incorrect value for field %s: expected %v, got %v", fname, test.want[fname], m[fname])
@@ -217,6 +218,7 @@ func TestConvertType(t *testing.T) {
 	if out.X.Cmp(big.NewInt(1)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out.X, big.NewInt(1))
 	}
+
 	if out.Y.Cmp(big.NewInt(2)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out.Y, big.NewInt(2))
 	}
@@ -226,16 +228,20 @@ func TestConvertType(t *testing.T) {
 	val2.Index(0).Field(1).Set(reflect.ValueOf(big.NewInt(2)))
 	val2.Index(1).Field(0).Set(reflect.ValueOf(big.NewInt(3)))
 	val2.Index(1).Field(1).Set(reflect.ValueOf(big.NewInt(4)))
+
 	out2 := *ConvertType(val2.Interface(), new([]T)).(*[]T)
 	if out2[0].X.Cmp(big.NewInt(1)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
 	}
+
 	if out2[0].Y.Cmp(big.NewInt(2)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
 	}
+
 	if out2[1].X.Cmp(big.NewInt(3)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
 	}
+
 	if out2[1].Y.Cmp(big.NewInt(4)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
 	}
@@ -245,16 +251,20 @@ func TestConvertType(t *testing.T) {
 	val3.Elem().Index(0).Field(1).Set(reflect.ValueOf(big.NewInt(2)))
 	val3.Elem().Index(1).Field(0).Set(reflect.ValueOf(big.NewInt(3)))
 	val3.Elem().Index(1).Field(1).Set(reflect.ValueOf(big.NewInt(4)))
+
 	out3 := *ConvertType(val3.Interface(), new([2]T)).(*[2]T)
 	if out3[0].X.Cmp(big.NewInt(1)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
 	}
+
 	if out3[0].Y.Cmp(big.NewInt(2)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
 	}
+
 	if out3[1].X.Cmp(big.NewInt(3)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
 	}
+
 	if out3[1].Y.Cmp(big.NewInt(4)) != 0 {
 		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
 	}

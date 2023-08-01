@@ -37,7 +37,13 @@ var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	testDB      = rawdb.NewMemoryDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000))
+
+	testGspec = &core.Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	testGenesis = testGspec.MustCommit(testDB)
 )
 
 // The common prefix of all test chains:
@@ -59,10 +65,12 @@ func init() {
 	testChainBase = newTestChain(blockCacheMaxItems+200, testGenesis)
 
 	var forkLen = int(fullMaxForkAncestry + 50)
+
 	var wg sync.WaitGroup
 
 	// Generate the test chains to seed the peers with
 	wg.Add(3)
+
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
 	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
 	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
@@ -98,12 +106,14 @@ func init() {
 		testChainForkHeavy.shorten(len(testChainBase.blocks) + 79),
 	}
 	wg.Add(len(chains))
+
 	for _, chain := range chains {
 		go func(blocks []*types.Block) {
 			newTestBlockchain(blocks)
 			wg.Done()
 		}(chain.blocks[1:])
 	}
+
 	wg.Wait()
 
 	// Mark the chains pregenerated. Generating a new one will lead to a panic.
@@ -120,6 +130,7 @@ func newTestChain(length int, genesis *types.Block) *testChain {
 		blocks: []*types.Block{genesis},
 	}
 	tc.generate(length-1, 0, genesis, false)
+
 	return tc
 }
 
@@ -127,6 +138,7 @@ func newTestChain(length int, genesis *types.Block) *testChain {
 func (tc *testChain) makeFork(length int, heavy bool, seed byte) *testChain {
 	fork := tc.copy(len(tc.blocks) + length)
 	fork.generate(length, seed, tc.blocks[len(tc.blocks)-1], heavy)
+
 	return fork
 }
 
@@ -136,6 +148,7 @@ func (tc *testChain) shorten(length int) *testChain {
 	if length > len(tc.blocks) {
 		panic(fmt.Errorf("can't shorten test chain to %d blocks, it's only %d blocks long", length, len(tc.blocks)))
 	}
+
 	return tc.copy(length)
 }
 
@@ -143,9 +156,11 @@ func (tc *testChain) copy(newlen int) *testChain {
 	if newlen > len(tc.blocks) {
 		newlen = len(tc.blocks)
 	}
+
 	cpy := &testChain{
 		blocks: append([]*types.Block{}, tc.blocks[:newlen]...),
 	}
+
 	return cpy
 }
 
@@ -154,7 +169,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
-	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(testGspec.Config, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -163,10 +178,12 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.blocks[0] && i%22 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
+
 			block.AddTx(tx)
 		}
 		// if the block number is a multiple of 5, add a bonus uncle to the block
@@ -199,10 +216,12 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 	if len(blocks) > 0 {
 		head = blocks[len(blocks)-1].Hash()
 	}
+
 	testBlockchainsLock.Lock()
 	if _, ok := testBlockchains[head]; !ok {
 		testBlockchains[head] = new(testBlockchain)
 	}
+
 	tbc := testBlockchains[head]
 	testBlockchainsLock.Unlock()
 
@@ -211,17 +230,18 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		if pregenerated {
 			panic("Requested chain generation outside of init")
 		}
-		db := rawdb.NewMemoryDatabase()
-		core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
 
-		chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+		chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, testGspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		if err != nil {
 			panic(err)
 		}
+
 		if n, err := chain.InsertChain(blocks); err != nil {
 			panic(fmt.Sprintf("block %d: %v", n, err))
 		}
+
 		tbc.chain = chain
 	})
+
 	return tbc.chain
 }

@@ -137,8 +137,10 @@ func pubkeyParams(key *PublicKey) (*ECIESParams, error) {
 			return nil, ErrUnsupportedECIESParameters
 		}
 	}
+
 	if params.KeyLen > maxKeyLen {
 		return nil, ErrInvalidKeyLen
 	}
+
 	return params, nil
 }

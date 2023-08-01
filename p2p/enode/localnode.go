@@ -83,6 +83,7 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 	ln.seq = db.localSeq(ln.id)
 	ln.update = time.Now()
 	ln.cur.Store((*Node)(nil))
+
 	return ln
 }
 
@@ -121,6 +122,7 @@ func (ln *LocalNode) Node() *Node {
 
 	ln.sign()
 	ln.update = time.Now()
+
 	return ln.cur.Load().(*Node)
 }
 
@@ -179,6 +181,7 @@ func (ln *LocalNode) endpointForIP(ip net.IP) *lnEndpoint {
 	if ip.To4() != nil {
 		return &ln.endpoint4
 	}
+
 	return &ln.endpoint6
 }
 
@@ -243,16 +246,19 @@ func (ln *LocalNode) updateEndpoints() {
 	} else {
 		ln.delete(enr.IPv4{})
 	}
+
 	if ip6 != nil && !ip6.IsUnspecified() {
 		ln.set(enr.IPv6(ip6))
 	} else {
 		ln.delete(enr.IPv6{})
 	}
+
 	if udp4 != 0 {
 		ln.set(enr.UDP(udp4))
 	} else {
 		ln.delete(enr.UDP(0))
 	}
+
 	if udp6 != 0 && udp6 != udp4 {
 		ln.set(enr.UDP6(udp6))
 	} else {
@@ -263,15 +269,18 @@ func (ln *LocalNode) updateEndpoints() {
 // get returns the endpoint with highest precedence.
 func (e *lnEndpoint) get() (newIP net.IP, newPort uint16) {
 	newPort = e.fallbackUDP
+
 	if e.fallbackIP != nil {
 		newIP = e.fallbackIP
 	}
+
 	if e.staticIP != nil {
 		newIP = e.staticIP
 	} else if ip, port := predictAddr(e.track); ip != nil {
 		newIP = ip
 		newPort = port
 	}
+
 	return newIP, newPort
 }
 
@@ -282,12 +291,15 @@ func predictAddr(t *netutil.IPTracker) (net.IP, uint16) {
 	if ep == "" {
 		return nil, 0
 	}
+
 	ipString, portString, _ := net.SplitHostPort(ep)
 	ip := net.ParseIP(ipString)
+
 	port, err := strconv.ParseUint(portString, 10, 16)
 	if err != nil {
 		return nil, 0
 	}
+
 	return ip, uint16(port)
 }
 
@@ -304,15 +316,19 @@ func (ln *LocalNode) sign() {
 	for _, e := range ln.entries {
 		r.Set(e)
 	}
+
 	ln.bumpSeq()
 	r.SetSeq(ln.seq)
+
 	if err := SignV4(&r, ln.key); err != nil {
 		panic(fmt.Errorf("enode: can't sign record: %v", err))
 	}
+
 	n, err := New(ValidSchemes, &r)
 	if err != nil {
 		panic(fmt.Errorf("enode: can't verify local record: %v", err))
 	}
+
 	ln.cur.Store(n)
 	log.Info("New local node record", "seq", ln.seq, "id", n.ID(), "ip", n.IP(), "udp", n.UDP(), "tcp", n.TCP())
 }
@@ -328,5 +344,6 @@ func nowMilliseconds() uint64 {
 	if ns < 0 {
 		return 0
 	}
+
 	return uint64(ns / 1000 / 1000)
 }

@@ -17,7 +17,7 @@
 package enode
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"net"
 	"testing"
 
@@ -29,6 +29,7 @@ import (
 func newLocalNodeForTesting() (*LocalNode, *DB) {
 	db, _ := OpenDB("")
 	key, _ := crypto.GenerateKey()
+
 	return NewLocalNode(db, key), db
 }
 
@@ -41,6 +42,7 @@ func TestLocalNode(t *testing.T) {
 	}
 
 	ln.Set(enr.WithEntry("x", uint(3)))
+
 	var x uint
 	if err := ln.Node().Load(enr.WithEntry("x", &x)); err != nil {
 		t.Fatal("can't load entry 'x':", err)
@@ -62,6 +64,7 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 	}
 
 	ln.Set(enr.WithEntry("x", uint(1)))
+
 	if s := ln.Node().Seq(); s != initialSeq+1 {
 		t.Fatalf("wrong seq %d after set, want %d", s, initialSeq+1)
 	}
@@ -79,6 +82,7 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 	// Create a new instance with a different node key on the same database.
 	// This should reset the sequence number.
 	key, _ := crypto.GenerateKey()
+
 	ln3 := NewLocalNode(db, key)
 	if s := ln3.Node().Seq(); s < finalSeq {
 		t.Fatalf("wrong seq %d on instance with changed key, want >= %d", s, finalSeq)
@@ -92,6 +96,7 @@ func TestLocalNodeEndpoint(t *testing.T) {
 		predicted = &net.UDPAddr{IP: net.IP{127, 0, 1, 2}, Port: 81}
 		staticIP  = net.IP{127, 0, 1, 2}
 	)
+
 	ln, db := newLocalNodeForTesting()
 	defer db.Close()
 

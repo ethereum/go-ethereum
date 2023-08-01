@@ -149,11 +149,14 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": false, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
 	require.NoError(t, err)
+
 	var b bytes.Buffer
+
 	var i uint8 = 1
 	for ; i <= 3; i++ {
 		b.Write(packNum(reflect.ValueOf(i)))
 	}
+
 	unpacked, err := abi.Unpack("test", b.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, [2]uint8{1, 2}, unpacked[0])
@@ -161,7 +164,6 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 }
 
 func TestEventTupleUnpack(t *testing.T) {
-
 	type EventTransfer struct {
 		Value *big.Int
 	}
@@ -210,6 +212,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	bigintExpected2 := big.NewInt(2218516807680)
 	bigintExpected3 := big.NewInt(1000001)
 	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
+
 	var testCases = []struct {
 		data     string
 		dest     interface{}
@@ -344,24 +347,33 @@ func TestEventTupleUnpack(t *testing.T) {
 func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, assert *assert.Assertions) error {
 	data, err := hex.DecodeString(hexData)
 	assert.NoError(err, "Hex data should be a correct hex-string")
+
 	var e Event
+
 	assert.NoError(json.Unmarshal(jsonEvent, &e), "Should be able to unmarshal event ABI")
 	a := ABI{Events: map[string]Event{"e": e}}
+
 	return a.UnpackIntoInterface(dest, "e", data)
 }
 
 // TestEventUnpackIndexed verifies that indexed field will be skipped by event decoder.
 func TestEventUnpackIndexed(t *testing.T) {
 	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
+
 	type testStruct struct {
 		Value1 uint8 // indexed
 		Value2 uint8
 	}
+
 	abi, err := JSON(strings.NewReader(definition))
 	require.NoError(t, err)
+
 	var b bytes.Buffer
+
 	b.Write(packNum(reflect.ValueOf(uint8(8))))
+
 	var rst testStruct
+
 	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes()))
 	require.Equal(t, uint8(0), rst.Value1)
 	require.Equal(t, uint8(8), rst.Value2)
@@ -370,13 +382,17 @@ func TestEventUnpackIndexed(t *testing.T) {
 // TestEventIndexedWithArrayUnpack verifies that decoder will not overflow when static array is indexed input.
 func TestEventIndexedWithArrayUnpack(t *testing.T) {
 	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"string"}]}]`
+
 	type testStruct struct {
 		Value1 [2]uint8 // indexed
 		Value2 string
 	}
+
 	abi, err := JSON(strings.NewReader(definition))
 	require.NoError(t, err)
+
 	var b bytes.Buffer
+
 	stringOut := "abc"
 	// number of fields that will be encoded * 32
 	b.Write(packNum(reflect.ValueOf(32)))
@@ -384,6 +400,7 @@ func TestEventIndexedWithArrayUnpack(t *testing.T) {
 	b.Write(common.RightPadBytes([]byte(stringOut), 32))
 
 	var rst testStruct
+
 	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes()))
 	require.Equal(t, [2]uint8{0, 0}, rst.Value1)
 	require.Equal(t, stringOut, rst.Value2)

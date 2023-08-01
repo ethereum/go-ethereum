@@ -39,6 +39,7 @@ type sigCache struct {
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
+
 	switch {
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
@@ -51,6 +52,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	default:
 		signer = FrontierSigner{}
 	}
+
 	return signer
 }
 
@@ -66,13 +68,16 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.LondonBlock != nil {
 			return NewLondonSigner(config.ChainID)
 		}
+
 		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
+
 		if config.EIP155Block != nil {
 			return NewEIP155Signer(config.ChainID)
 		}
 	}
+
 	return HomesteadSigner{}
 }
 
@@ -87,16 +92,19 @@ func LatestSignerForChainID(chainID *big.Int) Signer {
 	if chainID == nil {
 		return HomesteadSigner{}
 	}
+
 	return NewLondonSigner(chainID)
 }
 
 // SignTx signs the transaction using the given signer and private key.
 func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
 	h := s.Hash(tx)
+
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
+
 	return tx.WithSignature(s, sig)
 }
 
@@ -104,10 +112,12 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, error) {
 	tx := NewTx(txdata)
 	h := s.Hash(tx)
+
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
+
 	return tx.WithSignature(s, sig)
 }
 
@@ -118,6 +128,7 @@ func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction 
 	if err != nil {
 		panic(err)
 	}
+
 	return tx
 }
 
@@ -186,13 +197,16 @@ func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
+
 	V, R, S := tx.RawSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
+
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, ErrInvalidChainId
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
+
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -209,10 +223,12 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
 	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-		return nil, nil, nil, ErrInvalidChainId
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 	}
+
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
+
 	return R, S, V, nil
 }
 
@@ -222,6 +238,7 @@ func (s londonSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
+
 	return prefixedRlpHash(
 		tx.Type(),
 		[]interface{}{
@@ -256,11 +273,13 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
+
 	switch tx.Type() {
 	case LegacyTxType:
 		if !tx.Protected() {
 			return HomesteadSigner{}.Sender(tx)
 		}
+
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
 	case AccessListTxType:
@@ -270,9 +289,11 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
 	}
+
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, ErrInvalidChainId
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
+
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -284,13 +305,15 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
 		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, ErrInvalidChainId
+			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 		}
+
 		R, S, _ = decodeSignature(sig)
 		V = big.NewInt(int64(sig[64]))
 	default:
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
+
 	return R, S, V, nil
 }
 
@@ -340,6 +363,7 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
+
 	return EIP155Signer{
 		chainId:    chainId,
 		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
@@ -361,15 +385,19 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
+
 	if !tx.Protected() {
 		return HomesteadSigner{}.Sender(tx)
 	}
+
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, ErrInvalidChainId
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
+
 	V, R, S := tx.RawSignatureValues()
 	V = new(big.Int).Sub(V, s.chainIdMul)
 	V.Sub(V, big8)
+
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -379,11 +407,13 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	if tx.Type() != LegacyTxType {
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
+
 	R, S, V = decodeSignature(sig)
 	if s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
 		V.Add(V, s.chainIdMul)
 	}
+
 	return R, S, V, nil
 }
 
@@ -401,7 +431,7 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	})
 }
 
-// HomesteadTransaction implements TransactionInterface using the
+// HomesteadSigner implements Signer interface using the
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
@@ -424,10 +454,14 @@ func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
+
 	v, r, s := tx.RawSignatureValues()
+
 	return recoverPlain(hs.Hash(tx), r, s, v, true)
 }
 
+// FrontierSigner implements Signer interface using the
+// frontier rules.
 type FrontierSigner struct{}
 
 func (s FrontierSigner) ChainID() *big.Int {
@@ -443,7 +477,9 @@ func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
+
 	v, r, s := tx.RawSignatureValues()
+
 	return recoverPlain(fs.Hash(tx), r, s, v, false)
 }
 
@@ -453,7 +489,9 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 	if tx.Type() != LegacyTxType {
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
+
 	r, s, v = decodeSignature(sig)
+
 	return r, s, v, nil
 }
 
@@ -510,9 +548,11 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want %d", len(sig), crypto.SignatureLength))
 	}
+
 	r = new(big.Int).SetBytes(sig[:32])
 	s = new(big.Int).SetBytes(sig[32:64])
 	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
+
 	return r, s, v
 }
 
@@ -520,6 +560,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	if Vb.BitLen() > 8 {
 		return common.Address{}, ErrInvalidSig
 	}
+
 	V := byte(Vb.Uint64() - 27)
 	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
 		return common.Address{}, ErrInvalidSig
@@ -535,11 +576,15 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	if err != nil {
 		return common.Address{}, err
 	}
+
 	if len(pub) == 0 || pub[0] != 4 {
 		return common.Address{}, errors.New("invalid public key")
 	}
+
 	var addr common.Address
+
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+
 	return addr, nil
 }
 
@@ -550,8 +595,11 @@ func deriveChainId(v *big.Int) *big.Int {
 		if v == 27 || v == 28 {
 			return new(big.Int)
 		}
+
 		return new(big.Int).SetUint64((v - 35) / 2)
 	}
+
 	v = new(big.Int).Sub(v, big.NewInt(35))
+
 	return v.Div(v, big.NewInt(2))
 }

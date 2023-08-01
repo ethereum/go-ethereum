@@ -48,9 +48,11 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		for {
 			cs, _, _ := cIndexer.Sections()
 			bts, _, _ := btIndexer.Sections()
+
 			if cs >= 1 && bts >= 1 {
 				break
 			}
+
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -61,6 +63,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -70,6 +73,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	if syncMode == 1 || syncMode == 2 {
 		// Assemble checkpoint 0
 		s, _, head := server.chtIndexer.Sections()
+
 		cp := &params.TrustedCheckpoint{
 			SectionIndex: 0,
 			SectionHead:  head,
@@ -88,9 +92,11 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 			auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
+
 			if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 				t.Error("register checkpoint failed", err)
 			}
+
 			server.backend.Commit()
 
 			// Wait for the checkpoint registration
@@ -100,8 +106,10 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 					time.Sleep(10 * time.Millisecond)
 					continue
 				}
+
 				break
 			}
+
 			expected += 1
 		}
 	}
@@ -120,6 +128,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	if err != nil {
 		t.Fatalf("Failed to connect testing peers %v", err)
 	}
+
 	defer peer1.close()
 	defer peer2.close()
 
@@ -128,6 +137,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
@@ -144,9 +154,11 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 		for {
 			cs, _, _ := cIndexer.Sections()
 			bts, _, _ := btIndexer.Sections()
+
 			if cs >= 1 && bts >= 1 {
 				break
 			}
+
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -157,6 +169,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -176,9 +189,11 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	auth, _ := bind.NewKeyedTransactorWithChainID(signerKey, big.NewInt(1337))
+
 	if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(auth, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 		t.Error("register checkpoint failed", err)
 	}
+
 	server.backend.Commit()
 
 	// Wait for the checkpoint registration
@@ -188,8 +203,10 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+
 		break
 	}
+
 	expected += 1
 
 	// Explicitly set the oracle as nil. In normal use case it can happen
@@ -226,6 +243,7 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool, protocol int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
@@ -241,9 +259,11 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		for {
 			cs, _, _ := cIndexer.Sections()
 			bts, _, _ := btIndexer.Sections()
+
 			if cs >= 2 && bts >= 2 {
 				break
 			}
+
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -254,6 +274,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -276,6 +297,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		expectStart = config.ChtSize - 1
 		expectEnd   = 2*config.ChtSize + config.ChtConfirms
 	)
+
 	client.handler.syncStart = func(header *types.Header) {
 		if header.Number.Uint64() == expectStart {
 			start <- nil
@@ -300,6 +322,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
@@ -310,6 +333,7 @@ func testSyncFromConfiguredCheckpoint(t *testing.T, protocol int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
@@ -325,9 +349,11 @@ func testSyncAll(t *testing.T, protocol int) {
 		for {
 			cs, _, _ := cIndexer.Sections()
 			bts, _, _ := btIndexer.Sections()
+
 			if cs >= 2 && bts >= 2 {
 				break
 			}
+
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -338,6 +364,7 @@ func testSyncAll(t *testing.T, protocol int) {
 		indexFn:   waitIndexers,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -349,6 +376,7 @@ func testSyncAll(t *testing.T, protocol int) {
 		expectStart = uint64(0)
 		expectEnd   = 2*config.ChtSize + config.ChtConfirms
 	)
+
 	client.handler.syncStart = func(header *types.Header) {
 		if header.Number.Uint64() == expectStart {
 			start <- nil
@@ -373,6 +401,7 @@ func testSyncAll(t *testing.T, protocol int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
@@ -383,6 +412,7 @@ func testSyncAll(t *testing.T, protocol int) {
 		if err != nil {
 			t.Error("sync failed", err)
 		}
+
 		return
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("checkpoint syncing timeout")
