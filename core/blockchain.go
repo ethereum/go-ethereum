@@ -220,7 +220,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64, checkCircuitCapacity bool) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -263,7 +263,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:         engine,
 		vmConfig:       vmConfig,
 	}
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
+	bc.validator = NewBlockValidator(chainConfig, bc, engine, db, checkCircuitCapacity)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
@@ -1182,10 +1182,14 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 	rawdb.WriteBlock(batch, block)
 
 	queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.ParentHash())
+
+	// note: we can insert blocks with header-only ancestors here,
+	// so queueIndex might not yet be available in DB.
 	if queueIndex != nil {
-		// note: we can insert blocks with header-only ancestors here,
-		// so queueIndex might not yet be available in DB.
-		rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), *queueIndex+uint64(block.L1MessageCount()))
+		// do not overwrite the index written by the miner worker
+		if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
+			rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), *queueIndex+uint64(block.NumL1MessagesProcessed(*queueIndex)))
+		}
 	}
 
 	if err := batch.Write(); err != nil {
@@ -1249,7 +1253,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// so the parent will always be inserted first.
 		log.Crit("Queue index in DB is nil", "parent", block.ParentHash(), "hash", block.Hash())
 	}
-	rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), *queueIndex+uint64(block.L1MessageCount()))
+	// do not overwrite the index written by the miner worker
+	if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
+		rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), *queueIndex+uint64(block.NumL1MessagesProcessed(*queueIndex)))
+	}
 
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)

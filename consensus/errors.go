@@ -45,8 +45,7 @@ var (
 
 	// ErrInvalidL1MessageOrder is returned if a block contains L1 messages in the wrong
 	// order. Possible scenarios are: (1) L1 messages do not follow their QueueIndex order,
-	// (2) the block skipped one or more L1 messages, (3) L1 messages are not included in
-	// a contiguous block at the front of the block.
+	// (2) L1 messages are not included in a contiguous block at the front of the block.
 	ErrInvalidL1MessageOrder = errors.New("invalid L1 message order")
 
 	// ErrUnknownL1Message is returned if a block contains an L1 message that does not

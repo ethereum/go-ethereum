@@ -11,7 +11,11 @@ import (
 )
 
 // WriteBlockRowConsumption writes a RowConsumption of the block to the database.
-func WriteBlockRowConsumption(db ethdb.KeyValueWriter, l2BlockHash common.Hash, rc types.RowConsumption) {
+func WriteBlockRowConsumption(db ethdb.KeyValueWriter, l2BlockHash common.Hash, rc *types.RowConsumption) {
+	if rc == nil {
+		return
+	}
+
 	bytes, err := rlp.EncodeToBytes(&rc)
 	if err != nil {
 		log.Crit("Failed to RLP encode RowConsumption ", "err", err)

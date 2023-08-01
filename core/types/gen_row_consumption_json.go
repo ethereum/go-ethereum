@@ -9,37 +9,37 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 )
 
-var _ = (*subCircuitRowConsumptionMarshaling)(nil)
+var _ = (*subCircuitRowUsageMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (s SubCircuitRowConsumption) MarshalJSON() ([]byte, error) {
-	type SubCircuitRowConsumption struct {
-		CircuitName string         `json:"circuitName" gencodec:"required"`
-		Rows        hexutil.Uint64 `json:"rows" gencodec:"required"`
+func (s SubCircuitRowUsage) MarshalJSON() ([]byte, error) {
+	type SubCircuitRowUsage struct {
+		Name      string         `json:"name" gencodec:"required"`
+		RowNumber hexutil.Uint64 `json:"row_number" gencodec:"required"`
 	}
-	var enc SubCircuitRowConsumption
-	enc.CircuitName = s.CircuitName
-	enc.Rows = hexutil.Uint64(s.Rows)
+	var enc SubCircuitRowUsage
+	enc.Name = s.Name
+	enc.RowNumber = hexutil.Uint64(s.RowNumber)
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (s *SubCircuitRowConsumption) UnmarshalJSON(input []byte) error {
-	type SubCircuitRowConsumption struct {
-		CircuitName *string         `json:"circuitName" gencodec:"required"`
-		Rows        *hexutil.Uint64 `json:"rows" gencodec:"required"`
+func (s *SubCircuitRowUsage) UnmarshalJSON(input []byte) error {
+	type SubCircuitRowUsage struct {
+		Name      *string         `json:"name" gencodec:"required"`
+		RowNumber *hexutil.Uint64 `json:"row_number" gencodec:"required"`
 	}
-	var dec SubCircuitRowConsumption
+	var dec SubCircuitRowUsage
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	if dec.CircuitName == nil {
-		return errors.New("missing required field 'circuitName' for SubCircuitRowConsumption")
+	if dec.Name == nil {
+		return errors.New("missing required field 'name' for SubCircuitRowUsage")
 	}
-	s.CircuitName = *dec.CircuitName
-	if dec.Rows == nil {
-		return errors.New("missing required field 'rows' for SubCircuitRowConsumption")
+	s.Name = *dec.Name
+	if dec.RowNumber == nil {
+		return errors.New("missing required field 'row_number' for SubCircuitRowUsage")
 	}
-	s.Rows = uint64(*dec.Rows)
+	s.RowNumber = uint64(*dec.RowNumber)
 	return nil
 }

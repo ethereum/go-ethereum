@@ -17,13 +17,18 @@
 package core
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/ethdb"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -35,15 +40,25 @@ type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for validating
+
+	// circuit capacity checker related fields
+	checkCircuitCapacity   bool                                           // whether enable circuit capacity check
+	db                     ethdb.Database                                 // db to store row consumption
+	cMu                    sync.Mutex                                     // mutex for circuit capacity checker
+	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker // circuit capacity checker instance
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine, db ethdb.Database, checkCircuitCapacity bool) *BlockValidator {
 	validator := &BlockValidator{
-		config: config,
-		engine: engine,
-		bc:     blockchain,
+		config:                 config,
+		engine:                 engine,
+		bc:                     blockchain,
+		checkCircuitCapacity:   checkCircuitCapacity,
+		db:                     db,
+		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(),
 	}
+	log.Info("created new BlockValidator", "CircuitCapacityChecker ID", validator.circuitCapacityChecker.ID)
 	return validator
 }
 
@@ -79,18 +94,34 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		return consensus.ErrPrunedAncestor
 	}
-	return v.ValidateL1Messages(block)
+	if err := v.ValidateL1Messages(block); err != nil {
+		return err
+	}
+	if v.checkCircuitCapacity {
+		// if a block's RowConsumption has been stored, which means it has been processed before,
+		// (e.g., in miner/worker.go or in insertChain),
+		// we simply skip its calculation and validation
+		if rawdb.ReadBlockRowConsumption(v.db, block.Hash()) != nil {
+			return nil
+		}
+		rowConsumption, err := v.validateCircuitRowConsumption(block)
+		if err != nil {
+			return err
+		}
+		rawdb.WriteBlockRowConsumption(v.db, block.Hash(), rowConsumption)
+	}
+	return nil
 }
 
 // ValidateL1Messages validates L1 messages contained in a block.
 // We check the following conditions:
 // - L1 messages are in a contiguous section at the front of the block.
 // - The first L1 message's QueueIndex is right after the last L1 message included in the chain.
-// - L1 messages follow the QueueIndex order. No L1 message is skipped.
+// - L1 messages follow the QueueIndex order.
 // - The L1 messages included in the block match the node's view of the L1 ledger.
 func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
-	// no further processing if the block contains no L1 messages
-	if block.L1MessageCount() == 0 {
+	// skip DB read if the block contains no L1 messages
+	if !block.ContainsL1Messages() {
 		return nil
 	}
 
@@ -120,16 +151,30 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 			return consensus.ErrInvalidL1MessageOrder
 		}
 
-		// check queue index
-		// TODO: account for skipped messages here
-		if tx.AsL1MessageTx().QueueIndex != queueIndex {
+		// queue index cannot decrease
+		txQueueIndex := tx.AsL1MessageTx().QueueIndex
+
+		if txQueueIndex < queueIndex {
 			return consensus.ErrInvalidL1MessageOrder
 		}
 
-		queueIndex += 1
+		// skipped messages
+		// TODO: consider verifying that skipped messages overflow
+		for index := queueIndex; index < txQueueIndex; index++ {
+			log.Debug("Skipped L1 message", "block", block.Hash().String(), "queueIndex", index)
+
+			if exists := it.Next(); !exists {
+				// the message in this block is not available in our local db.
+				// we'll reprocess this block at a later time.
+				return consensus.ErrMissingL1MessageData
+			}
+		}
+
+		queueIndex = txQueueIndex + 1
 
 		if exists := it.Next(); !exists {
-			// we'll reprocess this block at a later time
+			// the message in this block is not available in our local db.
+			// we'll reprocess this block at a later time.
 			return consensus.ErrMissingL1MessageData
 		}
 
@@ -201,4 +246,36 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		}
 	}
 	return limit
+}
+
+func (v *BlockValidator) createTraceEnv(block *types.Block) (*TraceEnv, error) {
+	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, errors.New("validateCircuitRowConsumption: no parent block found")
+	}
+
+	statedb, err := v.bc.StateAt(parent.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	return CreateTraceEnv(v.config, v.bc, v.engine, statedb, parent, block)
+}
+
+func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {
+	env, err := v.createTraceEnv(block)
+	if err != nil {
+		return nil, err
+	}
+
+	traces, err := env.GetBlockTrace(block)
+	if err != nil {
+		return nil, err
+	}
+
+	v.cMu.Lock()
+	defer v.cMu.Unlock()
+
+	v.circuitCapacityChecker.Reset()
+	return v.circuitCapacityChecker.ApplyBlock(traces)
 }

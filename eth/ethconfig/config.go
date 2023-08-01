@@ -207,6 +207,9 @@ type Config struct {
 
 	// Trace option
 	MPTWitness int
+
+	// Check circuit capacity in block validator
+	CheckCircuitCapacity bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

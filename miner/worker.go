@@ -36,6 +36,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -95,14 +96,21 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	// circuit capacity check related fields
+	traceEnv   *core.TraceEnv        // env for tracing
+	accRows    *types.RowConsumption // accumulated row consumption for a block
+	maxL1Index uint64                // maximum L1 index included or skipped
 }
 
 // task contains all information for consensus engine sealing and result submitting.
 type task struct {
-	receipts  []*types.Receipt
-	state     *state.StateDB
-	block     *types.Block
-	createdAt time.Time
+	receipts   []*types.Receipt
+	state      *state.StateDB
+	block      *types.Block
+	createdAt  time.Time
+	accRows    *types.RowConsumption // accumulated row consumption in the circuit side
+	maxL1Index uint64                // maximum L1 index included or skipped
 }
 
 const (
@@ -190,6 +198,8 @@ type worker struct {
 	// External functions
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
+	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker
+
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
@@ -199,29 +209,31 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		mux:                mux,
-		chain:              eth.BlockChain(),
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		l1MsgsCh:           make(chan core.NewL1MsgsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		config:                 config,
+		chainConfig:            chainConfig,
+		engine:                 engine,
+		eth:                    eth,
+		mux:                    mux,
+		chain:                  eth.BlockChain(),
+		isLocalBlock:           isLocalBlock,
+		localUncles:            make(map[common.Hash]*types.Block),
+		remoteUncles:           make(map[common.Hash]*types.Block),
+		unconfirmed:            newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		pendingTasks:           make(map[common.Hash]*task),
+		txsCh:                  make(chan core.NewTxsEvent, txChanSize),
+		l1MsgsCh:               make(chan core.NewL1MsgsEvent, txChanSize),
+		chainHeadCh:            make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:            make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:              make(chan *newWorkReq),
+		taskCh:                 make(chan *task),
+		resultCh:               make(chan *types.Block, resultQueueSize),
+		exitCh:                 make(chan struct{}),
+		startCh:                make(chan struct{}, 1),
+		resubmitIntervalCh:     make(chan time.Duration),
+		resubmitAdjustCh:       make(chan *intervalAdjust, resubmitAdjustChanSize),
+		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(),
 	}
+	log.Info("created new worker", "CircuitCapacityChecker ID", worker.circuitCapacityChecker.ID)
 
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -625,6 +637,14 @@ func (w *worker) taskLoop() {
 				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
 				w.pendingMu.Unlock()
+			} else {
+				// Store highest L1 queue index processed by this block. This includes both
+				// included and skipped messages. This way, if a block only skips messages,
+				// we won't reprocess the same messages from the next block.
+				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), sealHash, task.maxL1Index+1)
+
+				// Store circuit row consumption.
+				rawdb.WriteBlockRowConsumption(w.eth.ChainDb(), sealHash, task.accRows)
 			}
 		case <-w.exitCh:
 			interrupt()
@@ -714,6 +734,15 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	if err != nil {
 		return err
 	}
+
+	traceEnv, err := core.CreateTraceEnv(w.chainConfig, w.chain, w.engine, state, parent,
+		// new block with a placeholder tx, for traceEnv's ExecutionResults length & TxStorageTraces length
+		types.NewBlockWithHeader(header).WithBody([]*types.Transaction{types.NewTx(&types.LegacyTx{})}, nil),
+	)
+	if err != nil {
+		return err
+	}
+
 	state.StartPrefetcher("miner")
 
 	env := &environment{
@@ -723,6 +752,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		family:    mapset.NewSet(),
 		uncles:    mapset.NewSet(),
 		header:    header,
+		traceEnv:  traceEnv,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -736,6 +766,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.tcount = 0
 	env.blockSize = 0
 	env.l1TxCount = 0
+	env.maxL1Index = 0
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
@@ -802,21 +833,44 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
+	// has to check circuit capacity before `core.ApplyTransaction`,
+	// because if the tx can be successfully executed but circuit capacity overflows, it will be inconvenient to revert
+	traces, err := w.current.traceEnv.GetBlockTrace(
+		types.NewBlockWithHeader(w.current.header).WithBody([]*types.Transaction{tx}, nil),
+	)
+	if err != nil {
+		// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
+		w.current.state.RevertToSnapshot(snap)
+		return nil, err
+	}
+	accRows, err := w.circuitCapacityChecker.ApplyTransaction(traces)
+	if err != nil {
+		// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
+		w.current.state.RevertToSnapshot(snap)
+		return nil, err
+	}
+
+	// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
+	w.current.state.RevertToSnapshot(snap)
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}
+
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
+	w.current.accRows = accRows
 
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
+func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) (bool, bool) {
+	var circuitCapacityReached bool
+
 	// Short circuit if current is nil
 	if w.current == nil {
-		return true
+		return true, circuitCapacityReached
 	}
 
 	gasLimit := w.current.header.GasLimit
@@ -826,6 +880,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 	var coalescedLogs []*types.Log
 
+loop:
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -845,7 +900,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 					inc:   true,
 				}
 			}
-			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
+			return atomic.LoadInt32(interrupt) == commitInterruptNewHead, circuitCapacityReached
 		}
 		// If we have collected enough transactions then we're done
 		if !w.chainConfig.Scroll.IsValidL2TxCount(w.current.tcount - w.current.l1TxCount + 1) {
@@ -905,6 +960,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			coalescedLogs = append(coalescedLogs, logs...)
 			if tx.IsL1MessageTx() {
 				w.current.l1TxCount++
+				w.current.maxL1Index = tx.AsL1MessageTx().QueueIndex
 			}
 			w.current.tcount++
 			w.current.blockSize += tx.Size()
@@ -913,6 +969,43 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
+
+		case errors.Is(err, circuitcapacitychecker.ErrBlockRowConsumptionOverflow):
+			// Circuit capacity check: circuit capacity limit reached in a block,
+			// don't pop or shift, just quit the loop immediately;
+			// though it might still be possible to add some "smaller" txs,
+			// but it's a trade-off between tracing overhead & block usage rate
+			log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash())
+			circuitCapacityReached = true
+			break loop
+
+		case (errors.Is(err, circuitcapacitychecker.ErrTxRowConsumptionOverflow) && tx.IsL1MessageTx()):
+			// Circuit capacity check: L1MessageTx row consumption too high, shift to the next from the account,
+			// because we shouldn't skip the entire txs from the same account.
+			// This is also useful for skipping "problematic" L1MessageTxs.
+			queueIndex := tx.AsL1MessageTx().QueueIndex
+			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash(), "queueIndex", queueIndex)
+			w.current.maxL1Index = queueIndex
+			txs.Shift()
+
+		case (errors.Is(err, circuitcapacitychecker.ErrTxRowConsumptionOverflow) && !tx.IsL1MessageTx()):
+			// Circuit capacity check: L2MessageTx row consumption too high, skip the account.
+			// This is also useful for skipping "problematic" L2MessageTxs.
+			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash())
+			txs.Pop()
+
+		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && tx.IsL1MessageTx()):
+			// Circuit capacity check: unknown circuit capacity checker error for L1MessageTx,
+			// shift to the next from the account because we shouldn't skip the entire txs from the same account
+			queueIndex := tx.AsL1MessageTx().QueueIndex
+			log.Trace("Unknown circuit capacity checker error for L1MessageTx", "tx", tx.Hash(), "queueIndex", queueIndex)
+			w.current.maxL1Index = queueIndex
+			txs.Shift()
+
+		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && !tx.IsL1MessageTx()):
+			// Circuit capacity check: unknown circuit capacity checker error for L2MessageTx, skip the account
+			log.Trace("Unknown circuit capacity checker error for L2MessageTx", "tx", tx.Hash())
 			txs.Pop()
 
 		default:
@@ -943,7 +1036,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	if interrupt != nil {
 		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
-	return false
+	return false, circuitCapacityReached
 }
 
 func (w *worker) collectPendingL1Messages() []types.L1MessageTx {
@@ -964,6 +1057,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
+	w.circuitCapacityChecker.Reset()
 
 	if parent.Time() >= uint64(timestamp) {
 		timestamp = int64(parent.Time() + 1)
@@ -1092,22 +1186,28 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			localTxs[account] = txs
 		}
 	}
+	var skipCommit, circuitCapacityReached bool
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Txs) > 0 {
 		log.Trace("Processing L1 messages for inclusion", "count", pendingL1Txs)
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, l1Txs, header.BaseFee)
-		if w.commitTransactions(txs, w.coinbase, interrupt) {
+		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		if skipCommit {
 			return
 		}
 	}
-	if len(localTxs) > 0 {
+	if len(localTxs) > 0 && !circuitCapacityReached {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
-		if w.commitTransactions(txs, w.coinbase, interrupt) {
+		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		if skipCommit {
 			return
 		}
 	}
-	if len(remoteTxs) > 0 {
+	if len(remoteTxs) > 0 && !circuitCapacityReached {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee)
-		if w.commitTransactions(txs, w.coinbase, interrupt) {
+		// don't need to get `circuitCapacityReached` here because we don't have further `commitTransactions`
+		// after this one, and if we assign it won't take effect (`ineffassign`)
+		skipCommit, _ = w.commitTransactions(txs, w.coinbase, interrupt)
+		if skipCommit {
 			return
 		}
 	}
@@ -1135,7 +1235,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			interval()
 		}
 		select {
-		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now(), accRows: w.current.accRows, maxL1Index: w.current.maxL1Index}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
