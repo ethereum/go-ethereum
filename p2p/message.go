@@ -156,7 +156,7 @@ func MsgPipe() (*MsgPipeRW, *MsgPipeRW) {
 	var (
 		c1, c2  = make(chan Msg), make(chan Msg)
 		closing = make(chan struct{})
-		closed  atomic.Int32
+		closed  = new(atomic.Int32)
 		rw1     = &MsgPipeRW{c1, c2, closing, closed}
 		rw2     = &MsgPipeRW{c2, c1, closing, closed}
 	)
@@ -172,7 +172,7 @@ type MsgPipeRW struct {
 	w       chan<- Msg
 	r       <-chan Msg
 	closing chan struct{}
-	closed  atomic.Int32
+	closed  *atomic.Int32
 }
 
 // WriteMsg sends a message on the pipe.
