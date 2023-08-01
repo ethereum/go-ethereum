@@ -41,12 +41,12 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 	if header.BlobGasUsed == nil {
 		return errors.New("header is missing blobGasUsed")
 	}
-	// Verify that the data gas used remains within reasonable limits.
+	// Verify that the blob gas used remains within reasonable limits.
 	if *header.BlobGasUsed > params.BlobTxMaxBlobGasPerBlock {
-		return fmt.Errorf("data gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, params.BlobTxMaxBlobGasPerBlock)
+		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, params.BlobTxMaxBlobGasPerBlock)
 	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
-		return fmt.Errorf("data gas used %d not a multiple of data gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
+		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
 	}
 	// Verify the excessBlobGas is correct based on the parent header
 	var (
@@ -65,8 +65,8 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 	return nil
 }
 
-// CalcExcessBlobGas calculates the excess data gas after applying the set of
-// blobs on top of the excess data gas.
+// CalcExcessBlobGas calculates the excess blob gas after applying the set of
+// blobs on top of the excess blob gas.
 func CalcExcessBlobGas(parentExcessBlobGas uint64, parentBlobGasUsed uint64) uint64 {
 	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
 	if excessBlobGas < params.BlobTxTargetBlobGasPerBlock {
@@ -75,7 +75,7 @@ func CalcExcessBlobGas(parentExcessBlobGas uint64, parentBlobGasUsed uint64) uin
 	return excessBlobGas - params.BlobTxTargetBlobGasPerBlock
 }
 
-// CalcBlobFee calculates the blobfee from the header's excess data gas field.
+// CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(excessBlobGas uint64) *big.Int {
 	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(excessBlobGas), blobGaspriceUpdateFraction)
 }
