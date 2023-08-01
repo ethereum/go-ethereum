@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -1867,6 +1868,19 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 				StorageKeys: []common.Hash{{0}},
 			}}
 			tx, err = types.SignTx(types.NewTx(&types.AccessListTx{Nonce: uint64(i), To: nil, Gas: 58100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040"), AccessList: accessList}), signer, acc1Key)
+		case 5:
+			fee := big.NewInt(500)
+			fee.Add(fee, b.BaseFee())
+			tx, err = types.SignTx(types.NewTx(&types.BlobTx{
+				Nonce:      uint64(i),
+				GasTipCap:  uint256.NewInt(1),
+				GasFeeCap:  uint256.MustFromBig(fee),
+				Gas:        params.TxGas,
+				To:         acc2Addr,
+				BlobFeeCap: uint256.NewInt(1),
+				BlobHashes: []common.Hash{{1}},
+				Value:      new(uint256.Int),
+			}), signer, acc1Key)
 		}
 		if err != nil {
 			t.Errorf("failed to sign tx: %v", err)
@@ -1874,6 +1888,9 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		if tx != nil {
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
+		}
+		if i == 5 {
+			b.SetBlobGas(params.BlobTxBlobGasPerBlob)
 		}
 		b.SetPoS()
 	})
@@ -2017,6 +2034,11 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		{
 			txHash: common.HexToHash("deadbeef"),
 			want:   `null`,
+		},
+		// 7. blob tx
+		{
+			txHash: txHashes[5],
+			want:   `{"blobGasPrice":"0x1","blobGasUsed":"0x20000","blockHash":"0x2ffcbc982ea819900e22b96c72bc85c8c64e080b9479d1c68ee49f55564816e7","blockNumber":"0x6","contractAddress":null,"cumulativeGasUsed":"0x5208","effectiveGasPrice":"0x1b09d63b","from":"0x703c4b2bd70c169f5717101caee543299fc946c7","gasUsed":"0x5208","logs":[],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","status":"0x1","to":"0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e","transactionHash":"0xb51ee3d2a89ba5d5623c73133c8d7a6ba9fb41194c17f4302c21b30994a1180f","transactionIndex":"0x0","type":"0x3"}`,
 		},
 	}
 
