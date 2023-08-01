@@ -82,9 +82,6 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
-	blobGas() uint64
-	blobGasFeeCap() *big.Int
-	blobHashes() []common.Hash
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -288,15 +285,6 @@ func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.g
 // GasFeeCap returns the fee cap per gas of the transaction.
 func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
 
-// BlobGas returns the blob gas limit of the transaction for blob transactions, 0 otherwise.
-func (tx *Transaction) BlobGas() uint64 { return tx.inner.blobGas() }
-
-// BlobGasFeeCap returns the blob gas fee cap per blob gas of the transaction for blob transactions, nil otherwise.
-func (tx *Transaction) BlobGasFeeCap() *big.Int { return tx.inner.blobGasFeeCap() }
-
-// BlobHashes returns the hases of the blob commitments for blob transactions, nil otherwise.
-func (tx *Transaction) BlobHashes() []common.Hash { return tx.inner.blobHashes() }
-
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
@@ -383,14 +371,38 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
 }
 
+// BlobGas returns the blob gas limit of the transaction for blob transactions, 0 otherwise.
+func (tx *Transaction) BlobGas() uint64 {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.blobGas()
+	}
+	return 0
+}
+
+// BlobGasFeeCap returns the blob gas fee cap per blob gas of the transaction for blob transactions, nil otherwise.
+func (tx *Transaction) BlobGasFeeCap() *big.Int {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.BlobFeeCap.ToBig()
+	}
+	return nil
+}
+
+// BlobHashes returns the hases of the blob commitments for blob transactions, nil otherwise.
+func (tx *Transaction) BlobHashes() []common.Hash {
+	if blobtx, ok := tx.inner.(*BlobTx); ok {
+		return blobtx.BlobHashes
+	}
+	return nil
+}
+
 // BlobGasFeeCapCmp compares the blob fee cap of two transactions.
 func (tx *Transaction) BlobGasFeeCapCmp(other *Transaction) int {
-	return tx.inner.blobGasFeeCap().Cmp(other.inner.blobGasFeeCap())
+	return tx.BlobGasFeeCap().Cmp(other.BlobGasFeeCap())
 }
 
 // BlobGasFeeCapIntCmp compares the blob fee cap of the transaction against the given blob fee cap.
 func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
-	return tx.inner.blobGasFeeCap().Cmp(other)
+	return tx.BlobGasFeeCap().Cmp(other)
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set
