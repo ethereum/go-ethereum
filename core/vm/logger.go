@@ -43,5 +43,52 @@ type EVMLogger interface {
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
-	OnGasConsumed(gas, amount uint64)
+	OnGasConsumed(gas, amount uint64, reason GasChangeReason)
 }
+
+// GasChangeReason is used to indicate the reason for a gas change, useful
+// for tracing and reporting.
+type GasChangeReason byte
+
+const (
+	GasChangeUnspecified GasChangeReason = iota
+
+	// GasInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call
+	GasInitialBalance
+	// GasRefunded is the amount of gas that will be refunded to the caller for data returned to the chain
+	// PR Review: Is that the right description? Called in core/state_transition.go#StateTransition.refundGas
+	GasRefunded
+	// GasBuyBack is the amount of gas that will be bought back by the chain and returned in Wei to the caller
+	GasBuyBack
+	// GasChangeIntrinsicGas is the amount of gas that will be charged for the intrinsic cost of the transaction, there is
+	// always exactly one of those per transaction
+	GasChangeIntrinsicGas
+
+	// PR Review: `GasChangeContractCreation/2` are actually the EIP150 burn cost of CREATE/CREATE2 respectively.
+	// I think our old name `GasChangeContractCreation/2` is not really accurate. I don't
+	// think that using EIP150 as a name is a good idea as rules can change in the future. So
+	// maybe we can just call them `GasChangeCreateBurn/GasChangeCreate2Burn`? Burn might
+	// feels like the wrong term, `Stipend` came to mind also but I'm unsure.
+	//
+	// I would like also to keep the distinction between CREATE and CREATE2 however, it's an
+	// important thing IMO as they are different and could use different rules in the future.
+
+	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE, today controlled by EIP150 rules
+	GasChangeContractCreation
+	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2, today controlled by EIP150 rules
+	GasChangeContractCreation2
+	// GasChangeCodeStorage is the amount of gas that will be charged for code storage
+	GasChangeCodeStorage
+	// GasChangeOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
+	// performed can be check by `CaptureState` handling
+	GasChangeOpCode
+	// GasChangePrecompiledContract is the amount of gas that will be charged for a precompiled contract execution
+	GasChangePrecompiledContract
+	// GasChangeStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules
+	GasChangeStorageColdAccess
+
+	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the caller after the execution of the call, if there is left over at the end of execution
+	GasChangeCallLeftOverRefunded
+	// GasChangeFailedExecution is the burning of the remaining gas when the execution failed without a revert
+	GasChangeFailedExecution
+)
