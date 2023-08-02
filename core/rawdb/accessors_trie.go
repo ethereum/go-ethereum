@@ -36,7 +36,7 @@ import (
 //
 // Now this scheme is still kept for backward compatibility, and it will be used
 // for archive node and some other tries(e.g. light trie).
-const HashScheme = "hashScheme"
+const HashScheme = "hash"
 
 // PathScheme is the new path-based state scheme with which trie nodes are stored
 // in the disk with node path as the database key. This scheme will only store one
@@ -44,7 +44,7 @@ const HashScheme = "hashScheme"
 // is native. At the same time, this scheme will put adjacent trie nodes in the same
 // area of the disk with good data locality property. But this scheme needs to rely
 // on extra state diffs to survive deep reorg.
-const PathScheme = "pathScheme"
+const PathScheme = "path"
 
 // hasher is used to compute the sha256 hash of the provided data.
 type hasher struct{ sha crypto.KeccakState }

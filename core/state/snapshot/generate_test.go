@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
@@ -163,7 +164,9 @@ func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &trie.Config{}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		config.PathDB = &pathdb.Config{} // disable caching
+	} else {
+		config.HashDB = &hashdb.Config{} // disable caching
 	}
 	triedb := trie.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)

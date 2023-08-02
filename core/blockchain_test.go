@@ -1008,7 +1008,7 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 
 	archiveCaching := *defaultCacheConfig
 	archiveCaching.TrieDirtyDisabled = true
-	archiveCaching.NodeScheme = scheme
+	archiveCaching.StateScheme = scheme
 
 	archive, _ := NewBlockChain(archiveDb, &archiveCaching, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if n, err := archive.InsertChain(blocks); err != nil {

@@ -205,7 +205,7 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	triedb := utils.MakeDatabase(ctx, chaindb, true)
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, true)
 	defer triedb.Close()
 
 	snapConfig := snapshot.Config{
@@ -256,7 +256,9 @@ func traverseState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	triedb := utils.MakeDatabase(ctx, chaindb, true)
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, true)
 	defer triedb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -358,7 +360,9 @@ func traverseRawState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	triedb := utils.MakeDatabase(ctx, chaindb, true)
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, true)
 	defer triedb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -518,7 +522,7 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeDatabase(ctx, db, true)
+	triedb := utils.MakeTrieDatabase(ctx, db, true)
 	defer triedb.Close()
 
 	snapConfig := snapshot.Config{

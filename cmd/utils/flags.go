@@ -75,6 +75,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
@@ -270,14 +271,15 @@ var (
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	PathBasedSchemeFlag = &cli.BoolFlag{
-		Name:     "trie.path-based",
-		Usage:    "Enables experiment path-based state scheme (default = disabled)",
+	StateSchemeFlag = &cli.StringFlag{
+		Name:     "state.scheme",
+		Usage:    "Ethereum state scheme to use ('hash' or 'path')",
+		Value:    rawdb.HashScheme,
 		Category: flags.MiscCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
-		Name:     "trie.state-history",
-		Usage:    "Number of recent blocks to maintain state history for (default = 90,000 blocks 0 = entire chain)",
+		Name:     "state.history",
+		Usage:    "Number of recent blocks to retain state history for (default = 90,000 blocks, 0 = entire chain)",
 		Value:    ethconfig.Defaults.StateHistory,
 		Category: flags.MiscCategory,
 	}
@@ -964,7 +966,7 @@ var (
 	// StateSchemeFlags is the flag group of all trie node scheme flags
 	StateSchemeFlags = []cli.Flag{
 		StateHistoryFlag,
-		PathBasedSchemeFlag,
+		StateSchemeFlag,
 	}
 )
 
@@ -1708,7 +1710,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
-	if ctx.IsSet(PathBasedSchemeFlag.Name) {
+	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ParseStateScheme(ctx)
 	}
 	if ctx.IsSet(TxLookupLimitFlag.Name) {
@@ -2138,7 +2140,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.Bool(CachePreimagesFlag.Name),
-		NodeScheme:          ParseStateScheme(ctx),
+		StateScheme:         ParseStateScheme(ctx),
 		StateHistory:        ctx.Uint64(StateHistoryFlag.Name),
 	}
 	if cache.TrieDirtyDisabled && !cache.Preimages {
@@ -2187,19 +2189,21 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 
 // ParseStateScheme resolves scheme identifier from CLI flag.
 func ParseStateScheme(ctx *cli.Context) string {
-	if ctx.Bool(PathBasedSchemeFlag.Name) {
-		return rawdb.PathScheme
+	scheme := ctx.String(StateSchemeFlag.Name)
+	if scheme != rawdb.HashScheme && scheme != rawdb.PathScheme {
+		Fatalf("Unknown state scheme, provided: %s, available: 'hash' or 'path'", scheme)
 	}
-	return rawdb.HashScheme
+	return scheme
 }
 
-// MakeDatabase constructs a trie database based on the configured scheme.
-func MakeDatabase(ctx *cli.Context, disk ethdb.Database, readOnly bool) *trie.Database {
+// MakeTrieDatabase constructs a trie database based on the configured scheme.
+func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, readOnly bool) *trie.Database {
+	config := &trie.Config{Preimages: ctx.Bool(CachePreimagesFlag.Name)}
 	scheme := ParseStateScheme(ctx)
 	if scheme == rawdb.HashScheme {
-		return trie.NewDatabase(disk, nil)
+		config.HashDB = hashdb.Defaults
+		return trie.NewDatabase(disk, config)
 	}
-	config := &trie.Config{}
 	if readOnly {
 		config.PathDB = pathdb.ReadOnly
 	} else {

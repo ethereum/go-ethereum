@@ -198,11 +198,7 @@ func initGenesis(ctx *cli.Context) error {
 		}
 		defer chaindb.Close()
 
-		config := &trie.Config{Preimages: ctx.Bool(utils.CachePreimagesFlag.Name)}
-		if ctx.Bool(utils.PathBasedSchemeFlag.Name) {
-			config.PathDB = pathdb.Defaults
-		}
-		triedb := trie.NewDatabase(chaindb, config)
+		triedb := utils.MakeTrieDatabase(ctx, chaindb, false)
 		defer triedb.Close()
 
 		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
@@ -474,7 +470,7 @@ func dump(ctx *cli.Context) error {
 	config := &trie.Config{
 		Preimages: true, // always enable preimage lookup
 	}
-	if ctx.Bool(utils.PathBasedSchemeFlag.Name) {
+	if ctx.Bool(utils.StateSchemeFlag.Name) {
 		config.PathDB = pathdb.ReadOnly
 	}
 	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)

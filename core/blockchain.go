@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"golang.org/x/exp/slices"
 )
@@ -129,7 +130,7 @@ const (
 )
 
 // CacheConfig contains the configuration values for the trie database
-// that's resident in a blockchain.
+// and state snapshot these are resident in a blockchain.
 type CacheConfig struct {
 	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
@@ -139,10 +140,28 @@ type CacheConfig struct {
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 	StateHistory        uint64        // Number of blocks from head whose state histories are reserved.
-	NodeScheme          string        // Disk scheme used to interact with trie nodes.
+	StateScheme         string        // Scheme used to store ethereum states and merkle tree nodes on top
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+}
+
+// triedbConfig derives the configures for trie database.
+func (c *CacheConfig) triedbConfig() *trie.Config {
+	config := &trie.Config{Preimages: c.Preimages}
+	if c.StateScheme == rawdb.HashScheme {
+		config.HashDB = &hashdb.Config{
+			CleanSize: c.TrieCleanLimit * 1024 * 1024,
+		}
+	}
+	if c.StateScheme == rawdb.PathScheme {
+		config.PathDB = &pathdb.Config{
+			StateHistory: c.StateHistory,
+			CleanSize:    c.TrieCleanLimit * 1024 * 1024,
+			DirtySize:    c.TrieDirtyLimit * 1024 * 1024,
+		}
+	}
+	return config
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -153,14 +172,14 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 	SnapshotWait:   true,
-	NodeScheme:     rawdb.HashScheme,
+	StateScheme:    rawdb.HashScheme,
 }
 
 // DefaultCacheConfigWithScheme returns a deep copied default cache config with
 // a provided trie node scheme.
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *defaultCacheConfig
-	config.NodeScheme = scheme
+	config.StateScheme = scheme
 	return &config
 }
 
@@ -247,17 +266,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig = defaultCacheConfig
 	}
 	// Open trie database with provided config
-	config := &trie.Config{
-		Cache:     cacheConfig.TrieCleanLimit,
-		Preimages: cacheConfig.Preimages,
-	}
-	if cacheConfig.NodeScheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{
-			StateHistory: cacheConfig.StateHistory,
-			DirtySize:    cacheConfig.TrieDirtyLimit * 1024 * 1024,
-		}
-	}
-	triedb := trie.NewDatabase(db, config)
+	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the

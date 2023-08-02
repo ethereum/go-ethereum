@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -29,12 +30,19 @@ import (
 
 // Config defines all necessary options for database.
 type Config struct {
-	Cache     int            // Memory allowance (MB) to use for caching trie nodes in memory
-	Preimages bool           // Flag whether the preimage of trie key is recorded
-	PathDB    *pathdb.Config // Configs for experimental path-based scheme, not used yet.
+	Preimages bool           // Flag whether the preimage of node key is recorded
+	HashDB    *hashdb.Config // Configs for hash-based scheme
+	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 
 	// Testing hooks
 	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
+}
+
+// HashDefaults represents a config for using hash-based scheme with
+// default settings.
+var HashDefaults = &Config{
+	Preimages: false,
+	HashDB:    hashdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -91,19 +99,32 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 	}
 }
 
-// NewDatabase initializes the trie database with default settings, namely
+// NewDatabase initializes the trie database with default settings, note
 // the legacy hash-based scheme is used by default.
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
-	var cleans int
-	if config != nil && config.Cache != 0 {
-		cleans = config.Cache * 1024 * 1024
+	// Sanitize the config and use the default one if it's not specified.
+	if config == nil {
+		config = HashDefaults
 	}
-	db := prepare(diskdb, config)
-	if config != nil && config.PathDB != nil {
-		config.PathDB.CleanSize = cleans
+	var preimages *preimageStore
+	if config.Preimages {
+		preimages = newPreimageStore(diskdb)
+	}
+	db := &Database{
+		config:    config,
+		diskdb:    diskdb,
+		preimages: preimages,
+	}
+	// Hash-based backend is preferred in case both modes are configured, or neither
+	// of them are configured. Flip when the default scheme is switched.
+	if config.HashDB != nil && config.PathDB != nil {
+		config.PathDB = nil
+		log.Warn("Both hash and path mode are configured, use hash mode as default")
+	}
+	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB)
 	} else {
-		db.backend = hashdb.New(diskdb, cleans, mptResolver{})
+		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
 	}
 	return db
 }

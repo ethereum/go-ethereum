@@ -256,7 +256,7 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 
 func newDbConfig(scheme string) *trie.Config {
 	if scheme == rawdb.HashScheme {
-		return &trie.Config{}
+		return trie.HashDefaults
 	}
 	return &trie.Config{PathDB: pathdb.Defaults}
 }

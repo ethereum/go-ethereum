@@ -793,11 +793,17 @@ func (s *spongeDb) Stat(property string) (string, error)     { panic("implement 
 func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
 func (s *spongeDb) Close() error                             { return nil }
 func (s *spongeDb) Put(key []byte, value []byte) error {
-	valbrief := value
+	var (
+		keybrief = key
+		valbrief = value
+	)
+	if len(keybrief) > 8 {
+		keybrief = keybrief[:8]
+	}
 	if len(valbrief) > 8 {
 		valbrief = valbrief[:8]
 	}
-	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...], [%d bytes] %x...)\n", s.id, key[:8], len(value), valbrief))
+	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...], [%d bytes] %x...)\n", s.id, keybrief, len(value), valbrief))
 	s.sponge.Write(key)
 	s.sponge.Write(value)
 	return nil

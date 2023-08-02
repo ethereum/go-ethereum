@@ -1786,7 +1786,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
 			SnapshotLimit:  0, // Disable snapshot by default
-			NodeScheme:     scheme,
+			StateScheme:    scheme,
 		}
 	)
 	defer engine.Close()

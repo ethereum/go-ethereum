@@ -198,7 +198,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
 			StateHistory:        config.StateHistory,
-			NodeScheme:          config.StateScheme,
+			StateScheme:         config.StateScheme,
 		}
 	)
 	// Override the chain config with provided settings.

@@ -65,6 +65,16 @@ type ChildResolver interface {
 	ForEach(node []byte, onChild func(common.Hash))
 }
 
+// Config contains the settings for database.
+type Config struct {
+	CleanSize int // Maximum memory allowance (in bytes) for caching clean nodes
+}
+
+// Defaults is the default setting for database if it's not specified.
+var Defaults = &Config{
+	CleanSize: 16 * 1024 * 1024,
+}
+
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
@@ -122,12 +132,13 @@ func (n *cachedNode) forChildren(resolver ChildResolver, onChild func(hash commo
 }
 
 // New initializes the hash-based node database.
-func New(diskdb ethdb.Database, size int, resolver ChildResolver) *Database {
-	// Initialize the clean cache if the specified cache allowance
-	// is non-zero. Note, the size is in bytes.
+func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Database {
+	if config == nil {
+		config = Defaults
+	}
 	var cleans *fastcache.Cache
-	if size > 0 {
-		cleans = fastcache.New(size)
+	if config.CleanSize > 0 {
+		cleans = fastcache.New(config.CleanSize)
 	}
 	return &Database{
 		diskdb:   diskdb,

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
@@ -1989,7 +1990,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
 			SnapshotLimit:  0, // Disable snapshot
-			NodeScheme:     scheme,
+			StateScheme:    scheme,
 		}
 	)
 	if snapshots {
@@ -2035,6 +2036,8 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	dbconfig := &trie.Config{}
 	if scheme == rawdb.PathScheme {
 		dbconfig.PathDB = pathdb.Defaults
+	} else {
+		dbconfig.HashDB = hashdb.Defaults
 	}
 	chain.triedb = trie.NewDatabase(chain.db, dbconfig)
 	chain.stateCache = state.NewDatabaseWithNodeDB(chain.db, chain.triedb)

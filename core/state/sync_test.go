@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
@@ -45,6 +46,8 @@ func makeTestState(scheme string) (ethdb.Database, Database, *trie.Database, com
 	config := &trie.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
+	} else {
+		config.HashDB = hashdb.Defaults
 	}
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := trie.NewDatabase(db, config)

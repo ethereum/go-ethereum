@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -755,7 +756,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	// Create an initial state with a few accounts
 	var (
 		memDb = rawdb.NewMemoryDatabase()
-		ndb   = trie.NewDatabase(memDb, nil)
+		ndb   = trie.NewDatabase(memDb, &trie.Config{HashDB: &hashdb.Config{}}) // disable caching
 		db    = NewDatabaseWithNodeDB(memDb, ndb)
 	)
 	var root common.Hash
