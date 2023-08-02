@@ -17,10 +17,13 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -38,10 +41,29 @@ type BlobTx struct {
 	BlobFeeCap *uint256.Int // a.k.a. maxFeePerBlobGas
 	BlobHashes []common.Hash
 
+	// A blob transaction can optionally contain blobs. This field must be set when BlobTx
+	// is used to create a transaction for sigining.
+	Sidecar *BlobSidecar `rlp:"-"`
+
 	// Signature values
 	V *uint256.Int `json:"v" gencodec:"required"`
 	R *uint256.Int `json:"r" gencodec:"required"`
 	S *uint256.Int `json:"s" gencodec:"required"`
+}
+
+// BlobSidecar contains the blobs of a blob transaction.
+type BlobSidecar struct {
+	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
+	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
+	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
+}
+
+// blobTxWithBlobs is used for encoding of transactions when blobs are present.
+type blobTxWithBlobs struct {
+	BlobTx      *BlobTx
+	Blobs       []kzg4844.Blob
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -90,6 +112,13 @@ func (tx *BlobTx) copy() TxData {
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
+	if tx.Sidecar != nil {
+		cpy.Sidecar = &BlobSidecar{
+			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
+			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
+			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
+		}
+	}
 	return cpy
 }
 
@@ -128,4 +157,50 @@ func (tx *BlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.V.SetFromBig(v)
 	tx.R.SetFromBig(r)
 	tx.S.SetFromBig(s)
+}
+
+func (tx *BlobTx) encode(b *bytes.Buffer) error {
+	if tx.Sidecar == nil {
+		return rlp.Encode(b, tx)
+	}
+	inner := &blobTxWithBlobs{
+		BlobTx:      tx,
+		Blobs:       tx.Sidecar.Blobs,
+		Commitments: tx.Sidecar.Commitments,
+		Proofs:      tx.Sidecar.Proofs,
+	}
+	return rlp.Encode(b, inner)
+}
+
+func (tx *BlobTx) decode(input []byte) error {
+	// Here we need to support two formats: the network protocol encoding of the tx (with
+	// blobs) or the canonical encoding without blobs.
+	//
+	// The two encodings can be distinguished by checking whether the first element of the
+	// input list is itself a list.
+
+	outerList, _, err := rlp.SplitList(input)
+	if err != nil {
+		return err
+	}
+	firstElemKind, _, _, err := rlp.Split(outerList)
+	if err != nil {
+		return err
+	}
+
+	if firstElemKind != rlp.List {
+		return rlp.DecodeBytes(input, tx)
+	}
+	// It's a tx with blobs.
+	var inner blobTxWithBlobs
+	if err := rlp.DecodeBytes(input, &inner); err != nil {
+		return err
+	}
+	*tx = *inner.BlobTx
+	tx.Sidecar = &BlobSidecar{
+		Blobs:       inner.Blobs,
+		Commitments: inner.Commitments,
+		Proofs:      inner.Proofs,
+	}
+	return nil
 }

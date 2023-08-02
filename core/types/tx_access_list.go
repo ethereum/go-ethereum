@@ -17,9 +17,11 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //go:generate go run github.com/fjl/gencodec -type AccessTuple -out gen_access_tuple.go
@@ -116,4 +118,12 @@ func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (tx *AccessListTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
+}
+
+func (tx *AccessListTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+
+func (tx *AccessListTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
 }
