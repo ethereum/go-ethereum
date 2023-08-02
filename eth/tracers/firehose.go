@@ -34,9 +34,6 @@ var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
 
 var _ core.BlockchainLogger = (*Firehose)(nil)
 
-var emptyAddress = common.Address{}.Bytes()
-var emptyHash = common.Hash{}.Bytes()
-
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
 
@@ -507,7 +504,6 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 
 	f.CaptureEnd(nil, 0, nil)
 	f.CaptureTxEnd(&types.Receipt{
-		Type:      uint8(types.LegacyTxType),
 		PostState: b.Root().Bytes(),
 		Status:    types.ReceiptStatusSuccessful,
 	}, nil)
