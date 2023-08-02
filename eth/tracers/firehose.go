@@ -9,7 +9,9 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"go.uber.org/atomic"
 	"golang.org/x/exp/maps"
@@ -36,6 +39,10 @@ var _ core.BlockchainLogger = (*Firehose)(nil)
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
+
+func init() {
+	staticFirehoseChainValidationOnInit()
+}
 
 type Firehose struct {
 	// Global state
@@ -232,9 +239,10 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 		f.transaction.Status = pbeth.TransactionTraceStatus_REVERTED
 	}
 
-	// Order is important, we must populate the state reverted before we remove the log block index
+	// Order is important, we must populate the state reverted before we remove the log block index and re-assign ordinals
 	f.populateStateReverted()
 	f.removeLogBlockIndexOnStateRevertedCalls()
+	f.assignOrdinalToReceiptLogs()
 
 	// I think this was never used in Firehose instrumentation actually
 	// f.transaction.ReturnData = rootCall.ReturnData
@@ -273,6 +281,52 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 				log.BlockIndex = 0
 			}
 		}
+	}
+}
+
+func (f *Firehose) assignOrdinalToReceiptLogs() {
+	trx := f.transaction
+
+	receiptsLogs := trx.Receipt.Logs
+
+	callLogs := []*pbeth.Log{}
+	for _, call := range trx.Calls {
+		if call.StateReverted {
+			continue
+		}
+
+		callLogs = append(callLogs, call.Logs...)
+	}
+
+	slices.SortFunc(callLogs, func(i, j *pbeth.Log) bool {
+		return i.Ordinal < j.Ordinal
+	})
+
+	if len(callLogs) != len(receiptsLogs) {
+		panic(fmt.Errorf(
+			"mismatch between Firehose call logs and Ethereum transaction receipt logs, transaction receipt has %d logs but there is %d Firehose call logs",
+			len(receiptsLogs),
+			len(callLogs),
+		))
+	}
+
+	for i := 0; i < len(callLogs); i++ {
+		callLog := callLogs[i]
+		receiptsLog := receiptsLogs[i]
+
+		result := &validationResult{}
+		// Ordinal must **not** be checked as we are assigning it here below after the validations
+		validateBytesField(result, "Address", callLog.Address, receiptsLog.Address)
+		validateUint32Field(result, "Index", callLog.Index, receiptsLog.Index)
+		validateUint32Field(result, "BlockIndex", callLog.BlockIndex, receiptsLog.BlockIndex)
+		validateBytesField(result, "Data", callLog.Data, receiptsLog.Data)
+		validateArrayOfBytesField(result, "Topics", callLog.Topics, receiptsLog.Topics)
+
+		if len(result.failures) > 0 {
+			result.panicOnAnyFailures("mismatch between Firehose call log and Ethereum transaction receipt log at index %d", i)
+		}
+
+		receiptsLog.Ordinal = callLog.Ordinal
 	}
 }
 
@@ -1318,4 +1372,155 @@ func firehoseBigIntFromNative(in *big.Int) *pbeth.BigInt {
 	}
 
 	return &pbeth.BigInt{Bytes: in.Bytes()}
+}
+
+var errFirehoseUnknownType = errors.New("firehose unknown tx type")
+var sanitizeRegexp = regexp.MustCompile(`[\t( ){2,}]+`)
+
+func staticFirehoseChainValidationOnInit() {
+	firehoseKnownTxTypes := map[byte]bool{types.LegacyTxType: true, types.AccessListTxType: true, types.DynamicFeeTxType: true, types.BlobTxType: true}
+
+	for txType := byte(0); txType < 255; txType++ {
+		err := validateFirehoseKnownTransactionType(txType, firehoseKnownTxTypes[txType])
+		if err != nil {
+			panic(fmt.Errorf(sanitizeRegexp.ReplaceAllString(`
+				If you see this panic message, it comes from a sanity check of Firehose instrumentation
+				around Ethereum transaction types.
+
+				Over time, Ethereum added new transaction types but there is no easy way for Firehose to
+				report a compile time check that a new transaction's type must be handled. As such, we
+				have a runtime check at initialization of the process that encode/decode each possible
+				transaction's receipt and check proper handling.
+
+				This panic means that a transaction that Firehose don't know about has most probably
+				been added and you must take **great care** to instrument it. One of the most important place
+				to look is in 'firehose.StartTransaction' where it should be properly handled. Think
+				carefully, read the EIP and ensure that any new "semantic" the transactions type's is
+				bringing is handled and instrumented (it might affect Block and other execution units also).
+
+				For example, when London fork appeared, semantic of 'GasPrice' changed and it required
+				a different computation for 'GasPrice' when 'DynamicFeeTx' transaction were added. If you determined
+				it was indeed a new transaction's type, fix 'firehoseKnownTxTypes' variable above to include it
+				as a known Firehose type (after proper instrumentation of course).
+
+				It's also possible the test itself is now flaky, we do 'receipt := types.Receipt{Type: <type>}'
+				then 'buffer := receipt.EncodeRLP(...)' and then 'receipt.DecodeRLP(buffer)'. This should catch
+				new transaction types but could be now generate false positive.
+
+				Received error: %w
+			`, " "), err))
+		}
+	}
+}
+
+func validateFirehoseKnownTransactionType(txType byte, isKnownFirehoseTxType bool) error {
+	writerBuffer := bytes.NewBuffer(nil)
+
+	receipt := types.Receipt{Type: txType}
+	err := receipt.EncodeRLP(writerBuffer)
+	if err != nil {
+		if err == types.ErrTxTypeNotSupported {
+			if isKnownFirehoseTxType {
+				return fmt.Errorf("firehose known type but encoding RLP of receipt led to 'types.ErrTxTypeNotSupported'")
+			}
+
+			// It's not a known type and encoding reported the same, so validation is OK
+			return nil
+		}
+
+		// All other cases results in an error as we should have been able to encode it to RLP
+		return fmt.Errorf("encoding RLP: %w", err)
+	}
+
+	readerBuffer := bytes.NewBuffer(writerBuffer.Bytes())
+	err = receipt.DecodeRLP(rlp.NewStream(readerBuffer, 0))
+	if err != nil {
+		if err == types.ErrTxTypeNotSupported {
+			if isKnownFirehoseTxType {
+				return fmt.Errorf("firehose known type but decoding of RLP of receipt led to 'types.ErrTxTypeNotSupported'")
+			}
+
+			// It's not a known type and decoding reported the same, so validation is OK
+			return nil
+		}
+
+		// All other cases results in an error as we should have been able to decode it from RLP
+		return fmt.Errorf("decoding RLP: %w", err)
+	}
+
+	// If we reach here, encoding/decoding accepted the transaction's type, so let's ensure we expected the same
+	if !isKnownFirehoseTxType {
+		return fmt.Errorf("unknown tx type value %d: %w", txType, errFirehoseUnknownType)
+	}
+
+	return nil
+}
+
+type validationResult struct {
+	failures []string
+}
+
+func (r *validationResult) panicOnAnyFailures(msg string, args ...any) {
+	if len(r.failures) > 0 {
+		panic(fmt.Errorf(fmt.Sprintf(msg, args...)+": validation failed:\n %s", strings.Join(r.failures, "\n")))
+	}
+}
+
+var _, _, _ = validateAddressField, validateBigIntField, validateHashField
+
+func validateAddressField(into *validationResult, field string, a, b common.Address) {
+	validateField(into, field, a, b, a == b, common.Address.String)
+}
+
+func validateBigIntField(into *validationResult, field string, a, b *big.Int) {
+	equal := false
+	if a == nil && b == nil {
+		equal = true
+	} else if a == nil || b == nil {
+		equal = false
+	} else {
+		equal = a.Cmp(b) == 0
+	}
+
+	validateField(into, field, a, b, equal, func(x *big.Int) string {
+		if x == nil {
+			return "<nil>"
+		} else {
+			return x.String()
+		}
+	})
+}
+
+func validateBytesField(into *validationResult, field string, a, b []byte) {
+	validateField(into, field, a, b, bytes.Equal(a, b), common.Bytes2Hex)
+}
+
+func validateArrayOfBytesField(into *validationResult, field string, a, b [][]byte) {
+	if len(a) != len(b) {
+		into.failures = append(into.failures, fmt.Sprintf("%s [(actual element) %d != %d (expected element)]", field, len(a), len(b)))
+		return
+	}
+
+	for i := range a {
+		validateBytesField(into, fmt.Sprintf("%s[%d]", field, i), a[i], b[i])
+	}
+}
+
+func validateHashField(into *validationResult, field string, a, b common.Hash) {
+	validateField(into, field, a, b, a == b, common.Hash.String)
+}
+
+func validateUint32Field(into *validationResult, field string, a, b uint32) {
+	validateField(into, field, a, b, a == b, func(x uint32) string { return strconv.FormatUint(uint64(x), 10) })
+}
+
+func validateUint64Field(into *validationResult, field string, a, b uint64) {
+	validateField(into, field, a, b, a == b, func(x uint64) string { return strconv.FormatUint(x, 10) })
+}
+
+// validateField, pays the price for failure message construction only when field are not equal
+func validateField[T any](into *validationResult, field string, a, b T, equal bool, toString func(x T) string) {
+	if !equal {
+		into.failures = append(into.failures, fmt.Sprintf("%s [(actual) %s %s %s (expected)]", field, toString(a), "!=", toString(b)))
+	}
 }
