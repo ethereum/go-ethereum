@@ -311,7 +311,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 			return errIteratorEnd
 		} else if err != nil {
 			return seekError{prefix, err}
-		} else if bytes.Compare(path, key) >= 0 {
+		} else if reachedPath(path, key) {
 			return nil
 		}
 		it.push(state, parentIndex, path)
@@ -552,6 +552,15 @@ func (it *nodeIterator) pop() {
 	it.stack = it.stack[:len(it.stack)-1]
 	// last is now unused
 	it.putInPool(last)
+}
+
+// reachedPath normalizes a path by truncating a terminator if present, and returns true if it is
+// greater than or equal to the target.
+func reachedPath(path, target []byte) bool {
+	if hasTerm(path) {
+		path = path[:len(path)-1]
+	}
+	return bytes.Compare(path, target) >= 0
 }
 
 func compareNodes(a, b NodeIterator) int {
