@@ -640,6 +640,7 @@ func TestMulticallV1(t *testing.T) {
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 		cac       = common.HexToAddress("0x0000000000000000000000000000000000000cac")
+		coinbase  = "0x000000000000000000000000000000000000ffff"
 		genesis   = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc: core.GenesisAlloc{
@@ -660,6 +661,7 @@ func TestMulticallV1(t *testing.T) {
 		sha256Address = common.BytesToAddress([]byte{0x02})
 	)
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.HexToAddress(coinbase))
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
@@ -731,7 +733,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa410",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -784,7 +786,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa410",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -801,7 +803,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5208",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -821,7 +823,8 @@ func TestMulticallV1(t *testing.T) {
 			tag:  latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(11)),
+					Number:   (*hexutil.Big)(big.NewInt(11)),
+					Coinbase: &cac,
 				},
 				Calls: []TransactionArgs{
 					{
@@ -851,7 +854,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         crypto.Keccak256Hash([]byte{0xb}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: strings.ToLower(cac.String()),
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
@@ -863,7 +866,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
@@ -932,7 +935,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x10683",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xaacc",
@@ -974,7 +977,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5508",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					Logs: []types.Log{{
@@ -1044,7 +1047,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x52f6",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					// Caller is in this case the contract that invokes ecrecover.
 					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
@@ -1095,7 +1098,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa58c",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
 					GasUsed:     "0x52dc",
@@ -1144,7 +1147,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xd984",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd984",
@@ -1198,7 +1201,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x1b83f",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd166",
@@ -1229,7 +1232,7 @@ func TestMulticallV1(t *testing.T) {
 				Hash:         n10hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x0",
-				FeeRecipient: "0x0000000000000000000000000000000000000000",
+				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x0",
@@ -1241,7 +1244,7 @@ func TestMulticallV1(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testSuite {
+	for _, tc := range testSuite {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := multicallOpts{BlockStateCalls: tc.blocks}
 			if tc.includeTransfers != nil && *tc.includeTransfers {
@@ -1253,18 +1256,18 @@ func TestMulticallV1(t *testing.T) {
 			result, err := api.MulticallV1(context.Background(), opts, tc.tag)
 			if tc.expectErr != nil {
 				if err == nil {
-					t.Fatalf("test %d: want error %v, have nothing", i, tc.expectErr)
+					t.Fatalf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
 				}
 				if !errors.Is(err, tc.expectErr) {
 					// Second try
 					if !reflect.DeepEqual(err, tc.expectErr) {
-						t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+						t.Errorf("test %s: error mismatch, want %v, have %v", tc.name, tc.expectErr, err)
 					}
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("test %d: want no error, have %v", i, err)
+				t.Fatalf("test %s: want no error, have %v", tc.name, err)
 			}
 			// Turn result into res-struct
 			var have []blockRes
@@ -1273,7 +1276,7 @@ func TestMulticallV1(t *testing.T) {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
 			if !reflect.DeepEqual(have, tc.want) {
-				t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, have, tc.want)
+				t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, have, tc.want)
 			}
 		})
 	}
