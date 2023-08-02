@@ -131,7 +131,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
 	if !jsonEqualFlat(ret, test.Result) {
-		t.Logf("tracer name: %s", tracerName)
+		t.Logf("test %s failed", filename)
 
 		// uncomment this for easier debugging
 		// have, _ := json.MarshalIndent(ret, "", " ")

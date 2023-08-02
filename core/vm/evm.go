@@ -17,9 +17,7 @@
 package vm
 
 import (
-	"fmt"
 	"math/big"
-	"os"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -181,24 +179,24 @@ func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	if tracer := evm.Config.Tracer; tracer != nil {
+	// Capture the tracer start/end events in debug mode
+	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
-			tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+			evm.Config.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 			defer func(startGas uint64) { // Lazy evaluation of the parameters
-				tracer.CaptureEnd(ret, startGas-leftOverGas, err)
+				evm.Config.Tracer.CaptureEnd(ret, startGas-gas, err)
 			}(gas)
 		} else {
 			// Handle tracer events for entering and exiting a call frame
-			tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
-			tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+			evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
+			evm.Config.Tracer.OnGasConsumed(0, -gas, GasInitialBalance)
 
 			defer func(startGas uint64) {
-				tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
-				tracer.CaptureExit(ret, startGas-leftOverGas, err)
+				evm.Config.Tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
+				evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 			}(gas)
 		}
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -212,6 +210,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
+			// Calling a non-existing account, don't do anything.
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -237,7 +236,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -264,16 +263,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 // code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if tracer := evm.Config.Tracer; tracer != nil {
-		tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
-		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+	if evm.Config.Tracer != nil {
+		evm.Config.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
+		evm.Config.Tracer.OnGasConsumed(0, -gas, GasInitialBalance)
 
 		defer func(startGas uint64) {
-			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
-			tracer.CaptureExit(ret, startGas-leftOverGas, err)
+			evm.Config.Tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
+			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -319,20 +317,19 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if tracer := evm.Config.Tracer; tracer != nil {
+	if evm.Config.Tracer != nil {
 		// NOTE: caller must, at all times be a contract. It should never happen
 		// that caller is something other than a Contract.
 		parent := caller.(*Contract)
 		// DELEGATECALL inherits value from parent call
-		tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
-		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+		evm.Config.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
+		evm.Config.Tracer.OnGasConsumed(0, -gas, GasInitialBalance)
 
 		defer func(startGas uint64) {
-			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
-			tracer.CaptureExit(ret, startGas-leftOverGas, err)
+			evm.Config.Tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
+			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -369,16 +366,15 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if tracer := evm.Config.Tracer; tracer != nil {
-		tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
-		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+	if evm.Config.Tracer != nil {
+		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
+		evm.Config.Tracer.OnGasConsumed(0, -gas, GasInitialBalance)
 
 		defer func(startGas uint64) {
-			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
-			tracer.CaptureExit(ret, startGas-leftOverGas, err)
+			evm.Config.Tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
+			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -439,24 +435,23 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, created common.Address, leftOverGas uint64, err error) {
-	if tracer := evm.Config.Tracer; tracer != nil {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftoverGas uint64, err error) {
+	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
-			tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
-			defer func(startGas uint64) {
-				tracer.CaptureEnd(ret, startGas-leftOverGas, err)
-			}(gas)
+			evm.Config.Tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
+			defer func() {
+				evm.Config.Tracer.CaptureEnd(ret, gas-leftoverGas, err)
+			}()
 		} else {
-			tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
-			tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+			evm.Config.Tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
+			evm.Config.Tracer.OnGasConsumed(0, -gas, GasInitialBalance)
 
-			defer func(startGas uint64) {
-				tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
-				tracer.CaptureExit(ret, startGas-leftOverGas, err)
-			}(gas)
+			defer func() {
+				evm.Config.Tracer.OnGasConsumed(leftoverGas, leftoverGas, GasBuyBack)
+				evm.Config.Tracer.CaptureExit(ret, gas-leftoverGas, err)
+			}()
 		}
 	}
-
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -523,7 +518,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
