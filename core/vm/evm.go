@@ -17,7 +17,9 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
+	"os"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -188,7 +190,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		} else {
 			// Handle tracer events for entering and exiting a call frame
 			tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
+			tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+
 			defer func(startGas uint64) {
+				tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
 				tracer.CaptureExit(ret, startGas-leftOverGas, err)
 			}(gas)
 		}
@@ -237,6 +242,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil {
+				evm.Config.Tracer.OnGasConsumed(gas, gas, GasChangeFailedExecution)
+			}
+
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -257,7 +266,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if tracer := evm.Config.Tracer; tracer != nil {
 		tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
+		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+
 		defer func(startGas uint64) {
+			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
 			tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -290,6 +302,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil {
+				evm.Config.Tracer.OnGasConsumed(gas, gas, GasChangeFailedExecution)
+			}
+
 			gas = 0
 		}
 	}
@@ -309,7 +325,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		parent := caller.(*Contract)
 		// DELEGATECALL inherits value from parent call
 		tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
+		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+
 		defer func(startGas uint64) {
+			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
 			tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -334,6 +353,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil {
+				evm.Config.Tracer.OnGasConsumed(gas, gas, GasChangeFailedExecution)
+			}
+
 			gas = 0
 		}
 	}
@@ -348,7 +371,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if tracer := evm.Config.Tracer; tracer != nil {
 		tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
+		tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+
 		defer func(startGas uint64) {
+			tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
 			tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -390,6 +416,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil {
+				evm.Config.Tracer.OnGasConsumed(gas, gas, GasChangeFailedExecution)
+			}
+
 			gas = 0
 		}
 	}
@@ -418,7 +448,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			}(gas)
 		} else {
 			tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
+			tracer.OnGasConsumed(0, -gas, GasInitialBalance)
+
 			defer func(startGas uint64) {
+				tracer.OnGasConsumed(leftOverGas, leftOverGas, GasBuyBack)
 				tracer.CaptureExit(ret, startGas-leftOverGas, err)
 			}(gas)
 		}
@@ -445,6 +478,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
+		if evm.Config.Tracer != nil {
+			evm.Config.Tracer.OnGasConsumed(gas, gas, GasChangeFailedExecution)
+		}
+
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
@@ -478,7 +515,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// by the error checking condition below.
 	if err == nil {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
-		if contract.UseGas(createDataGas, evm.Config.Tracer) {
+		if contract.UseGas(createDataGas, evm.Config.Tracer, GasChangeCodeStorage) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
@@ -491,7 +528,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer)
+			contract.UseGas(contract.Gas, evm.Config.Tracer, GasChangeFailedExecution)
 		}
 	}
 

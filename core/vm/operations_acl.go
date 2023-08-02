@@ -169,7 +169,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer) {
+			if !contract.UseGas(coldCost, evm.Config.Tracer, GasChangeStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 		}

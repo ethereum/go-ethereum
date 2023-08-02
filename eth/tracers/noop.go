@@ -59,7 +59,7 @@ func (t *NoopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *
 func (t *NoopTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // OnGasConsumed is called when gas is consumed.
-func (t *NoopTracer) OnGasConsumed(gas, amount uint64) {}
+func (t *NoopTracer) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *NoopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
