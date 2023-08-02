@@ -314,6 +314,13 @@ var (
 	}
 
 	{{range .Calls}}
+		// {{.Normalized.Name}}Method is a call to retrieve the method information 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}Method() (*abi.Method, error) {
+			return _{{$contract.Type}}.contract.Method("{{.Normalized.Name}}")
+		}
+	
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
@@ -356,6 +363,20 @@ var (
 	{{end}}
 
 	{{range .Transacts}}
+		// {{.Normalized.Name}}Method is a call to retrieve the method information 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}Method() (*abi.Method, error) {
+			return _{{$contract.Type}}.contract.Method("{{.Normalized.Name}}")
+		}
+
+		// {{.Normalized.Name}}Calldata is the abi packed data binding the contract method 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+        func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}Calldata({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+			return _{{$contract.Type}}.contract.Calldata("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+		}
+		
 		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
@@ -493,6 +514,13 @@ var (
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
 			Raw types.Log // Blockchain specific contextual infos
+		}
+
+		// {{.Normalized.Name}}Event is a call to retrieve the event information.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) {{.Normalized.Name}}Event() (*abi.Event, error) {
+			return _{{$contract.Type}}.contract.Event("{{.Normalized.Name}}")
 		}
 
 		// Filter{{.Normalized.Name}} is a free log retrieval operation binding the contract event 0x{{printf "%x" .Original.ID}}.
