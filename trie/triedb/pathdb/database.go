@@ -143,7 +143,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// mechanism also ensures that at most one **non-readOnly** database
 	// is opened at the same time to prevent accidental mutation.
 	if ancient, err := diskdb.AncientDatadir(); err == nil && ancient != "" && !db.readOnly {
-		freezer, err := rawdb.NewStateHistoryFreezer(ancient, false)
+		freezer, err := rawdb.NewStateFreezer(ancient, false)
 		if err != nil {
 			log.Crit("Failed to open state history freezer", "err", err)
 		}

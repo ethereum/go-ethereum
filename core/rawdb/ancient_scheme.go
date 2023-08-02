@@ -58,7 +58,7 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
-var stateHistoryFreezerNoSnappy = map[string]bool{
+var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,
 	stateHistoryStorageIndex: false,
@@ -75,7 +75,7 @@ var (
 // freezers the collections of all builtin freezers.
 var freezers = []string{chainFreezerName, stateFreezerName}
 
-// NewStateHistoryFreezer initializes the freezer for state history.
-func NewStateHistoryFreezer(ancientDir string, readOnly bool) (*ResettableFreezer, error) {
-	return NewResettableFreezer(filepath.Join(ancientDir, stateFreezerName), "eth/db/state", readOnly, stateHistoryTableSize, stateHistoryFreezerNoSnappy)
+// NewStateFreezer initializes the freezer for state history.
+func NewStateFreezer(ancientDir string, readOnly bool) (*ResettableFreezer, error) {
+	return NewResettableFreezer(filepath.Join(ancientDir, stateFreezerName), "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
 }

@@ -273,15 +273,15 @@ var (
 	}
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
-		Usage:    "Ethereum state scheme to use ('hash' or 'path')",
+		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
 		Value:    rawdb.HashScheme,
-		Category: flags.MiscCategory,
+		Category: flags.EthCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "state.history",
 		Usage:    "Number of recent blocks to retain state history for (default = 90,000 blocks, 0 = entire chain)",
 		Value:    ethconfig.Defaults.StateHistory,
-		Category: flags.MiscCategory,
+		Category: flags.EthCategory,
 	}
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
@@ -963,10 +963,10 @@ var (
 		RemoteDBFlag,
 		HttpHeaderFlag,
 	}
-	// StateSchemeFlags is the flag group of all trie node scheme flags
+	// StateSchemeFlags is the flag group of all state scheme flags
 	StateSchemeFlags = []cli.Flag{
-		StateHistoryFlag,
 		StateSchemeFlag,
+		StateHistoryFlag,
 	}
 )
 

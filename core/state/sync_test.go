@@ -114,10 +114,6 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 
 // checkStateConsistency checks that all data of a state root is present.
 func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) error {
-	// Create and iterate a state trie rooted in a sub-node
-	if !rawdb.HasTrieNode(db, common.Hash{}, nil, root, scheme) {
-		return nil // Consider a non existent state consistent.
-	}
 	config := &trie.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults

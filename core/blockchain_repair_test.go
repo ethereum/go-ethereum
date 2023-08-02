@@ -1765,7 +1765,6 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})
@@ -1846,7 +1845,6 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})
@@ -1911,7 +1909,6 @@ func testIssue23496(t *testing.T, scheme string) {
 	ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})
@@ -1969,7 +1966,6 @@ func testIssue23496(t *testing.T, scheme string) {
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})

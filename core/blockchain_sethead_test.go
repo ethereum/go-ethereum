@@ -1969,7 +1969,6 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})

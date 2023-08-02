@@ -680,6 +680,6 @@ func (h *handler) txBroadcastLoop() {
 func (h *handler) setSynced() {
 	h.acceptTxs.Store(true)
 	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetCacheSize(64)
+		h.chain.TrieDB().SetBufferSize(64 * 1024 * 1024)
 	}
 }

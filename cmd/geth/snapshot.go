@@ -411,7 +411,7 @@ func traverseRawState(ctx *cli.Context) error {
 	}
 	reader, err := triedb.Reader(root)
 	if err != nil {
-		log.Error("state is not existent", "root", root)
+		log.Error("State is non-existent", "root", root)
 		return nil
 	}
 	for accIter.Next(true) {

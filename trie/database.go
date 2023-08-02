@@ -119,7 +119,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	// of them are configured. Flip when the default scheme is switched.
 	if config.HashDB != nil && config.PathDB != nil {
 		config.PathDB = nil
-		log.Warn("Both hash and path mode are configured, use hash mode as default")
+		log.Warn("Both 'hash' and 'path' mode are configured, use 'hash' mode as default")
 	}
 	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB)
@@ -306,9 +306,10 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
-// SetCacheSize sets the dirty cache size to the provided value(in mega-bytes).
-// It's only supported by path-based database and will return an error for others.
-func (db *Database) SetCacheSize(size int) error {
+// SetBufferSize sets the node buffer size to the provided value(in bytes).
+// It's only supported by path-based database and will return an error for
+// others.
+func (db *Database) SetBufferSize(size int) error {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
 		return errors.New("not supported")

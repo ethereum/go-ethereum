@@ -66,7 +66,6 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         datadir,
 		AncientsDirectory: ancient,
 	})
@@ -257,7 +256,6 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 
 	// Start a new blockchain back up and see where the repair leads us
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              "leveldb",
 		Directory:         snaptest.datadir,
 		AncientsDirectory: snaptest.ancient,
 	})

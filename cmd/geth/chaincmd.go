@@ -243,7 +243,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	if ctx.IsSet(utils.DataDirFlag.Name) {
 		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
 	}
-	utils.Fatalf("no network preset provided.  no exisiting genesis in the default datadir")
+	utils.Fatalf("no network preset provided, no existing genesis in the default datadir")
 	return nil
 }
 
@@ -470,7 +470,7 @@ func dump(ctx *cli.Context) error {
 	config := &trie.Config{
 		Preimages: true, // always enable preimage lookup
 	}
-	if ctx.Bool(utils.StateSchemeFlag.Name) {
+	if utils.ParseStateScheme(ctx) == rawdb.PathScheme {
 		config.PathDB = pathdb.ReadOnly
 	}
 	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
