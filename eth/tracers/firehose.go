@@ -29,8 +29,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var isFirehoseDebugEnabled = os.Getenv("GETH_FIREHOSE_TRACER_DEBUG") != ""
-var isFirehoseTracerEnabled = os.Getenv("GETH_FIREHOSE_TRACER_TRACE") != ""
+var firehoseTracerLogLevel = strings.ToLower(os.Getenv("GETH_FIREHOSE_TRACER_LOG_LEVEL"))
+var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
+var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
 
 var _ core.BlockchainLogger = (*Firehose)(nil)
 
@@ -281,18 +282,51 @@ func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	f.captureInterpreterStep(pc, op, gas, cost, scope, rData, depth, err)
+	firehoseTrace("capture state op=%s gas=%d cost=%d, err=%s", op, gas, cost, errorView(err))
+
+	if activeCall := f.callStack.Peek(); activeCall != nil {
+		f.captureInterpreterStep(activeCall, pc, op, gas, cost, scope, rData, depth, err)
+
+		if err == nil && cost > 0 {
+			if reason, found := opCodeToGasChangeReasonMap[op]; found {
+				activeCall.GasChanges = append(activeCall.GasChanges, f.newGasChange("state", gas, gas-cost, reason))
+			}
+		}
+	}
+}
+
+var opCodeToGasChangeReasonMap = map[vm.OpCode]pbeth.GasChange_Reason{
+	vm.CREATE:         pbeth.GasChange_REASON_CONTRACT_CREATION,
+	vm.CREATE2:        pbeth.GasChange_REASON_CONTRACT_CREATION2,
+	vm.CALL:           pbeth.GasChange_REASON_CALL,
+	vm.STATICCALL:     pbeth.GasChange_REASON_STATIC_CALL,
+	vm.CALLCODE:       pbeth.GasChange_REASON_CALL_CODE,
+	vm.DELEGATECALL:   pbeth.GasChange_REASON_DELEGATE_CALL,
+	vm.RETURN:         pbeth.GasChange_REASON_RETURN,
+	vm.REVERT:         pbeth.GasChange_REASON_REVERT,
+	vm.LOG0:           pbeth.GasChange_REASON_EVENT_LOG,
+	vm.LOG1:           pbeth.GasChange_REASON_EVENT_LOG,
+	vm.LOG2:           pbeth.GasChange_REASON_EVENT_LOG,
+	vm.LOG3:           pbeth.GasChange_REASON_EVENT_LOG,
+	vm.LOG4:           pbeth.GasChange_REASON_EVENT_LOG,
+	vm.SELFDESTRUCT:   pbeth.GasChange_REASON_SELF_DESTRUCT,
+	vm.CALLDATACOPY:   pbeth.GasChange_REASON_CALL_DATA_COPY,
+	vm.CODECOPY:       pbeth.GasChange_REASON_CODE_COPY,
+	vm.EXTCODECOPY:    pbeth.GasChange_REASON_EXT_CODE_COPY,
+	vm.RETURNDATACOPY: pbeth.GasChange_REASON_RETURN_DATA_COPY,
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
 func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-	f.captureInterpreterStep(pc, op, gas, cost, scope, nil, depth, err)
+	if activeCall := f.callStack.Peek(); activeCall != nil {
+		f.captureInterpreterStep(activeCall, pc, op, gas, cost, scope, nil, depth, err)
+	}
 }
 
-func (f *Firehose) captureInterpreterStep(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, rData []byte, depth int, err error) {
-	if activeCall := f.callStack.Peek(); activeCall != nil && !activeCall.ExecutedCode {
+func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, rData []byte, depth int, err error) {
+	if !activeCall.ExecutedCode {
+		firehoseTrace("setting active call executed code to true")
 		activeCall.ExecutedCode = true
-		firehoseDebug("setting active call executed code to true")
 	}
 }
 
@@ -677,21 +711,27 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 	})
 }
 
-func (f *Firehose) OnGasConsumed(gas, amount uint64) {
+func (f *Firehose) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {
 	f.ensureInBlockAndInTrx()
 
 	if amount == 0 {
 		return
 	}
 
-	firehoseTrace("gas consumed before=%d after=%d", gas, gas-amount)
+	if reason == vm.GasChangeOpCode {
+		// We ignore those because we track OpCode gas consumption manually by tracking the gas value at `CaptureState` call
+		return
+	}
+
+	// Known issue: New geth native tracer added more gas change, some that we were indeed missing and
+	// should have included in our previous patch. For new chain, this code should be remove so that
+	// they are included and useful to user.
+	if reason == vm.GasInitialBalance || reason == vm.GasRefunded || reason == vm.GasBuyBack {
+		return
+	}
 
 	activeCall := f.callStack.Peek()
-	change := &pbeth.GasChange{
-		OldValue: gas,
-		NewValue: gas - amount,
-		Ordinal:  f.blockOrdinal.Next(),
-	}
+	change := f.newGasChange("tracer", gas, gas-amount, gasChangeReasonFromChain(reason))
 
 	// There is an initial gas consumption happening will the call is not yet started, we track it manually
 	if activeCall == nil {
@@ -700,6 +740,21 @@ func (f *Firehose) OnGasConsumed(gas, amount uint64) {
 	}
 
 	activeCall.GasChanges = append(activeCall.GasChanges, change)
+}
+
+func (f *Firehose) newGasChange(tag string, oldValue, newValue uint64, reason pbeth.GasChange_Reason) *pbeth.GasChange {
+	firehoseTrace("gas consumed tag=%s before=%d after=%d reason=%s", tag, oldValue, newValue, reason)
+
+	if reason == pbeth.GasChange_REASON_UNKNOWN {
+		panic(fmt.Errorf("received unknown gas change reason %s", reason))
+	}
+
+	return &pbeth.GasChange{
+		OldValue: oldValue,
+		NewValue: newValue,
+		Ordinal:  f.blockOrdinal.Next(),
+		Reason:   reason,
+	}
 }
 
 func (f *Firehose) ensureInBlock() {
@@ -976,42 +1031,62 @@ func newAccessListFromChain(accessList types.AccessList) (out []*pbeth.AccessTup
 	return
 }
 
-func balanceChangeReasonFromChain(reason state.BalanceChangeReason) pbeth.BalanceChange_Reason {
-	switch reason {
-	case state.BalanceChangeRewardMineUncle:
-		return pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE
-	case state.BalanceChangeRewardMineBlock:
-		return pbeth.BalanceChange_REASON_REWARD_MINE_BLOCK
-	case state.BalanceChangeDaoRefundContract:
-		return pbeth.BalanceChange_REASON_DAO_REFUND_CONTRACT
-	case state.BalanceChangeDaoAdjustBalance:
-		return pbeth.BalanceChange_REASON_DAO_ADJUST_BALANCE
-	case state.BalanceChangeTransfer:
-		return pbeth.BalanceChange_REASON_TRANSFER
-	case state.BalanceChangeGenesisBalance:
-		return pbeth.BalanceChange_REASON_GENESIS_BALANCE
-	case state.BalanceChangeGasBuy:
-		return pbeth.BalanceChange_REASON_GAS_BUY
-	case state.BalanceChangeRewardTransactionFee:
-		return pbeth.BalanceChange_REASON_REWARD_TRANSACTION_FEE
-	case state.BalanceChangeGasRefund:
-		return pbeth.BalanceChange_REASON_GAS_REFUND
-	case state.BalanceChangeTouchAccount:
-		return pbeth.BalanceChange_REASON_TOUCH_ACCOUNT
-	case state.BalanceChangeSuicideRefund:
-		return pbeth.BalanceChange_REASON_SUICIDE_REFUND
-	case state.BalanceChangeSuicideWithdraw:
-		return pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW
-	case state.BalanceChangeBurn:
-		return pbeth.BalanceChange_REASON_BURN
-	case state.BalanceChangeWithdrawal:
-		return pbeth.BalanceChange_REASON_WITHDRAWAL
+var balanceChangeReasonToPb = map[state.BalanceChangeReason]pbeth.BalanceChange_Reason{
+	state.BalanceChangeRewardMineUncle:      pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE,
+	state.BalanceChangeRewardMineBlock:      pbeth.BalanceChange_REASON_REWARD_MINE_BLOCK,
+	state.BalanceChangeDaoRefundContract:    pbeth.BalanceChange_REASON_DAO_REFUND_CONTRACT,
+	state.BalanceChangeDaoAdjustBalance:     pbeth.BalanceChange_REASON_DAO_ADJUST_BALANCE,
+	state.BalanceChangeTransfer:             pbeth.BalanceChange_REASON_TRANSFER,
+	state.BalanceChangeGenesisBalance:       pbeth.BalanceChange_REASON_GENESIS_BALANCE,
+	state.BalanceChangeGasBuy:               pbeth.BalanceChange_REASON_GAS_BUY,
+	state.BalanceChangeRewardTransactionFee: pbeth.BalanceChange_REASON_REWARD_TRANSACTION_FEE,
+	state.BalanceChangeGasRefund:            pbeth.BalanceChange_REASON_GAS_REFUND,
+	state.BalanceChangeTouchAccount:         pbeth.BalanceChange_REASON_TOUCH_ACCOUNT,
+	state.BalanceChangeSuicideRefund:        pbeth.BalanceChange_REASON_SUICIDE_REFUND,
+	state.BalanceChangeSuicideWithdraw:      pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW,
+	state.BalanceChangeBurn:                 pbeth.BalanceChange_REASON_BURN,
+	state.BalanceChangeWithdrawal:           pbeth.BalanceChange_REASON_WITHDRAWAL,
 
-	case state.BalanceChangeUnspecified:
-		return pbeth.BalanceChange_REASON_UNKNOWN
+	state.BalanceChangeUnspecified: pbeth.BalanceChange_REASON_UNKNOWN,
+}
+
+func balanceChangeReasonFromChain(reason state.BalanceChangeReason) pbeth.BalanceChange_Reason {
+	if r, ok := balanceChangeReasonToPb[reason]; ok {
+		return r
 	}
 
 	panic(fmt.Errorf("unknown tracer balance change reason value '%d', check state.BalanceChangeReason so see to which constant it refers to", reason))
+}
+
+var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
+	// Those are valid only on some chains that fix a known issue with gas changes, for now
+	// they are not part of our patch.
+	// vm.GasInitialBalance: pbeth.GasChange_REASON_INITIAL_BALANCE,
+	// vm.GasRefunded:       pbeth.GasChange_REASON_REFUND,
+	// vm.GasBuyBack:        pbeth.GasChange_REASON_BUYBACK,
+	vm.GasInitialBalance: pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasRefunded:       pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasBuyBack:        pbeth.GasChange_REASON_UNKNOWN,
+
+	vm.GasChangeIntrinsicGas:         pbeth.GasChange_REASON_INTRINSIC_GAS,
+	vm.GasChangeContractCreation:     pbeth.GasChange_REASON_CONTRACT_CREATION,
+	vm.GasChangeContractCreation2:    pbeth.GasChange_REASON_CONTRACT_CREATION2,
+	vm.GasChangeCodeStorage:          pbeth.GasChange_REASON_CODE_STORAGE,
+	vm.GasChangePrecompiledContract:  pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
+	vm.GasChangeStorageColdAccess:    pbeth.GasChange_REASON_STATE_COLD_ACCESS,
+	vm.GasChangeCallLeftOverRefunded: pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	vm.GasChangeFailedExecution:      pbeth.GasChange_REASON_FAILED_EXECUTION,
+
+	// Ignored, we track them manually, newGasChange ensure that we panic if we see Unknown
+	vm.GasChangeOpCode: pbeth.GasChange_REASON_UNKNOWN,
+}
+
+func gasChangeReasonFromChain(reason vm.GasChangeReason) pbeth.GasChange_Reason {
+	if r, ok := gasChangeReasonToPb[reason]; ok {
+		return r
+	}
+
+	panic(fmt.Errorf("unknown tracer gas change reason value '%d', check vm.GasChangeReason so see to which constant it refers to", reason))
 }
 
 func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
