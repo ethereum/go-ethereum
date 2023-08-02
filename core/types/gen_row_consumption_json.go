@@ -5,29 +5,25 @@ package types
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/scroll-tech/go-ethereum/common/hexutil"
 )
-
-var _ = (*subCircuitRowUsageMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
 func (s SubCircuitRowUsage) MarshalJSON() ([]byte, error) {
 	type SubCircuitRowUsage struct {
-		Name      string         `json:"name" gencodec:"required"`
-		RowNumber hexutil.Uint64 `json:"row_number" gencodec:"required"`
+		Name      string `json:"name" gencodec:"required"`
+		RowNumber uint64 `json:"row_number" gencodec:"required"`
 	}
 	var enc SubCircuitRowUsage
 	enc.Name = s.Name
-	enc.RowNumber = hexutil.Uint64(s.RowNumber)
+	enc.RowNumber = s.RowNumber
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (s *SubCircuitRowUsage) UnmarshalJSON(input []byte) error {
 	type SubCircuitRowUsage struct {
-		Name      *string         `json:"name" gencodec:"required"`
-		RowNumber *hexutil.Uint64 `json:"row_number" gencodec:"required"`
+		Name      *string `json:"name" gencodec:"required"`
+		RowNumber *uint64 `json:"row_number" gencodec:"required"`
 	}
 	var dec SubCircuitRowUsage
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -40,6 +36,6 @@ func (s *SubCircuitRowUsage) UnmarshalJSON(input []byte) error {
 	if dec.RowNumber == nil {
 		return errors.New("missing required field 'row_number' for SubCircuitRowUsage")
 	}
-	s.RowNumber = uint64(*dec.RowNumber)
+	s.RowNumber = *dec.RowNumber
 	return nil
 }
