@@ -161,6 +161,7 @@ var (
 		utils.L1EndpointFlag,
 		utils.L1ConfirmationsFlag,
 		utils.L1DeploymentBlockFlag,
+		utils.CircuitCapacityCheckEnabledFlag,
 	}
 
 	rpcFlags = []cli.Flag{
