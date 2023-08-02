@@ -200,7 +200,7 @@ func randomZktrie(t *testing.T, n int) (*ZkTrie, map[string]*kv) {
 func TestProofWithDeletion(t *testing.T) {
 	tr, _ := NewZkTrie(common.Hash{}, NewZktrieDatabase((memorydb.New())))
 	mt := &zkTrieImplTestWrapper{tr.Tree()}
-	key1 := bytes.Repeat([]byte("k"), 32)
+	key1 := bytes.Repeat([]byte("l"), 32)
 	key2 := bytes.Repeat([]byte("m"), 32)
 	err := mt.UpdateWord(
 		zkt.NewByte32FromBytesPaddingZero(key1),
@@ -229,7 +229,7 @@ func TestProofWithDeletion(t *testing.T) {
 
 	err = proofTracer.Prove(s_key2.Bytes(), 0, proof)
 	assert.NoError(t, err)
-	// assert.Equal(t, len(sibling1), len(delTracer.GetProofs()))
+	//assert.Equal(t, len(sibling1), len(delTracer.GetProofs()))
 
 	siblings, err := proofTracer.GetDeletionProofs()
 	assert.NoError(t, err)

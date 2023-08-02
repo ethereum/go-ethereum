@@ -9,6 +9,8 @@ import (
 
 	"github.com/iden3/go-iden3-crypto/ff"
 	"github.com/iden3/go-iden3-crypto/utils"
+
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 const NROUNDSF = 8 //nolint:golint
@@ -153,8 +155,8 @@ func HashWithCap(inpBI []*big.Int, width int, nBytes int64) (*big.Int, error) {
 
 }
 
-// Hash computes the Poseidon hash for the given fixed-size inputs, select specs automatically from the size, no capacity flag is applied
-func HashFixed(inpBI []*big.Int) (*big.Int, error) {
+// Hash computes the Poseidon hash for the given fixed-size inputs, with specified domain field
+func HashFixedWithDomain(inpBI []*big.Int, domain *big.Int) (*big.Int, error) {
 	t := len(inpBI) + 1
 	if len(inpBI) == 0 || len(inpBI) > len(NROUNDSP) {
 		return nil, fmt.Errorf("invalid inputs length %d, max %d", len(inpBI), len(NROUNDSP)) //nolint:gomnd,lll
@@ -165,7 +167,7 @@ func HashFixed(inpBI []*big.Int) (*big.Int, error) {
 	inp := utils.BigIntArrayToElementArray(inpBI[:])
 
 	state := make([]*ff.Element, t)
-	state[0] = zero()
+	state[0] = ff.NewElement().SetBigInt(domain)
 	copy(state[1:], inp[:])
 
 	state = permute(state, t)
@@ -174,4 +176,10 @@ func HashFixed(inpBI []*big.Int) (*big.Int, error) {
 	r := big.NewInt(0)
 	rE.ToBigIntRegular(r)
 	return r, nil
+}
+
+// Deprecated HashFixed entry, with domain field is 0
+func HashFixed(inpBI []*big.Int) (*big.Int, error) {
+	log.Warn("called a deprecated method for poseidon fixed hash", "inputs", inpBI)
+	return HashFixedWithDomain(inpBI, big.NewInt(0))
 }

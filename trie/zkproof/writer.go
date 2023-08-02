@@ -55,7 +55,7 @@ func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *zktrie.Node {
 				//notice: must consistent with trie/merkletree.go
 				bt := hash[:]
 				db.Put(bt, buf)
-				if n.Type == zktrie.NodeTypeLeaf || n.Type == zktrie.NodeTypeEmpty {
+				if n.Type == zktrie.NodeTypeLeaf_New || n.Type == zktrie.NodeTypeEmpty_New {
 					return n
 				}
 			}
@@ -107,9 +107,9 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 				keyCounter.Mul(keyCounter, big.NewInt(2))
 			}
 			switch n.Type {
-			case zktrie.NodeTypeParent:
+			case zktrie.NodeTypeBranch_0, zktrie.NodeTypeBranch_1, zktrie.NodeTypeBranch_2, zktrie.NodeTypeBranch_3:
 				lastNode = n
-			case zktrie.NodeTypeLeaf:
+			case zktrie.NodeTypeLeaf_New:
 				vhash, _ := n.ValueHash()
 				path.Leaf = &SMTPathNode{
 					//here we just return the inner represent of hash (little endian, reversed byte order to common hash)
@@ -127,7 +127,7 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 				}
 
 				return
-			case zktrie.NodeTypeEmpty:
+			case zktrie.NodeTypeEmpty_New:
 				return
 			default:
 				panic(fmt.Errorf("unknown node type %d", n.Type))
@@ -160,7 +160,7 @@ func NewZkTrieProofWriter(storage *types.StorageTrace) (*zktrieProofWriter, erro
 	for addrs, proof := range storage.Proofs {
 		if n := resumeProofs(proof, underlayerDb); n != nil {
 			addr := common.HexToAddress(addrs)
-			if n.Type == zktrie.NodeTypeEmpty {
+			if n.Type == zktrie.NodeTypeEmpty_New {
 				accounts[addr] = nil
 			} else if acc, err := types.UnmarshalStateAccount(n.Data()); err == nil {
 				if bytes.Equal(n.NodeKey[:], addressToKey(addr)[:]) {
@@ -328,7 +328,7 @@ func verifyAccount(addr common.Address, data *types.StateAccount, leaf *SMTPathN
 		}
 	} else if data != nil {
 		arr, flag := data.MarshalFields()
-		h, err := zkt.PreHandlingElems(flag, arr)
+		h, err := zkt.HandlingElemsAndByte32(flag, arr)
 		//log.Info("sanity check acc before", "addr", addr.String(), "key", leaf.Sibling.Text(16), "hash", h.Text(16))
 
 		if err != nil {

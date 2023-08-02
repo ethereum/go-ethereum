@@ -92,6 +92,14 @@ func TestPoseidonHashFixed(t *testing.T) {
 	assert.Equal(t,
 		"9989051620750914585850546081941653841776809718687451684622678807385399211877",
 		h.String())
+
+	h, err = HashFixedWithDomain([]*big.Int{b1, b2}, big.NewInt(256))
+	assert.Nil(t, err)
+	assert.Equal(t,
+		"2362370911616048355006851495576377379220050231129891536935411970097789775493",
+		h.String())
+	h_ref, _ := HashFixed([]*big.Int{b1, b2})
+	assert.NotEqual(t, h_ref, h)
 }
 
 func TestErrorInputs(t *testing.T) {

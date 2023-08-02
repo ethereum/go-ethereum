@@ -2,6 +2,7 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 
 	zktrie "github.com/scroll-tech/zktrie/trie"
 	zkt "github.com/scroll-tech/zktrie/types"
@@ -98,7 +99,7 @@ func (t *ProofTracer) GetDeletionProofs() ([][]byte, error) {
 					if err != nil {
 						return nil, err
 					}
-					if sibling.Type != zktrie.NodeTypeEmpty {
+					if sibling.Type != zktrie.NodeTypeEmpty_New {
 						retMap[*siblingHash] = sibling.Value()
 					}
 				}
@@ -125,7 +126,7 @@ func (t *ProofTracer) MarkDeletion(key []byte) {
 		// sanity check
 		leafNode := path[len(path)-1]
 
-		if leafNode.Type != zktrie.NodeTypeLeaf {
+		if leafNode.Type != zktrie.NodeTypeLeaf_New {
 			panic("all path recorded in proofTrace should be ended with leafNode")
 		}
 
@@ -145,19 +146,23 @@ func (t *ProofTracer) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWr
 				return err
 			}
 
-			if n.Type == zktrie.NodeTypeLeaf {
+			switch n.Type {
+			case zktrie.NodeTypeLeaf_New:
 				preImage := t.GetKey(n.NodeKey.Bytes())
 				if len(preImage) > 0 {
 					n.KeyPreimage = &zkt.Byte32{}
 					copy(n.KeyPreimage[:], preImage)
 				}
-			} else if n.Type == zktrie.NodeTypeParent {
+			case zktrie.NodeTypeBranch_0, zktrie.NodeTypeBranch_1,
+				zktrie.NodeTypeBranch_2, zktrie.NodeTypeBranch_3:
 				mptPath = append(mptPath, n)
-			} else if n.Type == zktrie.NodeTypeEmpty {
+			case zktrie.NodeTypeEmpty_New:
 				// empty node is considered as "unhit" but it should be also being added
 				// into a temporary slot for possibly being marked as deletion later
 				mptPath = append(mptPath, n)
 				t.emptyTermPaths[string(key)] = mptPath
+			default:
+				panic(fmt.Errorf("unexpected node type %d", n.Type))
 			}
 
 			return proofDb.Put(nodeHash[:], n.Value())
