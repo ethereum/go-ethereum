@@ -313,6 +313,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	keyvals := make([]verkle.StateDiff, 0, n)
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
+	var preStateTrie *trie.VerkleTrie
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
@@ -372,13 +373,28 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 				kvs[string(key)] = v
 			}
 
+			// Initialize the preStateTrie if it is nil, this should
+			// correspond to the genesis block. This is a workaround
+			// needed until the main verkle PR is rebased on top of
+			// PBSS.
+			if preStateTrie == nil {
+				preStateTrie = vtr
+			}
+
 			vtr.Hash()
-			p, k, err := vtr.ProveAndSerialize(statedb.Witness().Keys(), kvs)
+			p, k, err := preStateTrie.ProveAndSerialize(statedb.Witness().Keys(), kvs)
 			if err != nil {
 				panic(err)
 			}
 			proofs = append(proofs, p)
 			keyvals = append(keyvals, k)
+
+			// save the current state of the trie for producing the proof for the next block,
+			// since reading it from disk is broken with the intermediate PBSS-like system we
+			// have: it will read the post-state as this is the only state present on disk.
+			// This is a workaround needed until the main verkle PR is rebased on top of PBSS.
+			preStateTrie = statedb.GetTrie().(*trie.VerkleTrie)
+
 			return block, b.receipts
 		}
 		return nil, nil

@@ -28,7 +28,7 @@ import (
 )
 
 func TestVerkleIterator(t *testing.T) {
-	trie := NewVerkleTrie(verkle.New(), NewDatabase(rawdb.NewMemoryDatabase()), utils.NewPointCache())
+	trie := NewVerkleTrie(verkle.New(), NewDatabase(rawdb.NewMemoryDatabase()), utils.NewPointCache(), true)
 	account0 := &types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(2),

@@ -24,3 +24,13 @@ var (
 	WitnessChunkWriteCost  uint64 = 500
 	WitnessChunkFillCost   uint64 = 6200
 )
+
+// ClearVerkleWitnessCosts sets all witness costs to 0, which is necessary
+// for historical block replay simulations.
+func ClearVerkleWitnessCosts() {
+	WitnessBranchReadCost = 0
+	WitnessChunkReadCost = 0
+	WitnessBranchWriteCost = 0
+	WitnessChunkWriteCost = 0
+	WitnessChunkFillCost = 0
+}

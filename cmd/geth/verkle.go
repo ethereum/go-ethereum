@@ -130,14 +130,13 @@ func convertToVerkle(ctx *cli.Context) error {
 		vRoot      = verkle.New().(*verkle.InternalNode)
 	)
 
-	saveverkle := func(node verkle.VerkleNode) {
-		comm := node.Commit()
+	saveverkle := func(path []byte, node verkle.VerkleNode) {
+		node.Commit()
 		s, err := node.Serialize()
 		if err != nil {
 			panic(err)
 		}
-		commB := comm.Bytes()
-		if err := chaindb.Put(commB[:], s); err != nil {
+		if err := chaindb.Put(path, s); err != nil {
 			panic(err)
 		}
 	}
@@ -330,7 +329,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 				return fmt.Errorf("could not find child %x in db: %w", childC, err)
 			}
 			// depth is set to 0, the tree isn't rebuilt so it's not a problem
-			childN, err := verkle.ParseNode(childS, 0, childC[:])
+			childN, err := verkle.ParseNode(childS, 0)
 			if err != nil {
 				return fmt.Errorf("decode error child %x in db: %w", child.Commitment().Bytes(), err)
 			}
@@ -390,7 +389,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+	root, err := verkle.ParseNode(serializedRoot, 0)
 	if err != nil {
 		return err
 	}
@@ -439,7 +438,7 @@ func expandVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+	root, err := verkle.ParseNode(serializedRoot, 0)
 	if err != nil {
 		return err
 	}

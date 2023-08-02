@@ -84,3 +84,8 @@ func FullAccountRLP(data []byte) ([]byte, error) {
 	}
 	return rlp.EncodeToBytes(account)
 }
+
+// HasStorage returns true if the account has a non-empty storage tree.
+func (acc *Account) HasStorage() bool {
+	return len(acc.Root) == 32 && !bytes.Equal(acc.Root, emptyRoot[:])
+}

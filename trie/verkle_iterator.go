@@ -104,7 +104,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		if err != nil {
 			panic(err)
 		}
-		it.current, err = verkle.ParseNode(data, byte(len(it.stack)-1), nodeToDBKey(node))
+		it.current, err = verkle.ParseNode(data, byte(len(it.stack)-1))
 		if err != nil {
 			panic(err)
 		}

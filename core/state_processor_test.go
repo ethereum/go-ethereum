@@ -374,7 +374,8 @@ func TestProcessVerkle(t *testing.T) {
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		db         = rawdb.NewMemoryDatabase()
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
 		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 		gspec      = &Genesis{
 			Config: config,
@@ -388,9 +389,13 @@ func TestProcessVerkle(t *testing.T) {
 	)
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
-	genesis := gspec.MustCommit(db)
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	genesis := gspec.MustCommit(bcdb)
+	blockchain, _ := NewBlockChain(bcdb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
+
+	// Commit the genesis block to the block-generation database as it
+	// is now independent of the blockchain database.
+	gspec.MustCommit(gendb)
 
 	txCost1 := params.WitnessBranchWriteCost*2 + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*3 + params.WitnessChunkReadCost*10 + params.TxGas
 	txCost2 := params.WitnessBranchWriteCost + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*2 + params.WitnessChunkReadCost*10 + params.TxGas
@@ -400,7 +405,7 @@ func TestProcessVerkle(t *testing.T) {
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
 	}
-	chain, _, proofs, keyvals := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, gen *BlockGen) {
+	chain, _, proofs, keyvals := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), gendb, 2, func(i int, gen *BlockGen) {
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{byte(i), 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
@@ -431,10 +436,11 @@ func TestProcessVerkle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log("verfied verkle proof")
 
-	_, err = blockchain.InsertChain(chain)
+	endnum, err := blockchain.InsertChain(chain)
 	if err != nil {
-		t.Fatalf("block imported with error: %v", err)
+		t.Fatalf("block %d imported with error: %v", endnum, err)
 	}
 
 	for i := 0; i < 2; i++ {

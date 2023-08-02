@@ -175,6 +175,17 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			sdb.snapDestructs = make(map[common.Hash]struct{})
 			sdb.snapAccounts = make(map[common.Hash][]byte)
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		} else {
+			if fdb, ok := db.(*cachingDB); ok {
+				trans := fdb.getTranslation(root)
+				if trans != (common.Hash{}) {
+					if sdb.snap = sdb.snaps.Snapshot(trans); sdb.snap != nil {
+						sdb.snapDestructs = make(map[common.Hash]struct{})
+						sdb.snapAccounts = make(map[common.Hash][]byte)
+						sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+					}
+				}
+			}
 		}
 	}
 	return sdb, nil
@@ -509,6 +520,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			chunks = trie.ChunkifyCode(obj.code)
 			values [][]byte
 			key    []byte
+			err    error
 		)
 		for i, chunknr := 0, uint64(0); i < len(chunks); i, chunknr = i+32, chunknr+1 {
 			groupOffset := (chunknr + 128) % 256
@@ -526,7 +538,13 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			}
 
 			if groupOffset == 255 || len(chunks)-i <= 32 {
-				if err := s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values); err != nil {
+				switch t := s.trie.(type) {
+				case *trie.VerkleTrie:
+					err = t.TryUpdateStem(key[:31], values)
+				case *trie.TransitionTrie:
+					err = t.TryUpdateStem(key[:31], values)
+				}
+				if err != nil {
 					s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 				}
 			}

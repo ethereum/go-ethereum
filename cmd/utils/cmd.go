@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -40,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
@@ -173,6 +176,18 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			return err
 		}
 	}
+	cpuProfile, err := os.Create("cpu.out")
+	if err != nil {
+		return fmt.Errorf("Error creating CPU profile: %v", err)
+	}
+	defer cpuProfile.Close()
+	err = pprof.StartCPUProfile(cpuProfile)
+	if err != nil {
+		return fmt.Errorf("Error starting CPU profile: %v", err)
+	}
+	defer pprof.StopCPUProfile()
+	params.ClearVerkleWitnessCosts()
+
 	stream := rlp.NewStream(reader, 0)
 
 	// Run actual the import.
@@ -361,6 +376,75 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 	}
+	log.Info("Exported preimages", "file", fn)
+	return nil
+}
+
+// ExportOverlayPreimages exports all known hash preimages into the specified file,
+// in the same order as expected by the overlay tree migration.
+func ExportOverlayPreimages(chain *core.BlockChain, fn string, root common.Hash) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	writer := bufio.NewWriter(fh)
+	defer writer.Flush()
+
+	statedb, err := chain.State()
+	if err != nil {
+		return fmt.Errorf("failed to open statedb: %w", err)
+	}
+
+	if root == (common.Hash{}) {
+		root = chain.CurrentBlock().Root()
+	}
+
+	accIt, err := statedb.Snaps().AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIt.Release()
+
+	count := 0
+	for accIt.Next() {
+		acc, err := snapshot.FullAccount(accIt.Account())
+		if err != nil {
+			return fmt.Errorf("invalid account encountered during traversal: %s", err)
+		}
+		addr := rawdb.ReadPreimage(statedb.Database().DiskDB(), accIt.Hash())
+		if len(addr) != 20 {
+			return fmt.Errorf("addr len is zero is not 32: %d", len(addr))
+		}
+		if _, err := writer.Write(addr); err != nil {
+			return fmt.Errorf("failed to write addr preimage: %w", err)
+		}
+
+		if acc.HasStorage() {
+			stIt, err := statedb.Snaps().StorageIterator(root, accIt.Hash(), common.Hash{})
+			if err != nil {
+				return fmt.Errorf("failed to create storage iterator: %w", err)
+			}
+			for stIt.Next() {
+				slotnr := rawdb.ReadPreimage(statedb.Database().DiskDB(), stIt.Hash())
+				if len(slotnr) != 32 {
+					return fmt.Errorf("slotnr not 32 len")
+				}
+				if _, err := writer.Write(slotnr); err != nil {
+					return fmt.Errorf("failed to write slotnr preimage: %w", err)
+				}
+			}
+			stIt.Release()
+		}
+		count++
+		if count%100000 == 0 {
+			log.Info("Last exported account", "account", accIt.Hash())
+		}
+	}
+
 	log.Info("Exported preimages", "file", fn)
 	return nil
 }
