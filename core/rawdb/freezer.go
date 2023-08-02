@@ -226,7 +226,16 @@ func (f *Freezer) AncientSize(kind string) (uint64, error) {
 	defer f.writeLock.RUnlock()
 
 	if table := f.tables[kind]; table != nil {
-		return table.size()
+		// Get the current size of the table (including tail-deleted elements).
+		totalSize, _ := table.size()
+
+		// Get the number of tail-deleted elements.
+		tailDeletedSize := table.itemHidden.Load()
+
+		// Calculate the size of live (non-hidden) elements.
+		liveSize := totalSize - tailDeletedSize
+
+		return liveSize, nil
 	}
 	return 0, errUnknownTable
 }
