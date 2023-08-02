@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"os"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"time"
 
@@ -37,6 +36,9 @@ var _ core.BlockchainLogger = (*Firehose)(nil)
 
 var emptyAddress = common.Address{}.Bytes()
 var emptyHash = common.Hash{}.Bytes()
+
+var emptyCommonAddress = common.Address{}
+var emptyCommonHash = common.Hash{}
 
 type Firehose struct {
 	// Global state
@@ -146,9 +148,6 @@ func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction) {
 
 	f.ensureInBlockAndNotInTrxAndNotInCall()
 
-	f.inTransaction.Store(true)
-	f.isPrecompiledAddr = evm.IsPrecompileAddr
-
 	signer := types.MakeSigner(evm.ChainConfig(), evm.Context.BlockNumber, evm.Context.Time)
 
 	from, err := types.Sender(signer, tx)
@@ -163,11 +162,21 @@ func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction) {
 		to = *tx.To()
 	}
 
+	f.captureTxStart(tx, tx.Hash(), from, to, evm.IsPrecompileAddr)
+}
+
+// captureTxStart is used internally a two places, in the normal "tracer" and in the "OnGenesisBlock",
+// we manually pass some override to the `tx` because genesis block has a different way of creating
+// the transaction that wraps the genesis block.
+func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from, to common.Address, isPrecompiledAddr func(common.Address) bool) {
+	f.inTransaction.Store(true)
+	f.isPrecompiledAddr = isPrecompiledAddr
+
 	v, r, s := tx.RawSignatureValues()
 
 	f.transaction = &pbeth.TransactionTrace{
 		BeginOrdinal:         f.blockOrdinal.Next(),
-		Hash:                 tx.Hash().Bytes(),
+		Hash:                 hash.Bytes(),
 		From:                 from.Bytes(),
 		To:                   to.Bytes(),
 		Nonce:                tx.Nonce(),
@@ -469,104 +478,40 @@ func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
-	// FIXME: Re-implement by actualling callin `OnBlockStart/OnTrxStart/CaptureStart` etc.
-	block := &pbeth.Block{
-		Hash:   b.Hash().Bytes(),
-		Number: b.Number().Uint64(),
-		Header: newBlockHeaderFromChainBlock(b, firehoseBigIntFromNative(b.Difficulty())),
-		TransactionTraces: []*pbeth.TransactionTrace{
-			{
-				BeginOrdinal: f.blockOrdinal.Next(),
-				Hash:         emptyHash,
-				From:         emptyAddress,
-				To:           emptyAddress,
-				Receipt: &pbeth.TransactionReceipt{
-					StateRoot: b.Root().Bytes(),
-					LogsBloom: types.Bloom{}.Bytes(),
-				},
-				Status: pbeth.TransactionTraceStatus_SUCCEEDED,
-				Calls: []*pbeth.Call{
-					{
-						// It seems we never properly set the BeginOrdinal/EndOrdinal of the root call of the genesis block
-						BeginOrdinal: 0,
-						EndOrdinal:   0,
-
-						CallType: pbeth.CallType_CALL,
-						Caller:   emptyAddress,
-						Address:  emptyAddress,
-						Index:    1,
-					},
-				},
-			},
-		},
-		Size: uint64(b.Size()),
-		Ver:  3,
-	}
-
-	rootTrx := block.TransactionTraces[0]
-	rootCall := rootTrx.Calls[0]
-
-	sortedAddrs := make([]common.Address, len(alloc))
-	i := 0
-	for addr := range alloc {
-		sortedAddrs[i] = addr
-		i++
-	}
-
-	sort.Slice(sortedAddrs, func(i, j int) bool {
-		return bytes.Compare(sortedAddrs[i][:], sortedAddrs[j][:]) <= -1
-	})
+	f.OnBlockStart(b, big.NewInt(0), nil, nil)
+	f.captureTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress, func(common.Address) bool { return false })
+	f.CaptureStart(emptyCommonAddress, emptyCommonAddress, false, nil, 0, nil)
 
 	for _, addr := range sortedKeys(alloc) {
 		account := alloc[addr]
 
-		rootCall.AccountCreations = append(rootCall.AccountCreations, &pbeth.AccountCreation{
-			Account: addr.Bytes(),
-			Ordinal: f.blockOrdinal.Next(),
-		})
+		f.OnNewAccount(addr)
 
-		rootCall.BalanceChanges = append(rootCall.BalanceChanges, &pbeth.BalanceChange{
-			Address:  addr.Bytes(),
-			NewValue: firehoseBigIntFromNative(account.Balance),
-			Reason:   pbeth.BalanceChange_REASON_GENESIS_BALANCE,
-			Ordinal:  f.blockOrdinal.Next(),
-		})
+		if account.Balance != nil && account.Balance.Sign() != 0 {
+			activeCall := f.callStack.Peek()
+			activeCall.BalanceChanges = append(activeCall.BalanceChanges, f.newBalanceChange("genesis", addr, common.Big0, account.Balance, pbeth.BalanceChange_REASON_GENESIS_BALANCE))
+		}
 
 		if len(account.Code) > 0 {
-			rootCall.CodeChanges = append(rootCall.CodeChanges, &pbeth.CodeChange{
-				Address: addr.Bytes(),
-				NewCode: account.Code,
-				NewHash: crypto.Keccak256(account.Code),
-				Ordinal: f.blockOrdinal.Next(),
-			})
+			f.OnCodeChange(addr, emptyCommonHash, nil, common.BytesToHash(crypto.Keccak256(account.Code)), account.Code)
 		}
 
 		if account.Nonce > 0 {
-			rootCall.NonceChanges = append(rootCall.NonceChanges, &pbeth.NonceChange{
-				Address:  addr.Bytes(),
-				OldValue: 0,
-				NewValue: account.Nonce,
-				Ordinal:  f.blockOrdinal.Next(),
-			})
+			f.OnNonceChange(addr, 0, account.Nonce)
 		}
 
-		// This is bad, we were not sorting the storage changes before! Not a big deal,
-		// just make it harder for verifiability of previous blocks, they are now sorted.
 		for _, key := range sortedKeys(account.Storage) {
-			rootCall.StorageChanges = append(rootCall.StorageChanges, &pbeth.StorageChange{
-				Address:  addr.Bytes(),
-				Key:      key.Bytes(),
-				NewValue: account.Storage[key].Bytes(),
-				Ordinal:  f.blockOrdinal.Next(),
-			})
+			f.OnStorageChange(addr, key, emptyCommonHash, account.Storage[key])
 		}
 	}
 
-	// Ordering matters here, we must set the end ordinal of the call before the transaction
-	rootTrx.EndOrdinal = f.blockOrdinal.Next()
-
-	f.printBlockToFirehose(block)
-	f.resetBlock()
+	f.CaptureEnd(nil, 0, nil)
+	f.CaptureTxEnd(&types.Receipt{
+		Type:      uint8(types.LegacyTxType),
+		PostState: b.Root().Bytes(),
+		Status:    types.ReceiptStatusSuccessful,
+	}, nil)
+	f.OnBlockEnd(nil)
 }
 
 type bytesGetter interface {
@@ -591,17 +536,7 @@ func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason 
 
 	f.ensureInBlockOrTrx()
 
-	change := &pbeth.BalanceChange{
-		Ordinal:  f.blockOrdinal.Next(),
-		Address:  a.Bytes(),
-		OldValue: firehoseBigIntFromNative(prev),
-		NewValue: firehoseBigIntFromNative(new),
-		Reason:   balanceChangeReasonFromChain(reason),
-	}
-
-	if change.Reason == pbeth.BalanceChange_REASON_UNKNOWN {
-		panic(fmt.Errorf("unknown balance change reason %s from code %d not accepted here", change.Reason, reason))
-	}
+	change := f.newBalanceChange("tracer", a, prev, new, balanceChangeReasonFromChain(reason))
 
 	if f.inTransaction.Load() {
 		activeCall := f.callStack.Peek()
@@ -615,6 +550,22 @@ func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason 
 		activeCall.BalanceChanges = append(activeCall.BalanceChanges, change)
 	} else {
 		f.block.BalanceChanges = append(f.block.BalanceChanges, change)
+	}
+}
+
+func (f *Firehose) newBalanceChange(tag string, address common.Address, oldValue, newValue *big.Int, reason pbeth.BalanceChange_Reason) *pbeth.BalanceChange {
+	firehoseTrace("balance changed tag=%s before=%d after=%d reason=%s", tag, oldValue, newValue, reason)
+
+	if reason == pbeth.BalanceChange_REASON_UNKNOWN {
+		panic(fmt.Errorf("received unknown balance change reason %s", reason))
+	}
+
+	return &pbeth.BalanceChange{
+		Ordinal:  f.blockOrdinal.Next(),
+		Address:  address.Bytes(),
+		OldValue: firehoseBigIntFromNative(oldValue),
+		NewValue: firehoseBigIntFromNative(newValue),
+		Reason:   reason,
 	}
 }
 
