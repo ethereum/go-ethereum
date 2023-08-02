@@ -498,7 +498,9 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	//
 	// New chain should turn the logic into:
 	//
-	//     if !call.ExecutedCode && f.isPrecompiledAddr(common.BytesToAddress(call.Address)) { call.ExecutedCode = true }
+	//     if !call.ExecutedCode && f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
+	//         call.ExecutedCode = true
+	//     }
 	//
 
 	// At this point, `call.ExecutedCode`` is tied to `EVMInterpreter#Run` execution (in `core/vm/interpreter.go`)
@@ -1369,7 +1371,15 @@ func (r *receiptView) String() string {
 		return "<failed>"
 	}
 
-	return fmt.Sprintf("[status=%d, gasUsed=%d, logs=%d]", r.Status, r.GasUsed, len(r.Logs))
+	status := "unknown"
+	switch r.Status {
+	case types.ReceiptStatusSuccessful:
+		status = "success"
+	case types.ReceiptStatusFailed:
+		status = "failed"
+	}
+
+	return fmt.Sprintf("[status=%s, gasUsed=%d, logs=%d]", status, r.GasUsed, len(r.Logs))
 }
 
 func emptyBytesToNil(in []byte) []byte {
