@@ -423,7 +423,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	// due to an oversight that having it in `CodeChange` would be sufficient but this is wrong
 	// as constructor's input are not part of the code change but part of the call input.
 	//
-	// New chain integration should remove this `if` statement.
+	// New chain integration should remove this `if` statement completely.
 	if callType == pbeth.CallType_CREATE {
 		input = nil
 	}
@@ -502,7 +502,6 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	//         call.ExecutedCode = true
 	//     }
 	//
-
 	// At this point, `call.ExecutedCode`` is tied to `EVMInterpreter#Run` execution (in `core/vm/interpreter.go`)
 	// and is `true` if the run/loop of the interpreter executed.
 	//
@@ -535,7 +534,13 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	}
 
 	// Known Firehose issue: The EndOrdinal of the genesis block root call is never actually
-	// incremented and it's always 0. Here we reproduce bogus behavior, remove on new chain.
+	// incremented and it's always 0.
+	//
+	// New chain should turn the logic into:
+	//
+	//     call.EndOrdinal = f.blockOrdinal.Next()
+	//
+	// Removing the condition around the `EndOrdinal` assignment (keeping it!)
 	if f.block.Number != 0 {
 		call.EndOrdinal = f.blockOrdinal.Next()
 	}
@@ -751,8 +756,11 @@ func (f *Firehose) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) 
 	}
 
 	// Known Firehose issue: New geth native tracer added more gas change, some that we were indeed missing and
-	// should have included in our previous patch. For new chain, this code should be remove so that
-	// they are included and useful to user.
+	// should have included in our previous patch.
+	//
+	// For new chain, this code should be remove so that they are included and useful to user.
+	//
+	// Ref eb1916a67d9bea03df16a7a3e2cfac72
 	if reason == vm.GasInitialBalance || reason == vm.GasRefunded || reason == vm.GasBuyBack {
 		return
 	}
@@ -1027,8 +1035,8 @@ func newTxReceiptFromChain(receipt *types.Receipt) (out *pbeth.TransactionReceip
 				Index:      uint32(i),
 				BlockIndex: uint32(log.Index),
 
-				// FIXME: Fix ordinal for logs in receipt!
-				// Ordinal: uint64,
+				// Ordinal on transaction receipt logs is populated at the very end, so pairing
+				// between call logs and receipt logs is made
 			}
 		}
 	}
@@ -1086,8 +1094,12 @@ func balanceChangeReasonFromChain(reason state.BalanceChangeReason) pbeth.Balanc
 }
 
 var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
-	// Those are valid only on some chains that fix a known issue with gas changes, for now
-	// they are not part of our patch.
+	// Known Firehose issue: Those are new gas change trace that we were missing initially in our old
+	// Firehose patch. See Known Firehose issue referenced eb1916a67d9bea03df16a7a3e2cfac72 for details
+	// search for the id within this project to find back all links).
+	//
+	// New chain should uncomment the code below and remove the same assigments to UNKNOWN
+	//
 	// vm.GasInitialBalance: pbeth.GasChange_REASON_INITIAL_BALANCE,
 	// vm.GasRefunded:       pbeth.GasChange_REASON_REFUND,
 	// vm.GasBuyBack:        pbeth.GasChange_REASON_BUYBACK,
