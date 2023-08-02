@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -261,5 +262,56 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 		}
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
+	}
+}
+
+func ReadPersistentScheme(db ethdb.Reader) string {
+	// Check if state in path-based scheme is present
+	blob, _ := ReadAccountTrieNode(db, nil)
+	if len(blob) != 0 {
+		return PathScheme
+	}
+	// Check if state in hash-based scheme is present.
+	// In hash mode, genesis state is always be retained
+	// in database and it can repre
+	header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
+	if header == nil {
+		return "" // empty datadir
+	}
+	blob = ReadLegacyTrieNode(db, header.Root)
+	if len(blob) == 0 {
+		return "" // no state in disk
+	}
+	return HashScheme
+}
+
+// CheckStateCompatibility ensures the provided state scheme is compatible with
+// persistent state in disk.
+func CheckStateCompatibility(scheme string, db ethdb.Reader) error {
+	switch scheme {
+	case PathScheme:
+		// Check whether the root node of the genesis state exists in
+		// the local database under the hash-based scheme. There may
+		// be special cases where the genesis state is empty, but it's
+		// not considered since it's impossible in ethereum proof-of-
+		// stake world.
+		header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
+		if header == nil {
+			return nil
+		}
+		blob := ReadLegacyTrieNode(db, header.Root)
+		if len(blob) == 0 {
+			return nil
+		}
+		return errors.New("incompatible state scheme, stored: hash, expect: path")
+	default:
+		// Check whether the root node of the state trie exists in the
+		// local database under the path-based scheme. Dangling trie
+		// nodes are not checked since they are unusable at all.
+		blob, _ := ReadAccountTrieNode(db, nil)
+		if len(blob) == 0 {
+			return nil
+		}
+		return errors.New("incompatible state scheme, stored: path, expect: hash")
 	}
 }

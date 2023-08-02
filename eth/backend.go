@@ -165,7 +165,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	// Ensure the requested state scheme is compatible with stored state data.
-	if err := eth.checkStateCompatibility(); err != nil {
+	if err := rawdb.CheckStateCompatibility(config.StateScheme, chainDb); err != nil {
 		return nil, err
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -545,35 +545,4 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	return nil
-}
-
-// checkStateCompatibility ensures the requested state scheme is compatible with
-// stored state data.
-func (s *Ethereum) checkStateCompatibility() error {
-	switch s.config.StateScheme {
-	case rawdb.PathScheme:
-		// Check whether the root node of the genesis state exists in
-		// the local database under the hash-based scheme. There may
-		// be special cases where the genesis state is empty, but it's
-		// not considered since it's impossible in ethereum proof-of-
-		// stake world.
-		header := rawdb.ReadHeader(s.chainDb, rawdb.ReadCanonicalHash(s.chainDb, 0), 0)
-		if header == nil {
-			return nil
-		}
-		blob := rawdb.ReadLegacyTrieNode(s.chainDb, header.Root)
-		if len(blob) == 0 {
-			return nil
-		}
-		return errors.New("incompatible state scheme, stored: hash, expect: path")
-	default:
-		// Check whether the root node of the state trie exists in the
-		// local database under the path-based scheme. Dangling trie
-		// nodes are not checked since they are unusable at all.
-		blob, _ := rawdb.ReadAccountTrieNode(s.chainDb, nil)
-		if len(blob) == 0 {
-			return nil
-		}
-		return errors.New("incompatible state scheme, stored: path, expect: hash")
-	}
 }

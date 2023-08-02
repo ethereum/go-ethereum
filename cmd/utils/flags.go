@@ -1710,9 +1710,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
-	if ctx.IsSet(StateSchemeFlag.Name) {
-		cfg.StateScheme = ParseStateScheme(ctx)
+	// Parse state scheme, abort the process if it's not compatible
+	chaindb := MakeChainDatabase(ctx, stack, true)
+	scheme, err := ParseStateScheme(ctx, chaindb)
+	chaindb.Close()
+	if err != nil {
+		Fatalf("%v", err)
 	}
+	cfg.StateScheme = scheme
+
 	if ctx.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
@@ -2132,6 +2138,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
+	scheme, err := ParseStateScheme(ctx, chainDb)
+	if err != nil {
+		Fatalf("%v", err)
+	}
 	cache := &core.CacheConfig{
 		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
 		TrieCleanNoPrefetch: ctx.Bool(CacheNoPrefetchFlag.Name),
@@ -2140,7 +2150,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.Bool(CachePreimagesFlag.Name),
-		StateScheme:         ParseStateScheme(ctx),
+		StateScheme:         scheme,
 		StateHistory:        ctx.Uint64(StateHistoryFlag.Name),
 	}
 	if cache.TrieDirtyDisabled && !cache.Preimages {
@@ -2187,19 +2197,50 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	return preloads
 }
 
-// ParseStateScheme resolves scheme identifier from CLI flag.
-func ParseStateScheme(ctx *cli.Context) string {
-	scheme := ctx.String(StateSchemeFlag.Name)
-	if scheme != rawdb.HashScheme && scheme != rawdb.PathScheme {
-		Fatalf("Unknown state scheme, provided: %s, available: 'hash' or 'path'", scheme)
+// ParseStateScheme resolves scheme identifier from CLI flag. If the provided
+// state scheme is not compatible with the one of persistent scheme, an error
+// will be returned.
+//
+//   - none: use the scheme consistent with persistent state, or fallback
+//     to hash-based scheme if state is empty.
+//   - hash: use hash-based scheme or error out if persistent state scheme
+//     is not compatible.
+//   - path: use path-based scheme or error out if persistent state scheme
+//     is not compatible.
+func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
+	// If state scheme is not specified, use the scheme consistent
+	// with persistent state, or fallback to hash mode in state
+	// is empty.
+	stored := rawdb.ReadPersistentScheme(disk)
+	if !ctx.IsSet(StateSchemeFlag.Name) {
+		if stored == "" {
+			// use default scheme for empty database, flip it when
+			// path mode is chosen as default
+			log.Info("Use default hash scheme")
+			return rawdb.HashScheme, nil
+		}
+		log.Info("Use scheme consistent with persistent state", "scheme", stored)
+		return stored, nil // reuse scheme of persistent scheme
 	}
-	return scheme
+	// If state scheme is specified, ensure it's compatible with
+	// persistent state.
+	scheme := ctx.String(StateSchemeFlag.Name)
+	if stored == "" || scheme == stored {
+		log.Info("Use user-specified scheme", "scheme", scheme)
+		return scheme, nil
+	}
+	return "", fmt.Errorf("incompatible state scheme, stored: %s, provided: %s", stored, scheme)
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, readOnly bool) *trie.Database {
-	config := &trie.Config{Preimages: ctx.Bool(CachePreimagesFlag.Name)}
-	scheme := ParseStateScheme(ctx)
+func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool) *trie.Database {
+	config := &trie.Config{
+		Preimages: preimage,
+	}
+	scheme, err := ParseStateScheme(ctx, disk)
+	if err != nil {
+		Fatalf("%v", err)
+	}
 	if scheme == rawdb.HashScheme {
 		config.HashDB = hashdb.Defaults
 		return trie.NewDatabase(disk, config)

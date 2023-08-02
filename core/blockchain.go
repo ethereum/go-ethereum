@@ -681,7 +681,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
 						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 					}
-					if !bc.StateRecoverable(newHeadBlock.Root()) {
+					if !bc.HasState(newHeadBlock.Root()) && !bc.stateRecoverable(newHeadBlock.Root()) {
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
@@ -1398,6 +1398,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
+	// If node is running in path mode, skip explicit gc operation
+	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		return nil
 	}
@@ -1409,8 +1411,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 	bc.triegc.Push(root, -int64(block.NumberU64()))
 
-	current := block.NumberU64()
 	// Flush limits are not considered for the first TriesInMemory blocks.
+	current := block.NumberU64()
 	if current <= TriesInMemory {
 		return nil
 	}
@@ -1996,7 +1998,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	)
 	parent := it.previous()
 	for parent != nil && !bc.HasState(parent.Root) {
-		if bc.StateRecoverable(parent.Root) {
+		if bc.stateRecoverable(parent.Root) {
 			if err := bc.triedb.Recover(parent.Root); err != nil {
 				return 0, err
 			}
@@ -2058,7 +2060,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		parent  = block
 	)
 	for parent != nil && !bc.HasState(parent.Root()) {
-		if bc.StateRecoverable(parent.Root()) {
+		if bc.stateRecoverable(parent.Root()) {
 			if err := bc.triedb.Recover(parent.Root()); err != nil {
 				return common.Hash{}, err
 			}

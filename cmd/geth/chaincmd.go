@@ -39,8 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -198,7 +196,7 @@ func initGenesis(ctx *cli.Context) error {
 		}
 		defer chaindb.Close()
 
-		triedb := utils.MakeTrieDatabase(ctx, chaindb, false)
+		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false)
 		defer triedb.Close()
 
 		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
@@ -467,13 +465,10 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	config := &trie.Config{
-		Preimages: true, // always enable preimage lookup
-	}
-	if utils.ParseStateScheme(ctx) == rawdb.PathScheme {
-		config.PathDB = pathdb.ReadOnly
-	}
-	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
+	triedb := utils.MakeTrieDatabase(ctx, db, true, false) // always enable preimage lookup
+	defer triedb.Close()
+
+	state, err := state.New(root, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		return err
 	}
