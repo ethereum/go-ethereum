@@ -79,10 +79,10 @@ pub mod checker {
                     )
                 })
                 .estimate_circuit_capacity(&[traces.clone()])
-                .unwrap_or_else(|_| {
+                .unwrap_or_else(|e| {
                     panic!(
-                        "id: {:?}, fail to estimate_circuit_capacity in apply_tx, block_hash: {:?}, tx_hash: {:?}",
-                        id, traces.header.hash, traces.transactions[0].tx_hash
+                        "id: {:?}, fail to estimate_circuit_capacity in apply_tx, block_hash: {:?}, tx_hash: {:?}, error: {:?}",
+                        id, traces.header.hash, traces.transactions[0].tx_hash, e
                     )
                 })
         });
@@ -126,10 +126,10 @@ pub mod checker {
                     )
                 })
                 .estimate_circuit_capacity(&[traces.clone()])
-                .unwrap_or_else(|_| {
+                .unwrap_or_else(|e| {
                     panic!(
-                        "id: {:?}, fail to estimate_circuit_capacity in apply_block, block_hash: {:?}",
-                        id, traces.header.hash
+                        "id: {:?}, fail to estimate_circuit_capacity in apply_block, block_hash: {:?}, error: {:?}",
+                        id, traces.header.hash, e
                     )
                 })
         });
