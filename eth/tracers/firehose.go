@@ -380,22 +380,28 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	}
 
 	call := &pbeth.Call{
-		BeginOrdinal: f.blockOrdinal.Next(),
-		CallType:     callType,
-		Depth:        0,
-		Caller:       from.Bytes(),
-		Address:      to.Bytes(),
-		Input:        bytes.Clone(input),
-		Value:        firehoseBigIntFromNative(value),
-		GasLimit:     gas,
+		CallType: callType,
+		Depth:    0,
+		Caller:   from.Bytes(),
+		Address:  to.Bytes(),
+		Input:    bytes.Clone(input),
+		Value:    firehoseBigIntFromNative(value),
+		GasLimit: gas,
+	}
+
+	// Known Firehose issue: The BeginOrdinal of the genesis block root call is never actually
+	// incremented and it's always 0. Here we reproduce bogus behavior, remove on new chain.
+	if f.block.Number != 0 {
+		call.BeginOrdinal = f.blockOrdinal.Next()
 	}
 
 	if err := f.deferredCallState.MaybePopulateCallAndReset(source, call); err != nil {
 		panic(err)
 	}
 
+	// Known Firehose issue: The `BeginOrdinal` of the root call is incremented but must
+	// be assigned back to 0 because of a bug in the console reader. remove on new chain.
 	if source == "root" {
-		// Re-do a current existing bug where the BeginOrdinal of the root call is always 0
 		call.BeginOrdinal = 0
 	}
 
@@ -457,7 +463,11 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 		call.StatusReverted = errors.Is(err, vm.ErrExecutionReverted) || errors.Is(err, vm.ErrInsufficientBalance) || errors.Is(err, vm.ErrDepth)
 	}
 
-	call.EndOrdinal = f.blockOrdinal.Next()
+	// Known Firehose issue: The EndOrdinal of the genesis block root call is never actually
+	// incremented and it's always 0. Here we reproduce bogus behavior, remove on new chain.
+	if f.block.Number != 0 {
+		call.EndOrdinal = f.blockOrdinal.Next()
+	}
 
 	f.transaction.Calls = append(f.transaction.Calls, call)
 }
