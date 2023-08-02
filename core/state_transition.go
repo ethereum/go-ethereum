@@ -129,7 +129,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, owner common.Address) ([]byte, uint64, bool, error) {
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, owner common.Address) ([]byte, uint64, bool, error, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb(owner)
 }
 
@@ -215,7 +215,7 @@ func (st *StateTransition) preCheck() error {
 // TransitionDb will transition the state by applying the current message and
 // returning the result including the the used gas. It returns an error if it
 // failed. An error indicates a consensus issue.
-func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedGas uint64, failed bool, err error) {
+func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedGas uint64, failed bool, err error, vmErr error) {
 	if err = st.preCheck(); err != nil {
 		return
 	}
@@ -228,10 +228,10 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	// Pay intrinsic gas
 	gas, err := IntrinsicGas(st.data, contractCreation, homestead)
 	if err != nil {
-		return nil, 0, false, err
+		return nil, 0, false, err, nil
 	}
 	if err = st.useGas(gas); err != nil {
-		return nil, 0, false, err
+		return nil, 0, false, err, nil
 	}
 
 	var (
@@ -261,7 +261,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
 		if vmerr == vm.ErrInsufficientBalance {
-			return nil, 0, false, vmerr
+			return nil, 0, false, vmerr, nil
 		}
 	}
 	st.refundGas()
@@ -274,7 +274,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 		st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 	}
 
-	return ret, st.gasUsed(), vmerr != nil, err
+	return ret, st.gasUsed(), vmerr != nil, err, vmerr
 }
 
 func (st *StateTransition) refundGas() {

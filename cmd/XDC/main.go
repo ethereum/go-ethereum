@@ -113,6 +113,7 @@ var (
 		//utils.RinkebyFlag,
 		//utils.VMEnableDebugFlag,
 		utils.XDCTestnetFlag,
+		utils.Enable0xPrefixFlag,
 		utils.RewoundFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,

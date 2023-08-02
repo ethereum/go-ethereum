@@ -57,7 +57,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 			return nil, err
 		}
 
-		snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
+		snap, err := x.getSnapshot(chain, h.Number.Uint64(), false)
 		if err != nil {
 			log.Error("[getEpochSwitchInfo] Adaptor v2 getSnapshot has error", "err", err)
 			return nil, err

@@ -1,4 +1,15 @@
 # XDPoSChain
+
+<p align="center">
+  <img src="./assets/images/xinfin-logo.png" />
+</p>
+
+<p align="center">
+  XinFin XDPoSchain<br/>
+  Enterprise ready hybrid blockchain for global trade and finance
+</p>
+<br/>
+
 ## XinFin Hybrid Blockchain
 
 XinFin Hybrid Blockchain is an Enterprise ready Blockchain for global trade and finance
@@ -51,5 +62,4 @@ See https://github.com/XinFinOrg/XDPoSChain/tree/dev-upgrade/cicd
 
 Simple create a pull request along with proper reasoning, we'll get back to you.
 
-Our Channels : [Telegram Developer Group](https://t.me/XinFinDevelopers)  or [Public Slack Group](https://launchpass.com/xinfin-public)
-
+Our Channels : [Telegram Developer Group](https://t.me/XinFinDevelopers)  or [XDC.Dev](https://xdc.dev)
