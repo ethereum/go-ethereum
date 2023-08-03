@@ -644,6 +644,12 @@ func (w *worker) taskLoop() {
 				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), sealHash, task.maxL1Index+1)
 
 				// Store circuit row consumption.
+				log.Trace(
+					"Worker write block row consumption",
+					"id", w.circuitCapacityChecker.ID,
+					"sealHash", sealHash.String(),
+					"accRows", task.accRows,
+				)
 				rawdb.WriteBlockRowConsumption(w.eth.ChainDb(), sealHash, task.accRows)
 			}
 		case <-w.exitCh:
@@ -834,6 +840,12 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
+	log.Trace(
+		"Worker apply ccc for tx",
+		"id", w.circuitCapacityChecker.ID,
+		"txhash", tx.Hash(),
+	)
+
 	// has to check circuit capacity before `core.ApplyTransaction`,
 	// because if the tx can be successfully executed but circuit capacity overflows, it will be inconvenient to revert
 	traces, err := w.current.traceEnv.GetBlockTrace(
@@ -850,6 +862,12 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}
+	log.Trace(
+		"Worker apply ccc for tx result",
+		"id", w.circuitCapacityChecker.ID,
+		"txhash", tx.Hash(),
+		"accRows", accRows,
+	)
 
 	// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
 	w.current.state.RevertToSnapshot(snap)
@@ -1061,6 +1079,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
 	w.circuitCapacityChecker.Reset()
+	log.Trace("Worker reset ccc")
 
 	if parent.Time() >= uint64(timestamp) {
 		timestamp = int64(parent.Time() + 1)
@@ -1229,6 +1248,12 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	// set w.current.accRows for empty-but-not-genesis block
 	if (w.current.header.Number.Uint64() != 0) &&
 		(w.current.accRows == nil || len(*w.current.accRows) == 0) {
+		log.Trace(
+			"Worker apply ccc for empty block",
+			"id", w.circuitCapacityChecker.ID,
+			"number", w.current.header.Number,
+			"hash", w.current.header.Hash().String(),
+		)
 		traces, err := w.current.traceEnv.GetBlockTrace(types.NewBlockWithHeader(w.current.header))
 		if err != nil {
 			return err
@@ -1241,6 +1266,13 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		if err != nil {
 			return err
 		}
+		log.Trace(
+			"Worker apply ccc for empty block result",
+			"id", w.circuitCapacityChecker.ID,
+			"number", w.current.header.Number,
+			"hash", w.current.header.Hash().String(),
+			"accRows", accRows,
+		)
 		w.current.accRows = accRows
 	}
 
