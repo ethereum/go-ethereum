@@ -413,6 +413,22 @@ func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
 	return tx.BlobGasFeeCap().Cmp(other)
 }
 
+// WithoutBlobSidecar returns a copy of tx with the blob sidecar removed.
+func (tx *Transaction) WithoutBlobSidecar() *Transaction {
+	blobtx, ok := tx.inner.(*BlobTx)
+	if !ok {
+		return tx
+	}
+	cpy := &Transaction{
+		inner: blobtx.withoutSidecar(),
+		time:  tx.time,
+	}
+	cpy.hash.Store(tx.hash.Load())
+	cpy.size.Store(tx.size.Load())
+	cpy.from.Store(tx.from.Load())
+	return tx
+}
+
 // SetTime sets the decoding time of a transaction. This is used by tests to set
 // arbitrary times and by persistent transaction pools when loading old txs from
 // disk.
