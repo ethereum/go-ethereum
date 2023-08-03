@@ -374,8 +374,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		}
 	}
 	for _, tx := range insert {
-		if _, ok := seen[tx.Tx.Hash()]; !ok {
-			t.Errorf("missing transaction: %x", tx.Tx.Hash())
+		if _, ok := seen[tx.Hash()]; !ok {
+			t.Errorf("missing transaction: %x", tx.Hash())
 		}
 	}
 }
