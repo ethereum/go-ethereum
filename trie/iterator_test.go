@@ -227,6 +227,12 @@ func TestIteratorSeek(t *testing.T) {
 	if err := checkIteratorOrder(nil, it); err != nil {
 		t.Fatal(err)
 	}
+
+	// Seek to a key for which a prefixing key exists.
+	it = NewIterator(trie.MustNodeIterator([]byte("food")))
+	if err := checkIteratorOrder(testdata1[5:], it); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func checkIteratorOrder(want []kvs, it *Iterator) error {
