@@ -418,6 +418,15 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	return stateObject
 }
 
+// clearStorageCache clears the various storage caches
+// belonging to the state object.
+// It is only used for RPC.
+func (s *stateObject) clearStorageCache() {
+	s.dirtyStorage = make(Storage)
+	s.originStorage = make(Storage)
+	s.pendingStorage = make(Storage)
+}
+
 //
 // Attribute accessors
 //

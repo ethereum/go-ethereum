@@ -640,6 +640,7 @@ func TestMulticallV1(t *testing.T) {
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 		cac       = common.HexToAddress("0x0000000000000000000000000000000000000cac")
+		bab       = common.HexToAddress("0x0000000000000000000000000000000000000bab")
 		coinbase  = "0x000000000000000000000000000000000000ffff"
 		genesis   = &core.Genesis{
 			Config: params.TestChainConfig,
@@ -655,6 +656,30 @@ func TestMulticallV1(t *testing.T) {
 				//     }
 				// }
 				cac: {Balance: big.NewInt(params.Ether), Code: common.Hex2Bytes("610dad80ff")},
+				bab: {
+					Balance: big.NewInt(1),
+					// object "Test" {
+					//    code {
+					//        let value1 := sload(1)
+					//        let value2 := sload(2)
+					//
+					//        // Shift value1 by 128 bits to the left by multiplying it with 2^128
+					//        value1 := mul(value1, 0x100000000000000000000000000000000)
+					//
+					//        // Concatenate value1 and value2
+					//        let concatenatedValue := add(value1, value2)
+					//
+					//        // Store the result in memory and return it
+					//        mstore(0, concatenatedValue)
+					//        return(0, 0x20)
+					//    }
+					// }
+					Code: common.FromHex("0x600154600254700100000000000000000000000000000000820291508082018060005260206000f3"),
+					Storage: map[common.Hash]common.Hash{
+						common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(10)),
+						common.BigToHash(big.NewInt(2)): common.BigToHash(big.NewInt(12)),
+					},
+				},
 			},
 		}
 		n10hash       = crypto.Keccak256Hash([]byte{0xa}).Hex()
@@ -1195,6 +1220,11 @@ func TestMulticallV1(t *testing.T) {
 					// }
 					Input: hex2Bytes("610cac610dad600082311115601357600080fd5b6000823b1115602157600080fd5b6000813103602e57600080fd5b5050"),
 				}},
+			}, {
+				Calls: []TransactionArgs{{
+					From:  &accounts[0].addr,
+					Input: hex2Bytes("610cac610dad600082311115601357600080fd5b6000823b1115602157600080fd5b6000813103602e57600080fd5b5050"),
+				}},
 			}},
 			want: []blockRes{{
 				Number:       "0xa",
@@ -1208,6 +1238,18 @@ func TestMulticallV1(t *testing.T) {
 					Logs:        []types.Log{},
 					Status:      "0x1",
 				}, {
+					ReturnValue: "0x",
+					GasUsed:     "0xe6d9",
+					Logs:        []types.Log{},
+					Status:      "0x1",
+				}},
+			}, {
+				Number:       "0xa",
+				Hash:         n10hash,
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xe6d9",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xe6d9",
 					Logs:        []types.Log{},
@@ -1239,6 +1281,76 @@ func TestMulticallV1(t *testing.T) {
 					Logs:        []types.Log{},
 					Status:      "0x0",
 					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 10000000)", accounts[2].addr),
+				}},
+			}},
+		},
+		// Clear storage.
+		{
+			name: "clear-storage",
+			tag:  latest,
+			blocks: []CallBatch{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: {
+						Code: newBytes(genesis.Alloc[bab].Code),
+						StateDiff: &map[common.Hash]common.Hash{
+							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(2)),
+							common.BigToHash(big.NewInt(2)): common.BigToHash(big.NewInt(3)),
+						},
+					},
+					bab: {
+						State: &map[common.Hash]common.Hash{
+							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(1)),
+						},
+					},
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}, {
+					From: &accounts[0].addr,
+					To:   &bab,
+				}},
+			}, {
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: {
+						State: &map[common.Hash]common.Hash{
+							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(5)),
+						},
+					},
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}},
+			}},
+			want: []blockRes{{
+				Number:       "0xa",
+				Hash:         n10hash,
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xc542",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x0000000000000000000000000000000200000000000000000000000000000003",
+					GasUsed:     "0x62a1",
+					Logs:        []types.Log{},
+					Status:      "0x1",
+				}, {
+					ReturnValue: "0x0000000000000000000000000000000100000000000000000000000000000000",
+					GasUsed:     "0x62a1",
+					Logs:        []types.Log{},
+					Status:      "0x1",
+				}},
+			}, {
+				Number:       "0xa",
+				Hash:         n10hash,
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x62a1",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x0000000000000000000000000000000500000000000000000000000000000000",
+					GasUsed:     "0x62a1",
+					Logs:        []types.Log{},
+					Status:      "0x1",
 				}},
 			}},
 		},
@@ -1316,6 +1428,11 @@ func hex2Bytes(str string) *hexutil.Bytes {
 func newUint64(v uint64) *hexutil.Uint64 {
 	rpcUint64 := hexutil.Uint64(v)
 	return &rpcUint64
+}
+
+func newBytes(b []byte) *hexutil.Bytes {
+	rpcBytes := hexutil.Bytes(b)
+	return &rpcBytes
 }
 
 // testHasher is the helper tool for transaction/receipt list hashing.

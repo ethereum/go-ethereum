@@ -448,6 +448,9 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	// to a previous incarnation of the object.
 	s.stateObjectsDestruct[addr] = struct{}{}
 	stateObject := s.GetOrNewStateObject(addr)
+	// If object was already in memory, it might have cached
+	// storage slots. These should be cleared.
+	stateObject.clearStorageCache()
 	for k, v := range storage {
 		stateObject.SetState(s.db, k, v)
 	}
