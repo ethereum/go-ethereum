@@ -254,7 +254,7 @@ func (v *BlockValidator) createTraceEnv(block *types.Block) (*TraceEnv, error) {
 		return nil, errors.New("validateCircuitRowConsumption: no parent block found")
 	}
 
-	statedb, err := v.bc.StateAt(parent.Hash())
+	statedb, err := v.bc.StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
