@@ -87,7 +87,22 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	if beaconRoot != nil {
-		misc.ApplyBeaconRoot(vmenv, *beaconRoot)
+		// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
+		// the new root
+		// TODO: Right now, I set the GasXX fields to 0. If this does not work,
+		// we can use the header.BaseFee and set that instead.
+		msg := &Message{
+			From:      params.SystemAddress,
+			GasLimit:  100_000,
+			GasPrice:  new(big.Int).SetUint64(0), // TODO use nil?
+			GasFeeCap: new(big.Int).SetUint64(0), // TODO use basefee?
+			GasTipCap: new(big.Int).SetUint64(0), // TODO use zero?
+			To:        &params.BeaconRootsStorageAddress,
+			Data:      (*beaconRoot)[:], // TODO use 4byte invocation?
+		}
+		vmenv.Reset(NewEVMTxContext(msg), statedb)
+		_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 100_000, nil)
+		statedb.Finalise(true)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {

@@ -185,4 +185,5 @@ var (
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 
 	BeaconRootsStorageAddress common.Address = common.BytesToAddress([]byte{0xb}) // Address where historical beacon roots are stored as per EIP-4788
+	SystemAddress             common.Address = common.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
 )
