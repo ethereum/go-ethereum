@@ -123,19 +123,18 @@ func (tx *BlobTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *BlobTx) txType() byte            { return BlobTxType }
-func (tx *BlobTx) chainID() *big.Int       { return tx.ChainID.ToBig() }
-func (tx *BlobTx) accessList() AccessList  { return tx.AccessList }
-func (tx *BlobTx) data() []byte            { return tx.Data }
-func (tx *BlobTx) gas() uint64             { return tx.Gas }
-func (tx *BlobTx) gasFeeCap() *big.Int     { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) gasTipCap() *big.Int     { return tx.GasTipCap.ToBig() }
-func (tx *BlobTx) gasPrice() *big.Int      { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) value() *big.Int         { return tx.Value.ToBig() }
-func (tx *BlobTx) nonce() uint64           { return tx.Nonce }
-func (tx *BlobTx) to() *common.Address     { tmp := tx.To; return &tmp }
-func (tx *BlobTx) blobGas() uint64         { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
-func (tx *BlobTx) blobGasFeeCap() *big.Int { return tx.BlobFeeCap.ToBig() }
+func (tx *BlobTx) txType() byte           { return BlobTxType }
+func (tx *BlobTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
+func (tx *BlobTx) accessList() AccessList { return tx.AccessList }
+func (tx *BlobTx) data() []byte           { return tx.Data }
+func (tx *BlobTx) gas() uint64            { return tx.Gas }
+func (tx *BlobTx) gasFeeCap() *big.Int    { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) gasTipCap() *big.Int    { return tx.GasTipCap.ToBig() }
+func (tx *BlobTx) gasPrice() *big.Int     { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) value() *big.Int        { return tx.Value.ToBig() }
+func (tx *BlobTx) nonce() uint64          { return tx.Nonce }
+func (tx *BlobTx) to() *common.Address    { tmp := tx.To; return &tmp }
+func (tx *BlobTx) blobGas() uint64        { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
 
 func (tx *BlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {
