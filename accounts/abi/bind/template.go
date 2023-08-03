@@ -370,10 +370,10 @@ var (
 			return _{{$contract.Type}}.contract.Method("{{.Normalized.Name}}")
 		}
 
-		// {{.Normalized.Name}}Calldata is the abi packed data binding the contract method 0x{{printf "%x" .Original.ID}}.
+		// {{.Normalized.Name}}RawCalldata is the abi packed data binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
-        func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}Calldata({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+        func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}RawCalldata({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
 			return _{{$contract.Type}}.contract.Calldata("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 		
