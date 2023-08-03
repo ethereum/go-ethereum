@@ -768,6 +768,9 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.l1TxCount = 0
 	env.maxL1Index = 0
 
+	// make sure accRows is not nil, even for empty blocks
+	env.accRows = &types.RowConsumption{}
+
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
 	if w.current != nil && w.current.state != nil {

@@ -280,6 +280,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// initialize L1 message index for genesis block
 	rawdb.WriteFirstQueueIndexNotInL2Block(db, bc.genesisBlock.Hash(), 0)
 
+	// initialize row consumption for genesis block
+	rawdb.WriteBlockRowConsumption(db, bc.genesisBlock.Hash(), &types.RowConsumption{})
+
 	var nilBlock *types.Block
 	bc.currentBlock.Store(nilBlock)
 	bc.currentFastBlock.Store(nilBlock)
@@ -699,6 +702,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
 	rawdb.WriteFirstQueueIndexNotInL2Block(batch, genesis.Hash(), 0)
+	rawdb.WriteBlockRowConsumption(batch, genesis.Hash(), &types.RowConsumption{})
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
