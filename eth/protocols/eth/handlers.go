@@ -498,7 +498,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 			continue
 		}
 		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(tx.Tx); err != nil {
+		if encoded, err := rlp.EncodeToBytes(tx); err != nil {
 			log.Error("Failed to encode transaction", "err", err)
 		} else {
 			hashes = append(hashes, hash)
