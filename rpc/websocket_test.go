@@ -19,10 +19,14 @@ package rpc
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,15 +40,12 @@ func TestWebsocketClientHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wsGetConfig failed: %s", err)
 	}
-
 	if endpoint != "wss://example.com:1234" {
 		t.Fatal("User should have been stripped from the URL")
 	}
-
 	if header.Get("authorization") != "Basic dGVzdHVzZXI6dGVzdC1QQVNTXzAx" {
 		t.Fatal("Basic auth header is incorrect")
 	}
-
 	if header.Get("origin") != "https://example.com" {
 		t.Fatal("Origin not set")
 	}
@@ -59,7 +60,6 @@ func TestWebsocketOriginCheck(t *testing.T) {
 		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"http://example.com"}))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
-
 	defer srv.Stop()
 	defer httpsrv.Close()
 
@@ -68,7 +68,6 @@ func TestWebsocketOriginCheck(t *testing.T) {
 		client.Close()
 		t.Fatal("no error for wrong origin")
 	}
-
 	wantErr := wsHandshakeError{websocket.ErrBadHandshake, "403 Forbidden"}
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("wrong error for wrong origin: %q", err)
@@ -79,7 +78,6 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error for empty origin: %v", err)
 	}
-
 	client.Close()
 }
 
@@ -92,7 +90,6 @@ func TestWebsocketLargeCall(t *testing.T) {
 		httpsrv = httptest.NewServer(srv.WebsocketHandler([]string{"*"}))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
-
 	defer srv.Stop()
 	defer httpsrv.Close()
 
@@ -104,19 +101,16 @@ func TestWebsocketLargeCall(t *testing.T) {
 
 	// This call sends slightly less than the limit and should work.
 	var result echoResult
-
 	arg := strings.Repeat("x", maxRequestContentLength-200)
 	if err := client.Call(&result, "test_echo", arg, 1); err != nil {
 		t.Fatalf("valid call didn't work: %v", err)
 	}
-
 	if result.String != arg {
 		t.Fatal("wrong string echoed")
 	}
 
 	// This call sends twice the allowed size and shouldn't work.
 	arg = strings.Repeat("x", maxRequestContentLength*2)
-
 	err = client.Call(&result, "test_echo", arg)
 	if err == nil {
 		t.Fatal("no error for too large call")
@@ -129,12 +123,10 @@ func TestWebsocketPeerInfo(t *testing.T) {
 		ts    = httptest.NewServer(s.WebsocketHandler([]string{"origin.example.com"}))
 		tsurl = "ws:" + strings.TrimPrefix(ts.URL, "http:")
 	)
-
 	defer s.Stop()
 	defer ts.Close()
 
 	ctx := context.Background()
-
 	c, err := DialWebsocket(ctx, tsurl, "origin.example.com")
 	if err != nil {
 		t.Fatal(err)
@@ -149,15 +141,12 @@ func TestWebsocketPeerInfo(t *testing.T) {
 	if connInfo.RemoteAddr == "" {
 		t.Error("RemoteAddr not set")
 	}
-
 	if connInfo.Transport != "ws" {
 		t.Errorf("wrong Transport %q", connInfo.Transport)
 	}
-
 	if connInfo.HTTP.UserAgent != "Go-http-client/1.1" {
 		t.Errorf("wrong HTTP.UserAgent %q", connInfo.HTTP.UserAgent)
 	}
-
 	if connInfo.HTTP.Origin != "origin.example.com" {
 		t.Errorf("wrong HTTP.Origin %q", connInfo.HTTP.UserAgent)
 	}
@@ -172,7 +161,6 @@ func TestClientWebsocketPing(t *testing.T) {
 		server      = wsPingTestServer(t, sendPing)
 		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
 	)
-
 	defer cancel()
 	defer server.Shutdown(ctx)
 
@@ -183,7 +171,6 @@ func TestClientWebsocketPing(t *testing.T) {
 	defer client.Close()
 
 	resultChan := make(chan int)
-
 	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
 	if err != nil {
 		t.Fatalf("client subscribe error: %v", err)
@@ -199,7 +186,6 @@ func TestClientWebsocketPing(t *testing.T) {
 	// Wait for the subscription result.
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
-
 	for {
 		select {
 		case err := <-sub.Err():
@@ -221,7 +207,6 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
-
 	defer srv.Stop()
 	defer httpsrv.Close()
 
@@ -237,9 +222,65 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	if err := c.Call(&r, "test_largeResp"); err != nil {
 		t.Fatal("call failed:", err)
 	}
-
 	if len(r) != respLength {
 		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
+func TestClientWebsocketSevered(t *testing.T) {
+	t.Parallel()
+
+	var (
+		server = wsPingTestServer(t, nil)
+		ctx    = context.Background()
+	)
+	defer server.Shutdown(ctx)
+
+	u, err := url.Parse("http://" + server.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rproxy := httputil.NewSingleHostReverseProxy(u)
+	var severable *severableReadWriteCloser
+	rproxy.ModifyResponse = func(response *http.Response) error {
+		severable = &severableReadWriteCloser{ReadWriteCloser: response.Body.(io.ReadWriteCloser)}
+		response.Body = severable
+		return nil
+	}
+	frontendProxy := httptest.NewServer(rproxy)
+	defer frontendProxy.Close()
+
+	wsURL := "ws:" + strings.TrimPrefix(frontendProxy.URL, "http:")
+	client, err := DialWebsocket(ctx, wsURL, "")
+	if err != nil {
+		t.Fatalf("client dial error: %v", err)
+	}
+	defer client.Close()
+
+	resultChan := make(chan int)
+	sub, err := client.EthSubscribe(ctx, resultChan, "foo")
+	if err != nil {
+		t.Fatalf("client subscribe error: %v", err)
+	}
+
+	// sever the connection
+	severable.Sever()
+
+	// Wait for subscription error.
+	timeout := time.NewTimer(3 * wsPingInterval)
+	defer timeout.Stop()
+	for {
+		select {
+		case err := <-sub.Err():
+			t.Log("client subscription error:", err)
+			return
+		case result := <-resultChan:
+			t.Error("unexpected result:", result)
+			return
+		case <-timeout.C:
+			t.Error("didn't get any error within the test timeout")
+			return
+		}
 	}
 }
 
@@ -248,25 +289,20 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 // pong and finally delivers a single subscription result.
 func wsPingTestServer(t *testing.T, sendPing <-chan struct{}) *http.Server {
 	var srv http.Server
-
 	shutdown := make(chan struct{})
-
 	srv.RegisterOnShutdown(func() {
 		close(shutdown)
 	})
-
 	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Upgrade to WebSocket.
 		upgrader := websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		}
-
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			t.Errorf("server WS upgrade error: %v", err)
 			return
 		}
-
 		defer conn.Close()
 
 		// Handle the connection.
@@ -278,10 +314,8 @@ func wsPingTestServer(t *testing.T, sendPing <-chan struct{}) *http.Server {
 	if err != nil {
 		t.Fatal("can't listen:", err)
 	}
-
 	srv.Addr = listener.Addr().String()
 	go srv.Serve(listener)
-
 	return &srv
 }
 
@@ -297,7 +331,6 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 		t.Errorf("server read error: %v", err)
 		return
 	}
-
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(subResp)); err != nil {
 		t.Errorf("server write error: %v", err)
 		return
@@ -305,21 +338,17 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 
 	// Read from the connection to process control messages.
 	var pongCh = make(chan string)
-
 	conn.SetPongHandler(func(d string) error {
 		t.Logf("server got pong: %q", d)
 		pongCh <- d
-
 		return nil
 	})
-
 	go func() {
 		for {
 			typ, msg, err := conn.ReadMessage()
 			if err != nil {
 				return
 			}
-
 			t.Logf("server got message (%d): %q", typ, msg)
 		}
 	}()
@@ -329,20 +358,16 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 		wantPong string
 		timer    = time.NewTimer(0)
 	)
-
 	defer timer.Stop()
 	<-timer.C
-
 	for {
 		select {
 		case _, open := <-sendPing:
 			if !open {
 				sendPing = nil
 			}
-
 			t.Logf("server sending ping")
 			conn.WriteMessage(websocket.PingMessage, []byte("ping"))
-
 			wantPong = "ping"
 		case data := <-pongCh:
 			if wantPong == "" {
@@ -350,9 +375,7 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			} else if data != wantPong {
 				t.Errorf("got pong with wrong data %q", data)
 			}
-
 			wantPong = ""
-
 			timer.Reset(200 * time.Millisecond)
 		case <-timer.C:
 			t.Logf("server sending response")
@@ -362,4 +385,32 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			return
 		}
 	}
+}
+
+// severableReadWriteCloser wraps an io.ReadWriteCloser and provides a Sever() method to drop writes and read empty.
+type severableReadWriteCloser struct {
+	io.ReadWriteCloser
+	severed int32 // atomic
+}
+
+func (s *severableReadWriteCloser) Sever() {
+	atomic.StoreInt32(&s.severed, 1)
+}
+
+func (s *severableReadWriteCloser) Read(p []byte) (n int, err error) {
+	if atomic.LoadInt32(&s.severed) > 0 {
+		return 0, nil
+	}
+	return s.ReadWriteCloser.Read(p)
+}
+
+func (s *severableReadWriteCloser) Write(p []byte) (n int, err error) {
+	if atomic.LoadInt32(&s.severed) > 0 {
+		return len(p), nil
+	}
+	return s.ReadWriteCloser.Write(p)
+}
+
+func (s *severableReadWriteCloser) Close() error {
+	return s.ReadWriteCloser.Close()
 }

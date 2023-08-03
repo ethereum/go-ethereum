@@ -17,7 +17,6 @@
 package enr
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -61,7 +60,7 @@ type TCP uint16
 
 func (v TCP) ENRKey() string { return "tcp" }
 
-// TCP6 is the "tcp6" key, which holds the IPv6-specific tcp6 port of the node.
+// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
 type TCP6 uint16
 
 func (v TCP6) ENRKey() string { return "tcp6" }
@@ -71,7 +70,7 @@ type UDP uint16
 
 func (v UDP) ENRKey() string { return "udp" }
 
-// UDP6 is the "udp6" key, which holds the IPv6-specific UDP port of the node.
+// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
 type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
@@ -92,7 +91,6 @@ func (v IP) ENRKey() string {
 	if net.IP(v).To4() == nil {
 		return "ip6"
 	}
-
 	return "ip"
 }
 
@@ -101,11 +99,9 @@ func (v IP) EncodeRLP(w io.Writer) error {
 	if ip4 := net.IP(v).To4(); ip4 != nil {
 		return rlp.Encode(w, ip4)
 	}
-
 	if ip6 := net.IP(v).To16(); ip6 != nil {
 		return rlp.Encode(w, ip6)
 	}
-
 	return fmt.Errorf("invalid IP address: %v", net.IP(v))
 }
 
@@ -114,11 +110,9 @@ func (v *IP) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode((*net.IP)(v)); err != nil {
 		return err
 	}
-
 	if len(*v) != 4 && len(*v) != 16 {
 		return fmt.Errorf("invalid IP address, want 4 or 16 bytes: %v", *v)
 	}
-
 	return nil
 }
 
@@ -133,7 +127,6 @@ func (v IPv4) EncodeRLP(w io.Writer) error {
 	if ip4 == nil {
 		return fmt.Errorf("invalid IPv4 address: %v", net.IP(v))
 	}
-
 	return rlp.Encode(w, ip4)
 }
 
@@ -142,11 +135,9 @@ func (v *IPv4) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode((*net.IP)(v)); err != nil {
 		return err
 	}
-
 	if len(*v) != 4 {
 		return fmt.Errorf("invalid IPv4 address, want 4 bytes: %v", *v)
 	}
-
 	return nil
 }
 
@@ -161,7 +152,6 @@ func (v IPv6) EncodeRLP(w io.Writer) error {
 	if ip6 == nil {
 		return fmt.Errorf("invalid IPv6 address: %v", net.IP(v))
 	}
-
 	return rlp.Encode(w, ip6)
 }
 
@@ -170,11 +160,9 @@ func (v *IPv6) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode((*net.IP)(v)); err != nil {
 		return err
 	}
-
 	if len(*v) != 16 {
 		return fmt.Errorf("invalid IPv6 address, want 16 bytes: %v", *v)
 	}
-
 	return nil
 }
 
@@ -189,21 +177,12 @@ func (err *KeyError) Error() string {
 	if err.Err == errNotFound {
 		return fmt.Sprintf("missing ENR key %q", err.Key)
 	}
-
 	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
-}
-
-func (err *KeyError) Unwrap() error {
-	return err.Err
 }
 
 // IsNotFound reports whether the given error means that a key/value pair is
 // missing from a record.
 func IsNotFound(err error) bool {
-	var ke *KeyError
-	if errors.As(err, &ke) {
-		return ke.Err == errNotFound
-	}
-
-	return false
+	kerr, ok := err.(*KeyError)
+	return ok && kerr.Err == errNotFound
 }

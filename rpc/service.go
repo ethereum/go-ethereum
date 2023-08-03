@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -62,7 +63,6 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 	if name == "" {
 		return fmt.Errorf("no service name for type %s", rcvrVal.Type().String())
 	}
-
 	callbacks := suitableCallbacks(rcvrVal)
 	if len(callbacks) == 0 {
 		return fmt.Errorf("service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
@@ -70,11 +70,9 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if r.services == nil {
 		r.services = make(map[string]service)
 	}
-
 	svc, ok := r.services[name]
 	if !ok {
 		svc = service{
@@ -84,7 +82,6 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 		}
 		r.services[name] = svc
 	}
-
 	for name, cb := range callbacks {
 		if cb.isSubscribe {
 			svc.subscriptions[name] = cb
@@ -92,7 +89,6 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 			svc.callbacks[name] = cb
 		}
 	}
-
 	return nil
 }
 
@@ -102,10 +98,8 @@ func (r *serviceRegistry) callback(method string) *callback {
 	if len(elem) != 2 {
 		return nil
 	}
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	return r.services[elem[0]].callbacks[elem[1]]
 }
 
@@ -113,7 +107,6 @@ func (r *serviceRegistry) callback(method string) *callback {
 func (r *serviceRegistry) subscription(service, name string) *callback {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	return r.services[service].subscriptions[name]
 }
 
@@ -123,22 +116,18 @@ func (r *serviceRegistry) subscription(service, name string) *callback {
 func suitableCallbacks(receiver reflect.Value) map[string]*callback {
 	typ := receiver.Type()
 	callbacks := make(map[string]*callback)
-
 	for m := 0; m < typ.NumMethod(); m++ {
 		method := typ.Method(m)
 		if method.PkgPath != "" {
 			continue // method not exported
 		}
-
 		cb := newCallback(receiver, method.Func)
 		if cb == nil {
 			continue // function invalid
 		}
-
 		name := formatName(method.Name)
 		callbacks[name] = cb
 	}
-
 	return callbacks
 }
 
@@ -156,7 +145,6 @@ func newCallback(receiver, fn reflect.Value) *callback {
 	for i := 0; i < fntype.NumOut(); i++ {
 		outs[i] = fntype.Out(i)
 	}
-
 	if len(outs) > 2 {
 		return nil
 	}
@@ -168,10 +156,8 @@ func newCallback(receiver, fn reflect.Value) *callback {
 		if isErrorType(outs[0]) || !isErrorType(outs[1]) {
 			return nil
 		}
-
 		c.errPos = 1
 	}
-
 	return c
 }
 
@@ -183,7 +169,6 @@ func (c *callback) makeArgTypes() {
 	if c.rcvr.IsValid() {
 		firstArg++
 	}
-
 	if fntype.NumIn() > firstArg && fntype.In(firstArg) == contextType {
 		c.hasCtx = true
 		firstArg++
@@ -202,11 +187,9 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	if c.rcvr.IsValid() {
 		fullargs = append(fullargs, c.rcvr)
 	}
-
 	if c.hasCtx {
 		fullargs = append(fullargs, reflect.ValueOf(ctx))
 	}
-
 	fullargs = append(fullargs, args...)
 
 	// Catch panic while running the callback.
@@ -216,8 +199,7 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
 			log.Error("RPC method " + method + " crashed: " + fmt.Sprintf("%v\n%s", err, buf))
-
-			errRes = &internalServerError{errcodePanic, "method handler crashed"}
+			errRes = errors.New("method handler crashed")
 		}
 	}()
 	// Run the callback.
@@ -225,13 +207,11 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	if len(results) == 0 {
 		return nil, nil
 	}
-
 	if c.errPos >= 0 && !results[c.errPos].IsNil() {
 		// Method has returned non-nil error value.
 		err := results[c.errPos].Interface().(error)
 		return reflect.Value{}, err
 	}
-
 	return results[0].Interface(), nil
 }
 
@@ -240,7 +220,6 @@ func isContextType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-
 	return t == contextType
 }
 
@@ -249,7 +228,6 @@ func isErrorType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-
 	return t.Implements(errorType)
 }
 
@@ -258,7 +236,6 @@ func isSubscriptionType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-
 	return t == subscriptionType
 }
 
@@ -269,7 +246,6 @@ func isPubSub(methodType reflect.Type) bool {
 	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
 		return false
 	}
-
 	return isContextType(methodType.In(1)) &&
 		isSubscriptionType(methodType.Out(0)) &&
 		isErrorType(methodType.Out(1))
@@ -281,6 +257,5 @@ func formatName(name string) string {
 	if len(ret) > 0 {
 		ret[0] = unicode.ToLower(ret[0])
 	}
-
 	return string(ret)
 }

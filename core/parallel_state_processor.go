@@ -50,7 +50,7 @@ type ParallelStateProcessor struct {
 	engine consensus.Engine    // Consensus engine used for block rewards
 }
 
-// NewParallelStateProcessor initialises a new StateProcessor.
+// NewStateProcessor initialises a new StateProcessor.
 func NewParallelStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *ParallelStateProcessor {
 	return &ParallelStateProcessor{
 		config: config,
@@ -60,7 +60,7 @@ func NewParallelStateProcessor(config *params.ChainConfig, bc *BlockChain, engin
 }
 
 type ExecutionTask struct {
-	msg    Message
+	msg    types.Message
 	config *params.ChainConfig
 
 	gasLimit                   uint64
@@ -93,14 +93,14 @@ type ExecutionTask struct {
 
 func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (err error) {
 	task.statedb = task.cleanStateDB.Copy()
-	task.statedb.SetTxContext(task.tx.Hash(), task.index)
+	task.statedb.Prepare(task.tx.Hash(), task.index)
 	task.statedb.SetMVHashmap(mvh)
 	task.statedb.SetIncarnation(incarnation)
 
 	evm := vm.NewEVM(task.blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
 
 	// Create a new context to be used in the EVM environment.
-	txContext := NewEVMTxContext(&task.msg)
+	txContext := NewEVMTxContext(task.msg)
 	evm.Reset(txContext, task.statedb)
 
 	defer func() {
@@ -136,7 +136,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 			task.shouldRerunWithoutFeeDelay = true
 		}
 	} else {
-		task.result, err = ApplyMessage(evm, &task.msg, new(GasPool).AddGas(task.gasLimit), nil)
+		task.result, err = ApplyMessage(evm, task.msg, new(GasPool).AddGas(task.gasLimit), nil)
 	}
 
 	if task.statedb.HadInvalidRead() || err != nil {
@@ -174,13 +174,13 @@ func (task *ExecutionTask) Dependencies() []int {
 }
 
 func (task *ExecutionTask) Settle() {
-	task.finalStateDB.SetTxContext(task.tx.Hash(), task.index)
+	task.finalStateDB.Prepare(task.tx.Hash(), task.index)
 
 	coinbaseBalance := task.finalStateDB.GetBalance(task.coinbase)
 
 	task.finalStateDB.ApplyMVWriteSet(task.statedb.MVFullWriteList())
 
-	for _, l := range task.statedb.GetLogs(task.tx.Hash(), task.blockNumber.Uint64(), task.blockHash) {
+	for _, l := range task.statedb.GetLogs(task.tx.Hash(), task.blockHash) {
 		task.finalStateDB.AddLog(l)
 	}
 
@@ -198,7 +198,7 @@ func (task *ExecutionTask) Settle() {
 		AddFeeTransferLog(
 			task.finalStateDB,
 
-			task.msg.From,
+			task.msg.From(),
 			task.coinbase,
 
 			task.result.FeeTipped,
@@ -237,12 +237,12 @@ func (task *ExecutionTask) Settle() {
 	receipt.GasUsed = task.result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if task.msg.To == nil {
-		receipt.ContractAddress = crypto.CreateAddress(task.msg.From, task.tx.Nonce())
+	if task.msg.To() == nil {
+		receipt.ContractAddress = crypto.CreateAddress(task.msg.From(), task.tx.Nonce())
 	}
 
 	// Set the receipt logs and create the bloom filter.
-	receipt.Logs = task.finalStateDB.GetLogs(task.tx.Hash(), task.blockNumber.Uint64(), task.blockHash)
+	receipt.Logs = task.finalStateDB.GetLogs(task.tx.Hash(), task.blockHash)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = task.blockHash
 	receipt.BlockNumber = task.blockNumber
@@ -296,7 +296,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		msg, err := TransactionToMessage(tx, types.MakeSigner(p.config, header.Number), header.BaseFee)
+		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
 		if err != nil {
 			log.Error("error creating message", "err", err)
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -304,13 +304,13 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 		cleansdb := statedb.Copy()
 
-		if msg.From == coinbase {
+		if msg.From() == coinbase {
 			shouldDelayFeeCal = false
 		}
 
 		if len(blockTxDependency) != len(block.Transactions()) {
 			task := &ExecutionTask{
-				msg:               *msg,
+				msg:               msg,
 				config:            p.config,
 				gasLimit:          block.GasLimit(),
 				blockNumber:       blockNumber,
@@ -323,7 +323,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				header:            header,
 				evmConfig:         cfg,
 				shouldDelayFeeCal: &shouldDelayFeeCal,
-				sender:            msg.From,
+				sender:            msg.From(),
 				totalUsedGas:      usedGas,
 				receipts:          &receipts,
 				allLogs:           &allLogs,
@@ -335,7 +335,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 			tasks = append(tasks, task)
 		} else {
 			task := &ExecutionTask{
-				msg:               *msg,
+				msg:               msg,
 				config:            p.config,
 				gasLimit:          block.GasLimit(),
 				blockNumber:       blockNumber,
@@ -348,7 +348,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				header:            header,
 				evmConfig:         cfg,
 				shouldDelayFeeCal: &shouldDelayFeeCal,
-				sender:            msg.From,
+				sender:            msg.From(),
 				totalUsedGas:      usedGas,
 				receipts:          &receipts,
 				allLogs:           &allLogs,
@@ -409,7 +409,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), nil)
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 
 	return receipts, allLogs, *usedGas, nil
 }

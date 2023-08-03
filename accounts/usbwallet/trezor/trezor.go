@@ -66,6 +66,5 @@ func Name(kind uint16) string {
 	if len(name) < 12 {
 		return name
 	}
-
 	return name[12:]
 }

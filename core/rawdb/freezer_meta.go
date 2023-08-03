@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
 
 package rawdb
 
@@ -53,12 +53,10 @@ func readMetadata(file *os.File) (*freezerTableMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var meta freezerTableMeta
 	if err := rlp.Decode(file, &meta); err != nil {
 		return nil, err
 	}
-
 	return &meta, nil
 }
 
@@ -69,7 +67,6 @@ func writeMetadata(file *os.File, meta *freezerTableMeta) error {
 	if err != nil {
 		return err
 	}
-
 	return rlp.Encode(file, meta)
 }
 
@@ -92,10 +89,8 @@ func loadMetadata(file *os.File, tail uint64) (*freezerTableMeta, error) {
 		if err := writeMetadata(file, m); err != nil {
 			return nil, err
 		}
-
 		return m, nil
 	}
-
 	m, err := readMetadata(file)
 	if err != nil {
 		return nil, err
@@ -105,12 +100,10 @@ func loadMetadata(file *os.File, tail uint64) (*freezerTableMeta, error) {
 	// a warning here.
 	if m.VirtualTail < tail {
 		log.Warn("Updated virtual tail", "have", m.VirtualTail, "now", tail)
-
 		m.VirtualTail = tail
 		if err := writeMetadata(file, m); err != nil {
 			return nil, err
 		}
 	}
-
 	return m, nil
 }

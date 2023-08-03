@@ -63,9 +63,7 @@ func newMeteredConn(conn net.Conn, ingress bool, addr *net.TCPAddr) net.Conn {
 	} else {
 		egressConnectMeter.Mark(1)
 	}
-
 	activePeerGauge.Inc(1)
-
 	return &meteredConn{Conn: conn}
 }
 
@@ -74,7 +72,6 @@ func newMeteredConn(conn net.Conn, ingress bool, addr *net.TCPAddr) net.Conn {
 func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
-
 	return n, err
 }
 
@@ -83,7 +80,6 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
-
 	return n, err
 }
 
@@ -94,6 +90,5 @@ func (c *meteredConn) Close() error {
 	if err == nil {
 		activePeerGauge.Dec(1)
 	}
-
 	return err
 }

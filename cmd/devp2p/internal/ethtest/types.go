@@ -1,18 +1,18 @@
 // Copyright 2020 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethtest
 
@@ -29,7 +29,6 @@ import (
 
 type Message interface {
 	Code() int
-	ReqID() uint64
 }
 
 type Error struct {
@@ -38,10 +37,8 @@ type Error struct {
 
 func (e *Error) Unwrap() error  { return e.err }
 func (e *Error) Error() string  { return e.err.Error() }
+func (e *Error) Code() int      { return -1 }
 func (e *Error) String() string { return e.Error() }
-
-func (e *Error) Code() int     { return -1 }
-func (e *Error) ReqID() uint64 { return 0 }
 
 func errorf(format string, args ...interface{}) *Error {
 	return &Error{fmt.Errorf(format, args...)}
@@ -59,94 +56,73 @@ type Hello struct {
 	Rest []rlp.RawValue `rlp:"tail"`
 }
 
-func (msg Hello) Code() int     { return 0x00 }
-func (msg Hello) ReqID() uint64 { return 0 }
+func (h Hello) Code() int { return 0x00 }
 
 // Disconnect is the RLP structure for a disconnect message.
 type Disconnect struct {
 	Reason p2p.DiscReason
 }
 
-func (msg Disconnect) Code() int     { return 0x01 }
-func (msg Disconnect) ReqID() uint64 { return 0 }
+func (d Disconnect) Code() int { return 0x01 }
 
 type Ping struct{}
 
-func (msg Ping) Code() int     { return 0x02 }
-func (msg Ping) ReqID() uint64 { return 0 }
+func (p Ping) Code() int { return 0x02 }
 
 type Pong struct{}
 
-func (msg Pong) Code() int     { return 0x03 }
-func (msg Pong) ReqID() uint64 { return 0 }
+func (p Pong) Code() int { return 0x03 }
 
 // Status is the network packet for the status message for eth/64 and later.
 type Status eth.StatusPacket
 
-func (msg Status) Code() int     { return 16 }
-func (msg Status) ReqID() uint64 { return 0 }
+func (s Status) Code() int { return 16 }
 
 // NewBlockHashes is the network packet for the block announcements.
 type NewBlockHashes eth.NewBlockHashesPacket
 
-func (msg NewBlockHashes) Code() int     { return 17 }
-func (msg NewBlockHashes) ReqID() uint64 { return 0 }
+func (nbh NewBlockHashes) Code() int { return 17 }
 
 type Transactions eth.TransactionsPacket
 
-func (msg Transactions) Code() int     { return 18 }
-func (msg Transactions) ReqID() uint64 { return 18 }
+func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
-type GetBlockHeaders eth.GetBlockHeadersPacket66
+type GetBlockHeaders eth.GetBlockHeadersPacket
 
-func (msg GetBlockHeaders) Code() int     { return 19 }
-func (msg GetBlockHeaders) ReqID() uint64 { return msg.RequestId }
+func (g GetBlockHeaders) Code() int { return 19 }
 
-type BlockHeaders eth.BlockHeadersPacket66
+type BlockHeaders eth.BlockHeadersPacket
 
-func (msg BlockHeaders) Code() int     { return 20 }
-func (msg BlockHeaders) ReqID() uint64 { return msg.RequestId }
+func (bh BlockHeaders) Code() int { return 20 }
 
 // GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies eth.GetBlockBodiesPacket66
+type GetBlockBodies eth.GetBlockBodiesPacket
 
-func (msg GetBlockBodies) Code() int     { return 21 }
-func (msg GetBlockBodies) ReqID() uint64 { return msg.RequestId }
+func (gbb GetBlockBodies) Code() int { return 21 }
 
 // BlockBodies is the network packet for block content distribution.
-type BlockBodies eth.BlockBodiesPacket66
+type BlockBodies eth.BlockBodiesPacket
 
-func (msg BlockBodies) Code() int     { return 22 }
-func (msg BlockBodies) ReqID() uint64 { return msg.RequestId }
+func (bb BlockBodies) Code() int { return 22 }
 
 // NewBlock is the network packet for the block propagation message.
 type NewBlock eth.NewBlockPacket
 
-func (msg NewBlock) Code() int     { return 23 }
-func (msg NewBlock) ReqID() uint64 { return 0 }
-
-// NewPooledTransactionHashes66 is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes66 eth.NewPooledTransactionHashesPacket66
-
-func (msg NewPooledTransactionHashes66) Code() int     { return 24 }
-func (msg NewPooledTransactionHashes66) ReqID() uint64 { return 0 }
+func (nb NewBlock) Code() int { return 23 }
 
 // NewPooledTransactionHashes is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket68
+type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
 
-func (msg NewPooledTransactionHashes) Code() int     { return 24 }
-func (msg NewPooledTransactionHashes) ReqID() uint64 { return 0 }
+func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
-type GetPooledTransactions eth.GetPooledTransactionsPacket66
+type GetPooledTransactions eth.GetPooledTransactionsPacket
 
-func (msg GetPooledTransactions) Code() int     { return 25 }
-func (msg GetPooledTransactions) ReqID() uint64 { return msg.RequestId }
+func (gpt GetPooledTransactions) Code() int { return 25 }
 
-type PooledTransactions eth.PooledTransactionsPacket66
+type PooledTransactions eth.PooledTransactionsPacket
 
-func (msg PooledTransactions) Code() int     { return 26 }
-func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
+func (pt PooledTransactions) Code() int { return 26 }
 
 // Conn represents an individual connection with a peer
 type Conn struct {
@@ -159,7 +135,7 @@ type Conn struct {
 	caps                       []p2p.Cap
 }
 
-// Read reads an eth66 packet from the connection.
+// Read reads an eth packet from the connection.
 func (c *Conn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
@@ -167,7 +143,55 @@ func (c *Conn) Read() Message {
 	}
 
 	var msg Message
+	switch int(code) {
+	case (Hello{}).Code():
+		msg = new(Hello)
+	case (Ping{}).Code():
+		msg = new(Ping)
+	case (Pong{}).Code():
+		msg = new(Pong)
+	case (Disconnect{}).Code():
+		msg = new(Disconnect)
+	case (Status{}).Code():
+		msg = new(Status)
+	case (GetBlockHeaders{}).Code():
+		msg = new(GetBlockHeaders)
+	case (BlockHeaders{}).Code():
+		msg = new(BlockHeaders)
+	case (GetBlockBodies{}).Code():
+		msg = new(GetBlockBodies)
+	case (BlockBodies{}).Code():
+		msg = new(BlockBodies)
+	case (NewBlock{}).Code():
+		msg = new(NewBlock)
+	case (NewBlockHashes{}).Code():
+		msg = new(NewBlockHashes)
+	case (Transactions{}).Code():
+		msg = new(Transactions)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
+	case (GetPooledTransactions{}.Code()):
+		msg = new(GetPooledTransactions)
+	case (PooledTransactions{}.Code()):
+		msg = new(PooledTransactions)
+	default:
+		return errorf("invalid message code: %d", code)
+	}
+	// if message is devp2p, decode here
+	if err := rlp.DecodeBytes(rawData, msg); err != nil {
+		return errorf("could not rlp decode message: %v", err)
+	}
+	return msg
+}
 
+// Read66 reads an eth66 packet from the connection.
+func (c *Conn) Read66() (uint64, Message) {
+	code, rawData, _, err := c.Conn.Read()
+	if err != nil {
+		return 0, errorf("could not read from connection: %v", err)
+	}
+
+	var msg Message
 	switch int(code) {
 	case (Hello{}).Code():
 		msg = new(Hello)
@@ -182,72 +206,58 @@ func (c *Conn) Read() Message {
 	case (GetBlockHeaders{}).Code():
 		ethMsg := new(eth.GetBlockHeadersPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*GetBlockHeaders)(ethMsg)
+		return ethMsg.RequestId, GetBlockHeaders(*ethMsg.GetBlockHeadersPacket)
 	case (BlockHeaders{}).Code():
 		ethMsg := new(eth.BlockHeadersPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*BlockHeaders)(ethMsg)
+		return ethMsg.RequestId, BlockHeaders(ethMsg.BlockHeadersPacket)
 	case (GetBlockBodies{}).Code():
 		ethMsg := new(eth.GetBlockBodiesPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*GetBlockBodies)(ethMsg)
+		return ethMsg.RequestId, GetBlockBodies(ethMsg.GetBlockBodiesPacket)
 	case (BlockBodies{}).Code():
 		ethMsg := new(eth.BlockBodiesPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*BlockBodies)(ethMsg)
+		return ethMsg.RequestId, BlockBodies(ethMsg.BlockBodiesPacket)
 	case (NewBlock{}).Code():
 		msg = new(NewBlock)
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
 	case (Transactions{}).Code():
 		msg = new(Transactions)
-	case (NewPooledTransactionHashes66{}).Code():
-		// Try decoding to eth68
-		ethMsg := new(NewPooledTransactionHashes)
-		if err := rlp.DecodeBytes(rawData, ethMsg); err == nil {
-			return ethMsg
-		}
-
-		msg = new(NewPooledTransactionHashes66)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
 	case (GetPooledTransactions{}.Code()):
 		ethMsg := new(eth.GetPooledTransactionsPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*GetPooledTransactions)(ethMsg)
+		return ethMsg.RequestId, GetPooledTransactions(ethMsg.GetPooledTransactionsPacket)
 	case (PooledTransactions{}.Code()):
 		ethMsg := new(eth.PooledTransactionsPacket66)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return (*PooledTransactions)(ethMsg)
+		return ethMsg.RequestId, PooledTransactions(ethMsg.PooledTransactionsPacket)
 	default:
 		msg = errorf("invalid message code: %d", code)
 	}
 
 	if msg != nil {
 		if err := rlp.DecodeBytes(rawData, msg); err != nil {
-			return errorf("could not rlp decode message: %v", err)
+			return 0, errorf("could not rlp decode message: %v", err)
 		}
-
-		return msg
+		return 0, msg
 	}
-
-	return errorf("invalid message: %s", string(rawData))
+	return 0, errorf("invalid message: %s", string(rawData))
 }
 
 // Write writes a eth packet to the connection.
@@ -256,9 +266,17 @@ func (c *Conn) Write(msg Message) error {
 	if err != nil {
 		return err
 	}
-
 	_, err = c.Conn.Write(uint64(msg.Code()), payload)
+	return err
+}
 
+// Write66 writes an eth66 packet to the connection.
+func (c *Conn) Write66(req eth.Packet, code int) error {
+	payload, err := rlp.EncodeToBytes(req)
+	if err != nil {
+		return err
+	}
+	_, err = c.Conn.Write(uint64(code), payload)
 	return err
 }
 
@@ -266,13 +284,11 @@ func (c *Conn) Write(msg Message) error {
 func (c *Conn) ReadSnap(id uint64) (Message, error) {
 	respId := id + 1
 	start := time.Now()
-
 	for respId != id && time.Since(start) < timeout {
 		code, rawData, _, err := c.Conn.Read()
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)
 		}
-
 		var snpMsg interface{}
 		switch int(code) {
 		case (GetAccountRange{}).Code():
@@ -295,13 +311,11 @@ func (c *Conn) ReadSnap(id uint64) (Message, error) {
 			//return nil, fmt.Errorf("invalid message code: %d", code)
 			continue
 		}
-
 		if err := rlp.DecodeBytes(rawData, snpMsg); err != nil {
 			return nil, fmt.Errorf("could not rlp decode message: %v", err)
 		}
-
 		return snpMsg.(Message), nil
-	}
 
+	}
 	return nil, fmt.Errorf("request timed out")
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,10 +20,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/beacon"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -44,80 +45,63 @@ var (
 	testBalance = big.NewInt(2e18)
 )
 
-// nolint:unparam
-func generatePreMergeChain(pre, post int) (*core.Genesis, []*types.Header, []*types.Block, []*types.Header, []*types.Block) {
-	config := *params.AllEthashProtocolChanges
+func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    &config,
+		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
-	// Pre-merge blocks
-	db, preBLocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), pre, nil)
-	totalDifficulty := new(big.Int).Set(params.GenesisDifficulty)
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, nil)
+	totalDifficulty := big.NewInt(0)
 
-	preHeaders := make([]*types.Header, 0, len(preBLocks))
-
-	for _, b := range preBLocks {
+	var headers []*types.Header
+	for _, b := range blocks {
 		totalDifficulty.Add(totalDifficulty, b.Difficulty())
-		preHeaders = append(preHeaders, b.Header())
+		headers = append(headers, b.Header())
 	}
-
 	config.TerminalTotalDifficulty = totalDifficulty
-	// Post-merge blocks
-	postBlocks, _ := core.GenerateChain(genesis.Config,
-		preBLocks[len(preBLocks)-1], ethash.NewFaker(), db, post,
-		func(i int, b *core.BlockGen) {
-			b.SetPoS()
-		})
 
-	postHeaders := make([]*types.Header, 0, len(postBlocks))
-	for _, b := range postBlocks {
-		postHeaders = append(postHeaders, b.Header())
-	}
-
-	return genesis, preHeaders, preBLocks, postHeaders, postBlocks
+	return genesis, headers, blocks
 }
 
 func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
-	genesis, headers, blocks, _, _ := generatePreMergeChain(10, 0)
-
+	genesis, headers, blocks := generatePreMergeChain(10)
 	n, lesService := startLesService(t, genesis, headers)
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
-	fcState := engine.ForkchoiceStateV1{
+	fcState := beacon.ForkchoiceStateV1{
 		HeadBlockHash:      blocks[5].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-
 	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
 
 func TestExecutePayloadV1(t *testing.T) {
-	genesis, headers, _, _, postBlocks := generatePreMergeChain(10, 2)
-	n, lesService := startLesService(t, genesis, headers)
+	genesis, headers, blocks := generatePreMergeChain(10)
+	n, lesService := startLesService(t, genesis, headers[:9])
 	lesService.Merger().ReachTTD()
-
 	defer n.Close()
 
 	api := NewConsensusAPI(lesService)
-	fcState := engine.ForkchoiceStateV1{
-		HeadBlockHash:      postBlocks[0].Hash(),
+	fcState := beacon.ForkchoiceStateV1{
+		HeadBlockHash:      blocks[8].Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-
 	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("Failed to update head %v", err)
 	}
-
-	block := postBlocks[0]
+	block := blocks[9]
 
 	fakeBlock := types.NewBlock(&types.Header{
 		ParentHash:  block.ParentHash(),
@@ -138,7 +122,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		BaseFee:     block.BaseFee(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(engine.ExecutableData{
+	_, err := api.ExecutePayloadV1(beacon.ExecutableDataV1{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),
@@ -157,13 +141,11 @@ func TestExecutePayloadV1(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to execute payload %v", err)
 	}
-
 	headHeader := api.les.BlockChain().CurrentHeader()
 	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
 		t.Fatal("Unexpected chain head update")
 	}
-
-	fcState = engine.ForkchoiceStateV1{
+	fcState = beacon.ForkchoiceStateV1{
 		HeadBlockHash:      fakeBlock.Hash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -171,7 +153,6 @@ func TestExecutePayloadV1(t *testing.T) {
 	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Fatal("Failed to update head")
 	}
-
 	headHeader = api.les.BlockChain().CurrentHeader()
 	if headHeader.Number.Uint64() != fakeBlock.NumberU64() {
 		t.Fatal("Failed to update chain head")
@@ -213,7 +194,7 @@ func TestEth2DeepReorg(t *testing.T) {
 			if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
 				t.Fatalf("Chain head shouldn't be updated")
 			}
-			if err := api.setCanonical(block.Hash()); err != nil {
+			if err := api.setHead(block.Hash()); err != nil {
 				t.Fatalf("Failed to set head: %v", err)
 			}
 			if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
@@ -232,7 +213,6 @@ func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Heade
 	if err != nil {
 		t.Fatal("can't create node:", err)
 	}
-
 	ethcfg := &ethconfig.Config{
 		Genesis:        genesis,
 		Ethash:         ethash.Config{PowMode: ethash.ModeFake},
@@ -241,21 +221,17 @@ func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Heade
 		TrieCleanCache: 256,
 		LightPeers:     10,
 	}
-
 	lesService, err := les.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
 	}
-
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
-
 	if _, err := lesService.BlockChain().InsertHeaderChain(headers, 0); err != nil {
 		n.Close()
 		t.Fatal("can't import test headers:", err)
 	}
-
 	return n, lesService
 }
 
@@ -264,6 +240,5 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 	for i, tx := range txs {
 		enc[i], _ = tx.MarshalBinary()
 	}
-
 	return enc
 }

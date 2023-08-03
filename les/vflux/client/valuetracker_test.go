@@ -43,21 +43,16 @@ func TestValueTracker(t *testing.T) {
 	requestList := make([]RequestInfo, testReqTypes)
 	relPrices := make([]float64, testReqTypes)
 	totalAmount := make([]uint64, testReqTypes)
-
 	for i := range requestList {
 		requestList[i] = RequestInfo{Name: "testreq" + strconv.Itoa(i), InitAmount: 1, InitValue: 1}
 		totalAmount[i] = 1
 		relPrices[i] = rand.Float64() + 0.1
 	}
-
 	nodes := make([]*NodeValueTracker, testNodeCount)
-
 	for round := 0; round < testRounds; round++ {
 		makeRequests := round < testRounds-2
 		useExpiration := round == testRounds-1
-
 		var expRate float64
-
 		if useExpiration {
 			expRate = math.Log(2) / float64(time.Hour*100)
 		}
@@ -66,19 +61,15 @@ func TestValueTracker(t *testing.T) {
 		updateCosts := func(i int) {
 			costList := make([]uint64, testReqTypes)
 			baseCost := rand.Float64()*10000000 + 100000
-
 			for j := range costList {
 				costList[j] = uint64(baseCost * relPrices[j])
 			}
-
 			nodes[i].UpdateCosts(costList)
 		}
-
 		for i := range nodes {
 			nodes[i] = vt.Register(enode.ID{byte(i)})
 			updateCosts(i)
 		}
-
 		if makeRequests {
 			for i := 0; i < testReqCount; i++ {
 				reqType := rand.Intn(testReqTypes)
@@ -91,22 +82,18 @@ func TestValueTracker(t *testing.T) {
 			}
 		} else {
 			clock.Run(time.Hour * 100)
-
 			if useExpiration {
 				for i, a := range totalAmount {
 					totalAmount[i] = a / 2
 				}
 			}
 		}
-
 		vt.Stop()
-
 		var sumrp, sumrv float64
 		for i, rp := range relPrices {
 			sumrp += rp
 			sumrv += vt.refBasket.reqValues[i]
 		}
-
 		for i, rp := range relPrices {
 			ratio := vt.refBasket.reqValues[i] * sumrp / (rp * sumrv)
 			if ratio < 0.99 || ratio > 1.01 {
@@ -114,14 +101,11 @@ func TestValueTracker(t *testing.T) {
 				break
 			}
 		}
-
 		exp := utils.ExpFactor(vt.StatsExpirer().LogOffset(clock.Now()))
 		basketAmount := make([]uint64, testReqTypes)
-
 		for i, bi := range vt.refBasket.basket.items {
 			basketAmount[i] += uint64(exp.Value(float64(bi.amount), vt.refBasket.basket.exp))
 		}
-
 		if makeRequests {
 			// if we did not make requests in this round then we expect all amounts to be
 			// in the reference basket
@@ -131,23 +115,18 @@ func TestValueTracker(t *testing.T) {
 				}
 			}
 		}
-
 		for i, a := range basketAmount {
 			amount := a / basketFactor
 			if amount+10 < totalAmount[i] || amount > totalAmount[i]+10 {
 				t.Errorf("totalAmount[%d] mismatch in round %d (expected %d, got %d)", i, round, totalAmount[i], amount)
 			}
 		}
-
 		var sumValue float64
-
 		for _, node := range nodes {
 			s := node.RtStats()
 			sumValue += s.Value(maxResponseWeights, exp)
 		}
-
 		s := vt.RtStats()
-
 		mainValue := s.Value(maxResponseWeights, exp)
 		if sumValue < mainValue-10 || sumValue > mainValue+10 {
 			t.Errorf("Main rtStats value does not match sum of node rtStats values in round %d (main %v, sum %v)", round, mainValue, sumValue)

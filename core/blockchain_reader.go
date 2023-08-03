@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -41,26 +40,14 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 
 // CurrentBlock retrieves the current head block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentBlock() *types.Header {
-	return bc.currentBlock.Load()
+func (bc *BlockChain) CurrentBlock() *types.Block {
+	return bc.currentBlock.Load().(*types.Block)
 }
 
-// CurrentSnapBlock retrieves the current snap-sync head block of the canonical
+// CurrentFastBlock retrieves the current fast-sync head block of the canonical
 // chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentSnapBlock() *types.Header {
-	return bc.currentSnapBlock.Load()
-}
-
-// CurrentFinalBlock retrieves the current finalized block of the canonical
-// chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentFinalBlock() *types.Header {
-	return bc.currentFinalBlock.Load()
-}
-
-// CurrentSafeBlock retrieves the current safe block of the canonical
-// chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentSafeBlock() *types.Header {
-	return bc.currentSafeBlock.Load()
+func (bc *BlockChain) CurrentFastBlock() *types.Block {
+	return bc.currentFastBlock.Load().(*types.Block)
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
@@ -98,21 +85,19 @@ func (bc *BlockChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := bc.bodyCache.Get(hash); ok {
-		return cached
+		body := cached.(*types.Body)
+		return body
 	}
-
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
-
 	body := rawdb.ReadBody(bc.db, hash, *number)
 	if body == nil {
 		return nil
 	}
 	// Cache the found body for next time and return
 	bc.bodyCache.Add(hash, body)
-
 	return body
 }
 
@@ -121,21 +106,18 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
-		return cached
+		return cached.(rlp.RawValue)
 	}
-
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
-
 	body := rawdb.ReadBodyRLP(bc.db, hash, *number)
 	if len(body) == 0 {
 		return nil
 	}
 	// Cache the found body for next time and return
 	bc.bodyRLPCache.Add(hash, body)
-
 	return body
 }
 
@@ -144,11 +126,6 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
-
-	if !bc.HasHeader(hash, number) {
-		return false
-	}
-
 	return rawdb.HasBody(bc.db, hash, number)
 }
 
@@ -157,11 +134,9 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasBlock(hash, number) {
 		return false
 	}
-
 	if bc.receiptsCache.Contains(hash) {
 		return true
 	}
-
 	return rawdb.HasReceipts(bc.db, hash, number)
 }
 
@@ -170,16 +145,14 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
-		return block
+		return block.(*types.Block)
 	}
-
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
 		return nil
 	}
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
-
 	return block
 }
 
@@ -189,7 +162,6 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	if number == nil {
 		return nil
 	}
-
 	return bc.GetBlock(hash, *number)
 }
 
@@ -200,7 +172,6 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	if hash == (common.Hash{}) {
 		return nil
 	}
-
 	return bc.GetBlock(hash, number)
 }
 
@@ -211,39 +182,32 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	if number == nil {
 		return nil
 	}
-
 	for i := 0; i < n; i++ {
 		block := bc.GetBlock(hash, *number)
 		if block == nil {
 			break
 		}
-
 		blocks = append(blocks, block)
 		hash = block.ParentHash()
 		*number--
 	}
-
 	return
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
-		return receipts
+		return receipts.(types.Receipts)
 	}
-
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
-
 	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
-
 	bc.receiptsCache.Add(hash, receipts)
-
 	return receipts
 }
 
@@ -255,7 +219,6 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 		uncles = append(uncles, block.Uncles()...)
 		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
-
 	return uncles
 }
 
@@ -278,17 +241,14 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if lookup, exist := bc.txLookupCache.Get(hash); exist {
-		return lookup
+		return lookup.(*rawdb.LegacyTxLookupEntry)
 	}
-
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
 		return nil
 	}
-
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 	bc.txLookupCache.Add(hash, lookup)
-
 	return lookup
 }
 
@@ -312,7 +272,6 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-
 	return bc.HasState(block.Root())
 }
 
@@ -337,13 +296,12 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 	type codeReader interface {
 		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
 	}
-
 	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root)
+	return bc.StateAt(bc.CurrentBlock().Root())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
@@ -379,7 +337,7 @@ func (bc *BlockChain) StateCache() state.Database {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (bc *BlockChain) GasLimit() uint64 {
-	return bc.CurrentBlock().GasLimit
+	return bc.CurrentBlock().GasLimit()
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -404,11 +362,6 @@ func (bc *BlockChain) TxLookupLimit() uint64 {
 	return bc.txLookupLimit
 }
 
-// TrieDB retrieves the low level trie database used for data storage.
-func (bc *BlockChain) TrieDB() *trie.Database {
-	return bc.triedb
-}
-
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
@@ -422,6 +375,11 @@ func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscripti
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChain2HeadEvent registers a subscription of ChainHeadEvent. ()
+func (bc *BlockChain) SubscribeChain2HeadEvent(ch chan<- Chain2HeadEvent) event.Subscription {
+	return bc.scope.Track(bc.chain2HeadFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

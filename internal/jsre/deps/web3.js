@@ -3696,7 +3696,7 @@ var outputBigNumberFormatter = function (number) {
 };
 
 var isPredefinedBlockNumber = function (blockNumber) {
-    return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest' || blockNumber === 'finalized' || blockNumber === 'safe';
+    return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest';
 };
 
 var inputDefaultBlockNumberFormatter = function (blockNumber) {

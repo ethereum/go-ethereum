@@ -74,20 +74,16 @@ func ParseNetlist(s string) (*Netlist, error) {
 	ws := strings.NewReplacer(" ", "", "\n", "", "\t", "")
 	masks := strings.Split(ws.Replace(s), ",")
 	l := make(Netlist, 0)
-
 	for _, mask := range masks {
 		if mask == "" {
 			continue
 		}
-
 		_, n, err := net.ParseCIDR(mask)
 		if err != nil {
 			return nil, err
 		}
-
 		l = append(l, *n)
 	}
-
 	return &l, nil
 }
 
@@ -97,7 +93,6 @@ func (l Netlist) MarshalTOML() interface{} {
 	for _, net := range l {
 		list = append(list, net.String())
 	}
-
 	return list
 }
 
@@ -107,16 +102,13 @@ func (l *Netlist) UnmarshalTOML(fn func(interface{}) error) error {
 	if err := fn(&masks); err != nil {
 		return err
 	}
-
 	for _, mask := range masks {
 		_, n, err := net.ParseCIDR(mask)
 		if err != nil {
 			return err
 		}
-
 		*l = append(*l, *n)
 	}
-
 	return nil
 }
 
@@ -127,7 +119,6 @@ func (l *Netlist) Add(cidr string) {
 	if err != nil {
 		panic(err)
 	}
-
 	*l = append(*l, *n)
 }
 
@@ -136,13 +127,11 @@ func (l *Netlist) Contains(ip net.IP) bool {
 	if l == nil {
 		return false
 	}
-
 	for _, net := range *l {
 		if net.Contains(ip) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -151,11 +140,9 @@ func IsLAN(ip net.IP) bool {
 	if ip.IsLoopback() {
 		return true
 	}
-
 	if v4 := ip.To4(); v4 != nil {
 		return lan4.Contains(v4)
 	}
-
 	return lan6.Contains(ip)
 }
 
@@ -165,11 +152,9 @@ func IsSpecialNetwork(ip net.IP) bool {
 	if ip.IsMulticast() {
 		return true
 	}
-
 	if v4 := ip.To4(); v4 != nil {
 		return special4.Contains(v4)
 	}
-
 	return special6.Contains(ip)
 }
 
@@ -193,30 +178,24 @@ func CheckRelayIP(sender, addr net.IP) error {
 	if len(addr) != net.IPv4len && len(addr) != net.IPv6len {
 		return errInvalid
 	}
-
 	if addr.IsUnspecified() {
 		return errUnspecified
 	}
-
 	if IsSpecialNetwork(addr) {
 		return errSpecial
 	}
-
 	if addr.IsLoopback() && !sender.IsLoopback() {
 		return errLoopback
 	}
-
 	if IsLAN(addr) && !IsLAN(sender) {
 		return errLAN
 	}
-
 	return nil
 }
 
 // SameNet reports whether two IP addresses have an equal prefix of the given bit length.
 func SameNet(bits uint, ip, other net.IP) bool {
 	ip4, other4 := ip.To4(), other.To4()
-
 	switch {
 	case (ip4 == nil) != (other4 == nil):
 		return false
@@ -230,11 +209,9 @@ func SameNet(bits uint, ip, other net.IP) bool {
 func sameNet(bits uint, ip, other net.IP) bool {
 	nb := int(bits / 8)
 	mask := ^byte(0xFF >> (bits % 8))
-
 	if mask != 0 && nb < len(ip) && ip[nb]&mask != other[nb]&mask {
 		return false
 	}
-
 	return nb <= len(ip) && ip[:nb].Equal(other[:nb])
 }
 
@@ -252,13 +229,11 @@ type DistinctNetSet struct {
 // number of existing IPs in the defined range exceeds the limit.
 func (s *DistinctNetSet) Add(ip net.IP) bool {
 	key := s.key(ip)
-
 	n := s.members[string(key)]
 	if n < s.Limit {
 		s.members[string(key)] = n + 1
 		return true
 	}
-
 	return false
 }
 
@@ -278,7 +253,6 @@ func (s *DistinctNetSet) Remove(ip net.IP) {
 func (s DistinctNetSet) Contains(ip net.IP) bool {
 	key := s.key(ip)
 	_, ok := s.members[string(key)]
-
 	return ok
 }
 
@@ -288,7 +262,6 @@ func (s DistinctNetSet) Len() int {
 	for _, i := range s.members {
 		n += i
 	}
-
 	return int(n)
 }
 
@@ -307,7 +280,6 @@ func (s *DistinctNetSet) key(ip net.IP) net.IP {
 	if ip4 := ip.To4(); ip4 != nil {
 		typ, ip = '4', ip4
 	}
-
 	bits := s.Subnet
 	if bits > uint(len(ip)*8) {
 		bits = uint(len(ip) * 8)
@@ -316,28 +288,22 @@ func (s *DistinctNetSet) key(ip net.IP) net.IP {
 	nb := int(bits / 8)
 	mask := ^byte(0xFF >> (bits % 8))
 	s.buf[0] = typ
-
 	buf := append(s.buf[:1], ip[:nb]...)
 	if nb < len(ip) && mask != 0 {
 		buf = append(buf, ip[nb]&mask)
 	}
-
 	return buf
 }
 
 // String implements fmt.Stringer
 func (s DistinctNetSet) String() string {
 	var buf bytes.Buffer
-
 	buf.WriteString("{")
-
 	keys := make([]string, 0, len(s.members))
 	for k := range s.members {
 		keys = append(keys, k)
 	}
-
 	sort.Strings(keys)
-
 	for i, k := range keys {
 		var ip net.IP
 		if k[0] == '4' {
@@ -345,16 +311,12 @@ func (s DistinctNetSet) String() string {
 		} else {
 			ip = make(net.IP, 16)
 		}
-
 		copy(ip, k[1:])
 		fmt.Fprintf(&buf, "%v×%d", ip, s.members[k])
-
 		if i != len(keys)-1 {
 			buf.WriteString(" ")
 		}
 	}
-
 	buf.WriteString("}")
-
 	return buf.String()
 }

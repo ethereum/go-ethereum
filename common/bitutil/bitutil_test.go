@@ -22,17 +22,14 @@ func TestXOR(t *testing.T) {
 				for i := 0; i < len(p); i++ {
 					p[i] = byte(i)
 				}
-
 				for i := 0; i < len(q); i++ {
 					q[i] = byte(len(q) - i)
 				}
-
 				d1 := make([]byte, 1023+alignD)[alignD:]
 				d2 := make([]byte, 1023+alignD)[alignD:]
 
 				XORBytes(d1, p, q)
 				safeXORBytes(d2, p, q)
-
 				if !bytes.Equal(d1, d2) {
 					t.Error("not equal", d1, d2)
 				}
@@ -52,17 +49,14 @@ func TestAND(t *testing.T) {
 				for i := 0; i < len(p); i++ {
 					p[i] = byte(i)
 				}
-
 				for i := 0; i < len(q); i++ {
 					q[i] = byte(len(q) - i)
 				}
-
 				d1 := make([]byte, 1023+alignD)[alignD:]
 				d2 := make([]byte, 1023+alignD)[alignD:]
 
 				ANDBytes(d1, p, q)
 				safeANDBytes(d2, p, q)
-
 				if !bytes.Equal(d1, d2) {
 					t.Error("not equal")
 				}
@@ -82,17 +76,14 @@ func TestOR(t *testing.T) {
 				for i := 0; i < len(p); i++ {
 					p[i] = byte(i)
 				}
-
 				for i := 0; i < len(q); i++ {
 					q[i] = byte(len(q) - i)
 				}
-
 				d1 := make([]byte, 1023+alignD)[alignD:]
 				d2 := make([]byte, 1023+alignD)[alignD:]
 
 				ORBytes(d1, p, q)
 				safeORBytes(d2, p, q)
-
 				if !bytes.Equal(d1, d2) {
 					t.Error("not equal")
 				}
@@ -209,11 +200,9 @@ func BenchmarkFastTest4KB(b *testing.B) { benchmarkFastTest(b, 4096) }
 func benchmarkFastTest(b *testing.B, size int) {
 	p := make([]byte, size)
 	a := false
-
 	for i := 0; i < b.N; i++ {
 		a = a != TestBytes(p)
 	}
-
 	GloBool = a // Use of benchmark "result" to prevent total dead code elimination.
 }
 
@@ -225,10 +214,8 @@ func BenchmarkBaseTest4KB(b *testing.B) { benchmarkBaseTest(b, 4096) }
 func benchmarkBaseTest(b *testing.B, size int) {
 	p := make([]byte, size)
 	a := false
-
 	for i := 0; i < b.N; i++ {
 		a = a != safeTestBytes(p)
 	}
-
 	GloBool = a // Use of benchmark "result" to prevent total dead code elimination.
 }

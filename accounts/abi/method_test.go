@@ -91,7 +91,6 @@ func TestMethodString(t *testing.T) {
 		} else {
 			got = abi.Methods[test.method].String()
 		}
-
 		if got != test.expectation {
 			t.Errorf("expected string to be %s, got %s", test.expectation, got)
 		}
@@ -132,7 +131,6 @@ func TestMethodSig(t *testing.T) {
 			expect: "complexTuple((uint256,uint256)[5][])",
 		},
 	}
-
 	abi, err := JSON(strings.NewReader(methoddata))
 	if err != nil {
 		t.Fatal(err)

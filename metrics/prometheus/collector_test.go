@@ -10,7 +10,6 @@ import (
 
 func TestMain(m *testing.M) {
 	metrics.Enabled = true
-
 	os.Exit(m.Run())
 }
 
@@ -20,10 +19,6 @@ func TestCollector(t *testing.T) {
 	counter := metrics.NewCounter()
 	counter.Inc(12345)
 	c.addCounter("test/counter", counter)
-
-	counterfloat64 := metrics.NewCounterFloat64()
-	counterfloat64.Inc(54321.98)
-	c.addCounterFloat64("test/counter_float64", counterfloat64)
 
 	gauge := metrics.NewGauge()
 	gauge.Update(23456)
@@ -65,9 +60,6 @@ func TestCollector(t *testing.T) {
 
 	const expectedOutput = `# TYPE test_counter gauge
 test_counter 12345
-
-# TYPE test_counter_float64 gauge
-test_counter_float64 54321.98
 
 # TYPE test_gauge gauge
 test_gauge 23456

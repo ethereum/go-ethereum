@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -50,7 +49,7 @@ type ethBackend interface {
 	BloomIndexer() *core.ChainIndexer
 	ChainDb() ethdb.Database
 	Synced() bool
-	TxPool() *txpool.TxPool
+	TxPool() *core.TxPool
 }
 
 type LesServer struct {
@@ -88,7 +87,6 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	if threads < 4 {
 		threads = 4
 	}
-
 	srv := &LesServer{
 		lesCommons: lesCommons{
 			genesis:          e.BlockChain().Genesis().Hash(),
@@ -112,12 +110,10 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		threadsIdle:  threads,
 		p2pSrv:       node.Server(),
 	}
-
 	issync := e.Synced
 	if config.LightNoSyncServe {
 		issync = func() bool { return true }
 	}
-
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), issync)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
@@ -137,11 +133,9 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	// possible while the actually used server capacity does not exceed the limits
 	totalRecharge := srv.costTracker.totalRecharge()
 	srv.maxCapacity = srv.minCapacity * uint64(srv.config.LightPeers)
-
 	if totalRecharge > srv.maxCapacity {
 		srv.maxCapacity = totalRecharge
 	}
-
 	srv.fcManager.SetCapacityLimits(srv.minCapacity, srv.maxCapacity, srv.minCapacity*2)
 	srv.clientPool = vfs.NewClientPool(lesDb, srv.minCapacity, defaultConnectedBias, mclock.System{}, issync)
 	srv.clientPool.Start()
@@ -153,13 +147,11 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		log.Info("Loaded latest checkpoint", "section", checkpoint.SectionIndex, "head", checkpoint.SectionHead,
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
-
 	srv.chtIndexer.Start(e.BlockChain())
 
 	node.RegisterProtocols(srv.Protocols())
 	node.RegisterAPIs(srv.APIs())
 	node.RegisterLifecycle(srv)
-
 	return srv, nil
 }
 
@@ -167,15 +159,21 @@ func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "les",
-			Service:   NewLightAPI(&s.lesCommons),
+			Version:   "1.0",
+			Service:   NewPrivateLightAPI(&s.lesCommons),
+			Public:    false,
 		},
 		{
 			Namespace: "les",
-			Service:   NewLightServerAPI(s),
+			Version:   "1.0",
+			Service:   NewPrivateLightServerAPI(s),
+			Public:    false,
 		},
 		{
 			Namespace: "debug",
-			Service:   NewDebugAPI(s),
+			Version:   "1.0",
+			Service:   NewPrivateDebugAPI(s),
+			Public:    false,
 		},
 	}
 }
@@ -185,7 +183,6 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 		if p := s.peers.peer(id); p != nil {
 			return p.Info()
 		}
-
 		return nil
 	}, nil)
 	// Add "les" ENR entries.
@@ -194,7 +191,6 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 			VfxVersion: 1,
 		}}
 	}
-
 	return ps
 }
 
@@ -204,13 +200,10 @@ func (s *LesServer) Start() error {
 	s.peers.setSignerKey(s.privateKey)
 	s.handler.start()
 	s.wg.Add(1)
-
 	go s.capacityManagement()
-
 	if s.p2pSrv.DiscV5 != nil {
 		s.p2pSrv.DiscV5.RegisterTalkHandler("vfx", s.vfluxServer.ServeEncoded)
 	}
-
 	return nil
 }
 
@@ -219,17 +212,14 @@ func (s *LesServer) Stop() error {
 	close(s.closeCh)
 
 	s.clientPool.Stop()
-
 	if s.serverset != nil {
 		s.serverset.close()
 	}
-
 	s.peers.close()
 	s.fcManager.Stop()
 	s.costTracker.stop()
 	s.handler.stop()
 	s.servingQueue.stop()
-
 	if s.vfluxServer != nil {
 		s.vfluxServer.Stop()
 	}
@@ -238,11 +228,9 @@ func (s *LesServer) Stop() error {
 	if s.chtIndexer != nil {
 		s.chtIndexer.Close()
 	}
-
 	if s.lesDb != nil {
 		s.lesDb.Close()
 	}
-
 	s.wg.Wait()
 	log.Info("Les server stopped")
 
@@ -256,7 +244,6 @@ func (s *LesServer) capacityManagement() {
 	defer s.wg.Done()
 
 	processCh := make(chan bool, 100)
-
 	sub := s.handler.blockchain.SubscribeBlockProcessingEvent(processCh)
 	defer sub.Unsubscribe()
 
@@ -272,7 +259,6 @@ func (s *LesServer) capacityManagement() {
 		freePeers    uint64
 		blockProcess mclock.AbsTime
 	)
-
 	updateRecharge := func() {
 		if busy {
 			s.servingQueue.setThreads(s.threadsBusy)
@@ -292,21 +278,17 @@ func (s *LesServer) capacityManagement() {
 			} else {
 				blockProcessingTimer.Update(time.Duration(mclock.Now() - blockProcess))
 			}
-
 			updateRecharge()
 		case totalRecharge = <-totalRechargeCh:
 			totalRechargeGauge.Update(int64(totalRecharge))
 			updateRecharge()
 		case totalCapacity = <-totalCapacityCh:
 			totalCapacityGauge.Update(int64(totalCapacity))
-
 			newFreePeers := totalCapacity / s.minCapacity
 			if newFreePeers < freePeers && newFreePeers < uint64(s.config.LightPeers) {
 				log.Warn("Reduced free peer connections", "from", freePeers, "to", newFreePeers)
 			}
-
 			freePeers = newFreePeers
-
 			s.clientPool.SetLimits(uint64(s.config.LightPeers), totalCapacity)
 		case <-s.closeCh:
 			return

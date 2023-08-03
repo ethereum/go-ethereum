@@ -41,7 +41,7 @@ func (q *bodyQueue) pending() int {
 }
 
 // capacity is responsible for calculating how many bodies a particular peer is
-// estimated to be able to retrieve within the allotted round trip time.
+// estimated to be able to retrieve within the alloted round trip time.
 func (q *bodyQueue) capacity(peer *peerConnection, rtt time.Duration) int {
 	return peer.BodyCapacity(rtt)
 }
@@ -58,7 +58,7 @@ func (q *bodyQueue) reserve(peer *peerConnection, items int) (*fetchRequest, boo
 	return q.queue.ReserveBodies(peer, items)
 }
 
-// unreserve is responsible for removing the current body retrieval allocation
+// unreserve is resposible for removing the current body retrieval allocation
 // assigned to a specific peer and placing it back into the pool to allow
 // reassigning to some other peer.
 func (q *bodyQueue) unreserve(peer string) int {
@@ -68,7 +68,6 @@ func (q *bodyQueue) unreserve(peer string) int {
 	} else {
 		log.Debug("Body delivery stalling", "peer", peer)
 	}
-
 	return fails
 }
 
@@ -76,7 +75,6 @@ func (q *bodyQueue) unreserve(peer string) int {
 // one and sending it to the remote peer for fulfillment.
 func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {
 	peer.log.Trace("Requesting new batch of bodies", "count", len(req.Headers), "from", req.Headers[0].Number)
-
 	if q.bodyFetchHook != nil {
 		q.bodyFetchHook(req.Headers)
 	}
@@ -85,18 +83,16 @@ func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan 
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
 	}
-
 	return peer.peer.RequestBodies(hashes, resCh)
 }
 
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the body data and delivering it to the downloader's queue.
 func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	txs, uncles, withdrawals := packet.Res.(*eth.BlockBodiesPacket).Unpack()
-	hashsets := packet.Meta.([][]common.Hash) // {txs hashes, uncle hashes, withdrawal hashes}
+	txs, uncles := packet.Res.(*eth.BlockBodiesPacket).Unpack()
+	hashsets := packet.Meta.([][]common.Hash) // {txs hashes, uncle hashes}
 
-	accepted, err := q.queue.DeliverBodies(peer.id, txs, hashsets[0], uncles, hashsets[1], withdrawals, hashsets[2])
-
+	accepted, err := q.queue.DeliverBodies(peer.id, txs, hashsets[0], uncles, hashsets[1])
 	switch {
 	case err == nil && len(txs) == 0:
 		peer.log.Trace("Requested bodies delivered")
@@ -105,6 +101,5 @@ func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, er
 	default:
 		peer.log.Debug("Failed to deliver retrieved bodies", "err", err)
 	}
-
 	return accepted, err
 }

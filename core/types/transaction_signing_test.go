@@ -17,7 +17,6 @@
 package types
 
 import (
-	"errors"
 	"math/big"
 	"testing"
 
@@ -31,7 +30,6 @@ func TestEIP155Signing(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	signer := NewEIP155Signer(big.NewInt(18))
-
 	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil), signer, key)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +39,6 @@ func TestEIP155Signing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if from != addr {
 		t.Errorf("exected from and address to be equal. Got %x want %x", from, addr)
 	}
@@ -52,12 +49,10 @@ func TestEIP155ChainId(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	signer := NewEIP155Signer(big.NewInt(18))
-
 	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil), signer, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if !tx.Protected() {
 		t.Fatal("expected tx to be protected")
 	}
@@ -67,7 +62,6 @@ func TestEIP155ChainId(t *testing.T) {
 	}
 
 	tx = NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil)
-
 	tx, err = SignTx(tx, HomesteadSigner{}, key)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +95,6 @@ func TestEIP155SigningVitalik(t *testing.T) {
 		signer := NewEIP155Signer(big.NewInt(1))
 
 		var tx *Transaction
-
 		err := rlp.DecodeBytes(common.Hex2Bytes(test.txRlp), &tx)
 		if err != nil {
 			t.Errorf("%d: %v", i, err)
@@ -118,6 +111,7 @@ func TestEIP155SigningVitalik(t *testing.T) {
 		if from != addr {
 			t.Errorf("%d: expected %x got %x", i, addr, from)
 		}
+
 	}
 }
 
@@ -127,15 +121,14 @@ func TestChainId(t *testing.T) {
 	tx := NewTransaction(0, common.Address{}, new(big.Int), 0, new(big.Int), nil)
 
 	var err error
-
 	tx, err = SignTx(tx, NewEIP155Signer(big.NewInt(1)), key)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(2)), tx)
-	if !errors.Is(err, ErrInvalidChainId) {
-		t.Error("expected error:", ErrInvalidChainId, err)
+	if err != ErrInvalidChainId {
+		t.Error("expected error:", ErrInvalidChainId)
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(1)), tx)

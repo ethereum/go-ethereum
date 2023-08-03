@@ -95,7 +95,6 @@ func (l *lattice) Multi(scalar *big.Int) []uint8 {
 	}
 
 	out := make([]uint8, maxLen)
-
 	for j, x := range decomp {
 		for i := 0; i < maxLen; i++ {
 			out[i] += uint8(x.Bit(i)) << uint(j)

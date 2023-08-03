@@ -41,12 +41,10 @@ func newPeerError(code int, format string, v ...interface{}) *peerError {
 	if !ok {
 		panic("invalid error code")
 	}
-
 	err := &peerError{code, desc}
 	if format != "" {
 		err.message += ": " + fmt.Sprintf(format, v...)
 	}
-
 	return err
 }
 
@@ -71,8 +69,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
-	// nolint : errname
-	DiscSubprotocolError = DiscReason(0x10)
+	DiscSubprotocolError = 0x10
 )
 
 var discReasonToString = [...]string{
@@ -95,7 +92,6 @@ func (d DiscReason) String() string {
 	if len(discReasonToString) <= int(d) {
 		return fmt.Sprintf("unknown disconnect reason %d", d)
 	}
-
 	return discReasonToString[d]
 }
 
@@ -107,11 +103,9 @@ func discReasonForError(err error) DiscReason {
 	if reason, ok := err.(DiscReason); ok {
 		return reason
 	}
-
-	if errors.Is(err, errProtocolReturned) {
+	if err == errProtocolReturned {
 		return DiscQuitting
 	}
-
 	peerError, ok := err.(*peerError)
 	if ok {
 		switch peerError.code {
@@ -121,6 +115,5 @@ func discReasonForError(err error) DiscReason {
 			return DiscSubprotocolError
 		}
 	}
-
 	return DiscSubprotocolError
 }

@@ -11,7 +11,6 @@ func TestPairingExpected(t *testing.T) {
 	bls := NewPairingEngine()
 	G1, G2 := bls.G1, bls.G2
 	GT := bls.GT()
-
 	expected, err := GT.FromBytes(
 		common.FromHex("" +
 			"0f41e58663bf08cf068672cbd01a7ec73baca4d72ca93544deff686bfd6df543d48eaa24afe47e1efde449383b676631" +
@@ -31,12 +30,10 @@ func TestPairingExpected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	r := bls.AddPair(G1.One(), G2.One()).Result()
 	if !r.Equal(expected) {
 		t.Fatal("bad pairing")
 	}
-
 	if !GT.IsValid(r) {
 		t.Fatal("element is not in correct subgroup")
 	}
@@ -51,12 +48,10 @@ func TestPairingNonDegeneracy(t *testing.T) {
 	bls.Reset()
 	{
 		bls.AddPair(g1One, g2One)
-
 		e := bls.Result()
 		if e.IsOne() {
 			t.Fatal("pairing result is not expected to be one")
 		}
-
 		if !GT.IsValid(e) {
 			t.Fatal("pairing result is not valid")
 		}
@@ -65,7 +60,6 @@ func TestPairingNonDegeneracy(t *testing.T) {
 	bls.Reset()
 	{
 		bls.AddPair(g1One, g2Zero)
-
 		e := bls.Result()
 		if !e.IsOne() {
 			t.Fatal("pairing result is expected to be one")
@@ -75,7 +69,6 @@ func TestPairingNonDegeneracy(t *testing.T) {
 	bls.Reset()
 	{
 		bls.AddPair(g1Zero, g2One)
-
 		e := bls.Result()
 		if !e.IsOne() {
 			t.Fatal("pairing result is expected to be one")
@@ -87,7 +80,6 @@ func TestPairingNonDegeneracy(t *testing.T) {
 		bls.AddPair(g1Zero, g2One)
 		bls.AddPair(g1One, g2Zero)
 		bls.AddPair(g1Zero, g2Zero)
-
 		e := bls.Result()
 		if !e.IsOne() {
 			t.Fatal("pairing result is expected to be one")
@@ -115,12 +107,10 @@ func TestPairingNonDegeneracy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		bls.AddPair(g1Zero, g2One)
 		bls.AddPair(g1One, g2Zero)
 		bls.AddPair(g1Zero, g2Zero)
 		bls.AddPair(g1One, g2One)
-
 		e := bls.Result()
 		if !e.Equal(expected) {
 			t.Fatal("bad pairing")
@@ -142,9 +132,7 @@ func TestPairingBilinearity(t *testing.T) {
 		g1.MulScalar(P1, G1, a)
 		g2.MulScalar(P2, G2, b)
 		e1 := bls.AddPair(P1, P2).Result()
-
 		gt.Exp(e0, e0, c)
-
 		if !e0.Equal(e1) {
 			t.Fatal("bad pairing, 1")
 		}
@@ -214,7 +202,6 @@ func TestPairingMulti(t *testing.T) {
 	T1, T2 := g1.One(), g2.One()
 	g1.MulScalar(T1, T1, targetExp)
 	bls.AddPairInv(T1, T2)
-
 	if !bls.Check() {
 		t.Fatal("fail multi pairing")
 	}
@@ -225,7 +212,6 @@ func TestPairingEmpty(t *testing.T) {
 	if !bls.Check() {
 		t.Fatal("empty check should be accepted")
 	}
-
 	if !bls.Result().IsOne() {
 		t.Fatal("empty pairing result should be one")
 	}
@@ -235,14 +221,10 @@ func BenchmarkPairing(t *testing.B) {
 	bls := NewPairingEngine()
 	g1, g2, gt := bls.G1, bls.G2, bls.GT()
 	bls.AddPair(g1.One(), g2.One())
-
 	e := gt.New()
-
 	t.ResetTimer()
-
 	for i := 0; i < t.N; i++ {
 		e = bls.calculate()
 	}
-
 	_ = e
 }

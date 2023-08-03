@@ -20,6 +20,5 @@ type resettingSample struct {
 func (rs *resettingSample) Snapshot() Sample {
 	s := rs.Sample.Snapshot()
 	rs.Sample.Clear()
-
 	return s
 }

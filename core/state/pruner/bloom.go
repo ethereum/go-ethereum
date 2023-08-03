@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ func (f stateBloomHasher) BlockSize() int                    { panic("not implem
 func (f stateBloomHasher) Size() int                         { return 8 }
 func (f stateBloomHasher) Sum64() uint64                     { return binary.BigEndian.Uint64(f) }
 
-// stateBloom is a bloom filter used during the state conversion(snapshot->state).
+// stateBloom is a bloom filter used during the state convesion(snapshot->state).
 // The keys of all generated entries will be recorded here so that in the pruning
 // stage the entries belong to the specific version can be avoided for deletion.
 //
@@ -67,9 +67,7 @@ func newStateBloomWithSize(size uint64) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	log.Info("Initialized state bloom", "size", common.StorageSize(float64(bloom.M()/8)))
-
 	return &stateBloom{bloom: bloom}, nil
 }
 
@@ -80,7 +78,6 @@ func NewStateBloomFromDisk(filename string) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &stateBloom{bloom: bloom}, nil
 }
 
@@ -97,15 +94,13 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 	if err != nil {
 		return err
 	}
-
 	if err := f.Sync(); err != nil {
 		f.Close()
 		return err
 	}
-
 	f.Close()
 
-	// Move the temporary file into it's final location
+	// Move the teporary file into it's final location
 	return os.Rename(tempname, filename)
 }
 
@@ -118,14 +113,10 @@ func (bloom *stateBloom) Put(key []byte, value []byte) error {
 		if !isCode {
 			return errors.New("invalid entry")
 		}
-
 		bloom.bloom.Add(stateBloomHasher(codeKey))
-
 		return nil
 	}
-
 	bloom.bloom.Add(stateBloomHasher(key))
-
 	return nil
 }
 

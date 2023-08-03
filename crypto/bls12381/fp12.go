@@ -35,15 +35,12 @@ type fp12temp struct {
 func newFp12Temp() fp12temp {
 	t2 := [9]*fe2{}
 	t6 := [5]*fe6{}
-
 	for i := 0; i < len(t2); i++ {
 		t2[i] = &fe2{}
 	}
-
 	for i := 0; i < len(t6); i++ {
 		t6[i] = &fe6{}
 	}
-
 	return fp12temp{t2, t6, &fe12{}}
 }
 
@@ -52,7 +49,6 @@ func newFp12(fp6 *fp6) *fp12 {
 	if fp6 == nil {
 		return &fp12{t, newFp6(nil)}
 	}
-
 	return &fp12{t, fp6}
 }
 
@@ -64,19 +60,15 @@ func (e *fp12) fromBytes(in []byte) (*fe12, error) {
 	if len(in) != 576 {
 		return nil, errors.New("input string should be larger than 96 bytes")
 	}
-
 	fp6 := e.fp6
-
 	c1, err := fp6.fromBytes(in[:288])
 	if err != nil {
 		return nil, err
 	}
-
 	c0, err := fp6.fromBytes(in[288:])
 	if err != nil {
 		return nil, err
 	}
-
 	return &fe12{*c0, *c1}, nil
 }
 
@@ -85,7 +77,6 @@ func (e *fp12) toBytes(a *fe12) []byte {
 	out := make([]byte, 576)
 	copy(out[:288], fp6.toBytes(&a[1]))
 	copy(out[288:], fp6.toBytes(&a[0]))
-
 	return out
 }
 
@@ -105,6 +96,7 @@ func (e *fp12) add(c, a, b *fe12) {
 	fp6 := e.fp6
 	fp6.add(&c[0], &a[0], &b[0])
 	fp6.add(&c[1], &a[1], &b[1])
+
 }
 
 func (e *fp12) double(c, a *fe12) {
@@ -117,6 +109,7 @@ func (e *fp12) sub(c, a, b *fe12) {
 	fp6 := e.fp6
 	fp6.sub(&c[0], &a[0], &b[0])
 	fp6.sub(&c[1], &a[1], &b[1])
+
 }
 
 func (e *fp12) neg(c, a *fe12) {
@@ -127,7 +120,6 @@ func (e *fp12) neg(c, a *fe12) {
 
 func (e *fp12) conjugate(c, a *fe12) {
 	fp6 := e.fp6
-
 	c[0].set(&a[0])
 	fp6.neg(&c[1], &a[1])
 }
@@ -240,7 +232,6 @@ func (e *fp12) exp(c, a *fe12, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.square(z, z)
-
 		if s.Bit(i) == 1 {
 			e.mul(z, z, a)
 		}
@@ -252,7 +243,6 @@ func (e *fp12) cyclotomicExp(c, a *fe12, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.cyclotomicSquare(z, z)
-
 		if s.Bit(i) == 1 {
 			e.mul(z, z, a)
 		}
@@ -264,7 +254,6 @@ func (e *fp12) frobeniusMap(c, a *fe12, power uint) {
 	fp6 := e.fp6
 	fp6.frobeniusMap(&c[0], &a[0], power)
 	fp6.frobeniusMap(&c[1], &a[1], power)
-
 	switch power {
 	case 0:
 		return
@@ -279,7 +268,6 @@ func (e *fp12) frobeniusMapAssign(a *fe12, power uint) {
 	fp6 := e.fp6
 	fp6.frobeniusMapAssign(&a[0], power)
 	fp6.frobeniusMapAssign(&a[1], power)
-
 	switch power {
 	case 0:
 		return

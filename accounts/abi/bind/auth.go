@@ -64,9 +64,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 // Deprecated: Use NewKeyStoreTransactorWithChainID instead.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
 	log.Warn("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
-
 	signer := types.HomesteadSigner{}
-
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -89,10 +87,8 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 // Deprecated: Use NewKeyedTransactorWithChainID instead.
 func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 	log.Warn("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
-
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	signer := types.HomesteadSigner{}
-
 	return &TransactOpts{
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -116,12 +112,10 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 	if err != nil {
 		return nil, err
 	}
-
 	key, err := keystore.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}
-
 	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID)
 }
 
@@ -131,9 +125,7 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 	if chainID == nil {
 		return nil, ErrNoChainID
 	}
-
 	signer := types.LatestSignerForChainID(chainID)
-
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -154,13 +146,10 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 // from a single private key.
 func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
-
 	if chainID == nil {
 		return nil, ErrNoChainID
 	}
-
 	signer := types.LatestSignerForChainID(chainID)
-
 	return &TransactOpts{
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
