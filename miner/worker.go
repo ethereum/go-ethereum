@@ -1231,6 +1231,10 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		if err != nil {
 			return err
 		}
+		// truncate ExecutionResults&TxStorageTraces, because we declare their lengths with a dummy tx before;
+		// however, we need to clean it up for an empty block
+		traces.ExecutionResults = traces.ExecutionResults[:0]
+		traces.TxStorageTraces = traces.TxStorageTraces[:0]
 		accRows, err := w.circuitCapacityChecker.ApplyBlock(traces)
 		if err != nil {
 			return err
