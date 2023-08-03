@@ -132,7 +132,6 @@ func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
 	if cap > MaxHeaderFetch {
 		cap = MaxHeaderFetch
 	}
-
 	return cap
 }
 
@@ -143,7 +142,6 @@ func (p *peerConnection) BodyCapacity(targetRTT time.Duration) int {
 	if cap > MaxBlockFetch {
 		cap = MaxBlockFetch
 	}
-
 	return cap
 }
 
@@ -154,7 +152,6 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	if cap > MaxReceiptFetch {
 		cap = MaxReceiptFetch
 	}
-
 	return cap
 }
 
@@ -171,7 +168,6 @@ func (p *peerConnection) MarkLacking(hash common.Hash) {
 			break
 		}
 	}
-
 	p.lacking[hash] = struct{}{}
 }
 
@@ -182,7 +178,6 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 	defer p.lock.RUnlock()
 
 	_, ok := p.lacking[hash]
-
 	return ok
 }
 
@@ -240,18 +235,14 @@ func (ps *peerSet) Register(p *peerConnection) error {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
-
 	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.MedianRoundTrip())
 	if err := ps.rates.Track(p.id, p.rates); err != nil {
-		ps.lock.Unlock()
 		return err
 	}
-
 	ps.peers[p.id] = p
 	ps.lock.Unlock()
 
 	ps.events.Send(&peeringEvent{peer: p, join: true})
-
 	return nil
 }
 
@@ -259,19 +250,16 @@ func (ps *peerSet) Register(p *peerConnection) error {
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
-
 	p, ok := ps.peers[id]
 	if !ok {
 		ps.lock.Unlock()
 		return errNotRegistered
 	}
-
 	delete(ps.peers, id)
 	ps.rates.Untrack(id)
 	ps.lock.Unlock()
 
 	ps.events.Send(&peeringEvent{peer: p, join: false})
-
 	return nil
 }
 
@@ -300,7 +288,6 @@ func (ps *peerSet) AllPeers() []*peerConnection {
 	for _, p := range ps.peers {
 		list = append(list, p)
 	}
-
 	return list
 }
 

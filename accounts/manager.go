@@ -87,12 +87,10 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 		quit:        make(chan chan error),
 		term:        make(chan struct{}),
 	}
-
 	for _, backend := range backends {
 		kind := reflect.TypeOf(backend)
 		am.backends[kind] = append(am.backends[kind], backend)
 	}
-
 	go am.update()
 
 	return am
@@ -102,7 +100,6 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 func (am *Manager) Close() error {
 	errc := make(chan error)
 	am.quit <- errc
-
 	return <-errc
 }
 
@@ -116,7 +113,6 @@ func (am *Manager) Config() *Config {
 func (am *Manager) AddBackend(backend Backend) {
 	done := make(chan struct{})
 	am.newBackends <- newBackendEvent{backend, done}
-
 	<-done
 }
 
@@ -129,7 +125,6 @@ func (am *Manager) update() {
 		for _, sub := range am.updaters {
 			sub.Unsubscribe()
 		}
-
 		am.updaters = nil
 		am.lock.Unlock()
 	}()
@@ -166,7 +161,6 @@ func (am *Manager) update() {
 			// Signals event emitters the loop is not receiving values
 			// to prevent them from getting stuck.
 			close(am.term)
-
 			return
 		}
 	}
@@ -192,7 +186,6 @@ func (am *Manager) Wallets() []Wallet {
 func (am *Manager) walletsNoLock() []Wallet {
 	cpy := make([]Wallet, len(am.wallets))
 	copy(cpy, am.wallets)
-
 	return cpy
 }
 
@@ -205,13 +198,11 @@ func (am *Manager) Wallet(url string) (Wallet, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	for _, wallet := range am.walletsNoLock() {
 		if wallet.URL() == parsed {
 			return wallet, nil
 		}
 	}
-
 	return nil, ErrUnknownWallet
 }
 
@@ -221,13 +212,11 @@ func (am *Manager) Accounts() []common.Address {
 	defer am.lock.RUnlock()
 
 	addresses := make([]common.Address, 0) // return [] instead of nil if empty
-
 	for _, wallet := range am.wallets {
 		for _, account := range wallet.Accounts() {
 			addresses = append(addresses, account.Address)
 		}
 	}
-
 	return addresses
 }
 
@@ -243,7 +232,6 @@ func (am *Manager) Find(account Account) (Wallet, error) {
 			return wallet, nil
 		}
 	}
-
 	return nil, ErrUnknownAccount
 }
 
@@ -264,10 +252,8 @@ func merge(slice []Wallet, wallets ...Wallet) []Wallet {
 			slice = append(slice, wallet)
 			continue
 		}
-
 		slice = append(slice[:n], append([]Wallet{wallet}, slice[n:]...)...)
 	}
-
 	return slice
 }
 
@@ -280,9 +266,7 @@ func drop(slice []Wallet, wallets ...Wallet) []Wallet {
 			// Wallet not found, may happen during startup
 			continue
 		}
-
 		slice = append(slice[:n], slice[n+1:]...)
 	}
-
 	return slice
 }

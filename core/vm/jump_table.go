@@ -55,7 +55,6 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
-	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -64,7 +63,7 @@ type JumpTable [256]*operation
 func validate(jt JumpTable) JumpTable {
 	for i, op := range jt {
 		if op == nil {
-			panic(fmt.Sprintf("op %#x is not set", i))
+			panic(fmt.Sprintf("op 0x%x is not set", i))
 		}
 		// The interpreter has an assumption that if the memorySize function is
 		// set, then the dynamicGas function is also set. This is a somewhat
@@ -76,51 +75,39 @@ func validate(jt JumpTable) JumpTable {
 			panic(fmt.Sprintf("op %v has dynamic memory but not dynamic gas", OpCode(i).String()))
 		}
 	}
-
 	return jt
-}
-
-func newShanghaiInstructionSet() JumpTable {
-	instructionSet := newMergeInstructionSet()
-	enable3855(&instructionSet) // PUSH0 instruction
-	enable3860(&instructionSet) // Limit and meter initcode
-
-	return validate(instructionSet)
 }
 
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[PREVRANDAO] = &operation{
+	instructionSet[RANDOM] = &operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
-
 	return validate(instructionSet)
 }
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg, berlin and london instructions.
+// contantinople, istanbul, petersburg, berlin and london instructions.
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
-
 	return validate(instructionSet)
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul, petersburg and berlin instructions.
+// contantinople, istanbul, petersburg and berlin instructions.
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
-
 	return validate(instructionSet)
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
-// constantinople, istanbul and petersburg instructions.
+// contantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
@@ -132,7 +119,7 @@ func newIstanbulInstructionSet() JumpTable {
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
-// byzantium and constantinople instructions.
+// byzantium and contantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = &operation{
@@ -167,7 +154,6 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(4, 1),
 		memorySize:  memoryCreate2,
 	}
-
 	return validate(instructionSet)
 }
 
@@ -204,7 +190,6 @@ func newByzantiumInstructionSet() JumpTable {
 		maxStack:   maxStack(2, 0),
 		memorySize: memoryRevert,
 	}
-
 	return validate(instructionSet)
 }
 
@@ -212,8 +197,8 @@ func newByzantiumInstructionSet() JumpTable {
 func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
-
 	return validate(instructionSet)
+
 }
 
 // EIP 150 a.k.a Tangerine Whistle
@@ -226,7 +211,6 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet[CALL].constantGas = params.CallGasEIP150
 	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
 	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
-
 	return validate(instructionSet)
 }
 
@@ -242,7 +226,6 @@ func newHomesteadInstructionSet() JumpTable {
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryDelegateCall,
 	}
-
 	return validate(instructionSet)
 }
 
@@ -1060,17 +1043,4 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	return validate(tbl)
-}
-
-func copyJumpTable(source *JumpTable) *JumpTable {
-	dest := *source
-
-	for i, op := range source {
-		if op != nil {
-			opCopy := *op
-			dest[i] = &opCopy
-		}
-	}
-
-	return &dest
 }

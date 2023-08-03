@@ -39,7 +39,7 @@ type Compiler struct {
 	debug bool
 }
 
-// NewCompiler returns a new allocated compiler.
+// newCompiler returns a new allocated compiler.
 func NewCompiler(debug bool) *Compiler {
 	return &Compiler{
 		labels: make(map[string]int),
@@ -58,7 +58,6 @@ func NewCompiler(debug bool) *Compiler {
 // position.
 func (c *Compiler) Feed(ch <-chan token) {
 	var prev token
-
 	for i := range ch {
 		switch i.typ {
 		case number:
@@ -66,7 +65,6 @@ func (c *Compiler) Feed(ch <-chan token) {
 			if len(num) == 0 {
 				num = []byte{0}
 			}
-
 			c.pc += len(num)
 		case stringValue:
 			c.pc += len(i.text) - 2
@@ -85,7 +83,6 @@ func (c *Compiler) Feed(ch <-chan token) {
 		c.tokens = append(c.tokens, i)
 		prev = i
 	}
-
 	if c.debug {
 		fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
 	}
@@ -108,18 +105,16 @@ func (c *Compiler) Compile() (string, []error) {
 	}
 
 	// turn the binary to hex
-	var bin strings.Builder
-
+	var bin string
 	for _, v := range c.binary {
 		switch v := v.(type) {
 		case vm.OpCode:
-			bin.WriteString(fmt.Sprintf("%x", []byte{byte(v)}))
+			bin += fmt.Sprintf("%x", []byte{byte(v)})
 		case []byte:
-			bin.WriteString(fmt.Sprintf("%x", v))
+			bin += fmt.Sprintf("%x", v)
 		}
 	}
-
-	return bin.String(), errors
+	return bin, errors
 }
 
 // next returns the next token and increments the
@@ -127,7 +122,6 @@ func (c *Compiler) Compile() (string, []error) {
 func (c *Compiler) next() token {
 	token := c.tokens[c.pos]
 	c.pos++
-
 	return token
 }
 
@@ -168,9 +162,7 @@ func (c *Compiler) compileNumber(element token) (int, error) {
 	if len(num) == 0 {
 		num = []byte{0}
 	}
-
 	c.pushBin(num)
-
 	return len(num), nil
 }
 
@@ -201,7 +193,6 @@ func (c *Compiler) compileElement(element token) error {
 		}
 		// push the operation
 		c.pushBin(toBinary(element.text))
-
 		return nil
 	} else if isPush(element.text) {
 		// handle pushes. pushes are read from left to right.
@@ -246,19 +237,18 @@ func (c *Compiler) pushBin(v interface{}) {
 	if c.debug {
 		fmt.Printf("%d: %v\n", len(c.binary), v)
 	}
-
 	c.binary = append(c.binary, v)
 }
 
 // isPush returns whether the string op is either any of
 // push(N).
 func isPush(op string) bool {
-	return strings.EqualFold(op, "PUSH")
+	return strings.ToUpper(op) == "PUSH"
 }
 
 // isJump returns whether the string op is jump(i)
 func isJump(op string) bool {
-	return strings.EqualFold(op, "JUMPI") || strings.EqualFold(op, "JUMP")
+	return strings.ToUpper(op) == "JUMPI" || strings.ToUpper(op) == "JUMP"
 }
 
 // toBinary converts text to a vm.OpCode

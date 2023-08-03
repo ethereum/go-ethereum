@@ -288,7 +288,6 @@ func testExecutorComb(t *testing.T, totalTxs []int, numReads []int, numWrites []
 					if execDuration < expectedSerialDuration {
 						improved++
 					}
-
 					total++
 
 					performance := greenTick
@@ -334,7 +333,6 @@ func testExecutorCombWithMetadata(t *testing.T, totalTxs []int, numReads []int, 
 					if execDuration < expectedSerialDuration {
 						improved++
 					}
-
 					total++
 
 					performance := greenTick

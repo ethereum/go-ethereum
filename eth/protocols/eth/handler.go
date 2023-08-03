@@ -96,7 +96,6 @@ type TxPool interface {
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
 func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2p.Protocol {
 	protocols := make([]p2p.Protocol, len(ProtocolVersions))
-
 	for i, version := range ProtocolVersions {
 		version := version // Closure
 
@@ -122,14 +121,13 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 			DialCandidates: dnsdisc,
 		}
 	}
-
 	return protocols
 }
 
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Rinkeby=4, Goerli=5)
+	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
 	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
@@ -139,14 +137,12 @@ type NodeInfo struct {
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
 func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
-	hash := head.Hash()
-
 	return &NodeInfo{
 		Network:    network,
-		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
+		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
-		Head:       hash,
+		Head:       head.Hash(),
 	}
 }
 
@@ -172,43 +168,13 @@ var eth66 = map[uint64]msgHandler{
 	NewBlockHashesMsg:             handleNewBlockhashes,
 	NewBlockMsg:                   handleNewBlock,
 	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes66,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	GetBlockHeadersMsg:            handleGetBlockHeaders66,
 	BlockHeadersMsg:               handleBlockHeaders66,
 	GetBlockBodiesMsg:             handleGetBlockBodies66,
 	BlockBodiesMsg:                handleBlockBodies66,
 	GetNodeDataMsg:                handleGetNodeData66,
 	NodeDataMsg:                   handleNodeData66,
-	GetReceiptsMsg:                handleGetReceipts66,
-	ReceiptsMsg:                   handleReceipts66,
-	GetPooledTransactionsMsg:      handleGetPooledTransactions66,
-	PooledTransactionsMsg:         handlePooledTransactions66,
-}
-
-var eth67 = map[uint64]msgHandler{
-	NewBlockHashesMsg:             handleNewBlockhashes,
-	NewBlockMsg:                   handleNewBlock,
-	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes66,
-	GetBlockHeadersMsg:            handleGetBlockHeaders66,
-	BlockHeadersMsg:               handleBlockHeaders66,
-	GetBlockBodiesMsg:             handleGetBlockBodies66,
-	BlockBodiesMsg:                handleBlockBodies66,
-	GetReceiptsMsg:                handleGetReceipts66,
-	ReceiptsMsg:                   handleReceipts66,
-	GetPooledTransactionsMsg:      handleGetPooledTransactions66,
-	PooledTransactionsMsg:         handlePooledTransactions66,
-}
-
-var eth68 = map[uint64]msgHandler{
-	NewBlockHashesMsg:             handleNewBlockhashes,
-	NewBlockMsg:                   handleNewBlock,
-	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes68,
-	GetBlockHeadersMsg:            handleGetBlockHeaders66,
-	BlockHeadersMsg:               handleBlockHeaders66,
-	GetBlockBodiesMsg:             handleGetBlockBodies66,
-	BlockBodiesMsg:                handleBlockBodies66,
 	GetReceiptsMsg:                handleGetReceipts66,
 	ReceiptsMsg:                   handleReceipts66,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions66,
@@ -223,21 +189,15 @@ func handleMessage(backend Backend, peer *Peer) error {
 	if err != nil {
 		return err
 	}
-
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-
 	defer msg.Discard()
 
 	var handlers = eth66
-	if peer.Version() == ETH67 {
-		handlers = eth67
-	}
-
-	if peer.Version() >= ETH68 {
-		handlers = eth68
-	}
+	//if peer.Version() >= ETH67 { // Left in as a sample when new protocol is added
+	//	handlers = eth67
+	//}
 
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
@@ -251,10 +211,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 			metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(start).Microseconds())
 		}(time.Now())
 	}
-
 	if handler := handlers[msg.Code]; handler != nil {
 		return handler(backend, msg, peer)
 	}
-
 	return fmt.Errorf("%w: %v", errInvalidMsgCode, msg.Code)
 }

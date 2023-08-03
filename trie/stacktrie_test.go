@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 func TestStackTrieInsertAndHash(t *testing.T) {
@@ -32,7 +32,6 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 		V string // Value, directly converted to bytes.
 		H string // Expected root hash after insert of (K, V) to an existing trie.
 	}
-
 	tests := [][]KeyValueHash{
 		{ // {0:0, 7:0, f:0}
 			{"00", "v_______________________0___0", "5cb26357b95bb9af08475be00243ceb68ade0b66b5cd816b0c18a18c612d2d21"},
@@ -168,20 +167,17 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 		},
 	}
 	st := NewStackTrie(nil)
-
 	for i, test := range tests {
 		// The StackTrie does not allow Insert(), Hash(), Insert(), ...
 		// so we will create new trie for every sequence length of inserts.
 		for l := 1; l <= len(test); l++ {
 			st.Reset()
-
 			for j := 0; j < l; j++ {
 				kv := &test[j]
-				if err := st.Update(common.FromHex(kv.K), []byte(kv.V)); err != nil {
+				if err := st.TryUpdate(common.FromHex(kv.K), []byte(kv.V)); err != nil {
 					t.Fatal(err)
 				}
 			}
-
 			expected := common.HexToHash(test[l-1].H)
 			if h := st.Hash(); h != expected {
 				t.Errorf("%d(%d): root hash mismatch: %x, expected %x", i, l, h, expected)
@@ -192,13 +188,13 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 
 func TestSizeBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 
 	leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
 
-	_ = nt.Update(leaf, value)
-	_ = st.Update(leaf, value)
+	nt.TryUpdate(leaf, value)
+	st.TryUpdate(leaf, value)
 
 	if nt.Hash() != st.Hash() {
 		t.Fatalf("error %x != %x", st.Hash(), nt.Hash())
@@ -207,7 +203,7 @@ func TestSizeBug(t *testing.T) {
 
 func TestEmptyBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -222,8 +218,8 @@ func TestEmptyBug(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		nt.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+		st.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -233,7 +229,7 @@ func TestEmptyBug(t *testing.T) {
 
 func TestValLength56(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -245,8 +241,8 @@ func TestValLength56(t *testing.T) {
 	}
 
 	for _, kv := range kvs {
-		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		nt.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+		st.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
 
 	if nt.Hash() != st.Hash() {
@@ -258,7 +254,7 @@ func TestValLength56(t *testing.T) {
 // which causes a lot of node-within-node. This case was found via fuzzing.
 func TestUpdateSmallNodes(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	kvs := []struct {
 		K string
 		V string
@@ -266,12 +262,10 @@ func TestUpdateSmallNodes(t *testing.T) {
 		{"63303030", "3041"}, // stacktrie.Update
 		{"65", "3000"},       // stacktrie.Update
 	}
-
 	for _, kv := range kvs {
-		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		nt.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+		st.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
-
 	if nt.Hash() != st.Hash() {
 		t.Fatalf("error %x != %x", st.Hash(), nt.Hash())
 	}
@@ -287,9 +281,8 @@ func TestUpdateSmallNodes(t *testing.T) {
 // This case was found via fuzzing.
 func TestUpdateVariableKeys(t *testing.T) {
 	t.SkipNow()
-
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	kvs := []struct {
 		K string
 		V string
@@ -297,12 +290,10 @@ func TestUpdateVariableKeys(t *testing.T) {
 		{"0x33303534636532393561313031676174", "303030"},
 		{"0x3330353463653239356131303167617430", "313131"},
 	}
-
 	for _, kv := range kvs {
-		_ = nt.Update(common.FromHex(kv.K), common.FromHex(kv.V))
-		_ = st.Update(common.FromHex(kv.K), common.FromHex(kv.V))
+		nt.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
+		st.TryUpdate(common.FromHex(kv.K), common.FromHex(kv.V))
 	}
-
 	if nt.Hash() != st.Hash() {
 		t.Fatalf("error %x != %x", st.Hash(), nt.Hash())
 	}
@@ -318,21 +309,17 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		value := make([]byte, 1, 100)
 		value[0] = 0x2
 		want := common.CopyBytes(value)
-		_ = st.Update([]byte{0x01}, value)
+		st.TryUpdate([]byte{0x01}, value)
 		st.Hash()
-
 		if have := value; !bytes.Equal(have, want) {
 			t.Fatalf("tiny trie: have %#x want %#x", have, want)
 		}
-
 		st = NewStackTrie(nil)
 	}
 	// Test with a larger trie
 	keyB := big.NewInt(1)
 	keyDelta := big.NewInt(1)
-
 	var vals [][]byte
-
 	getValue := func(i int) []byte {
 		if i%2 == 0 { // large
 			return crypto.Keccak256(big.NewInt(int64(i)).Bytes())
@@ -340,17 +327,15 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 			return big.NewInt(int64(i)).Bytes()
 		}
 	}
-
 	for i := 0; i < 1000; i++ {
 		key := common.BigToHash(keyB)
 		value := getValue(i)
-		_ = st.Update(key.Bytes(), value)
+		st.TryUpdate(key.Bytes(), value)
 		vals = append(vals, value)
 		keyB = keyB.Add(keyB, keyDelta)
 		keyDelta.Add(keyDelta, common.Big1)
 	}
 	st.Hash()
-
 	for i := 0; i < 1000; i++ {
 		want := getValue(i)
 
@@ -358,6 +343,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		if !bytes.Equal(have, want) {
 			t.Fatalf("item %d, have %#x want %#x", i, have, want)
 		}
+
 	}
 }
 
@@ -366,13 +352,12 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 func TestStacktrieSerialization(t *testing.T) {
 	var (
 		st       = NewStackTrie(nil)
-		nt       = NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+		nt, _    = New(common.Hash{}, NewDatabase(memorydb.New()))
 		keyB     = big.NewInt(1)
 		keyDelta = big.NewInt(1)
 		vals     [][]byte
 		keys     [][]byte
 	)
-
 	getValue := func(i int) []byte {
 		if i%2 == 0 { // large
 			return crypto.Keccak256(big.NewInt(int64(i)).Bytes())
@@ -386,9 +371,8 @@ func TestStacktrieSerialization(t *testing.T) {
 		keyB = keyB.Add(keyB, keyDelta)
 		keyDelta.Add(keyDelta, common.Big1)
 	}
-
 	for i, k := range keys {
-		_ = nt.Update(k, common.CopyBytes(vals[i]))
+		nt.TryUpdate(k, common.CopyBytes(vals[i]))
 	}
 
 	for i, k := range keys {
@@ -396,16 +380,13 @@ func TestStacktrieSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		newSt, err := NewFromBinary(blob, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		st = newSt
-		_ = st.Update(k, common.CopyBytes(vals[i]))
+		st.TryUpdate(k, common.CopyBytes(vals[i]))
 	}
-
 	if have, want := st.Hash(), nt.Hash(); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}

@@ -50,7 +50,6 @@ func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
-
 		if newMatch == oldMatch {
 			return
 		}
@@ -66,15 +65,12 @@ func NewQueueIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags
 				if qn.ID() == id {
 					copy(qi.queue[i:len(qi.queue)-1], qi.queue[i+1:])
 					qi.queue = qi.queue[:len(qi.queue)-1]
-
 					break
 				}
 			}
 		}
-
 		qi.cond.Signal()
 	})
-
 	return qi
 }
 
@@ -85,20 +81,16 @@ func (qi *QueueIterator) Next() bool {
 		if qi.waitCallback != nil {
 			qi.waitCallback(true)
 		}
-
 		for !qi.closed && len(qi.queue) == 0 {
 			qi.cond.Wait()
 		}
-
 		if qi.waitCallback != nil {
 			qi.waitCallback(false)
 		}
 	}
-
 	if qi.closed {
 		qi.nextNode = nil
 		qi.lock.Unlock()
-
 		return false
 	}
 	// Move to the next node in queue.
@@ -111,7 +103,6 @@ func (qi *QueueIterator) Next() bool {
 		qi.queue = qi.queue[:len(qi.queue)-1]
 	}
 	qi.lock.Unlock()
-
 	return true
 }
 

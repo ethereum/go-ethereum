@@ -40,18 +40,14 @@ func hexToCompact(hex []byte) []byte {
 		terminator = 1
 		hex = hex[:len(hex)-1]
 	}
-
 	buf := make([]byte, len(hex)/2+1)
 	buf[0] = terminator << 5 // the flag byte
-
 	if len(hex)&1 == 1 {
 		buf[0] |= 1 << 4 // odd flag
 		buf[0] |= hex[0] // first nibble is contained in the first byte
 		hex = hex[1:]
 	}
-
 	decodeNibbles(hex, buf[1:])
-
 	return buf
 }
 
@@ -67,25 +63,20 @@ func hexToCompactInPlace(hex []byte) int {
 		firstByte = 1 << 5
 		hexLen-- // last part was the terminator, ignore that
 	}
-
 	var (
 		binLen = hexLen/2 + 1
 		ni     = 0 // index in hex
 		bi     = 1 // index in bin (compact)
 	)
-
 	if hexLen&1 == 1 {
 		firstByte |= 1 << 4 // odd flag
 		firstByte |= hex[0] // first nibble is contained in the first byte
 		ni++
 	}
-
 	for ; ni < hexLen; bi, ni = bi+1, ni+2 {
 		hex[bi] = hex[ni]<<4 | hex[ni+1]
 	}
-
 	hex[0] = firstByte
-
 	return binLen
 }
 
@@ -93,7 +84,6 @@ func compactToHex(compact []byte) []byte {
 	if len(compact) == 0 {
 		return compact
 	}
-
 	base := keybytesToHex(compact)
 	// delete terminator flag
 	if base[0] < 2 {
@@ -101,21 +91,17 @@ func compactToHex(compact []byte) []byte {
 	}
 	// apply odd flag
 	chop := 2 - base[0]&1
-
 	return base[chop:]
 }
 
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
-
 	var nibbles = make([]byte, l)
 	for i, b := range str {
 		nibbles[i*2] = b / 16
 		nibbles[i*2+1] = b % 16
 	}
-
 	nibbles[l-1] = 16
-
 	return nibbles
 }
 
@@ -125,14 +111,11 @@ func hexToKeybytes(hex []byte) []byte {
 	if hasTerm(hex) {
 		hex = hex[:len(hex)-1]
 	}
-
 	if len(hex)&1 != 0 {
 		panic("can't convert hex key of odd length")
 	}
-
 	key := make([]byte, len(hex)/2)
 	decodeNibbles(hex, key)
-
 	return key
 }
 
@@ -148,13 +131,11 @@ func prefixLen(a, b []byte) int {
 	if len(b) < length {
 		length = len(b)
 	}
-
 	for ; i < length; i++ {
 		if a[i] != b[i] {
 			break
 		}
 	}
-
 	return i
 }
 

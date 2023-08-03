@@ -19,7 +19,6 @@
 package simulations
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -28,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -66,7 +64,6 @@ func TestMocker(t *testing.T) {
 
 	//check the list is at least 1 in size
 	var mockerlist []string
-
 	err = json.NewDecoder(resp.Body).Decode(&mockerlist)
 	if err != nil {
 		t.Fatalf("Error decoding JSON mockerlist: %s", err)
@@ -77,13 +74,10 @@ func TestMocker(t *testing.T) {
 	}
 
 	nodeCount := 10
-
 	var wg sync.WaitGroup
 
 	events := make(chan *Event, 10)
-
 	var opts SubscribeOpts
-
 	sub, err := client.SubscribeNetwork(events, opts)
 	defer sub.Unsubscribe()
 
@@ -92,9 +86,7 @@ func TestMocker(t *testing.T) {
 	nodemap := make(map[enode.ID]bool)
 	nodesComplete := false
 	connCount := 0
-
 	wg.Add(1)
-
 	go func() {
 		defer wg.Done()
 
@@ -132,9 +124,6 @@ func TestMocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not start mocker: %s", err)
 	}
-
-	resp.Body.Close()
-
 	if resp.StatusCode != 200 {
 		t.Fatalf("Invalid Status Code received for starting mocker, expected 200, got %d", resp.StatusCode)
 	}
@@ -156,30 +145,15 @@ func TestMocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not stop mocker: %s", err)
 	}
-
-	resp.Body.Close()
-
 	if resp.StatusCode != 200 {
 		t.Fatalf("Invalid Status Code received for stopping mocker, expected 200, got %d", resp.StatusCode)
 	}
 
 	//reset the network
-	cli := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	resetUrl := s.URL + "/reset"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, resetUrl, nil)
-
-	if err != nil {
-		log.Crit("Can't build request", "url", resetUrl, "err", err)
-	}
-
-	resp, err = cli.Do(req)
+	_, err = http.Post(s.URL+"/reset", "", nil)
 	if err != nil {
 		t.Fatalf("Could not reset network: %s", err)
 	}
-
-	resp.Body.Close()
 
 	//now the number of nodes in the network should be zero
 	nodesInfo, err = client.GetNodes()

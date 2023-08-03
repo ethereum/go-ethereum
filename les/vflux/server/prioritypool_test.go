@@ -59,33 +59,26 @@ func TestPriorityPool(t *testing.T) {
 			c.cap = newValue.(uint64)
 		}
 	})
-
 	pp := newPriorityPool(ns, setup, clock, testMinCap, 0, testCapacityStepDiv, testCapacityStepDiv)
 	ns.Start()
 	pp.SetLimits(100, 1000000)
-
 	clients := make([]*ppTestClient, 100)
 	raise := func(c *ppTestClient) {
 		for {
 			var ok bool
-
 			ns.Operation(func() {
 				newCap := c.cap + c.cap/testCapacityStepDiv
 				ok = pp.requestCapacity(c.node, newCap, newCap, 0) == newCap
 			})
-
 			if !ok {
 				return
 			}
 		}
 	}
-
 	var sumBalance uint64
-
 	check := func(c *ppTestClient) {
 		expCap := 1000000 * c.balance / sumBalance
 		capTol := expCap / testCapacityToleranceDiv
-
 		if c.cap < expCap-capTol || c.cap > expCap+capTol {
 			t.Errorf("Wrong node capacity (expected %d, got %d)", expCap, c.cap)
 		}
@@ -112,7 +105,6 @@ func TestPriorityPool(t *testing.T) {
 		sumBalance += c.balance - oldBalance
 		pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
 		pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
-
 		if c.balance > oldBalance {
 			raise(c)
 		} else {
@@ -124,7 +116,6 @@ func TestPriorityPool(t *testing.T) {
 		for _, c := range clients {
 			check(c)
 		}
-
 		if count%10 == 0 {
 			// test available capacity calculation with capacity curve
 			c = clients[rand.Intn(len(clients))]
@@ -136,38 +127,29 @@ func TestPriorityPool(t *testing.T) {
 			expCap := curve.maxCapacity(func(cap uint64) int64 {
 				return int64(c.balance / cap)
 			})
-
 			var ok bool
-
 			expFail := expCap + 10
 			if expFail < testMinCap {
 				expFail = testMinCap
 			}
-
 			ns.Operation(func() {
 				ok = pp.requestCapacity(c.node, expFail, expFail, 0) == expFail
 			})
-
 			if ok {
 				t.Errorf("Request for more than expected available capacity succeeded")
 			}
-
 			if expCap >= testMinCap {
 				ns.Operation(func() {
 					ok = pp.requestCapacity(c.node, expCap, expCap, 0) == expCap
 				})
-
 				if !ok {
 					t.Errorf("Request for expected available capacity failed")
 				}
 			}
-
 			c.balance -= add
 			sumBalance -= add
-
 			pp.ns.SetState(c.node, setup.updateFlag, nodestate.Flags{}, 0)
 			pp.ns.SetState(c.node, nodestate.Flags{}, setup.updateFlag, 0)
-
 			for _, c := range clients {
 				raise(c)
 			}
@@ -186,7 +168,6 @@ func TestCapacityCurve(t *testing.T) {
 	pp := newPriorityPool(ns, setup, clock, 400000, 0, 2, 2)
 	ns.Start()
 	pp.SetLimits(10, 10000000)
-
 	clients := make([]*ppTestClient, 10)
 
 	for i := range clients {
@@ -208,9 +189,7 @@ func TestCapacityCurve(t *testing.T) {
 		cap := curve.maxCapacity(func(cap uint64) int64 {
 			return int64(balance / cap)
 		})
-
 		var fail bool
-
 		if cap == 0 || expCap == 0 {
 			fail = cap != expCap
 		} else {
@@ -218,7 +197,6 @@ func TestCapacityCurve(t *testing.T) {
 			expPri := balance / expCap
 			fail = pri != expPri && pri != expPri+1
 		}
-
 		if fail {
 			t.Errorf("Incorrect capacity for %d balance (got %d, expected %d)", balance, cap, expCap)
 		}

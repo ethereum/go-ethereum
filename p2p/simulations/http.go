@@ -21,10 +21,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -102,23 +101,18 @@ type SubscribeOpts struct {
 // nodes and connections and filtering message events
 func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event.Subscription, error) {
 	url := fmt.Sprintf("%s/events?current=%t&filter=%s", c.URL, opts.Current, opts.Filter)
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	req.Header.Set("Accept", "text/event-stream")
-
 	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-
 	if res.StatusCode != http.StatusOK {
-		response, _ := io.ReadAll(res.Body)
+		response, _ := ioutil.ReadAll(res.Body)
 		res.Body.Close()
-
 		return nil, fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
 
@@ -132,7 +126,6 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 		// always reading from the stop channel
 		lines := make(chan string)
 		errC := make(chan error, 1)
-
 		go func() {
 			s := bufio.NewScanner(res.Body)
 			for s.Scan() {
@@ -153,10 +146,8 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 				if !strings.HasPrefix(line, "data:") {
 					continue
 				}
-
 				data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 				event := &Event{}
-
 				if err := json.Unmarshal([]byte(data), event); err != nil {
 					return fmt.Errorf("error decoding SSE event: %s", err)
 				}
@@ -223,60 +214,51 @@ func (c *Client) RPCClient(ctx context.Context, nodeID string) (*rpc.Client, err
 // Get performs a HTTP GET request decoding the resulting JSON response
 // into "out"
 func (c *Client) Get(path string, out interface{}) error {
-	return c.Send(http.MethodGet, path, nil, out)
+	return c.Send("GET", path, nil, out)
 }
 
 // Post performs a HTTP POST request sending "in" as the JSON body and
 // decoding the resulting JSON response into "out"
 func (c *Client) Post(path string, in, out interface{}) error {
-	return c.Send(http.MethodPost, path, in, out)
+	return c.Send("POST", path, in, out)
 }
 
 // Delete performs a HTTP DELETE request
 func (c *Client) Delete(path string) error {
-	return c.Send(http.MethodDelete, path, nil, nil)
+	return c.Send("DELETE", path, nil, nil)
 }
 
 // Send performs a HTTP request, sending "in" as the JSON request body and
 // decoding the JSON response into "out"
 func (c *Client) Send(method, path string, in, out interface{}) error {
 	var body []byte
-
 	if in != nil {
 		var err error
-
 		body, err = json.Marshal(in)
 		if err != nil {
 			return err
 		}
 	}
-
 	req, err := http.NewRequest(method, c.URL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-
 	res, err := c.client.Do(req)
 	if err != nil {
 		return err
 	}
-
 	defer res.Body.Close()
-
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
-		response, _ := io.ReadAll(res.Body)
+		response, _ := ioutil.ReadAll(res.Body)
 		return fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
-
 	if out != nil {
 		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -347,26 +329,21 @@ func (s *Server) StopNetwork(w http.ResponseWriter, req *http.Request) {
 func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	s.mockerMtx.Lock()
 	defer s.mockerMtx.Unlock()
-
 	if s.mockerStop != nil {
 		http.Error(w, "mocker already running", http.StatusInternalServerError)
 		return
 	}
-
 	mockerType := req.FormValue("mocker-type")
 	mockerFn := LookupMocker(mockerType)
-
 	if mockerFn == nil {
-		http.Error(w, fmt.Sprintf("unknown mocker type %q", html.EscapeString(mockerType)), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown mocker type %q", mockerType), http.StatusBadRequest)
 		return
 	}
-
 	nodeCount, err := strconv.Atoi(req.FormValue("node-count"))
 	if err != nil {
 		http.Error(w, "invalid node-count provided", http.StatusBadRequest)
 		return
 	}
-
 	s.mockerStop = make(chan struct{})
 	go mockerFn(s.network, s.mockerStop, nodeCount)
 
@@ -377,20 +354,19 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 func (s *Server) StopMocker(w http.ResponseWriter, req *http.Request) {
 	s.mockerMtx.Lock()
 	defer s.mockerMtx.Unlock()
-
 	if s.mockerStop == nil {
 		http.Error(w, "stop channel not initialized", http.StatusInternalServerError)
 		return
 	}
-
 	close(s.mockerStop)
 	s.mockerStop = nil
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetMockers returns a list of available mockers
+// GetMockerList returns a list of available mockers
 func (s *Server) GetMockers(w http.ResponseWriter, req *http.Request) {
+
 	list := GetMockerList()
 	s.JSON(w, http.StatusOK, list)
 }
@@ -405,7 +381,6 @@ func (s *Server) ResetNetwork(w http.ResponseWriter, req *http.Request) {
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	events := make(chan *Event)
-
 	sub := s.network.events.Subscribe(events)
 	defer sub.Unsubscribe()
 
@@ -417,7 +392,6 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	write := func(event, data string) {
 		fmt.Fprintf(w, "event: %s\n", event)
 		fmt.Fprintf(w, "data: %s\n\n", data)
-
 		if fw, ok := w.(http.Flusher); ok {
 			fw.Flush()
 		}
@@ -427,9 +401,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			return err
 		}
-
 		write("network", string(data))
-
 		return nil
 	}
 	writeErr := func(err error) {
@@ -438,10 +410,8 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 
 	// check if filtering has been requested
 	var filters MsgFilters
-
 	if filterParam := req.URL.Query().Get("filter"); filterParam != "" {
 		var err error
-
 		filters, err = NewMsgFilters(filterParam)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -452,7 +422,6 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "\n\n")
-
 	if fw, ok := w.(http.Flusher); ok {
 		fw.Flush()
 	}
@@ -464,7 +433,6 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			writeErr(err)
 			return
 		}
-
 		for _, node := range snap.Nodes {
 			event := NewEvent(&node.Node)
 			if err := writeEvent(event); err != nil {
@@ -472,10 +440,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-
 		for _, conn := range snap.Conns {
-			conn := conn
-
 			event := NewEvent(&conn)
 			if err := writeEvent(event); err != nil {
 				writeErr(err)
@@ -485,7 +450,6 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	}
 
 	clientGone := req.Context().Done()
-
 	for {
 		select {
 		case event := <-events:
@@ -493,7 +457,6 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			if event.Msg != nil && !filters.Match(event.Msg) {
 				continue
 			}
-
 			if err := writeEvent(event); err != nil {
 				writeErr(err)
 				return
@@ -514,30 +477,24 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 // A message code of '*' or '-1' is considered a wildcard and matches any code.
 func NewMsgFilters(filterParam string) (MsgFilters, error) {
 	filters := make(MsgFilters)
-
 	for _, filter := range strings.Split(filterParam, "-") {
 		protoCodes := strings.SplitN(filter, ":", 2)
 		if len(protoCodes) != 2 || protoCodes[0] == "" || protoCodes[1] == "" {
 			return nil, fmt.Errorf("invalid message filter: %s", filter)
 		}
-
 		proto := protoCodes[0]
-
 		for _, code := range strings.Split(protoCodes[1], ",") {
 			if code == "*" || code == "-1" {
 				filters[MsgFilter{Proto: proto, Code: -1}] = struct{}{}
 				continue
 			}
-
 			n, err := strconv.ParseUint(code, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("invalid message code: %s", code)
 			}
-
 			filters[MsgFilter{Proto: proto, Code: int64(n)}] = struct{}{}
 		}
 	}
-
 	return filters, nil
 }
 
@@ -602,7 +559,7 @@ func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
 	config := &adapters.NodeConfig{}
 
 	err := json.NewDecoder(req.Body).Decode(config)
-	if err != nil && !errors.Is(err, io.EOF) {
+	if err != nil && err != io.EOF {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -703,9 +660,7 @@ func (s *Server) NodeRPC(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-
 	defer conn.Close()
-
 	node := req.Context().Value("node").(*Node)
 	node.ServeRPC(conn)
 }
@@ -754,37 +709,31 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 
 		if id := params.ByName("nodeid"); id != "" {
 			var nodeID enode.ID
-
 			var node *Node
 			if nodeID.UnmarshalText([]byte(id)) == nil {
 				node = s.network.GetNode(nodeID)
 			} else {
 				node = s.network.GetNodeByName(id)
 			}
-
 			if node == nil {
 				http.NotFound(w, req)
 				return
 			}
-
 			ctx = context.WithValue(ctx, "node", node)
 		}
 
 		if id := params.ByName("peerid"); id != "" {
 			var peerID enode.ID
-
 			var peer *Node
 			if peerID.UnmarshalText([]byte(id)) == nil {
 				peer = s.network.GetNode(peerID)
 			} else {
 				peer = s.network.GetNodeByName(id)
 			}
-
 			if peer == nil {
 				http.NotFound(w, req)
 				return
 			}
-
 			ctx = context.WithValue(ctx, "peer", peer)
 		}
 

@@ -25,9 +25,7 @@ import (
 	"runtime"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
-	"golang.org/x/crypto/sha3"
-
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -37,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 // Ethash proof-of-work protocol constants.
@@ -46,11 +45,6 @@ var (
 	ConstantinopleBlockReward     = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
-
-	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
-	// It offsets the bomb a total of 11.4M blocks.
-	// Specification EIP-5133: https://eips.ethereum.org/EIPS/eip-5133
-	calcDifficultyEip5133 = makeDifficultyCalculator(big.NewInt(11_400_000))
 
 	// calcDifficultyEip4345 is the difficulty adjustment algorithm as specified by EIP 4345.
 	// It offsets the bomb a total of 10.7M blocks.
@@ -114,7 +108,6 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
 	}
-
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
@@ -133,7 +126,6 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		for i := 0; i < len(headers); i++ {
 			results <- nil
 		}
-
 		return abort, results
 	}
 
@@ -151,7 +143,6 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		abort   = make(chan struct{})
 		unixNow = time.Now().Unix()
 	)
-
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range inputs {
@@ -162,16 +153,13 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 	}
 
 	errorsOut := make(chan error, len(headers))
-
 	go func() {
 		defer close(inputs)
-
 		var (
 			in, out = 0, 0
 			checked = make([]bool, len(headers))
 			inputs  = inputs
 		)
-
 		for {
 			select {
 			case inputs <- in:
@@ -182,7 +170,6 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			case index := <-done:
 				for checked[index] = true; checked[out]; out++ {
 					errorsOut <- errors[out]
-
 					if out == len(headers)-1 {
 						return
 					}
@@ -192,7 +179,6 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			}
 		}
 	}()
-
 	return abort, errorsOut
 }
 
@@ -203,11 +189,9 @@ func (ethash *Ethash) verifyHeaderWorker(chain consensus.ChainHeaderReader, head
 	} else if headers[index-1].Hash() == headers[index].ParentHash {
 		parent = headers[index-1]
 	}
-
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-
 	return ethash.verifyHeader(chain, headers[index], parent, false, seals[index], unixNow)
 }
 
@@ -222,12 +206,11 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if len(block.Uncles()) > maxUncles {
 		return errTooManyUncles
 	}
-
 	if len(block.Uncles()) == 0 {
 		return nil
 	}
 	// Gather the set of past uncles and ancestors
-	uncles, ancestors := mapset.NewSet[common.Hash](), make(map[common.Hash]*types.Header)
+	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
 
 	number, parent := block.NumberU64()-1, block.ParentHash()
 	for i := 0; i < 7; i++ {
@@ -235,7 +218,6 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		if ancestorHeader == nil {
 			break
 		}
-
 		ancestors[parent] = ancestorHeader
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash != types.EmptyUncleHash {
@@ -244,15 +226,12 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 			if ancestor == nil {
 				break
 			}
-
 			for _, uncle := range ancestor.Uncles() {
 				uncles.Add(uncle.Hash())
 			}
 		}
-
 		parent, number = ancestorHeader.ParentHash, number-1
 	}
-
 	ancestors[block.Hash()] = block.Header()
 	uncles.Add(block.Hash())
 
@@ -263,23 +242,19 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		if uncles.Contains(hash) {
 			return errDuplicateUncle
 		}
-
 		uncles.Add(hash)
 
 		// Make sure the uncle has a valid ancestry
 		if ancestors[hash] != nil {
 			return errUncleIsAncestor
 		}
-
 		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == block.ParentHash() {
 			return errDanglingUncle
 		}
-
 		if err := ethash.verifyHeader(chain, uncle, ancestors[uncle.ParentHash], true, true, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -297,7 +272,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return consensus.ErrFutureBlock
 		}
 	}
-
 	if header.Time <= parent.Time {
 		return errOlderBlockTime
 	}
@@ -321,7 +295,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
 		}
-
 		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 			return err
 		}
@@ -333,14 +306,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// TODO marcello double check
-	if chain.Config().IsShanghai(header.Time) {
-		return fmt.Errorf("ethash does not support shanghai fork")
-	}
-
-	if chain.Config().IsCancun(header.Time) {
-		return fmt.Errorf("ethash does not support cancun fork")
-	}
 	// Verify the engine specific seal securing the block
 	if seal {
 		if err := ethash.verifySeal(chain, header, false); err != nil {
@@ -351,7 +316,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
 		return err
 	}
-
+	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -367,10 +334,7 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 // given the parent block's time and difficulty.
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
-
 	switch {
-	case config.IsGrayGlacier(next):
-		return calcDifficultyEip5133(time, parent)
 	case config.IsArrowGlacier(next):
 		return calcDifficultyEip4345(time, parent)
 	case config.IsLondon(next):
@@ -405,13 +369,13 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 	// Note, the calculations below looks at the parent number, which is 1 below
 	// the block number. Thus we remove one from the delay given
 	bombDelayFromParent := new(big.Int).Sub(bombDelay, big1)
-
 	return func(time uint64, parent *types.Header) *big.Int {
 		// https://github.com/ethereum/EIPs/issues/100.
 		// algorithm:
 		// diff = (parent_diff +
 		//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 		//        ) + 2^(periodCount - 2)
+
 		bigTime := new(big.Int).SetUint64(time)
 		bigParentTime := new(big.Int).SetUint64(parent.Time)
 
@@ -422,7 +386,6 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9
 		x.Sub(bigTime, bigParentTime)
 		x.Div(x, big9)
-
 		if parent.UncleHash == types.EmptyUncleHash {
 			x.Sub(big1, x)
 		} else {
@@ -458,7 +421,6 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 			y.Exp(big2, y, nil)
 			x.Add(x, y)
 		}
-
 		return x
 	}
 }
@@ -472,6 +434,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	// diff = (parent_diff +
 	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
 	//        ) + 2^(periodCount - 2)
+
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parent.Time)
 
@@ -508,7 +471,6 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 		y.Exp(big2, y, nil)
 		x.Add(x, y)
 	}
-
 	return x
 }
 
@@ -529,14 +491,12 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	} else {
 		diff.Sub(parent.Difficulty, adjust)
 	}
-
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
 		diff.Set(params.MinimumDifficulty)
 	}
 
 	periodCount := new(big.Int).Add(parent.Number, big1)
 	periodCount.Div(periodCount, expDiffPeriod)
-
 	if periodCount.Cmp(big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
 		expDiff := periodCount.Sub(periodCount, big2)
@@ -544,13 +504,12 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		diff.Add(diff, expDiff)
 		diff = math.BigMax(diff, params.MinimumDifficulty)
 	}
-
 	return diff
 }
 
 // Exported for fuzzing
-var FrontierDifficultyCalculator = calcDifficultyFrontier
-var HomesteadDifficultyCalculator = calcDifficultyHomestead
+var FrontierDifficultyCalulator = calcDifficultyFrontier
+var HomesteadDifficultyCalulator = calcDifficultyHomestead
 var DynamicDifficultyCalculator = makeDifficultyCalculator
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
@@ -560,11 +519,9 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	// If we're running a fake PoW, accept any seal as valid
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		time.Sleep(ethash.fakeDelay)
-
 		if ethash.fakeFail == header.Number.Uint64() {
 			return errInvalidPoW
 		}
-
 		return nil
 	}
 	// If we're running a shared PoW, delegate verification to it
@@ -604,7 +561,6 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		if ethash.config.PowMode == ModeTest {
 			size = 32 * 1024
 		}
-
 		digest, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
 
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
@@ -615,12 +571,10 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	if !bytes.Equal(header.MixDigest[:], digest) {
 		return errInvalidMixDigest
 	}
-
 	target := new(big.Int).Div(two256, header.Difficulty)
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
-
 	return nil
 }
 
@@ -631,29 +585,23 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-
 	header.Difficulty = ethash.CalcDifficulty(chain, header.Time, parent)
-
 	return nil
 }
 
-// Finalize implements consensus.Engine, accumulating the block and uncle rewards.
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
-	// Accumulate any block and uncle rewards
+// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
+// setting the final state on the header
+func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (ethash *Ethash) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
-	if len(withdrawals) > 0 {
-		return nil, errors.New("ethash does not support withdrawals")
-	}
+func (ethash *Ethash) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
-	ethash.Finalize(chain, header, state, txs, uncles, nil)
-
-	// Assign the final state root to header.
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	ethash.Finalize(chain, header, state, txs, uncles)
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
@@ -681,14 +629,8 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
-
-	if header.WithdrawalsHash != nil {
-		panic("withdrawal hash set on ethash")
-	}
-
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
-
 	return hash
 }
 
@@ -707,13 +649,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsByzantium(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
-
 	if config.IsConstantinople(header.Number) {
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
-
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big8)
@@ -725,6 +665,5 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-
 	state.AddBalance(header.Coinbase, reward)
 }

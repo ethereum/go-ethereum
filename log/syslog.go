@@ -26,10 +26,8 @@ func sharedSyslog(fmtr Format, sysWr *syslog.Writer, err error) (Handler, error)
 	if err != nil {
 		return nil, err
 	}
-
 	h := FuncHandler(func(r *Record) error {
 		var syslogFn = sysWr.Info
-
 		switch r.Lvl {
 		case LvlCrit:
 			syslogFn = sysWr.Crit
@@ -46,10 +44,8 @@ func sharedSyslog(fmtr Format, sysWr *syslog.Writer, err error) (Handler, error)
 		}
 
 		s := strings.TrimSpace(string(fmtr.Format(r)))
-
 		return syslogFn(s)
 	}, LvlTrace)
-
 	return LazyHandler(&closingHandler{sysWr, h}), nil
 }
 

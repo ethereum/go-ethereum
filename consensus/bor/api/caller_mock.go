@@ -30,7 +30,6 @@ type MockCallerMockRecorder struct {
 func NewMockCaller(ctrl *gomock.Controller) *MockCaller {
 	mock := &MockCaller{ctrl: ctrl}
 	mock.recorder = &MockCallerMockRecorder{mock}
-
 	return mock
 }
 
@@ -45,7 +44,6 @@ func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg
 	ret := m.ctrl.Call(m, "Call", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(hexutil.Bytes)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
@@ -61,7 +59,6 @@ func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.Transaction
 	ret := m.ctrl.Call(m, "CallWithState", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(hexutil.Bytes)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 

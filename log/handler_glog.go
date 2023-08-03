@@ -92,7 +92,6 @@ func (h *GlogHandler) Verbosity(level Lvl) {
 //	 sets V to 3 in all files of any packages whose import path contains "foo"
 func (h *GlogHandler) Vmodule(ruleset string) error {
 	var filter []pattern
-
 	for _, rule := range strings.Split(ruleset, ",") {
 		// Empty strings such as from a trailing comma can be ignored
 		if len(rule) == 0 {
@@ -103,10 +102,8 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if len(parts) != 2 {
 			return errVmoduleSyntax
 		}
-
 		parts[0] = strings.TrimSpace(parts[0])
 		parts[1] = strings.TrimSpace(parts[1])
-
 		if len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return errVmoduleSyntax
 		}
@@ -115,13 +112,11 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if err != nil {
 			return errVmoduleSyntax
 		}
-
 		if level <= 0 {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// Compile the rule pattern into a regular expression
 		matcher := ".*"
-
 		for _, comp := range strings.Split(parts[0], "/") {
 			if comp == "*" {
 				matcher += "(/.*)?"
@@ -129,11 +124,9 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 				matcher += "/" + regexp.QuoteMeta(comp)
 			}
 		}
-
 		if !strings.HasSuffix(parts[0], ".go") {
 			matcher += "/[^/]+\\.go"
 		}
-
 		matcher = matcher + "$"
 
 		re, _ := regexp.Compile(matcher)
@@ -161,10 +154,8 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	if len(parts) != 2 {
 		return errTraceSyntax
 	}
-
 	parts[0] = strings.TrimSpace(parts[0])
 	parts[1] = strings.TrimSpace(parts[1])
-
 	if len(parts[0]) == 0 || len(parts[1]) == 0 {
 		return errTraceSyntax
 	}
@@ -172,7 +163,6 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	if !strings.HasSuffix(parts[0], ".go") {
 		return errTraceSyntax
 	}
-
 	if _, err := strconv.Atoi(parts[1]); err != nil {
 		return errTraceSyntax
 	}
@@ -235,11 +225,9 @@ func (h *GlogHandler) Log(r *Record) error {
 		}
 		h.lock.Unlock()
 	}
-
 	if lvl >= r.Lvl {
 		return h.origin.Log(r)
 	}
-
 	return nil
 }
 

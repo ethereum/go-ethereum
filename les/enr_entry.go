@@ -47,12 +47,10 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 	// Enable DNS discovery.
 	if len(eth.config.EthDiscoveryURLs) != 0 {
 		client := dnsdisc.NewClient(dnsdisc.Config{})
-
 		dns, err := client.NewIterator(eth.config.EthDiscoveryURLs...)
 		if err != nil {
 			return nil, err
 		}
-
 		it.AddSource(dns)
 	}
 
@@ -63,15 +61,12 @@ func (eth *LightEthereum) setupDiscovery() (enode.Iterator, error) {
 
 	forkFilter := forkid.NewFilter(eth.blockchain)
 	iterator := enode.Filter(it, func(n *enode.Node) bool { return nodeIsServer(forkFilter, n) })
-
 	return iterator, nil
 }
 
 // nodeIsServer checks whether n is an LES server node.
 func nodeIsServer(forkFilter forkid.Filter, n *enode.Node) bool {
 	var les lesEntry
-
 	var eth ethEntry
-
 	return n.Load(&les) == nil && n.Load(&eth) == nil && forkFilter(eth.ForkID) == nil
 }

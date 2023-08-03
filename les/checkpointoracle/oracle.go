@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -65,12 +65,10 @@ func (oracle *CheckpointOracle) Start(backend bind.ContractBackend) {
 		log.Error("Oracle contract binding failed", "err", err)
 		return
 	}
-
 	if !atomic.CompareAndSwapInt32(&oracle.running, 0, 1) {
 		log.Error("Already bound and listening to registrar")
 		return
 	}
-
 	oracle.contract = contract
 }
 
@@ -89,7 +87,6 @@ func (oracle *CheckpointOracle) Contract() *checkpointoracle.CheckpointOracle {
 func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, uint64) {
 	oracle.checkMu.Lock()
 	defer oracle.checkMu.Unlock()
-
 	if time.Since(oracle.lastCheckTime) < 1*time.Minute {
 		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
@@ -97,14 +94,11 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	// Retrieve the latest checkpoint from the contract, abort if empty
 	latest, hash, height, err := oracle.contract.Contract().GetLatestCheckpoint(nil)
 	oracle.lastCheckTime = time.Now()
-
 	if err != nil || (latest == 0 && hash == [32]byte{}) {
 		oracle.lastCheckPointHeight = 0
 		oracle.lastCheckPoint = nil
-
 		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
-
 	local := oracle.getLocal(latest)
 
 	// The following scenarios may occur:
@@ -117,10 +111,8 @@ func (oracle *CheckpointOracle) StableCheckpoint() (*params.TrustedCheckpoint, u
 	if local.HashEqual(hash) {
 		oracle.lastCheckPointHeight = height.Uint64()
 		oracle.lastCheckPoint = &local
-
 		return oracle.lastCheckPoint, oracle.lastCheckPointHeight
 	}
-
 	return nil, 0
 }
 
@@ -131,12 +123,10 @@ func (oracle *CheckpointOracle) VerifySigners(index uint64, hash [32]byte, signa
 	if len(signatures) < int(oracle.config.Threshold) {
 		return false, nil
 	}
-
 	var (
 		signers []common.Address
 		checked = make(map[common.Address]struct{})
 	)
-
 	for i := 0; i < len(signatures); i++ {
 		if len(signatures[i]) != 65 {
 			continue
@@ -155,20 +145,15 @@ func (oracle *CheckpointOracle) VerifySigners(index uint64, hash [32]byte, signa
 		binary.BigEndian.PutUint64(buf, index)
 		data := append([]byte{0x19, 0x00}, append(oracle.config.Address.Bytes(), append(buf, hash[:]...)...)...)
 		signatures[i][64] -= 27 // Transform V from 27/28 to 0/1 according to the yellow paper for verification.
-
 		pubkey, err := crypto.Ecrecover(crypto.Keccak256(data), signatures[i])
 		if err != nil {
 			return false, nil
 		}
-
 		var signer common.Address
-
 		copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
 		if _, exist := checked[signer]; exist {
 			continue
 		}
-
 		for _, s := range oracle.config.Signers {
 			if s == signer {
 				signers = append(signers, signer)
@@ -176,12 +161,10 @@ func (oracle *CheckpointOracle) VerifySigners(index uint64, hash [32]byte, signa
 			}
 		}
 	}
-
 	threshold := oracle.config.Threshold
 	if uint64(len(signers)) < threshold {
 		log.Warn("Not enough signers to approve checkpoint", "signers", len(signers), "threshold", threshold)
 		return false, nil
 	}
-
 	return true, signers
 }

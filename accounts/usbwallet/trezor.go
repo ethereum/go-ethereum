@@ -73,15 +73,12 @@ func (w *trezorDriver) Status() (string, error) {
 	if w.failure != nil {
 		return fmt.Sprintf("Failed: %v", w.failure), w.failure
 	}
-
 	if w.device == nil {
 		return "Closed", w.failure
 	}
-
 	if w.pinwait {
 		return fmt.Sprintf("Trezor v%d.%d.%d '%s' waiting for PIN", w.version[0], w.version[1], w.version[2], w.label), w.failure
 	}
-
 	return fmt.Sprintf("Trezor v%d.%d.%d '%s' online", w.version[0], w.version[1], w.version[2], w.label), w.failure
 }
 
@@ -110,14 +107,12 @@ func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 		if _, err := w.trezorExchange(&trezor.Initialize{}, features); err != nil {
 			return err
 		}
-
 		w.version = [3]uint32{features.GetMajorVersion(), features.GetMinorVersion(), features.GetPatchVersion()}
 		w.label = features.GetLabel()
 
 		// Do a manual ping, forcing the device to ask for its PIN and Passphrase
 		askPin := true
 		askPassphrase := true
-
 		res, err := w.trezorExchange(&trezor.Ping{PinProtection: &askPin, PassphraseProtection: &askPassphrase}, new(trezor.PinMatrixRequest), new(trezor.PassphraseRequest), new(trezor.Success))
 		if err != nil {
 			return err
@@ -130,7 +125,6 @@ func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 		case 1:
 			w.pinwait = false
 			w.passphrasewait = true
-
 			return ErrTrezorPassphraseNeeded
 		case 2:
 			return nil // responded with trezor.Success
@@ -140,12 +134,10 @@ func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 	if w.pinwait {
 		w.pinwait = false
 		res, err := w.trezorExchange(&trezor.PinMatrixAck{Pin: &passphrase}, new(trezor.Success), new(trezor.PassphraseRequest))
-
 		if err != nil {
 			w.failure = err
 			return err
 		}
-
 		if res == 1 {
 			w.passphrasewait = true
 			return ErrTrezorPassphraseNeeded
@@ -175,7 +167,6 @@ func (w *trezorDriver) Heartbeat() error {
 		w.failure = err
 		return err
 	}
-
 	return nil
 }
 
@@ -191,7 +182,6 @@ func (w *trezorDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 	if w.device == nil {
 		return common.Address{}, nil, accounts.ErrWalletClosed
 	}
-
 	return w.trezorSign(path, tx, chainID)
 }
 
@@ -214,7 +204,6 @@ func (w *trezorDriver) trezorDerive(derivationPath []uint32) (common.Address, er
 	if addr := address.GetAddressHex(); len(addr) > 0 { // Newer firmwares use hexadecimal formats
 		return common.HexToAddress(addr), nil
 	}
-
 	return common.Address{}, errors.New("missing derived address")
 }
 
@@ -233,20 +222,17 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		Value:      tx.Value().Bytes(),
 		DataLength: &length,
 	}
-
 	if to := tx.To(); to != nil {
 		// Non contract deploy, set recipient explicitly
 		hex := to.Hex()
 		request.ToHex = &hex     // Newer firmwares (old will ignore)
 		request.ToBin = (*to)[:] // Older firmwares (new will ignore)
 	}
-
 	if length > 1024 { // Send the data chunked if that was requested
 		request.DataInitialChunk, data = data[:1024], data[1024:]
 	} else {
 		request.DataInitialChunk, data = data, nil
 	}
-
 	if chainID != nil { // EIP-155 transaction, set chain ID explicitly (only 32 bit is supported!?)
 		id := uint32(chainID.Int64())
 		request.ChainId = &id
@@ -256,7 +242,6 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	if _, err := w.trezorExchange(request, response); err != nil {
 		return common.Address{}, nil, err
 	}
-
 	for response.DataLength != nil && int(*response.DataLength) <= len(data) {
 		chunk := data[:*response.DataLength]
 		data = data[*response.DataLength:]
@@ -269,7 +254,6 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	if len(response.GetSignatureR()) == 0 || len(response.GetSignatureS()) == 0 || response.GetSignatureV() == 0 {
 		return common.Address{}, nil, errors.New("reply lacks signature")
 	}
-
 	signature := append(append(response.GetSignatureR(), response.GetSignatureS()...), byte(response.GetSignatureV()))
 
 	// Create the correct signer and signature transform based on the chain ID
@@ -287,12 +271,10 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-
 	sender, err := types.Sender(signer, signed)
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-
 	return sender, signed, nil
 }
 
@@ -305,7 +287,6 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 	if err != nil {
 		return 0, err
 	}
-
 	payload := make([]byte, 8+len(data))
 	copy(payload, []byte{0x23, 0x23})
 	binary.BigEndian.PutUint16(payload[2:], trezor.Type(req))
@@ -328,7 +309,6 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 		}
 		// Send over to the device
 		w.log.Trace("Data chunk sent to the Trezor", "chunk", hexutil.Bytes(chunk))
-
 		if _, err := w.device.Write(chunk); err != nil {
 			return 0, err
 		}
@@ -338,13 +318,11 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 		kind  uint16
 		reply []byte
 	)
-
 	for {
 		// Read the next chunk from the Trezor wallet
 		if _, err := io.ReadFull(w.device, chunk); err != nil {
 			return 0, err
 		}
-
 		w.log.Trace("Data chunk received from the Trezor", "chunk", hexutil.Bytes(chunk))
 
 		// Make sure the transport header matches
@@ -376,25 +354,20 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 		if err := proto.Unmarshal(reply, failure); err != nil {
 			return 0, err
 		}
-
 		return 0, errors.New("trezor: " + failure.GetMessage())
 	}
-
 	if kind == uint16(trezor.MessageType_MessageType_ButtonRequest) {
 		// Trezor is waiting for user confirmation, ack and wait for the next message
 		return w.trezorExchange(&trezor.ButtonAck{}, results...)
 	}
-
 	for i, res := range results {
 		if trezor.Type(res) == kind {
 			return i, proto.Unmarshal(reply, res)
 		}
 	}
-
 	expected := make([]string, len(results))
 	for i, res := range results {
 		expected[i] = trezor.Name(trezor.Type(res))
 	}
-
 	return 0, fmt.Errorf("trezor: expected reply types %s, got %s", expected, trezor.Name(kind))
 }

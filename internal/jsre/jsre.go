@@ -23,8 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
-	"os"
 	"time"
 
 	"github.com/dop251/goja"
@@ -80,7 +80,6 @@ func New(assetPath string, output io.Writer) *JSRE {
 	go re.runEventLoop()
 	re.Set("loadScript", MakeCallback(re.vm, re.loadScript))
 	re.Set("inspect", re.prettyPrintJS)
-
 	return re
 }
 
@@ -88,13 +87,11 @@ func New(assetPath string, output io.Writer) *JSRE {
 func randomSource() *rand.Rand {
 	bytes := make([]byte, 8)
 	seed := time.Now().UnixNano()
-
 	if _, err := crand.Read(bytes); err == nil {
 		seed = int64(binary.LittleEndian.Uint64(bytes))
 	}
 
 	src := rand.NewSource(seed)
-
 	return rand.New(src)
 }
 
@@ -121,7 +118,6 @@ func (re *JSRE) runEventLoop() {
 		if 0 >= delay {
 			delay = 1
 		}
-
 		timer := &jsTimer{
 			duration: time.Duration(delay) * time.Millisecond,
 			call:     call,
@@ -152,10 +148,8 @@ func (re *JSRE) runEventLoop() {
 			timer.timer.Stop()
 			delete(registry, timer)
 		}
-
 		return goja.Undefined()
 	}
-
 	re.vm.Set("_setTimeout", setTimeout)
 	re.vm.Set("_setInterval", setInterval)
 	re.vm.RunString(`var setTimeout = function(args) {
@@ -260,11 +254,10 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (re *JSRE) Exec(file string) error {
-	code, err := os.ReadFile(common.AbsolutePath(re.assetPath, file))
+	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {
 		return err
 	}
-
 	return re.Compile(file, string(code))
 }
 
@@ -287,7 +280,6 @@ func MakeCallback(vm *goja.Runtime, fn func(Call) (goja.Value, error)) goja.Valu
 		if err != nil {
 			panic(vm.NewGoError(err))
 		}
-
 		return result
 	})
 }
@@ -301,7 +293,6 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 		} else {
 			prettyPrint(vm, val, w)
 		}
-
 		fmt.Fprintln(w)
 	})
 }
@@ -329,17 +320,14 @@ func (re *JSRE) Compile(filename string, src string) (err error) {
 func (re *JSRE) loadScript(call Call) (goja.Value, error) {
 	file := call.Argument(0).ToString().String()
 	file = common.AbsolutePath(re.assetPath, file)
-	source, err := os.ReadFile(file)
-
+	source, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file %s: %v", file, err)
+		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
 	}
-
 	value, err := compileAndRun(re.vm, file, string(source))
 	if err != nil {
-		return nil, fmt.Errorf("error while compiling or running script: %v", err)
+		return nil, fmt.Errorf("Error while compiling or running script: %v", err)
 	}
-
 	return value, nil
 }
 
@@ -348,6 +336,5 @@ func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, e
 	if err != nil {
 		return goja.Null(), err
 	}
-
 	return vm.RunProgram(script)
 }

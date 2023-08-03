@@ -37,7 +37,6 @@ func (bits bitvec) set1(pos uint64) {
 func (bits bitvec) setN(flag uint16, pos uint64) {
 	a := flag << (pos % 8)
 	bits[pos/8] |= byte(a)
-
 	if b := byte(a >> 8); b != 0 {
 		bits[pos/8+1] = b
 	}
@@ -64,7 +63,7 @@ func (bits *bitvec) codeSegment(pos uint64) bool {
 // codeBitmap collects data locations in code.
 func codeBitmap(code []byte) bitvec {
 	// The bitmap is 4 bytes longer than necessary, in case the code
-	// ends with a PUSH32, the algorithm will set bits on the
+	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
 	bits := make(bitvec, len(code)/8+1+4)
 	return codeBitmapInternal(code, bits)
@@ -77,24 +76,20 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
 		pc++
-
-		if int8(op) < int8(PUSH1) { // If not PUSH (the int8(op) > int(PUSH32) is always false).
+		if op < PUSH1 || op > PUSH32 {
 			continue
 		}
-
 		numbits := op - PUSH1 + 1
 		if numbits >= 8 {
 			for ; numbits >= 16; numbits -= 16 {
 				bits.set16(pc)
 				pc += 16
 			}
-
 			for ; numbits >= 8; numbits -= 8 {
 				bits.set8(pc)
 				pc += 8
 			}
 		}
-
 		switch numbits {
 		case 1:
 			bits.set1(pc)
@@ -119,6 +114,5 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 			pc += 7
 		}
 	}
-
 	return bits
 }

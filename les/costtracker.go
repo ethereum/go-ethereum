@@ -145,36 +145,28 @@ func newCostTracker(db ethdb.Database, config *ethconfig.Config) (*costTracker, 
 		reqInfoCh:  make(chan reqInfo, 100),
 		utilTarget: utilTarget,
 	}
-
 	if config.LightIngress > 0 {
 		ct.inSizeFactor = utilTarget / float64(config.LightIngress)
 	}
-
 	if config.LightEgress > 0 {
 		ct.outSizeFactor = utilTarget / float64(config.LightEgress)
 	}
-
 	if makeCostStats {
 		ct.stats = make(map[uint64][]uint64)
 		for code := range reqAvgTimeCost {
 			ct.stats[code] = make([]uint64, 10)
 		}
 	}
-
 	ct.gfLoop()
-
 	costList := ct.makeCostList(ct.globalFactor() * 1.25)
 	for _, c := range costList {
 		amount := minBufferReqAmount[c.MsgCode]
-
 		cost := c.BaseCost + amount*c.ReqCost
 		if cost > ct.minBufLimit {
 			ct.minBufLimit = cost
 		}
 	}
-
 	ct.minBufLimit *= uint64(minBufferMultiplier)
-
 	return ct, (ct.minBufLimit-1)/bufLimitRatio + 1
 }
 
@@ -183,7 +175,6 @@ func (ct *costTracker) stop() {
 	stopCh := make(chan struct{})
 	ct.stopCh <- stopCh
 	<-stopCh
-
 	if makeCostStats {
 		ct.printStats()
 	}
@@ -195,25 +186,19 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 	maxCost := func(avgTimeCost, inSize, outSize uint64) uint64 {
 		cost := avgTimeCost * maxCostFactor
 		inSizeCost := uint64(float64(inSize) * ct.inSizeFactor * globalFactor)
-
 		if inSizeCost > cost {
 			cost = inSizeCost
 		}
-
 		outSizeCost := uint64(float64(outSize) * ct.outSizeFactor * globalFactor)
 		if outSizeCost > cost {
 			cost = outSizeCost
 		}
-
 		return cost
 	}
-
 	var list RequestCostList
-
 	for code, data := range reqAvgTimeCost {
 		baseCost := maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost)
 		reqCost := maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost)
-
 		if ct.minBufLimit != 0 {
 			// if minBufLimit is set then always enforce maximum request cost <= minBufLimit
 			maxCost := baseCost + reqCost*minBufferReqAmount[code]
@@ -230,7 +215,6 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 			ReqCost:  reqCost,
 		})
 	}
-
 	return list
 }
 
@@ -270,7 +254,6 @@ func (ct *costTracker) gfLoop() {
 	if len(data) == 8 {
 		gfLog = math.Float64frombits(binary.BigEndian.Uint64(data[:]))
 	}
-
 	ct.factor = math.Exp(gfLog)
 	factor, totalRecharge = ct.factor, ct.utilTarget*ct.factor
 
@@ -281,12 +264,10 @@ func (ct *costTracker) gfLoop() {
 	go func() {
 		saveCostFactor := func() {
 			var data [8]byte
-
 			binary.BigEndian.PutUint64(data[:], math.Float64bits(gfLog))
 			ct.db.Put([]byte(gfDbKey), data[:])
 			log.Debug("global cost factor saved", "value", factor)
 		}
-
 		saveTicker := time.NewTicker(time.Minute * 10)
 		defer saveTicker.Stop()
 
@@ -325,7 +306,6 @@ func (ct *costTracker) gfLoop() {
 				if r.msgCode == SendTxV2Msg || r.msgCode == GetTxStatusMsg {
 					continue
 				}
-
 				requestServedMeter.Mark(int64(r.servingTime))
 				requestServedTimer.Update(time.Duration(r.servingTime))
 				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
@@ -339,7 +319,6 @@ func (ct *costTracker) gfLoop() {
 
 				// calculate factor correction until now, based on previous values
 				var gfCorr float64
-
 				max := recentTime
 				if recentAvg > max {
 					max = recentAvg
@@ -376,19 +355,16 @@ func (ct *costTracker) gfLoop() {
 						ct.factor = factor
 						ch := ct.totalRechargeCh
 						ct.gfLock.Unlock()
-
 						if ch != nil {
 							select {
 							case ct.totalRechargeCh <- uint64(totalRecharge):
 							default:
 							}
 						}
-
 						globalFactorGauge.Update(int64(1000 * factor))
 						log.Debug("global cost factor updated", "factor", factor)
 					}
 				}
-
 				recentServedGauge.Update(int64(recentTime))
 				recentEstimatedGauge.Update(int64(recentAvg))
 
@@ -398,7 +374,6 @@ func (ct *costTracker) gfLoop() {
 			case stopCh := <-ct.stopCh:
 				saveCostFactor()
 				close(stopCh)
-
 				return
 			}
 		}
@@ -429,7 +404,6 @@ func (ct *costTracker) subscribeTotalRecharge(ch chan uint64) uint64 {
 	defer ct.gfLock.Unlock()
 
 	ct.totalRechargeCh = ch
-
 	return uint64(ct.factor * ct.utilTarget)
 }
 
@@ -442,11 +416,9 @@ func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 	case ct.reqInfoCh <- reqInfo{float64(avgTimeCost), float64(servingTime), code}:
 	default:
 	}
-
 	if makeCostStats {
 		realCost <<= 4
 		l := 0
-
 		for l < 9 && realCost > avgTimeCost {
 			l++
 			realCost >>= 1
@@ -466,16 +438,13 @@ func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 func (ct *costTracker) realCost(servingTime uint64, inSize, outSize uint32) uint64 {
 	cost := float64(servingTime)
 	inSizeCost := float64(inSize) * ct.inSizeFactor
-
 	if inSizeCost > cost {
 		cost = inSizeCost
 	}
-
 	outSizeCost := float64(outSize) * ct.outSizeFactor
 	if outSizeCost > cost {
 		cost = outSizeCost
 	}
-
 	return uint64(cost * ct.globalFactor())
 }
 
@@ -484,7 +453,6 @@ func (ct *costTracker) printStats() {
 	if ct.stats == nil {
 		return
 	}
-
 	for code, arr := range ct.stats {
 		log.Info("Request cost statistics", "code", code, "1/16", arr[0], "1/8", arr[1], "1/4", arr[2], "1/2", arr[3], "1", arr[4], "2", arr[5], "4", arr[6], "8", arr[7], "16", arr[8], ">16", arr[9])
 	}
@@ -516,7 +484,6 @@ func (table requestCostTable) getMaxCost(code, amount uint64) uint64 {
 // decode converts a cost list to a cost table
 func (list RequestCostList) decode(protocolLength uint64) requestCostTable {
 	table := make(requestCostTable)
-
 	for _, e := range list {
 		if e.MsgCode < protocolLength {
 			table[e.MsgCode] = &requestCosts{
@@ -525,23 +492,19 @@ func (list RequestCostList) decode(protocolLength uint64) requestCostTable {
 			}
 		}
 	}
-
 	return table
 }
 
 // testCostList returns a dummy request cost list used by tests
 func testCostList(testCost uint64) RequestCostList {
 	cl := make(RequestCostList, len(reqAvgTimeCost))
-
 	var max uint64
 	for code := range reqAvgTimeCost {
 		if code > max {
 			max = code
 		}
 	}
-
 	i := 0
-
 	for code := uint64(0); code <= max; code++ {
 		if _, ok := reqAvgTimeCost[code]; ok {
 			cl[i].MsgCode = code
@@ -550,6 +513,5 @@ func testCostList(testCost uint64) RequestCostList {
 			i++
 		}
 	}
-
 	return cl
 }

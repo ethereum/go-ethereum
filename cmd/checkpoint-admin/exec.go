@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/urfave/cli/v2"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,9 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"gopkg.in/urfave/cli.v1"
 )
 
-var commandDeploy = &cli.Command{
+var commandDeploy = cli.Command{
 	Name:  "deploy",
 	Usage: "Deploy a new checkpoint oracle contract",
 	Flags: []cli.Flag{
@@ -50,10 +49,10 @@ var commandDeploy = &cli.Command{
 		signersFlag,
 		thresholdFlag,
 	},
-	Action: deploy,
+	Action: utils.MigrateFlags(deploy),
 }
 
-var commandSign = &cli.Command{
+var commandSign = cli.Command{
 	Name:  "sign",
 	Usage: "Sign the checkpoint with the specified key",
 	Flags: []cli.Flag{
@@ -64,10 +63,10 @@ var commandSign = &cli.Command{
 		hashFlag,
 		oracleFlag,
 	},
-	Action: sign,
+	Action: utils.MigrateFlags(sign),
 }
 
-var commandPublish = &cli.Command{
+var commandPublish = cli.Command{
 	Name:  "publish",
 	Usage: "Publish a checkpoint into the oracle",
 	Flags: []cli.Flag{
@@ -77,7 +76,7 @@ var commandPublish = &cli.Command{
 		indexFlag,
 		signaturesFlag,
 	},
-	Action: publish,
+	Action: utils.MigrateFlags(publish),
 }
 
 // deploy deploys the checkpoint registrar contract.
@@ -87,12 +86,10 @@ var commandPublish = &cli.Command{
 func deploy(ctx *cli.Context) error {
 	// Gather all the addresses that should be permitted to sign
 	var addrs []common.Address
-
 	for _, account := range strings.Split(ctx.String(signersFlag.Name), ",") {
 		if trimmed := strings.TrimSpace(account); !common.IsHexAddress(trimmed) {
 			utils.Fatalf("Invalid account in --signers: '%s'", trimmed)
 		}
-
 		addrs = append(addrs, common.HexToAddress(account))
 	}
 	// Retrieve and validate the signing threshold
@@ -102,11 +99,9 @@ func deploy(ctx *cli.Context) error {
 	}
 	// Print a summary to ensure the user understands what they're signing
 	fmt.Printf("Deploying new checkpoint oracle:\n\n")
-
 	for i, addr := range addrs {
 		fmt.Printf("Admin %d => %s\n", i+1, addr.Hex())
 	}
-
 	fmt.Printf("\nSignatures needed to publish: %d\n", needed)
 
 	// setup clef signer, create an abigen transactor and an RPC client
@@ -114,13 +109,11 @@ func deploy(ctx *cli.Context) error {
 
 	// Deploy the checkpoint oracle
 	fmt.Println("Sending deploy request to Clef...")
-
 	oracle, tx, _, err := contract.DeployCheckpointOracle(transactor, client, addrs, big.NewInt(int64(params.CheckpointFrequency)),
 		big.NewInt(int64(params.CheckpointProcessConfirmations)), big.NewInt(int64(needed)))
 	if err != nil {
 		utils.Fatalf("Failed to deploy checkpoint oracle %v", err)
 	}
-
 	log.Info("Deployed checkpoint oracle", "address", oracle, "tx", tx.Hash().Hex())
 
 	return nil
@@ -139,32 +132,26 @@ func sign(ctx *cli.Context) error {
 		node   *rpc.Client
 		oracle *checkpointoracle.CheckpointOracle
 	)
-
-	// nolint:nestif
-	if !ctx.IsSet(nodeURLFlag.Name) {
+	if !ctx.GlobalIsSet(nodeURLFlag.Name) {
 		// Offline mode signing
 		offline = true
-
 		if !ctx.IsSet(hashFlag.Name) {
 			utils.Fatalf("Please specify the checkpoint hash (--hash) to sign in offline mode")
 		}
-
 		chash = common.HexToHash(ctx.String(hashFlag.Name))
 
 		if !ctx.IsSet(indexFlag.Name) {
 			utils.Fatalf("Please specify checkpoint index (--index) to sign in offline mode")
 		}
-
 		cindex = ctx.Uint64(indexFlag.Name)
 
 		if !ctx.IsSet(oracleFlag.Name) {
 			utils.Fatalf("Please specify oracle address (--oracle) to sign in offline mode")
 		}
-
 		address = common.HexToAddress(ctx.String(oracleFlag.Name))
 	} else {
 		// Interactive mode signing, retrieve the data from the remote node
-		node = newRPCClient(ctx.String(nodeURLFlag.Name))
+		node = newRPCClient(ctx.GlobalString(nodeURLFlag.Name))
 
 		checkpoint := getCheckpoint(ctx, node)
 		chash, cindex, address = checkpoint.Hash(), checkpoint.SectionIndex, getContractAddr(node)
@@ -177,28 +164,22 @@ func sign(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-
 		num := head.Number.Uint64()
 		if num < ((cindex+1)*params.CheckpointFrequency + params.CheckpointProcessConfirmations) {
 			utils.Fatalf("Invalid future checkpoint")
 		}
-
 		_, oracle = newContract(node)
-
 		latest, _, h, err := oracle.Contract().GetLatestCheckpoint(nil)
 		if err != nil {
 			return err
 		}
-
 		if cindex < latest {
 			utils.Fatalf("Checkpoint is too old")
 		}
-
 		if cindex == latest && (latest != 0 || h.Uint64() != 0) {
 			utils.Fatalf("Stale checkpoint, latest registered %d, given %d", latest, cindex)
 		}
 	}
-
 	var (
 		signature string
 		signer    string
@@ -209,13 +190,11 @@ func sign(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-
 		for _, s := range signers {
 			if s == addr {
 				return nil
 			}
 		}
-
 		return fmt.Errorf("signer %v is not the admin", addr.Hex())
 	}
 	// Print to the user the data thy are about to sign
@@ -230,24 +209,19 @@ func sign(ctx *cli.Context) error {
 			return err
 		}
 	}
-
 	clef := newRPCClient(ctx.String(clefURLFlag.Name))
 	p := make(map[string]string)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, cindex)
-
 	p["address"] = address.Hex()
 	p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
 
 	fmt.Println("Sending signing request to Clef...")
-
 	if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
 		utils.Fatalf("Failed to sign checkpoint, err %v", err)
 	}
-
 	fmt.Printf("Signer     => %s\n", signer)
 	fmt.Printf("Signature  => %s\n", signature)
-
 	return nil
 }
 
@@ -257,7 +231,6 @@ func sighash(index uint64, oracle common.Address, hash common.Hash) []byte {
 	binary.BigEndian.PutUint64(buf, index)
 
 	data := append([]byte{0x19, 0x00}, append(oracle[:], append(buf, hash[:]...)...)...)
-
 	return crypto.Keccak256(data)
 }
 
@@ -270,7 +243,6 @@ func ecrecover(sighash []byte, sig []byte) common.Address {
 	if err != nil {
 		utils.Fatalf("Failed to recover sender from signature %x: %v", sig, err)
 	}
-
 	return crypto.PubkeyToAddress(*signer)
 }
 
@@ -283,7 +255,6 @@ func publish(ctx *cli.Context) error {
 
 	// Gather the signatures from the CLI
 	var sigs [][]byte
-
 	for _, sig := range strings.Split(ctx.String(signaturesFlag.Name), ",") {
 		trimmed := strings.TrimPrefix(strings.TrimSpace(sig), "0x")
 		if len(trimmed) != 130 {
@@ -294,17 +265,15 @@ func publish(ctx *cli.Context) error {
 	}
 	// Retrieve the checkpoint we want to sign to sort the signatures
 	var (
-		client       = newRPCClient(ctx.String(nodeURLFlag.Name))
+		client       = newRPCClient(ctx.GlobalString(nodeURLFlag.Name))
 		addr, oracle = newContract(client)
 		checkpoint   = getCheckpoint(ctx, client)
 		sighash      = sighash(checkpoint.SectionIndex, addr, checkpoint.Hash())
 	)
-
 	for i := 0; i < len(sigs); i++ {
 		for j := i + 1; j < len(sigs); j++ {
 			signerA := ecrecover(sighash, sigs[i])
 			signerB := ecrecover(sighash, sigs[j])
-
 			if bytes.Compare(signerA.Bytes(), signerB.Bytes()) > 0 {
 				sigs[i], sigs[j] = sigs[j], sigs[i]
 			}
@@ -318,32 +287,25 @@ func publish(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	num := head.Number.Uint64()
-
 	recent, err := ethclient.NewClient(client).HeaderByNumber(reqCtx, big.NewInt(int64(num-128)))
 	if err != nil {
 		return err
 	}
 	// Print a summary of the operation that's going to be performed
 	fmt.Printf("Publishing %d => %s:\n\n", checkpoint.SectionIndex, checkpoint.Hash().Hex())
-
 	for i, sig := range sigs {
 		fmt.Printf("Signer %d => %s\n", i+1, ecrecover(sighash, sig).Hex())
 	}
-
 	fmt.Println()
 	fmt.Printf("Sentry number => %d\nSentry hash   => %s\n", recent.Number, recent.Hash().Hex())
 
 	// Publish the checkpoint into the oracle
 	fmt.Println("Sending publish request to Clef...")
-
 	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
 	if err != nil {
 		utils.Fatalf("Register contract failed %v", err)
 	}
-
 	log.Info("Successfully registered checkpoint", "tx", tx.Hash().Hex())
-
 	return nil
 }

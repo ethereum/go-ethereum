@@ -59,7 +59,6 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 	for _, id := range step.Expect.Nodes {
 		nodes[id] = struct{}{}
 	}
-
 	for len(result.Passes) < len(nodes) {
 		select {
 		case id := <-step.Trigger:
@@ -79,7 +78,6 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 				result.Error = err
 				return
 			}
-
 			if pass {
 				result.Passes[id] = time.Now()
 			}
@@ -97,11 +95,9 @@ func (s *Simulation) watchNetwork(result *StepResult) func() {
 	done := make(chan struct{})
 	events := make(chan *Event)
 	sub := s.network.Events().Subscribe(events)
-
 	go func() {
 		defer close(done)
 		defer sub.Unsubscribe()
-
 		for {
 			select {
 			case event := <-events:
@@ -111,7 +107,6 @@ func (s *Simulation) watchNetwork(result *StepResult) func() {
 			}
 		}
 	}()
-
 	return func() {
 		close(stop)
 		<-done

@@ -35,7 +35,7 @@ func TestStartRPC(t *testing.T) {
 	type test struct {
 		name string
 		cfg  Config
-		fn   func(*testing.T, *Node, *adminAPI)
+		fn   func(*testing.T, *Node, *privateAdminAPI)
 
 		// Checks. These run after the node is configured and all API calls have been made.
 		wantReachable bool // whether the HTTP server should be reachable at all
@@ -48,8 +48,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "all off",
 			cfg:  Config{},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 			},
 			wantReachable: false,
 			wantHandlers:  false,
@@ -59,8 +58,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc enabled through config",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 			},
 			wantReachable: true,
 			wantHandlers:  true,
@@ -70,9 +68,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc enabled through API",
 			cfg:  Config{},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 			},
@@ -84,9 +80,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc start again after failure",
 			cfg:  Config{},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				// Listen on a random port.
 				listener, err := net.Listen("tcp", "127.0.0.1:0")
 				if err != nil {
@@ -114,9 +108,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc stopped through API",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StopHTTP()
 				assert.NoError(t, err)
 			},
@@ -128,9 +120,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "rpc stopped twice",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StopHTTP()
 				assert.NoError(t, err)
 
@@ -153,9 +143,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "ws enabled through API",
 			cfg:  Config{},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 			},
@@ -167,9 +155,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "ws stopped through API",
 			cfg:  Config{WSHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StopWS()
 				assert.NoError(t, err)
 			},
@@ -181,9 +167,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "ws stopped twice",
 			cfg:  Config{WSHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StopWS()
 				assert.NoError(t, err)
 
@@ -198,9 +182,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "ws enabled after RPC",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				wsport := n.http.port
 				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
@@ -213,9 +195,7 @@ func TestStartRPC(t *testing.T) {
 		{
 			name: "ws enabled after RPC then stopped",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				wsport := n.http.port
 				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
 				assert.NoError(t, err)
@@ -230,9 +210,7 @@ func TestStartRPC(t *testing.T) {
 		},
 		{
 			name: "rpc stopped with ws enabled",
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StartHTTP(sp("127.0.0.1"), ip(0), nil, nil, nil)
 				assert.NoError(t, err)
 
@@ -250,9 +228,7 @@ func TestStartRPC(t *testing.T) {
 		},
 		{
 			name: "rpc enabled after ws",
-			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				t.Helper()
-
+			fn: func(t *testing.T, n *Node, api *privateAdminAPI) {
 				_, err := api.StartWS(sp("127.0.0.1"), ip(0), nil, nil)
 				assert.NoError(t, err)
 
@@ -276,9 +252,6 @@ func TestStartRPC(t *testing.T) {
 			config := test.cfg
 			// config.Logger = testlog.Logger(t, log.LvlDebug)
 			config.P2P.NoDiscovery = true
-			if config.HTTPTimeouts == (rpc.HTTPTimeouts{}) {
-				config.HTTPTimeouts = rpc.DefaultHTTPTimeouts
-			}
 
 			// Create Node.
 			stack, err := New(&config)
@@ -298,7 +271,7 @@ func TestStartRPC(t *testing.T) {
 
 			// Run the API call hook.
 			if test.fn != nil {
-				test.fn(t, stack, &adminAPI{stack})
+				test.fn(t, stack, &privateAdminAPI{stack})
 			}
 
 			// Check if the HTTP endpoints are available.
@@ -307,19 +280,15 @@ func TestStartRPC(t *testing.T) {
 			handlersAvailable := checkBodyOK(baseURL + "/test")
 			rpcAvailable := checkRPC(baseURL)
 			wsAvailable := checkRPC(strings.Replace(baseURL, "http://", "ws://", 1))
-
 			if reachable != test.wantReachable {
 				t.Errorf("HTTP server is %sreachable, want it %sreachable", not(reachable), not(test.wantReachable))
 			}
-
 			if handlersAvailable != test.wantHandlers {
 				t.Errorf("RegisterHandler handlers %savailable, want them %savailable", not(handlersAvailable), not(test.wantHandlers))
 			}
-
 			if rpcAvailable != test.wantRPC {
 				t.Errorf("HTTP RPC %savailable, want it %savailable", not(rpcAvailable), not(test.wantRPC))
 			}
-
 			if wsAvailable != test.wantWS {
 				t.Errorf("WS RPC %savailable, want it %savailable", not(wsAvailable), not(test.wantWS))
 			}
@@ -333,14 +302,11 @@ func checkReachable(rawurl string) bool {
 	if err != nil {
 		panic(err)
 	}
-
 	conn, err := net.Dial("tcp", u.Host)
 	if err != nil {
 		return false
 	}
-
 	conn.Close()
-
 	return true
 }
 
@@ -355,12 +321,10 @@ func checkBodyOK(url string) bool {
 	if resp.StatusCode != 200 {
 		return false
 	}
-
 	buf := make([]byte, 2)
 	if _, err = io.ReadFull(resp.Body, buf); err != nil {
 		return false
 	}
-
 	return bytes.Equal(buf, []byte("OK"))
 }
 
@@ -373,7 +337,6 @@ func checkRPC(url string) bool {
 	defer c.Close()
 
 	_, err = c.SupportedModules()
-
 	return err == nil
 }
 
@@ -385,6 +348,5 @@ func not(ok bool) string {
 	if ok {
 		return ""
 	}
-
 	return "not "
 }

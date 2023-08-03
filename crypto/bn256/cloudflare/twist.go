@@ -33,7 +33,6 @@ var twistGen = &twistPoint{
 func (c *twistPoint) String() string {
 	c.MakeAffine()
 	x, y := gfP2Decode(&c.x), gfP2Decode(&c.y)
-
 	return "(" + x.String() + ", " + y.String() + ")"
 }
 
@@ -47,7 +46,6 @@ func (c *twistPoint) Set(a *twistPoint) {
 // IsOnCurve returns true iff c is on the curve.
 func (c *twistPoint) IsOnCurve() bool {
 	c.MakeAffine()
-
 	if c.IsInfinity() {
 		return true
 	}
@@ -59,10 +57,8 @@ func (c *twistPoint) IsOnCurve() bool {
 	if *y2 != *x3 {
 		return false
 	}
-
 	cneg := &twistPoint{}
 	cneg.Mul(c, Order)
-
 	return cneg.z.IsZero()
 }
 
@@ -79,11 +75,11 @@ func (c *twistPoint) IsInfinity() bool {
 
 func (c *twistPoint) Add(a, b *twistPoint) {
 	// For additional comments, see the same function in curve.go.
+
 	if a.IsInfinity() {
 		c.Set(b)
 		return
 	}
-
 	if b.IsInfinity() {
 		c.Set(a)
 		return
@@ -109,21 +105,17 @@ func (c *twistPoint) Add(a, b *twistPoint) {
 	j := (&gfP2{}).Mul(h, i)
 
 	t.Sub(s2, s1)
-
 	yEqual := t.IsZero()
 	if xEqual && yEqual {
 		c.Double(a)
 		return
 	}
-
 	r := (&gfP2{}).Add(t, t)
 
 	v := (&gfP2{}).Mul(u1, i)
 
 	t4 := (&gfP2{}).Square(r)
-
 	t.Add(v, v)
-
 	t6 := (&gfP2{}).Sub(t4, j)
 	c.x.Sub(t6, t)
 
@@ -174,7 +166,6 @@ func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int) {
 
 	for i := scalar.BitLen(); i >= 0; i-- {
 		t.Double(sum)
-
 		if scalar.Bit(i) != 0 {
 			sum.Add(t, a)
 		} else {
@@ -192,7 +183,6 @@ func (c *twistPoint) MakeAffine() {
 		c.x.SetZero()
 		c.y.SetOne()
 		c.t.SetZero()
-
 		return
 	}
 

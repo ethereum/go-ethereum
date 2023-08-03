@@ -41,7 +41,8 @@ var ErrInvalidPassphrase = errors.New("invalid password")
 // second time.
 var ErrWalletAlreadyOpen = errors.New("wallet already open")
 
-// ErrWalletClosed is returned if a wallet is offline.
+// ErrWalletClosed is returned if a wallet is attempted to be opened the
+// second time.
 var ErrWalletClosed = errors.New("wallet closed")
 
 // AuthNeededError is returned by backends for signing requests where the user

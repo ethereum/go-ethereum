@@ -21,10 +21,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,16 +94,11 @@ type httpServer struct {
 	RPCBatchLimit uint64
 }
 
-const (
-	shutdownTimeout = 5 * time.Second
-)
-
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts, rpcBatchLimit uint64) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string), RPCBatchLimit: rpcBatchLimit}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
-
 	return h
 }
 
@@ -119,7 +114,6 @@ func (h *httpServer) setListenAddr(host string, port int) error {
 
 	h.host, h.port = host, port
 	h.endpoint = fmt.Sprintf("%s:%d", host, port)
-
 	return nil
 }
 
@@ -131,7 +125,6 @@ func (h *httpServer) listenAddr() string {
 	if h.listener != nil {
 		return h.listener.Addr().String()
 	}
-
 	return h.endpoint
 }
 
@@ -149,7 +142,6 @@ func (h *httpServer) start() error {
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
-		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
 		h.server.WriteTimeout = h.timeouts.WriteTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
@@ -161,10 +153,8 @@ func (h *httpServer) start() error {
 		// configuration so they can be configured another time.
 		h.disableRPC()
 		h.disableWS()
-
 		return err
 	}
-
 	h.listener = listener
 	go h.server.Serve(listener)
 
@@ -173,7 +163,6 @@ func (h *httpServer) start() error {
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
-
 		h.log.Info("WebSocket enabled", "url", url)
 	}
 	// if server is websocket only, return after logging
@@ -193,19 +182,15 @@ func (h *httpServer) start() error {
 	for path := range h.handlerNames {
 		paths = append(paths, path)
 	}
-
 	sort.Strings(paths)
 	logged := make(map[string]bool, len(paths))
-
 	for _, path := range paths {
 		name := h.handlerNames[path]
 		if !logged[name] {
 			log.Info(name+" enabled", "url", "http://"+listener.Addr().String()+path)
-
 			logged[name] = true
 		}
 	}
-
 	return nil
 }
 
@@ -216,10 +201,8 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if checkPath(r, h.wsConfig.prefix) {
 			ws.ServeHTTP(w, r)
 		}
-
 		return
 	}
-
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
@@ -238,7 +221,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	w.WriteHeader(http.StatusNotFound)
 }
 
@@ -257,18 +239,15 @@ func validatePrefix(what, path string) error {
 	if path == "" {
 		return nil
 	}
-
 	if path[0] != '/' {
 		return fmt.Errorf(`%s RPC path prefix %q does not contain leading "/"`, what, path)
 	}
-
 	if strings.ContainsAny(path, "?#") {
 		// This is just to avoid confusion. While these would match correctly (i.e. they'd
 		// match if URL-escaped into path), it's not easy to understand for users when
 		// setting that on the command line.
 		return fmt.Errorf("%s RPC path prefix %q contains URL meta-characters", what, path)
 	}
-
 	return nil
 }
 
@@ -287,26 +266,15 @@ func (h *httpServer) doStop() {
 	// Shut down the server.
 	httpHandler := h.httpHandler.Load().(*rpcHandler)
 	wsHandler := h.wsHandler.Load().(*rpcHandler)
-
 	if httpHandler != nil {
 		h.httpHandler.Store((*rpcHandler)(nil))
 		httpHandler.server.Stop()
 	}
-
 	if wsHandler != nil {
 		h.wsHandler.Store((*rpcHandler)(nil))
 		wsHandler.server.Stop()
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	err := h.server.Shutdown(ctx)
-	if err != nil && err == ctx.Err() {
-		h.log.Warn("HTTP server graceful shutdown timed out")
-		h.server.Close()
-	}
-
+	h.server.Shutdown(context.Background())
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
@@ -327,17 +295,14 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	// Create RPC server and handler.
 	srv := rpc.NewServer("http", config.executionPoolSize, config.executionPoolRequestTimeout)
 	srv.SetRPCBatchLimit(h.RPCBatchLimit)
-
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
-
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
 		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
 		server:  srv,
 	})
-
 	return nil
 }
 
@@ -348,7 +313,6 @@ func (h *httpServer) disableRPC() bool {
 		h.httpHandler.Store((*rpcHandler)(nil))
 		handler.server.Stop()
 	}
-
 	return handler != nil
 }
 
@@ -363,17 +327,14 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	// Create RPC server and handler.
 	srv := rpc.NewServer("ws", config.executionPoolSize, config.executionPoolRequestTimeout)
 	srv.SetRPCBatchLimit(h.RPCBatchLimit)
-
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
 		return err
 	}
-
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
 		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
 		server:  srv,
 	})
-
 	return nil
 }
 
@@ -396,7 +357,6 @@ func (h *httpServer) disableWS() bool {
 		h.wsHandler.Store((*rpcHandler)(nil))
 		ws.server.Stop()
 	}
-
 	return ws != nil
 }
 
@@ -412,7 +372,7 @@ func (h *httpServer) wsAllowed() bool {
 
 // isWebsocket checks the header of an http request for a websocket upgrade request.
 func isWebsocket(r *http.Request) bool {
-	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
 
@@ -421,11 +381,9 @@ func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSe
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
-
 	if len(jwtSecret) != 0 {
 		handler = newJWTHandler(jwtSecret, handler)
 	}
-
 	return newGzipHandler(handler)
 }
 
@@ -434,7 +392,6 @@ func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
 	if len(jwtSecret) != 0 {
 		return newJWTHandler(jwtSecret, srv)
 	}
-
 	return srv
 }
 
@@ -443,14 +400,12 @@ func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 	if len(allowedOrigins) == 0 {
 		return srv
 	}
-
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{http.MethodPost, http.MethodGet},
 		AllowedHeaders: []string{"*"},
 		MaxAge:         600,
 	})
-
 	return c.Handler(srv)
 }
 
@@ -468,7 +423,6 @@ func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
 	for _, allowedHost := range vhosts {
 		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
 	}
-
 	return &virtualHostHandler{vhostMap, next}
 }
 
@@ -479,134 +433,48 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.next.ServeHTTP(w, r)
 		return
 	}
-
 	host, _, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		// Either invalid (too many colons) or no port specified
 		host = r.Host
 	}
-
 	if ipAddr := net.ParseIP(host); ipAddr != nil {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
 		return
+
 	}
 	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {
 		h.next.ServeHTTP(w, r)
 		return
 	}
-
 	if _, exist := h.vhosts[host]; exist {
 		h.next.ServeHTTP(w, r)
 		return
 	}
-
 	http.Error(w, "invalid host specified", http.StatusForbidden)
 }
 
 var gzPool = sync.Pool{
 	New: func() interface{} {
-		w := gzip.NewWriter(io.Discard)
+		w := gzip.NewWriter(ioutil.Discard)
 		return w
 	},
 }
 
 type gzipResponseWriter struct {
-	resp http.ResponseWriter
-
-	gz            *gzip.Writer
-	contentLength uint64 // total length of the uncompressed response
-	written       uint64 // amount of written bytes from the uncompressed response
-	hasLength     bool   // true if uncompressed response had Content-Length
-	inited        bool   // true after init was called for the first time
-}
-
-// init runs just before response headers are written. Among other things, this function
-// also decides whether compression will be applied at all.
-func (w *gzipResponseWriter) init() {
-	if w.inited {
-		return
-	}
-
-	w.inited = true
-
-	hdr := w.resp.Header()
-
-	length := hdr.Get("content-length")
-	if len(length) > 0 {
-		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
-			w.hasLength = true
-			w.contentLength = n
-		}
-	}
-
-	// Setting Transfer-Encoding to "identity" explicitly disables compression. net/http
-	// also recognizes this header value and uses it to disable "chunked" transfer
-	// encoding, trimming the header from the response. This means downstream handlers can
-	// set this without harm, even if they aren't wrapped by newGzipHandler.
-	//
-	// In go-ethereum, we use this signal to disable compression for certain error
-	// responses which are flushed out close to the write deadline of the response. For
-	// these cases, we want to avoid chunked transfer encoding and compression because
-	// they require additional output that may not get written in time.
-	passthrough := hdr.Get("transfer-encoding") == "identity"
-	if !passthrough {
-		w.gz = gzPool.Get().(*gzip.Writer)
-		w.gz.Reset(w.resp)
-		hdr.Del("content-length")
-		hdr.Set("content-encoding", "gzip")
-	}
-}
-
-func (w *gzipResponseWriter) Header() http.Header {
-	return w.resp.Header()
+	io.Writer
+	http.ResponseWriter
 }
 
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.init()
-	w.resp.WriteHeader(status)
+	w.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	w.init()
-
-	if w.gz == nil {
-		// Compression is disabled.
-		return w.resp.Write(b)
-	}
-
-	n, err := w.gz.Write(b)
-	w.written += uint64(n)
-
-	if w.hasLength && w.written >= w.contentLength {
-		// The HTTP handler has finished writing the entire uncompressed response. Close
-		// the gzip stream to ensure the footer will be seen by the client in case the
-		// response is flushed after this call to write.
-		err = w.gz.Close()
-	}
-
-	return n, err
-}
-
-func (w *gzipResponseWriter) Flush() {
-	if w.gz != nil {
-		w.gz.Flush()
-	}
-
-	if f, ok := w.resp.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-func (w *gzipResponseWriter) close() {
-	if w.gz == nil {
-		return
-	}
-
-	w.gz.Close()
-	gzPool.Put(w.gz)
-	w.gz = nil
+	return w.Writer.Write(b)
 }
 
 func newGzipHandler(next http.Handler) http.Handler {
@@ -616,10 +484,15 @@ func newGzipHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		wrapper := &gzipResponseWriter{resp: w}
-		defer wrapper.close()
+		w.Header().Set("Content-Encoding", "gzip")
 
-		next.ServeHTTP(wrapper, r)
+		gz := gzPool.Get().(*gzip.Writer)
+		defer gzPool.Put(gz)
+
+		gz.Reset(w)
+		defer gz.Close()
+
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
 	})
 }
 
@@ -644,16 +517,13 @@ func (is *ipcServer) start(apis []rpc.API) error {
 	if is.listener != nil {
 		return nil // already running
 	}
-
 	listener, srv, err := rpc.StartIPCEndpoint(is.endpoint, apis)
 	if err != nil {
 		is.log.Warn("IPC opening failed", "url", is.endpoint, "error", err)
 		return err
 	}
-
 	is.log.Info("IPC endpoint opened", "url", is.endpoint)
 	is.listener, is.srv = listener, srv
-
 	return nil
 }
 
@@ -664,18 +534,16 @@ func (is *ipcServer) stop() error {
 	if is.listener == nil {
 		return nil // not running
 	}
-
 	err := is.listener.Close()
 	is.srv.Stop()
 	is.listener, is.srv = nil, nil
 	is.log.Info("IPC endpoint closed", "url", is.endpoint)
-
 	return err
 }
 
 // RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
+func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
@@ -686,12 +554,11 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
 	}
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
-		if allowList[api.Namespace] || len(allowList) == 0 {
+		if exposeAll || allowList[api.Namespace] || (len(allowList) == 0 && api.Public) {
 			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }

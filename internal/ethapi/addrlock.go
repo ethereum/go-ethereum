@@ -31,15 +31,12 @@ type AddrLocker struct {
 func (l *AddrLocker) lock(address common.Address) *sync.Mutex {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-
 	if l.locks == nil {
 		l.locks = make(map[common.Address]*sync.Mutex)
 	}
-
 	if _, ok := l.locks[address]; !ok {
 		l.locks[address] = new(sync.Mutex)
 	}
-
 	return l.locks[address]
 }
 

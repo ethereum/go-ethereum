@@ -51,20 +51,16 @@ type upnpClient interface {
 
 func (n *upnp) natEnabled() bool {
 	var ok bool
-
 	var err error
-
 	n.withRateLimit(func() error {
 		_, ok, err = n.client.GetNATRSIPStatus()
 		return err
 	})
-
 	return err == nil && ok
 }
 
 func (n *upnp) ExternalIP() (addr net.IP, err error) {
 	var ipString string
-
 	n.withRateLimit(func() error {
 		ipString, err = n.client.GetExternalIPAddress()
 		return err
@@ -73,25 +69,20 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 	if err != nil {
 		return nil, err
 	}
-
 	ip := net.ParseIP(ipString)
 	if ip == nil {
 		return nil, errors.New("bad IP in response")
 	}
-
 	return ip, nil
 }
 
 func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) error {
 	ip, err := n.internalAddress()
 	if err != nil {
-		//nolint:nilerr
-		return nil // TODO: Shouldn't we return the error?
+		return nil
 	}
-
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
-
 	n.DeleteMapping(protocol, extport, intport)
 
 	return n.withRateLimit(func() error {
@@ -104,25 +95,21 @@ func (n *upnp) internalAddress() (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
-
 	for _, iface := range ifaces {
 		addrs, err := iface.Addrs()
 		if err != nil {
 			return nil, err
 		}
-
 		for _, addr := range addrs {
 			if x, ok := addr.(*net.IPNet); ok && x.Contains(devaddr.IP) {
 				return x.IP, nil
 			}
 		}
 	}
-
 	return nil, fmt.Errorf("could not find local address in same net as %v", devaddr)
 }
 
@@ -144,10 +131,8 @@ func (n *upnp) withRateLimit(fn func() error) error {
 	if lastreq < rateLimit {
 		time.Sleep(rateLimit - lastreq)
 	}
-
 	err := fn()
 	n.lastReqTime = time.Now()
-
 	return err
 }
 
@@ -163,7 +148,6 @@ func discoverUPnP() Interface {
 		case internetgateway1.URN_WANPPPConnection_1:
 			return &upnp{service: "IGDv1-PPP1", client: &internetgateway1.WANPPPConnection1{ServiceClient: sc}}
 		}
-
 		return nil
 	})
 	// IGDv2
@@ -176,16 +160,13 @@ func discoverUPnP() Interface {
 		case internetgateway2.URN_WANPPPConnection_1:
 			return &upnp{service: "IGDv2-PPP1", client: &internetgateway2.WANPPPConnection1{ServiceClient: sc}}
 		}
-
 		return nil
 	})
-
 	for i := 0; i < cap(found); i++ {
 		if c := <-found; c != nil {
 			return c
 		}
 	}
-
 	return nil
 }
 
@@ -198,13 +179,11 @@ func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient
 		out <- nil
 		return
 	}
-
 	found := false
 	for i := 0; i < len(devs) && !found; i++ {
 		if devs[i].Root == nil {
 			continue
 		}
-
 		devs[i].Root.Device.VisitServices(func(service *goupnp.Service) {
 			if found {
 				return
@@ -217,23 +196,19 @@ func discover(out chan<- *upnp, target string, matcher func(goupnp.ServiceClient
 				Service:    service,
 			}
 			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
-
 			upnp := matcher(sc)
 			if upnp == nil {
 				return
 			}
-
 			upnp.dev = devs[i].Root
 
 			// check whether port mapping is enabled
 			if upnp.natEnabled() {
 				out <- upnp
-
 				found = true
 			}
 		})
 	}
-
 	if !found {
 		out <- nil
 	}

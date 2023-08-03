@@ -135,7 +135,6 @@ func TestRoute53ChangeSort(t *testing.T) {
 	}
 
 	var client route53Client
-
 	changes := client.computeChanges("n", testTree1, testTree0)
 	if !reflect.DeepEqual(changes, wantChanges) {
 		t.Fatalf("wrong changes (got %d, want %d)", len(changes), len(wantChanges))
@@ -148,7 +147,6 @@ func TestRoute53ChangeSort(t *testing.T) {
 		wantChanges[6:],
 	}
 	split := splitChanges(changes, 600, 4000)
-
 	if !reflect.DeepEqual(split, wantSplit) {
 		t.Fatalf("wrong split batches: got %d, want %d", len(split), len(wantSplit))
 	}
@@ -159,7 +157,6 @@ func TestRoute53ChangeSort(t *testing.T) {
 		wantChanges[5:],
 	}
 	split = splitChanges(changes, 10000, 6)
-
 	if !reflect.DeepEqual(split, wantSplit) {
 		t.Fatalf("wrong split batches: got %d, want %d", len(split), len(wantSplit))
 	}
@@ -183,7 +180,6 @@ func TestRoute53NoChange(t *testing.T) {
 	}
 
 	var client route53Client
-
 	changes := client.computeChanges("n", testTree1, testTree0)
 	if len(changes) > 0 {
 		t.Fatalf("wrong changes (got %d, want 0)", len(changes))

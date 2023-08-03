@@ -34,7 +34,6 @@ func ExampleNewSubscription() {
 				return nil
 			}
 		}
-
 		return nil
 	})
 
@@ -42,7 +41,6 @@ func ExampleNewSubscription() {
 	// Note that Unsubscribe waits until the producer has shut down.
 	for i := range ch {
 		fmt.Println(i)
-
 		if i == 4 {
 			sub.Unsubscribe()
 			break

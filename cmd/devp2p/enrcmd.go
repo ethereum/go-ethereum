@@ -22,54 +22,46 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/urfave/cli/v2"
-
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
-var fileFlag = &cli.StringFlag{Name: "file"}
-
-var enrdumpCommand = &cli.Command{
+var enrdumpCommand = cli.Command{
 	Name:   "enrdump",
 	Usage:  "Pretty-prints node records",
 	Action: enrdump,
 	Flags: []cli.Flag{
-		fileFlag,
+		cli.StringFlag{Name: "file"},
 	},
 }
 
 func enrdump(ctx *cli.Context) error {
 	var source string
-
-	// nolint:nestif
-	if file := ctx.String(fileFlag.Name); file != "" {
+	if file := ctx.String("file"); file != "" {
 		if ctx.NArg() != 0 {
 			return fmt.Errorf("can't dump record from command-line argument in -file mode")
 		}
-
 		var b []byte
-
 		var err error
 		if file == "-" {
-			b, err = io.ReadAll(os.Stdin)
+			b, err = ioutil.ReadAll(os.Stdin)
 		} else {
-			b, err = os.ReadFile(file)
+			b, err = ioutil.ReadFile(file)
 		}
-
 		if err != nil {
 			return err
 		}
-
 		source = string(b)
 	} else if ctx.NArg() == 1 {
-		source = ctx.Args().First()
+		source = ctx.Args()[0]
 	} else {
 		return fmt.Errorf("need record as argument")
 	}
@@ -78,9 +70,7 @@ func enrdump(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("INVALID: %v", err)
 	}
-
 	dumpRecord(os.Stdout, r)
-
 	return nil
 }
 
@@ -93,7 +83,6 @@ func dumpRecord(out io.Writer, r *enr.Record) {
 		fmt.Fprintf(out, "Node ID: %v\n", n.ID())
 		dumpNodeURL(out, n)
 	}
-
 	kv := r.AppendElements(nil)[1:]
 	fmt.Fprintf(out, "Record has sequence number %d and %d key/value pairs.\n", r.Seq(), len(kv)/2)
 	fmt.Fprint(out, dumpRecordKV(kv, 2))
@@ -104,16 +93,13 @@ func dumpNodeURL(out io.Writer, n *enode.Node) {
 	if n.Load(&key) != nil {
 		return // no secp256k1 public key
 	}
-
 	fmt.Fprintf(out, "URLv4:   %s\n", n.URLv4())
 }
 
 func dumpRecordKV(kv []interface{}, indent int) string {
 	// Determine the longest key name for alignment.
 	var out string
-
 	var longestKey = 0
-
 	for i := 0; i < len(kv); i += 2 {
 		key := kv[i].(string)
 		if len(key) > longestKey {
@@ -126,12 +112,10 @@ func dumpRecordKV(kv []interface{}, indent int) string {
 		val := kv[i+1].(rlp.RawValue)
 		pad := longestKey - len(key)
 		out += strings.Repeat(" ", indent) + strconv.Quote(key) + strings.Repeat(" ", pad+1)
-
 		formatter := attrFormatters[key]
 		if formatter == nil {
 			formatter = formatAttrRaw
 		}
-
 		fmtval, ok := formatter(val)
 		if ok {
 			out += fmtval + "\n"
@@ -139,7 +123,6 @@ func dumpRecordKV(kv []interface{}, indent int) string {
 			out += hex.EncodeToString(val) + " (!)\n"
 		}
 	}
-
 	return out
 }
 
@@ -148,12 +131,10 @@ func parseNode(source string) (*enode.Node, error) {
 	if strings.HasPrefix(source, "enode://") {
 		return enode.ParseV4(source)
 	}
-
 	r, err := parseRecord(source)
 	if err != nil {
 		return nil, err
 	}
-
 	return enode.New(enode.ValidSchemes, r)
 }
 
@@ -165,10 +146,8 @@ func parseRecord(source string) (*enr.Record, error) {
 	} else if d, ok := decodeRecordBase64(bytes.TrimSpace(bin)); ok {
 		bin = d
 	}
-
 	var r enr.Record
 	err := rlp.DecodeBytes(bin, &r)
-
 	return &r, err
 }
 
@@ -176,10 +155,8 @@ func decodeRecordHex(b []byte) ([]byte, bool) {
 	if bytes.HasPrefix(b, []byte("0x")) {
 		b = b[2:]
 	}
-
 	dec := make([]byte, hex.DecodedLen(len(b)))
 	_, err := hex.Decode(dec, b)
-
 	return dec, err == nil
 }
 
@@ -187,10 +164,8 @@ func decodeRecordBase64(b []byte) ([]byte, bool) {
 	if bytes.HasPrefix(b, []byte("enr:")) {
 		b = b[4:]
 	}
-
 	dec := make([]byte, base64.RawURLEncoding.DecodedLen(len(b)))
 	n, err := base64.RawURLEncoding.Decode(dec, b)
-
 	return dec[:n], err == nil
 }
 
@@ -220,7 +195,6 @@ func formatAttrIP(v rlp.RawValue) (string, bool) {
 	if err != nil || len(content) != 4 && len(content) != 6 {
 		return "", false
 	}
-
 	return net.IP(content).String(), true
 }
 
@@ -229,6 +203,5 @@ func formatAttrUint(v rlp.RawValue) (string, bool) {
 	if err := rlp.DecodeBytes(v, &x); err != nil {
 		return "", false
 	}
-
 	return strconv.FormatUint(x, 10), true
 }

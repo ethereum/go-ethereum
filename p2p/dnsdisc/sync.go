@@ -56,15 +56,12 @@ func (ct *clientTree) syncAll(dest map[string]entry) error {
 	if err := ct.updateRoot(context.Background()); err != nil {
 		return err
 	}
-
 	if err := ct.links.resolveAll(dest); err != nil {
 		return err
 	}
-
 	if err := ct.enrs.resolveAll(dest); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -89,7 +86,6 @@ func (ct *clientTree) syncRandom(ctx context.Context) (n *enode.Node, err error)
 		err := ct.syncNextLink(ctx)
 		return nil, err
 	}
-
 	ct.gcLinks()
 
 	// Sync next random entry in ENR tree. Once every node has been visited, we simply
@@ -98,7 +94,6 @@ func (ct *clientTree) syncRandom(ctx context.Context) (n *enode.Node, err error)
 	if ct.enrs.done() {
 		ct.enrs = newSubtreeSync(ct.c, ct.loc, ct.root.eroot, false)
 	}
-
 	return ct.syncNextRandomENR(ctx)
 }
 
@@ -116,44 +111,36 @@ func (ct *clientTree) gcLinks() {
 	if !ct.links.done() || ct.root.lroot == ct.linkGCRoot {
 		return
 	}
-
 	ct.lc.resetLinks(ct.loc.str, ct.curLinks)
 	ct.linkGCRoot = ct.root.lroot
 }
 
 func (ct *clientTree) syncNextLink(ctx context.Context) error {
 	hash := ct.links.missing[0]
-
 	e, err := ct.links.resolveNext(ctx, hash)
 	if err != nil {
 		return err
 	}
-
 	ct.links.missing = ct.links.missing[1:]
 
 	if dest, ok := e.(*linkEntry); ok {
 		ct.lc.addLink(ct.loc.str, dest.str)
 		ct.curLinks[dest.str] = struct{}{}
 	}
-
 	return nil
 }
 
 func (ct *clientTree) syncNextRandomENR(ctx context.Context) (*enode.Node, error) {
 	index := rand.Intn(len(ct.enrs.missing))
 	hash := ct.enrs.missing[index]
-
 	e, err := ct.enrs.resolveNext(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-
 	ct.enrs.missing = removeHash(ct.enrs.missing, index)
-
 	if ee, ok := e.(*enrEntry); ok {
 		return ee.node, nil
 	}
-
 	return nil, nil
 }
 
@@ -166,13 +153,11 @@ func removeHash(h []string, index int) []string {
 	if len(h) == 1 {
 		return nil
 	}
-
 	last := len(h) - 1
 	if index < last {
 		h[index] = h[last]
 		h[last] = ""
 	}
-
 	return h[:last]
 }
 
@@ -183,16 +168,13 @@ func (ct *clientTree) updateRoot(ctx context.Context) error {
 	}
 
 	ct.lastRootCheck = ct.c.clock.Now()
-
 	ctx, cancel := context.WithTimeout(ctx, ct.c.cfg.Timeout)
 	defer cancel()
-
 	root, err := ct.c.resolveRoot(ctx, ct.loc)
 	if err != nil {
 		ct.rootFailCount++
 		return err
 	}
-
 	ct.root = &root
 	ct.rootFailCount = 0
 	ct.leafFailCount = 0
@@ -202,11 +184,9 @@ func (ct *clientTree) updateRoot(ctx context.Context) error {
 		ct.links = newSubtreeSync(ct.c, ct.loc, root.lroot, true)
 		ct.curLinks = make(map[string]struct{})
 	}
-
 	if ct.enrs == nil || root.eroot != ct.enrs.root {
 		ct.enrs = newSubtreeSync(ct.c, ct.loc, root.eroot, false)
 	}
-
 	return nil
 }
 
@@ -214,7 +194,6 @@ func (ct *clientTree) updateRoot(ctx context.Context) error {
 func (ct *clientTree) rootUpdateDue() bool {
 	tooManyFailures := ct.leafFailCount > rootRecheckFailCount
 	scheduledCheck := ct.c.clock.Now() >= ct.nextScheduledRootCheck()
-
 	return ct.root == nil || tooManyFailures || scheduledCheck
 }
 
@@ -227,7 +206,6 @@ func (ct *clientTree) nextScheduledRootCheck() mclock.AbsTime {
 // Returns true if the timeout passed, false if sync was canceled.
 func (ct *clientTree) slowdownRootUpdate(ctx context.Context) bool {
 	var delay time.Duration
-
 	switch {
 	case ct.rootFailCount > 20:
 		delay = 10 * time.Second
@@ -236,7 +214,6 @@ func (ct *clientTree) slowdownRootUpdate(ctx context.Context) bool {
 	default:
 		return true
 	}
-
 	timeout := ct.c.clock.NewTimer(delay)
 	defer timeout.Stop()
 	select {
@@ -270,17 +247,13 @@ func (ts *subtreeSync) resolveAll(dest map[string]entry) error {
 		hash := ts.missing[0]
 		ctx, cancel := context.WithTimeout(context.Background(), ts.c.cfg.Timeout)
 		e, err := ts.resolveNext(ctx, hash)
-
 		cancel()
-
 		if err != nil {
 			return err
 		}
-
 		dest[hash] = e
 		ts.missing = ts.missing[1:]
 	}
-
 	return nil
 }
 
@@ -289,24 +262,20 @@ func (ts *subtreeSync) resolveNext(ctx context.Context, hash string) (entry, err
 	if err != nil {
 		return nil, err
 	}
-
 	switch e := e.(type) {
 	case *enrEntry:
 		if ts.link {
 			return nil, errENRInLinkTree
 		}
-
 		ts.leaves++
 	case *linkEntry:
 		if !ts.link {
 			return nil, errLinkInENRTree
 		}
-
 		ts.leaves++
 	case *branchEntry:
 		ts.missing = append(ts.missing, e.children...)
 	}
-
 	return e, nil
 }
 
@@ -328,11 +297,9 @@ func (lc *linkCache) addLink(from, to string) {
 	if lc.backrefs == nil {
 		lc.backrefs = make(map[string]map[string]struct{})
 	}
-
 	if _, ok := lc.backrefs[to]; !ok {
 		lc.backrefs[to] = make(map[string]struct{})
 	}
-
 	lc.backrefs[to][from] = struct{}{}
 	lc.changed = true
 }
@@ -348,15 +315,11 @@ func (lc *linkCache) resetLinks(from string, keep map[string]struct{}) {
 			if _, ok := keep[r]; ok {
 				continue
 			}
-
 			if _, ok := refs[item]; !ok {
 				continue
 			}
-
 			lc.changed = true
-
 			delete(refs, item)
-
 			if len(refs) == 0 {
 				delete(lc.backrefs, r)
 				stk = append(stk, r)

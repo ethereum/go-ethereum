@@ -41,7 +41,7 @@ var (
 	errPeerNotRegistered = errors.New("peer not registered")
 
 	// errSnapWithoutEth is returned if a peer attempts to connect only on the
-	// snap protocol without advertising the eth main protocol.
+	// snap protocol without advertizing the eth main protocol.
 	errSnapWithoutEth = errors.New("peer connected on snap without compatible eth support")
 )
 
@@ -84,7 +84,6 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	if _, ok := ps.peers[id]; ok {
 		return errPeerAlreadyRegistered // avoid connections with the same id as existing ones
 	}
-
 	if _, ok := ps.snapPend[id]; ok {
 		return errPeerAlreadyRegistered // avoid connections with the same id as pending ones
 	}
@@ -92,12 +91,9 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	if wait, ok := ps.snapWait[id]; ok {
 		delete(ps.snapWait, id)
 		wait <- peer
-
 		return nil
 	}
-
 	ps.snapPend[id] = peer
-
 	return nil
 }
 
@@ -116,7 +112,6 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 		ps.lock.Unlock()
 		return nil, errPeerAlreadyRegistered // avoid connections with the same id as existing ones
 	}
-
 	if _, ok := ps.snapWait[id]; ok {
 		ps.lock.Unlock()
 		return nil, errPeerAlreadyRegistered // avoid connections with the same id as pending ones
@@ -126,7 +121,6 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 		delete(ps.snapPend, id)
 
 		ps.lock.Unlock()
-
 		return snap, nil
 	}
 	// Otherwise wait for `snap` to connect concurrently
@@ -147,12 +141,10 @@ func (ps *peerSet) registerPeer(peer *eth.Peer, ext *snap.Peer) error {
 	if ps.closed {
 		return errPeerSetClosed
 	}
-
 	id := peer.ID()
 	if _, ok := ps.peers[id]; ok {
 		return errPeerAlreadyRegistered
 	}
-
 	eth := &ethPeer{
 		Peer: peer,
 	}
@@ -160,9 +152,7 @@ func (ps *peerSet) registerPeer(peer *eth.Peer, ext *snap.Peer) error {
 		eth.snapExt = &snapPeer{ext}
 		ps.snapPeers++
 	}
-
 	ps.peers[id] = eth
-
 	return nil
 }
 
@@ -176,13 +166,10 @@ func (ps *peerSet) unregisterPeer(id string) error {
 	if !ok {
 		return errPeerNotRegistered
 	}
-
 	delete(ps.peers, id)
-
 	if peer.snapExt != nil {
 		ps.snapPeers--
 	}
-
 	return nil
 }
 
@@ -201,13 +188,11 @@ func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
 	defer ps.lock.RUnlock()
 
 	list := make([]*ethPeer, 0, len(ps.peers))
-
 	for _, p := range ps.peers {
 		if !p.KnownBlock(hash) {
 			list = append(list, p)
 		}
 	}
-
 	return list
 }
 
@@ -218,13 +203,11 @@ func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
 	defer ps.lock.RUnlock()
 
 	list := make([]*ethPeer, 0, len(ps.peers))
-
 	for _, p := range ps.peers {
 		if !p.KnownTransaction(hash) {
 			list = append(list, p)
 		}
 	}
-
 	return list
 }
 
@@ -256,13 +239,11 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 		bestPeer *eth.Peer
 		bestTd   *big.Int
 	)
-
 	for _, p := range ps.peers {
 		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
 			bestPeer, bestTd = p.Peer, td
 		}
 	}
-
 	return bestPeer
 }
 
@@ -274,6 +255,5 @@ func (ps *peerSet) close() {
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
-
 	ps.closed = true
 }

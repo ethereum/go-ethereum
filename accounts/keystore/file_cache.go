@@ -17,46 +17,44 @@
 package keystore
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
-
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
-	all     mapset.Set[string] // Set of all files from the keystore folder
-	lastMod time.Time          // Last time instance when a file was modified
+	all     mapset.Set // Set of all files from the keystore folder
+	lastMod time.Time  // Last time instance when a file was modified
 	mu      sync.Mutex
 }
 
 // scan performs a new scan on the given directory, compares against the already
 // cached filenames, and returns file sets: creates, deletes, updates.
-func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string], mapset.Set[string], error) {
+func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, error) {
 	t0 := time.Now()
 
-	// List all the files from the keystore folder
-	files, err := os.ReadDir(keyDir)
+	// List all the fails from the keystore folder
+	files, err := ioutil.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	t1 := time.Now()
 
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
 	// Iterate all the files and gather their metadata
-	all := mapset.NewThreadUnsafeSet[string]()
-	mods := mapset.NewThreadUnsafeSet[string]()
+	all := mapset.NewThreadUnsafeSet()
+	mods := mapset.NewThreadUnsafeSet()
 
 	var newLastMod time.Time
-
 	for _, fi := range files {
 		path := filepath.Join(keyDir, fi.Name())
 		// Skip any non-key files from the folder
@@ -64,24 +62,17 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
-		// Gather the set of all and freshly modified files
+		// Gather the set of all and fresly modified files
 		all.Add(path)
 
-		info, err := fi.Info()
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		modified := info.ModTime()
+		modified := fi.ModTime()
 		if modified.After(fc.lastMod) {
 			mods.Add(path)
 		}
-
 		if modified.After(newLastMod) {
 			newLastMod = modified
 		}
 	}
-
 	t2 := time.Now()
 
 	// Update the tracked files and return the three sets
@@ -94,20 +85,18 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 
 	// Report on the scanning stats and return
 	log.Debug("FS scan times", "list", t1.Sub(t0), "set", t2.Sub(t1), "diff", t3.Sub(t2))
-
 	return creates, deletes, updates, nil
 }
 
 // nonKeyFile ignores editor backups, hidden files and folders/symlinks.
-func nonKeyFile(fi os.DirEntry) bool {
+func nonKeyFile(fi os.FileInfo) bool {
 	// Skip editor backups and UNIX-style hidden files.
 	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || !fi.Type().IsRegular() {
+	if fi.IsDir() || fi.Mode()&os.ModeType != 0 {
 		return true
 	}
-
 	return false
 }
