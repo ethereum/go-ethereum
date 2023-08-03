@@ -94,8 +94,8 @@ type TxData interface {
 	// Method implementations can use 'dst' to store the result.
 	effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int
 
-	encode(b *bytes.Buffer) error
-	decode(b []byte) error
+	encode(*bytes.Buffer) error
+	decode([]byte) error
 }
 
 // EncodeRLP implements rlp.Encoder
