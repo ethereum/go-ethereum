@@ -52,6 +52,7 @@ func TestSetFeeDefaults(t *testing.T) {
 
 	var (
 		b        = newBackendMock()
+		zero     = (*hexutil.Big)(big.NewInt(0))
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
 		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
@@ -183,6 +184,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+		},
+		{
+			"set gas price to zero",
+			true,
+			&TransactionArgs{GasPrice: zero},
+			nil,
+			errors.New("gasPrice must be positive"),
 		},
 	}
 
