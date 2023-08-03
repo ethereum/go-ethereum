@@ -89,7 +89,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 
-		// If the tx is a blob tx, it must have a sidecar attached to be valid in a block.
+		// If the tx is a blob tx, it must NOT have a sidecar attached to be valid in a block.
 		if tx.Type() == types.BlobTxType && tx.BlobSidecar() != nil {
 			return fmt.Errorf("unexpected blob sidecar in transaction at index %d", i)
 		}
