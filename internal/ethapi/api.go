@@ -1266,7 +1266,7 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap(), true)
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap(), false)
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
