@@ -753,6 +753,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		uncles:    mapset.NewSet(),
 		header:    header,
 		traceEnv:  traceEnv,
+		accRows:   nil,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -767,9 +768,6 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.blockSize = 0
 	env.l1TxCount = 0
 	env.maxL1Index = 0
-
-	// make sure accRows is not nil, even for empty blocks
-	env.accRows = &types.RowConsumption{}
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
@@ -1226,6 +1224,20 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
+	// set w.current.accRows for empty-but-not-genesis block
+	if (w.current.header.Number.Uint64() != 0) &&
+		(w.current.accRows == nil || len(*w.current.accRows) == 0) {
+		traces, err := w.current.traceEnv.GetBlockTrace(types.NewBlockWithHeader(w.current.header))
+		if err != nil {
+			return err
+		}
+		accRows, err := w.circuitCapacityChecker.ApplyBlock(traces)
+		if err != nil {
+			return err
+		}
+		w.current.accRows = accRows
+	}
+
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()

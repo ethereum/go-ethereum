@@ -447,8 +447,12 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 		}
 	}
 
+	var chainID uint64
+	if env.chainConfig.ChainID != nil {
+		chainID = env.chainConfig.ChainID.Uint64()
+	}
 	blockTrace := &types.BlockTrace{
-		ChainID: env.chainConfig.ChainID.Uint64(),
+		ChainID: chainID,
 		Version: params.ArchiveVersion(params.CommitHash),
 		Coinbase: &types.AccountWrapper{
 			Address:          env.coinbase,

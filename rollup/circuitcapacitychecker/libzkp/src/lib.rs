@@ -60,13 +60,6 @@ pub mod checker {
     pub unsafe extern "C" fn apply_tx(id: u64, tx_traces: *const c_char) -> *const c_char {
         let result = panic::catch_unwind(|| {
             let tx_traces_vec = c_char_to_vec(tx_traces);
-
-            log::debug!(
-                "ccc apply_tx raw input, id: {:?}, tx_traces: {:?}",
-                id,
-                String::from(tx_traces_vec)
-            );
-
             let traces = serde_json::from_slice::<BlockTrace>(&tx_traces_vec)
                 .unwrap_or_else(|_| panic!("id: {id:?}, fail to deserialize tx_traces"));
             if traces.transactions.len() != 1 {
@@ -121,13 +114,6 @@ pub mod checker {
     pub unsafe extern "C" fn apply_block(id: u64, block_trace: *const c_char) -> *const c_char {
         let result = panic::catch_unwind(|| {
             let block_trace = c_char_to_vec(block_trace);
-
-            log::debug!(
-                "ccc apply_block raw input, id: {:?}, block_trace: {:?}",
-                id,
-                String::from(block_trace)
-            );
-
             let traces = serde_json::from_slice::<BlockTrace>(&block_trace)
                 .unwrap_or_else(|_| panic!("id: {id:?}, fail to deserialize block_trace"));
             CHECKERS
