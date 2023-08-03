@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -37,12 +53,15 @@ func (g *gethrpc) addPeer(peer *gethrpc) {
 	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
+
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
 		g.geth.Fatalf("subscribe %v: %v", g.name, err)
 	}
+
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
+
 	dur := 14 * time.Second
 	timeout := time.After(dur)
 	select {
@@ -60,44 +79,11 @@ func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
 	if g.nodeInfo != nil {
 		return g.nodeInfo
 	}
+
 	g.nodeInfo = &p2p.NodeInfo{}
 	g.callRPC(&g.nodeInfo, "admin_nodeInfo")
+
 	return g.nodeInfo
-}
-
-func (g *gethrpc) waitSynced() {
-	// Check if it's synced now
-	var result interface{}
-	g.callRPC(&result, "eth_syncing")
-	syncing, ok := result.(bool)
-	if ok && !syncing {
-		g.geth.Logf("%v already synced", g.name)
-		return
-	}
-
-	// Actually wait, subscribe to the event
-	ch := make(chan interface{})
-	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
-	if err != nil {
-		g.geth.Fatalf("%v syncing: %v", g.name, err)
-	}
-	defer sub.Unsubscribe()
-	timeout := time.After(4 * time.Second)
-	select {
-	case ev := <-ch:
-		g.geth.Log("'syncing' event", ev)
-		syncing, ok := ev.(bool)
-		if ok && !syncing {
-			break
-		}
-		g.geth.Log("Other 'syncing' event", ev)
-	case err := <-sub.Err():
-		g.geth.Fatalf("%v notification: %v", g.name, err)
-		break
-	case <-timeout:
-		g.geth.Fatalf("%v timeout syncing", g.name)
-		break
-	}
 }
 
 // ipcEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -109,6 +95,7 @@ func ipcEndpoint(ipcPath, datadir string) string {
 		if strings.HasPrefix(ipcPath, `\\.\pipe\`) {
 			return ipcPath
 		}
+
 		return `\\.\pipe\` + ipcPath
 	}
 	// Resolve names into the data directory full paths otherwise
@@ -116,8 +103,10 @@ func ipcEndpoint(ipcPath, datadir string) string {
 		if datadir == "" {
 			return filepath.Join(os.TempDir(), ipcPath)
 		}
+
 		return filepath.Join(datadir, ipcPath)
 	}
+
 	return ipcPath
 }
 
@@ -130,7 +119,7 @@ var nextIPC = uint32(0)
 
 func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 	ipcName := fmt.Sprintf("geth-%d.ipc", atomic.AddUint32(&nextIPC, 1))
-	args = append([]string{"--networkid=42", "--port=0", "--ipcpath", ipcName}, args...)
+	args = append([]string{"--networkid=42", "--port=0", "--authrpc.port", "0", "--ipcpath", ipcName}, args...)
 	t.Logf("Starting %v with rpc: %v", name, args)
 
 	g := &gethrpc{
@@ -141,13 +130,16 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 	// We can't know exactly how long geth will take to start, so we try 10
 	// times over a 5 second period.
 	var err error
+
 	for i := 0; i < 10; i++ {
 		time.Sleep(500 * time.Millisecond)
+
 		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
 			return g
 		}
 	}
 	t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+
 	return nil
 }
 
@@ -157,15 +149,18 @@ func initGeth(t *testing.T) string {
 	g := runGeth(t, args...)
 	datadir := g.Datadir
 	g.WaitExit()
+
 	return datadir
 }
 
 func startLightServer(t *testing.T) *gethrpc {
 	datadir := initGeth(t)
 	t.Logf("Importing keys to geth")
-	runGeth(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv", "--lightkdf").WaitExit()
+	runGeth(t, "account", "import", "--datadir", datadir, "--password", "./testdata/password.txt", "--lightkdf", "./testdata/key.prv").WaitExit()
+
 	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
-	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
+	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--miner.etherbase=0x02f0d131f1f97aef08aec6e3291b957d9efe7105", "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
+
 	return server
 }
 
@@ -184,7 +179,9 @@ func TestPriorityClient(t *testing.T) {
 	freeCli.addPeer(lightServer)
 
 	var peers []*p2p.PeerInfo
+
 	freeCli.callRPC(&peers, "admin_peers")
+
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of client peers == 1, actual: %v", len(peers))
 		return
@@ -200,6 +197,7 @@ func TestPriorityClient(t *testing.T) {
 
 	// Check if priority client is actually syncing and the regular client got kicked out
 	prioCli.callRPC(&peers, "admin_peers")
+
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
@@ -209,15 +207,19 @@ func TestPriorityClient(t *testing.T) {
 		freeCli.getNodeInfo().ID:     freeCli,
 		prioCli.getNodeInfo().ID:     prioCli,
 	}
+
 	time.Sleep(1 * time.Second)
 	lightServer.callRPC(&peers, "admin_peers")
+
 	peersWithNames := make(map[string]string)
 	for _, p := range peers {
 		peersWithNames[nodes[p.ID].name] = p.ID
 	}
+
 	if _, freeClientFound := peersWithNames[freeCli.name]; freeClientFound {
 		t.Error("client is still a peer of lightServer", peersWithNames)
 	}
+
 	if _, prioClientFound := peersWithNames[prioCli.name]; !prioClientFound {
 		t.Error("prio client is not among lightServer peers", peersWithNames)
 	}

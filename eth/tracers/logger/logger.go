@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,11 +18,12 @@ package logger
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
 	"strings"
-	"time"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,10 +39,11 @@ type Storage map[common.Hash]common.Hash
 
 // Copy duplicates the current storage.
 func (s Storage) Copy() Storage {
-	cpy := make(Storage)
+	cpy := make(Storage, len(s))
 	for key, value := range s {
 		cpy[key] = value
 	}
+
 	return cpy
 }
 
@@ -57,7 +59,7 @@ type Config struct {
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
-//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+//go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
@@ -66,10 +68,10 @@ type StructLog struct {
 	Op            vm.OpCode                   `json:"op"`
 	Gas           uint64                      `json:"gas"`
 	GasCost       uint64                      `json:"gasCost"`
-	Memory        []byte                      `json:"memory"`
+	Memory        []byte                      `json:"memory,omitempty"`
 	MemorySize    int                         `json:"memSize"`
 	Stack         []uint256.Int               `json:"stack"`
-	ReturnData    []byte                      `json:"returnData"`
+	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
@@ -82,8 +84,8 @@ type structLogMarshaling struct {
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
 	ReturnData  hexutil.Bytes
-	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
-	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
+	OpName      string `json:"opName"`          // adds call to OpName() in MarshalJSON
+	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
 }
 
 // OpName formats the operand name in a human-readable format.
@@ -96,6 +98,7 @@ func (s *StructLog) ErrorString() string {
 	if s.Err != nil {
 		return s.Err.Error()
 	}
+
 	return ""
 }
 
@@ -108,10 +111,15 @@ type StructLogger struct {
 	cfg Config
 	env *vm.EVM
 
-	storage map[common.Address]Storage
-	logs    []StructLog
-	output  []byte
-	err     error
+	storage  map[common.Address]Storage
+	logs     []StructLog
+	output   []byte
+	err      error
+	gasLimit uint64
+	usedGas  uint64
+
+	interrupt atomic.Bool // Atomic flag to signal execution interruption
+	reason    error       // Textual reason for the interruption
 }
 
 // NewStructLogger returns a new logger
@@ -122,6 +130,7 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	if cfg != nil {
 		logger.cfg = *cfg
 	}
+
 	return logger
 }
 
@@ -142,13 +151,18 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.Memory
-	stack := scope.Stack
-	contract := scope.Contract
+	// If tracing was interrupted, set the error and stop
+	if l.interrupt.Load() {
+		return
+	}
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return
 	}
+
+	memory := scope.Memory
+	stack := scope.Stack
+	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if l.cfg.EnableMemory {
@@ -163,6 +177,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 			stck[i] = item
 		}
 	}
+
 	stackData := stack.Data()
 	stackLen := len(stackData)
 	// Copy a snapshot of the current storage to a new container
@@ -179,6 +194,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 				value   = l.env.StateDB.GetState(contract.Address(), address)
 			)
+
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		} else if op == vm.SSTORE && stackLen >= 2 {
@@ -187,10 +203,12 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				value   = common.Hash(stackData[stackLen-2].Bytes32())
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 			)
+
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		}
 	}
+
 	var rdata []byte
 	if l.cfg.EnableReturnData {
 		rdata = make([]byte, len(rData))
@@ -207,11 +225,13 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.output = output
 	l.err = err
+
 	if l.cfg.Debug {
-		fmt.Printf("0x%x\n", output)
+		fmt.Printf("%#x\n", output)
+
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
@@ -221,7 +241,44 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
-func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
+}
+
+func (l *StructLogger) GetResult() (json.RawMessage, error) {
+	// Tracing aborted
+	if l.reason != nil {
+		return nil, l.reason
+	}
+
+	failed := l.err != nil
+	returnData := common.CopyBytes(l.output)
+	// Return data when successful and revert reason when reverted, otherwise empty.
+	returnVal := fmt.Sprintf("%x", returnData)
+	if failed && l.err != vm.ErrExecutionReverted {
+		returnVal = ""
+	}
+
+	return json.Marshal(&ExecutionResult{
+		Gas:         l.usedGas,
+		Failed:      failed,
+		ReturnValue: returnVal,
+		StructLogs:  formatLogs(l.StructLogs()),
+	})
+}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (l *StructLogger) Stop(err error) {
+	l.reason = err
+	l.interrupt.Store(true)
+}
+
+func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
+	l.gasLimit = gasLimit
+}
+
+func (l *StructLogger) CaptureTxEnd(restGas uint64) {
+	l.usedGas = l.gasLimit - restGas
+}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
@@ -236,31 +293,39 @@ func (l *StructLogger) Output() []byte { return l.output }
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
 		fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
+
 		if log.Err != nil {
 			fmt.Fprintf(writer, " ERROR: %v", log.Err)
 		}
+
 		fmt.Fprintln(writer)
 
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
+
 			for i := len(log.Stack) - 1; i >= 0; i-- {
 				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
+
 		if len(log.Memory) > 0 {
 			fmt.Fprintln(writer, "Memory:")
 			fmt.Fprint(writer, hex.Dump(log.Memory))
 		}
+
 		if len(log.Storage) > 0 {
 			fmt.Fprintln(writer, "Storage:")
+
 			for h, item := range log.Storage {
 				fmt.Fprintf(writer, "%x: %x\n", h, item)
 			}
 		}
+
 		if len(log.ReturnData) > 0 {
 			fmt.Fprintln(writer, "ReturnData:")
 			fmt.Fprint(writer, hex.Dump(log.ReturnData))
 		}
+
 		fmt.Fprintln(writer)
 	}
 }
@@ -292,17 +357,18 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
+
 	return l
 }
 
 func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	}
@@ -316,6 +382,7 @@ func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
+
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
@@ -324,11 +391,14 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 		for _, elem := range stack.Data() {
 			a = append(a, elem.Hex())
 		}
+
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
 	}
+
 	fmt.Fprintf(t.out, "%10v |", t.env.StateDB.GetRefund())
 	fmt.Fprintln(t.out, "")
+
 	if err != nil {
 		fmt.Fprintf(t.out, "Error: %v\n", err)
 	}
@@ -338,8 +408,8 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) {
-	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
+func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
 
@@ -347,3 +417,77 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 }
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
+func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
+
+func (*mdLogger) CaptureTxEnd(restGas uint64) {}
+
+// ExecutionResult groups all structured logs emitted by the EVM
+// while replaying a transaction in debug mode as well as transaction
+// execution status, the amount of gas used and the return value
+type ExecutionResult struct {
+	Gas         uint64         `json:"gas"`
+	Failed      bool           `json:"failed"`
+	ReturnValue string         `json:"returnValue"`
+	StructLogs  []StructLogRes `json:"structLogs"`
+}
+
+// StructLogRes stores a structured log emitted by the EVM while replaying a
+// transaction in debug mode
+type StructLogRes struct {
+	Pc            uint64             `json:"pc"`
+	Op            string             `json:"op"`
+	Gas           uint64             `json:"gas"`
+	GasCost       uint64             `json:"gasCost"`
+	Depth         int                `json:"depth"`
+	Error         string             `json:"error,omitempty"`
+	Stack         *[]string          `json:"stack,omitempty"`
+	Memory        *[]string          `json:"memory,omitempty"`
+	Storage       *map[string]string `json:"storage,omitempty"`
+	RefundCounter uint64             `json:"refund,omitempty"`
+}
+
+// formatLogs formats EVM returned structured logs for json output
+func formatLogs(logs []StructLog) []StructLogRes {
+	formatted := make([]StructLogRes, len(logs))
+	for index, trace := range logs {
+		formatted[index] = StructLogRes{
+			Pc:            trace.Pc,
+			Op:            trace.Op.String(),
+			Gas:           trace.Gas,
+			GasCost:       trace.GasCost,
+			Depth:         trace.Depth,
+			Error:         trace.ErrorString(),
+			RefundCounter: trace.RefundCounter,
+		}
+
+		if trace.Stack != nil {
+			stack := make([]string, len(trace.Stack))
+			for i, stackValue := range trace.Stack {
+				stack[i] = stackValue.Hex()
+			}
+
+			formatted[index].Stack = &stack
+		}
+
+		if trace.Memory != nil {
+			memory := make([]string, 0, (len(trace.Memory)+31)/32)
+			for i := 0; i+32 <= len(trace.Memory); i += 32 {
+				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+			}
+
+			formatted[index].Memory = &memory
+		}
+
+		if trace.Storage != nil {
+			storage := make(map[string]string)
+			for i, storageValue := range trace.Storage {
+				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+			}
+
+			formatted[index].Storage = &storage
+		}
+	}
+
+	return formatted
+}

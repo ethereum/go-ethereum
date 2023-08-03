@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"encoding/hex"
 	"math/rand"
 	"testing"
@@ -41,6 +42,7 @@ func TestHexCompact(t *testing.T) {
 		if c := hexToCompact(test.hex); !bytes.Equal(c, test.compact) {
 			t.Errorf("hexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
 		}
+
 		if h := compactToHex(test.compact); !bytes.Equal(h, test.hex) {
 			t.Errorf("compactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
 		}
@@ -71,6 +73,7 @@ func TestHexKeybytes(t *testing.T) {
 		if h := keybytesToHex(test.key); !bytes.Equal(h, test.hexOut) {
 			t.Errorf("keybytesToHex(%x) -> %x, want %x", test.key, h, test.hexOut)
 		}
+
 		if k := hexToKeybytes(test.hexIn); !bytes.Equal(k, test.key) {
 			t.Errorf("hexToKeybytes(%x) -> %x, want %x", test.hexIn, k, test.key)
 		}
@@ -78,17 +81,18 @@ func TestHexKeybytes(t *testing.T) {
 }
 
 func TestHexToCompactInPlace(t *testing.T) {
-	for i, keyS := range []string{
+	for i, key := range []string{
 		"00",
 		"060a040c0f000a090b040803010801010900080d090a0a0d0903000b10",
 		"10",
 	} {
-		hexBytes, _ := hex.DecodeString(keyS)
+		hexBytes, _ := hex.DecodeString(key)
 		exp := hexToCompact(hexBytes)
 		sz := hexToCompactInPlace(hexBytes)
+
 		got := hexBytes[:sz]
 		if !bytes.Equal(exp, got) {
-			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, keyS, got, exp)
+			t.Fatalf("test %d: encoding err\ninp %v\ngot %x\nexp %x\n", i, key, got, exp)
 		}
 	}
 }
@@ -97,7 +101,7 @@ func TestHexToCompactInPlaceRandom(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		l := rand.Intn(128)
 		key := make([]byte, l)
-		rand.Read(key)
+		_, _ = crand.Read(key)
 		hexBytes := keybytesToHex(key)
 		hexOrig := []byte(string(hexBytes))
 		exp := hexToCompact(hexBytes)

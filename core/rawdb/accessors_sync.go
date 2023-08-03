@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -52,11 +52,13 @@ func ReadSkeletonHeader(db ethdb.KeyValueReader, number uint64) *types.Header {
 	if len(data) == 0 {
 		return nil
 	}
+
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
 		log.Error("Invalid skeleton header RLP", "number", number, "err", err)
 		return nil
 	}
+
 	return header
 }
 
@@ -66,6 +68,7 @@ func WriteSkeletonHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
+
 	key := skeletonHeaderKey(header.Number.Uint64())
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store skeleton header", "err", err)

@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ var (
 // each client can have several minutes of connection time.
 //
 // Balances of disconnected clients are stored in nodeDB including positive balance
-// and negative banalce. Boeth positive balance and negative balance will decrease
+// and negative balance. Both positive balance and negative balance will decrease
 // exponentially. If the balance is low enough, then the record will be dropped.
 type ClientPool struct {
 	*priorityPool
@@ -61,7 +61,6 @@ type ClientPool struct {
 
 	setup  *serverSetup
 	clock  mclock.Clock
-	closed bool
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 
@@ -103,11 +102,14 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				timeout = c.InactiveAllowance()
 			}
+
 			ns.AddTimeout(node, setup.inactiveFlag, timeout)
 		}
+
 		if oldState.Equals(setup.inactiveFlag) && newState.Equals(setup.inactiveFlag.Or(setup.priorityFlag)) {
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
 		}
+
 		if newState.Equals(setup.activeFlag) {
 			// active with no priority; limit capacity to minCap
 			cap, _ := ns.GetField(node, setup.capacityField).(uint64)
@@ -115,6 +117,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 				cp.requestCapacity(node, minCap, minCap, 0)
 			}
 		}
+
 		if newState.Equals(nodestate.Flags{}) {
 			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				c.Disconnect()
@@ -134,20 +137,25 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		if oldState.IsEmpty() && !newState.IsEmpty() {
 			clientConnectedMeter.Mark(1)
 		}
+
 		if !oldState.IsEmpty() && newState.IsEmpty() {
 			clientDisconnectedMeter.Mark(1)
 		}
+
 		if oldState.HasNone(cp.setup.activeFlag) && oldState.HasAll(cp.setup.activeFlag) {
 			clientActivatedMeter.Mark(1)
 		}
+
 		if oldState.HasAll(cp.setup.activeFlag) && oldState.HasNone(cp.setup.activeFlag) {
 			clientDeactivatedMeter.Mark(1)
 		}
+
 		activeCount, activeCap := cp.Active()
 		totalActiveCountGauge.Update(int64(activeCount))
 		totalActiveCapacityGauge.Update(int64(activeCap))
 		totalInactiveCountGauge.Update(int64(cp.Inactive()))
 	})
+
 	return cp
 }
 
@@ -169,6 +177,7 @@ func (cp *ClientPool) Stop() {
 func (cp *ClientPool) Register(peer clientPeer) ConnectedBalance {
 	cp.ns.SetField(peer.Node(), cp.setup.clientField, peerWrapper{peer})
 	balance, _ := cp.ns.GetField(peer.Node(), cp.setup.balanceField).(*nodeBalance)
+
 	return balance
 }
 
@@ -201,24 +210,29 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			err = ErrNotConnected
 			return
 		}
+
 		capacity, _ = cp.ns.GetField(node, cp.setup.capacityField).(uint64)
 		if capacity == 0 {
 			// if the client is inactive then it has insufficient priority for the minimal capacity
 			// (will be activated automatically with minCap when possible)
 			return
 		}
+
 		if reqCap < cp.minCap {
 			// can't request less than minCap; switching between 0 (inactive state) and minCap is
 			// performed by the server automatically as soon as necessary/possible
 			reqCap = cp.minCap
 		}
+
 		if reqCap > cp.minCap && cp.ns.GetState(node).HasNone(cp.setup.priorityFlag) {
 			err = ErrNoPriority
 			return
 		}
+
 		if reqCap == capacity {
 			return
 		}
+
 		if requested {
 			// mark the requested node so that the UpdateCapacity callback can signal
 			// whether the update is the direct result of a SetCapacity call on the given node
@@ -229,6 +243,7 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 		}
 
 		var minTarget, maxTarget uint64
+
 		if reqCap > capacity {
 			// Estimate maximum available capacity at the current priority level and request
 			// the estimated amount.
@@ -238,12 +253,14 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			// estimation of the maximum available capacity based on the capacity curve we
 			// can limit the number of required iterations.
 			curve := cp.getCapacityCurve().exclude(node.ID())
+
 			maxTarget = curve.maxCapacity(func(capacity uint64) int64 {
 				return balance.estimatePriority(capacity, 0, 0, bias, false)
 			})
 			if maxTarget < reqCap {
 				return
 			}
+
 			maxTarget = reqCap
 
 			// Specify a narrow target range that allows a limited number of fine step
@@ -255,14 +272,17 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 		} else {
 			minTarget, maxTarget = reqCap, reqCap
 		}
+
 		if newCap := cp.requestCapacity(node, minTarget, maxTarget, bias); newCap >= minTarget && newCap <= maxTarget {
 			capacity = newCap
 			return
 		}
 		// we should be able to find the maximum allowed capacity in a few iterations
 		log.Error("Unable to find maximum allowed capacity")
+
 		err = ErrCantFindMaximum
 	})
+
 	return
 }
 
@@ -274,17 +294,23 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	if rlp.DecodeBytes(data, &req) != nil {
 		return nil
 	}
+
 	if l := len(req.AddTokens); l == 0 || l > vflux.CapacityQueryMaxLen {
 		return nil
 	}
+
 	result := make(vflux.CapacityQueryReply, len(req.AddTokens))
+
 	if !cp.synced() {
 		capacityQueryZeroMeter.Mark(1)
+
 		reply, _ := rlp.EncodeToBytes(&result)
+
 		return reply
 	}
 
 	bias := time.Second * time.Duration(req.Bias)
+
 	cp.lock.RLock()
 	if cp.connectedBias > bias {
 		bias = cp.connectedBias
@@ -295,14 +321,17 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	curve := cp.getCapacityCurve().exclude(id)
 	cp.BalanceOperation(id, freeID, func(balance AtomicBalanceOperator) {
 		pb, _ := balance.GetBalance()
+
 		for i, addTokens := range req.AddTokens {
 			add := addTokens.Int64()
 			result[i] = curve.maxCapacity(func(capacity uint64) int64 {
 				return balance.estimatePriority(capacity, add, 0, bias, false) / int64(capacity)
 			})
+
 			if add <= 0 && uint64(-add) >= pb && result[i] > cp.minCap {
 				result[i] = cp.minCap
 			}
+
 			if result[i] < cp.minCap {
 				result[i] = 0
 			}
@@ -314,7 +343,9 @@ func (cp *ClientPool) serveCapQuery(id enode.ID, freeID string, data []byte) []b
 	} else {
 		capacityQueryNonZeroMeter.Mark(1)
 	}
+
 	reply, _ := rlp.EncodeToBytes(&result)
+
 	return reply
 }
 

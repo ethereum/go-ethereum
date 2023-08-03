@@ -52,6 +52,7 @@ func (t *ShutdownTracker) MarkStartup() {
 		if discards > 0 {
 			log.Warn("Old unclean shutdowns found", "count", discards)
 		}
+
 		for _, tstamp := range uncleanShutdowns {
 			t := time.Unix(int64(tstamp), 0)
 			log.Warn("Unclean shutdown detected", "booted", t,
@@ -65,6 +66,7 @@ func (t *ShutdownTracker) Start() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ticker.C:

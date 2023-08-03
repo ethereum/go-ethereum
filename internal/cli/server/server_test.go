@@ -47,14 +47,16 @@ func TestServer_DeveloperMode(t *testing.T) {
 	defer CloseMockServer(server)
 
 	// record the initial block number
-	blockNumber := server.backend.BlockChain().CurrentBlock().Header().Number.Int64()
+	blockNumber := server.backend.BlockChain().CurrentBlock().Number.Int64()
 
 	var i int64 = 0
 	for i = 0; i < 3; i++ {
 		// We expect the node to mine blocks every `config.Developer.Period` time period
 		time.Sleep(time.Duration(config.Developer.Period) * time.Second)
-		currBlock := server.backend.BlockChain().CurrentBlock().Header().Number.Int64()
+
+		currBlock := server.backend.BlockChain().CurrentBlock().Number.Int64()
 		expected := blockNumber + i + 1
+
 		if res := assert.Equal(t, currBlock, expected); res == false {
 			break
 		}

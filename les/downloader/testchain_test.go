@@ -35,7 +35,12 @@ var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	testDB      = rawdb.NewMemoryDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000000000))
+
+	gspec = core.Genesis{
+		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	testGenesis = gspec.MustCommit(testDB)
 )
 
 // The common prefix of all test chains:
@@ -46,8 +51,11 @@ var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
 func init() {
 	var forkLen = int(fullMaxForkAncestry + 50)
+
 	var wg sync.WaitGroup
+
 	wg.Add(3)
+
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
 	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
 	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
@@ -72,6 +80,7 @@ func newTestChain(length int, genesis *types.Block) *testChain {
 	tc.tdm[tc.genesis.Hash()] = tc.genesis.Difficulty()
 	tc.blockm[tc.genesis.Hash()] = tc.genesis
 	tc.generate(length-1, 0, genesis, false)
+
 	return tc
 }
 
@@ -79,6 +88,7 @@ func newTestChain(length int, genesis *types.Block) *testChain {
 func (tc *testChain) makeFork(length int, heavy bool, seed byte) *testChain {
 	fork := tc.copy(tc.len() + length)
 	fork.generate(length, seed, tc.headBlock(), heavy)
+
 	return fork
 }
 
@@ -88,6 +98,7 @@ func (tc *testChain) shorten(length int) *testChain {
 	if length > tc.len() {
 		panic(fmt.Errorf("can't shorten test chain to %d blocks, it's only %d blocks long", length, tc.len()))
 	}
+
 	return tc.copy(length)
 }
 
@@ -99,6 +110,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		receiptm: make(map[common.Hash][]*types.Receipt, newlen),
 		tdm:      make(map[common.Hash]*big.Int, newlen),
 	}
+
 	for i := 0; i < len(tc.chain) && i < newlen; i++ {
 		hash := tc.chain[i]
 		cpy.chain = append(cpy.chain, tc.chain[i])
@@ -107,6 +119,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		cpy.headerm[hash] = tc.headerm[hash]
 		cpy.receiptm[hash] = tc.receiptm[hash]
 	}
+
 	return cpy
 }
 
@@ -117,7 +130,6 @@ func (tc *testChain) copy(newlen int) *testChain {
 func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
 	// start := time.Now()
 	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
-
 	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
@@ -127,10 +139,12 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.genesis && i%22 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
+
 			block.AddTx(tx)
 		}
 		// if the block number is a multiple of 5, add a bonus uncle to the block
@@ -193,17 +207,20 @@ func (tc *testChain) headersByNumber(origin uint64, amount int, skip int, revers
 			}
 		}
 	}
+
 	return result
 }
 
 // receipts returns the receipts of the given block hashes.
 func (tc *testChain) receipts(hashes []common.Hash) [][]*types.Receipt {
 	results := make([][]*types.Receipt, 0, len(hashes))
+
 	for _, hash := range hashes {
 		if receipt, ok := tc.receiptm[hash]; ok {
 			results = append(results, receipt)
 		}
 	}
+
 	return results
 }
 
@@ -211,12 +228,14 @@ func (tc *testChain) receipts(hashes []common.Hash) [][]*types.Receipt {
 func (tc *testChain) bodies(hashes []common.Hash) ([][]*types.Transaction, [][]*types.Header) {
 	transactions := make([][]*types.Transaction, 0, len(hashes))
 	uncles := make([][]*types.Header, 0, len(hashes))
+
 	for _, hash := range hashes {
 		if block, ok := tc.blockm[hash]; ok {
 			transactions = append(transactions, block.Transactions())
 			uncles = append(uncles, block.Uncles())
 		}
 	}
+
 	return transactions, uncles
 }
 
@@ -226,5 +245,6 @@ func (tc *testChain) hashToNumber(target common.Hash) (uint64, bool) {
 			return uint64(num), true
 		}
 	}
+
 	return 0, false
 }

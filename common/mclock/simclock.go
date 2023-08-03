@@ -58,12 +58,15 @@ func (s *Simulated) Run(d time.Duration) {
 	s.mu.Lock()
 	s.init()
 
-	end := s.now + AbsTime(d)
+	end := s.now.Add(d)
+
 	var do []func()
+
 	for len(s.scheduled) > 0 && s.scheduled[0].at <= end {
 		ev := heap.Pop(&s.scheduled).(*simTimer)
 		do = append(do, ev.do)
 	}
+
 	s.now = end
 	s.mu.Unlock()
 
@@ -110,9 +113,11 @@ func (s *Simulated) NewTimer(d time.Duration) ChanTimer {
 	defer s.mu.Unlock()
 
 	ch := make(chan AbsTime, 1)
+
 	var timer *simTimer
 	timer = s.schedule(d, func() { ch <- timer.at })
 	timer.ch = ch
+
 	return timer
 }
 
@@ -134,10 +139,11 @@ func (s *Simulated) AfterFunc(d time.Duration, fn func()) Timer {
 func (s *Simulated) schedule(d time.Duration, fn func()) *simTimer {
 	s.init()
 
-	at := s.now + AbsTime(d)
+	at := s.now.Add(d)
 	ev := &simTimer{do: fn, at: at, s: s}
 	heap.Push(&s.scheduled, ev)
 	s.cond.Broadcast()
+
 	return ev
 }
 
@@ -148,9 +154,11 @@ func (ev *simTimer) Stop() bool {
 	if ev.index < 0 {
 		return false
 	}
+
 	heap.Remove(&ev.s.scheduled, ev.index)
 	ev.s.cond.Broadcast()
 	ev.index = -1
+
 	return true
 }
 
@@ -161,12 +169,14 @@ func (ev *simTimer) Reset(d time.Duration) {
 
 	ev.s.mu.Lock()
 	defer ev.s.mu.Unlock()
+
 	ev.at = ev.s.now.Add(d)
 	if ev.index < 0 {
 		heap.Push(&ev.s.scheduled, ev) // already expired
 	} else {
 		heap.Fix(&ev.s.scheduled, ev.index) // hasn't fired yet, reschedule
 	}
+
 	ev.s.cond.Broadcast()
 }
 
@@ -174,6 +184,7 @@ func (ev *simTimer) C() <-chan AbsTime {
 	if ev.ch == nil {
 		panic("mclock: C() on timer created by AfterFunc")
 	}
+
 	return ev.ch
 }
 
@@ -205,5 +216,6 @@ func (h *simTimerHeap) Pop() interface{} {
 	t.index = -1
 	(*h)[end] = nil
 	*h = (*h)[:end]
+
 	return t
 }

@@ -73,14 +73,17 @@ func (f *Feed) Subscribe(channel interface{}) Subscription {
 	f.once.Do(f.init)
 
 	chanval := reflect.ValueOf(channel)
+
 	chantyp := chanval.Type()
 	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.SendDir == 0 {
 		panic(errBadChannel)
 	}
+
 	sub := &feedSub{feed: f, channel: chanval, err: make(chan error, 1)}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if !f.typecheck(chantyp.Elem()) {
 		panic(feedTypeError{op: "Subscribe", got: chantyp, want: reflect.ChanOf(reflect.SendDir, f.etype)})
 	}
@@ -88,6 +91,7 @@ func (f *Feed) Subscribe(channel interface{}) Subscription {
 	// The next Send will add it to f.sendCases.
 	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
 	f.inbox = append(f.inbox, cas)
+
 	return sub
 }
 
@@ -97,6 +101,7 @@ func (f *Feed) typecheck(typ reflect.Type) bool {
 		f.etype = typ
 		return true
 	}
+
 	return f.etype == typ
 }
 
@@ -104,11 +109,14 @@ func (f *Feed) remove(sub *feedSub) {
 	// Delete from inbox first, which covers channels
 	// that have not been added to f.sendCases yet.
 	ch := sub.channel.Interface()
+
 	f.mu.Lock()
+
 	index := f.inbox.find(ch)
 	if index != -1 {
 		f.inbox = f.inbox.delete(index)
 		f.mu.Unlock()
+
 		return
 	}
 	f.mu.Unlock()
@@ -152,6 +160,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	// of sendCases. When a send succeeds, the corresponding case moves to the end of
 	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
+
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
 		// This should usually succeed if subscribers are fast enough and have free
@@ -163,6 +172,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 				i--
 			}
 		}
+
 		if len(cases) == firstSubSendCase {
 			break
 		}
@@ -171,6 +181,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		if chosen == 0 /* <-f.removeSub */ {
 			index := f.sendCases.find(recv.Interface())
 			f.sendCases = f.sendCases.delete(index)
+
 			if index >= 0 && index < len(cases) {
 				// Shrink 'cases' too because the removed case was still active.
 				cases = f.sendCases[:len(cases)-1]
@@ -186,6 +197,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		f.sendCases[i].Send = reflect.Value{}
 	}
 	f.sendLock <- struct{}{}
+
 	return nsent
 }
 
@@ -216,6 +228,7 @@ func (cs caseList) find(channel interface{}) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
@@ -228,6 +241,7 @@ func (cs caseList) delete(index int) caseList {
 func (cs caseList) deactivate(index int) caseList {
 	last := len(cs) - 1
 	cs[index], cs[last] = cs[last], cs[index]
+
 	return cs[:last]
 }
 

@@ -28,6 +28,7 @@ func calcMemSize64(off, l *uint256.Int) (uint64, bool) {
 	if !l.IsUint64() {
 		return 0, true
 	}
+
 	return calcMemSize64WithUint(off, l.Uint64())
 }
 
@@ -44,6 +45,7 @@ func calcMemSize64WithUint(off *uint256.Int, length64 uint64) (uint64, bool) {
 	if overflow {
 		return 0, true
 	}
+
 	val := offset64 + length64
 	// if value < either of it's parts, then it overflowed
 	return val, val < offset64
@@ -56,10 +58,12 @@ func getData(data []byte, start uint64, size uint64) []byte {
 	if start > length {
 		start = length
 	}
+
 	end := start + size
 	if end > length {
 		end = length
 	}
+
 	return common.RightPadBytes(data[start:end], int(size))
 }
 
@@ -78,5 +82,6 @@ func allZero(b []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }

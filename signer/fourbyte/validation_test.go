@@ -29,11 +29,11 @@ func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }
 func toHexBig(h string) hexutil.Big {
-	b := big.NewInt(0).SetBytes(common.FromHex(h))
+	b := new(big.Int).SetBytes(common.FromHex(h))
 	return hexutil.Big(*b)
 }
 func toHexUint(h string) hexutil.Uint64 {
-	b := big.NewInt(0).SetBytes(common.FromHex(h))
+	b := new(big.Int).SetBytes(common.FromHex(h))
 	return hexutil.Uint64(b.Uint64())
 }
 func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
@@ -43,18 +43,21 @@ func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
 	gas := toHexUint(t.g)
 	gasPrice := toHexBig(t.gp)
 	value := toHexBig(t.value)
+
 	var (
 		data, input *hexutil.Bytes
 	)
+
 	if t.d != "" {
 		a := hexutil.Bytes(common.FromHex(t.d))
 		data = &a
 	}
+
 	if t.i != "" {
 		a := hexutil.Bytes(common.FromHex(t.i))
 		input = &a
-
 	}
+
 	return &apitypes.SendTxArgs{
 		From:     *from,
 		To:       to,
@@ -78,6 +81,7 @@ func TestTransactionValidation(t *testing.T) {
 		// use empty db, there are other tests for the abi-specific stuff
 		db = newEmpty()
 	)
+
 	testcases := []txtestcase{
 		// Invalid to checksum
 		{from: "000000000000000000000000000000000000dead", to: "000000000000000000000000000000000000dead",
@@ -111,25 +115,30 @@ func TestTransactionValidation(t *testing.T) {
 		msgs, err := db.ValidateTransaction(nil, dummyTxArgs(test))
 		if err == nil && test.expectErr {
 			t.Errorf("Test %d, expected error", i)
+
 			for _, msg := range msgs.Messages {
 				t.Logf("* %s: %s", msg.Typ, msg.Message)
 			}
 		}
+
 		if err != nil && !test.expectErr {
 			t.Errorf("Test %d, unexpected error: %v", i, err)
 		}
+
 		if err == nil {
 			got := len(msgs.Messages)
 			if got != test.numMessages {
 				for _, msg := range msgs.Messages {
 					t.Logf("* %s: %s", msg.Typ, msg.Message)
 				}
+
 				t.Errorf("Test %d, expected %d messages, got %d", i, test.numMessages, got)
 			} else {
 				//Debug printout, remove later
 				for _, msg := range msgs.Messages {
 					t.Logf("* [%d] %s: %s", i, msg.Typ, msg.Message)
 				}
+
 				t.Log()
 			}
 		}

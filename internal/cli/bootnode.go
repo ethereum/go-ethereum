@@ -170,6 +170,7 @@ func (b *BootnodeCommand) Run(args []string) int {
 			b.UI.Error(fmt.Sprintf("could not generate key: %v", err))
 			return 1
 		}
+
 		if b.saveKey != "" {
 			path := b.saveKey
 

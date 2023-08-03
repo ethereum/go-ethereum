@@ -39,6 +39,7 @@ func TestUnconfirmedInsertBounds(t *testing.T) {
 	limit := uint(10)
 
 	pool := newUnconfirmedBlocks(new(noopChainRetriever), limit)
+
 	for depth := uint64(0); depth < 2*uint64(limit); depth++ {
 		// Insert multiple blocks for the same level just to stress it
 		for i := 0; i < int(depth); i++ {
@@ -68,17 +69,19 @@ func TestUnconfirmedShifts(t *testing.T) {
 
 	// Try to shift below the limit and ensure no blocks are dropped
 	pool.Shift(start + uint64(limit) - 1)
+
 	if n := pool.blocks.Len(); n != int(limit) {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, limit)
 	}
 
 	// Try to shift half the blocks out and verify remainder
 	pool.Shift(start + uint64(limit) - 1 + uint64(limit/2))
+
 	if n := pool.blocks.Len(); n != int(limit)/2 {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, limit/2)
 	}
 
-	// Try to shift all the remaining blocks out and verify emptyness
+	// Try to shift all the remaining blocks out and verify emptiness
 	pool.Shift(start + 2*uint64(limit))
 
 	if n := pool.blocks.Len(); n != 0 {

@@ -46,6 +46,7 @@ func parseURL(url string) (URL, error) {
 	if len(parts) != 2 || parts[0] == "" {
 		return URL{}, errors.New("protocol scheme missing")
 	}
+
 	return URL{
 		Scheme: parts[0],
 		Path:   parts[1],
@@ -57,6 +58,7 @@ func (u URL) String() string {
 	if u.Scheme != "" {
 		return fmt.Sprintf("%s://%s", u.Scheme, u.Path)
 	}
+
 	return u.Path
 }
 
@@ -66,6 +68,7 @@ func (u URL) TerminalString() string {
 	if len(url) > 32 {
 		return url[:31] + ".."
 	}
+
 	return url
 }
 
@@ -77,28 +80,32 @@ func (u URL) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON parses url.
 func (u *URL) UnmarshalJSON(input []byte) error {
 	var textURL string
+
 	err := json.Unmarshal(input, &textURL)
 	if err != nil {
 		return err
 	}
+
 	url, err := parseURL(textURL)
 	if err != nil {
 		return err
 	}
+
 	u.Scheme = url.Scheme
 	u.Path = url.Path
+
 	return nil
 }
 
 // Cmp compares x and y and returns:
 //
-//   -1 if x <  y
-//    0 if x == y
-//   +1 if x >  y
-//
+//	-1 if x <  y
+//	 0 if x == y
+//	+1 if x >  y
 func (u URL) Cmp(url URL) int {
 	if u.Scheme == url.Scheme {
 		return strings.Compare(u.Path, url.Path)
 	}
+
 	return strings.Compare(u.Scheme, url.Scheme)
 }

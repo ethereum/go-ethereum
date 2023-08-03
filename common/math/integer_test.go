@@ -50,6 +50,7 @@ func TestOverflow(t *testing.T) {
 		{MaxUint64, 1, false, mul},
 	} {
 		var overflows bool
+
 		switch test.op {
 		case sub:
 			_, overflows = SafeSub(test.x, test.y)
@@ -89,11 +90,13 @@ func TestHexOrDecimal64(t *testing.T) {
 	}
 	for _, test := range tests {
 		var num HexOrDecimal64
+
 		err := num.UnmarshalText([]byte(test.input))
 		if (err == nil) != test.ok {
 			t.Errorf("ParseUint64(%q) -> (err == nil) = %t, want %t", test.input, err == nil, test.ok)
 			continue
 		}
+
 		if err == nil && uint64(num) != test.num {
 			t.Errorf("ParseUint64(%q) -> %d, want %d", test.input, num, test.num)
 		}

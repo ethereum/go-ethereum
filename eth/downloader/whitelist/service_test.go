@@ -215,6 +215,7 @@ func TestSplitChain(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			past, future := splitChain(tc.current, tc.chain)
 			require.Equal(t, len(past), tc.result.pastLength)
 			require.Equal(t, len(future), tc.result.futureLength)

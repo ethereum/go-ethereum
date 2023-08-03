@@ -96,6 +96,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 			if err != nil && bytes.Compare(conf.ID.Bytes(), otherID.Bytes()) < 0 {
 				return false
 			}
+
 			return true
 		}
 	}
@@ -104,6 +105,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	if node := net.getNode(conf.ID); node != nil {
 		return nil, fmt.Errorf("node with ID %q already exists", conf.ID)
 	}
+
 	if node := net.getNodeByName(conf.Name); node != nil {
 		return nil, fmt.Errorf("node with name %q already exists", conf.Name)
 	}
@@ -118,6 +120,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	node := newNode(adapterNode, conf, false)
 	log.Trace("Node created", "id", conf.ID)
 
@@ -147,10 +150,12 @@ func (net *Network) StartAll() error {
 		if node.Up() {
 			continue
 		}
+
 		if err := net.Start(node.ID()); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -160,10 +165,12 @@ func (net *Network) StopAll() error {
 		if !node.Up() {
 			continue
 		}
+
 		if err := net.Stop(node.ID()); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -182,16 +189,21 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
+
 	if node.Up() {
 		return fmt.Errorf("node %v already up", id)
 	}
+
 	log.Trace("Starting node", "id", id, "adapter", net.nodeAdapter.Name())
+
 	if err := node.Start(snapshots); err != nil {
 		log.Warn("Node startup failed", "id", id, "err", err)
 		return err
 	}
+
 	node.SetUp(true)
 	log.Info("Started node", "id", id)
+
 	ev := NewEvent(node)
 	net.events.Send(ev)
 
@@ -200,12 +212,16 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 	if err != nil {
 		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
 	}
+
 	events := make(chan *p2p.PeerEvent)
+
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
+
 	go net.watchPeerEvents(id, events, sub)
+
 	return nil
 }
 
@@ -223,19 +239,21 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 		if node == nil {
 			return
 		}
+
 		node.SetUp(false)
 		ev := NewEvent(node)
 		net.events.Send(ev)
 	}()
+
 	for {
 		select {
 		case event, ok := <-events:
 			if !ok {
 				return
 			}
+
 			peer := event.Peer
 			switch event.Type {
-
 			case p2p.PeerEventTypeAdd:
 				net.DidConnect(id, peer)
 
@@ -247,13 +265,13 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 
 			case p2p.PeerEventTypeMsgRecv:
 				net.DidReceive(peer, id, event.Protocol, *event.MsgCode)
-
 			}
 
 		case err := <-sub.Err():
 			if err != nil {
 				log.Error("Error in peer event subscription", "id", id, "err", err)
 			}
+
 			return
 		}
 	}
@@ -265,7 +283,6 @@ func (net *Network) Stop(id enode.ID) error {
 	// node.Reachable() closure has a reference to the network and
 	// calls net.InitConn() what also locks the network. => DEADLOCK
 	// That holds until the following ticket is not resolved:
-
 	var err error
 
 	node, err := func() (*Node, error) {
@@ -276,10 +293,13 @@ func (net *Network) Stop(id enode.ID) error {
 		if node == nil {
 			return nil, fmt.Errorf("node %v does not exist", id)
 		}
+
 		if !node.Up() {
 			return nil, fmt.Errorf("node %v already down", id)
 		}
+
 		node.SetUp(false)
+
 		return node, nil
 	}()
 	if err != nil {
@@ -295,9 +315,12 @@ func (net *Network) Stop(id enode.ID) error {
 		node.SetUp(true)
 		return err
 	}
+
 	log.Info("Stopped node", "id", id, "err", err)
+
 	ev := ControlEvent(node)
 	net.events.Send(ev)
+
 	return nil
 }
 
@@ -306,20 +329,25 @@ func (net *Network) Stop(id enode.ID) error {
 func (net *Network) Connect(oneID, otherID enode.ID) error {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	return net.connect(oneID, otherID)
 }
 
 func (net *Network) connect(oneID, otherID enode.ID) error {
 	log.Debug("Connecting nodes with addPeer", "id", oneID, "other", otherID)
+
 	conn, err := net.initConn(oneID, otherID)
 	if err != nil {
 		return err
 	}
+
 	client, err := conn.one.Client()
 	if err != nil {
 		return err
 	}
+
 	net.events.Send(ControlEvent(conn))
+
 	return client.Call(nil, "admin_addPeer", string(conn.other.Addr()))
 }
 
@@ -330,14 +358,18 @@ func (net *Network) Disconnect(oneID, otherID enode.ID) error {
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", oneID, otherID)
 	}
+
 	if !conn.Up {
 		return fmt.Errorf("%v and %v already disconnected", oneID, otherID)
 	}
+
 	client, err := conn.one.Client()
 	if err != nil {
 		return err
 	}
+
 	net.events.Send(ControlEvent(conn))
+
 	return client.Call(nil, "admin_removePeer", string(conn.other.Addr()))
 }
 
@@ -345,15 +377,19 @@ func (net *Network) Disconnect(oneID, otherID enode.ID) error {
 func (net *Network) DidConnect(one, other enode.ID) error {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	conn, err := net.getOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
+
 	if conn.Up {
 		return fmt.Errorf("%v and %v already connected", one, other)
 	}
+
 	conn.Up = true
 	net.events.Send(NewEvent(conn))
+
 	return nil
 }
 
@@ -362,16 +398,20 @@ func (net *Network) DidConnect(one, other enode.ID) error {
 func (net *Network) DidDisconnect(one, other enode.ID) error {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	conn := net.getConn(one, other)
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
+
 	if !conn.Up {
 		return fmt.Errorf("%v and %v already disconnected", one, other)
 	}
+
 	conn.Up = false
 	conn.initiated = time.Now().Add(-DialBanTimeout)
 	net.events.Send(NewEvent(conn))
+
 	return nil
 }
 
@@ -385,6 +425,7 @@ func (net *Network) DidSend(sender, receiver enode.ID, proto string, code uint64
 		Received: false,
 	}
 	net.events.Send(NewEvent(msg))
+
 	return nil
 }
 
@@ -398,6 +439,7 @@ func (net *Network) DidReceive(sender, receiver enode.ID, proto string, code uin
 		Received: true,
 	}
 	net.events.Send(NewEvent(msg))
+
 	return nil
 }
 
@@ -406,6 +448,7 @@ func (net *Network) DidReceive(sender, receiver enode.ID, proto string, code uin
 func (net *Network) GetNode(id enode.ID) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getNode(id)
 }
 
@@ -414,6 +457,7 @@ func (net *Network) getNode(id enode.ID) *Node {
 	if !found {
 		return nil
 	}
+
 	return net.Nodes[i]
 }
 
@@ -422,6 +466,7 @@ func (net *Network) getNode(id enode.ID) *Node {
 func (net *Network) GetNodeByName(name string) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getNodeByName(name)
 }
 
@@ -431,6 +476,7 @@ func (net *Network) getNodeByName(name string) *Node {
 			return node
 		}
 	}
+
 	return nil
 }
 
@@ -454,6 +500,7 @@ func (net *Network) getNodeIDs(excludeIDs []enode.ID) []enode.ID {
 		// Return the difference of nodeIDs and excludeIDs
 		return filterIDs(nodeIDs, excludeIDs)
 	}
+
 	return nodeIDs
 }
 
@@ -471,6 +518,7 @@ func (net *Network) getNodes(excludeIDs []enode.ID) []*Node {
 		nodeIDs := net.getNodeIDs(excludeIDs)
 		return net.getNodesByID(nodeIDs)
 	}
+
 	return net.Nodes
 }
 
@@ -485,6 +533,7 @@ func (net *Network) GetNodesByID(nodeIDs []enode.ID) []*Node {
 
 func (net *Network) getNodesByID(nodeIDs []enode.ID) []*Node {
 	nodes := make([]*Node, 0, len(nodeIDs))
+
 	for _, id := range nodeIDs {
 		node := net.getNode(id)
 		if node != nil {
@@ -522,6 +571,7 @@ func (net *Network) GetNodeIDsByProperty(property string) []enode.ID {
 
 func (net *Network) getNodeIDsByProperty(property string) []enode.ID {
 	nodeIDs := make([]enode.ID, 0, len(net.propertyMap[property]))
+
 	for _, nodeIndex := range net.propertyMap[property] {
 		node := net.Nodes[nodeIndex]
 		nodeIDs = append(nodeIDs, node.ID())
@@ -534,6 +584,7 @@ func (net *Network) getNodeIDsByProperty(property string) []enode.ID {
 func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getRandomUpNode(excludeIDs...)
 }
 
@@ -548,6 +599,7 @@ func (net *Network) getUpNodeIDs() (ids []enode.ID) {
 			ids = append(ids, node.ID())
 		}
 	}
+
 	return ids
 }
 
@@ -555,6 +607,7 @@ func (net *Network) getUpNodeIDs() (ids []enode.ID) {
 func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getRandomNode(net.getDownNodeIDs(), excludeIDs)
 }
 
@@ -564,6 +617,7 @@ func (net *Network) getDownNodeIDs() (ids []enode.ID) {
 			ids = append(ids, node.ID())
 		}
 	}
+
 	return ids
 }
 
@@ -571,6 +625,7 @@ func (net *Network) getDownNodeIDs() (ids []enode.ID) {
 func (net *Network) GetRandomNode(excludeIDs ...enode.ID) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getRandomNode(net.getNodeIDs(nil), excludeIDs) // no need to exclude twice
 }
 
@@ -581,6 +636,7 @@ func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
 	if l == 0 {
 		return nil
 	}
+
 	return net.getNode(filtered[rand.Intn(l)])
 }
 
@@ -589,12 +645,15 @@ func filterIDs(ids []enode.ID, excludeIDs []enode.ID) []enode.ID {
 	for _, id := range excludeIDs {
 		exclude[id] = true
 	}
+
 	var filtered []enode.ID
+
 	for _, id := range ids {
 		if _, found := exclude[id]; !found {
 			filtered = append(filtered, id)
 		}
 	}
+
 	return filtered
 }
 
@@ -603,6 +662,7 @@ func filterIDs(ids []enode.ID, excludeIDs []enode.ID) []enode.ID {
 func (net *Network) GetConn(oneID, otherID enode.ID) *Conn {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+
 	return net.getConn(oneID, otherID)
 }
 
@@ -611,6 +671,7 @@ func (net *Network) GetConn(oneID, otherID enode.ID) *Conn {
 func (net *Network) GetOrCreateConn(oneID, otherID enode.ID) (*Conn, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	return net.getOrCreateConn(oneID, otherID)
 }
 
@@ -623,10 +684,12 @@ func (net *Network) getOrCreateConn(oneID, otherID enode.ID) (*Conn, error) {
 	if one == nil {
 		return nil, fmt.Errorf("node %v does not exist", oneID)
 	}
+
 	other := net.getNode(otherID)
 	if other == nil {
 		return nil, fmt.Errorf("node %v does not exist", otherID)
 	}
+
 	conn := &Conn{
 		One:   oneID,
 		Other: otherID,
@@ -636,20 +699,23 @@ func (net *Network) getOrCreateConn(oneID, otherID enode.ID) (*Conn, error) {
 	label := ConnLabel(oneID, otherID)
 	net.connMap[label] = len(net.Conns)
 	net.Conns = append(net.Conns, conn)
+
 	return conn, nil
 }
 
 func (net *Network) getConn(oneID, otherID enode.ID) *Conn {
 	label := ConnLabel(oneID, otherID)
+
 	i, found := net.connMap[label]
 	if !found {
 		return nil
 	}
+
 	return net.Conns[i]
 }
 
-// InitConn(one, other) retrieves the connection model for the connection between
-// peers one and other, or creates a new one if it does not exist
+// InitConn retrieves the connection model for the connection between
+// peers 'oneID' and 'otherID', or creates a new one if it does not exist
 // the order of nodes does not matter, i.e., Conn(i,j) == Conn(j, i)
 // it checks if the connection is already up, and if the nodes are running
 // NOTE:
@@ -659,6 +725,7 @@ func (net *Network) getConn(oneID, otherID enode.ID) *Conn {
 func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	return net.initConn(oneID, otherID)
 }
 
@@ -666,13 +733,16 @@ func (net *Network) initConn(oneID, otherID enode.ID) (*Conn, error) {
 	if oneID == otherID {
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
+
 	conn, err := net.getOrCreateConn(oneID, otherID)
 	if err != nil {
 		return nil, err
 	}
+
 	if conn.Up {
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
+
 	if time.Since(conn.initiated) < DialBanTimeout {
 		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
 	}
@@ -682,8 +752,11 @@ func (net *Network) initConn(oneID, otherID enode.ID) (*Conn, error) {
 		log.Trace("Nodes not up", "err", err)
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
+
 	log.Debug("Connection initiated", "id", oneID, "other", otherID)
+
 	conn.initiated = time.Now()
+
 	return conn, nil
 }
 
@@ -691,10 +764,12 @@ func (net *Network) initConn(oneID, otherID enode.ID) (*Conn, error) {
 func (net *Network) Shutdown() {
 	for _, node := range net.Nodes {
 		log.Debug("Stopping node", "id", node.ID())
+
 		if err := node.Stop(); err != nil {
 			log.Warn("Can't stop node", "id", node.ID(), "err", err)
 		}
 	}
+
 	close(net.quitc)
 }
 
@@ -739,6 +814,7 @@ func (n *Node) copy() *Node {
 func (n *Node) Up() bool {
 	n.upMu.RLock()
 	defer n.upMu.RUnlock()
+
 	return n.up
 }
 
@@ -765,8 +841,10 @@ func (n *Node) NodeInfo() *p2p.NodeInfo {
 	if n.Node == nil {
 		return nil
 	}
+
 	info := n.Node.NodeInfo()
 	info.Name = n.Config.Name
+
 	return info
 }
 
@@ -793,10 +871,13 @@ func (n *Node) UnmarshalJSON(raw []byte) error {
 		Config *adapters.NodeConfig `json:"config,omitempty"`
 		Up     bool                 `json:"up"`
 	}
+
 	if err := json.Unmarshal(raw, &node); err != nil {
 		return err
 	}
+
 	*n = *newNode(nil, node.Config, node.Up)
+
 	return nil
 }
 
@@ -822,9 +903,11 @@ func (c *Conn) nodesUp() error {
 	if !c.one.Up() {
 		return fmt.Errorf("one %v is not up", c.One)
 	}
+
 	if !c.other.Up() {
 		return fmt.Errorf("other %v is not up", c.Other)
 	}
+
 	return nil
 }
 
@@ -859,6 +942,7 @@ func ConnLabel(source, target enode.ID) string {
 		first = source
 		second = target
 	}
+
 	return fmt.Sprintf("%v-%v", first, second)
 }
 
@@ -889,54 +973,67 @@ func (net *Network) SnapshotWithServices(addServices []string, removeServices []
 func (net *Network) snapshot(addServices []string, removeServices []string) (*Snapshot, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	snap := &Snapshot{
 		Nodes: make([]NodeSnapshot, len(net.Nodes)),
 	}
 	for i, node := range net.Nodes {
 		snap.Nodes[i] = NodeSnapshot{Node: *node.copy()}
+
 		if !node.Up() {
 			continue
 		}
+
 		snapshots, err := node.Snapshots()
 		if err != nil {
 			return nil, err
 		}
+
 		snap.Nodes[i].Snapshots = snapshots
+
 		for _, addSvc := range addServices {
 			haveSvc := false
+
 			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				if svc == addSvc {
 					haveSvc = true
 					break
 				}
 			}
+
 			if !haveSvc {
 				snap.Nodes[i].Node.Config.Lifecycles = append(snap.Nodes[i].Node.Config.Lifecycles, addSvc)
 			}
 		}
+
 		if len(removeServices) > 0 {
 			var cleanedServices []string
+
 			for _, svc := range snap.Nodes[i].Node.Config.Lifecycles {
 				haveSvc := false
+
 				for _, rmSvc := range removeServices {
 					if rmSvc == svc {
 						haveSvc = true
 						break
 					}
 				}
+
 				if !haveSvc {
 					cleanedServices = append(cleanedServices, svc)
 				}
-
 			}
+
 			snap.Nodes[i].Node.Config.Lifecycles = cleanedServices
 		}
 	}
+
 	for _, conn := range net.Conns {
 		if conn.Up {
 			snap.Conns = append(snap.Conns, *conn)
 		}
 	}
+
 	return snap, nil
 }
 
@@ -950,9 +1047,11 @@ func (net *Network) Load(snap *Snapshot) error {
 		if _, err := net.NewNodeWithConfig(n.Node.Config); err != nil {
 			return err
 		}
+
 		if !n.Node.Up() {
 			continue
 		}
+
 		if err := net.startWithSnapshots(n.Node.Config.ID, n.Snapshots); err != nil {
 			return err
 		}
@@ -960,13 +1059,15 @@ func (net *Network) Load(snap *Snapshot) error {
 
 	// Prepare connection events counter.
 	allConnected := make(chan struct{}) // closed when all connections are established
-	done := make(chan struct{})         // ensures that the event loop goroutine is terminated
+
+	done := make(chan struct{}) // ensures that the event loop goroutine is terminated
 	defer close(done)
 
 	// Subscribe to event channel.
 	// It needs to be done outside of the event loop goroutine (created below)
 	// to ensure that the event channel is blocking before connect calls are made.
 	events := make(chan *Event)
+
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
 
@@ -989,6 +1090,7 @@ func (net *Network) Load(snap *Snapshot) error {
 				if e.Type != EventTypeConn {
 					continue
 				}
+
 				connection := [2]enode.ID{e.Conn.One, e.Conn.Other}
 				// Nodes are still not connected or have been disconnected.
 				if !e.Conn.Up {
@@ -996,6 +1098,7 @@ func (net *Network) Load(snap *Snapshot) error {
 					// This will prevent false positive in case disconnections happen.
 					delete(connections, connection)
 					log.Warn("load snapshot: unexpected disconnection", "one", e.Conn.One, "other", e.Conn.Other)
+
 					continue
 				}
 				// Check that the connection is from the snapshot.
@@ -1021,12 +1124,12 @@ func (net *Network) Load(snap *Snapshot) error {
 
 	// Start connecting.
 	for _, conn := range snap.Conns {
-
 		if !net.GetNode(conn.One).Up() || !net.GetNode(conn.Other).Up() {
 			//in this case, at least one of the nodes of a connection is not up,
 			//so it would result in the snapshot `Load` to fail
 			continue
 		}
+
 		if err := net.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
@@ -1039,6 +1142,7 @@ func (net *Network) Load(snap *Snapshot) error {
 	case <-time.After(snapshotLoadTimeout):
 		return errors.New("snapshot connections not established")
 	}
+
 	return nil
 }
 
@@ -1050,6 +1154,7 @@ func (net *Network) Subscribe(events chan *Event) {
 			if !ok {
 				return
 			}
+
 			if event.Control {
 				net.executeControlEvent(event)
 			}
@@ -1061,6 +1166,7 @@ func (net *Network) Subscribe(events chan *Event) {
 
 func (net *Network) executeControlEvent(event *Event) {
 	log.Trace("Executing control event", "type", event.Type, "event", event)
+
 	switch event.Type {
 	case EventTypeNode:
 		if err := net.executeNodeEvent(event); err != nil {
@@ -1083,6 +1189,7 @@ func (net *Network) executeNodeEvent(e *Event) error {
 	if _, err := net.NewNodeWithConfig(e.Node.Config); err != nil {
 		return err
 	}
+
 	return net.Start(e.Node.ID())
 }
 
@@ -1090,5 +1197,6 @@ func (net *Network) executeConnEvent(e *Event) error {
 	if e.Conn.Up {
 		return net.Connect(e.Conn.One, e.Conn.Other)
 	}
+
 	return net.Disconnect(e.Conn.One, e.Conn.Other)
 }

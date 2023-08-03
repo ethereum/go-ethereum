@@ -18,7 +18,6 @@ package logger
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -62,16 +61,14 @@ func (al accessList) equal(other accessList) bool {
 	if len(al) != len(other) {
 		return false
 	}
+	// Given that len(al) == len(other), we only need to check that
+	// all the items from al are in other.
 	for addr := range al {
 		if _, ok := other[addr]; !ok {
 			return false
 		}
 	}
-	for addr := range other {
-		if _, ok := al[addr]; !ok {
-			return false
-		}
-	}
+
 	// Accounts match, cross reference the storage slots too
 	for addr, slots := range al {
 		otherslots := other[addr]
@@ -79,30 +76,31 @@ func (al accessList) equal(other accessList) bool {
 		if len(slots) != len(otherslots) {
 			return false
 		}
+		// Given that len(slots) == len(otherslots), we only need to check that
+		// all the items from slots are in otherslots.
 		for hash := range slots {
 			if _, ok := otherslots[hash]; !ok {
 				return false
 			}
 		}
-		for hash := range otherslots {
-			if _, ok := slots[hash]; !ok {
-				return false
-			}
-		}
 	}
+
 	return true
 }
 
 // accesslist converts the accesslist to a types.AccessList.
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
+
 	for addr, slots := range al {
 		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
+
 		acl = append(acl, tuple)
 	}
+
 	return acl
 }
 
@@ -123,15 +121,19 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	for _, addr := range precompiles {
 		excl[addr] = struct{}{}
 	}
+
 	list := newAccessList()
+
 	for _, al := range acl {
 		if _, ok := excl[al.Address]; !ok {
 			list.addAddress(al.Address)
 		}
+
 		for _, slot := range al.StorageKeys {
 			list.addSlot(al.Address, slot)
 		}
 	}
+
 	return &AccessListTracer{
 		excl: excl,
 		list: list,
@@ -146,16 +148,19 @@ func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
+
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
 		a.list.addSlot(scope.Contract.Address(), slot)
 	}
+
 	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		if _, ok := a.excl[addr]; !ok {
 			a.list.addAddress(addr)
 		}
 	}
+
 	if (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE) && stackLen >= 5 {
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		if _, ok := a.excl[addr]; !ok {
@@ -167,12 +172,16 @@ func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 func (*AccessListTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
-func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {}
 
 func (*AccessListTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
+func (*AccessListTracer) CaptureTxStart(gasLimit uint64) {}
+
+func (*AccessListTracer) CaptureTxEnd(restGas uint64) {}
 
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {

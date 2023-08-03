@@ -54,6 +54,7 @@ func (eth *Ethereum) startBloomHandlers(sectionSize uint64) {
 				case request := <-eth.bloomRequests:
 					task := <-request
 					task.Bitsets = make([][]byte, len(task.Sections))
+
 					for i, section := range task.Sections {
 						head := rawdb.ReadCanonicalHash(eth.chainDb, (section+1)*sectionSize-1)
 						if compVector, err := rawdb.ReadBloomBits(eth.chainDb, task.Bit, section, head); err == nil {

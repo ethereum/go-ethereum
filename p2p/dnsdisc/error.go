@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -50,6 +50,7 @@ func (err nameError) Error() string {
 	if ee, ok := err.err.(entryError); ok {
 		return fmt.Sprintf("invalid %s entry at %s: %v", ee.typ, err.name, ee.err)
 	}
+
 	return err.name + ": " + err.err.Error()
 }
 

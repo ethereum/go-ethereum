@@ -51,55 +51,57 @@ type txJSON struct {
 }
 
 // MarshalJSON marshals as JSON with a hash.
-func (t *Transaction) MarshalJSON() ([]byte, error) {
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	var enc txJSON
 	// These are set for all tx types.
-	enc.Hash = t.Hash()
-	enc.Type = hexutil.Uint64(t.Type())
+	enc.Hash = tx.Hash()
+	enc.Type = hexutil.Uint64(tx.Type())
 
 	// Other fields are set conditionally depending on tx type.
-	switch tx := t.inner.(type) {
+	switch itx := tx.inner.(type) {
 	case *LegacyTx:
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *AccessListTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *DynamicFeeTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	}
+
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (t *Transaction) UnmarshalJSON(input []byte) error {
+// nolint:gocognit
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec txJSON
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -107,46 +109,65 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 
 	// Decode / verify fields according to transaction type.
 	var inner TxData
+
 	switch dec.Type {
 	case LegacyTxType:
 		var itx LegacyTx
 		inner = &itx
+
 		if dec.To != nil {
 			itx.To = dec.To
 		}
+
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
+
 		itx.Nonce = uint64(*dec.Nonce)
+
 		if dec.GasPrice == nil {
 			return errors.New("missing required field 'gasPrice' in transaction")
 		}
+
 		itx.GasPrice = (*big.Int)(dec.GasPrice)
+
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in transaction")
 		}
+
 		itx.Gas = uint64(*dec.Gas)
+
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+
 		itx.Value = (*big.Int)(dec.Value)
+
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
+
 		itx.Data = *dec.Data
+
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
+
 		itx.V = (*big.Int)(dec.V)
+
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
+
 		itx.R = (*big.Int)(dec.R)
+
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
+
 		itx.S = (*big.Int)(dec.S)
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+
 		if withSignature {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, true); err != nil {
 				return err
@@ -160,46 +181,65 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
+
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
+
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.To != nil {
 			itx.To = dec.To
 		}
+
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
+
 		itx.Nonce = uint64(*dec.Nonce)
+
 		if dec.GasPrice == nil {
 			return errors.New("missing required field 'gasPrice' in transaction")
 		}
+
 		itx.GasPrice = (*big.Int)(dec.GasPrice)
+
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in transaction")
 		}
+
 		itx.Gas = uint64(*dec.Gas)
+
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+
 		itx.Value = (*big.Int)(dec.Value)
+
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
+
 		itx.Data = *dec.Data
+
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
+
 		itx.V = (*big.Int)(dec.V)
+
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
+
 		itx.R = (*big.Int)(dec.R)
+
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
+
 		itx.S = (*big.Int)(dec.S)
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+
 		if withSignature {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
 				return err
@@ -213,50 +253,71 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
+
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
+
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.To != nil {
 			itx.To = dec.To
 		}
+
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
+
 		itx.Nonce = uint64(*dec.Nonce)
+
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
 		}
+
 		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+
 		if dec.MaxFeePerGas == nil {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
+
 		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}
+
 		itx.Gas = uint64(*dec.Gas)
+
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+
 		itx.Value = (*big.Int)(dec.Value)
+
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
+
 		itx.Data = *dec.Data
+
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
+
 		itx.V = (*big.Int)(dec.V)
+
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
+
 		itx.R = (*big.Int)(dec.R)
+
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
+
 		itx.S = (*big.Int)(dec.S)
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+
 		if withSignature {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
 				return err
@@ -268,7 +329,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	}
 
 	// Now set the inner transaction.
-	t.setDecoded(inner, 0)
+	tx.setDecoded(inner, 0)
 
 	// TODO: check hash here?
 	return nil

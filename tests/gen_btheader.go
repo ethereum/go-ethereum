@@ -34,7 +34,9 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 		GasUsed          math.HexOrDecimal64
 		Timestamp        math.HexOrDecimal64
 		BaseFeePerGas    *math.HexOrDecimal256
+		WithdrawalsRoot  *common.Hash
 	}
+
 	var enc btHeader
 	enc.Bloom = b.Bloom
 	enc.Coinbase = b.Coinbase
@@ -53,6 +55,8 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.GasUsed = math.HexOrDecimal64(b.GasUsed)
 	enc.Timestamp = math.HexOrDecimal64(b.Timestamp)
 	enc.BaseFeePerGas = (*math.HexOrDecimal256)(b.BaseFeePerGas)
+	enc.WithdrawalsRoot = b.WithdrawalsRoot
+
 	return json.Marshal(&enc)
 }
 
@@ -76,61 +80,85 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		GasUsed          *math.HexOrDecimal64
 		Timestamp        *math.HexOrDecimal64
 		BaseFeePerGas    *math.HexOrDecimal256
+		WithdrawalsRoot  *common.Hash
 	}
+
 	var dec btHeader
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.Bloom != nil {
 		b.Bloom = *dec.Bloom
 	}
+
 	if dec.Coinbase != nil {
 		b.Coinbase = *dec.Coinbase
 	}
+
 	if dec.MixHash != nil {
 		b.MixHash = *dec.MixHash
 	}
+
 	if dec.Nonce != nil {
 		b.Nonce = *dec.Nonce
 	}
+
 	if dec.Number != nil {
 		b.Number = (*big.Int)(dec.Number)
 	}
+
 	if dec.Hash != nil {
 		b.Hash = *dec.Hash
 	}
+
 	if dec.ParentHash != nil {
 		b.ParentHash = *dec.ParentHash
 	}
+
 	if dec.ReceiptTrie != nil {
 		b.ReceiptTrie = *dec.ReceiptTrie
 	}
+
 	if dec.StateRoot != nil {
 		b.StateRoot = *dec.StateRoot
 	}
+
 	if dec.TransactionsTrie != nil {
 		b.TransactionsTrie = *dec.TransactionsTrie
 	}
+
 	if dec.UncleHash != nil {
 		b.UncleHash = *dec.UncleHash
 	}
+
 	if dec.ExtraData != nil {
 		b.ExtraData = *dec.ExtraData
 	}
+
 	if dec.Difficulty != nil {
 		b.Difficulty = (*big.Int)(dec.Difficulty)
 	}
+
 	if dec.GasLimit != nil {
 		b.GasLimit = uint64(*dec.GasLimit)
 	}
+
 	if dec.GasUsed != nil {
 		b.GasUsed = uint64(*dec.GasUsed)
 	}
+
 	if dec.Timestamp != nil {
 		b.Timestamp = uint64(*dec.Timestamp)
 	}
+
 	if dec.BaseFeePerGas != nil {
 		b.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
 	}
+
+	if dec.WithdrawalsRoot != nil {
+		b.WithdrawalsRoot = dec.WithdrawalsRoot
+	}
+
 	return nil
 }

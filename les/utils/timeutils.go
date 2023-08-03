@@ -39,6 +39,7 @@ func NewUpdateTimer(clock mclock.Clock, threshold time.Duration) *UpdateTimer {
 	if clock == nil {
 		clock = mclock.System{}
 	}
+
 	return &UpdateTimer{
 		clock:     clock,
 		last:      clock.Now(),
@@ -58,12 +59,15 @@ func (t *UpdateTimer) UpdateAt(at mclock.AbsTime, callback func(diff time.Durati
 	if diff < 0 {
 		diff = 0
 	}
+
 	if diff < t.threshold {
 		return false
 	}
+
 	if callback(diff) {
 		t.last = at
 		return true
 	}
+
 	return false
 }

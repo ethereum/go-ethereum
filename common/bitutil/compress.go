@@ -61,8 +61,10 @@ func CompressBytes(data []byte) []byte {
 	if out := bitsetEncodeBytes(data); len(out) < len(data) {
 		return out
 	}
+
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
+
 	return cpy
 }
 
@@ -78,6 +80,7 @@ func bitsetEncodeBytes(data []byte) []byte {
 		if data[0] == 0 {
 			return nil
 		}
+
 		return data
 	}
 	// Calculate the bitset of set bytes, and gather the non-zero bytes
@@ -90,9 +93,11 @@ func bitsetEncodeBytes(data []byte) []byte {
 			nonZeroBitset[i/8] |= 1 << byte(7-i%8)
 		}
 	}
+
 	if len(nonZeroBytes) == 0 {
 		return nil
 	}
+
 	return append(bitsetEncodeBytes(nonZeroBitset), nonZeroBytes...)
 }
 
@@ -103,11 +108,14 @@ func DecompressBytes(data []byte, target int) ([]byte, error) {
 	if len(data) > target {
 		return nil, errExceededTarget
 	}
+
 	if len(data) == target {
 		cpy := make([]byte, len(data))
 		copy(cpy, data)
+
 		return cpy, nil
 	}
+
 	return bitsetDecodeBytes(data, target)
 }
 
@@ -117,9 +125,11 @@ func bitsetDecodeBytes(data []byte, target int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if size != len(data) {
 		return nil, errUnreferencedData
 	}
+
 	return out, nil
 }
 
@@ -137,11 +147,13 @@ func bitsetDecodePartialBytes(data []byte, target int) ([]byte, int, error) {
 	if len(data) == 0 {
 		return decomp, 0, nil
 	}
+
 	if target == 1 {
 		decomp[0] = data[0] // copy to avoid referencing the input slice
 		if data[0] != 0 {
 			return decomp, 1, nil
 		}
+
 		return decomp, 0, nil
 	}
 	// Decompress the bitset of set bytes and distribute the non zero bytes
@@ -149,12 +161,14 @@ func bitsetDecodePartialBytes(data []byte, target int) ([]byte, int, error) {
 	if err != nil {
 		return nil, ptr, err
 	}
+
 	for i := 0; i < 8*len(nonZeroBitset); i++ {
 		if nonZeroBitset[i/8]&(1<<byte(7-i%8)) != 0 {
 			// Make sure we have enough data to push into the correct slot
 			if ptr >= len(data) {
 				return nil, 0, errMissingData
 			}
+
 			if i >= len(decomp) {
 				return nil, 0, errExceededTarget
 			}
@@ -162,9 +176,11 @@ func bitsetDecodePartialBytes(data []byte, target int) ([]byte, int, error) {
 			if data[ptr] == 0 {
 				return nil, 0, errZeroContent
 			}
+
 			decomp[i] = data[ptr]
 			ptr++
 		}
 	}
+
 	return decomp, ptr, nil
 }

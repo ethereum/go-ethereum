@@ -38,11 +38,13 @@ func CaptureDebugGCStats(r Registry, d time.Duration) {
 func CaptureDebugGCStatsOnce(r Registry) {
 	lastGC := gcStats.LastGC
 	t := time.Now()
+
 	debug.ReadGCStats(&gcStats)
 	debugMetrics.ReadGCStats.UpdateSince(t)
 
 	debugMetrics.GCStats.LastGC.Update(gcStats.LastGC.UnixNano())
 	debugMetrics.GCStats.NumGC.Update(gcStats.NumGC)
+
 	if lastGC != gcStats.LastGC && 0 < len(gcStats.Pause) {
 		debugMetrics.GCStats.Pause.Update(int64(gcStats.Pause[0]))
 	}

@@ -151,6 +151,7 @@ func TestDecode(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
+
 		if !bytes.Equal(test.want.([]byte), dec) {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
 			continue
@@ -173,6 +174,7 @@ func TestDecodeBig(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
+
 		if dec.Cmp(test.want.(*big.Int)) != 0 {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
 			continue
@@ -195,6 +197,7 @@ func TestDecodeUint64(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
+
 		if dec != test.want.(uint64) {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
 			continue
@@ -206,6 +209,7 @@ func BenchmarkEncodeBig(b *testing.B) {
 	for _, bench := range encodeBigTests {
 		b.Run(bench.want, func(b *testing.B) {
 			b.ReportAllocs()
+
 			bigint := bench.input.(*big.Int)
 			for i := 0; i < b.N; i++ {
 				EncodeBig(bigint)

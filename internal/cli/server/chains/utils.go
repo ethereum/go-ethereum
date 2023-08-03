@@ -16,12 +16,15 @@ func readPrealloc(filename string) core.GenesisAlloc {
 	if err != nil {
 		panic(fmt.Sprintf("Could not open genesis preallocation for %s: %v", filename, err))
 	}
+
 	defer f.Close()
 	decoder := json.NewDecoder(f)
 	ga := make(core.GenesisAlloc)
+
 	err = decoder.Decode(&ga)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
 	}
+
 	return ga
 }

@@ -44,10 +44,12 @@ func New(validSchemes enr.IdentityScheme, r *enr.Record) (*Node, error) {
 	if err := r.VerifySignature(validSchemes); err != nil {
 		return nil, err
 	}
+
 	node := &Node{r: *r}
 	if n := copy(node.id[:], validSchemes.NodeAddr(&node.r)); n != len(ID{}) {
 		return nil, fmt.Errorf("invalid node ID length %d, need %d", n, len(ID{}))
 	}
+
 	return node, nil
 }
 
@@ -57,6 +59,7 @@ func MustParse(rawurl string) *Node {
 	if err != nil {
 		panic("invalid node: " + err.Error())
 	}
+
 	return n
 }
 
@@ -65,17 +68,21 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	if strings.HasPrefix(input, "enode://") {
 		return ParseV4(input)
 	}
+
 	if !strings.HasPrefix(input, "enr:") {
 		return nil, errMissingPrefix
 	}
+
 	bin, err := base64.RawURLEncoding.DecodeString(input[4:])
 	if err != nil {
 		return nil, err
 	}
+
 	var r enr.Record
 	if err := rlp.DecodeBytes(bin, &r); err != nil {
 		return nil, err
 	}
+
 	return New(validSchemes, &r)
 }
 
@@ -105,26 +112,33 @@ func (n *Node) IP() net.IP {
 		ip4 enr.IPv4
 		ip6 enr.IPv6
 	)
+
 	if n.Load(&ip4) == nil {
 		return net.IP(ip4)
 	}
+
 	if n.Load(&ip6) == nil {
 		return net.IP(ip6)
 	}
+
 	return nil
 }
 
 // UDP returns the UDP port of the node.
 func (n *Node) UDP() int {
 	var port enr.UDP
+
 	n.Load(&port)
+
 	return int(port)
 }
 
 // TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	var port enr.TCP
+
 	n.Load(&port)
+
 	return int(port)
 }
 
@@ -134,6 +148,7 @@ func (n *Node) Pubkey() *ecdsa.PublicKey {
 	if n.Load((*Secp256k1)(&key)) != nil {
 		return nil
 	}
+
 	return &key
 }
 
@@ -150,15 +165,18 @@ func (n *Node) ValidateComplete() error {
 	if n.Incomplete() {
 		return errors.New("missing IP address")
 	}
+
 	if n.UDP() == 0 {
 		return errors.New("missing UDP port")
 	}
+
 	ip := n.IP()
 	if ip.IsMulticast() || ip.IsUnspecified() {
 		return errors.New("invalid IP (multicast/unspecified)")
 	}
 	// Validate the node key (on curve, etc.).
 	var key Secp256k1
+
 	return n.Load(&key)
 }
 
@@ -167,8 +185,10 @@ func (n *Node) String() string {
 	if isNewV4(n) {
 		return n.URLv4() // backwards-compatibility glue for NewV4 nodes
 	}
+
 	enc, _ := rlp.EncodeToBytes(&n.r) // always succeeds because record is valid
 	b64 := base64.RawURLEncoding.EncodeToString(enc)
+
 	return "enr:" + b64
 }
 
@@ -183,6 +203,7 @@ func (n *Node) UnmarshalText(text []byte) error {
 	if err == nil {
 		*n = *dec
 	}
+
 	return err
 }
 
@@ -199,7 +220,7 @@ func (n ID) String() string {
 	return fmt.Sprintf("%x", n[:])
 }
 
-// The Go syntax representation of a ID is a call to HexID.
+// GoString returns the Go syntax representation of a ID is a call to HexID.
 func (n ID) GoString() string {
 	return fmt.Sprintf("enode.HexID(\"%x\")", n[:])
 }
@@ -220,7 +241,9 @@ func (n *ID) UnmarshalText(text []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*n = id
+
 	return nil
 }
 
@@ -232,18 +255,22 @@ func HexID(in string) ID {
 	if err != nil {
 		panic(err)
 	}
+
 	return id
 }
 
 func ParseID(in string) (ID, error) {
 	var id ID
+
 	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		return id, err
 	} else if len(b) != len(id) {
 		return id, fmt.Errorf("wrong length, want %d hex chars", len(id)*2)
 	}
+
 	copy(id[:], b)
+
 	return id, nil
 }
 
@@ -254,18 +281,21 @@ func DistCmp(target, a, b ID) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
+
 		if da > db {
 			return 1
 		} else if da < db {
 			return -1
 		}
 	}
+
 	return 0
 }
 
 // LogDist returns the logarithmic distance between a and b, log2(a ^ b).
 func LogDist(a, b ID) int {
 	lz := 0
+
 	for i := range a {
 		x := a[i] ^ b[i]
 		if x == 0 {
@@ -275,5 +305,6 @@ func LogDist(a, b ID) int {
 			break
 		}
 	}
+
 	return len(a)*8 - lz
 }

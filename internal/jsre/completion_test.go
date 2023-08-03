@@ -84,6 +84,7 @@ func TestCompleteKeywords(t *testing.T) {
 			},
 		},
 	}
+
 	for _, test := range tests {
 		cs := re.CompleteKeywords(test.input)
 		if !reflect.DeepEqual(cs, test.want) {

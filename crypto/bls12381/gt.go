@@ -67,9 +67,11 @@ func (g *GT) FromBytes(in []byte) (*E, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if !g.IsValid(e) {
 		return e, errors.New("invalid element")
 	}
+
 	return e, nil
 }
 
@@ -82,6 +84,7 @@ func (g *GT) ToBytes(e *E) []byte {
 func (g *GT) IsValid(e *E) bool {
 	r := g.New()
 	g.fp12.exp(r, e, q)
+
 	return r.isOne()
 }
 

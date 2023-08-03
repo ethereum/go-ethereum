@@ -10,20 +10,22 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts" // nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/bor"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -41,14 +43,25 @@ const (
 	testCode = "0x60806040527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060005534801561003457600080fd5b5060fc806100436000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80630c4dae8814603757806398a213cf146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506084565b005b60005481565b806000819055507fe9e44f9f7da8c559de847a3232b57364adc0354f15a2cd8dc636d54396f9587a6000546040518082815260200191505060405180910390a15056fea265627a7a723058208ae31d9424f2d0bc2a3da1a5dd659db2d71ec322a17db8f87e19e209e3a1ff4a64736f6c634300050a0032"
 
 	// testGas is the gas required for contract deployment.
-	testGas = 144109
-
+	testGas                   = 144109
 	storageContractByteCode   = "608060405234801561001057600080fd5b50610150806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100a1565b60405180910390f35b610073600480360381019061006e91906100ed565b61007e565b005b60008054905090565b8060008190555050565b6000819050919050565b61009b81610088565b82525050565b60006020820190506100b66000830184610092565b92915050565b600080fd5b6100ca81610088565b81146100d557600080fd5b50565b6000813590506100e7816100c1565b92915050565b600060208284031215610103576101026100bc565b5b6000610111848285016100d8565b9150509291505056fea2646970667358221220322c78243e61b783558509c9cc22cb8493dde6925aa5e89a08cdf6e22f279ef164736f6c63430008120033"
 	storageContractTxCallData = "0x6057361d0000000000000000000000000000000000000000000000000000000000000001"
 	storageCallTxGas          = 100000
 )
 
 func init() {
+
+	testTxPoolConfig = txpool.DefaultConfig
+	testTxPoolConfig.Journal = ""
+	ethashChainConfig = new(params.ChainConfig)
+	*ethashChainConfig = *params.TestChainConfig
+	cliqueChainConfig = new(params.ChainConfig)
+	*cliqueChainConfig = *params.TestChainConfig
+	cliqueChainConfig.Clique = &params.CliqueConfig{
+		Period: 10,
+		Epoch:  30000,
+	}
+
 	signer := types.LatestSigner(params.TestChainConfig)
 
 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
@@ -76,7 +89,7 @@ func init() {
 // testWorkerBackend implements worker.Backend interfaces and wraps all information needed during the testing.
 type testWorkerBackend struct {
 	DB         ethdb.Database
-	txPool     *core.TxPool
+	txPool     *txpool.TxPool
 	chain      *core.BlockChain
 	Genesis    *core.Genesis
 	uncleBlock *types.Block
@@ -109,8 +122,8 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 
 	genesis := gspec.MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{}, nil, nil, nil)
-	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
+	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, &gspec, nil, engine, vm.Config{}, nil, nil, nil)
+	txpool := txpool.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
 	if n > 0 {
@@ -124,7 +137,7 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 
 	parent := genesis
 	if n > 0 {
-		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
+		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash)
 	}
 
 	blocks, _ := core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
@@ -141,7 +154,7 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 }
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
+func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
 func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
 	return nil, errors.New("not supported")
 }
@@ -151,10 +164,10 @@ func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
 
 	cur := b.chain.CurrentBlock()
 
-	if cur.NumberU64() == 0 {
+	if cur.Number.Uint64() == 0 {
 		parent = b.chain.Genesis()
 	} else {
-		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
+		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 	}
 
 	var err error
@@ -203,7 +216,7 @@ func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *t
 	return tx
 }
 
-// newRandomTxWithGas creates a new transaction to deploy a storage smart contract.
+// newStorageCreateContractTx creates a new transaction to deploy a storage smart contract.
 func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
 	var tx *types.Transaction
 
@@ -227,7 +240,7 @@ func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce ui
 }
 
 // NewTestWorker creates a new test worker with the given parameters.
-func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty uint32, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
+func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 
@@ -244,7 +257,7 @@ func NewTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 	w.setEtherbase(TestBankAddress)
 
 	// enable empty blocks
-	w.noempty = noempty
+	w.noempty.Store(noempty)
 
 	return w, backend, w.close
 }
@@ -275,9 +288,9 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 		startCh:             make(chan struct{}, 1),
 		resubmitIntervalCh:  make(chan time.Duration),
 		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
-		noempty:             1,
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
+	worker.noempty.Store(true)
 	worker.profileCount = new(int32)
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -295,7 +308,7 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 	}
 
 	if !worker.interruptCommitFlag {
-		worker.noempty = 0
+		worker.noempty.Store(false)
 	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -341,17 +354,22 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 	for {
 		select {
 		case req := <-w.newWorkCh:
+			i := req.interrupt.Load()
 			//nolint:contextcheck
-			w.commitWorkWithDelay(req.ctx, req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
+			w.commitWorkWithDelay(req.ctx, &i, req.noempty, req.timestamp, delay, opcodeDelay)
 
 		case req := <-w.getWorkCh:
 			//nolint:contextcheck
-			block, err := w.generateWork(req.ctx, req.params)
+			block, _, err := w.generateWork(req.ctx, req.params)
 			if err != nil {
-				req.err = err
 				req.result <- nil
 			} else {
-				req.result <- block
+				payload := newPayloadResult{
+					err:   nil,
+					block: block,
+					fees:  block.BaseFee(),
+				}
+				req.result <- &payload
 			}
 
 		case ev := <-w.chainSideCh:
@@ -387,13 +405,13 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 		case <-cleanTicker.C:
 			chainHead := w.chain.CurrentBlock()
 			for hash, uncle := range w.localUncles {
-				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
+				if uncle.NumberU64()+staleThreshold <= chainHead.Number.Uint64() {
 					delete(w.localUncles, hash)
 				}
 			}
 
 			for hash, uncle := range w.remoteUncles {
-				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
+				if uncle.NumberU64()+staleThreshold <= chainHead.Number.Uint64() {
 					delete(w.remoteUncles, hash)
 				}
 			}
@@ -437,9 +455,8 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				}
 			}
 
-			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
-
-		// System stopped
+			w.newTxs.Add(int32(len(ev.Txs)))
+			// System stopped
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
@@ -492,7 +509,8 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	}()
 
 	if !noempty && w.interruptCommitFlag {
-		interruptCtx, stopFn = getInterruptTimer(ctx, work, w.chain.CurrentBlock())
+		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
+		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
 		// nolint : staticcheck
 		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
 		// nolint : staticcheck
@@ -511,7 +529,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
-	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
+	if !noempty && !w.noempty.Load() {
 		err = w.commit(ctx, work.copy(), nil, false, start)
 		if err != nil {
 			return
@@ -613,7 +631,6 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 	}
 
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
-
 		prePendingTime := time.Now()
 
 		pending := w.eth.TxPool().Pending(ctx, true)
@@ -624,6 +641,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *int32
 		for _, account := range w.eth.TxPool().Locals() {
 			if txs := remoteTxs[account]; len(txs) > 0 {
 				delete(remoteTxs, account)
+
 				localTxs[account] = txs
 			}
 		}
@@ -793,7 +811,7 @@ mainloop:
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		var start time.Time
 

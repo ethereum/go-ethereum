@@ -20,31 +20,31 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (
-	rlpxCommand = cli.Command{
+	rlpxCommand = &cli.Command{
 		Name:  "rlpx",
 		Usage: "RLPx Commands",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			rlpxPingCommand,
 			rlpxEthTestCommand,
 			rlpxSnapTestCommand,
 		},
 	}
-	rlpxPingCommand = cli.Command{
+	rlpxPingCommand = &cli.Command{
 		Name:   "ping",
 		Usage:  "ping <node>",
 		Action: rlpxPing,
 	}
-	rlpxEthTestCommand = cli.Command{
+	rlpxEthTestCommand = &cli.Command{
 		Name:      "eth-test",
 		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
@@ -54,7 +54,7 @@ var (
 			testTAPFlag,
 		},
 	}
-	rlpxSnapTestCommand = cli.Command{
+	rlpxSnapTestCommand = &cli.Command{
 		Name:      "snap-test",
 		Usage:     "Runs tests against a node",
 		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
@@ -68,36 +68,44 @@ var (
 
 func rlpxPing(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
+
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return err
 	}
+
 	conn := rlpx.NewConn(fd, n.Pubkey())
 	ourKey, _ := crypto.GenerateKey()
+
 	_, err = conn.Handshake(ourKey)
 	if err != nil {
 		return err
 	}
+
 	code, data, _, err := conn.Read()
 	if err != nil {
 		return err
 	}
+
 	switch code {
 	case 0:
 		var h ethtest.Hello
 		if err := rlp.DecodeBytes(data, &h); err != nil {
 			return fmt.Errorf("invalid handshake: %v", err)
 		}
+
 		fmt.Printf("%+v\n", h)
 	case 1:
 		var msg []p2p.DiscReason
 		if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
 			return fmt.Errorf("invalid disconnect message")
 		}
+
 		return fmt.Errorf("received disconnect message: %v", msg[0])
 	default:
 		return fmt.Errorf("invalid message code %d, expected handshake (code zero)", code)
 	}
+
 	return nil
 }
 
@@ -106,16 +114,13 @@ func rlpxEthTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+
+	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
 	if err != nil {
 		exit(err)
 	}
-	// check if given node supports eth66, and if so, run eth66 protocol tests as well
-	is66Failed, _ := utesting.Run(utesting.Test{Name: "Is_66", Fn: suite.Is_66})
-	if is66Failed {
-		return runTests(ctx, suite.EthTests())
-	}
-	return runTests(ctx, suite.AllEthTests())
+
+	return runTests(ctx, suite.EthTests())
 }
 
 // rlpxSnapTest runs the snap protocol test suite.
@@ -123,9 +128,11 @@ func rlpxSnapTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args()[1], ctx.Args()[2])
+
+	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
 	if err != nil {
 		exit(err)
 	}
+
 	return runTests(ctx, suite.SnapTests())
 }

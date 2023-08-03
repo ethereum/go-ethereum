@@ -41,7 +41,7 @@ func (q *headerQueue) pending() int {
 }
 
 // capacity is responsible for calculating how many headers a particular peer is
-// estimated to be able to retrieve within the alloted round trip time.
+// estimated to be able to retrieve within the allotted round trip time.
 func (q *headerQueue) capacity(peer *peerConnection, rtt time.Duration) int {
 	return peer.HeaderCapacity(rtt)
 }
@@ -58,7 +58,7 @@ func (q *headerQueue) reserve(peer *peerConnection, items int) (*fetchRequest, b
 	return q.queue.ReserveHeaders(peer, items), false, false
 }
 
-// unreserve is resposible for removing the current header retrieval allocation
+// unreserve is responsible for removing the current header retrieval allocation
 // assigned to a specific peer and placing it back into the pool to allow
 // reassigning to some other peer.
 func (q *headerQueue) unreserve(peer string) int {
@@ -68,6 +68,7 @@ func (q *headerQueue) unreserve(peer string) int {
 	} else {
 		log.Debug("Header delivery stalling", "peer", peer)
 	}
+
 	return fails
 }
 
@@ -85,6 +86,7 @@ func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, 
 	hashes := packet.Meta.([]common.Hash)
 
 	accepted, err := q.queue.DeliverHeaders(peer.id, headers, hashes, q.headerProcCh)
+
 	switch {
 	case err == nil && len(headers) == 0:
 		peer.log.Trace("Requested headers delivered")
@@ -93,5 +95,6 @@ func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, 
 	default:
 		peer.log.Debug("Failed to deliver retrieved headers", "err", err)
 	}
+
 	return accepted, err
 }

@@ -16,6 +16,7 @@ import (
 // GetRootHash returns root hash for given start and end block
 func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
 	var api *bor.API
+
 	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
 		if _api.Namespace == "bor" {
 			api = _api.Service.(*bor.API)
@@ -30,6 +31,7 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 	if err != nil {
 		return "", err
 	}
+
 	return root, nil
 }
 
@@ -49,6 +51,7 @@ func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) (
 	if receipt == nil {
 		return nil, nil
 	}
+
 	return receipt.Logs, nil
 }
 

@@ -41,6 +41,7 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	}
 
 	x, y := elliptic.Unmarshal(S256(), s)
+
 	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
@@ -48,7 +49,7 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 //
 // This function is susceptible to chosen plaintext attacks that can leak
 // information about the private key that is used for signing. Callers must
-// be aware that the given digest cannot be chosen by an adversery. Common
+// be aware that the given digest cannot be chosen by an adversary. Common
 // solution is to hash any input before calculating the signature.
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.
@@ -56,8 +57,10 @@ func Sign(digestHash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(digestHash) != DigestLength {
 		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(digestHash))
 	}
+
 	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
+
 	return secp256k1.Sign(digestHash, seckey)
 }
 
@@ -74,6 +77,7 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 	if x == nil {
 		return nil, fmt.Errorf("invalid public key")
 	}
+
 	return &ecdsa.PublicKey{X: x, Y: y, Curve: S256()}, nil
 }
 

@@ -43,55 +43,67 @@ func NewBorClient(cc grpc.ClientConnInterface) BorClient {
 
 func (c *borClient) PeersAdd(ctx context.Context, in *PeersAddRequest, opts ...grpc.CallOption) (*PeersAddResponse, error) {
 	out := new(PeersAddResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/PeersAdd", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
 func (c *borClient) PeersRemove(ctx context.Context, in *PeersRemoveRequest, opts ...grpc.CallOption) (*PeersRemoveResponse, error) {
 	out := new(PeersRemoveResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/PeersRemove", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
 func (c *borClient) PeersList(ctx context.Context, in *PeersListRequest, opts ...grpc.CallOption) (*PeersListResponse, error) {
 	out := new(PeersListResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/PeersList", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
 func (c *borClient) PeersStatus(ctx context.Context, in *PeersStatusRequest, opts ...grpc.CallOption) (*PeersStatusResponse, error) {
 	out := new(PeersStatusResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/PeersStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
 func (c *borClient) ChainSetHead(ctx context.Context, in *ChainSetHeadRequest, opts ...grpc.CallOption) (*ChainSetHeadResponse, error) {
 	out := new(ChainSetHeadResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/ChainSetHead", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
 func (c *borClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
+
 	err := c.cc.Invoke(ctx, "/proto.Bor/Status", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return out, nil
 }
 
@@ -100,13 +112,16 @@ func (c *borClient) ChainWatch(ctx context.Context, in *ChainWatchRequest, opts 
 	if err != nil {
 		return nil, err
 	}
+
 	x := &borChainWatchClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
+
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
+
 	return x, nil
 }
 
@@ -124,6 +139,7 @@ func (x *borChainWatchClient) Recv() (*ChainWatchResponse, error) {
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
+
 	return m, nil
 }
 
@@ -132,13 +148,16 @@ func (c *borClient) DebugPprof(ctx context.Context, in *DebugPprofRequest, opts 
 	if err != nil {
 		return nil, err
 	}
+
 	x := &borDebugPprofClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
+
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
+
 	return x, nil
 }
 
@@ -156,6 +175,7 @@ func (x *borDebugPprofClient) Recv() (*DebugFileResponse, error) {
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
+
 	return m, nil
 }
 
@@ -164,13 +184,16 @@ func (c *borClient) DebugBlock(ctx context.Context, in *DebugBlockRequest, opts 
 	if err != nil {
 		return nil, err
 	}
+
 	x := &borDebugBlockClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
+
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
+
 	return x, nil
 }
 
@@ -188,6 +211,7 @@ func (x *borDebugBlockClient) Recv() (*DebugFileResponse, error) {
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
+
 	return m, nil
 }
 
@@ -256,9 +280,11 @@ func _Bor_PeersAdd_Handler(srv interface{}, ctx context.Context, dec func(interf
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).PeersAdd(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/PeersAdd",
@@ -266,6 +292,7 @@ func _Bor_PeersAdd_Handler(srv interface{}, ctx context.Context, dec func(interf
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).PeersAdd(ctx, req.(*PeersAddRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -274,9 +301,11 @@ func _Bor_PeersRemove_Handler(srv interface{}, ctx context.Context, dec func(int
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).PeersRemove(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/PeersRemove",
@@ -284,6 +313,7 @@ func _Bor_PeersRemove_Handler(srv interface{}, ctx context.Context, dec func(int
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).PeersRemove(ctx, req.(*PeersRemoveRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -292,9 +322,11 @@ func _Bor_PeersList_Handler(srv interface{}, ctx context.Context, dec func(inter
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).PeersList(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/PeersList",
@@ -302,6 +334,7 @@ func _Bor_PeersList_Handler(srv interface{}, ctx context.Context, dec func(inter
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).PeersList(ctx, req.(*PeersListRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -310,9 +343,11 @@ func _Bor_PeersStatus_Handler(srv interface{}, ctx context.Context, dec func(int
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).PeersStatus(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/PeersStatus",
@@ -320,6 +355,7 @@ func _Bor_PeersStatus_Handler(srv interface{}, ctx context.Context, dec func(int
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).PeersStatus(ctx, req.(*PeersStatusRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -328,9 +364,11 @@ func _Bor_ChainSetHead_Handler(srv interface{}, ctx context.Context, dec func(in
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).ChainSetHead(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/ChainSetHead",
@@ -338,6 +376,7 @@ func _Bor_ChainSetHead_Handler(srv interface{}, ctx context.Context, dec func(in
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).ChainSetHead(ctx, req.(*ChainSetHeadRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -346,9 +385,11 @@ func _Bor_Status_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	if err := dec(in); err != nil {
 		return nil, err
 	}
+
 	if interceptor == nil {
 		return srv.(BorServer).Status(ctx, in)
 	}
+
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: "/proto.Bor/Status",
@@ -356,6 +397,7 @@ func _Bor_Status_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BorServer).Status(ctx, req.(*StatusRequest))
 	}
+
 	return interceptor(ctx, in, info, handler)
 }
 
@@ -364,6 +406,7 @@ func _Bor_ChainWatch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
+
 	return srv.(BorServer).ChainWatch(m, &borChainWatchServer{stream})
 }
 
@@ -385,6 +428,7 @@ func _Bor_DebugPprof_Handler(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
+
 	return srv.(BorServer).DebugPprof(m, &borDebugPprofServer{stream})
 }
 
@@ -406,6 +450,7 @@ func _Bor_DebugBlock_Handler(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
+
 	return srv.(BorServer).DebugBlock(m, &borDebugBlockServer{stream})
 }
 

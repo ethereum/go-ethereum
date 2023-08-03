@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -29,14 +29,16 @@ func NewListIterator(data RawValue) (*listIterator, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if k != List {
 		return nil, ErrExpectedList
 	}
+
 	it := &listIterator{
 		data: data[t : t+c],
 	}
-	return it, nil
 
+	return it, nil
 }
 
 // Next forwards the iterator one step, returns true if it was not at end yet
@@ -44,10 +46,12 @@ func (it *listIterator) Next() bool {
 	if len(it.data) == 0 {
 		return false
 	}
+
 	_, t, c, err := readKind(it.data)
 	it.next = it.data[:t+c]
 	it.data = it.data[t+c:]
 	it.err = err
+
 	return true
 }
 

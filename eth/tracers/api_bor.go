@@ -62,10 +62,12 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	}
 
 	// TODO: discuss consequences of setting preferDisk false.
-	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
+
+	defer release()
 
 	// Execute all the transaction contained within the block concurrently
 	var (
@@ -77,25 +79,25 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 
 	traceTxn := func(indx int, tx *types.Transaction, borTx bool) *TxTraceResult {
-		message, _ := tx.AsMessage(signer, block.BaseFee())
+		message, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(message)
 
 		tracer := logger.NewStructLogger(config.Config)
 
 		// Run the transaction with tracing enabled.
-		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
 
 		// Call Prepare to clear out the statedb access list
 		// Not sure if we need to do this
-		statedb.Prepare(tx.Hash(), indx)
+		statedb.SetTxContext(tx.Hash(), indx)
 
 		var execRes *core.ExecutionResult
 
 		if borTx {
-			callmsg := prepareCallMessage(message)
+			callmsg := prepareCallMessage(*message)
 			execRes, err = statefull.ApplyBorMessage(*vmenv, callmsg)
 		} else {
-			execRes, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), nil)
+			execRes, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit), nil)
 		}
 
 		if err != nil {

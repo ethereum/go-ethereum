@@ -100,6 +100,7 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		}
 		// Block seems to exceed depth allowance, check for canonical status
 		header := set.chain.GetHeaderByNumber(next.index)
+
 		switch {
 		case header == nil:
 			log.Warn("Failed to retrieve header of mined block", "number", next.index, "hash", next.hash)
@@ -118,6 +119,7 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 					}
 				}
 			}
+
 			if included {
 				log.Info("⑂ block became an uncle", "number", next.index, "hash", next.hash)
 			} else {

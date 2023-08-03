@@ -24,6 +24,9 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			case Counter:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %9d\n", metric.Count())
+			case CounterFloat64:
+				l.Printf("counter %s\n", name)
+				l.Printf("  count:       %f\n", metric.Count())
 			case Gauge:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %9d\n", metric.Value())
@@ -37,6 +40,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			case Histogram:
 				h := metric.Snapshot()
 				ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+
 				l.Printf("histogram %s\n", name)
 				l.Printf("  count:       %9d\n", h.Count())
 				l.Printf("  min:         %9d\n", h.Min())
@@ -50,6 +54,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 				l.Printf("  99.9%%:       %12.2f\n", ps[4])
 			case Meter:
 				m := metric.Snapshot()
+
 				l.Printf("meter %s\n", name)
 				l.Printf("  count:       %9d\n", m.Count())
 				l.Printf("  1-min rate:  %12.2f\n", m.Rate1())
@@ -59,6 +64,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			case Timer:
 				t := metric.Snapshot()
 				ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+
 				l.Printf("timer %s\n", name)
 				l.Printf("  count:       %9d\n", t.Count())
 				l.Printf("  min:         %12.2f%s\n", float64(t.Min())/du, duSuffix)

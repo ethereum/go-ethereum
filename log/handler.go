@@ -51,6 +51,7 @@ func StreamHandler(wr io.Writer, fmtr Format) Handler {
 		_, err := wr.Write(fmtr.Format(r))
 		return err
 	}, LvlTrace)
+
 	return LazyHandler(SyncHandler(h))
 }
 
@@ -59,9 +60,11 @@ func StreamHandler(wr io.Writer, fmtr Format) Handler {
 // for thread-safe concurrent writes.
 func SyncHandler(h Handler) Handler {
 	var mu sync.Mutex
+
 	return FuncHandler(func(r *Record) error {
-		defer mu.Unlock()
 		mu.Lock()
+		defer mu.Unlock()
+
 		return h.Log(r)
 	}, h.Level())
 }
@@ -75,6 +78,7 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return closingHandler{f, StreamHandler(f, fmtr)}, nil
 }
 
@@ -135,6 +139,7 @@ func CallerStackHandler(format string, h Handler) Handler {
 		if len(s) > 0 {
 			r.Ctx = append(r.Ctx, "stack", fmt.Sprintf(format, s))
 		}
+
 		return h.Log(r)
 	}, h.Level())
 }
@@ -156,6 +161,7 @@ func FilterHandler(fn func(r *Record) bool, h Handler) Handler {
 		if fn(r) {
 			return h.Log(r)
 		}
+
 		return nil
 	}, h.Level())
 }
@@ -182,6 +188,7 @@ func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
 				return r.Ctx[i+1] == value
 			}
 		}
+
 		return false
 	}, h)
 }
@@ -212,6 +219,7 @@ func MultiHandler(hs ...Handler) Handler {
 			// what to do about failures?
 			h.Log(r)
 		}
+
 		return nil
 	}, LvlDebug)
 }
@@ -239,6 +247,7 @@ func FailoverHandler(hs ...Handler) Handler {
 			if err == nil {
 				return nil
 			}
+
 			r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
 		}
 
@@ -281,6 +290,7 @@ func LazyHandler(h Handler) Handler {
 		// go through the values (odd indices) and reassign
 		// the values of any lazy fn to the result of its execution
 		hadErr := false
+
 		for i := 1; i < len(r.Ctx); i += 2 {
 			lz, ok := r.Ctx[i].(Lazy)
 			if ok {
@@ -292,6 +302,7 @@ func LazyHandler(h Handler) Handler {
 					if cs, ok := v.(stack.CallStack); ok {
 						v = cs.TrimBelow(r.Call).TrimRuntime()
 					}
+
 					r.Ctx[i] = v
 				}
 			}
@@ -321,14 +332,17 @@ func evaluateLazy(lz Lazy) (interface{}, error) {
 	}
 
 	value := reflect.ValueOf(lz.Fn)
+
 	results := value.Call([]reflect.Value{})
 	if len(results) == 1 {
 		return results[0].Interface(), nil
 	}
+
 	values := make([]interface{}, len(results))
 	for i, v := range results {
 		values[i] = v.Interface()
 	}
+
 	return values, nil
 }
 
@@ -350,6 +364,7 @@ func must(h Handler, err error) Handler {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 

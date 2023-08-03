@@ -17,8 +17,8 @@
 package netutil
 
 import (
+	crand "crypto/rand"
 	"fmt"
-	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -87,10 +87,13 @@ func runIPTrackerTest(t *testing.T, evs []iptrackTestEvent) {
 		clock mclock.Simulated
 		it    = NewIPTracker(10*time.Second, 10*time.Second, 3)
 	)
+
 	it.clock = &clock
+
 	for i, ev := range evs {
 		evtime := time.Duration(ev.time) * time.Millisecond
 		clock.Run(evtime - time.Duration(clock.Now()))
+
 		switch ev.op {
 		case opStatement:
 			it.AddStatement(ev.from, ev.ip)
@@ -118,20 +121,23 @@ func TestIPTrackerForceGC(t *testing.T) {
 		max    = int(window/rate) + 1
 		it     = NewIPTracker(window, window, 3)
 	)
+
 	it.clock = &clock
 
 	for i := 0; i < 5*max; i++ {
 		e1 := make([]byte, 4)
 		e2 := make([]byte, 4)
-		mrand.Read(e1)
-		mrand.Read(e2)
+		_, _ = crand.Read(e1)
+		_, _ = crand.Read(e2)
 		it.AddStatement(string(e1), string(e2))
 		it.AddContact(string(e1))
 		clock.Run(rate)
 	}
+
 	if len(it.contact) > 2*max {
 		t.Errorf("contacts not GCed, have %d", len(it.contact))
 	}
+
 	if len(it.statements) > 2*max {
 		t.Errorf("statements not GCed, have %d", len(it.statements))
 	}

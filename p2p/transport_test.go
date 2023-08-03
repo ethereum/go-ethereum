@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -46,15 +46,18 @@ func TestProtocolHandshake(t *testing.T) {
 	}
 
 	wg.Add(2)
+
 	go func() {
 		defer wg.Done()
 		defer fd0.Close()
 		frame := newRLPX(fd0, &prv1.PublicKey)
+
 		rpubkey, err := frame.doEncHandshake(prv0)
 		if err != nil {
 			t.Errorf("dial side enc handshake failed: %v", err)
 			return
 		}
+
 		if !reflect.DeepEqual(rpubkey, &prv1.PublicKey) {
 			t.Errorf("dial side remote pubkey mismatch: got %v, want %v", rpubkey, &prv1.PublicKey)
 			return
@@ -65,22 +68,26 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("dial side proto handshake error: %v", err)
 			return
 		}
+
 		phs.Rest = nil
 		if !reflect.DeepEqual(phs, hs1) {
 			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
 			return
 		}
+
 		frame.close(DiscQuitting)
 	}()
 	go func() {
 		defer wg.Done()
 		defer fd1.Close()
 		rlpx := newRLPX(fd1, nil)
+
 		rpubkey, err := rlpx.doEncHandshake(prv1)
 		if err != nil {
 			t.Errorf("listen side enc handshake failed: %v", err)
 			return
 		}
+
 		if !reflect.DeepEqual(rpubkey, &prv0.PublicKey) {
 			t.Errorf("listen side remote pubkey mismatch: got %v, want %v", rpubkey, &prv0.PublicKey)
 			return
@@ -91,6 +98,7 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("listen side proto handshake error: %v", err)
 			return
 		}
+
 		phs.Rest = nil
 		if !reflect.DeepEqual(phs, hs0) {
 			t.Errorf("listen side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs0))
@@ -140,6 +148,7 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 	for i, test := range tests {
 		p1, p2 := MsgPipe()
 		go Send(p1, test.code, test.msg)
+
 		_, err := readProtocolHandshake(p2)
 		if !reflect.DeepEqual(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)

@@ -86,6 +86,7 @@ func (fp *fetcherPeer) addAnno(anno *announce) {
 	if _, exist := fp.announces[hash]; exist {
 		return
 	}
+
 	fp.announces[hash] = anno
 	fp.fifo = append(fp.fifo, hash)
 
@@ -106,21 +107,26 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 		cutset  int
 		evicted []*announce
 	)
+
 	for ; cutset < len(fp.fifo); cutset++ {
 		anno := fp.announces[fp.fifo[cutset]]
 		if anno == nil {
 			continue // In theory it should never ever happen
 		}
+
 		if anno.data.Td.Cmp(td) > 0 {
 			break
 		}
+
 		evicted = append(evicted, anno)
 		delete(fp.announces, anno.data.Hash)
 	}
+
 	if cutset > 0 {
 		copy(fp.fifo, fp.fifo[cutset:])
 		fp.fifo = fp.fifo[:len(fp.fifo)-cutset]
 	}
+
 	return evicted
 }
 
@@ -171,6 +177,7 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		if ulc != nil {
 			checkFreq = 0
 		}
+
 		return chain.InsertHeaderChain(headers, checkFreq)
 	}
 	f := &lightFetcher{
@@ -189,12 +196,14 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		closeCh:     make(chan struct{}),
 	}
 	peers.subscribe(f)
+
 	return f
 }
 
 func (f *lightFetcher) start() {
 	f.wg.Add(1)
 	f.fetcher.Start()
+
 	go f.mainloop()
 }
 
@@ -242,18 +251,20 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 }
 
 // mainloop is the main event loop of the light fetcher, which is responsible for
-// - announcement maintenance(ulc)
-//   If we are running in ultra light client mode, then all announcements from
-//   the trusted servers are maintained. If the same announcements from trusted
-//   servers reach the threshold, then the relevant header is requested for retrieval.
 //
-// - block header retrieval
-//   Whenever we receive announce with higher td compared with local chain, the
-//   request will be made for header retrieval.
+//   - announcement maintenance(ulc)
 //
-// - re-sync trigger
-//   If the local chain lags too much, then the fetcher will enter "synnchronise"
-//   mode to retrieve missing headers in batch.
+//     If we are running in ultra light client mode, then all announcements from
+//     the trusted servers are maintained. If the same announcements from trusted
+//     servers reach the threshold, then the relevant header is requested for retrieval.
+//
+//   - block header retrieval
+//     Whenever we receive announce with higher td compared with local chain, the
+//     request will be made for header retrieval.
+//
+//   - re-sync trigger
+//     If the local chain lags too much, then the fetcher will enter "synchronise"
+//     mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
 	defer f.wg.Done()
 
@@ -270,6 +281,9 @@ func (f *lightFetcher) mainloop() {
 		localHead = f.chain.CurrentHeader()
 		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number.Uint64())
 	)
+
+	defer requestTimer.Stop()
+
 	sub := f.chain.SubscribeChainHeadEvent(headCh)
 	defer sub.Unsubscribe()
 
@@ -286,6 +300,7 @@ func (f *lightFetcher) mainloop() {
 			agreed  []enode.ID
 			trusted bool
 		)
+
 		f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
 			if anno := p.announces[hash]; anno != nil && anno.trust && anno.data.Number == number {
 				agreed = append(agreed, id)
@@ -294,10 +309,13 @@ func (f *lightFetcher) mainloop() {
 					return false // abort iteration
 				}
 			}
+
 			return true
 		})
+
 		return trusted, agreed
 	}
+
 	for {
 		select {
 		case anno := <-f.announceCh:
@@ -314,14 +332,17 @@ func (f *lightFetcher) mainloop() {
 			if peer.latest != nil && data.Td.Cmp(peer.latest.Td) <= 0 {
 				f.peerset.unregister(peerid.String())
 				log.Debug("Non-monotonic td", "peer", peerid, "current", data.Td, "previous", peer.latest.Td)
+
 				continue
 			}
+
 			peer.latest = data
 
 			// Filter out any stale announce, the local chain is ahead of announce
 			if localTd != nil && data.Td.Cmp(localTd) <= 0 {
 				continue
 			}
+
 			peer.addAnno(anno)
 
 			// If we are not syncing, try to trigger a single retrieval or re-sync
@@ -333,10 +354,13 @@ func (f *lightFetcher) mainloop() {
 				// in both cases, so resync is necessary.
 				if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
 					syncing = true
+
 					go f.startSync(peerid)
 					log.Debug("Trigger light sync", "peer", peerid, "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
+
 					continue
 				}
+
 				f.fetcher.Notify(peerid.String(), data.Hash, data.Number, time.Now(), f.requestHeaderByHash(peerid), nil)
 				log.Debug("Trigger header retrieval", "peer", peerid, "number", data.Number, "hash", data.Hash)
 			}
@@ -348,10 +372,13 @@ func (f *lightFetcher) mainloop() {
 				if trusted && !syncing {
 					if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
 						syncing = true
+
 						go f.startSync(peerid)
 						log.Debug("Trigger trusted light sync", "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
+
 						continue
 					}
+
 					p := agreed[rand.Intn(len(agreed))]
 					f.fetcher.Notify(p.String(), data.Hash, data.Number, time.Now(), f.requestHeaderByHash(p), nil)
 					log.Debug("Trigger trusted header retrieval", "number", data.Number, "hash", data.Hash)
@@ -372,6 +399,7 @@ func (f *lightFetcher) mainloop() {
 					log.Debug("Request timeout", "peer", request.peerid, "reqid", reqid)
 				}
 			}
+
 			f.rescheduleTimer(fetching, requestTimer)
 
 		case resp := <-f.deliverCh:
@@ -386,11 +414,14 @@ func (f *lightFetcher) mainloop() {
 				if len(resp.headers) != 1 {
 					f.peerset.unregister(req.peerid.String())
 					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
+
 					continue
 				}
+
 				if resp.headers[0].Hash() != req.hash {
 					f.peerset.unregister(req.peerid.String())
 					log.Debug("Deliver invalid header", "peer", req.peerid, "reqid", req.reqid)
+
 					continue
 				}
 				resp.remain <- f.fetcher.FilterHeaders(resp.peerid.String(), resp.headers, time.Now())
@@ -404,10 +435,12 @@ func (f *lightFetcher) mainloop() {
 			if syncing {
 				continue
 			}
+
 			reset(ev.Block.Header())
 
 			// Clean stale announcements from les-servers.
 			var droplist []enode.ID
+
 			f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
 				removed := p.forwardAnno(localTd)
 				for _, anno := range removed {
@@ -424,12 +457,15 @@ func (f *lightFetcher) mainloop() {
 						}
 					}
 				}
+
 				return true
 			})
+
 			for _, id := range droplist {
 				f.peerset.unregister(id.String())
 				log.Debug("Kicked out peer for invalid announcement")
 			}
+
 			if f.newHeadHook != nil {
 				f.newHeadHook(localHead)
 			}
@@ -441,15 +477,31 @@ func (f *lightFetcher) mainloop() {
 			if ulc {
 				head := f.chain.CurrentHeader()
 				ancestor := rawdb.FindCommonAncestor(f.chaindb, origin, head)
+
+				// Recap the ancestor with genesis header in case the ancestor
+				// is not found. It can happen the original head is before the
+				// checkpoint while the synced headers are after it. In this
+				// case there is no ancestor between them.
+				if ancestor == nil {
+					ancestor = f.chain.Genesis().Header()
+				}
+
 				var untrusted []common.Hash
+
 				for head.Number.Cmp(ancestor.Number) > 0 {
 					hash, number := head.Hash(), head.Number.Uint64()
 					if trusted, _ := trustedHeader(hash, number); trusted {
 						break
 					}
+
 					untrusted = append(untrusted, hash)
 					head = f.chain.GetHeader(head.ParentHash, number-1)
+
+					if head == nil {
+						break // all the synced headers will be dropped
+					}
 				}
+
 				if len(untrusted) > 0 {
 					for i, j := 0, len(untrusted)-1; i < j; i, j = i+1, j-1 {
 						untrusted[i], untrusted[j] = untrusted[j], untrusted[i]
@@ -459,9 +511,11 @@ func (f *lightFetcher) mainloop() {
 			}
 			// Reset local status.
 			reset(f.chain.CurrentHeader())
+
 			if f.newHeadHook != nil {
 				f.newHeadHook(localHead)
 			}
+
 			log.Debug("light sync finished", "number", localHead.Number, "hash", localHead.Hash())
 
 		case <-f.closeCh:
@@ -510,11 +564,12 @@ func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) er
 			},
 		}
 		f.reqDist.queue(req)
+
 		return nil
 	}
 }
 
-// requestResync invokes synchronisation callback to start syncing.
+// startSync invokes synchronisation callback to start syncing.
 func (f *lightFetcher) startSync(id enode.ID) {
 	defer func(header *types.Header) {
 		f.syncDone <- header
@@ -524,6 +579,7 @@ func (f *lightFetcher) startSync(id enode.ID) {
 	if peer == nil || peer.onlyAnnounce {
 		return
 	}
+
 	f.synchronise(peer)
 }
 
@@ -535,6 +591,7 @@ func (f *lightFetcher) deliverHeaders(peer *serverPeer, reqid uint64, headers []
 	case <-f.closeCh:
 		return nil
 	}
+
 	return <-remain
 }
 
@@ -552,5 +609,6 @@ func (f *lightFetcher) rescheduleTimer(requests map[uint64]*request, timer *time
 			earliest = req.sendAt
 		}
 	}
+
 	timer.Reset(blockDelayTimeout - time.Since(earliest))
 }

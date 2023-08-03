@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -49,20 +49,22 @@ func TestVerification(t *testing.T) {
 
 func testVerification(t *testing.T, pubkey, sigdir string) {
 	// Data to verify
-	data, err := ioutil.ReadFile("./testdata/vcheck/data.json")
+	data, err := os.ReadFile("./testdata/vcheck/data.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Signatures, with and without comments, both trusted and untrusted
-	files, err := ioutil.ReadDir(sigdir)
+	files, err := os.ReadDir(sigdir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, f := range files {
-		sig, err := ioutil.ReadFile(filepath.Join(sigdir, f.Name()))
+		sig, err := os.ReadFile(filepath.Join(sigdir, f.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		err = verifySignature([]string{pubkey}, data, sig)
 		if err != nil {
 			t.Fatal(err)
@@ -76,36 +78,45 @@ func versionUint(v string) int {
 		if err != nil {
 			panic(v)
 		}
+
 		return a
 	}
 	components := strings.Split(strings.TrimPrefix(v, "v"), ".")
 	a := mustInt(components[0])
 	b := mustInt(components[1])
 	c := mustInt(components[2])
+
 	return a*100*100 + b*100 + c
 }
 
 // TestMatching can be used to check that the regexps are correct
 func TestMatching(t *testing.T) {
-	data, _ := ioutil.ReadFile("./testdata/vcheck/vulnerabilities.json")
+	data, _ := os.ReadFile("./testdata/vcheck/vulnerabilities.json")
+
 	var vulns []vulnJson
+
 	if err := json.Unmarshal(data, &vulns); err != nil {
 		t.Fatal(err)
 	}
+
 	check := func(version string) {
 		vFull := fmt.Sprintf("Geth/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
+
 		for _, vuln := range vulns {
 			r, err := regexp.Compile(vuln.Check)
 			vulnIntro := versionUint(vuln.Introduced)
 			vulnFixed := versionUint(vuln.Fixed)
 			current := versionUint(version)
+
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if vuln.Name == "Denial of service due to Go CVE-2020-28362" {
 				// this one is not tied to geth-versions
 				continue
 			}
+
 			if vulnIntro <= current && vulnFixed > current {
 				// Should be vulnerable
 				if !r.MatchString(vFull) {
@@ -118,9 +129,9 @@ func TestMatching(t *testing.T) {
 						version, vuln.Introduced, vuln.Fixed, vuln.Name, vulnIntro, current, vulnFixed)
 				}
 			}
-
 		}
 	}
+
 	for major := 1; major < 2; major++ {
 		for minor := 0; minor < 30; minor++ {
 			for patch := 0; patch < 30; patch++ {
@@ -144,6 +155,7 @@ func TestKeyID(t *testing.T) {
 	type args struct {
 		id [8]byte
 	}
+
 	tests := []struct {
 		name string
 		args args

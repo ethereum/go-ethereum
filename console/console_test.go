@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -88,16 +87,14 @@ type tester struct {
 // Please ensure you call Close() on the returned tester to avoid leaks.
 func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
-	workspace, err := ioutil.TempDir("", "console-tester-")
-	if err != nil {
-		t.Fatalf("failed to create temporary keystore: %v", err)
-	}
+	workspace := t.TempDir()
 
 	// Create a networkless protocol stack and start an Ethereum service within
 	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: testInstance})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
+
 	ethConf := &ethconfig.Config{
 		Genesis: core.DeveloperGenesisBlock(15, 11_500_000, common.Address{}),
 		Miner: miner.Config{
@@ -110,6 +107,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if confOverride != nil {
 		confOverride(ethConf)
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
@@ -118,10 +116,12 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if err = stack.Start(); err != nil {
 		t.Fatalf("failed to start test stack: %v", err)
 	}
+
 	client, err := stack.Attach()
 	if err != nil {
 		t.Fatalf("failed to attach to node: %v", err)
 	}
+
 	prompter := &hookedPrompter{scheduler: make(chan string)}
 	printer := new(bytes.Buffer)
 
@@ -152,9 +152,11 @@ func (env *tester) Close(t *testing.T) {
 	if err := env.console.Stop(false); err != nil {
 		t.Errorf("failed to stop embedded console: %v", err)
 	}
+
 	if err := env.stack.Close(); err != nil {
 		t.Errorf("failed to tear down embedded node: %v", err)
 	}
+
 	os.RemoveAll(env.workspace)
 }
 
@@ -171,15 +173,19 @@ func TestWelcome(t *testing.T) {
 	if want := "Welcome"; !strings.Contains(output, want) {
 		t.Fatalf("console output missing welcome message: have\n%s\nwant also %s", output, want)
 	}
+
 	if want := fmt.Sprintf("instance: %s", testInstance); !strings.Contains(output, want) {
 		t.Fatalf("console output missing instance: have\n%s\nwant also %s", output, want)
 	}
+
 	if want := fmt.Sprintf("coinbase: %s", testAddress); !strings.Contains(output, want) {
 		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
 	}
+
 	if want := "at block: 0"; !strings.Contains(output, want) {
 		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
 	}
+
 	if want := fmt.Sprintf("datadir: %s", tester.workspace); !strings.Contains(output, want) {
 		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
 	}
@@ -191,6 +197,7 @@ func TestEvaluate(t *testing.T) {
 	defer tester.Close(t)
 
 	tester.console.Evaluate("2 + 2")
+
 	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
 	}
@@ -221,6 +228,7 @@ func TestInteractive(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("secondary prompt timeout")
 	}
+
 	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
 	}
@@ -233,21 +241,9 @@ func TestPreload(t *testing.T) {
 	defer tester.Close(t)
 
 	tester.console.Evaluate("preloaded")
+
 	if output := tester.output.String(); !strings.Contains(output, "some-preloaded-string") {
 		t.Fatalf("preloaded variable missing: have %s, want %s", output, "some-preloaded-string")
-	}
-}
-
-// Tests that JavaScript scripts can be executes from the configured asset path.
-func TestExecute(t *testing.T) {
-	tester := newTester(t, nil)
-	defer tester.Close(t)
-
-	tester.console.Execute("exec.js")
-
-	tester.console.Evaluate("execed")
-	if output := tester.output.String(); !strings.Contains(output, "some-executed-string") {
-		t.Fatalf("execed variable missing: have %s, want %s", output, "some-executed-string")
 	}
 }
 
@@ -289,7 +285,7 @@ func TestPrettyError(t *testing.T) {
 	defer tester.Close(t)
 	tester.console.Evaluate("throw 'hello'")
 
-	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:7(1)\n\n"
+	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:1(1)\n\n"
 	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
 	}

@@ -42,6 +42,7 @@ func calcBloomIndexes(b []byte) bloomIndexes {
 	for i := 0; i < len(idxs); i++ {
 		idxs[i] = (uint(b[2*i])<<8)&2047 + uint(b[2*i+1])
 	}
+
 	return idxs
 }
 
@@ -83,7 +84,7 @@ type Matcher struct {
 	retrievals chan chan *Retrieval // Retriever processes waiting for task allocations
 	deliveries chan *Retrieval      // Retriever processes waiting for task response deliveries
 
-	running uint32 // Atomic flag whether a session is live or not
+	running atomic.Bool // Atomic flag whether a session is live or not
 }
 
 // NewMatcher creates a new pipeline for retrieving bloom bit streams and doing
@@ -107,12 +108,15 @@ func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 		if len(filter) == 0 {
 			continue
 		}
+
 		bloomBits := make([]bloomIndexes, len(filter))
+
 		for i, clause := range filter {
 			if clause == nil {
 				bloomBits = nil
 				break
 			}
+
 			bloomBits[i] = calcBloomIndexes(clause)
 		}
 		// Accumulate the filter rules if no nil rule was within
@@ -128,6 +132,7 @@ func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 			}
 		}
 	}
+
 	return m
 }
 
@@ -138,6 +143,7 @@ func (m *Matcher) addScheduler(idx uint) {
 	if _, ok := m.schedulers[idx]; ok {
 		return
 	}
+
 	m.schedulers[idx] = newScheduler(idx)
 }
 
@@ -146,10 +152,10 @@ func (m *Matcher) addScheduler(idx uint) {
 // channel is closed.
 func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uint64) (*MatcherSession, error) {
 	// Make sure we're not creating concurrent sessions
-	if atomic.SwapUint32(&m.running, 1) == 1 {
+	if m.running.Swap(true) {
 		return nil, errors.New("matcher already running")
 	}
-	defer atomic.StoreUint32(&m.running, 0)
+	defer m.running.Store(false)
 
 	// Initiate a new matching round
 	session := &MatcherSession{
@@ -157,13 +163,16 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 		quit:    make(chan struct{}),
 		ctx:     ctx,
 	}
+
 	for _, scheduler := range m.schedulers {
 		scheduler.reset()
 	}
+
 	sink := m.run(begin, end, cap(results), session)
 
 	// Read the output from the result sink and deliver to the user
 	session.pend.Add(1)
+
 	go func() {
 		defer session.pend.Done()
 		defer close(results)
@@ -185,6 +194,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 				if begin > first {
 					first = begin
 				}
+
 				last := sectionStart + m.sectionSize - 1
 				if end < last {
 					last = end
@@ -197,6 +207,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 						if i%8 == 0 {
 							i += 7
 						}
+
 						continue
 					}
 					// Some bit it set, do the actual submatching
@@ -211,6 +222,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 			}
 		}
 	}()
+
 	return session, nil
 }
 
@@ -226,6 +238,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 	source := make(chan *partialMatches, buffer)
 
 	session.pend.Add(1)
+
 	go func() {
 		defer session.pend.Done()
 		defer close(source)
@@ -247,6 +260,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 	}
 	// Start the request distribution
 	session.pend.Add(1)
+
 	go m.distributor(dist, session)
 
 	return next
@@ -260,6 +274,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 	// Start the concurrent schedulers for each bit required by the bloom filter
 	sectionSources := make([][3]chan uint64, len(bloom))
 	sectionSinks := make([][3]chan []byte, len(bloom))
+
 	for i, bits := range bloom {
 		for j, bit := range bits {
 			sectionSources[i][j] = make(chan uint64, cap(source))
@@ -273,6 +288,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 	results := make(chan *partialMatches, cap(source))
 
 	session.pend.Add(2)
+
 	go func() {
 		// Tear down the goroutine and terminate all source channels
 		defer session.pend.Done()
@@ -334,8 +350,10 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 				}
 				// Gather all the sub-results and merge them together
 				var orVector []byte
+
 				for _, bloomSinks := range sectionSinks {
 					var andVector []byte
+
 					for _, bitSink := range bloomSinks {
 						var data []byte
 						select {
@@ -343,6 +361,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 							return
 						case data = <-bitSink:
 						}
+
 						if andVector == nil {
 							andVector = make([]byte, int(m.sectionSize/8))
 							copy(andVector, data)
@@ -350,6 +369,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 							bitutil.ANDBytes(andVector, andVector, data)
 						}
 					}
+
 					if orVector == nil {
 						orVector = andVector
 					} else {
@@ -360,9 +380,11 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 				if orVector == nil {
 					orVector = make([]byte, int(m.sectionSize/8))
 				}
+
 				if subres.bitset != nil {
 					bitutil.ANDBytes(orVector, orVector, subres.bitset)
 				}
+
 				if bitutil.TestBytes(orVector) {
 					select {
 					case <-session.quit:
@@ -373,6 +395,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 			}
 		}
 	}()
+
 	return results
 }
 
@@ -409,6 +432,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 			// Shutdown requested. No more retrievers can be allocated,
 			// but we still need to wait until all pending requests have returned.
 			shutdown = nil
+
 			if allocs == 0 {
 				return
 			}
@@ -434,9 +458,11 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 			}
 			// Stop tracking this bit (and alloc notifications if no more work is available)
 			delete(unallocs, bit)
+
 			if len(unallocs) == 0 {
 				retrievers = nil
 			}
+
 			allocs++
 			fetcher <- bit
 
@@ -469,15 +495,19 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 				bitsets  = make([][]byte, 0, len(result.Bitsets))
 				missing  = make([]uint64, 0, len(result.Sections))
 			)
+
 			for i, bitset := range result.Bitsets {
 				if len(bitset) == 0 {
 					missing = append(missing, result.Sections[i])
 					continue
 				}
+
 				sections = append(sections, result.Sections[i])
 				bitsets = append(bitsets, bitset)
 			}
+
 			m.schedulers[result.Bit].deliver(sections, bitsets)
+
 			allocs--
 
 			// Reschedule missing sections and allocate bit if newly available
@@ -487,6 +517,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 					index := sort.Search(len(queue), func(i int) bool { return queue[i] >= section })
 					queue = append(queue[:index], append([]uint64{section}, queue[index:]...)...)
 				}
+
 				requests[result.Bit] = queue
 
 				if len(queue) == len(missing) {
@@ -579,6 +610,7 @@ func (s *MatcherSession) allocateSections(bit uint, count int) []uint64 {
 			Sections: make([]uint64, count),
 		}
 		fetcher <- task
+
 		return (<-fetcher).Sections
 	}
 }
@@ -609,10 +641,11 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 				// Session terminating, we can't meaningfully service, abort
 				s.allocateSections(bit, 0)
 				s.deliverSections(bit, []uint64{}, [][]byte{})
+
 				return
 
 			case <-time.After(wait):
-				// Throttling up, fetch whatever's available
+				// Throttling up, fetch whatever is available
 			}
 		}
 		// Allocate as much as we can handle and request servicing
@@ -636,6 +669,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 				s.errLock.Unlock()
 				s.Close()
 			}
+
 			s.deliverSections(result.Bit, result.Sections, result.Bitsets)
 		}
 	}

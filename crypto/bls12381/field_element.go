@@ -42,11 +42,14 @@ type fe12 [2]fe6
 func (fe *fe) setBytes(in []byte) *fe {
 	size := 48
 	l := len(in)
+
 	if l >= size {
 		l = size
 	}
+
 	padded := make([]byte, size)
 	copy(padded[size-l:], in[:])
+
 	var a int
 	for i := 0; i < 6; i++ {
 		a = size - i*8
@@ -55,6 +58,7 @@ func (fe *fe) setBytes(in []byte) *fe {
 			uint64(padded[a-5])<<32 | uint64(padded[a-6])<<40 |
 			uint64(padded[a-7])<<48 | uint64(padded[a-8])<<56
 	}
+
 	return fe
 }
 
@@ -66,10 +70,12 @@ func (fe *fe) setString(s string) (*fe, error) {
 	if s[:2] == "0x" {
 		s = s[2:]
 	}
+
 	bytes, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}
+
 	return fe.setBytes(bytes), nil
 }
 
@@ -80,11 +86,13 @@ func (fe *fe) set(fe2 *fe) *fe {
 	fe[3] = fe2[3]
 	fe[4] = fe2[4]
 	fe[5] = fe2[5]
+
 	return fe
 }
 
 func (fe *fe) bytes() []byte {
 	out := make([]byte, 48)
+
 	var a int
 	for i := 0; i < 6; i++ {
 		a = 48 - i*8
@@ -97,6 +105,7 @@ func (fe *fe) bytes() []byte {
 		out[a-7] = byte(fe[i] >> 48)
 		out[a-8] = byte(fe[i] >> 56)
 	}
+
 	return out
 }
 
@@ -108,6 +117,7 @@ func (fe *fe) string() (s string) {
 	for i := 5; i >= 0; i-- {
 		s = fmt.Sprintf("%s%16.16x", s, fe[i])
 	}
+
 	return "0x" + s
 }
 
@@ -118,6 +128,7 @@ func (fe *fe) zero() *fe {
 	fe[3] = 0
 	fe[4] = 0
 	fe[5] = 0
+
 	return fe
 }
 
@@ -130,6 +141,7 @@ func (fe *fe) rand(r io.Reader) (*fe, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return fe.setBig(bi), nil
 }
 
@@ -163,6 +175,7 @@ func (fe *fe) cmp(fe2 *fe) int {
 			return -1
 		}
 	}
+
 	return 0
 }
 
@@ -173,6 +186,7 @@ func (fe *fe) equal(fe2 *fe) bool {
 func (e *fe) sign() bool {
 	r := new(fe)
 	fromMont(r, e)
+
 	return r[0]&1 == 0
 }
 
@@ -193,24 +207,28 @@ func (fe *fe) mul2() uint64 {
 	fe[2] = fe[2]<<1 | fe[1]>>63
 	fe[1] = fe[1]<<1 | fe[0]>>63
 	fe[0] = fe[0] << 1
+
 	return e
 }
 
 func (e *fe2) zero() *fe2 {
 	e[0].zero()
 	e[1].zero()
+
 	return e
 }
 
 func (e *fe2) one() *fe2 {
 	e[0].one()
 	e[1].zero()
+
 	return e
 }
 
 func (e *fe2) set(e2 *fe2) *fe2 {
 	e[0].set(&e2[0])
 	e[1].set(&e2[1])
+
 	return e
 }
 
@@ -219,10 +237,12 @@ func (e *fe2) rand(r io.Reader) (*fe2, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	a1, err := new(fe).rand(r)
 	if err != nil {
 		return nil, err
 	}
+
 	return &fe2{*a0, *a1}, nil
 }
 
@@ -244,7 +264,9 @@ func (e *fe2) sign() bool {
 		fromMont(r, &e[0])
 		return r[0]&1 == 0
 	}
+
 	fromMont(r, &e[1])
+
 	return r[0]&1 == 0
 }
 
@@ -252,6 +274,7 @@ func (e *fe6) zero() *fe6 {
 	e[0].zero()
 	e[1].zero()
 	e[2].zero()
+
 	return e
 }
 
@@ -259,6 +282,7 @@ func (e *fe6) one() *fe6 {
 	e[0].one()
 	e[1].zero()
 	e[2].zero()
+
 	return e
 }
 
@@ -266,6 +290,7 @@ func (e *fe6) set(e2 *fe6) *fe6 {
 	e[0].set(&e2[0])
 	e[1].set(&e2[1])
 	e[2].set(&e2[2])
+
 	return e
 }
 
@@ -274,14 +299,17 @@ func (e *fe6) rand(r io.Reader) (*fe6, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	a1, err := new(fe2).rand(r)
 	if err != nil {
 		return nil, err
 	}
+
 	a2, err := new(fe2).rand(r)
 	if err != nil {
 		return nil, err
 	}
+
 	return &fe6{*a0, *a1, *a2}, nil
 }
 
@@ -300,18 +328,21 @@ func (e *fe6) equal(e2 *fe6) bool {
 func (e *fe12) zero() *fe12 {
 	e[0].zero()
 	e[1].zero()
+
 	return e
 }
 
 func (e *fe12) one() *fe12 {
 	e[0].one()
 	e[1].zero()
+
 	return e
 }
 
 func (e *fe12) set(e2 *fe12) *fe12 {
 	e[0].set(&e2[0])
 	e[1].set(&e2[1])
+
 	return e
 }
 
@@ -320,10 +351,12 @@ func (e *fe12) rand(r io.Reader) (*fe12, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	a1, err := new(fe6).rand(r)
 	if err != nil {
 		return nil, err
 	}
+
 	return &fe12{*a0, *a1}, nil
 }
 

@@ -68,11 +68,14 @@ func (m *Merger) ReachTTD() {
 	if m.status.LeftPoW {
 		return
 	}
+
 	m.status = transitionStatus{LeftPoW: true}
+
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
+
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Left PoW stage")
 }
@@ -86,11 +89,14 @@ func (m *Merger) FinalizePoS() {
 	if m.status.EnteredPoS {
 		return
 	}
+
 	m.status = transitionStatus{LeftPoW: true, EnteredPoS: true}
+
 	blob, err := rlp.EncodeToBytes(m.status)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to encode the transition status: %v", err))
 	}
+
 	rawdb.WriteTransitionStatus(m.db, blob)
 	log.Info("Entered PoS stage")
 }

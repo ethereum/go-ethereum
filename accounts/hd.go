@@ -41,12 +41,12 @@ var DefaultBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60,
 var LegacyLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
 
 // DerivationPath represents the computer friendly version of a hierarchical
-// deterministic wallet account derivaion path.
+// deterministic wallet account derivation path.
 //
 // The BIP-32 spec https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 // defines derivation paths to be of the form:
 //
-//   m / purpose' / coin_type' / account' / change / address_index
+//	m / purpose' / coin_type' / account' / change / address_index
 //
 // The BIP-44 spec https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
 // defines that the `purpose` be 44' (or 0x8000002C) for crypto currencies, and
@@ -70,6 +70,7 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 
 	// Handle absolute or relative paths
 	components := strings.Split(path, "/")
+
 	switch {
 	case len(components) == 0:
 		return nil, errors.New("empty derivation path")
@@ -87,9 +88,11 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 	if len(components) == 0 {
 		return nil, errors.New("empty derivation path") // Empty relative paths
 	}
+
 	for _, component := range components {
 		// Ignore any user added whitespace
 		component = strings.TrimSpace(component)
+
 		var value uint32
 
 		// Handle hardened paths
@@ -102,18 +105,22 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid component: %s", component)
 		}
+
 		max := math.MaxUint32 - value
 		if bigval.Sign() < 0 || bigval.Cmp(big.NewInt(int64(max))) > 0 {
 			if value == 0 {
 				return nil, fmt.Errorf("component %v out of allowed range [0, %d]", bigval, max)
 			}
+
 			return nil, fmt.Errorf("component %v out of allowed hardened range [0, %d]", bigval, max)
 		}
+
 		value += uint32(bigval.Uint64())
 
 		// Append and repeat
 		result = append(result, value)
 	}
+
 	return result, nil
 }
 
@@ -121,17 +128,21 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 // to its canonical representation.
 func (path DerivationPath) String() string {
 	result := "m"
+
 	for _, component := range path {
 		var hardened bool
+
 		if component >= 0x80000000 {
 			component -= 0x80000000
 			hardened = true
 		}
+
 		result = fmt.Sprintf("%s/%d", result, component)
 		if hardened {
 			result += "'"
 		}
 	}
+
 	return result
 }
 
@@ -143,11 +154,14 @@ func (path DerivationPath) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON a json-serialized string back into a derivation path
 func (path *DerivationPath) UnmarshalJSON(b []byte) error {
 	var dp string
+
 	var err error
 	if err = json.Unmarshal(b, &dp); err != nil {
 		return err
 	}
+
 	*path, err = ParseDerivationPath(dp)
+
 	return err
 }
 
@@ -158,6 +172,7 @@ func DefaultIterator(base DerivationPath) func() DerivationPath {
 	copy(path[:], base[:])
 	// Set it back by one, so the first call gives the first result
 	path[len(path)-1]--
+
 	return func() DerivationPath {
 		path[len(path)-1]++
 		return path
@@ -172,6 +187,7 @@ func LedgerLiveIterator(base DerivationPath) func() DerivationPath {
 	copy(path[:], base[:])
 	// Set it back by one, so the first call gives the first result
 	path[2]--
+
 	return func() DerivationPath {
 		// ledgerLivePathIterator iterates on the third component
 		path[2]++

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"time"
@@ -54,6 +53,7 @@ func loadNodesJSON(file string) nodeSet {
 	if err := common.LoadJSON(file, &nodes); err != nil {
 		exit(err)
 	}
+
 	return nodes
 }
 
@@ -62,11 +62,13 @@ func writeNodesJSON(file string, nodes nodeSet) {
 	if err != nil {
 		exit(err)
 	}
+
 	if file == "-" {
 		os.Stdout.Write(nodesJSON)
 		return
 	}
-	if err := ioutil.WriteFile(file, nodesJSON, 0644); err != nil {
+
+	if err := os.WriteFile(file, nodesJSON, 0644); err != nil {
 		exit(err)
 	}
 }
@@ -81,6 +83,7 @@ func (ns nodeSet) nodes() []*enode.Node {
 	sort.Slice(result, func(i, j int) bool {
 		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
 	})
+
 	return result
 }
 
@@ -104,13 +107,16 @@ func (ns nodeSet) topN(n int) nodeSet {
 	for _, v := range ns {
 		byscore = append(byscore, v)
 	}
+
 	sort.Slice(byscore, func(i, j int) bool {
 		return byscore[i].Score >= byscore[j].Score
 	})
+
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {
 		result[v.N.ID()] = v
 	}
+
 	return result
 }
 
@@ -120,9 +126,11 @@ func (ns nodeSet) verify() error {
 		if n.N.ID() != id {
 			return fmt.Errorf("invalid node %v: ID does not match ID %v in record", id, n.N.ID())
 		}
+
 		if n.N.Seq() != n.Seq {
 			return fmt.Errorf("invalid node %v: 'seq' does not match seq %d from record", id, n.N.Seq())
 		}
 	}
+
 	return nil
 }

@@ -60,6 +60,7 @@ func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) ligh
 	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
 		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
 	}
+
 	return nil
 }
 
@@ -72,12 +73,15 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 	if number != nil {
 		return nil
 	}
+
 	header := rawdb.ReadHeader(db, bhash, *number)
 	if header.Number.Uint64() < testContractDeployed {
 		return nil
 	}
+
 	sti := light.StateTrieID(header)
 	ci := light.StorageTrieID(sti, crypto.Keccak256Hash(testContractAddr[:]), common.Hash{})
+
 	return &light.CodeRequest{Id: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
 }
 
@@ -90,6 +94,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 		connect:   true,
 		nopruning: true,
 	}
+
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -104,14 +109,18 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+
 				err := client.handler.backend.odr.Retrieve(ctx, req)
+
 				cancel()
 
 				got := err == nil
 				exp := i < expFail
+
 				if exp && !got {
 					t.Errorf("object retrieval failed")
 				}
+
 				if !exp && got {
 					t.Errorf("unexpected object retrieval success")
 				}

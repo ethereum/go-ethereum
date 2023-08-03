@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/tests/fuzzers/snap"
 )
 
@@ -29,11 +28,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
 		os.Exit(1)
 	}
-	crasher := os.Args[1]
 
-	data := common.VerifyCrasher(crasher)
-	if data == nil {
-		return
+	crasher := os.Args[1]
+	data, err := os.ReadFile(crasher)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
+		os.Exit(1)
 	}
 
 	snap.FuzzTrieNodes(data)

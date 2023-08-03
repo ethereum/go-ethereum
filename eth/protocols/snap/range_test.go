@@ -95,7 +95,7 @@ func TestHashRanges(t *testing.T) {
 		// meaningful space size for manual verification.
 		//   - The head being 0xff...f0, we have 14 hashes left in the space
 		//   - Chunking up 14 into 3 pieces is 4.(6), but we need the ceil of 5 to avoid a micro-last-chunk
-		//   - Since the range is not divisible, the last interval will be shrter, capped at 0xff...f
+		//   - Since the range is not divisible, the last interval will be shorter, capped at 0xff...f
 		//   - The chunk ranges thus needs to be [..0, ..5], [..6, ..b], [..c, ..f]
 		{
 			head:   common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
@@ -119,21 +119,26 @@ func TestHashRanges(t *testing.T) {
 			starts = []common.Hash{{}}
 			ends   = []common.Hash{r.End()}
 		)
+
 		for r.Next() {
 			starts = append(starts, r.Start())
 			ends = append(ends, r.End())
 		}
+
 		if len(starts) != len(tt.starts) {
 			t.Errorf("test %d: starts count mismatch: have %d, want %d", i, len(starts), len(tt.starts))
 		}
+
 		for j := 0; j < len(starts) && j < len(tt.starts); j++ {
 			if starts[j] != tt.starts[j] {
 				t.Errorf("test %d, start %d: hash mismatch: have %x, want %x", i, j, starts[j], tt.starts[j])
 			}
 		}
+
 		if len(ends) != len(tt.ends) {
 			t.Errorf("test %d: ends count mismatch: have %d, want %d", i, len(ends), len(tt.ends))
 		}
+
 		for j := 0; j < len(ends) && j < len(tt.ends); j++ {
 			if ends[j] != tt.ends[j] {
 				t.Errorf("test %d, end %d: hash mismatch: have %x, want %x", i, j, ends[j], tt.ends[j])

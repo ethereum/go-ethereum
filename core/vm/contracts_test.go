@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -101,6 +101,7 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 		} else if common.Bytes2Hex(res) != test.Expected {
 			t.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
 		}
+
 		if expGas := test.Gas; expGas != gas {
 			t.Errorf("%v: gas wrong, expected %d, got %d", test.Name, expGas, gas)
 		}
@@ -134,6 +135,7 @@ func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in)
+
 	t.Run(test.Name, func(t *testing.T) {
 		_, _, err := RunPrecompiledContract(p, in, gas)
 		if err.Error() != test.ExpectedError {
@@ -151,6 +153,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.NoBenchmark {
 		return
 	}
+
 	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.Input)
 	reqGas := p.RequiredGas(in)
@@ -163,17 +166,22 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 
 	bench.Run(fmt.Sprintf("%s-Gas=%d", test.Name, reqGas), func(bench *testing.B) {
 		bench.ReportAllocs()
+
 		start := time.Now()
+
 		bench.ResetTimer()
+
 		for i := 0; i < bench.N; i++ {
 			copy(data, in)
 			res, _, err = RunPrecompiledContract(p, data, reqGas)
 		}
 		bench.StopTimer()
+
 		elapsed := uint64(time.Since(start))
 		if elapsed < 1 {
 			elapsed = 1
 		}
+
 		gasUsed := reqGas * uint64(bench.N)
 		bench.ReportMetric(float64(reqGas), "gas/op")
 		// Keep it as uint64, multiply 100 to get two digit float later
@@ -184,8 +192,9 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 			bench.Error(err)
 			return
 		}
+
 		if common.Bytes2Hex(res) != test.Expected {
-			bench.Error(fmt.Sprintf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res)))
+			bench.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
 			return
 		}
 	})
@@ -248,6 +257,7 @@ func TestPrecompiledModExpOOG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, test := range modexpTests {
 		testPrecompiledOOG("05", test, t)
 	}
@@ -277,6 +287,7 @@ func testJson(name, addr string, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, test := range tests {
 		testPrecompiled(addr, test, t)
 	}
@@ -287,6 +298,7 @@ func testJsonFail(name, addr string, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, test := range tests {
 		testPrecompiledFailure(addr, test, t)
 	}
@@ -297,6 +309,7 @@ func benchJson(name, addr string, b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	for _, test := range tests {
 		benchmarkPrecompiled(addr, test, b)
 	}
@@ -334,22 +347,26 @@ func TestPrecompiledBLS12381MapG1Fail(t *testing.T)      { testJsonFail("blsMapG
 func TestPrecompiledBLS12381MapG2Fail(t *testing.T)      { testJsonFail("blsMapG2", "12", t) }
 
 func loadJson(name string) ([]precompiledTest, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
+	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
 	if err != nil {
 		return nil, err
 	}
+
 	var testcases []precompiledTest
 	err = json.Unmarshal(data, &testcases)
+
 	return testcases, err
 }
 
 func loadJsonFail(name string) ([]precompiledFailureTest, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/fail-%v.json", name))
+	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/fail-%v.json", name))
 	if err != nil {
 		return nil, err
 	}
+
 	var testcases []precompiledFailureTest
 	err = json.Unmarshal(data, &testcases)
+
 	return testcases, err
 }
 
@@ -359,9 +376,11 @@ func BenchmarkPrecompiledBLS12381G1MultiExpWorstCase(b *testing.B) {
 		"0000000000000000000000000000000011bc8afe71676e6730702a46ef817060249cd06cd82e6981085012ff6d013aa4470ba3a2c71e13ef653e1e223d1ccfe9" +
 		"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 	input := task
+
 	for i := 0; i < 4787; i++ {
 		input = input + task
 	}
+
 	testcase := precompiledTest{
 		Input:       input,
 		Expected:    "0000000000000000000000000000000005a6310ea6f2a598023ae48819afc292b4dfcb40aabad24a0c2cb6c19769465691859eeb2a764342a810c5038d700f18000000000000000000000000000000001268ac944437d15923dc0aec00daa9250252e43e4b35ec7a19d01f0d6cd27f6e139d80dae16ba1c79cc7f57055a93ff5",
@@ -379,6 +398,7 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 		"000000000000000000000000000000001239b7640f416eb6e921fe47f7501d504fadc190d9cf4e89ae2b717276739a2f4ee9f637c35e23c480df029fd8d247c7" +
 		"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
 	input := task
+
 	for i := 0; i < 1040; i++ {
 		input = input + task
 	}

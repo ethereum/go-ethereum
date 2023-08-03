@@ -60,14 +60,17 @@ func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
 	if weight > math.MaxInt64-w.root.sumCost {
 		// old weight is still included in sumCost, remove and check again
 		w.setWeight(item, 0)
+
 		if weight > math.MaxInt64-w.root.sumCost {
 			log.Error("WeightedRandomSelect overflow", "sumCost", w.root.sumCost, "new weight", weight)
 			weight = math.MaxInt64 - w.root.sumCost
 		}
 	}
+
 	idx, ok := w.idx[item]
 	if ok {
 		w.root.setWeight(idx, weight)
+
 		if weight == 0 {
 			delete(w.idx, item)
 		}
@@ -80,6 +83,7 @@ func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
 				newRoot.weights[0] = w.root.sumCost
 				w.root = newRoot
 			}
+
 			w.idx[item] = w.root.insert(item, weight)
 		}
 	}
@@ -94,12 +98,15 @@ func (w *WeightedRandomSelect) Choose() WrsItem {
 		if w.root.sumCost == 0 {
 			return nil
 		}
+
 		val := uint64(rand.Int63n(int64(w.root.sumCost)))
 		choice, lastWeight := w.root.choose(val)
 		weight := w.wfn(choice)
+
 		if weight != lastWeight {
 			w.setWeight(choice, weight)
 		}
+
 		if weight >= lastWeight || uint64(rand.Int63n(int64(lastWeight))) < weight {
 			return choice
 		}
@@ -125,13 +132,16 @@ func (n *wrsNode) insert(item WrsItem, weight uint64) int {
 			panic(nil)
 		}
 	}
+
 	n.itemCnt++
 	n.sumCost += weight
 	n.weights[branch] += weight
+
 	if n.level == 0 {
 		n.items[branch] = item
 		return branch
 	}
+
 	var subNode *wrsNode
 	if n.items[branch] == nil {
 		subNode = &wrsNode{maxItems: n.maxItems / wrsBranches, level: n.level - 1}
@@ -139,7 +149,9 @@ func (n *wrsNode) insert(item WrsItem, weight uint64) int {
 	} else {
 		subNode = n.items[branch].(*wrsNode)
 	}
+
 	subIdx := subNode.insert(item, weight)
+
 	return subNode.maxItems*branch + subIdx
 }
 
@@ -150,21 +162,26 @@ func (n *wrsNode) setWeight(idx int, weight uint64) uint64 {
 		oldWeight := n.weights[idx]
 		n.weights[idx] = weight
 		diff := weight - oldWeight
+
 		n.sumCost += diff
 		if weight == 0 {
 			n.items[idx] = nil
 			n.itemCnt--
 		}
+
 		return diff
 	}
+
 	branchItems := n.maxItems / wrsBranches
 	branch := idx / branchItems
 	diff := n.items[branch].(*wrsNode).setWeight(idx-branch*branchItems, weight)
 	n.weights[branch] += diff
 	n.sumCost += diff
+
 	if weight == 0 {
 		n.itemCnt--
 	}
+
 	return diff
 }
 
@@ -175,9 +192,12 @@ func (n *wrsNode) choose(val uint64) (WrsItem, uint64) {
 			if n.level == 0 {
 				return n.items[i].(WrsItem), n.weights[i]
 			}
+
 			return n.items[i].(*wrsNode).choose(val)
 		}
+
 		val -= w
 	}
+
 	panic(nil)
 }

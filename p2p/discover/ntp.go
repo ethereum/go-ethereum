@@ -48,6 +48,7 @@ func checkClockDrift() {
 	if err != nil {
 		return
 	}
+
 	if drift < -driftThreshold || drift > driftThreshold {
 		log.Warn(fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift))
 		log.Warn("Please enable network time synchronisation in system settings.")
@@ -76,6 +77,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 
 	// Execute each of the measurements
 	drifts := []time.Duration{}
+
 	for i := 0; i < measurements+2; i++ {
 		// Dial the NTP server and send the time retrieval request
 		conn, err := net.DialUDP("udp", nil, addr)
@@ -85,6 +87,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 		defer conn.Close()
 
 		sent := time.Now()
+
 		if _, err = conn.Write(request); err != nil {
 			return 0, err
 		}
@@ -95,6 +98,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 		if _, err = conn.Read(reply); err != nil {
 			return 0, err
 		}
+
 		elapsed := time.Since(sent)
 
 		// Reconstruct the time from the reply data
@@ -108,12 +112,13 @@ func sntpDrift(measurements int) (time.Duration, error) {
 		// Calculate the drift based on an assumed answer time of RRT/2
 		drifts = append(drifts, sent.Sub(t)+elapsed/2)
 	}
-	// Calculate average drif (drop two extremities to avoid outliers)
+	// Calculate average drift (drop two extremities to avoid outliers)
 	sort.Sort(durationSlice(drifts))
 
 	drift := time.Duration(0)
 	for i := 1; i < len(drifts)-1; i++ {
 		drift += drifts[i]
 	}
+
 	return drift / time.Duration(measurements), nil
 }

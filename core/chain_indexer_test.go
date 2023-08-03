@@ -54,17 +54,20 @@ func testChainIndexer(t *testing.T, count int) {
 
 	// Create a chain of indexers and ensure they all report empty
 	backends := make([]*testChainIndexBackend, count)
+
 	for i := 0; i < count; i++ {
 		var (
 			sectionSize = uint64(rand.Intn(100) + 1)
 			confirmsReq = uint64(rand.Intn(10))
 		)
+
 		backends[i] = &testChainIndexBackend{t: t, processCh: make(chan uint64)}
 		backends[i].indexer = NewChainIndexer(db, rawdb.NewTable(db, string([]byte{byte(i)})), backends[i], sectionSize, confirmsReq, 0, fmt.Sprintf("indexer-%d", i))
 
 		if sections, _, _ := backends[i].indexer.Sections(); sections != 0 {
 			t.Fatalf("Canonical section count mismatch: have %v, want %v", sections, 0)
 		}
+
 		if i > 0 {
 			backends[i-1].indexer.AddChildIndexer(backends[i].indexer)
 		}
@@ -74,19 +77,23 @@ func testChainIndexer(t *testing.T, count int) {
 	// processed blocks if a section is processable
 	notify := func(headNum, failNum uint64, reorg bool) {
 		backends[0].indexer.newHead(headNum, reorg)
+
 		if reorg {
 			for _, backend := range backends {
 				headNum = backend.reorg(headNum)
 				backend.assertSections()
 			}
+
 			return
 		}
+
 		var cascade bool
 		for _, backend := range backends {
 			headNum, cascade = backend.assertBlocks(headNum, failNum)
 			if !cascade {
 				break
 			}
+
 			backend.assertSections()
 		}
 	}
@@ -96,6 +103,7 @@ func testChainIndexer(t *testing.T, count int) {
 		if number > 0 {
 			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
 		}
+
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
 	}
@@ -118,6 +126,7 @@ func testChainIndexer(t *testing.T, count int) {
 		inject(i)
 		notify(i, i, false)
 	}
+
 	for i := uint64(1001); i <= 1500; i++ {
 		inject(i)
 	}
@@ -151,6 +160,7 @@ func (b *testChainIndexBackend) assertSections() {
 		if sections == b.stored {
 			return
 		}
+
 		time.Sleep(10 * time.Millisecond)
 	}
 	b.t.Fatalf("Canonical section count mismatch: have %v, want %v", sections, b.stored)
@@ -170,19 +180,25 @@ func (b *testChainIndexBackend) assertBlocks(headNum, failNum uint64) (uint64, b
 					// rolled back after processing started, no more process calls expected
 					// wait until updating is done to make sure that processing actually fails
 					var updating bool
+
 					for i := 0; i < 300; i++ {
 						b.indexer.lock.Lock()
 						updating = b.indexer.knownSections > b.indexer.storedSections
 						b.indexer.lock.Unlock()
+
 						if !updating {
 							break
 						}
+
 						time.Sleep(10 * time.Millisecond)
 					}
+
 					if updating {
 						b.t.Fatalf("update did not finish")
 					}
+
 					sections = expectd / b.indexer.sectionSize
+
 					break
 				}
 				select {
@@ -194,12 +210,15 @@ func (b *testChainIndexBackend) assertBlocks(headNum, failNum uint64) (uint64, b
 					}
 				}
 			}
+
 			b.stored = sections
 		}
 	}
+
 	if b.stored == 0 {
 		return 0, false
 	}
+
 	return b.stored*b.indexer.sectionSize - 1, true
 }
 
@@ -208,12 +227,14 @@ func (b *testChainIndexBackend) reorg(headNum uint64) uint64 {
 	if firstChanged < b.stored {
 		b.stored = firstChanged
 	}
+
 	return b.stored * b.indexer.sectionSize
 }
 
 func (b *testChainIndexBackend) Reset(ctx context.Context, section uint64, prevHead common.Hash) error {
 	b.section = section
 	b.headerCnt = 0
+
 	return nil
 }
 
@@ -231,6 +252,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		return errors.New("Unexpected call to Process")
 	case b.processCh <- header.Number.Uint64():
 	}
+
 	return nil
 }
 
@@ -238,6 +260,7 @@ func (b *testChainIndexBackend) Commit() error {
 	if b.headerCnt != b.indexer.sectionSize {
 		b.t.Error("Not enough headers processed")
 	}
+
 	return nil
 }
 

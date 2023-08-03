@@ -44,7 +44,9 @@ type Bloom [BloomByteLength]byte
 // It panics if b is not of suitable size.
 func BytesToBloom(b []byte) Bloom {
 	var bloom Bloom
+
 	bloom.SetBytes(b)
+
 	return bloom
 }
 
@@ -54,6 +56,7 @@ func (b *Bloom) SetBytes(d []byte) {
 	if len(b) < len(d) {
 		panic(fmt.Sprintf("bloom bytes too big %d %d", len(b), len(d)))
 	}
+
 	copy(b[BloomByteLength-len(d):], d)
 }
 
@@ -85,6 +88,7 @@ func (b Bloom) Bytes() []byte {
 // Test checks if the given topic is present in the bloom filter
 func (b Bloom) Test(topic []byte) bool {
 	i1, v1, i2, v2, i3, v3 := bloomValues(topic, make([]byte, 6))
+
 	return v1 == v1&b[i1] &&
 		v2 == v2&b[i2] &&
 		v3 == v3&b[i3]
@@ -103,35 +107,45 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 // CreateBloom creates a bloom filter out of the give Receipts (+Logs)
 func CreateBloom(receipts Receipts) Bloom {
 	buf := make([]byte, 6)
+
 	var bin Bloom
+
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
 			bin.add(log.Address.Bytes(), buf)
+
 			for _, b := range log.Topics {
 				bin.add(b[:], buf)
 			}
 		}
 	}
+
 	return bin
 }
 
 // LogsBloom returns the bloom bytes for the given logs
 func LogsBloom(logs []*Log) []byte {
 	buf := make([]byte, 6)
+
 	var bin Bloom
+
 	for _, log := range logs {
 		bin.add(log.Address.Bytes(), buf)
+
 		for _, b := range log.Topics {
 			bin.add(b[:], buf)
 		}
 	}
+
 	return bin[:]
 }
 
 // Bloom9 returns the bloom filter for the given data
 func Bloom9(data []byte) []byte {
 	var b Bloom
+
 	b.SetBytes(data)
+
 	return b.Bytes()
 }
 
@@ -154,7 +168,7 @@ func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byt
 	return i1, v1, i2, v2, i3, v3
 }
 
-// BloomLookup is a convenience-method to check presence int he bloom filter
+// BloomLookup is a convenience-method to check presence in the bloom filter
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	return bin.Test(topic.Bytes())
 }

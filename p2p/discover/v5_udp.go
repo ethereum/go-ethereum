@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
 	"time"
@@ -41,7 +40,6 @@ const (
 	lookupRequestLimit      = 3  // max requests against a single node during lookup
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
-	nodesResponseItemLimit  = 3  // applies in sendNodes
 
 	respTimeoutV5 = 700 * time.Millisecond
 )
@@ -54,7 +52,7 @@ type codecV5 interface {
 	// Encode encodes a packet.
 	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
-	// decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
+	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
 	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
 }
@@ -72,6 +70,9 @@ type UDPv5 struct {
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
 
+	// misc buffers used during message handling
+	logcontext []interface{}
+
 	// talkreq handler registry
 	trlock     sync.Mutex
 	trhandlers map[string]TalkRequestHandler
@@ -82,6 +83,7 @@ type UDPv5 struct {
 	callCh        chan *callV5
 	callDoneCh    chan *callV5
 	respTimeoutCh chan *callTimeout
+	unhandled     chan<- ReadPacket
 
 	// state of dispatch
 	codec            codecV5
@@ -127,10 +129,13 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	go t.tab.loop()
 	t.wg.Add(2)
+
 	go t.readLoop()
 	go t.dispatch()
+
 	return t, nil
 }
 
@@ -155,20 +160,25 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
+		unhandled:     cfg.Unhandled,
 		// state of dispatch
-		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
+		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[v5wire.Nonce]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
+
 		// shutdown
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 	}
+
 	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
 	if err != nil {
 		return nil, err
 	}
+
 	t.tab = tab
+
 	return t, nil
 }
 
@@ -210,6 +220,7 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 			return rn
 		}
 	}
+
 	return n
 }
 
@@ -217,6 +228,7 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 func (t *UDPv5) AllNodes() []*enode.Node {
 	t.tab.mutex.Lock()
 	defer t.tab.mutex.Unlock()
+
 	nodes := make([]*enode.Node, 0)
 
 	for _, b := range &t.tab.buckets {
@@ -224,6 +236,7 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 			nodes = append(nodes, unwrapNode(n))
 		}
 	}
+
 	return nodes
 }
 
@@ -245,6 +258,7 @@ func (t *UDPv5) RegisterTalkHandler(protocol string, handler TalkRequestHandler)
 // TalkRequest sends a talk request to n and waits for a response.
 func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
+
 	resp := t.call(n, v5wire.TalkResponseMsg, req)
 	defer t.callDone(resp)
 	select {
@@ -286,7 +300,9 @@ func (t *UDPv5) lookupSelf() []*enode.Node {
 
 func (t *UDPv5) newRandomLookup(ctx context.Context) *lookup {
 	var target enode.ID
+
 	crand.Read(target[:])
+
 	return t.newLookup(ctx, target)
 }
 
@@ -303,16 +319,20 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 		nodes = nodesByDistance{target: target}
 		err   error
 	)
+
 	var r []*enode.Node
 	r, err = t.findnode(unwrapNode(destNode), dists)
-	if err == errClosed {
+
+	if errors.Is(err, errClosed) {
 		return nil, err
 	}
+
 	for _, n := range r {
 		if n.ID() != t.Self().ID() {
 			nodes.push(wrapNode(n), findnodeResultLimit)
 		}
 	}
+
 	return nodes.entries, err
 }
 
@@ -322,14 +342,17 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
 	dists = append(dists, uint(td))
+
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
-		if td+i < 256 {
+		if td+i <= 256 {
 			dists = append(dists, uint(td+i))
 		}
+
 		if td-i > 0 {
 			dists = append(dists, uint(td-i))
 		}
 	}
+
 	return dists
 }
 
@@ -347,15 +370,17 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	}
 }
 
-// requestENR requests n's record.
+// RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	nodes, err := t.findnode(n, []uint{0})
 	if err != nil {
 		return nil, err
 	}
+
 	if len(nodes) != 1 {
 		return nil, fmt.Errorf("%d nodes in response for distance zero", len(nodes))
 	}
+
 	return nodes[0], nil
 }
 
@@ -374,6 +399,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 		seen            = make(map[enode.ID]struct{})
 		received, total = 0, -1
 	)
+
 	for {
 		select {
 		case responseP := <-c.ch:
@@ -384,11 +410,14 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 					t.log.Debug("Invalid record in "+response.Name(), "id", c.node.ID(), "err", err)
 					continue
 				}
+
 				nodes = append(nodes, node)
 			}
+
 			if total == -1 {
-				total = min(int(response.Total), totalNodesResponseLimit)
+				total = min(int(response.RespCount), totalNodesResponseLimit)
 			}
+
 			if received++; received == total {
 				return nodes, nil
 			}
@@ -404,22 +433,32 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err != nil {
 		return nil, err
 	}
+
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
 	}
+
+	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+		return nil, errors.New("not contained in netrestrict list")
+	}
+
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
 	}
+
 	if distances != nil {
 		nd := enode.LogDist(c.node.ID(), node.ID())
 		if !containsUint(uint(nd), distances) {
 			return nil, errors.New("does not match any requested distance")
 		}
 	}
+
 	if _, ok := seen[node.ID()]; ok {
 		return nil, fmt.Errorf("duplicate record")
 	}
+
 	seen[node.ID()] = struct{}{}
+
 	return node, nil
 }
 
@@ -429,6 +468,7 @@ func containsUint(x uint, xs []uint) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -452,6 +492,7 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) 
 	case <-t.closeCtx.Done():
 		c.err <- errClosed
 	}
+
 	return c
 }
 
@@ -506,10 +547,12 @@ func (t *UDPv5) dispatch() {
 
 		case c := <-t.callDoneCh:
 			id := c.node.ID()
+
 			active := t.activeCallByNode[id]
 			if active != c {
 				panic("BUG: callDone for inactive call")
 			}
+
 			c.timeout.Stop()
 			delete(t.activeCallByAuth, c.nonce)
 			delete(t.activeCallByNode, id)
@@ -522,17 +565,22 @@ func (t *UDPv5) dispatch() {
 
 		case <-t.closeCtx.Done():
 			close(t.readNextCh)
+
 			for id, queue := range t.callQueue {
 				for _, c := range queue {
 					c.err <- errClosed
 				}
+
 				delete(t.callQueue, id)
 			}
+
 			for id, c := range t.activeCallByNode {
 				c.err <- errClosed
+
 				delete(t.activeCallByNode, id)
 				delete(t.activeCallByAuth, c.nonce)
 			}
+
 			return
 		}
 	}
@@ -543,10 +591,12 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 	if c.timeout != nil {
 		c.timeout.Stop()
 	}
+
 	var (
 		timer mclock.Timer
 		done  = make(chan struct{})
 	)
+
 	timer = t.clock.AfterFunc(respTimeoutV5, func() {
 		<-done
 		select {
@@ -555,6 +605,7 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 		}
 	})
 	c.timeout = timer
+
 	close(done)
 }
 
@@ -564,8 +615,10 @@ func (t *UDPv5) sendNextCall(id enode.ID) {
 	if len(queue) == 0 || t.activeCallByNode[id] != nil {
 		return
 	}
+
 	t.activeCallByNode[id] = queue[0]
 	t.sendCall(t.activeCallByNode[id])
+
 	if len(queue) == 1 {
 		delete(t.callQueue, id)
 	} else {
@@ -600,13 +653,20 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.P
 // send sends a packet to the given node.
 func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
 	addr := toAddr.String()
+	t.logcontext = append(t.logcontext[:0], "id", toID, "addr", addr)
+	t.logcontext = packet.AppendLogInfo(t.logcontext)
+
 	enc, nonce, err := t.codec.Encode(toID, addr, packet, c)
 	if err != nil {
-		t.log.Warn(">> "+packet.Name(), "id", toID, "addr", addr, "err", err)
+		t.logcontext = append(t.logcontext, "err", err)
+		t.log.Warn(">> "+packet.Name(), t.logcontext...)
+
 		return nonce, err
 	}
+
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.Name(), "id", toID, "addr", addr)
+	t.log.Trace(">> "+packet.Name(), t.logcontext...)
+
 	return nonce, err
 }
 
@@ -622,12 +682,14 @@ func (t *UDPv5) readLoop() {
 			t.log.Debug("Temporary UDP read error", "err", err)
 			continue
 		} else if err != nil {
-			// Shut down the loop for permament errors.
-			if err != io.EOF {
+			// Shut down the loop for permanent errors.
+			if !errors.Is(err, io.EOF) {
 				t.log.Debug("UDP read error", "err", err)
 			}
+
 			return
 		}
+
 		t.dispatchReadPacket(from, buf[:nbytes])
 	}
 }
@@ -645,20 +707,38 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 // handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
+
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
+		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
+			// The packet seems unrelated to discv5, send it to the next protocol.
+			// t.log.Trace("Unhandled discv5 packet", "id", fromID, "addr", addr, "err", err)
+			up := ReadPacket{Data: make([]byte, len(rawpacket)), Addr: fromAddr}
+			copy(up.Data, rawpacket)
+			t.unhandled <- up
+
+			return nil
+		}
+
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
+
 		return err
 	}
+
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addSeenNode(wrapNode(fromNode))
 	}
+
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
-		t.log.Trace("<< "+packet.Name(), "id", fromID, "addr", addr)
+		t.logcontext = append(t.logcontext[:0], "id", fromID, "addr", addr)
+		t.logcontext = packet.AppendLogInfo(t.logcontext)
+		t.log.Trace("<< "+packet.Name(), t.logcontext...)
 	}
+
 	t.handle(packet, fromID, fromAddr)
+
 	return nil
 }
 
@@ -669,16 +749,20 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5w
 		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "id", fromID, "addr", fromAddr)
 		return false
 	}
+
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {
 		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "id", fromID, "addr", fromAddr)
 		return false
 	}
+
 	if p.Kind() != ac.responseType {
 		t.log.Debug(fmt.Sprintf("Wrong discv5 response type %s", p.Name()), "id", fromID, "addr", fromAddr)
 		return false
 	}
+
 	t.startResponseTimeout(ac)
 	ac.ch <- p
+
 	return true
 }
 
@@ -687,9 +771,11 @@ func (t *UDPv5) getNode(id enode.ID) *enode.Node {
 	if n := t.tab.getNode(id); n != nil {
 		return n
 	}
+
 	if n := t.localNode.Database().Node(id); n != nil {
 		return n
 	}
+
 	return nil
 }
 
@@ -711,7 +797,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 	case *v5wire.Nodes:
 		t.handleCallResponse(fromID, fromAddr, p)
 	case *v5wire.TalkRequest:
-		t.handleTalkRequest(p, fromID, fromAddr)
+		t.handleTalkRequest(fromID, fromAddr, p)
 	case *v5wire.TalkResponse:
 		t.handleCallResponse(fromID, fromAddr, p)
 	}
@@ -721,10 +807,12 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr *net.UDPAddr) {
 	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
+
 	if n := t.getNode(fromID); n != nil {
 		challenge.Node = n
 		challenge.RecordSeq = n.Seq()
 	}
+
 	t.sendResponse(fromID, fromAddr, challenge)
 }
 
@@ -743,6 +831,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 
 	// Resend the call that was answered by WHOAREYOU.
 	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
+
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
@@ -755,9 +844,11 @@ func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, err
 	if c == nil {
 		return nil, errChallengeNoCall
 	}
+
 	if c.handshakeCount > 0 {
 		return nil, errChallengeTwice
 	}
+
 	return c, nil
 }
 
@@ -770,6 +861,7 @@ func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAdd
 	if remoteIP.To4() != nil {
 		remoteIP = remoteIP.To4()
 	}
+
 	t.sendResponse(fromID, fromAddr, &v5wire.Pong{
 		ReqID:  p.ReqID,
 		ToIP:   remoteIP,
@@ -789,6 +881,7 @@ func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr *ne
 // collectTableNodes creates a FINDNODE result set for the given distances.
 func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*enode.Node {
 	var nodes []*enode.Node
+
 	var processed = make(map[uint]struct{})
 	for _, dist := range distances {
 		// Reject duplicate / invalid distances.
@@ -806,6 +899,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 			bn = unwrapNodes(t.tab.bucketAtDistance(int(dist)).entries)
 			t.tab.mutex.Unlock()
 		}
+
 		processed[dist] = struct{}{}
 
 		// Apply some pre-checks to avoid sending invalid nodes.
@@ -814,37 +908,57 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 			if netutil.CheckRelayIP(rip, n.IP()) != nil {
 				continue
 			}
+
 			nodes = append(nodes, n)
 			if len(nodes) >= limit {
 				return nodes
 			}
 		}
 	}
+
 	return nodes
 }
 
 // packNodes creates NODES response packets for the given node list.
 func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 	if len(nodes) == 0 {
-		return []*v5wire.Nodes{{ReqID: reqid, Total: 1}}
+		return []*v5wire.Nodes{{ReqID: reqid, RespCount: 1}}
 	}
 
-	total := uint8(math.Ceil(float64(len(nodes)) / 3))
+	// This limit represents the available space for nodes in output packets. Maximum
+	// packet size is 1280, and out of this ~80 bytes will be taken up by the packet
+	// frame. So limiting to 1000 bytes here leaves 200 bytes for other fields of the
+	// NODES message, which is a lot.
+	const sizeLimit = 1000
+
 	var resp []*v5wire.Nodes
+
 	for len(nodes) > 0 {
-		p := &v5wire.Nodes{ReqID: reqid, Total: total}
-		items := min(nodesResponseItemLimit, len(nodes))
-		for i := 0; i < items; i++ {
-			p.Nodes = append(p.Nodes, nodes[i].Record())
+		p := &v5wire.Nodes{ReqID: reqid}
+		size := uint64(0)
+
+		for len(nodes) > 0 {
+			r := nodes[0].Record()
+			if size += r.Size(); size > sizeLimit {
+				break
+			}
+
+			p.Nodes = append(p.Nodes, r)
+			nodes = nodes[1:]
 		}
-		nodes = nodes[items:]
+
 		resp = append(resp, p)
 	}
+
+	for _, msg := range resp {
+		msg.RespCount = uint8(len(resp))
+	}
+
 	return resp
 }
 
 // handleTalkRequest runs the talk request handler of the requested protocol.
-func (t *UDPv5) handleTalkRequest(p *v5wire.TalkRequest, fromID enode.ID, fromAddr *net.UDPAddr) {
+func (t *UDPv5) handleTalkRequest(fromID enode.ID, fromAddr *net.UDPAddr, p *v5wire.TalkRequest) {
 	t.trlock.Lock()
 	handler := t.trhandlers[p.Protocol]
 	t.trlock.Unlock()
@@ -853,6 +967,7 @@ func (t *UDPv5) handleTalkRequest(p *v5wire.TalkRequest, fromID enode.ID, fromAd
 	if handler != nil {
 		response = handler(fromID, fromAddr, p.Message)
 	}
+
 	resp := &v5wire.TalkResponse{ReqID: p.ReqID, Message: response}
 	t.sendResponse(fromID, fromAddr, resp)
 }

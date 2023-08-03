@@ -98,13 +98,16 @@ func (c System) NewTimer(d time.Duration) ChanTimer {
 		default:
 		}
 	})
+
 	return &systemTimer{t, ch}
 }
 
 // After returns a channel which receives the current time after d has elapsed.
 func (c System) After(d time.Duration) <-chan AbsTime {
 	ch := make(chan AbsTime, 1)
+
 	time.AfterFunc(d, func() { ch <- c.Now() })
+
 	return ch
 }
 

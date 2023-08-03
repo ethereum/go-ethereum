@@ -17,8 +17,10 @@
 package vm
 
 import (
+	"bytes"
 	"math"
 	"math/big"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,6 +44,7 @@ func TestMemoryGasCost(t *testing.T) {
 		if (err == ErrGasUintOverflow) != tt.overflow {
 			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == ErrGasUintOverflow, tt.overflow)
 		}
+
 		if v != tt.cost {
 			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, v, tt.cost)
 		}
@@ -97,11 +100,95 @@ func TestEIP2200(t *testing.T) {
 		if err != tt.failure {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
+
 		if used := tt.gaspool - gas; used != tt.used {
 			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, used, tt.used)
 		}
+
 		if refund := vmenv.StateDB.GetRefund(); refund != tt.refund {
 			t.Errorf("test %d: gas refund mismatch: have %v, want %v", i, refund, tt.refund)
+		}
+	}
+}
+
+var createGasTests = []struct {
+	code       string
+	eip3860    bool
+	gasUsed    uint64
+	minimumGas uint64
+}{
+	// legacy create(0, 0, 0xc000) without 3860 used
+	{"0x61C00060006000f0" + "600052" + "60206000F3", false, 41237, 41237},
+	// legacy create(0, 0, 0xc000) _with_ 3860
+	{"0x61C00060006000f0" + "600052" + "60206000F3", true, 44309, 44309},
+	// create2(0, 0, 0xc001, 0) without 3860
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", false, 50471, 50471},
+	// create2(0, 0, 0xc001, 0) (too large), with 3860
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32012, 100_000},
+	// create2(0, 0, 0xc000, 0)
+	// This case is trying to deploy code at (within) the limit
+	{"0x600061C00060006000f5" + "600052" + "60206000F3", true, 53528, 53528},
+	// create2(0, 0, 0xc001, 0)
+	// This case is trying to deploy code exceeding the limit
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32024, 100000},
+}
+
+func TestCreateGas(t *testing.T) {
+	t.Parallel()
+
+	for i, tt := range createGasTests {
+		var gasUsed = uint64(0)
+
+		doCheck := func(testGas int) bool {
+			address := common.BytesToAddress([]byte("contract"))
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb.CreateAccount(address)
+			statedb.SetCode(address, hexutil.MustDecode(tt.code))
+			statedb.Finalise(true)
+
+			vmctx := BlockContext{
+				CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
+				Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
+				BlockNumber: big.NewInt(0),
+			}
+			config := Config{}
+
+			if tt.eip3860 {
+				config.ExtraEips = []int{3860}
+			}
+
+			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
+
+			var startGas = uint64(testGas)
+			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int), nil)
+
+			if err != nil {
+				return false
+			}
+
+			gasUsed = startGas - gas
+
+			if len(ret) != 32 {
+				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
+			}
+
+			if bytes.Equal(ret, make([]byte, 32)) {
+				// Failure
+				return false
+			}
+
+			return true
+		}
+		minGas := sort.Search(100_000, doCheck)
+
+		if uint64(minGas) != tt.minimumGas {
+			t.Fatalf("test %d: min gas error, want %d, have %d", i, tt.minimumGas, minGas)
+		}
+		// If the deployment succeeded, we also check the gas used
+		if minGas < 100_000 {
+			if gasUsed != tt.gasUsed {
+				t.Errorf("test %d: gas used mismatch: have %v, want %v", i, gasUsed, tt.gasUsed)
+			}
 		}
 	}
 }

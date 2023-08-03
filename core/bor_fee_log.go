@@ -13,6 +13,10 @@ var transferFeeLogSig = common.HexToHash("0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b4
 var feeAddress = common.HexToAddress("0x0000000000000000000000000000000000001010")
 var bigZero = big.NewInt(0)
 
+func GetFeeAddress() common.Address {
+	return feeAddress
+}
+
 // AddTransferLog adds transfer log into state
 func AddTransferLog(
 	state vm.StateDB,

@@ -105,7 +105,6 @@ func (BitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
 	return x3.Cmp(y2) == 0
 }
 
-//TODO: double check if the function is okay
 // affineFromJacobian reverses the Jacobian transform. See the comment at the
 // top of the file.
 func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.Int) {
@@ -121,6 +120,7 @@ func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.
 	zinvsq.Mul(zinvsq, zinv)
 	yOut = new(big.Int).Mul(y, zinvsq)
 	yOut.Mod(yOut, BitCurve.P)
+
 	return
 }
 
@@ -131,13 +131,16 @@ func (BitCurve *BitCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 	if x1.Sign() == 0 && y1.Sign() == 0 {
 		return x2, y2
 	}
+
 	if x2.Sign() == 0 && y2.Sign() == 0 {
 		return x1, y1
 	}
+
 	z := new(big.Int).SetInt64(1)
 	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
 		return BitCurve.affineFromJacobian(BitCurve.doubleJacobian(x1, y1, z))
 	}
+
 	return BitCurve.affineFromJacobian(BitCurve.addJacobian(x1, y1, z, x2, y2, z))
 }
 
@@ -147,17 +150,21 @@ func (BitCurve *BitCurve) addJacobian(x1, y1, z1, x2, y2, z2 *big.Int) (*big.Int
 	// See http://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
 	z1z1 := new(big.Int).Mul(z1, z1)
 	z1z1.Mod(z1z1, BitCurve.P)
+
 	z2z2 := new(big.Int).Mul(z2, z2)
 	z2z2.Mod(z2z2, BitCurve.P)
 
 	u1 := new(big.Int).Mul(x1, z2z2)
 	u1.Mod(u1, BitCurve.P)
+
 	u2 := new(big.Int).Mul(x2, z1z1)
 	u2.Mod(u2, BitCurve.P)
+
 	h := new(big.Int).Sub(u2, u1)
 	if h.Sign() == -1 {
 		h.Add(h, BitCurve.P)
 	}
+
 	i := new(big.Int).Lsh(h, 1)
 	i.Mul(i, i)
 	j := new(big.Int).Mul(h, i)
@@ -165,14 +172,18 @@ func (BitCurve *BitCurve) addJacobian(x1, y1, z1, x2, y2, z2 *big.Int) (*big.Int
 	s1 := new(big.Int).Mul(y1, z2)
 	s1.Mul(s1, z2z2)
 	s1.Mod(s1, BitCurve.P)
+
 	s2 := new(big.Int).Mul(y2, z1)
 	s2.Mul(s2, z1z1)
 	s2.Mod(s2, BitCurve.P)
+
 	r := new(big.Int).Sub(s2, s1)
 	if r.Sign() == -1 {
 		r.Add(r, BitCurve.P)
 	}
+
 	r.Lsh(r, 1)
+
 	v := new(big.Int).Mul(u1, i)
 
 	x3 := new(big.Int).Set(r)
@@ -183,6 +194,7 @@ func (BitCurve *BitCurve) addJacobian(x1, y1, z1, x2, y2, z2 *big.Int) (*big.Int
 	x3.Mod(x3, BitCurve.P)
 
 	y3 := new(big.Int).Set(r)
+
 	v.Sub(v, x3)
 	y3.Mul(y3, v)
 	s1.Mul(s1, j)
@@ -193,13 +205,17 @@ func (BitCurve *BitCurve) addJacobian(x1, y1, z1, x2, y2, z2 *big.Int) (*big.Int
 	z3 := new(big.Int).Add(z1, z2)
 	z3.Mul(z3, z3)
 	z3.Sub(z3, z1z1)
+
 	if z3.Sign() == -1 {
 		z3.Add(z3, BitCurve.P)
 	}
+
 	z3.Sub(z3, z2z2)
+
 	if z3.Sign() == -1 {
 		z3.Add(z3, BitCurve.P)
 	}
+
 	z3.Mul(z3, h)
 	z3.Mod(z3, BitCurve.P)
 
@@ -216,7 +232,6 @@ func (BitCurve *BitCurve) Double(x1, y1 *big.Int) (*big.Int, *big.Int) {
 // returns its double, also in Jacobian form.
 func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, *big.Int) {
 	// See http://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-
 	a := new(big.Int).Mul(x, x) //X1²
 	b := new(big.Int).Mul(y, y) //Y1²
 	c := new(big.Int).Mul(b, b) //B²
@@ -260,6 +275,7 @@ func (BitCurve *BitCurve) Marshal(x, y *big.Int) []byte {
 	ret[0] = 4 // uncompressed point flag
 	readBits(x, ret[1:1+byteLen])
 	readBits(y, ret[1+byteLen:])
+
 	return ret
 }
 
@@ -270,11 +286,14 @@ func (BitCurve *BitCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	if len(data) != 1+2*byteLen {
 		return
 	}
+
 	if data[0] != 4 { // uncompressed form
 		return
 	}
+
 	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
 	y = new(big.Int).SetBytes(data[1+byteLen:])
+
 	return
 }
 

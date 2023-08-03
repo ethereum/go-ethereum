@@ -23,7 +23,15 @@ import (
 )
 
 var (
-	errBadBool = errors.New("abi: improperly encoded boolean value")
+	errBadBool   = errors.New("abi: improperly encoded boolean value")
+	errBadUint8  = errors.New("abi: improperly encoded uint8 value")
+	errBadUint16 = errors.New("abi: improperly encoded uint16 value")
+	errBadUint32 = errors.New("abi: improperly encoded uint32 value")
+	errBadUint64 = errors.New("abi: improperly encoded uint64 value")
+	errBadInt8   = errors.New("abi: improperly encoded int8 value")
+	errBadInt16  = errors.New("abi: improperly encoded int16 value")
+	errBadInt32  = errors.New("abi: improperly encoded int32 value")
+	errBadInt64  = errors.New("abi: improperly encoded int64 value")
 )
 
 // formatSliceString formats the reflection kind with the given slice size
@@ -32,6 +40,7 @@ func formatSliceString(kind reflect.Kind, sliceSize int) string {
 	if sliceSize == -1 {
 		return fmt.Sprintf("[]%v", kind)
 	}
+
 	return fmt.Sprintf("[%d]%v", sliceSize, kind)
 }
 
@@ -55,6 +64,7 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 	if val.Type().Elem().Kind() != t.Elem.GetType().Kind() {
 		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), val.Type())
 	}
+
 	return nil
 }
 
@@ -73,7 +83,6 @@ func typeCheck(t Type, value reflect.Value) error {
 	} else {
 		return nil
 	}
-
 }
 
 // typeErr returns a formatted type casting error.

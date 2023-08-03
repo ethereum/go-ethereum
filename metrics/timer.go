@@ -35,6 +35,7 @@ func GetOrRegisterTimer(name string, r Registry) Timer {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewTimer).(Timer)
 }
 
@@ -44,6 +45,7 @@ func NewCustomTimer(h Histogram, m Meter) Timer {
 	if !Enabled {
 		return NilTimer{}
 	}
+
 	return &StandardTimer{
 		histogram: h,
 		meter:     m,
@@ -55,10 +57,13 @@ func NewCustomTimer(h Histogram, m Meter) Timer {
 // allow for garbage collection.
 func NewRegisteredTimer(name string, r Registry) Timer {
 	c := NewTimer()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -69,6 +74,7 @@ func NewTimer() Timer {
 	if !Enabled {
 		return NilTimer{}
 	}
+
 	return &StandardTimer{
 		histogram: NewHistogram(NewExpDecaySample(1028, 0.015)),
 		meter:     NewMeter(),
@@ -197,6 +203,7 @@ func (t *StandardTimer) RateMean() float64 {
 func (t *StandardTimer) Snapshot() Timer {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
+
 	return &TimerSnapshot{
 		histogram: t.histogram.Snapshot().(*HistogramSnapshot),
 		meter:     t.meter.Snapshot().(*MeterSnapshot),
@@ -221,6 +228,7 @@ func (t *StandardTimer) Sum() int64 {
 // Record the duration of the execution of the given function.
 func (t *StandardTimer) Time(f func()) {
 	ts := time.Now()
+
 	f()
 	t.Update(time.Since(ts))
 }

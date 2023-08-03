@@ -63,7 +63,7 @@ type lesCommons struct {
 // NodeInfo represents a short summary of the Ethereum sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64                   `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Network    uint64                   `json:"network"`    // Ethereum network ID (1=Mainnet, Rinkeby=4, Goerli=5)
 	Difficulty *big.Int                 `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash              `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig      `json:"config"`     // Chain configuration for the fork rules
@@ -74,6 +74,7 @@ type NodeInfo struct {
 // makeProtocols creates protocol descriptors for the given LES versions.
 func (c *lesCommons) makeProtocols(versions []uint, runPeer func(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error, peerInfo func(id enode.ID) interface{}, dialCandidates enode.Iterator) []p2p.Protocol {
 	protos := make([]p2p.Protocol, len(versions))
+
 	for i, version := range versions {
 		version := version
 		protos[i] = p2p.Protocol{
@@ -88,6 +89,7 @@ func (c *lesCommons) makeProtocols(versions []uint, runPeer func(version uint, p
 			DialCandidates: dialCandidates,
 		}
 	}
+
 	return protos
 }
 
@@ -95,6 +97,7 @@ func (c *lesCommons) makeProtocols(versions []uint, runPeer func(version uint, p
 func (c *lesCommons) nodeInfo() interface{} {
 	head := c.chainReader.CurrentHeader()
 	hash := head.Hash()
+
 	return &NodeInfo{
 		Network:    c.config.NetworkId,
 		Difficulty: rawdb.ReadTd(c.chainDb, hash, head.Number.Uint64()),
@@ -115,10 +118,12 @@ func (c *lesCommons) latestLocalCheckpoint() params.TrustedCheckpoint {
 	if sections > sections2 {
 		sections = sections2
 	}
+
 	if sections == 0 {
 		// No checkpoint information can be provided.
 		return params.TrustedCheckpoint{}
 	}
+
 	return c.localCheckpoint(sections - 1)
 }
 
@@ -129,6 +134,7 @@ func (c *lesCommons) latestLocalCheckpoint() params.TrustedCheckpoint {
 // not the stable checkpoint registered in the registrar contract.
 func (c *lesCommons) localCheckpoint(index uint64) params.TrustedCheckpoint {
 	sectionHead := c.chtIndexer.SectionHead(index)
+
 	return params.TrustedCheckpoint{
 		SectionIndex: index,
 		SectionHead:  sectionHead,
@@ -144,18 +150,22 @@ func (c *lesCommons) setupOracle(node *node.Node, genesis common.Hash, ethconfig
 		// Try loading default config.
 		config = params.CheckpointOracles[genesis]
 	}
+
 	if config == nil {
 		log.Info("Checkpoint oracle is not enabled")
 		return nil
 	}
+
 	if config.Address == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
 		log.Warn("Invalid checkpoint oracle config")
 		return nil
 	}
+
 	oracle := checkpointoracle.New(config, c.localCheckpoint)
 	rpcClient, _ := node.Attach()
 	client := ethclient.NewClient(rpcClient)
 	oracle.Start(client)
 	log.Info("Configured checkpoint oracle", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
+
 	return oracle
 }

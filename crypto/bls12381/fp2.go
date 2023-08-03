@@ -34,6 +34,7 @@ func newFp2Temp() fp2Temp {
 	for i := 0; i < len(t); i++ {
 		t[i] = &fe{}
 	}
+
 	return fp2Temp{t}
 }
 
@@ -46,14 +47,17 @@ func (e *fp2) fromBytes(in []byte) (*fe2, error) {
 	if len(in) != 96 {
 		return nil, errors.New("length of input string should be 96 bytes")
 	}
+
 	c1, err := fromBytes(in[:48])
 	if err != nil {
 		return nil, err
 	}
+
 	c0, err := fromBytes(in[48:])
 	if err != nil {
 		return nil, err
 	}
+
 	return &fe2{*c0, *c1}, nil
 }
 
@@ -61,6 +65,7 @@ func (e *fp2) toBytes(a *fe2) []byte {
 	out := make([]byte, 96)
 	copy(out[:48], toBytes(&a[1]))
 	copy(out[48:], toBytes(&a[0]))
+
 	return out
 }
 
@@ -200,6 +205,7 @@ func (e *fp2) exp(c, a *fe2, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.square(z, z)
+
 		if s.Bit(i) == 1 {
 			e.mul(z, z, a)
 		}
@@ -209,10 +215,12 @@ func (e *fp2) exp(c, a *fe2, s *big.Int) {
 
 func (e *fp2) frobeniusMap(c, a *fe2, power uint) {
 	c[0].set(&a[0])
+
 	if power%2 == 1 {
 		neg(&c[1], &a[1])
 		return
 	}
+
 	c[1].set(&a[1])
 }
 
@@ -230,15 +238,19 @@ func (e *fp2) sqrt(c, a *fe2) bool {
 	e.square(alpha, a1)
 	e.mul(alpha, alpha, a)
 	e.mul(x0, a1, a)
+
 	if alpha.equal(negativeOne2) {
 		neg(&c[0], &x0[1])
 		c[1].set(&x0[0])
+
 		return true
 	}
+
 	e.add(alpha, alpha, e.one())
 	e.exp(alpha, alpha, pMinus1Over2)
 	e.mul(c, alpha, x0)
 	e.square(alpha, c)
+
 	return alpha.equal(u)
 }
 
@@ -248,5 +260,6 @@ func (e *fp2) isQuadraticNonResidue(a *fe2) bool {
 	square(c0, &a[0])
 	square(c1, &a[1])
 	add(c1, c1, c0)
+
 	return isQuadraticNonResidue(c1)
 }

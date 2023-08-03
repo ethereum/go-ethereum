@@ -23,6 +23,7 @@ func GetOrRegisterHistogram(name string, r Registry, s Sample) Histogram {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, func() Histogram { return NewHistogram(s) }).(Histogram)
 }
 
@@ -32,6 +33,7 @@ func GetOrRegisterHistogramLazy(name string, r Registry, s func() Sample) Histog
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, func() Histogram { return NewHistogram(s()) }).(Histogram)
 }
 
@@ -40,6 +42,7 @@ func NewHistogram(s Sample) Histogram {
 	if !Enabled {
 		return NilHistogram{}
 	}
+
 	return &StandardHistogram{sample: s}
 }
 
@@ -47,10 +50,13 @@ func NewHistogram(s Sample) Histogram {
 // a Sample.
 func NewRegisteredHistogram(name string, r Registry, s Sample) Histogram {
 	c := NewHistogram(s)
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 

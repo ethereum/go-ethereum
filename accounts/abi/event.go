@@ -29,7 +29,7 @@ import (
 // don't get the signature canonical representation as the first LOG topic.
 type Event struct {
 	// Name is the event name used for internal representation. It's derived from
-	// the raw name and a suffix will be added in the case of a event overload.
+	// the raw name and a suffix will be added in the case of event overloading.
 	//
 	// e.g.
 	// These are two events that have the same name:
@@ -38,15 +38,18 @@ type Event struct {
 	// The event name of the first one will be resolved as foo while the second one
 	// will be resolved as foo0.
 	Name string
+
 	// RawName is the raw event name parsed from ABI.
 	RawName   string
 	Anonymous bool
 	Inputs    Arguments
 	str       string
+
 	// Sig contains the string signature according to the ABI spec.
 	// e.g.	 event foo(uint32 a, int b) = "foo(uint32,int256)"
 	// Please note that "int" is substitute for its canonical representation "int256"
 	Sig string
+
 	// ID returns the canonical representation of the event's signature used by the
 	// abi definition to identify event names and types.
 	ID common.Hash
@@ -61,6 +64,7 @@ func NewEvent(name, rawName string, anonymous bool, inputs Arguments) Event {
 	// and precompute string and sig representation.
 	names := make([]string, len(inputs))
 	types := make([]string, len(inputs))
+
 	for i, input := range inputs {
 		if input.Name == "" {
 			inputs[i] = Argument{

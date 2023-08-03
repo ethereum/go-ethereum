@@ -34,12 +34,14 @@ type mulServer struct{ results event.Feed }
 func (s *divServer) do(a, b int) int {
 	r := a / b
 	s.results.Send(r)
+
 	return r
 }
 
 func (s *mulServer) do(a, b int) int {
 	r := a * b
 	s.results.Send(r)
+
 	return r
 }
 
@@ -93,12 +95,15 @@ func ExampleSubscriptionScope() {
 	// Run a subscriber in the background.
 	divsub := app.SubscribeResults('/', divs)
 	mulsub := app.SubscribeResults('*', muls)
+
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 		defer fmt.Println("subscriber exited")
 		defer divsub.Unsubscribe()
 		defer mulsub.Unsubscribe()
+
 		for {
 			select {
 			case result := <-divs:
