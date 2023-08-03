@@ -141,16 +141,26 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	// who are not yet synced past London to get defaults for other tx values. See
 	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-	if (args.GasPrice != nil && args.GasPrice.ToInt().Sign() > 0 && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
+	if args.GasPrice == nil && eip1559ParamsSet {
 		// Sanity check the EIP-1559 fee parameters if present.
-		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
-		return nil
+		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
+
 	// Now attempt to fill in default value depending on whether London is active or not.
 	head := b.CurrentHeader()
-	if b.ChainConfig().IsLondon(head.Number) {
+	isLondon := b.ChainConfig().IsLondon(head.Number)
+	if args.GasPrice != nil && !eip1559ParamsSet {
+		// Sanity-check that zero gasprice is not used post London
+		if args.GasPrice.ToInt().Sign() == 0 && isLondon {
+			return errors.New("gasPrice must be non-zero")
+		}
+		return nil // No need to set anything, user already set GasPrice
+	}
+
+	if isLondon {
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
 			return err
@@ -171,10 +181,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
 func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
-	// After London was activated, a gas price of zero is forbidden.
-	if args.GasPrice != nil && args.GasPrice.ToInt().Sign() == 0 {
-		return errors.New("gasPrice must be positive")
-	}
 	// Set maxPriorityFeePerGas if it is missing.
 	if args.MaxPriorityFeePerGas == nil {
 		tip, err := b.SuggestGasTipCap(ctx)
