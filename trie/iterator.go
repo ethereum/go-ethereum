@@ -449,7 +449,7 @@ func (it *nodeIterator) findChild(n *fullNode, index int, ancestor common.Hash) 
 		state     *nodeIteratorState
 		childPath []byte
 	)
-	for ; index < len(n.Children); index++ {
+	for ; index < len(n.Children); index = nextChildIndex(index) {
 		if n.Children[index] != nil {
 			child = n.Children[index]
 			hash, _ := child.cache()
@@ -471,8 +471,8 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Has
 	switch node := parent.node.(type) {
 	case *fullNode:
 		// Full node, move to the first non-nil child.
-		if child, state, path, index := it.findChild(node, parent.index+1, ancestor); child != nil {
-			parent.index = index - 1
+		if child, state, path, index := it.findChild(node, nextChildIndex(parent.index), ancestor); child != nil {
+			parent.index = prevChildIndex(index)
 			return state, path, true
 		}
 	case *shortNode:
@@ -498,23 +498,23 @@ func (it *nodeIterator) nextChildAt(parent *nodeIteratorState, ancestor common.H
 	switch n := parent.node.(type) {
 	case *fullNode:
 		// Full node, move to the first non-nil child before the desired key position
-		child, state, path, index := it.findChild(n, parent.index+1, ancestor)
+		child, state, path, index := it.findChild(n, nextChildIndex(parent.index), ancestor)
 		if child == nil {
 			// No more children in this fullnode
 			return parent, it.path, false
 		}
 		// If the child we found is already past the seek position, just return it.
 		if bytes.Compare(path, key) >= 0 {
-			parent.index = index - 1
+			parent.index = prevChildIndex(index)
 			return state, path, true
 		}
 		// The child is before the seek position. Try advancing
 		for {
-			nextChild, nextState, nextPath, nextIndex := it.findChild(n, index+1, ancestor)
+			nextChild, nextState, nextPath, nextIndex := it.findChild(n, nextChildIndex(index), ancestor)
 			// If we run out of children, or skipped past the target, return the
 			// previous one
 			if nextChild == nil || bytes.Compare(nextPath, key) >= 0 {
-				parent.index = index - 1
+				parent.index = prevChildIndex(index)
 				return state, path, true
 			}
 			// We found a better child closer to the target
@@ -541,7 +541,7 @@ func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []
 	it.path = path
 	it.stack = append(it.stack, state)
 	if parentIndex != nil {
-		*parentIndex++
+		*parentIndex = nextChildIndex(*parentIndex)
 	}
 }
 
@@ -561,6 +561,32 @@ func reachedPath(path, target []byte) bool {
 		path = path[:len(path)-1]
 	}
 	return bytes.Compare(path, target) >= 0
+}
+
+func prevChildIndex(index int) int {
+	switch index {
+	case 0:
+		return 16
+	case 16:
+		return -1
+	case 17:
+		return 15
+	default:
+		return index - 1
+	}
+}
+
+func nextChildIndex(index int) int {
+	switch index {
+	case -1:
+		return 16
+	case 15:
+		return 17
+	case 16:
+		return 0
+	default:
+		return index + 1
+	}
 }
 
 func compareNodes(a, b NodeIterator) int {
