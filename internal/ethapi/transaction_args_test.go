@@ -68,11 +68,25 @@ func TestSetFeeDefaults(t *testing.T) {
 			nil,
 		},
 		{
+			"legacy tx pre-London with zero price",
+			false,
+			&TransactionArgs{GasPrice: zero},
+			&TransactionArgs{GasPrice: fortytwo},
+			nil,
+		},
+		{
 			"legacy tx post-London, explicit gas price",
 			true,
 			&TransactionArgs{GasPrice: fortytwo},
 			&TransactionArgs{GasPrice: fortytwo},
 			nil,
+		},
+		{
+			"legacy tx post-London with zero price",
+			true,
+			&TransactionArgs{GasPrice: zero},
+			nil,
+			errors.New("gasPrice must be positive"),
 		},
 
 		// Access list txs
@@ -184,13 +198,6 @@ func TestSetFeeDefaults(t *testing.T) {
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
-		},
-		{
-			"set gas price to zero",
-			true,
-			&TransactionArgs{GasPrice: zero},
-			nil,
-			errors.New("gasPrice must be positive"),
 		},
 	}
 
