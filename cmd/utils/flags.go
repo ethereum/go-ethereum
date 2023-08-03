@@ -2219,7 +2219,7 @@ func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
 			log.Info("Use default hash scheme")
 			return rawdb.HashScheme, nil
 		}
-		log.Info("Use scheme consistent with persistent state", "scheme", stored)
+		log.Info("Use scheme of persistent state", "scheme", stored)
 		return stored, nil // reuse scheme of persistent scheme
 	}
 	// If state scheme is specified, ensure it's compatible with
