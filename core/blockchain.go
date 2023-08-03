@@ -2394,9 +2394,25 @@ func (bc *BlockChain) maintainTxIndex() {
 	}
 	defer sub.Unsubscribe()
 
+	// If geth is running in read-only mode(not receiving new blocks),
+	// we still want to trigger transaction indexing at least once.
+	timer := time.NewTimer(30 * time.Second)
+	defer timer.Stop()
+
 	for {
 		select {
+		case <-timer.C:
+			if done == nil {
+				head := rawdb.ReadHeadBlock(bc.db)
+				if head != nil {
+					done = make(chan struct{})
+					go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
+				}
+			}
 		case head := <-headCh:
+			if !timer.Stop() {
+				<-timer.C
+			}
 			if done == nil {
 				done = make(chan struct{})
 				go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), done)
