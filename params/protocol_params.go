@@ -164,9 +164,6 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
-	HistoricalRootsModulus  uint64 = 98304 // Limits how many historical roots are stored by EIP-4788
-	BeaconRootPrecompileGas uint64 = 4200  // Price for retrieving a beacon root from the beacon root precompile
-
 	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
 	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
 	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash

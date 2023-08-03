@@ -66,6 +66,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
+		beaconRoot  *common.Hash
 	)
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -75,7 +76,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if header.BeaconRoot == nil {
 			return nil, nil, 0, errors.New("expected beacon root post-cancun")
 		}
-		misc.ApplyBeaconRoot(header, statedb)
+		beaconRoot = header.BeaconRoot
 	} else if header.BeaconRoot != nil {
 		return nil, nil, 0, errors.New("beacon root set pre-cancun")
 	}
@@ -85,6 +86,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
+	if beaconRoot != nil {
+		misc.ApplyBeaconRoot(vmenv, *beaconRoot)
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)

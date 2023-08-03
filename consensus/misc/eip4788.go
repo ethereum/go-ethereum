@@ -18,30 +18,13 @@ package misc
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // ApplyBeaconRoot adds the beacon root from the header to the state.
-func ApplyBeaconRoot(header *types.Header, state *state.StateDB) {
-	// If EIP-4788 is enabled, we need to store the block root
-	timeKey, time, rootKey, root := calcBeaconRootIndices(header)
-	state.SetState(params.BeaconRootsStorageAddress, timeKey, time)
-	state.SetState(params.BeaconRootsStorageAddress, rootKey, root)
-	// We also need to ensure that the BeaconRoot address has nonzero nonce.
-	if state.GetNonce(params.BeaconRootsStorageAddress) == 0 {
-		state.SetNonce(params.BeaconRootsStorageAddress, 1)
-	}
-}
+func ApplyBeaconRoot(evm *vm.EVM, root common.Hash) {
+	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
+	// the new root
 
-func calcBeaconRootIndices(header *types.Header) (timeKey, time, rootKey, root common.Hash) {
-	// timeKey -> header.Time
-	timeIndex := header.Time % params.HistoricalRootsModulus
-	timeKey = common.Uint64ToHash(timeIndex)
-	time = common.Uint64ToHash(header.Time)
-	// rootKey -> header.BeaconRoot
-	rootKey = common.Uint64ToHash(timeIndex + params.HistoricalRootsModulus)
-	root = *header.BeaconRoot
-	return
+	panic("not implemented!")
 }
