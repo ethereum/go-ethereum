@@ -1,0 +1,32 @@
+#!/bin/sh
+if [ -z $1 ]
+then
+    echo "No parameter passed"
+    exit
+elsef
+    echo "Initialize Node$1"
+fi
+number=$1
+
+mkdir -p $HOME/.pooh
+sudo rm -rf /home/ubuntu/.pooh/el
+mkdir $HOME/.pooh/el
+mkdir $HOME/.pooh/el/geth
+mkdir $HOME/.pooh/el/keystore
+cp -rf ./config/el/template/node$number/* $HOME/.pooh/el
+
+docker run -it \
+  -v $HOME/.pooh/el:/data \
+  -v ./config/el:/config \
+  --name pow-node --rm \
+  linked0/poohnet-pow:latest \
+  --datadir=/data \
+  init \
+  /config/genesis.json
+
+
+if [ $number -ne 0 ]
+then
+  cp -f ./config/el/nodekey/nodekey$number $HOME/.pooh/el/geth/nodekey
+fi
+

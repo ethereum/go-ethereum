@@ -1,0 +1,225 @@
+# Extends the mainnet preset
+PRESET_BASE: 'mainnet'
+
+# Free-form short name of the network that this configuration applies to - known
+# canonical network names include:
+# * 'mainnet' - there can be only one
+# * 'prater' - testnet
+# Must match the regex: [a-z0-9\-]
+CONFIG_NAME: 'agora-devnet'
+
+# Transition
+# ---------------------------------------------------------------
+# TBD, 2**256-2**10 is a placeholder
+TERMINAL_TOTAL_DIFFICULTY: 2800
+# By default, don't use these params
+TERMINAL_BLOCK_HASH: 0x0000000000000000000000000000000000000000000000000000000000000000
+TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH: 18446744073709551615
+
+# Genesis
+# ---------------------------------------------------------------
+# `2**14` (= 16,384)
+MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: 1024
+# [customized] 2022년 9월 8일 목요일 오후 8:30:00 GMT+09:00
+MIN_GENESIS_TIME: 1667667600
+# [customized] Initial fork version
+GENESIS_FORK_VERSION: 0x2F1C0000
+# [customized]300 seconds (5 min)
+GENESIS_DELAY: 300
+
+
+# Forking
+# ---------------------------------------------------------------
+# Some forks are disabled for now:
+#  - These may be re-assigned to another fork-version later
+#  - Temporarily set to max uint64 value: 2**64 - 1
+
+# Altair
+ALTAIR_FORK_VERSION: 0x2F1C0100
+ALTAIR_FORK_EPOCH: 2
+# Bellatrix
+BELLATRIX_FORK_VERSION: 0x2F1C0200
+BELLATRIX_FORK_EPOCH: 23
+# Capella
+CAPELLA_FORK_VERSION: 0x2F1C0300
+CAPELLA_FORK_EPOCH: 18446744073709551615
+# Sharding
+SHARDING_FORK_VERSION: 0x2F1C0400
+SHARDING_FORK_EPOCH: 18446744073709551615
+
+
+
+
+# Time parameters
+# ---------------------------------------------------------------
+# 12 seconds
+SECONDS_PER_SLOT: 12
+# 14 (estimate from Eth1 mainnet)
+SECONDS_PER_ETH1_BLOCK: 14
+# 2**8 (= 256) epochs ~27 hours
+MIN_VALIDATOR_WITHDRAWABILITY_DELAY: 256
+# 2**8 (= 256) epochs ~27 hours
+SHARD_COMMITTEE_PERIOD: 256
+# 2**11 (= 2,048) Eth1 blocks ~8 hours
+ETH1_FOLLOW_DISTANCE: 10
+
+
+# Validator cycle
+# ---------------------------------------------------------------
+# 2**2 (= 4)
+INACTIVITY_SCORE_BIAS: 4
+# 2**4 (= 16)
+INACTIVITY_SCORE_RECOVERY_RATE: 16
+# [customized] 20_000 * 10**9 (= 20,000,000,000,000) Gwei
+EJECTION_BALANCE: 20_000_000_000_000
+# 2**2 (= 4)
+MIN_PER_EPOCH_CHURN_LIMIT: 4
+# 2**16 (= 65,536)
+CHURN_LIMIT_QUOTIENT: 65536
+
+
+# Fork choice
+# ---------------------------------------------------------------
+# 70%
+PROPOSER_SCORE_BOOST: 70
+
+# Deposit contract
+# ---------------------------------------------------------------
+# [customized]
+DEPOSIT_CHAIN_ID: 12301
+DEPOSIT_NETWORK_ID: 12301
+DEPOSIT_CONTRACT_ADDRESS: 0x720C56DB8f81cd68BBDFe1aAC8B3EB66e6Dea0d5
+
+
+# Mainnet preset - Altair
+
+# Updated penalty values
+# ---------------------------------------------------------------
+# 3 * 2**24 (= 50,331,648)
+INACTIVITY_PENALTY_QUOTIENT_ALTAIR: 50331648
+# 2**6 (= 64)
+MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR: 64
+# 2
+PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR: 2
+
+
+# Sync committee
+# ---------------------------------------------------------------
+# 2**9 (= 512)
+SYNC_COMMITTEE_SIZE: 512
+# 2**8 (= 256)
+EPOCHS_PER_SYNC_COMMITTEE_PERIOD: 256
+
+
+# Sync protocol
+# ---------------------------------------------------------------
+# 1
+MIN_SYNC_COMMITTEE_PARTICIPANTS: 1
+
+
+# Mainnet preset - Bellatrix
+
+# Updated penalty values
+# ---------------------------------------------------------------
+# 2**24 (= 16,777,216)
+INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: 16777216
+# 2**5 (= 32)
+MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX: 32
+# 3
+PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX: 3
+
+
+# Mainnet preset - Phase0
+
+# Misc
+# ---------------------------------------------------------------
+# 2**6 (= 64)
+MAX_COMMITTEES_PER_SLOT: 64
+# 2**7 (= 128)
+TARGET_COMMITTEE_SIZE: 128
+# 2**11 (= 2,048)
+MAX_VALIDATORS_PER_COMMITTEE: 2048
+# See issue 563
+SHUFFLE_ROUND_COUNT: 90
+# 4
+HYSTERESIS_QUOTIENT: 4
+# 1 (minus 0.25)
+HYSTERESIS_DOWNWARD_MULTIPLIER: 1
+# 5 (plus 1.25)
+HYSTERESIS_UPWARD_MULTIPLIER: 5
+
+
+# Fork Choice
+# ---------------------------------------------------------------
+# 2**3 (= 8)
+SAFE_SLOTS_TO_UPDATE_JUSTIFIED: 8
+
+
+# Gwei values
+# ---------------------------------------------------------------
+# 2**0 * 10**9 (= 1,000,000,000) Gwei
+MIN_DEPOSIT_AMOUNT: 1000000000
+# [customized] 40_000 * 10**9 (= 40,000,000,000,000) Gwei
+MAX_EFFECTIVE_BALANCE: 40_000_000_000_000
+# 2**0 * 10**9 (= 1,000,000,000) Gwei
+EFFECTIVE_BALANCE_INCREMENT: 1000000000
+
+
+# Time parameters
+# ---------------------------------------------------------------
+# 2**0 (= 1) slots 12 seconds
+MIN_ATTESTATION_INCLUSION_DELAY: 1
+# 2**5 (= 32) slots 6.4 minutes
+SLOTS_PER_EPOCH: 32
+# 2**0 (= 1) epochs 6.4 minutes
+MIN_SEED_LOOKAHEAD: 1
+# 2**2 (= 4) epochs 25.6 minutes
+MAX_SEED_LOOKAHEAD: 4
+# [customized] 2**5 (= 32) epochs ~3.4 hours
+EPOCHS_PER_ETH1_VOTING_PERIOD: 32
+# 2**13 (= 8,192) slots ~27 hours
+SLOTS_PER_HISTORICAL_ROOT: 8192
+# 2**2 (= 4) epochs 25.6 minutes
+MIN_EPOCHS_TO_INACTIVITY_PENALTY: 4
+
+
+# State list lengths
+# ---------------------------------------------------------------
+# 2**16 (= 65,536) epochs ~0.8 years
+EPOCHS_PER_HISTORICAL_VECTOR: 65536
+# 2**13 (= 8,192) epochs ~36 days
+EPOCHS_PER_SLASHINGS_VECTOR: 8192
+# 2**24 (= 16,777,216) historical roots, ~26,131 years
+HISTORICAL_ROOTS_LIMIT: 16777216
+# 2**40 (= 1,099,511,627,776) validator spots
+VALIDATOR_REGISTRY_LIMIT: 1099511627776
+
+
+# Reward and penalty quotients
+# ---------------------------------------------------------------
+# 2**6 (= 64)
+BASE_REWARD_FACTOR: 64
+# 2**9 (= 512)
+WHISTLEBLOWER_REWARD_QUOTIENT: 512
+# 2**3 (= 8)
+PROPOSER_REWARD_QUOTIENT: 8
+# 2**26 (= 67,108,864)
+INACTIVITY_PENALTY_QUOTIENT: 67108864
+# 2**7 (= 128) (lower safety margin at Phase 0 genesis)
+MIN_SLASHING_PENALTY_QUOTIENT: 128
+# 1 (lower safety margin at Phase 0 genesis)
+PROPORTIONAL_SLASHING_MULTIPLIER: 1
+
+
+# Max operations per block
+# ---------------------------------------------------------------
+# 2**4 (= 16)
+MAX_PROPOSER_SLASHINGS: 16
+# 2**1 (= 2)
+MAX_ATTESTER_SLASHINGS: 2
+# 2**7 (= 128)
+MAX_ATTESTATIONS: 128
+# 2**4 (= 16)
+MAX_DEPOSITS: 16
+# 2**4 (= 16)
+MAX_VOLUNTARY_EXITS: 16
