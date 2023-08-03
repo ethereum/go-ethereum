@@ -74,6 +74,17 @@ type Config struct {
 	ReadOnly     bool   // Flag whether the database is opened in read only mode.
 }
 
+// sanitize checks the provided user configurations and changes anything that's
+// unreasonable or unworkable.
+func (c *Config) sanitize() *Config {
+	conf := *c
+	if conf.DirtySize > maxBufferSize {
+		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.DirtySize), "updated", common.StorageSize(maxBufferSize))
+		conf.DirtySize = maxBufferSize
+	}
+	return &conf
+}
+
 var (
 	// defaultCleanSize is the default memory allowance of clean cache.
 	defaultCleanSize = 16 * 1024 * 1024
@@ -83,6 +94,12 @@ var (
 	// disk. Do not increase the buffer size arbitrarily, otherwise the
 	// system pause time will increase when the database writes happen.
 	defaultBufferSize = 128 * 1024 * 1024
+
+	// maxBufferSize is the maximum memory allowance of node buffer.
+	// Too large nodebuffer will cause the system to pause for a long
+	// time when write happens. Also, the largest batch that pebble can
+	// support is 4GB, node will panic if batch size exceeds this limit.
+	maxBufferSize = 1024 * 1024 * 1024
 )
 
 // Defaults contains default settings for Ethereum mainnet.
@@ -126,6 +143,8 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	if config == nil {
 		config = Defaults
 	}
+	config = config.sanitize()
+
 	db := &Database{
 		readOnly:   config.ReadOnly,
 		bufferSize: config.DirtySize,
@@ -385,6 +404,10 @@ func (db *Database) SetBufferSize(size int) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	if size > maxBufferSize {
+		log.Info("Capped node buffer size", "provided", common.StorageSize(size), "adjusted", common.StorageSize(maxBufferSize))
+		size = maxBufferSize
+	}
 	db.bufferSize = size
 	return db.tree.bottom().setBufferSize(db.bufferSize)
 }
