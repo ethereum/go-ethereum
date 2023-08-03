@@ -48,9 +48,10 @@ type Firehose struct {
 	outputBuffer *bytes.Buffer
 
 	// Block state
-	block        *pbeth.Block
-	blockBaseFee *big.Int
-	blockOrdinal *Ordinal
+	block         *pbeth.Block
+	blockBaseFee  *big.Int
+	blockOrdinal  *Ordinal
+	blockFinality *FinalityStatus
 
 	// Transaction state
 	transaction         *pbeth.TransactionTrace
@@ -73,7 +74,8 @@ func NewFirehoseLogger() *Firehose {
 		outputBuffer: bytes.NewBuffer(make([]byte, 0, 100*1024*1024)),
 
 		// Block state
-		blockOrdinal: &Ordinal{},
+		blockOrdinal:  &Ordinal{},
+		blockFinality: &FinalityStatus{},
 
 		// Transaction state
 		transactionLogIndex: 0,
@@ -90,6 +92,7 @@ func (f *Firehose) resetBlock() {
 	f.block = nil
 	f.blockBaseFee = nil
 	f.blockOrdinal.Reset()
+	f.blockFinality.Reset()
 }
 
 // resetTransaction resets the transaction state and the call state in one shot
@@ -121,8 +124,7 @@ func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.He
 		f.blockBaseFee = f.block.Header.BaseFeePerGas.Native()
 	}
 
-	// FIXME: How are we going to pass `finalized` data around? We will probably need to pass it in the text
-	// version of the format. This poses interesting question for a standard convential format.
+	f.blockFinality.populateFromChain(finalized)
 }
 
 func (f *Firehose) OnBlockEnd(err error) {
@@ -130,7 +132,7 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 	if err == nil {
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block)
+		f.printBlockToFirehose(f.block, f.blockFinality)
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
 		f.ensureInBlock()
@@ -863,7 +865,7 @@ func (f *Firehose) panicNotInState(msg string) string {
 // as adding a newline at the end.
 //
 // It flushes this through [flushToFirehose] to the `os.Stdout` writer.
-func (f *Firehose) printBlockToFirehose(block *pbeth.Block) {
+func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
 	marshalled, err := proto.Marshal(block)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
@@ -871,8 +873,10 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block) {
 
 	f.outputBuffer.Reset()
 
-	// Final space is important!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s ", block.Number, hex.EncodeToString(block.Hash)))
+	libNum, libID := finalityStatus.ToFirehoseLogParams()
+
+	// **Important* The final space in the Sprintf template is mandatory!
+	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %s %s ", block.Number, hex.EncodeToString(block.Hash), libNum, libID))
 
 	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
 	if _, err = encoder.Write(marshalled); err != nil {
@@ -1135,6 +1139,7 @@ func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 
 	case types.DynamicFeeTxType, types.BlobTxType:
 		return firehoseBigIntFromNative(tx.GasFeeCap())
+
 	}
 
 	panic(errUnhandledTransactionType("maxFeePerGas", tx.Type()))
@@ -1410,11 +1415,50 @@ func firehoseBigIntFromNative(in *big.Int) *pbeth.BigInt {
 	return &pbeth.BigInt{Bytes: in.Bytes()}
 }
 
+type FinalityStatus struct {
+	LastIrreversibleBlockNumber uint64
+	LastIrreversibleBlockHash   []byte
+}
+
+func (s *FinalityStatus) populateFromChain(finalHeader *types.Header) {
+	if finalHeader == nil {
+		s.Reset()
+		return
+	}
+
+	s.LastIrreversibleBlockNumber = finalHeader.Number.Uint64()
+	s.LastIrreversibleBlockHash = finalHeader.Hash().Bytes()
+}
+
+// ToFirehoseLogParams converts the data into the format expected by Firehose reader,
+// replacing the value with "." if the data is empty.
+func (s *FinalityStatus) ToFirehoseLogParams() (libNum, libID string) {
+	if s.IsEmpty() {
+		return ".", "."
+	}
+
+	return strconv.FormatUint(s.LastIrreversibleBlockNumber, 10), hex.EncodeToString(s.LastIrreversibleBlockHash)
+}
+
+func (s *FinalityStatus) Reset() {
+	s.LastIrreversibleBlockNumber = 0
+	s.LastIrreversibleBlockHash = nil
+}
+
+func (s *FinalityStatus) IsEmpty() bool {
+	return s.LastIrreversibleBlockNumber == 0 && len(s.LastIrreversibleBlockHash) == 0
+}
+
 var errFirehoseUnknownType = errors.New("firehose unknown tx type")
 var sanitizeRegexp = regexp.MustCompile(`[\t( ){2,}]+`)
 
 func staticFirehoseChainValidationOnInit() {
-	firehoseKnownTxTypes := map[byte]bool{types.LegacyTxType: true, types.AccessListTxType: true, types.DynamicFeeTxType: true, types.BlobTxType: true}
+	firehoseKnownTxTypes := map[byte]bool{
+		types.LegacyTxType:     true,
+		types.AccessListTxType: true,
+		types.DynamicFeeTxType: true,
+		types.BlobTxType:       true,
+	}
 
 	for txType := byte(0); txType < 255; txType++ {
 		err := validateFirehoseKnownTransactionType(txType, firehoseKnownTxTypes[txType])
