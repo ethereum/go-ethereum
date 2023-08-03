@@ -8,7 +8,6 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
 
-
 libzkp:
 	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
 
