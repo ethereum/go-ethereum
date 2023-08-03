@@ -2203,13 +2203,13 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 //
 //   - none: use the scheme consistent with persistent state, or fallback
 //     to hash-based scheme if state is empty.
-//   - hash: use hash-based scheme or error out if persistent state scheme
-//     is not compatible.
-//   - path: use path-based scheme or error out if persistent state scheme
-//     is not compatible.
+//   - hash: use hash-based scheme or error out if not compatible with
+//     persistent state scheme.
+//   - path: use path-based scheme or error out if not compatible with
+//     persistent state scheme.
 func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
 	// If state scheme is not specified, use the scheme consistent
-	// with persistent state, or fallback to hash mode in state
+	// with persistent state, or fallback to hash mode if database
 	// is empty.
 	stored := rawdb.ReadPersistentScheme(disk)
 	if !ctx.IsSet(StateSchemeFlag.Name) {

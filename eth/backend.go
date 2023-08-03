@@ -164,10 +164,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		p2pServer:         stack.Server(),
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
-	// Ensure the requested state scheme is compatible with stored state data.
-	if err := rawdb.CheckStateCompatibility(config.StateScheme, chainDb); err != nil {
-		return nil, err
-	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
 	if bcVersion != nil {

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func TestGenerateWithdrawalChain(t *testing.T) {
@@ -74,8 +75,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		Storage: storage,
 		Code:    common.Hex2Bytes("600154600354"),
 	}
-
-	genesis := gspec.MustCommit(gendb)
+	genesis := gspec.MustCommit(gendb, trie.NewDatabase(gendb, trie.HashDefaults))
 
 	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
@@ -154,7 +154,7 @@ func ExampleGenerateChain() {
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
-	genesis := gspec.MustCommit(genDb)
+	genesis := gspec.MustCommit(genDb, trie.NewDatabase(genDb, trie.HashDefaults))
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the

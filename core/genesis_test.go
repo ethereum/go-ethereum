@@ -86,7 +86,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "mainnet block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				DefaultGenesisBlock().MustCommit(db)
+				DefaultGenesisBlock().MustCommit(db, trie.NewDatabase(db, newDbConfig(scheme)))
 				return SetupGenesisBlock(db, trie.NewDatabase(db, newDbConfig(scheme)), nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
@@ -186,7 +186,8 @@ func TestGenesisHashes(t *testing.T) {
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 	} {
 		// Test via MustCommit
-		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
+		db := rawdb.NewMemoryDatabase()
+		if have := c.genesis.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults)).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
@@ -204,7 +205,7 @@ func TestGenesis_Commit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	genesisBlock := genesis.MustCommit(db)
+	genesisBlock := genesis.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	if genesis.Difficulty != nil {
 		t.Fatalf("assumption wrong")

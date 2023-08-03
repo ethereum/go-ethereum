@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -109,7 +110,7 @@ func (t *BlockTest) Run(snapshotter bool, tracer vm.EVMLogger) error {
 	// import pre accounts & construct test genesis block & state root
 	db := rawdb.NewMemoryDatabase()
 	gspec := t.genesis(config)
-	gblock := gspec.MustCommit(db)
+	gblock := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 	if gblock.Hash() != t.json.Genesis.Hash {
 		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
 	}

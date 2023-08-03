@@ -528,10 +528,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-// Note the state changes will be committed in hash-based scheme, use Commit
-// if path-scheme is preferred.
-func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
+func (g *Genesis) MustCommit(db ethdb.Database, triedb *trie.Database) *types.Block {
+	block, err := g.Commit(db, triedb)
 	if err != nil {
 		panic(err)
 	}
