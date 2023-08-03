@@ -141,7 +141,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	// who are not yet synced past London to get defaults for other tx values. See
 	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
+	if (args.GasPrice != nil && args.GasPrice.ToInt().Sign() > 0 && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
 		// Sanity check the EIP-1559 fee parameters if present.
 		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
