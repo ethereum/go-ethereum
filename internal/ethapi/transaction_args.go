@@ -171,6 +171,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
 func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+	// After London was activated, a gas price of zero is forbidden.
+	if args.GasPrice != nil && args.GasPrice.ToInt().Sign() == 0 {
+		return errors.New("gasPrice must be positive")
+	}
 	// Set maxPriorityFeePerGas if it is missing.
 	if args.MaxPriorityFeePerGas == nil {
 		tip, err := b.SuggestGasTipCap(ctx)
