@@ -563,6 +563,9 @@ func reachedPath(path, target []byte) bool {
 	return bytes.Compare(path, target) >= 0
 }
 
+// A value embedded in a fullNode occupies its last child slot, but we want to visit it last to
+// produce a pre-order traversal. These two functions handle the ordering by mapping index 0 to the
+// value, and shifting the indices of children over by 1.
 func prevChildIndex(index int) int {
 	switch index {
 	case 0:
