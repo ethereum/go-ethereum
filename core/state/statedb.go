@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -79,7 +78,6 @@ type StateDB struct {
 	stateObjectsPending  map[common.Address]struct{} // State objects finalized but not yet written to the trie
 	stateObjectsDirty    map[common.Address]struct{} // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]struct{} // State objects destructed in the block
-	stateObjectsMu       sync.RWMutex
 
 	// Block-stm related fields
 	mvHashmap    *blockstm.MVHashMap
@@ -156,7 +154,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsPending:  make(map[common.Address]struct{}),
 		stateObjectsDirty:    make(map[common.Address]struct{}),
 		stateObjectsDestruct: make(map[common.Address]struct{}),
-		stateObjectsMu:       sync.RWMutex{},
 		revertedKeys:         make(map[blockstm.Key]struct{}),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
@@ -1000,9 +997,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 }
 
 func (s *StateDB) setStateObject(object *stateObject) {
-	s.stateObjectsMu.Lock()
-	defer s.stateObjectsMu.Unlock()
-
 	s.stateObjects[object.Address()] = object
 }
 
