@@ -437,8 +437,9 @@ var (
 
 func TestProcessVerkle(t *testing.T) {
 	var (
-		cancuntime uint64 = 0
-		config            = &params.ChainConfig{
+		cancuntime   uint64 = 0
+		shanghaiTime uint64 = 0
+		config              = &params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -452,6 +453,7 @@ func TestProcessVerkle(t *testing.T) {
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			Ethash:              new(params.EthashConfig),
+			ShanghaiTime:        &shanghaiTime,
 			CancunTime:          &cancuntime,
 		}
 		signer     = types.LatestSigner(config)
