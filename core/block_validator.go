@@ -111,7 +111,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		log.Trace(
 			"Validator write block row consumption",
 			"id", v.circuitCapacityChecker.ID,
-			"sealHash", block.Hash().String(),
+			"number", block.NumberU64(),
+			"hash", block.Hash().String(),
 			"rowConsumption", rowConsumption,
 		)
 		rawdb.WriteBlockRowConsumption(v.db, block.Hash(), rowConsumption)
@@ -272,7 +273,7 @@ func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*typ
 	log.Trace(
 		"Validator apply ccc for block",
 		"id", v.circuitCapacityChecker.ID,
-		"number", block.Number(),
+		"number", block.NumberU64(),
 		"hash", block.Hash().String(),
 		"len(txs)", block.Transactions().Len(),
 	)
@@ -291,13 +292,13 @@ func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*typ
 	defer v.cMu.Unlock()
 
 	v.circuitCapacityChecker.Reset()
-	log.Trace("Validator reset ccc")
+	log.Trace("Validator reset ccc", "id", v.circuitCapacityChecker.ID)
 	rc, err := v.circuitCapacityChecker.ApplyBlock(traces)
 
 	log.Trace(
 		"Validator apply ccc for block result",
 		"id", v.circuitCapacityChecker.ID,
-		"number", block.Number(),
+		"number", block.NumberU64(),
 		"hash", block.Hash().String(),
 		"len(txs)", block.Transactions().Len(),
 		"rc", rc,

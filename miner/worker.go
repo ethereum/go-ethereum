@@ -637,20 +637,6 @@ func (w *worker) taskLoop() {
 				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
 				w.pendingMu.Unlock()
-			} else {
-				// Store highest L1 queue index processed by this block. This includes both
-				// included and skipped messages. This way, if a block only skips messages,
-				// we won't reprocess the same messages from the next block.
-				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), sealHash, task.maxL1Index+1)
-
-				// Store circuit row consumption.
-				log.Trace(
-					"Worker write block row consumption",
-					"id", w.circuitCapacityChecker.ID,
-					"sealHash", sealHash.String(),
-					"accRows", task.accRows,
-				)
-				rawdb.WriteBlockRowConsumption(w.eth.ChainDb(), sealHash, task.accRows)
 			}
 		case <-w.exitCh:
 			interrupt()
@@ -678,6 +664,7 @@ func (w *worker) resultLoop() {
 				sealhash = w.engine.SealHash(block.Header())
 				hash     = block.Hash()
 			)
+
 			w.pendingMu.RLock()
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
@@ -711,6 +698,19 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
+			// Store highest L1 queue index processed by this block. This includes both
+			// included and skipped messages. This way, if a block only skips messages,
+			// we won't reprocess the same messages from the next block.
+			rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), hash, task.maxL1Index+1)
+			// Store circuit row consumption.
+			log.Trace(
+				"Worker write block row consumption",
+				"id", w.circuitCapacityChecker.ID,
+				"number", block.Number(),
+				"hash", hash.String(),
+				"accRows", task.accRows,
+			)
+			rawdb.WriteBlockRowConsumption(w.eth.ChainDb(), hash, task.accRows)
 			// Commit block and state to database.
 			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
 			if err != nil {
@@ -1079,7 +1079,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
 	w.circuitCapacityChecker.Reset()
-	log.Trace("Worker reset ccc")
+	log.Trace("Worker reset ccc", "id", w.circuitCapacityChecker.ID)
 
 	if parent.Time() >= uint64(timestamp) {
 		timestamp = int64(parent.Time() + 1)
