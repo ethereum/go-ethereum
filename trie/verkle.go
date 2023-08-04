@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
+	"github.com/holiman/uint256"
 )
 
 // VerkleTrie is a wrapper around VerkleNode that implements the trie.Trie
@@ -477,6 +478,34 @@ func (t *VerkleTrie) ClearStrorageRootConversion(addr common.Address) {
 }
 
 func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
-	// XXX a copier depuis statedb/state_object
+	var (
+		chunks = ChunkifyCode(code)
+		values [][]byte
+		key    []byte
+		err    error
+	)
+	for i, chunknr := 0, uint64(0); i < len(chunks); i, chunknr = i+32, chunknr+1 {
+		groupOffset := (chunknr + 128) % 256
+		if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
+			values = make([][]byte, verkle.NodeWidth)
+			key = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(t.pointCache.GetTreeKeyHeader(addr[:]), uint256.NewInt(chunknr))
+		}
+		values[groupOffset] = chunks[i : i+32]
+
+		// Reuse the calculated key to also update the code size.
+		if i == 0 {
+			cs := make([]byte, 32)
+			binary.LittleEndian.PutUint64(cs, uint64(len(code)))
+			values[utils.CodeSizeLeafKey] = cs
+		}
+
+		if groupOffset == 255 || len(chunks)-i <= 32 {
+			err = t.UpdateStem(key[:31], values)
+
+			if err != nil {
+				return fmt.Errorf("UpdateContractCode (addr=%x) error: %w", addr[:], err)
+			}
+		}
+	}
 	return nil
 }
