@@ -936,9 +936,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // destructed object instead of wiping all knowledge about the state object.
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	return MVRead(s, blockstm.NewAddressKey(addr), nil, func(s *StateDB) *stateObject {
-		s.stateObjectsMu.Lock()
-		defer s.stateObjectsMu.Unlock()
-
 		// Prefer live objects if any is available
 		if obj := s.stateObjects[addr]; obj != nil {
 			return obj
@@ -1003,6 +1000,9 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 }
 
 func (s *StateDB) setStateObject(object *stateObject) {
+	s.stateObjectsMu.Lock()
+	defer s.stateObjectsMu.Unlock()
+
 	s.stateObjects[object.Address()] = object
 }
 
