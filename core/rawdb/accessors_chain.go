@@ -770,60 +770,6 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles).WithWithdrawals(body.Withdrawals)
 }
 
-// Account is an account in the state of the genesis block
-//
-// FIXME: This is a duplicate for now of core.GenesisAccount (and actually core.GenesisAlloc).
-type Account struct {
-	Address    common.Address   `json:"address" gencodec:"required"`
-	Code       []byte           `json:"code,omitempty"`
-	Storage    []AccountStorage `json:"storage,omitempty"`
-	Balance    *big.Int         `json:"balance" gencodec:"required"`
-	Nonce      uint64           `json:"nonce,omitempty"`
-	PrivateKey []byte           `json:"secretKey,omitempty"` // for tests
-}
-
-type AccountStorage struct {
-	Key   common.Hash `json:"key,omitempty"`
-	Value common.Hash `json:"value,omitempty"`
-}
-
-// HasGenesisAlloc checks if a genesis allocation exists currently in the database
-func HasGenesisAlloc(db ethdb.Reader) (found bool) {
-	found, _ = db.Has(genesisAllocKey)
-	return
-}
-
-// ReadGenesisalloc serializes the full initial genesis allocation into the database
-func ReadGenesisAlloc(db ethdb.Reader) (alloc []Account, found bool) {
-	// We handle case where genesis alloc is not present, downstream code might decide differently
-	// PR Review question: Should I check for specific Not Found Error? I did not see a common `error` in `ethdb`
-	data, _ := db.Get(genesisAllocKey)
-
-	if len(data) == 0 {
-		return nil, false
-	}
-
-	alloc = []Account{}
-	if err := rlp.Decode(bytes.NewReader(data), &alloc); err != nil {
-		log.Crit("Failed to decode genesis alloc", "err", err)
-		return nil, true
-	}
-
-	return alloc, true
-}
-
-// WriteGenesisAlloc serializes the full initial genesis allocation into the database
-func WriteGenesisAlloc(db ethdb.KeyValueWriter, alloc []Account) {
-	data, err := rlp.EncodeToBytes(alloc)
-	if err != nil {
-		log.Crit("Failed to RLP encode alloc", "err", err)
-	}
-
-	if err := db.Put(genesisAllocKey, data); err != nil {
-		log.Crit("Failed to store genesis alloc", "err", err)
-	}
-}
-
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())

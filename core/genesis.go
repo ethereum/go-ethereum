@@ -382,21 +382,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
 		return newcfg, stored, compatErr
 	}
-
 	// Don't overwrite if the old is identical to the new
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}
-
-	// PR Review Question: Should we actually use same behavior as above and overwrite if the old is not identical to the new?
-	// A new genesis alloc would lead to a new genesis block hash, so we should probably NOT overwrite unless block hash
-	// is also affected in the flow above.
-	//
-	// We only write genesis alloc if the `genesis` is non-nil, which happen on blockchain boot and custom network.
-	if genesis != nil && !rawdb.HasGenesisAlloc(db) {
-		rawdb.WriteGenesisAlloc(db, toRawDBAccounts(genesis.Alloc))
-	}
-
 	return newcfg, stored, nil
 }
 
@@ -528,8 +517,6 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 	if err := g.Alloc.flush(db, triedb, block.Hash(), bcLogger); err != nil {
 		return nil, err
 	}
-
-	rawdb.WriteGenesisAlloc(db, toRawDBAccounts(g.Alloc))
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
@@ -539,46 +526,6 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
 	return block, nil
-}
-
-func toRawDBAccounts(alloc GenesisAlloc) (out []rawdb.Account) {
-	if len(alloc) == 0 {
-		return
-	}
-
-	i := 0
-	out = make([]rawdb.Account, len(alloc))
-	for addr, account := range alloc {
-		out[i] = rawdb.Account{
-			Address:    addr,
-			Code:       account.Code,
-			Storage:    toRawDBAccountStorages(account.Storage),
-			Balance:    account.Balance,
-			Nonce:      account.Nonce,
-			PrivateKey: account.PrivateKey,
-		}
-		i++
-	}
-
-	return
-}
-
-func toRawDBAccountStorages(in map[common.Hash]common.Hash) (out []rawdb.AccountStorage) {
-	if len(in) == 0 {
-		return
-	}
-
-	i := 0
-	out = make([]rawdb.AccountStorage, len(in))
-	for key, value := range in {
-		out[i] = rawdb.AccountStorage{
-			Key:   key,
-			Value: value,
-		}
-		i++
-	}
-
-	return
 }
 
 // MustCommit writes the genesis block and state to db, panicking on error.
