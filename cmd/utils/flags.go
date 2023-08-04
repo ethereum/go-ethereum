@@ -1710,8 +1710,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
-	// Parse state scheme, abort the process if it's not compatible
-	chaindb := MakeChainDatabase(ctx, stack, true)
+	// Parse state scheme, abort the process if it's not compatible.
+	chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 	scheme, err := ParseStateScheme(ctx, chaindb)
 	chaindb.Close()
 	if err != nil {
@@ -1846,15 +1846,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// Create a new developer genesis block or reuse existing one
 		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
-			// If datadir doesn't exist we need to open db in write-mode
-			// so leveldb can create files.
-			readonly := true
-			if !common.FileExist(stack.ResolvePath("chaindata")) {
-				readonly = false
-			}
-			// Check if we have an already initialized chain and fall back to
-			// that if so. Otherwise we need to generate a new genesis spec.
-			chaindb := MakeChainDatabase(ctx, stack, readonly)
+			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
@@ -2070,6 +2062,18 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		Fatalf("Could not open database: %v", err)
 	}
 	return chainDb
+}
+
+// tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
+// or fallback to write mode if the database is not initialized.
+func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
+	// If datadir doesn't exist we need to open db in write-mode
+	// so database engine can create files.
+	readonly := true
+	if !common.FileExist(stack.ResolvePath("chaindata")) {
+		readonly = false
+	}
+	return MakeChainDatabase(ctx, stack, readonly)
 }
 
 func IsNetworkPreset(ctx *cli.Context) bool {
