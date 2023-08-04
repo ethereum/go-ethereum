@@ -352,6 +352,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount := new(big.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, big.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount)
+
+		// The returned gas is not charged
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:])
 	}
 	// No block reward which is issued by consensus layer instead.
 }
