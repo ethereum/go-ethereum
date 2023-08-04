@@ -35,7 +35,7 @@ var (
 	RinkebyGenesisHash       = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash        = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	ScrollAlphaGenesisHash   = common.HexToHash("0xa4fc62b9b0643e345bdcebe457b3ae898bef59c7203c3db269200055e037afda")
-	ScrollSepoliaGenesisHash = common.HexToHash("0x8deefb75edbf59fbff1cd9ffd6ebcd42dced646a1487ef369e0a64ccfc8b1fa2")
+	ScrollSepoliaGenesisHash = common.HexToHash("0x82f79483ba08c0411b4cb52031b57695eebecebf4169d777740cd069959b0ba1")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -257,7 +257,7 @@ var (
 	}
 
 	// ScrollAlphaChainConfig contains the chain parameters to run a node on the Scroll Alpha test network.
-	ScrollMaxTxPerBlock             = 44
+	ScrollMaxTxPerBlock             = 100
 	ScrollMaxTxPayloadBytesPerBlock = 120 * 1024
 
 	ScrollAlphaChainConfig = &ChainConfig{
@@ -293,6 +293,44 @@ var (
 				L1ChainId:             5,
 				L1MessageQueueAddress: common.HexToAddress("0x79DB48002Aa861C8cb189cabc21c6B1468BC83BB"),
 				NumL1MessagesPerBlock: 0,
+			},
+		},
+	}
+
+	// TODO fix this config
+	ScrollSepoliaChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(534351),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   nil,
+		ArchimedesBlock:     big.NewInt(0),
+		ShanghaiBlock:       big.NewInt(0),
+		Clique: &CliqueConfig{
+			Period: 3,
+			Epoch:  30000,
+		},
+		Scroll: ScrollConfig{
+			UseZktrie:                 true,
+			MaxTxPerBlock:             &ScrollMaxTxPerBlock,
+			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
+			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
+			EnableEIP2718:             false,
+			EnableEIP1559:             false,
+			L1Config: &L1Config{
+				L1ChainId:             11155111,
+				L1MessageQueueAddress: common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
+				NumL1MessagesPerBlock: 10,
 			},
 		},
 	}

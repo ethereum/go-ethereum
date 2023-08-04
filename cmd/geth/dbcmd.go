@@ -86,6 +86,7 @@ Remove blockchain and state databases`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
@@ -103,6 +104,7 @@ Remove blockchain and state databases`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 	}
 	dbCompactCmd = cli.Command{
@@ -118,10 +120,11 @@ Remove blockchain and state databases`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 		},
-		Description: `This command performs a database compaction. 
+		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
@@ -139,6 +142,7 @@ corruption if it is aborted during execution'!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Description: "This command looks up the specified database key from the database.",
 	}
@@ -156,8 +160,9 @@ corruption if it is aborted during execution'!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
-		Description: `This command deletes the specified database key from the database. 
+		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = cli.Command{
@@ -174,8 +179,9 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
-		Description: `This command sets a given database key to the given value. 
+		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbGetSlotsCmd = cli.Command{
@@ -192,6 +198,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Description: "This command looks up the specified database key from the database.",
 	}
@@ -209,6 +216,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Description: "This command displays information about the freezer index.",
 	}
@@ -225,6 +233,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Description: "The import command imports the specific chain data from an RLP encoded stream.",
 	}
@@ -241,6 +250,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
 		},
 		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
 	}
