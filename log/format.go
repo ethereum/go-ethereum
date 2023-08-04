@@ -32,11 +32,7 @@ var locationTrims = []string{
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
 // format output.
 func PrintOrigins(print bool) {
-	if print {
-		locationEnabled.Store(true)
-	} else {
-		locationEnabled.Store(false)
-	}
+	locationEnabled.Store(print)
 }
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
