@@ -60,3 +60,12 @@ devtools:
 	env GOBIN= go install ./cmd/abigen
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+docker:
+	docker build --platform linux/x86_64 -t scrolltech/l2geth:latest ./ -f Dockerfile
+
+mockccc_docker:
+	docker build --platform linux/x86_64 -t scrolltech/l2geth:latest ./ -f Dockerfile.mockccc
+
+mockccc_alpine_docker:
+	docker build --platform linux/x86_64 -t scrolltech/l2geth:latest ./ -f Dockerfile.mockccc.alpine
