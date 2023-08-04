@@ -277,7 +277,7 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 	case types.DynamicFeeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
-				// price = min(tip, gasFeeCap - baseFee) + baseFee
+				// price = min(gasTipCap + baseFee, gasFeeCap)
 				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap()))
 			}
 		}
