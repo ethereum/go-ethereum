@@ -337,10 +337,12 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 			if !existed {
 				m = make(map[string][]hexutil.Bytes)
 				env.StorageProofs[addrStr] = m
-				if zktrieTracer.Available() {
-					env.ZkTrieTracer[addrStr] = state.NewProofTracer(trie)
-				}
-			} else if proof, existed := m[keyStr]; existed {
+			}
+			if zktrieTracer.Available() && !env.ZkTrieTracer[addrStr].Available() {
+				env.ZkTrieTracer[addrStr] = state.NewProofTracer(trie)
+			}
+
+			if proof, existed := m[keyStr]; existed {
 				txm[keyStr] = proof
 				// still need to touch tracer for deletion
 				if isDelete && zktrieTracer.Available() {
