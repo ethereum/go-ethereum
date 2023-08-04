@@ -148,7 +148,12 @@ type (
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
+	s.stateObjectsMu.Lock()
+
 	delete(s.stateObjects, *ch.account)
+
+	s.stateObjectsMu.Unlock()
+
 	delete(s.stateObjectsDirty, *ch.account)
 	RevertWrite(s, blockstm.NewAddressKey(*ch.account))
 }
