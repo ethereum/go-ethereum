@@ -2334,7 +2334,9 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 
 // indexBlocks reindexes or unindexes transactions depending on user configuration
 func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{}) {
-	defer func() { close(done) }()
+	if done != nil {
+		defer func() { close(done) }()
+	}
 
 	// The tail flag is not existent, it means the node is just initialized
 	// and all blocks(may from ancient store) are not indexed yet.
@@ -2383,6 +2385,13 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 func (bc *BlockChain) maintainTxIndex() {
 	defer bc.wg.Done()
 
+	// Geth should always index/uninindex the unfinished chain segments,
+	// in case the chain has no progress for a long time.
+	head := rawdb.ReadHeadBlock(bc.db)
+	if head != nil {
+		bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), nil)
+	}
+
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
 		done   chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
@@ -2394,25 +2403,9 @@ func (bc *BlockChain) maintainTxIndex() {
 	}
 	defer sub.Unsubscribe()
 
-	// If geth is running in read-only mode(not receiving new blocks),
-	// we still want to trigger transaction indexing at least once.
-	timer := time.NewTimer(30 * time.Second)
-	defer timer.Stop()
-
 	for {
 		select {
-		case <-timer.C:
-			if done == nil {
-				head := rawdb.ReadHeadBlock(bc.db)
-				if head != nil {
-					done = make(chan struct{})
-					go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
-				}
-			}
 		case head := <-headCh:
-			if !timer.Stop() {
-				<-timer.C
-			}
 			if done == nil {
 				done = make(chan struct{})
 				go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), done)
