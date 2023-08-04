@@ -39,9 +39,9 @@ var errTraceSyntax = errors.New("expect file.go:234")
 type GlogHandler struct {
 	origin Handler // The origin handler this wraps
 
-	level     uint32 // Current log level, atomically accessible
-	override  uint32 // Flag whether overrides are used, atomically accessible
-	backtrace uint32 // Flag whether backtrace location is set
+	level     atomic.Uint32 // Current log level, atomically accessible
+	override  atomic.Bool   // Flag whether overrides are used, atomically accessible
+	backtrace atomic.Bool   // Flag whether backtrace location is set
 
 	patterns  []pattern       // Current list of patterns to override with
 	siteCache map[uintptr]Lvl // Cache of callsite pattern evaluations
@@ -72,7 +72,7 @@ type pattern struct {
 // Verbosity sets the glog verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (h *GlogHandler) Verbosity(level Lvl) {
-	atomic.StoreUint32(&h.level, uint32(level))
+	h.level.Store(uint32(level))
 }
 
 // Vmodule sets the glog verbosity pattern.
@@ -138,7 +138,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 
 	h.patterns = filter
 	h.siteCache = make(map[uintptr]Lvl)
-	atomic.StoreUint32(&h.override, uint32(len(filter)))
+	h.override.Store(len(filter) != 0)
 
 	return nil
 }
@@ -171,7 +171,7 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	defer h.lock.Unlock()
 
 	h.location = location
-	atomic.StoreUint32(&h.backtrace, uint32(len(location)))
+	h.backtrace.Store(len(location) > 0)
 
 	return nil
 }
@@ -180,7 +180,7 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 // and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Log(r *Record) error {
 	// If backtracing is requested, check whether this is the callsite
-	if atomic.LoadUint32(&h.backtrace) > 0 {
+	if h.backtrace.Load() {
 		// Everything below here is slow. Although we could cache the call sites the
 		// same way as for vmodule, backtracing is so rare it's not worth the extra
 		// complexity.
@@ -198,11 +198,11 @@ func (h *GlogHandler) Log(r *Record) error {
 		}
 	}
 	// If the global log level allows, fast track logging
-	if atomic.LoadUint32(&h.level) >= uint32(r.Lvl) {
+	if h.level.Load() >= uint32(r.Lvl) {
 		return h.origin.Log(r)
 	}
 	// If no local overrides are present, fast track skipping
-	if atomic.LoadUint32(&h.override) == 0 {
+	if !h.override.Load() {
 		return nil
 	}
 	// Check callsite cache for previously calculated log levels
