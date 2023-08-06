@@ -604,9 +604,12 @@ checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "convert_case"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb4a24b1aaf0fd0ce8b45161144d6f42cd91677fd5940fd431183eb023b3a2b8"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "core-foundation-sys"
@@ -1150,13 +1153,12 @@ dependencies = [
 [[package]]
 name = "ethers-core"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ebdd63c828f58aa067f40f9adcbea5e114fb1f90144b3a1e2858e0c9b1ff4e8"
+source = "git+https://github.com/scroll-tech/ethers-rs.git?branch=v0.17.0#739ec9a0df8daf536937739c87e85612bd73212f"
 dependencies = [
  "arrayvec",
  "bytes",
  "chrono",
- "convert_case 0.5.0",
+ "convert_case 0.6.0",
  "elliptic-curve",
  "ethabi",
  "fastrlp",
@@ -4052,6 +4054,12 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
 name = "unicode-width"
