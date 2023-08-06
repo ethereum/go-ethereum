@@ -32,6 +32,9 @@ RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install -buildtags 
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
 
+RUN apt-get -qq update \
+    && apt-get -qq install -y --no-install-recommends ca-certificates
+
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /usr/local/lib/
