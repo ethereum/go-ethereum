@@ -7,6 +7,8 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[patch.crates-io]
+ethers-core = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v0.17.0" }
 [patch."https://github.com/privacy-scaling-explorations/halo2.git"]
 halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "develop"  }
 [patch."https://github.com/privacy-scaling-explorations/poseidon.git"]
