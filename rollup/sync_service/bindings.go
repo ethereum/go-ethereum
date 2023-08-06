@@ -128,7 +128,7 @@ type L1MessageQueueQueueTransaction struct {
 	Raw        types.Log // Blockchain specific contextual infos
 }
 
-// FilterQueueTransaction is a free log retrieval operation binding the contract event 0xbdcc7517f8fe3db6506dfd910942d0bbecaf3d6a506dadea65b0d988e75b9439.
+// FilterQueueTransaction is a free log retrieval operation binding the contract event 0x69cfcb8e6d4192b8aba9902243912587f37e550d75c1fa801491fce26717f37e.
 //
 // Solidity: event QueueTransaction(address indexed sender, address indexed target, uint256 value, uint64 queueIndex, uint256 gasLimit, bytes data)
 func (_L1MessageQueue *L1MessageQueueFilterer) FilterQueueTransaction(opts *bind.FilterOpts, sender []common.Address, target []common.Address) (*L1MessageQueueQueueTransactionIterator, error) {
