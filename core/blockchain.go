@@ -1186,9 +1186,28 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 	// note: we can insert blocks with header-only ancestors here,
 	// so queueIndex might not yet be available in DB.
 	if queueIndex != nil {
+		numProcessed := uint64(block.NumL1MessagesProcessed(*queueIndex))
 		// do not overwrite the index written by the miner worker
 		if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
-			rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), *queueIndex+uint64(block.NumL1MessagesProcessed(*queueIndex)))
+			newIndex := *queueIndex + numProcessed
+			log.Trace(
+				"Blockchain.writeBlockWithoutState WriteFirstQueueIndexNotInL2Block",
+				"number", block.Number(),
+				"hash", block.Hash().String(),
+				"queueIndex", *queueIndex,
+				"numProcessed", numProcessed,
+				"newIndex", newIndex,
+			)
+			rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), newIndex)
+		} else {
+			log.Trace(
+				"Blockchain.writeBlockWithoutState WriteFirstQueueIndexNotInL2Block: not overwriting existing index",
+				"number", block.Number(),
+				"hash", block.Hash().String(),
+				"queueIndex", *queueIndex,
+				"numProcessed", numProcessed,
+				"index", *index,
+			)
 		}
 	}
 
@@ -1253,9 +1272,28 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// so the parent will always be inserted first.
 		log.Crit("Queue index in DB is nil", "parent", block.ParentHash(), "hash", block.Hash())
 	}
+	numProcessed := uint64(block.NumL1MessagesProcessed(*queueIndex))
 	// do not overwrite the index written by the miner worker
 	if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
-		rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), *queueIndex+uint64(block.NumL1MessagesProcessed(*queueIndex)))
+		newIndex := *queueIndex + numProcessed
+		log.Trace(
+			"Blockchain.writeBlockWithState WriteFirstQueueIndexNotInL2Block",
+			"number", block.Number(),
+			"hash", block.Hash().String(),
+			"queueIndex", *queueIndex,
+			"numProcessed", numProcessed,
+			"newIndex", newIndex,
+		)
+		rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), newIndex)
+	} else {
+		log.Trace(
+			"Blockchain.writeBlockWithState WriteFirstQueueIndexNotInL2Block: not overwriting existing index",
+			"number", block.Number(),
+			"hash", block.Hash().String(),
+			"queueIndex", *queueIndex,
+			"numProcessed", numProcessed,
+			"index", *index,
+		)
 	}
 
 	if err := blockBatch.Write(); err != nil {
