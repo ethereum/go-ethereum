@@ -792,7 +792,14 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.tcount = 0
 	env.blockSize = 0
 	env.l1TxCount = 0
-	env.nextL1MsgIndex = 0 // initialized in commitNewWork
+
+	// find next L1 message queue index
+	nextQueueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), parent.Hash())
+	if nextQueueIndex == nil {
+		// the parent must have been processed before we start a new mining job.
+		log.Crit("Failed to read last L1 message in L2 block", "parent.Hash()", parent.Hash().String())
+	}
+	env.nextL1MsgIndex = *nextQueueIndex
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
@@ -1086,15 +1093,9 @@ loop:
 	return false, circuitCapacityReached
 }
 
-func (w *worker) collectPendingL1Messages() (uint64, []types.L1MessageTx) {
-	nextQueueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), w.chain.CurrentHeader().Hash())
-	if nextQueueIndex == nil {
-		// the parent (w.chain.CurrentHeader) must have been processed before we start a new mining job.
-		log.Crit("Failed to read last L1 message in L2 block", "l2BlockHash", w.chain.CurrentHeader().Hash())
-	}
-	startIndex := *nextQueueIndex
+func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx {
 	maxCount := w.chainConfig.Scroll.L1Config.NumL1MessagesPerBlock
-	return startIndex, rawdb.ReadL1MessagesFrom(w.eth.ChainDb(), startIndex, maxCount)
+	return rawdb.ReadL1MessagesFrom(w.eth.ChainDb(), startIndex, maxCount)
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
@@ -1203,12 +1204,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	l1Txs := make(map[common.Address]types.Transactions)
 	pendingL1Txs := 0
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		nextQueueIndex, l1Messages := w.collectPendingL1Messages()
-
-		// If l1Messages is empty, we should still set this
-		// to the same value as the parent block.
-		env.nextL1MsgIndex = nextQueueIndex
-
+		l1Messages := w.collectPendingL1Messages(env.nextL1MsgIndex)
 		pendingL1Txs = len(l1Messages)
 		for _, l1msg := range l1Messages {
 			tx := types.NewTx(&l1msg)
