@@ -3974,7 +3974,6 @@ var outputSyncingFormatter = function(result) {
 
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
-    inputBlockNumberOrHashFormatter: inputBlockNumberOrHashFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
