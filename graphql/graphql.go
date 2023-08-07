@@ -1269,7 +1269,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 		}
 		ret = append(ret, block)
 		if err := ctx.Err(); err != nil {
-		    return nil, err
+			return nil, err
 		}
 	}
 	return ret, nil
