@@ -963,10 +963,13 @@ var (
 		RemoteDBFlag,
 		HttpHeaderFlag,
 	}
-	// StateSchemeFlags is the flag group of all state scheme flags
-	StateSchemeFlags = []cli.Flag{
+	// ChainHistoryFlags is the flag group for configuring chain history.
+	ChainHistoryFlags = []cli.Flag{
 		StateSchemeFlag,
 		StateHistoryFlag,
+		SyncModeFlag,
+		GCModeFlag,
+		TxLookupLimitFlag,
 	}
 )
 

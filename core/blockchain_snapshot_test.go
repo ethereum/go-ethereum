@@ -414,6 +414,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
 	snaptest.verify(t, newchain, blocks)
+	newchain.Stop()
 }
 
 // Tests a Geth restart with valid snapshot. Before the shutdown, all snapshot
