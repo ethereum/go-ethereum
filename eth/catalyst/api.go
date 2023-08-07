@@ -350,6 +350,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
 			Random:       payloadAttributes.Random,
 			Withdrawals:  payloadAttributes.Withdrawals,
+			BeaconRoot:   payloadAttributes.BeaconRoot,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -461,6 +462,9 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	var hashes []common.Hash
 	if versionedHashes != nil {
 		hashes = *versionedHashes
+	}
+	if params.BeaconRoot == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
 	}
 	return api.newPayload(params, hashes)
 }

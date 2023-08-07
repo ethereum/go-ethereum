@@ -458,6 +458,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			coinbase:    c.coinbase,
 			random:      c.random,
 			withdrawals: nil,
+			beaconRoot:  nil,
 			noTxs:       false,
 			forceTime:   true,
 		})
@@ -482,6 +483,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			coinbase:    c.coinbase,
 			random:      c.random,
 			withdrawals: nil,
+			beaconRoot:  nil,
 			noTxs:       false,
 			forceTime:   true,
 		})
