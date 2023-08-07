@@ -55,7 +55,7 @@ echo "Starting nodes with $bootnodes ..."
 # Note: --gcmode=archive means node will store all historical data. This will lead to high memory usage. Only needed if you need the node to perform historical operations
 XDC --ethstats ${netstats} --gcmode=full \
 --nat extip:${INSTANCE_IP} \
---bootnodes ${bootnodes} --syncmode fast \
+--bootnodes ${bootnodes} --syncmode full \
 --datadir /work/xdcchain --networkid 551 \
 -port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
 --rpcport 8545 \
