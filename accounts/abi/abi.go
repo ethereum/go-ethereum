@@ -296,11 +296,15 @@ func UnpackRevert(data []byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		pCode := unpacked[0].(*big.Int).Uint64()
-		if reason, ok := panicReasons[pCode]; ok {
-			return reason, nil
+		pCode := unpacked[0].(*big.Int)
+		// uint64 safety check for future
+		// but the code is not bigger than MAX(uint64) now
+		if pCode.IsUint64() {
+			if reason, ok := panicReasons[pCode.Uint64()]; ok {
+				return reason, nil
+			}
 		}
-		return fmt.Sprintf("unknown panic code: 0x%x", pCode), nil
+		return fmt.Sprintf("unknown panic code: 0x%s", pCode.Text(16)), nil
 	default:
 		return "", errors.New("invalid data for unpacking")
 	}
