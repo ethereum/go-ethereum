@@ -147,7 +147,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		var wg sync.WaitGroup
 		stop := make(chan struct{})
 
-		reqCount := make([](*atomic.Uint64), len(clientRpcClients))
+		reqCount := make([]atomic.Uint64, len(clientRpcClients))
 
 		// Send light request like crazy.
 		for i, c := range clientRpcClients {
