@@ -65,6 +65,7 @@ type Payload struct {
 	id       engine.PayloadID
 	empty    *types.Block
 	full     *types.Block
+	sidecars []*types.BlobTxSidecar
 	fullFees *big.Int
 	stop     chan struct{}
 	lock     sync.Mutex
@@ -84,7 +85,7 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 }
 
 // update updates the full-block with latest built version.
-func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.Duration) {
+func (payload *Payload) update(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, elapsed time.Duration) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -99,6 +100,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 	if payload.full == nil || fees.Cmp(payload.fullFees) > 0 {
 		payload.full = block
 		payload.fullFees = fees
+		payload.sidecars = sidecars
 
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(), "hash", block.Hash(),
@@ -120,9 +122,9 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return engine.BlockToExecutableData(payload.full, payload.fullFees, nil, nil, nil)
+		return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 	}
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, nil, nil)
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
@@ -131,7 +133,7 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, nil, nil)
+	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
@@ -157,7 +159,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
-	return engine.BlockToExecutableData(payload.full, payload.fullFees, nil, nil, nil)
+	return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 }
 
 // buildPayload builds the payload according to the provided parameters.
@@ -165,7 +167,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
-	empty, _, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
+	empty, _, _, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +191,9 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			select {
 			case <-timer.C:
 				start := time.Now()
-				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
+				block, fees, sidecars, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
 				if err == nil {
-					payload.update(block, fees, time.Since(start))
+					payload.update(block, fees, sidecars, time.Since(start))
 				}
 				timer.Reset(w.recommit)
 			case <-payload.stop:
