@@ -300,6 +300,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.BlobGasUsed = new(uint64)
 		*cpy.BlobGasUsed = *h.BlobGasUsed
 	}
+	if h.BeaconRoot != nil {
+		cpy.BeaconRoot = new(common.Hash)
+		*cpy.BeaconRoot = *h.BeaconRoot
+	}
 	return &cpy
 }
 
