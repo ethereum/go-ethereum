@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
-	executionv1 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1"
+	executionv1a1 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha1"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -23,7 +23,7 @@ type ExecutionServiceServer struct {
 	// NOTE - from the generated code:
 	// All implementations must embed UnimplementedExecutionServiceServer
 	// for forward compatibility
-	executionv1.UnimplementedExecutionServiceServer
+	executionv1a1.UnimplementedExecutionServiceServer
 
 	consensus *catalyst.ConsensusAPI
 	eth       *eth.Ethereum
@@ -43,7 +43,7 @@ func NewExecutionServiceServer(eth *eth.Ethereum) *ExecutionServiceServer {
 	}
 }
 
-func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.DoBlockRequest) (*executionv1.DoBlockResponse, error) {
+func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1a1.DoBlockRequest) (*executionv1a1.DoBlockResponse, error) {
 	log.Info("DoBlock called request", "request", req)
 	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
 
@@ -107,25 +107,25 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1.D
 		return nil, err
 	}
 
-	res := &executionv1.DoBlockResponse{
+	res := &executionv1a1.DoBlockResponse{
 		BlockHash: fcEndResp.PayloadStatus.LatestValidHash.Bytes(),
 	}
 	return res, nil
 }
 
-func (s *ExecutionServiceServer) FinalizeBlock(ctx context.Context, req *executionv1.FinalizeBlockRequest) (*executionv1.FinalizeBlockResponse, error) {
+func (s *ExecutionServiceServer) FinalizeBlock(ctx context.Context, req *executionv1a1.FinalizeBlockRequest) (*executionv1a1.FinalizeBlockResponse, error) {
 	header := s.bc.GetHeaderByHash(common.BytesToHash(req.BlockHash))
 	if header == nil {
 		return nil, fmt.Errorf("failed to get header for block hash 0x%x", req.BlockHash)
 	}
 
 	s.bc.SetFinalized(header)
-	return &executionv1.FinalizeBlockResponse{}, nil
+	return &executionv1a1.FinalizeBlockResponse{}, nil
 }
 
-func (s *ExecutionServiceServer) InitState(ctx context.Context, req *executionv1.InitStateRequest) (*executionv1.InitStateResponse, error) {
+func (s *ExecutionServiceServer) InitState(ctx context.Context, req *executionv1a1.InitStateRequest) (*executionv1a1.InitStateResponse, error) {
 	currHead := s.eth.BlockChain().CurrentHeader()
-	res := &executionv1.InitStateResponse{
+	res := &executionv1a1.InitStateResponse{
 		BlockHash: currHead.Hash().Bytes(),
 	}
 
