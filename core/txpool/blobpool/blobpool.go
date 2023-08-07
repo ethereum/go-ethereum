@@ -19,6 +19,7 @@ package blobpool
 
 import (
 	"container/heap"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -453,7 +454,8 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return err
 	}
 	if tx.BlobSidecar() == nil {
-		return fmt.Errorf("missing blob sidecar in tx id %d", id)
+		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
+		return errors.New("missing blob sidecar")
 	}
 
 	meta := newBlobTxMeta(id, size, tx)
