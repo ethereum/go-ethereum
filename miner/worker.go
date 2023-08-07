@@ -34,7 +34,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -59,10 +58,6 @@ const (
 	chainHeadChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
-	// timeout waiting for M1
-	waitPeriod = 10
-	// timeout for checkpoint.
-	waitPeriodCheckpoint = 20
 
 	txMatchGasLimit = 40000000
 )
@@ -270,7 +265,13 @@ func (self *worker) update() {
 	}
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
-	timeout := time.NewTimer(waitPeriod * time.Second)
+
+	// timeout waiting for v1 inital value
+	minePeriod := 2
+	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
+	defer close(MinePeriodCh)
+
+	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	c := make(chan struct{})
 	finish := make(chan struct{})
 	defer close(finish)
@@ -289,24 +290,31 @@ func (self *worker) update() {
 	for {
 		// A real event arrived, process interesting content
 		select {
+		case v := <-MinePeriodCh:
+			log.Info("[worker] update wait period", "period", v)
+			minePeriod = v
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
+
 		case <-c:
 			if atomic.LoadInt32(&self.mining) == 1 {
 				self.commitNewWork()
 			}
-			timeout.Reset(waitPeriod * time.Second)
-			// Handle ChainHeadEvent
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
+
+		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
-			timeout.Reset(waitPeriod * time.Second)
+			timeout.Reset(time.Duration(minePeriod) * time.Second)
 
-			// Handle ChainSideEvent
+		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
 			if self.config.XDPoS == nil {
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
 			}
-			// Handle TxPreEvent
+
+		// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
@@ -323,8 +331,10 @@ func (self *worker) update() {
 					self.commitNewWork()
 				}
 			}
+
 		case <-self.chainHeadSub.Err():
 			return
+
 		case <-self.chainSideSub.Err():
 			return
 		}
@@ -381,7 +391,11 @@ func (self *worker) wait() {
 			}
 			if work.config.XDPoS != nil {
 				// epoch block
-				if (block.NumberU64() % work.config.XDPoS.Epoch) == 0 {
+				isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(block.Header())
+				if err != nil {
+					log.Error("[wait] fail to check if block is epoch switch block when worker waiting", "BlockNum", block.Number(), "Hash", block.Hash())
+				}
+				if isEpochSwitchBlock {
 					core.CheckpointCh <- 1
 				}
 			}
@@ -397,8 +411,12 @@ func (self *worker) wait() {
 
 			if self.config.XDPoS != nil {
 				c := self.engine.(*XDPoS.XDPoS)
+				err = c.HandleProposedBlock(self.chain, block.Header())
+				if err != nil {
+					log.Warn("[wait] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
+				}
 
-				authorized := c.IsAuthorisedAddress(block.Header(), self.chain, self.coinbase)
+				authorized := c.IsAuthorisedAddress(self.chain, block.Header(), self.coinbase)
 				if !authorized {
 					valid := false
 					masternodes := c.GetMasternodes(self.chain, block.Header())
@@ -416,7 +434,7 @@ func (self *worker) wait() {
 				// Send tx sign to smart contract blockSigners.
 				if block.NumberU64()%common.MergeSignRange == 0 || !self.config.IsTIP2019(block.Number()) {
 					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb, self.coinbase); err != nil {
-						log.Error("Fail to create tx sign for signer", "error", "err")
+						log.Error("Fail to create tx sign for signer", "error", err)
 					}
 				}
 			}
@@ -508,7 +526,15 @@ func (self *worker) commitNewWork() {
 	defer self.currentMu.Unlock()
 
 	tstart := time.Now()
-	parent := self.chain.CurrentBlock()
+
+	c := self.engine.(*XDPoS.XDPoS)
+	var parent *types.Block
+	if c != nil {
+		parent = c.FindParentBlockToAssign(self.chain, self.chain.CurrentBlock())
+	} else {
+		parent = self.chain.CurrentBlock()
+	}
+
 	var signers map[common.Address]struct{}
 	if parent.Hash().Hex() == self.lastParentBlockCommit {
 		return
@@ -520,39 +546,15 @@ func (self *worker) commitNewWork() {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		// only go with XDPoS
 		if self.config.XDPoS != nil {
-			// get masternodes set from latest checkpoint
-			c := self.engine.(*XDPoS.XDPoS)
-			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
+			ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return
 			}
 			if !ok {
 				log.Info("Not my turn to commit block. Waiting...")
-				// in case some nodes are down
-				if preIndex == -1 {
-					// first block
-					return
-				}
-				if curIndex == -1 {
-					// you're not allowed to create this block
-					return
-				}
-				h := utils.Hop(len, preIndex, curIndex)
-				gap := waitPeriod * int64(h)
-				// Check nearest checkpoint block in hop range.
-				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
-				if uint64(h) >= nearest {
-					gap = waitPeriodCheckpoint * int64(h)
-				}
-				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
-				waitedTime := time.Now().Unix() - parent.Header().Time.Int64()
-				if gap > waitedTime {
-					return
-				}
-				log.Info("Wait enough. It's my turn", "waited seconds", waitedTime)
+				return
 			}
 		}
 	}
@@ -581,6 +583,10 @@ func (self *worker) commitNewWork() {
 	}
 
 	if err := self.engine.Prepare(self.chain, header); err != nil {
+		if err == consensus.ErrNotReadyToPropose {
+			log.Info("Waiting...", "err", err)
+			return
+		}
 		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}
@@ -626,13 +632,19 @@ func (self *worker) commitNewWork() {
 		lendingFinalizedTradeTransaction                                     *types.Transaction
 	)
 	feeCapacity := state.GetTRC21FeeCapacityFromStateWithCache(parent.Root(), work.state)
-	if self.config.XDPoS != nil && header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
-		pending, err := self.eth.TxPool().Pending()
+	if self.config.XDPoS != nil {
+		isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 		if err != nil {
-			log.Error("Failed to fetch pending transactions", "err", err)
-			return
+			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
-		txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers, feeCapacity)
+		if !isEpochSwitchBlock {
+			pending, err := self.eth.TxPool().Pending()
+			if err != nil {
+				log.Error("Failed to fetch pending transactions", "err", err)
+				return
+			}
+			txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers, feeCapacity)
+		}
 	}
 	if atomic.LoadInt32(&self.mining) == 1 {
 		wallet, err := self.eth.AccountManager().Find(accounts.Account{Address: self.coinbase})
@@ -644,16 +656,20 @@ func (self *worker) commitNewWork() {
 			XDCX := self.eth.GetXDCX()
 			XDCXLending := self.eth.GetXDCXLending()
 			if XDCX != nil && header.Number.Uint64() > self.config.XDPoS.Epoch {
-				if header.Number.Uint64()%self.config.XDPoS.Epoch == 0 {
-					err := XDCX.UpdateMediumPriceBeforeEpoch(header.Number.Uint64()/self.config.XDPoS.Epoch, work.tradingState, work.state)
+				isEpochSwitchBlock, epochNumber, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
+				if err != nil {
+					log.Error("[commitNewWork] fail to check if block is epoch switch block when performing XDCX and XDCXLending operations", "BlockNum", header.Number, "Hash", header.Hash())
+				}
+
+				if isEpochSwitchBlock {
+					err := XDCX.UpdateMediumPriceBeforeEpoch(epochNumber, work.tradingState, work.state)
 					if err != nil {
 						log.Error("Fail when update medium price last epoch", "error", err)
 						return
 					}
-				}
-				// won't grasp tx at checkpoint
-				//https://github.com/XinFinOrg/XDPoSChain-v1/pull/416
-				if header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
+				} else {
+					// won't grasp tx at checkpoint
+					//https://github.com/XinFinOrg/XDPoSChain-v1/pull/416
 					log.Debug("Start processing order pending")
 					tradingOrderPending, _ := self.eth.OrderPool().Pending()
 					log.Debug("Start processing order pending", "len", len(tradingOrderPending))
@@ -671,6 +687,7 @@ func (self *worker) commitNewWork() {
 						}
 					}
 				}
+
 				if len(tradingTxMatches) > 0 {
 					txMatchBatch := &tradingstate.TxMatchBatch{
 						Data:      tradingTxMatches,
@@ -1053,10 +1070,16 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		}
 		go func(logs []*types.Log, tcount int) {
 			if len(logs) > 0 {
-				mux.Post(core.PendingLogsEvent{Logs: logs})
+				err := mux.Post(core.PendingLogsEvent{Logs: logs})
+				if err != nil {
+					log.Warn("[commitTransactions] Error when sending PendingLogsEvent", "LogLength", len(logs))
+				}
 			}
 			if tcount > 0 {
-				mux.Post(core.PendingStateEvent{})
+				err := mux.Post(core.PendingStateEvent{})
+				if err != nil {
+					log.Warn("[commitTransactions] Error when sending PendingStateEvent", "tcount", tcount)
+				}
 			}
 		}(cpy, env.tcount)
 	}

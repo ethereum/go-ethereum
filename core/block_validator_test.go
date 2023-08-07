@@ -17,10 +17,11 @@
 package core
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core/types"

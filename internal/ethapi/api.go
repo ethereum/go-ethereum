@@ -35,6 +35,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -425,7 +426,8 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs
 // safely used to calculate a signature from.
 //
 // The hash is calulcated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+//
+//	keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
@@ -496,12 +498,16 @@ func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args Sen
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
-	b Backend
+	b           Backend
+	chainReader consensus.ChainReader
 }
 
 // NewPublicBlockChainAPI creates a new Ethereum blockchain API.
-func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
-	return &PublicBlockChainAPI{b}
+func NewPublicBlockChainAPI(b Backend, chainReader consensus.ChainReader) *PublicBlockChainAPI {
+	return &PublicBlockChainAPI{
+		b,
+		chainReader,
+	}
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -693,11 +699,7 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 		}
 		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
 			// Get block epoc latest.
-			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().XDPoS.Epoch)
-			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
-			if prevCheckpointBlock != nil {
-				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XDPoS.Epoch)
-			}
+			return engine.GetMasternodesByNumber(s.chainReader, prevBlockNumber), nil
 		} else {
 			log.Error("Undefined XDPoS consensus engine")
 		}
@@ -790,7 +792,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 
 	// Second, Find candidates that have masternode status
 	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
-		masternodes = engine.GetMasternodesFromCheckpointHeader(header, block.Number().Uint64(), s.b.ChainConfig().XDPoS.Epoch)
+		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
 			log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes), "blockNum", header.Number.Uint64())
 			result[fieldSuccess] = false
@@ -901,7 +903,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 
 	// Second, Find candidates that have masternode status
 	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
-		masternodes = engine.GetMasternodesFromCheckpointHeader(header, block.Number().Uint64(), s.b.ChainConfig().XDPoS.Epoch)
+		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
 			log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes), "blockNum", header.Number.Uint64())
 			result[fieldSuccess] = false
@@ -964,23 +966,28 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 // GetPreviousCheckpointFromEpoch returns header of the previous checkpoint
 func (s *PublicBlockChainAPI) GetPreviousCheckpointFromEpoch(ctx context.Context, epochNum rpc.EpochNumber) (rpc.BlockNumber, rpc.EpochNumber) {
 	var checkpointNumber uint64
-	epoch := s.b.ChainConfig().XDPoS.Epoch
 
-	if epochNum == rpc.LatestEpochNumber {
-		blockNumer := s.b.CurrentBlock().Number().Uint64()
-		diff := blockNumer % epoch
-		// checkpoint number
-		checkpointNumber = blockNumer - diff
-		epochNum = rpc.EpochNumber(checkpointNumber / epoch)
-		if diff > 0 {
-			epochNum += 1
+	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		currentCheckpointNumber, epochNumber, err := engine.GetCurrentEpochSwitchBlock(s.chainReader, s.b.CurrentBlock().Number())
+		if err != nil {
+			log.Error("[GetPreviousCheckpointFromEpoch] Error while trying to get current epoch switch block information", "Block", s.b.CurrentBlock(), "Error", err)
 		}
-	} else if epochNum < 2 {
-		checkpointNumber = 0
+		if epochNum == rpc.LatestEpochNumber {
+			checkpointNumber = currentCheckpointNumber
+			epochNum = rpc.EpochNumber(epochNumber)
+		} else if epochNum < 2 {
+			checkpointNumber = 0
+		} else {
+			blockNumberBeforeCurrentEpochSwitch := currentCheckpointNumber - 1
+			checkpointNumber, _, err = engine.GetCurrentEpochSwitchBlock(s.chainReader, big.NewInt(int64(blockNumberBeforeCurrentEpochSwitch)))
+			if err != nil {
+				log.Error("[GetPreviousCheckpointFromEpoch] Error while trying to get last epoch switch block information", "Number", blockNumberBeforeCurrentEpochSwitch, "Error", err)
+			}
+		}
+		return rpc.BlockNumber(checkpointNumber), epochNum
 	} else {
-		checkpointNumber = epoch * (uint64(epochNum) - 1)
+		panic("[GetPreviousCheckpointFromEpoch] Error while trying to get XDPoS consensus engine")
 	}
-	return rpc.BlockNumber(checkpointNumber), epochNum
 }
 
 // getCandidatesFromSmartContract returns all candidates with their capacities at the current time
@@ -1234,7 +1241,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 			}
 
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)						
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
 	return hexutil.Uint64(hi), nil
@@ -1376,7 +1383,11 @@ func (s *PublicBlockChainAPI) findNearestSignedBlock(ctx context.Context, b *typ
 	}
 
 	// Get block epoc latest
-	checkpointNumber := signedBlockNumber - (signedBlockNumber % s.b.ChainConfig().XDPoS.Epoch)
+	checkpointNumber, _, err := s.b.GetEngine().(*XDPoS.XDPoS).GetCurrentEpochSwitchBlock(s.chainReader, big.NewInt(int64(signedBlockNumber)))
+	if err != nil {
+		log.Error("[findNearestSignedBlock] Error while trying to get current Epoch switch block", "Number", signedBlockNumber)
+	}
+
 	checkpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(checkpointNumber))
 
 	if checkpointBlock != nil {
@@ -1388,8 +1399,8 @@ func (s *PublicBlockChainAPI) findNearestSignedBlock(ctx context.Context, b *typ
 }
 
 /*
-	findFinalityOfBlock return finality of a block
-	Use blocksHashCache for to keep track - refer core/blockchain.go for more detail
+findFinalityOfBlock return finality of a block
+Use blocksHashCache for to keep track - refer core/blockchain.go for more detail
 */
 func (s *PublicBlockChainAPI) findFinalityOfBlock(ctx context.Context, b *types.Block, masternodes []common.Address) (uint, error) {
 	engine, _ := s.b.GetEngine().(*XDPoS.XDPoS)
@@ -1454,19 +1465,15 @@ func (s *PublicBlockChainAPI) findFinalityOfBlock(ctx context.Context, b *types.
 }
 
 /*
-	Extract signers from block
+Extract signers from block
 */
 func (s *PublicBlockChainAPI) getSigners(ctx context.Context, block *types.Block, engine *XDPoS.XDPoS) ([]common.Address, error) {
 	var err error
 	var filterSigners []common.Address
 	var signers []common.Address
-	blockNumber := block.Number().Uint64()
 
-	// Get block epoc latest.
-	checkpointNumber := blockNumber - (blockNumber % s.b.ChainConfig().XDPoS.Epoch)
-	checkpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(checkpointNumber))
+	masternodes := engine.GetMasternodes(s.chainReader, block.Header())
 
-	masternodes := engine.GetMasternodesFromCheckpointHeader(checkpointBlock.Header(), blockNumber, s.b.ChainConfig().XDPoS.Epoch)
 	signers, err = GetSignersFromBlocks(s.b, block.NumberU64(), block.Hash(), masternodes)
 	if err != nil {
 		log.Error("Fail to get signers from block signer SC.", "error", err)
@@ -3048,7 +3055,8 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 // GetStakerROI Estimate ROI for stakers using the last epoc reward
 // then multiple by epoch per year, if the address is not masternode of last epoch - return 0
 // Formular:
-// 		ROI = average_latest_epoch_reward_for_voters*number_of_epoch_per_year/latest_total_cap*100
+//
+//	ROI = average_latest_epoch_reward_for_voters*number_of_epoch_per_year/latest_total_cap*100
 func (s *PublicBlockChainAPI) GetStakerROI() float64 {
 	blockNumber := s.b.CurrentBlock().Number().Uint64()
 	lastCheckpointNumber := blockNumber - (blockNumber % s.b.ChainConfig().XDPoS.Epoch) - s.b.ChainConfig().XDPoS.Epoch // calculate for 2 epochs ago
@@ -3074,7 +3082,8 @@ func (s *PublicBlockChainAPI) GetStakerROI() float64 {
 // GetStakerROIMasternode Estimate ROI for stakers of a specific masternode using the last epoc reward
 // then multiple by epoch per year, if the address is not masternode of last epoch - return 0
 // Formular:
-// 		ROI = latest_epoch_reward_for_voters*number_of_epoch_per_year/latest_total_cap*100
+//
+//	ROI = latest_epoch_reward_for_voters*number_of_epoch_per_year/latest_total_cap*100
 func (s *PublicBlockChainAPI) GetStakerROIMasternode(masternode common.Address) float64 {
 	votersReward := s.b.GetVotersRewards(masternode)
 	if votersReward == nil {

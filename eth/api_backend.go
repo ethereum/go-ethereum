@@ -56,8 +56,9 @@ import (
 
 // EthApiBackend implements ethapi.Backend for full nodes
 type EthApiBackend struct {
-	eth *Ethereum
-	gpo *gasprice.Oracle
+	eth   *Ethereum
+	gpo   *gasprice.Oracle
+	XDPoS *XDPoS.XDPoS
 }
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
@@ -81,6 +82,22 @@ func (b *EthApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock().Header(), nil
+	} else if blockNr == rpc.CommittedBlockNumber {
+		if b.eth.chainConfig.XDPoS == nil {
+			return nil, errors.New("PoW does not support confirmed block lookup")
+		}
+		current := b.eth.blockchain.CurrentBlock().Header()
+		if b.eth.blockchain.Config().XDPoS.BlockConsensusVersion(
+			current.Number,
+			current.Extra,
+			XDPoS.ExtraFieldCheck,
+		) == params.ConsensusEngineVersion2 {
+			// TO CHECK: why calling config in XDPoS is blocked (not field and method)
+			confirmedHash := b.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
+			return b.eth.blockchain.GetHeaderByHash(confirmedHash), nil
+		} else {
+			return nil, errors.New("PoS V1 does not support confirmed block lookup")
+		}
 	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)), nil
 }
@@ -93,6 +110,22 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
+	} else if blockNr == rpc.CommittedBlockNumber {
+		if b.eth.chainConfig.XDPoS == nil {
+			return nil, errors.New("PoW does not support confirmed block lookup")
+		}
+		current := b.eth.blockchain.CurrentBlock().Header()
+		if b.eth.blockchain.Config().XDPoS.BlockConsensusVersion(
+			current.Number,
+			current.Extra,
+			XDPoS.ExtraFieldCheck,
+		) == params.ConsensusEngineVersion2 {
+			// TO CHECK: why calling config in XDPoS is blocked (not field and method)
+			confirmedHash := b.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
+			return b.eth.blockchain.GetBlockByHash(confirmedHash), nil
+		} else {
+			return nil, errors.New("PoS V1 does not support confirmed block lookup")
+		}
 	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
 }
@@ -303,7 +336,17 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	number := block.Number().Uint64()
 	engine := b.GetEngine().(*XDPoS.XDPoS)
 	foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
-	lastCheckpointNumber := number - (number % b.ChainConfig().XDPoS.Epoch) - b.ChainConfig().XDPoS.Epoch // calculate for 2 epochs ago
+
+	// calculate for 2 epochs ago
+	currentCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, block.Number())
+	if err != nil {
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for current checkpoint block", "block", block)
+	}
+	lastCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, big.NewInt(int64(currentCheckpointNumber-1)))
+	if err != nil {
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for last checkpoint block", "block", block)
+	}
+
 	lastCheckpointBlock := chain.GetBlockByNumber(lastCheckpointNumber)
 	rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 

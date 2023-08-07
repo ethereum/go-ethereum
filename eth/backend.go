@@ -216,7 +216,11 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, ctx.GetConfig().AnnounceTxs)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	eth.ApiBackend = &EthApiBackend{eth, nil}
+	if eth.chainConfig.XDPoS != nil {
+		eth.ApiBackend = &EthApiBackend{eth, nil, eth.engine.(*XDPoS.XDPoS)}
+	} else {
+		eth.ApiBackend = &EthApiBackend{eth, nil, nil}
+	}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
@@ -267,7 +271,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 					return block, false, err
 				}
 				header := block.Header()
-				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, XDPoS.SigHash(header).Bytes())
+				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, c.SigHash(header).Bytes())
 				if err != nil || sighash == nil {
 					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
 					return block, false, err
@@ -285,6 +289,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 			XDPoS1.0 Specific hooks
 		*/
 		hooks.AttachConsensusV1Hooks(c, eth.blockchain, chainConfig)
+		hooks.AttachConsensusV2Hooks(c, eth.blockchain, chainConfig)
 
 		eth.txPool.IsSigner = func(address common.Address) bool {
 			currentHeader := eth.blockchain.CurrentHeader()
@@ -296,7 +301,7 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 				// not genesis block
 				header = parentHeader
 			}
-			return c.IsAuthorisedAddress(header, eth.blockchain, address)
+			return c.IsAuthorisedAddress(eth.blockchain, header, address)
 		}
 
 	}
@@ -333,7 +338,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If delegated-proof-of-stake is requested, set it up
 	if chainConfig.XDPoS != nil {
-		return XDPoS.New(chainConfig.XDPoS, db)
+		return XDPoS.New(chainConfig, db)
 	}
 
 	// Otherwise assume proof-of-work
@@ -364,7 +369,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.ApiBackend)
+	apis := ethapi.GetAPIs(s.ApiBackend, s.BlockChain())
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
@@ -464,7 +469,7 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 		//check if miner's wallet is in set of validators
 		c := s.engine.(*XDPoS.XDPoS)
 
-		authorized := c.IsAuthorisedAddress(s.blockchain.CurrentHeader(), s.blockchain, eb)
+		authorized := c.IsAuthorisedAddress(s.blockchain, s.blockchain.CurrentHeader(), eb)
 		if !authorized {
 			//This miner doesn't belong to set of validators
 			return false, nil
@@ -506,7 +511,7 @@ func (s *Ethereum) StartStaking(local bool) error {
 	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
+			log.Error("Etherbase account unavailable locally", "address", eb, "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
 		XDPoS.Authorize(eb, wallet.SignHash)

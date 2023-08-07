@@ -54,7 +54,7 @@ const (
 	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 )
 
-type rewardLog struct {
+type RewardLog struct {
 	Sign   uint64   `json:"sign"`
 	Reward *big.Int `json:"reward"`
 }
@@ -319,13 +319,13 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*RewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	number := header.Number.Uint64()
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
 	endBlockNumber := startBlockNumber + rCheckpoint - 1
-	signers := make(map[common.Address]*rewardLog)
+	signers := make(map[common.Address]*RewardLog)
 	mapBlkHash := map[uint64]common.Hash{}
 
 	data := make(map[common.Hash][]common.Address)
@@ -352,7 +352,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
-	masternodes := utils.GetMasternodesFromCheckpointHeader(header)
+	masternodes := c.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
@@ -376,7 +376,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 					if exist {
 						signers[addr].Sign++
 					} else {
-						signers[addr] = &rewardLog{1, new(big.Int)}
+						signers[addr] = &RewardLog{1, new(big.Int)}
 					}
 					*totalSigner++
 				}
@@ -390,7 +390,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 }
 
 // Calculate reward for signers.
-func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
+func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*RewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
 	resultSigners := make(map[common.Address]*big.Int)
 	// Add reward for signers.
 	if totalSigner > 0 {
@@ -404,12 +404,11 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 			resultSigners[signer] = calcReward
 		}
 	}
-	jsonSigners, err := json.Marshal(signers)
-	if err != nil {
-		log.Error("Fail to parse json signers", "error", err)
-		return nil, err
+
+	log.Info("Signers data", "totalSigner", totalSigner, "totalReward", chainReward)
+	for addr, signer := range signers {
+		log.Info("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
 	}
-	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 
 	return resultSigners, nil
 }

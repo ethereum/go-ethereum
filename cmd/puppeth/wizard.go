@@ -62,7 +62,7 @@ func (c config) servers() []string {
 func (c config) flush() {
 	os.MkdirAll(filepath.Dir(c.path), 0755)
 
-	out, _ := json.MarshalIndent(c, "", "  ")
+	out, _ := json.MarshalIndent(c.Genesis, "", "  ")
 	if err := ioutil.WriteFile(c.path, out, 0644); err != nil {
 		log.Warn("Failed to save puppeth configs", "file", c.path, "err", err)
 	}

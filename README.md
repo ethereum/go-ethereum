@@ -54,6 +54,10 @@ If at a later stage if some predecided amount of owners ( investors ) vote that 
 
 ### For developers
 
+#### Continues integration & delivery
+See https://github.com/XinFinOrg/XDPoSChain/tree/dev-upgrade/cicd
+
+
 ### To contribute
 
 Simple create a pull request along with proper reasoning, we'll get back to you.

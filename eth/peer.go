@@ -41,6 +41,9 @@ const (
 	maxKnownOrderTxs   = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
 	maxKnownLendingTxs = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
 	maxKnownBlocks     = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
+	maxKnownVote       = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownTimeout    = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownSyncInfo   = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
 	handshakeTimeout   = 5 * time.Second
 )
 
@@ -66,10 +69,15 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	knownTxs        mapset.Set // Set of transaction hashes known to be known by this peer
-	knownBlocks     mapset.Set // Set of block hashes known to be known by this peer
+	knownTxs    mapset.Set // Set of transaction hashes known to be known by this peer
+	knownBlocks mapset.Set // Set of block hashes known to be known by this peer
+
 	knownOrderTxs   mapset.Set // Set of order transaction hashes known to be known by this peer
 	knownLendingTxs mapset.Set // Set of lending transaction hashes known to be known by this peer
+
+	knownVote     mapset.Set // Set of BFT Vote known to be known by this peer
+	knownTimeout  mapset.Set // Set of BFT timeout known to be known by this peer
+	knownSyncInfo mapset.Set // Set of BFT Sync Info known to be known by this peer`
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -84,6 +92,10 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		knownBlocks:     mapset.NewSet(),
 		knownOrderTxs:   mapset.NewSet(),
 		knownLendingTxs: mapset.NewSet(),
+
+		knownVote:     mapset.NewSet(),
+		knownTimeout:  mapset.NewSet(),
+		knownSyncInfo: mapset.NewSet(),
 	}
 }
 
@@ -155,6 +167,36 @@ func (p *peer) MarkLendingTransaction(hash common.Hash) {
 		p.knownLendingTxs.Pop()
 	}
 	p.knownLendingTxs.Add(hash)
+}
+
+// MarkVote marks a vote as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkVote(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	for p.knownVote.Cardinality() >= maxKnownVote {
+		p.knownVote.Pop()
+	}
+	p.knownVote.Add(hash)
+}
+
+// MarkTimeout marks a timeout as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkTimeout(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	for p.knownTimeout.Cardinality() >= maxKnownTimeout {
+		p.knownTimeout.Pop()
+	}
+	p.knownTimeout.Add(hash)
+}
+
+// MarkSyncInfo marks a syncInfo as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkSyncInfo(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	for p.knownSyncInfo.Cardinality() >= maxKnownSyncInfo {
+		p.knownSyncInfo.Pop()
+	}
+	p.knownSyncInfo.Add(hash)
 }
 
 // SendTransactions sends transactions to the peer and includes the hashes
@@ -274,6 +316,61 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 		return p2p.Send(p.rw, ReceiptsMsg, receipts)
 	}
 }
+
+func (p *peer) SendVote(vote *types.Vote) error {
+	for p.knownVote.Cardinality() >= maxKnownVote {
+		p.knownVote.Pop()
+	}
+
+	p.knownVote.Add(vote.Hash())
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, VoteMsg, vote)
+	} else {
+		return p2p.Send(p.rw, VoteMsg, vote)
+	}
+}
+
+/*
+func (p *peer) AsyncSendVote() {
+
+}
+*/
+func (p *peer) SendTimeout(timeout *types.Timeout) error {
+	for p.knownTimeout.Cardinality() >= maxKnownTimeout {
+		p.knownTimeout.Pop()
+	}
+
+	p.knownTimeout.Add(timeout.Hash())
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, TimeoutMsg, timeout)
+	} else {
+		return p2p.Send(p.rw, TimeoutMsg, timeout)
+	}
+}
+
+/*
+func (p *peer) AsyncSendTimeout() {
+
+}
+*/
+func (p *peer) SendSyncInfo(syncInfo *types.SyncInfo) error {
+	for p.knownSyncInfo.Cardinality() >= maxKnownSyncInfo {
+		p.knownSyncInfo.Pop()
+	}
+
+	p.knownSyncInfo.Add(syncInfo.Hash())
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, SyncInfoMsg, syncInfo)
+	} else {
+		return p2p.Send(p.rw, SyncInfoMsg, syncInfo)
+	}
+}
+
+/*
+func (p *peer) AsyncSendSyncInfo() {
+
+}
+*/
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
@@ -499,6 +596,51 @@ func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if !p.knownTxs.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// PeersWithoutVote retrieves a list of peers that do not have a given block in
+// their set of known hashes.
+func (ps *peerSet) PeersWithoutVote(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownVote.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// PeersWithoutTimeout retrieves a list of peers that do not have a given block in
+// their set of known hashes.
+func (ps *peerSet) PeersWithoutTimeout(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownTimeout.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// PeersWithoutSyncInfo retrieves a list of peers that do not have a given block in
+// their set of known hashes.
+func (ps *peerSet) PeersWithoutSyncInfo(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownSyncInfo.Contains(hash) {
 			list = append(list, p)
 		}
 	}

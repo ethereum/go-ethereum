@@ -19,8 +19,9 @@ package miner
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"sync/atomic"
+
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/accounts"

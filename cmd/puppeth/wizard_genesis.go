@@ -116,14 +116,39 @@ func (w *wizard) makeGenesis() {
 			Period: 15,
 			Epoch:  30000,
 			Reward: 0,
+			V2: &params.V2{
+				SwitchBlock:   big.NewInt(0),
+				CurrentConfig: &params.V2Config{},
+				AllConfigs:    make(map[uint64]*params.V2Config),
+			},
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 2)")
 		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
+		genesis.Config.XDPoS.V2.CurrentConfig.MinePeriod = int(genesis.Config.XDPoS.Period)
 
 		fmt.Println()
 		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
 		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(10))
+
+		fmt.Println()
+		fmt.Println("Which block number start v2 consesus? (default = 0)")
+		genesis.Config.XDPoS.V2.SwitchBlock = w.readDefaultBigInt(genesis.Config.XDPoS.V2.SwitchBlock)
+		genesis.Config.XDPoS.V2.CurrentConfig.SwitchRound = 0
+
+		fmt.Println()
+		fmt.Println("How long is the v2 timeout period? (default = 10)")
+		genesis.Config.XDPoS.V2.CurrentConfig.TimeoutPeriod = w.readDefaultInt(10)
+
+		fmt.Println()
+		fmt.Println("How many v2 timeout reach to send Synchronize message? (default = 3)")
+		genesis.Config.XDPoS.V2.CurrentConfig.TimeoutSyncThreshold = w.readDefaultInt(3)
+
+		fmt.Println()
+		fmt.Printf("How many v2 vote collection to generate a QC, should be two thirds of masternodes? (default = %d)\n", common.MaxMasternodesV2/3*2+1)
+		genesis.Config.XDPoS.V2.CurrentConfig.CertThreshold = w.readDefaultInt(common.MaxMasternodesV2)/3*2 + 1
+
+		genesis.Config.XDPoS.V2.AllConfigs[0] = genesis.Config.XDPoS.V2.CurrentConfig
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")

@@ -138,6 +138,24 @@ web3._extend({
 			call: 'XDPoS_getSignersAtHash',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'getV2Block',
+			call: function (args) {
+				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "XDPoS_getV2BlockByHash" : "XDPoS_getV2BlockByNumber";
+			},
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getMasternodesByNumber',
+			call: 'XDPoS_getMasternodesByNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getLatestPoolStatus',
+			call: 'XDPoS_getLatestPoolStatus'
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

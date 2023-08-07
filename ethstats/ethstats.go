@@ -33,6 +33,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth"
@@ -55,6 +56,12 @@ const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 )
+
+type consensusEngine interface {
+	// SubscribeForensicsEvent should return an event subscription of
+	// ForensicsEvent and send events to the given channel.
+	SubscribeForensicsEvent(chan<- types.ForensicsEvent) event.Subscription
+}
 
 type txPool interface {
 	// SubscribeTxPreEvent should return an event subscription of
@@ -140,9 +147,11 @@ func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
 	var blockchain blockChain
 	var txpool txPool
+	var engine consensusEngine
 	if s.eth != nil {
 		blockchain = s.eth.BlockChain()
 		txpool = s.eth.TxPool()
+		engine = s.eth.Engine().(*XDPoS.XDPoS)
 	} else {
 		blockchain = s.les.BlockChain()
 		txpool = s.les.TxPool()
@@ -156,11 +165,19 @@ func (s *Service) loop() {
 	txSub := txpool.SubscribeTxPreEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
+	// Forensics events
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	if engine != nil {
+		forensicsSub := engine.SubscribeForensicsEvent(forensicsEventCh)
+		defer forensicsSub.Unsubscribe()
+	}
+
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
 	var (
-		quitCh = make(chan struct{})
-		headCh = make(chan *types.Block, 1)
-		txCh   = make(chan struct{}, 1)
+		quitCh      = make(chan struct{})
+		headCh      = make(chan *types.Block, 1)
+		txCh        = make(chan struct{}, 1)
+		forensicsCh = make(chan *types.ForensicProof, 1)
 	)
 	go func() {
 		var lastTx mclock.AbsTime
@@ -168,6 +185,11 @@ func (s *Service) loop() {
 	HandleLoop:
 		for {
 			select {
+			case forensics := <-forensicsEventCh:
+				select {
+				case forensicsCh <- forensics.ForensicsProof:
+				default:
+				}
 			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
 				select {
@@ -267,6 +289,10 @@ func (s *Service) loop() {
 			case <-txCh:
 				if err = s.reportPending(conn); err != nil {
 					log.Warn("Transaction stats report failed", "err", err)
+				}
+			case forensicsReport := <-forensicsCh:
+				if err = s.reportForensics(conn, forensicsReport); err != nil {
+					log.Error("Forensics proof stats report failed", "err", err)
 				}
 			}
 		}
@@ -485,6 +511,13 @@ type blockStats struct {
 	Uncles     uncleStats     `json:"uncles"`
 }
 
+// blockStats is the information to report about individual blocks.
+type latestCommittedBlockStats struct {
+	Number *big.Int    `json:"number"`
+	Hash   common.Hash `json:"hash"`
+	Round  uint64      `json:"round"`
+}
+
 // txStats is the information to report about individual transactions.
 type txStats struct {
 	Hash common.Hash `json:"hash"`
@@ -513,8 +546,33 @@ func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 		"id":    s.node,
 		"block": details,
 	}
+
+	// Get the latest committed block information
+	if (s.engine.(*XDPoS.XDPoS).EngineV2 != nil) && (s.engine.(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo() != nil) {
+		latestCommittedBlockInfo := s.engine.(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo()
+		stats["latestCommittedBlockInfo"] = &latestCommittedBlockStats{
+			Number: latestCommittedBlockInfo.Number,
+			Round:  uint64(latestCommittedBlockInfo.Round),
+			Hash:   latestCommittedBlockInfo.Hash,
+		}
+	}
+
 	report := map[string][]interface{}{
 		"emit": {"block", stats},
+	}
+	return websocket.JSON.Send(conn, report)
+}
+
+// reportForensics forward the forensics repors it to the stats server.
+func (s *Service) reportForensics(conn *websocket.Conn, forensicsProof *types.ForensicProof) error {
+	log.Info("Sending Forensics report to ethstats", "ForensicsType", forensicsProof.ForensicsType)
+
+	stats := map[string]interface{}{
+		"id":             s.node,
+		"forensicsProof": forensicsProof,
+	}
+	report := map[string][]interface{}{
+		"emit": {"forensics", stats},
 	}
 	return websocket.JSON.Send(conn, report)
 }

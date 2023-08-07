@@ -120,6 +120,8 @@ var (
 		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
 		//utils.FakePoWFlag,
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
@@ -291,11 +293,16 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 		utils.Fatalf("Light clients do not support staking")
 	}
+	// Start metrics export if enabled
+	utils.SetupMetrics(ctx)
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
+
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("Ethereum service not running: %v", err)
 	}
-	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
+	if engine, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
 			ok := false
@@ -339,6 +346,9 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			defer close(core.CheckpointCh)
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
+				log.Info("Update consensus parameters")
+				chain := ethereum.BlockChain()
+				engine.UpdateParams(chain.CurrentHeader())
 				if common.IsTestnet {
 					ok, err = ethereum.ValidateMasternodeTestnet()
 					if err != nil {

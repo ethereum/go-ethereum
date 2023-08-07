@@ -188,10 +188,11 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 		}
 		return newcfg, stored, err
 	}
-	// Special case: don't change the existing config of a non-mainnet chain if no new
+
+	// Special case: don't change the existing config of a non-xinfin chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
-	if genesis == nil && stored != params.MainnetGenesisHash {
+	if genesis == nil && newcfg == params.AllEthashProtocolChanges {
 		return storedcfg, stored, nil
 	}
 
@@ -211,12 +212,19 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
+		log.Info("[configOrDefault] load orignal config", "hash", ghash)
 		return g.Config
-	case ghash == params.MainnetGenesisHash:
+	case ghash == params.XDCMainnetGenesisHash:
+		log.Info("[configOrDefault] load mainnetconfig")
 		return params.XDCMainnetChainConfig
 	case ghash == params.TestnetGenesisHash:
+		log.Info("[configOrDefault] load TestnetChainConfig")
 		return params.TestnetChainConfig
+	case ghash == params.DevnetGenesisHash:
+		log.Info("[configOrDefault] load DevnetChainConfig")
+		return params.DevnetChainConfig
 	default:
+		log.Info("[configOrDefault] load AllEthashProtocolChanges", "hash", ghash)
 		return params.AllEthashProtocolChanges
 	}
 }
@@ -312,26 +320,30 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
+	config := params.XDCMainnetChainConfig
 	return &Genesis{
-		Config:     params.XDCMainnetChainConfig,
+		Config:     config,
 		Nonce:      0,
-		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000001b82c4bf317fcafe3d77e8b444c82715d216afe845b7bd987fa22c9bac89b71f0ded03f6e150ba31ad670b2b166684657ffff95f4810380ae7381e9bce41231d5dd8cdd7499e418b648c00af75d184a2f9aba09a6fa4a46fb1a6a3919b027d9cac5aa6890000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		ExtraData:  hexutil.MustDecode("0x000000000000000000000000000000000000000000000000000000000000000025c65b4b379ac37cf78357c4915f73677022eaffc7d49d0a2cf198deebd6ce581af465944ec8b2bbcfccdea1006a5cfa7d9484b5b293b46964c265c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   4700000,
 		Difficulty: big.NewInt(1),
-		Alloc:      DecodeMainnet(),
-		Timestamp:  1544771829,
+		Alloc:      DecodeAllocJson(XDCAllocData),
+		Timestamp:  1559211559,
 	}
 }
 
 // DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
+	config := params.TestnetChainConfig
+	config.XDPoS.V2 = nil
 	return &Genesis{
 		Config:     params.TestnetChainConfig,
-		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   16777216,
-		Difficulty: big.NewInt(1048576),
-		Alloc:      decodePrealloc(testnetAllocData),
+		Nonce:      0,
+		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000003ea0a3555f9b1de983572bff6444aeb1899ec58c4f7900282f3d371d585ab1361205b0940ab1789c942a5885a8844ee5587c8ac5e371fc39ffe618960000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(1),
+		Alloc:      DecodeAllocJson(XDCTestAllocData),
+		Timestamp:  1560417871,
 	}
 }
 
@@ -386,8 +398,8 @@ func decodePrealloc(data string) GenesisAlloc {
 	return ga
 }
 
-func DecodeMainnet() GenesisAlloc {
-	mainnetAlloc := GenesisAlloc{}
-	json.Unmarshal([]byte(XDCAllocData), &mainnetAlloc)
-	return mainnetAlloc
+func DecodeAllocJson(s string) GenesisAlloc {
+	alloc := GenesisAlloc{}
+	json.Unmarshal([]byte(s), &alloc)
+	return alloc
 }

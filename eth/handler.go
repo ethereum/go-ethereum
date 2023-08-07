@@ -29,9 +29,11 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/eth/bft"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/fetcher"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -80,6 +82,7 @@ type ProtocolManager struct {
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
+	bft        *bft.Bfter
 
 	SubProtocols []p2p.Protocol
 
@@ -104,6 +107,11 @@ type ProtocolManager struct {
 	knownTxs       *lru.Cache
 	knowOrderTxs   *lru.Cache
 	knowLendingTxs *lru.Cache
+
+	// V2 messages
+	knownVotes     *lru.Cache
+	knownSyncInfos *lru.Cache
+	knownTimeouts  *lru.Cache
 }
 
 // NewProtocolManagerEx add order pool to protocol
@@ -123,6 +131,11 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	knownTxs, _ := lru.New(maxKnownTxs)
 	knowOrderTxs, _ := lru.New(maxKnownOrderTxs)
 	knowLendingTxs, _ := lru.New(maxKnownLendingTxs)
+
+	knownVotes, _ := lru.New(maxKnownVote)
+	knownSyncInfos, _ := lru.New(maxKnownSyncInfo)
+	knownTimeouts, _ := lru.New(maxKnownTimeout)
+
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:      networkID,
@@ -138,6 +151,9 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		knownTxs:       knownTxs,
 		knowOrderTxs:   knowOrderTxs,
 		knowLendingTxs: knowLendingTxs,
+		knownVotes:     knownVotes,
+		knownSyncInfos: knownSyncInfos,
+		knownTimeouts:  knownTimeouts,
 		orderpool:      nil,
 		lendingpool:    nil,
 		orderTxSub:     nil,
@@ -189,15 +205,29 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	if len(manager.SubProtocols) == 0 {
 		return nil, errIncompatibleConfig
 	}
+
+	var handleProposedBlock func(header *types.Header) error
+	if config.XDPoS != nil {
+		handleProposedBlock = func(header *types.Header) error {
+			return engine.(*XDPoS.XDPoS).HandleProposedBlock(blockchain, header)
+		}
+	} else {
+		handleProposedBlock = func(header *types.Header) error {
+			return nil
+		}
+	}
+
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer)
+	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer, handleProposedBlock)
 
 	validator := func(header *types.Header) error {
 		return engine.VerifyHeader(blockchain, header, true)
 	}
+
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
+
 	inserter := func(block *types.Block) error {
 		// If fast sync is running, deny importing weird blocks
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
@@ -217,7 +247,18 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		return manager.blockchain.PrepareBlock(block)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, handleProposedBlock, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
+	//Define bft function
+	broadcasts := bft.BroadcastFns{
+		Vote:     manager.BroadcastVote,
+		Timeout:  manager.BroadcastTimeout,
+		SyncInfo: manager.BroadcastSyncInfo,
+	}
+	manager.bft = bft.New(broadcasts, blockchain, heighter)
+	if blockchain.Config().XDPoS != nil {
+		manager.bft.InitEpochNumber()
+		manager.bft.SetConsensusFuns(engine)
+	}
 
 	return manager, nil
 }
@@ -253,7 +294,6 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	// broadcast transactions
 	pm.txCh = make(chan core.TxPreEvent, txChanSize)
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
-
 	pm.orderTxCh = make(chan core.OrderTxPreEvent, txChanSize)
 	if pm.orderpool != nil {
 		pm.orderTxSub = pm.orderpool.SubscribeTxPreEvent(pm.orderTxCh)
@@ -808,6 +848,60 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if pm.lendingpool != nil {
 			pm.lendingpool.AddRemotes(txs)
 		}
+	case msg.Code == VoteMsg:
+		if pm.downloader.Synchronising() {
+			break
+		}
+
+		var vote types.Vote
+		if err := msg.Decode(&vote); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.MarkVote(vote.Hash())
+
+		exist, _ := pm.knownVotes.ContainsOrAdd(vote.Hash(), true)
+		if !exist {
+			go pm.bft.Vote(p.id, &vote)
+		} else {
+			log.Debug("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
+		}
+
+	case msg.Code == TimeoutMsg:
+		if pm.downloader.Synchronising() {
+			break
+		}
+
+		var timeout types.Timeout
+		if err := msg.Decode(&timeout); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.MarkTimeout(timeout.Hash())
+
+		exist, _ := pm.knownTimeouts.ContainsOrAdd(timeout.Hash(), true)
+
+		if !exist {
+			go pm.bft.Timeout(p.id, &timeout)
+		} else {
+			log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
+		}
+
+	case msg.Code == SyncInfoMsg:
+		if pm.downloader.Synchronising() {
+			break
+		}
+
+		var syncInfo types.SyncInfo
+		if err := msg.Decode(&syncInfo); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.MarkSyncInfo(syncInfo.Hash())
+
+		exist, _ := pm.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true)
+		if !exist {
+			go pm.bft.SyncInfo(p.id, &syncInfo)
+		} else {
+			log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
+		}
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -857,6 +951,58 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 		peer.SendTransactions(types.Transactions{tx})
 	}
 	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+}
+
+// BroadcastVote will propagate a Vote to all peers which are not known to
+// already have the given vote.
+func (pm *ProtocolManager) BroadcastVote(vote *types.Vote) {
+	hash := vote.Hash()
+	peers := pm.peers.PeersWithoutVote(hash)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendVote(vote)
+			if err != nil {
+				log.Error("[BroadcastVote] Fail to broadcast vote message", "peerId", peer.id, "version", peer.version, "blockNum", vote.ProposedBlockInfo.Number, "err", err)
+				pm.removePeer(peer.id)
+			}
+		}
+		log.Trace("Propagated Vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round, "recipients", len(peers))
+	}
+}
+
+// BroadcastTimeout will propagate a Timeout to all peers which are not known to
+// already have the given timeout.
+func (pm *ProtocolManager) BroadcastTimeout(timeout *types.Timeout) {
+	hash := timeout.Hash()
+	peers := pm.peers.PeersWithoutTimeout(hash)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendTimeout(timeout)
+			if err != nil {
+				log.Error("[BroadcastTimeout] Fail to broadcast timeout message, remove peer", "peerId", peer.id, "version", peer.version, "timeout", timeout, "err", err)
+				pm.removePeer(peer.id)
+			}
+		}
+		log.Trace("Propagated Timeout", "hash", hash, "recipients", len(peers))
+	}
+}
+
+// BroadcastSyncInfo will propagate a SyncInfo to all peers which are not known to
+// already have the given SyncInfo.
+func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *types.SyncInfo) {
+	hash := syncInfo.Hash()
+	peers := pm.peers.PeersWithoutSyncInfo(hash)
+	if len(peers) > 0 {
+		for _, peer := range peers {
+			err := peer.SendSyncInfo(syncInfo)
+			if err != nil {
+				log.Error("[BroadcastSyncInfo] Fail to broadcast syncInfo message, remove peer", "peerId", peer.id, "version", peer.version, "syncInfo", syncInfo, "err", err)
+				pm.removePeer(peer.id)
+			}
+		}
+		log.Trace("Propagated SyncInfo", "hash", hash, "recipients", len(peers))
+	}
+
 }
 
 // OrderBroadcastTx will propagate a transaction to all peers which are not known to

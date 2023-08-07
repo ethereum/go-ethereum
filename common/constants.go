@@ -17,6 +17,7 @@ const (
 	MaxMasternodes             = 18
 	MaxMasternodesV2           = 108
 	LimitPenaltyEpoch          = 4
+	LimitPenaltyEpochV2        = 0
 	BlocksPerYearTest          = uint64(200000)
 	BlocksPerYear              = uint64(15768000)
 	LimitThresholdNonceInQueue = 10
@@ -34,6 +35,8 @@ var Rewound = uint64(0)
 var TIP2019Block = big.NewInt(1)
 var TIPSigning = big.NewInt(3000000)
 var TIPRandomize = big.NewInt(3464000)
+
+var TIPV2SwitchBlock = big.NewInt(99999999999)
 
 var TIPIncreaseMasternodes = big.NewInt(5000000) // Upgrade MN Count at Block.
 var TIPNoHalvingMNReward = big.NewInt(38383838)  // hardfork no halving masternodes reward

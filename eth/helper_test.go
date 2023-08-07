@@ -22,11 +22,12 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sort"
 	"sync"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
