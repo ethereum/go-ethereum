@@ -760,10 +760,11 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		return err
 	}
 
+	commitAfterApply := false // don't commit during tracing for circuit capacity checker, otherwise we cannot revert
 	traceEnv, err := core.CreateTraceEnv(w.chainConfig, w.chain, w.engine, state, parent,
 		// new block with a placeholder tx, for traceEnv's ExecutionResults length & TxStorageTraces length
 		types.NewBlockWithHeader(header).WithBody([]*types.Transaction{types.NewTx(&types.LegacyTx{})}, nil),
-	)
+		commitAfterApply)
 	if err != nil {
 		return err
 	}

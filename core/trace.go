@@ -22,8 +22,9 @@ import (
 )
 
 type TraceEnv struct {
-	logConfig   *vm.LogConfig
-	chainConfig *params.ChainConfig
+	logConfig        *vm.LogConfig
+	commitAfterApply bool
+	chainConfig      *params.ChainConfig
 
 	coinbase common.Address
 
@@ -58,7 +59,7 @@ type txTraceTask struct {
 	index   int
 }
 
-func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, engine consensus.Engine, statedb *state.StateDB, parent *types.Block, block *types.Block) (*TraceEnv, error) {
+func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, engine consensus.Engine, statedb *state.StateDB, parent *types.Block, block *types.Block, commitAfterApply bool) (*TraceEnv, error) {
 	var coinbase common.Address
 	var err error
 	if chainConfig.Scroll.FeeVaultEnabled() {
@@ -75,11 +76,12 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, 
 			EnableMemory:     false,
 			EnableReturnData: true,
 		},
-		chainConfig: chainConfig,
-		coinbase:    coinbase,
-		signer:      types.MakeSigner(chainConfig, block.Number()),
-		state:       statedb,
-		blockCtx:    NewEVMBlockContext(block.Header(), chainContext, nil),
+		commitAfterApply: commitAfterApply,
+		chainConfig:      chainConfig,
+		coinbase:         coinbase,
+		signer:           types.MakeSigner(chainConfig, block.Number()),
+		state:            statedb,
+		blockCtx:         NewEVMBlockContext(block.Header(), chainContext, nil),
 		StorageTrace: &types.StorageTrace{
 			RootBefore:    parent.Root(),
 			RootAfter:     block.Root(),
@@ -156,8 +158,9 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 			failed = err
 			break
 		}
-		// we'd better don't finalise
-		// env.state.Finalise(vmenv.chainConfig().IsEIP158(block.Number()))
+		if env.commitAfterApply {
+			env.state.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		}
 	}
 	close(jobs)
 	pend.Wait()
