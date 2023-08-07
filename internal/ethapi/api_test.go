@@ -560,6 +560,7 @@ func TestEstimateGas(t *testing.T) {
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        TransactionArgs
+		overrides   StateOverride
 		expectErr   error
 		want        uint64
 	}{
@@ -592,9 +593,30 @@ func TestEstimateGas(t *testing.T) {
 			expectErr:   nil,
 			want:        53000,
 		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			overrides: StateOverride{
+				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			},
+			expectErr: nil,
+			want:      53000,
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &randomAccounts[0].addr,
+				To:    &randomAccounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			overrides: StateOverride{
+				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+			},
+			expectErr: core.ErrInsufficientFunds,
+		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber})
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
