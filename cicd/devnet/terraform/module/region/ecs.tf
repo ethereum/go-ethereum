@@ -29,8 +29,8 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   # Please set it back to cpu 256 and memory of 2048 after sync is done to save the cost
   # cpu = 256
   # memory = 2048
-  cpu = 512
-  memory = 3072
+  cpu = 1024
+  memory = 4096
   volume {
     name = "efs"
 
