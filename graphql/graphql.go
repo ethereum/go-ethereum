@@ -1207,6 +1207,9 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	Number *Long
 	Hash   *common.Hash
 }) (*Block, error) {
+	if args.Number != nil && args.Hash != nil {
+		return nil, errors.New("either number or hash must be specified")
+	}
 	var numberOrHash rpc.BlockNumberOrHash
 	if args.Number != nil {
 		if *args.Number < 0 {
