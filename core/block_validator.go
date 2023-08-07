@@ -168,7 +168,7 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		// skipped messages
 		// TODO: consider verifying that skipped messages overflow
 		for index := queueIndex; index < txQueueIndex; index++ {
-			log.Debug("Skipped L1 message", "block", block.Hash().String(), "queueIndex", index)
+			log.Debug("Skipped L1 message", "queueIndex", index, "tx", tx.Hash().String(), "block", block.Hash().String())
 
 			if exists := it.Next(); !exists {
 				// the message in this block is not available in our local db.

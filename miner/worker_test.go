@@ -731,3 +731,65 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 		t.Fatalf("timeout")
 	}
 }
+
+func TestL1MessageOverGasLimit(t *testing.T) {
+	assert := assert.New(t)
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 10000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // same sender
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}}} // different sender
+	rawdb.WriteL1Messages(db, msgs)
+
+	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine = clique.New(chainConfig.Clique, db)
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 3,
+	}
+
+	chainConfig.LondonBlock = big.NewInt(0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Start mining!
+	w.start()
+
+	select {
+	case ev := <-sub.Chan():
+		block := ev.Data.(core.NewMinedBlockEvent).Block
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+		}
+
+		// Should contain 2, not 1
+		// i.e. we should only skip 1 message
+		assert.Equal(2, len(block.Transactions()))
+
+		queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+		assert.NotNil(queueIndex)
+		assert.Equal(uint64(3), *queueIndex)
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout")
+	}
+}

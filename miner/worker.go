@@ -1002,6 +1002,18 @@ loop:
 
 		logs, err := w.commitTransaction(tx, coinbase)
 		switch {
+		case errors.Is(err, core.ErrGasLimitReached) && tx.IsL1MessageTx():
+			// If this block already contains some L1 messages,
+			// terminate here and try again in the next block.
+			if w.current.l1TxCount > 0 {
+				break loop
+			}
+			// A single L1 message leads to out-of-gas. Skip it.
+			queueIndex := tx.AsL1MessageTx().QueueIndex
+			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "gas limit exceeded")
+			w.current.nextL1MsgIndex = queueIndex + 1
+			txs.Shift()
+
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
@@ -1021,8 +1033,10 @@ loop:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			if tx.IsL1MessageTx() {
+				queueIndex := tx.AsL1MessageTx().QueueIndex
+				log.Debug("Including L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String())
 				w.current.l1TxCount++
-				w.current.nextL1MsgIndex = tx.AsL1MessageTx().QueueIndex + 1
+				w.current.nextL1MsgIndex = queueIndex + 1
 			}
 			w.current.tcount++
 			w.current.blockSize += tx.Size()
@@ -1038,7 +1052,7 @@ loop:
 			// don't pop or shift, just quit the loop immediately;
 			// though it might still be possible to add some "smaller" txs,
 			// but it's a trade-off between tracing overhead & block usage rate
-			log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash())
+			log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash().String())
 			circuitCapacityReached = true
 			break loop
 
@@ -1047,33 +1061,39 @@ loop:
 			// because we shouldn't skip the entire txs from the same account.
 			// This is also useful for skipping "problematic" L1MessageTxs.
 			queueIndex := tx.AsL1MessageTx().QueueIndex
-			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash(), "queueIndex", queueIndex)
+			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash().String(), "queueIndex", queueIndex)
+			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "row consumption overflow")
 			w.current.nextL1MsgIndex = queueIndex + 1
 			txs.Shift()
 
 		case (errors.Is(err, circuitcapacitychecker.ErrTxRowConsumptionOverflow) && !tx.IsL1MessageTx()):
 			// Circuit capacity check: L2MessageTx row consumption too high, skip the account.
 			// This is also useful for skipping "problematic" L2MessageTxs.
-			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash())
+			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash().String())
 			txs.Pop()
 
 		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && tx.IsL1MessageTx()):
 			// Circuit capacity check: unknown circuit capacity checker error for L1MessageTx,
 			// shift to the next from the account because we shouldn't skip the entire txs from the same account
 			queueIndex := tx.AsL1MessageTx().QueueIndex
-			log.Trace("Unknown circuit capacity checker error for L1MessageTx", "tx", tx.Hash(), "queueIndex", queueIndex)
+			log.Trace("Unknown circuit capacity checker error for L1MessageTx", "tx", tx.Hash().String(), "queueIndex", queueIndex)
+			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "unknown row consumption error")
 			w.current.nextL1MsgIndex = queueIndex + 1
 			txs.Shift()
 
 		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && !tx.IsL1MessageTx()):
 			// Circuit capacity check: unknown circuit capacity checker error for L2MessageTx, skip the account
-			log.Trace("Unknown circuit capacity checker error for L2MessageTx", "tx", tx.Hash())
+			log.Trace("Unknown circuit capacity checker error for L2MessageTx", "tx", tx.Hash().String())
 			txs.Pop()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash().String(), "err", err)
+			if tx.IsL1MessageTx() {
+				queueIndex := tx.AsL1MessageTx().QueueIndex
+				log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "strange error", "err", err)
+			}
 			txs.Shift()
 		}
 	}
