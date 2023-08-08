@@ -1699,17 +1699,6 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 
-	// send to sequencer
-	txBytes, err := tx.MarshalBinary()
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	err = sendTransactionToSequencer(ctx, txBytes)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
 	// Print a log with full tx details for manual investigations and interventions
 	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number)
 	from, err := types.Sender(signer, tx)
