@@ -110,7 +110,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure blob transactions have valid commitments
 	if tx.Type() == types.BlobTxType {
-		sidecar := tx.BlobSidecar()
+		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
 			return fmt.Errorf("missing sidecar in blob transaction")
 		}
@@ -130,7 +130,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	return nil
 }
 
-func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobSidecar) error {
+func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}

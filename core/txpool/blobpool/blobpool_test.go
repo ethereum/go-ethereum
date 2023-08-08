@@ -209,7 +209,7 @@ func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: []common.Hash{emptyBlobVHash},
 		Value:      uint256.NewInt(100),
-		Sidecar: &types.BlobSidecar{
+		Sidecar: &types.BlobTxSidecar{
 			Blobs:       []kzg4844.Blob{emptyBlob},
 			Commitments: []kzg4844.Commitment{emptyBlobCommit},
 			Proofs:      []kzg4844.Proof{emptyBlobProof},

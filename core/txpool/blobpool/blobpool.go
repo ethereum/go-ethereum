@@ -453,7 +453,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
 	}
-	if tx.BlobSidecar() == nil {
+	if tx.BlobTxSidecar() == nil {
 		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
 		return errors.New("missing blob sidecar")
 	}

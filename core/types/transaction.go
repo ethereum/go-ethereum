@@ -395,8 +395,8 @@ func (tx *Transaction) BlobHashes() []common.Hash {
 	return nil
 }
 
-// BlobSidecar returns the sidecar of a blob transaction, nil otherwise.
-func (tx *Transaction) BlobSidecar() *BlobSidecar {
+// BlobTxSidecar returns the sidecar of a blob transaction, nil otherwise.
+func (tx *Transaction) BlobTxSidecar() *BlobTxSidecar {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.Sidecar
 	}
@@ -413,8 +413,8 @@ func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
 	return tx.BlobGasFeeCap().Cmp(other)
 }
 
-// WithoutBlobSidecar returns a copy of tx with the blob sidecar removed.
-func (tx *Transaction) WithoutBlobSidecar() *Transaction {
+// WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
+func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	blobtx, ok := tx.inner.(*BlobTx)
 	if !ok {
 		return tx

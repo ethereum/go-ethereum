@@ -814,7 +814,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 						return errInvalidBody
 					}
 				}
-				if tx.BlobSidecar() != nil {
+				if tx.BlobTxSidecar() != nil {
 					return errInvalidBody
 				}
 			}

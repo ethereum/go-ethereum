@@ -43,7 +43,7 @@ type BlobTx struct {
 
 	// A blob transaction can optionally contain blobs. This field must be set when BlobTx
 	// is used to create a transaction for sigining.
-	Sidecar *BlobSidecar `rlp:"-"`
+	Sidecar *BlobTxSidecar `rlp:"-"`
 
 	// Signature values
 	V *uint256.Int `json:"v" gencodec:"required"`
@@ -51,8 +51,8 @@ type BlobTx struct {
 	S *uint256.Int `json:"s" gencodec:"required"`
 }
 
-// BlobSidecar contains the blobs of a blob transaction.
-type BlobSidecar struct {
+// BlobTxSidecar contains the blobs of a blob transaction.
+type BlobTxSidecar struct {
 	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
@@ -113,7 +113,7 @@ func (tx *BlobTx) copy() TxData {
 		cpy.S.Set(tx.S)
 	}
 	if tx.Sidecar != nil {
-		cpy.Sidecar = &BlobSidecar{
+		cpy.Sidecar = &BlobTxSidecar{
 			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
 			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
 			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
@@ -202,7 +202,7 @@ func (tx *BlobTx) decode(input []byte) error {
 		return err
 	}
 	*tx = *inner.BlobTx
-	tx.Sidecar = &BlobSidecar{
+	tx.Sidecar = &BlobTxSidecar{
 		Blobs:       inner.Blobs,
 		Commitments: inner.Commitments,
 		Proofs:      inner.Proofs,
