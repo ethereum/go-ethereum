@@ -145,6 +145,24 @@ var (
 		var {{.Type}}FuncSigs = {{.Type}}MetaData.Sigs
 	{{end}}
 
+	// {{.Type}}GetABI is a convenience function that returns the parsed ABI Object of {{.Type}}.
+	func {{.Type}}GetABI() (abi.ABI, error) {
+        parsed, err := {{.Type}}MetaData.GetAbi()
+		if err != nil {
+			return abi.ABI{}, err
+		}
+		if parsed == nil {
+			return abi.ABI{}, errors.New("GetABI returned nil")
+		}
+		return *parsed, nil
+	}
+
+	{{if .InputBin}}
+		// Deprecated: Use {{.Type}}MetaData.Bin instead.
+		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
+		var {{.Type}}Bin = {{.Type}}MetaData.Bin
+	{{end}}
+
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
 		// Deprecated: Use {{.Type}}MetaData.Bin instead.
@@ -275,6 +293,11 @@ var (
 	  return bind.NewBoundContract(address, *parsed, caller, transactor, filterer), nil
 	}
 
+	// GetABI is a convenience that returns the parsed ABI of the bound contract.
+	func (_{{$contract.Type}} *{{$contract.Type}}Raw) GetABI() abi.ABI {
+		return _{{$contract.Type}}.Contract.{{$contract.Type}}Caller.contract.GetABI()
+	}
+	
 	// Call invokes the (constant) contract method with params as input values and
 	// sets the output to result. The result type might be a single field for simple
 	// returns, a slice of interfaces for anonymous returns and a struct for named
