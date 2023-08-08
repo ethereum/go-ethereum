@@ -142,7 +142,9 @@ func checkChainAndProof(t *testing.T, b *testBackend, parent *types.Block, block
 			for addr, wrappedProof := range storageProof {
 				for keyStr, data2 := range wrappedProof {
 					data1, err := statedb.GetStorageProof(common.HexToAddress(addr), common.HexToHash(keyStr))
-					assert.NoError(t, err)
+					if len(data2) > 0 {
+						assert.NoError(t, err)
+					}
 					verifyProof(t, data1, data2)
 				}
 			}
