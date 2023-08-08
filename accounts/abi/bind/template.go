@@ -145,18 +145,6 @@ var (
 		var {{.Type}}FuncSigs = {{.Type}}MetaData.Sigs
 	{{end}}
 
-	// {{.Type}}GetABI is a convenience function that returns the parsed ABI Object of {{.Type}}.
-	func {{.Type}}GetABI() (abi.ABI, error) {
-        parsed, err := {{.Type}}MetaData.GetAbi()
-		if err != nil {
-			return abi.ABI{}, err
-		}
-		if parsed == nil {
-			return abi.ABI{}, errors.New("GetABI returned nil")
-		}
-		return *parsed, nil
-	}
-
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
 		// Deprecated: Use {{.Type}}MetaData.Bin instead.
