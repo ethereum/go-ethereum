@@ -48,7 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
-	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
+	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -221,28 +221,10 @@ var (
 	}
 
 	defaultSyncMode = ethconfig.Defaults.SyncMode
-	SyncModeFlag    = &flags.TextMarshalerFlag{
-		Name:     "syncmode",
-		Usage:    `Blockchain sync mode ("snap", "full" or "light")`,
-		Value:    &defaultSyncMode,
-		Category: flags.EthCategory,
-	}
-	GCModeFlag = &cli.StringFlag{
-		Name:     "gcmode",
-		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
-		Value:    "full",
-		Category: flags.EthCategory,
-	}
-	SnapshotFlag = &cli.BoolFlag{
+	SnapshotFlag    = &cli.BoolFlag{
 		Name:     "snapshot",
 		Usage:    `Enables snapshot-database mode (default = enable)`,
 		Value:    true,
-		Category: flags.EthCategory,
-	}
-	TxLookupLimitFlag = &cli.Uint64Flag{
-		Name:     "txlookuplimit",
-		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
-		Value:    ethconfig.Defaults.TxLookupLimit,
 		Category: flags.EthCategory,
 	}
 	LightKDFFlag = &cli.BoolFlag{
@@ -271,17 +253,35 @@ var (
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	SyncModeFlag = &flags.TextMarshalerFlag{
+		Name:     "syncmode",
+		Usage:    `Blockchain sync mode ("snap", "full" or "light")`,
+		Value:    &defaultSyncMode,
+		Category: flags.StateCategory,
+	}
+	GCModeFlag = &cli.StringFlag{
+		Name:     "gcmode",
+		Usage:    `Blockchain garbage collection mode, only relevant in state.scheme=hash ("full", "archive")`,
+		Value:    "full",
+		Category: flags.StateCategory,
+	}
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
 		Value:    rawdb.HashScheme,
-		Category: flags.EthCategory,
+		Category: flags.StateCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
 		Usage:    "Number of recent blocks to retain state history for (default = 90,000 blocks, 0 = entire chain)",
 		Value:    ethconfig.Defaults.StateHistory,
-		Category: flags.EthCategory,
+		Category: flags.StateCategory,
+	}
+	TransactionHistoryFlag = &cli.Uint64Flag{
+		Name:     "history.transactions",
+		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
+		Value:    ethconfig.Defaults.TransactionHistory,
+		Category: flags.StateCategory,
 	}
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
@@ -963,14 +963,6 @@ var (
 		RemoteDBFlag,
 		HttpHeaderFlag,
 	}
-	// ChainHistoryFlags is the flag group for configuring chain history.
-	ChainHistoryFlags = []cli.Flag{
-		StateSchemeFlag,
-		StateHistoryFlag,
-		SyncModeFlag,
-		GCModeFlag,
-		TxLookupLimitFlag,
-	}
 )
 
 func init() {
@@ -1647,13 +1639,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
-	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
-		ctx.Set(TxLookupLimitFlag.Name, "0")
-		log.Warn("Disable transaction unindexing for archive node")
-	}
-	if ctx.IsSet(LightServeFlag.Name) && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
-		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
-	}
+
+	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.String(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
@@ -1722,9 +1709,21 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	cfg.StateScheme = scheme
 
-	if ctx.IsSet(TxLookupLimitFlag.Name) {
-		cfg.TxLookupLimit = ctx.Uint64(TxLookupLimitFlag.Name)
+	// Parse transaction history flag
+	if ctx.IsSet(TransactionHistoryFlag.Name) {
+		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
+	} else if ctx.IsSet(TxLookupLimitFlag.Name) {
+		log.Warn("The flag --txlookuplimit is deprecated and will be removed, please use --history.transactions")
+		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
 	}
+	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
+		cfg.TransactionHistory = 0
+		log.Warn("Disable transaction unindexing for archive node")
+	}
+	if ctx.IsSet(LightServeFlag.Name) && cfg.TransactionHistory != 0 {
+		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
+	}
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
@@ -1957,7 +1956,7 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
 	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
 		Fatalf("Failed to decode block: %v", err)
 	}
-	ethcatalyst.RegisterFullSyncTester(stack, eth, &block)
+	catalyst.RegisterFullSyncTester(stack, eth, &block)
 	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
 }
 

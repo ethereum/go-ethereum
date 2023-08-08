@@ -88,6 +88,7 @@ var (
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag,
+		utils.TransactionHistoryFlag,
 		utils.StateSchemeFlag,
 		utils.StateHistoryFlag,
 		utils.LightServeFlag,
