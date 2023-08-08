@@ -732,17 +732,12 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 	}
 }
 
-func TestL1MessageOverGasLimit(t *testing.T) {
-	assert := assert.New(t)
+func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, callback func(i int, block *types.Block, db ethdb.Database) bool) {
 	var (
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	msgs := []types.L1MessageTx{
-		{QueueIndex: 0, Gas: 10000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
-		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // same sender
-		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}}} // different sender
 	rawdb.WriteL1Messages(db, msgs)
 
 	chainConfig = params.AllCliqueProtocolChanges
@@ -775,21 +770,95 @@ func TestL1MessageOverGasLimit(t *testing.T) {
 	// Start mining!
 	w.start()
 
-	select {
-	case ev := <-sub.Chan():
-		block := ev.Data.(core.NewMinedBlockEvent).Block
-		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+	for ii := 1; true; ii++ {
+		// timeout for all blocks
+		select {
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout")
+		default:
 		}
 
-		// Should contain 2, not 1
-		// i.e. we should only skip 1 message
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			// TODO
+			if callback(ii, block, db) {
+				return
+			}
+
+		// timeout for one block
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout")
+		}
+	}
+}
+
+func TestL1SingleMessageOverGasLimit(t *testing.T) {
+	assert := assert.New(t)
+
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 10000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // over gas limit
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},    // same sender
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}},    // different sender
+	}
+
+	l1MessageTest(t, msgs, func(_i int, block *types.Block, db ethdb.Database) bool {
+		// skip #0, include #1 and #2
 		assert.Equal(2, len(block.Transactions()))
 
+		assert.True(block.Transactions()[0].IsL1MessageTx())
+		assert.Equal(uint64(1), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+		assert.True(block.Transactions()[1].IsL1MessageTx())
+		assert.Equal(uint64(2), block.Transactions()[1].AsL1MessageTx().QueueIndex)
+
+		// db is updated correctly
 		queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
 		assert.NotNil(queueIndex)
 		assert.Equal(uint64(3), *queueIndex)
-	case <-time.After(3 * time.Second):
-		t.Fatalf("timeout")
+
+		return true
+	})
+}
+
+func TestL1CombinedMessagesOverGasLimit(t *testing.T) {
+	assert := assert.New(t)
+
+	// message #0 is over the gas limit
+	// we should skip #0 but not #1 and #2
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 4000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 1, Gas: 4000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // same sender
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}},   // different sender
 	}
+
+	l1MessageTest(t, msgs, func(blockNum int, block *types.Block, db ethdb.Database) bool {
+		switch blockNum {
+		case 1:
+			// block #1 only includes 1 message
+			assert.Equal(1, len(block.Transactions()))
+			assert.True(block.Transactions()[0].IsL1MessageTx())
+			assert.Equal(uint64(0), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+
+			// db is updated correctly
+			queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+			assert.NotNil(queueIndex)
+			assert.Equal(uint64(1), *queueIndex)
+			return false
+		case 2:
+			// block #2 includes the other 2 messages
+			assert.Equal(2, len(block.Transactions()))
+			assert.True(block.Transactions()[0].IsL1MessageTx())
+			assert.Equal(uint64(1), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+			assert.True(block.Transactions()[1].IsL1MessageTx())
+			assert.Equal(uint64(2), block.Transactions()[1].AsL1MessageTx().QueueIndex)
+
+			// db is updated correctly
+			queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+			assert.NotNil(queueIndex)
+			assert.Equal(uint64(3), *queueIndex)
+			return true
+		default:
+			return true
+		}
+	})
 }
