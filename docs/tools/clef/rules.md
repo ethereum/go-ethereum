@@ -40,7 +40,7 @@ function ApproveTx(req) {
 	var limit = big.Newint("0xb1a2bc2ec50000")
 	var value = asBig(req.transaction.value);
 
-	if (req.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9") && value.lt(limit)) {
+	if (req.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9" && value.lt(limit)) {
 		return "Approve"
 	}
 	// If we return "Reject", it will be rejected.
