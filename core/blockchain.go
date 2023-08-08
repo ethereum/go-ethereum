@@ -151,14 +151,14 @@ func (c *CacheConfig) triedbConfig() *trie.Config {
 	config := &trie.Config{Preimages: c.Preimages}
 	if c.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
-			CleanSize: c.TrieCleanLimit * 1024 * 1024,
+			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
 		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
-			StateHistory: c.StateHistory,
-			CleanSize:    c.TrieCleanLimit * 1024 * 1024,
-			DirtySize:    c.TrieDirtyLimit * 1024 * 1024,
+			StateHistory:   c.StateHistory,
+			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
+			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}
 	}
 	return config
@@ -2467,6 +2467,7 @@ func (bc *BlockChain) maintainTxIndex() {
 		return
 	}
 	defer sub.Unsubscribe()
+	log.Info("Initialized transaction indexer", "limit", bc.TxLookupLimit())
 
 	for {
 		select {

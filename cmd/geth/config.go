@@ -297,8 +297,6 @@ func deprecated(field string) bool {
 		return true
 	case "ethconfig.Config.TrieCleanCacheRejournal":
 		return true
-	case "ethconfig.Config.TxLookupLimit":
-		return true
 	default:
 		return false
 	}

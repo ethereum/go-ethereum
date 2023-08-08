@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 const (
@@ -184,7 +185,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		// If we've successfully finished a sync cycle, accept transactions from
 		// the network
-		h.setSynced()
+		h.enableSyncedFeatures()
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
@@ -273,7 +274,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		n, err := h.chain.InsertChain(blocks)
 		if err == nil {
-			h.setSynced() // Mark initial sync done on any fetcher import
+			h.enableSyncedFeatures() // Mark initial sync done on any fetcher import
 		}
 		return n, err
 	}
@@ -676,10 +677,11 @@ func (h *handler) txBroadcastLoop() {
 	}
 }
 
-// setSynced sets the flag as true when node finishes chain sync.
-func (h *handler) setSynced() {
+// enableSyncedFeatures enables the post-sync functionalities when the initial
+// sync is finished.
+func (h *handler) enableSyncedFeatures() {
 	h.acceptTxs.Store(true)
 	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetBufferSize(64 * 1024 * 1024)
+		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
 }

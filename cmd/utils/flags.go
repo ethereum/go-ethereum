@@ -1709,7 +1709,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	cfg.StateScheme = scheme
 
-	// Parse transaction history flag
+	// Parse transaction history flag, if user is still using legacy config
+	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
+	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
+		log.Warn("The config option 'TxLookupLimit' is deprecated and will be removed, please use 'TransactionHistory'")
+		cfg.TransactionHistory = cfg.TxLookupLimit
+	}
 	if ctx.IsSet(TransactionHistoryFlag.Name) {
 		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
 	} else if ctx.IsSet(TxLookupLimitFlag.Name) {
@@ -1723,7 +1728,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(LightServeFlag.Name) && cfg.TransactionHistory != 0 {
 		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
 	}
-
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
@@ -2222,17 +2226,17 @@ func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
 		if stored == "" {
 			// use default scheme for empty database, flip it when
 			// path mode is chosen as default
-			log.Info("Use default hash scheme")
+			log.Info("State schema set to default", "scheme", "hash")
 			return rawdb.HashScheme, nil
 		}
-		log.Info("Use scheme of persistent state", "scheme", stored)
+		log.Info("State scheme set to already existing", "scheme", stored)
 		return stored, nil // reuse scheme of persistent scheme
 	}
 	// If state scheme is specified, ensure it's compatible with
 	// persistent state.
 	scheme := ctx.String(StateSchemeFlag.Name)
 	if stored == "" || scheme == stored {
-		log.Info("Use user-specified scheme", "scheme", scheme)
+		log.Info("State scheme set by user", "scheme", scheme)
 		return scheme, nil
 	}
 	return "", fmt.Errorf("incompatible state scheme, stored: %s, provided: %s", stored, scheme)
@@ -2248,6 +2252,9 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		Fatalf("%v", err)
 	}
 	if scheme == rawdb.HashScheme {
+		// Read-only mode is not implemented in hash mode,
+		// ignore the parameter silently. TODO(rjl493456442)
+		// please config it if read mode is implemented.
 		config.HashDB = hashdb.Defaults
 		return trie.NewDatabase(disk, config)
 	}

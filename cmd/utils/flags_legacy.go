@@ -70,7 +70,7 @@ var (
 		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use --discv5 instead)",
 		Category: flags.DeprecatedCategory,
 	}
-	// Deprecated Augest 2023
+	// Deprecated August 2023
 	TxLookupLimitFlag = &cli.Uint64Flag{
 		Name:     "txlookuplimit",
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (deprecated, use history.transactions instead)",

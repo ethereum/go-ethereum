@@ -115,11 +115,8 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		diskdb:    diskdb,
 		preimages: preimages,
 	}
-	// Hash-based backend is preferred in case both modes are configured, or neither
-	// of them are configured. Flip when the default scheme is switched.
 	if config.HashDB != nil && config.PathDB != nil {
-		config.PathDB = nil
-		log.Warn("Both 'hash' and 'path' mode are configured, use 'hash' mode as default")
+		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
 	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB)
@@ -262,8 +259,8 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 
 // Recover rollbacks the database to a specified historical point. The state is
 // supported as the rollback destination only if it's canonical state and the
-// corresponding trie histories are existent. It's only supported by snap database
-// and will return an error for others.
+// corresponding trie histories are existent. It's only supported by path-based
+// database and will return an error for others.
 func (db *Database) Recover(target common.Hash) error {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
@@ -273,8 +270,8 @@ func (db *Database) Recover(target common.Hash) error {
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be
-// recovered. It's only supported by snap database and will return an error
-// for others.
+// recovered. It's only supported by path-based database and will return an
+// error for others.
 func (db *Database) Recoverable(root common.Hash) (bool, error) {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -753,12 +754,28 @@ func TestDeleteCreateRevert(t *testing.T) {
 // the Commit operation fails with an error
 // If we are missing trie nodes, we should not continue writing to the trie
 func TestMissingTrieNodes(t *testing.T) {
+	testMissingTrieNodes(t, rawdb.HashScheme)
+	testMissingTrieNodes(t, rawdb.PathScheme)
+}
+
+func testMissingTrieNodes(t *testing.T, scheme string) {
 	// Create an initial state with a few accounts
 	var (
-		memDb = rawdb.NewMemoryDatabase()
-		ndb   = trie.NewDatabase(memDb, &trie.Config{HashDB: &hashdb.Config{}}) // disable caching
-		db    = NewDatabaseWithNodeDB(memDb, ndb)
+		triedb *trie.Database
+		memDb  = rawdb.NewMemoryDatabase()
 	)
+	if scheme == rawdb.PathScheme {
+		triedb = trie.NewDatabase(memDb, &trie.Config{PathDB: &pathdb.Config{
+			CleanCacheSize: 0,
+			DirtyCacheSize: 0,
+		}}) // disable caching
+	} else {
+		triedb = trie.NewDatabase(memDb, &trie.Config{HashDB: &hashdb.Config{
+			CleanCacheSize: 0,
+		}}) // disable caching
+	}
+	db := NewDatabaseWithNodeDB(memDb, triedb)
+
 	var root common.Hash
 	state, _ := New(types.EmptyRootHash, db, nil)
 	addr := common.BytesToAddress([]byte("so"))
@@ -771,7 +788,7 @@ func TestMissingTrieNodes(t *testing.T) {
 		root, _ = state.Commit(0, false)
 		t.Logf("root: %x", root)
 		// force-flush
-		ndb.Commit(root, false)
+		triedb.Commit(root, false)
 	}
 	// Create a new state on the old root
 	state, _ = New(root, db, nil)

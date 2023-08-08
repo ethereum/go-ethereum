@@ -67,14 +67,17 @@ type ChildResolver interface {
 
 // Config contains the settings for database.
 type Config struct {
-	CleanSize int // Maximum memory allowance (in bytes) for caching clean nodes
+	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
 }
 
 // Defaults is the default setting for database if it's not specified.
-// Notably, clean cache is disabled explicitly, since Reset operation
-// must be done if clean cache is no longer needed, otherwise memory
-// leak can happen.
-var Defaults = &Config{}
+// Notably, clean cache is disabled explicitly,
+var Defaults = &Config{
+	// Explicitly set clean cache size to 0 to avoid creating fastcache,
+	// otherwise database must be closed when it's no longer needed to
+	// prevent memory leak.
+	CleanCacheSize: 0,
+}
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
@@ -138,8 +141,8 @@ func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Databas
 		config = Defaults
 	}
 	var cleans *fastcache.Cache
-	if config.CleanSize > 0 {
-		cleans = fastcache.New(config.CleanSize)
+	if config.CleanCacheSize > 0 {
+		cleans = fastcache.New(config.CleanCacheSize)
 	}
 	return &Database{
 		diskdb:   diskdb,

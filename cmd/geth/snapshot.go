@@ -61,10 +61,7 @@ two version states are available: genesis and the specific one.
 
 The default pruning target is the HEAD-127 state.
 
-WARNING: It's necessary to delete the trie clean cache after the pruning.
-If you specify another directory for the trie clean cache via "--cache.trie.journal"
-during the use of Geth, please also specify it here for correct deletion. Otherwise
-the trie clean cache with default directory will be deleted.
+WARNING: it's only supported in hash mode(--state.scheme=hash)".
 `,
 			},
 			{
@@ -172,6 +169,9 @@ func pruneState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
+	if rawdb.ReadPersistentScheme(chaindb) != rawdb.HashScheme {
+		log.Crit("Offline pruning is only supported in hash mode")
+	}
 	prunerconfig := pruner.Config{
 		Datadir:   stack.ResolvePath(""),
 		BloomSize: ctx.Uint64(utils.BloomFilterSizeFlag.Name),
