@@ -147,12 +147,19 @@ func runCmd(ctx *cli.Context) error {
 			Preimages: preimages,
 			HashDB:    hashdb.Defaults,
 		})
+		defer triedb.Close()
 		genesis := gen.MustCommit(db, triedb)
 		sdb := state.NewDatabaseWithNodeDB(db, triedb)
 		statedb, _ = state.New(genesis.Root(), sdb, nil)
 		chainConfig = gen.Config
 	} else {
-		sdb := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: preimages})
+		db := rawdb.NewMemoryDatabase()
+		triedb := trie.NewDatabase(db, &trie.Config{
+			Preimages: preimages,
+			HashDB:    hashdb.Defaults,
+		})
+		defer triedb.Close()
+		sdb := state.NewDatabaseWithNodeDB(db, triedb)
 		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}

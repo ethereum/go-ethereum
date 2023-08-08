@@ -335,6 +335,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	defer triedb.Close()
+
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil)
 		if err != nil {
@@ -353,7 +355,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
-	_, err := genesis.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
+	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	defer triedb.Close()
+	_, err := genesis.Commit(db, triedb)
 	if err != nil {
 		panic(err)
 	}

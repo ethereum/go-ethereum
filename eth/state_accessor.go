@@ -65,6 +65,8 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		if preferDisk {
 			// Create an ephemeral trie.Database for isolating the live one. Otherwise
 			// the internal junks created by tracing will be persisted into the disk.
+			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
+			// please re-enable it for better performance.
 			database = state.NewDatabaseWithConfig(eth.chainDb, trie.HashDefaults)
 			if statedb, err = state.New(block.Root(), database, nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
@@ -80,6 +82,8 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
+		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
+		// please re-enable it for better performance.
 		triedb = trie.NewDatabase(eth.chainDb, trie.HashDefaults)
 		database = state.NewDatabaseWithNodeDB(eth.chainDb, triedb)
 

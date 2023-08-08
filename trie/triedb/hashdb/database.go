@@ -71,9 +71,10 @@ type Config struct {
 }
 
 // Defaults is the default setting for database if it's not specified.
-var Defaults = &Config{
-	CleanSize: 16 * 1024 * 1024,
-}
+// Notably, clean cache is disabled explicitly, since Reset operation
+// must be done if clean cache is no longer needed, otherwise memory
+// leak can happen.
+var Defaults = &Config{}
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
@@ -632,7 +633,13 @@ func (db *Database) Size() common.StorageSize {
 }
 
 // Close closes the trie database and releases all held resources.
-func (db *Database) Close() error { return nil }
+func (db *Database) Close() error {
+	if db.cleans != nil {
+		db.cleans.Reset()
+		db.cleans = nil
+	}
+	return nil
+}
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
