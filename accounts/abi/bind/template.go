@@ -158,12 +158,6 @@ var (
 	}
 
 	{{if .InputBin}}
-		// Deprecated: Use {{.Type}}MetaData.Bin instead.
-		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
-		var {{.Type}}Bin = {{.Type}}MetaData.Bin
-	{{end}}
-
-	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
 		// Deprecated: Use {{.Type}}MetaData.Bin instead.
 		var {{.Type}}Bin = {{.Type}}MetaData.Bin
