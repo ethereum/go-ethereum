@@ -979,7 +979,7 @@ loop:
 				"got", tx.AsL1MessageTx().QueueIndex,
 			)
 		}
-		if !w.chainConfig.Scroll.IsValidBlockSize(w.current.blockSize + tx.Size()) {
+		if !tx.IsL1MessageTx() && !w.chainConfig.Scroll.IsValidBlockSize(w.current.blockSize+tx.Size()) {
 			log.Trace("Block size limit reached", "have", w.current.blockSize, "want", w.chainConfig.Scroll.MaxTxPayloadBytesPerBlock, "tx", tx.Size())
 			txs.Pop() // skip transactions from this account
 			continue

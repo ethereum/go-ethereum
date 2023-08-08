@@ -743,6 +743,9 @@ func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, callback func(i int, 
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine = clique.New(chainConfig.Clique, db)
+
+	maxPayload := 1024
+	chainConfig.Scroll.MaxTxPayloadBytesPerBlock = &maxPayload
 	chainConfig.Scroll.L1Config = &params.L1Config{
 		NumL1MessagesPerBlock: 3,
 	}
@@ -860,5 +863,35 @@ func TestL1CombinedMessagesOverGasLimit(t *testing.T) {
 		default:
 			return true
 		}
+	})
+}
+
+func TestLargeL1MessageSkipPayloadCheck(t *testing.T) {
+	assert := assert.New(t)
+
+	// message #0 is over the L2 block payload size limit
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 25100, To: &common.Address{1}, Data: make([]byte, 1025), Sender: common.Address{2}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // same sender
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}}, // different sender
+	}
+
+	l1MessageTest(t, msgs, func(blockNum int, block *types.Block, db ethdb.Database) bool {
+		// include #0, #1 and #2
+		assert.Equal(3, len(block.Transactions()))
+
+		assert.True(block.Transactions()[0].IsL1MessageTx())
+		assert.Equal(uint64(0), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+		assert.True(block.Transactions()[1].IsL1MessageTx())
+		assert.Equal(uint64(1), block.Transactions()[1].AsL1MessageTx().QueueIndex)
+		assert.True(block.Transactions()[2].IsL1MessageTx())
+		assert.Equal(uint64(2), block.Transactions()[2].AsL1MessageTx().QueueIndex)
+
+		// db is updated correctly
+		queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+		assert.NotNil(queueIndex)
+		assert.Equal(uint64(3), *queueIndex)
+
+		return true
 	})
 }
