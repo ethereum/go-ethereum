@@ -264,17 +264,17 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 	}
 }
 
-// ReadPersistentScheme reads the state scheme of persistent state, or none
+// ReadStateScheme reads the state scheme of persistent state, or none
 // if the state is not present in database.
-func ReadPersistentScheme(db ethdb.Reader) string {
+func ReadStateScheme(db ethdb.Reader) string {
 	// Check if state in path-based scheme is present
 	blob, _ := ReadAccountTrieNode(db, nil)
 	if len(blob) != 0 {
 		return PathScheme
 	}
-	// Check if state in hash-based scheme is present.
-	// In hash mode, genesis state is always be retained
-	// in database and it can repre
+	// In a hash-based scheme, the genesis state is consistently stored
+	// on the disk. To assess the scheme of the persistent state, it
+	// suffices to inspect the scheme of the genesis state.
 	header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
 	if header == nil {
 		return "" // empty datadir

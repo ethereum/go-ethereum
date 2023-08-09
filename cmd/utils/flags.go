@@ -1723,7 +1723,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
 		cfg.TransactionHistory = 0
-		log.Warn("Disable transaction unindexing for archive node")
+		log.Warn("Disabled transaction unindexing for archive node")
 	}
 	if ctx.IsSet(LightServeFlag.Name) && cfg.TransactionHistory != 0 {
 		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
@@ -2221,7 +2221,7 @@ func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
 	// If state scheme is not specified, use the scheme consistent
 	// with persistent state, or fallback to hash mode if database
 	// is empty.
-	stored := rawdb.ReadPersistentScheme(disk)
+	stored := rawdb.ReadStateScheme(disk)
 	if !ctx.IsSet(StateSchemeFlag.Name) {
 		if stored == "" {
 			// use default scheme for empty database, flip it when
