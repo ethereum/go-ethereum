@@ -195,6 +195,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
 		addrToPoint:   utils.NewPointCache(),
+		ended:         triedb.IsVerkle(),
 	}
 }
 
@@ -313,8 +314,16 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		err error
 	)
 
-	if db.started {
-		vkt, err := db.openVKTrie(db.getTranslation(root))
+	// TODO separate both cases when I can be certain that it won't
+	// find a Verkle trie where is expects a Transitoion trie.
+	if db.started || db.ended {
+		var r common.Hash
+		if db.ended {
+			r = root
+		} else {
+			r = db.getTranslation(root)
+		}
+		vkt, err := db.openVKTrie(r)
 		if err != nil {
 			return nil, err
 		}

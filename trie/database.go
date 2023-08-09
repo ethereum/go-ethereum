@@ -33,6 +33,7 @@ type Config struct {
 	Cache     int            // Memory allowance (MB) to use for caching trie nodes in memory
 	Preimages bool           // Flag whether the preimage of trie key is recorded
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme, not used yet.
+	Verkle    bool
 
 	// Testing hooks
 	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
@@ -278,4 +279,8 @@ func (db *Database) ClearStorageRootConversion(addr common.Address) {
 	db.addrToRootLock.Lock()
 	defer db.addrToRootLock.Unlock()
 	delete(db.addrToRoot, addr)
+}
+
+func (db *Database) IsVerkle() bool {
+	return db.config != nil && db.config.Verkle
 }

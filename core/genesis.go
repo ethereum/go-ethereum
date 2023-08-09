@@ -121,13 +121,13 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 }
 
 // deriveHash computes the state root according to the genesis specification.
-func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig) (common.Hash, error) {
+func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig, timestamp uint64) (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
 	// XXX check this is the case
 	// TODO remove the nil config check once we have rebased, it should never be nil
-	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), 0 /* XXX */) {
+	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), timestamp) {
 		db.EndVerkleTransition()
 	}
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
@@ -155,7 +155,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	}
 
 	// End the verkle conversion at genesis if the fork block is 0
-	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), 0 /* XXX */) {
+	if triedb.IsVerkle() {
 		statedb.Database().EndVerkleTransition()
 	}
 
@@ -456,7 +456,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := g.Alloc.deriveHash(g.Config)
+	root, err := g.Alloc.deriveHash(g.Config, g.Timestamp)
 	if err != nil {
 		panic(err)
 	}
@@ -547,7 +547,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 // Note the state changes will be committed in hash-based scheme, use Commit
 // if path-scheme is preferred.
 func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db, trie.NewDatabase(db))
+	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{Verkle: g.Config != nil && g.Config.IsCancun(big.NewInt(int64(g.Number)), g.Timestamp)})
+	block, err := g.Commit(db, triedb)
 	if err != nil {
 		panic(err)
 	}
