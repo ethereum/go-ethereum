@@ -423,16 +423,14 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 		inner: blobtx.withoutSidecar(),
 		time:  tx.time,
 	}
+	// Note: tx.size cache not carried over because the sidecar is included in size!
 	if h := tx.hash.Load(); h != nil {
 		cpy.hash.Store(h)
-	}
-	if s := tx.size.Load(); s != nil {
-		cpy.size.Store(s)
 	}
 	if f := tx.from.Load(); f != nil {
 		cpy.from.Store(f)
 	}
-	return tx
+	return cpy
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set
@@ -470,13 +468,24 @@ func (tx *Transaction) Size() uint64 {
 	if size := tx.size.Load(); size != nil {
 		return size.(uint64)
 	}
+
+	// Cache miss, encode and cache.
+	// Note we rely on the assumption that all tx.inner values are RLP-encoded!
 	c := writeCounter(0)
 	rlp.Encode(&c, &tx.inner)
-
 	size := uint64(c)
-	if tx.Type() != LegacyTxType {
-		size += 1 // type byte
+
+	// For blob transactions, add the size of the blob content and the outer list of the
+	// tx + sidecar encoding.
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		size += rlp.ListSize(sc.encodedSize())
 	}
+
+	// For typed transactions, the encoding also includes the leading type byte.
+	if tx.Type() != LegacyTxType {
+		size += 1
+	}
+
 	tx.size.Store(size)
 	return size
 }
