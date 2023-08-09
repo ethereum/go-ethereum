@@ -291,8 +291,8 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		close(stop)
 		wg.Wait()
 
-		for i, count := range reqCount {
-			t.Log("client", i, "processed", count.Load())
+		for i := range reqCount {
+			t.Log("client", i, "processed", reqCount[i].Load())
 		}
 		return true
 	}) {
