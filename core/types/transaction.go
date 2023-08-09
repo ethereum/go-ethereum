@@ -423,9 +423,15 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 		inner: blobtx.withoutSidecar(),
 		time:  tx.time,
 	}
-	cpy.hash.Store(tx.hash.Load())
-	cpy.size.Store(tx.size.Load())
-	cpy.from.Store(tx.from.Load())
+	if h := tx.hash.Load(); h != nil {
+		cpy.hash.Store(h)
+	}
+	if s := tx.size.Load(); s != nil {
+		cpy.size.Store(s)
+	}
+	if f := tx.from.Load(); f != nil {
+		cpy.from.Store(f)
+	}
 	return tx
 }
 
