@@ -568,7 +568,7 @@ func (t *Transaction) V(ctx context.Context) hexutil.Big {
 
 func (t *Transaction) YParity(ctx context.Context) (*hexutil.Uint64, error) {
 	tx, _ := t.resolve(ctx)
-	if tx == nil {
+	if tx == nil || tx.Type() == types.LegacyTxType {
 		return nil, nil
 	}
 	v, _, _ := tx.RawSignatureValues()
