@@ -1,7 +1,0 @@
-bootstrap-node:
-  - enr:-LG4QK4HWLn7-0sC-b3vqE_zy0h6s2lGgQcUeivGhfYeGhksHvOABZxQjOj6czqRmPgn_yadn_xUAcUpHxC7TS633QiGAYSiA--Dh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCAwONDLxwAAP__________gmlkgnY0gmlwhAMBm1uJc2VjcDI1NmsxoQNftghXC-ukUAytEm1AUFWCLXjA4c9QP85Fyv6YGhsrpYN1ZHCCD6A
-rpc-host: 0.0.0.0
-monitoring-host: 0.0.0.0
-grpc-gateway-host: 0.0.0.0
-p2p-max-peers: 75
-

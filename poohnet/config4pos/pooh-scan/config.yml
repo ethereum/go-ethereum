@@ -1,0 +1,85 @@
+# Database credentials
+readerDatabase:
+  user: "postgres"
+  name: "db"
+  host: "localhost"
+  port: "5432"
+  password: "pass"
+writerDatabase:
+  user: "postgres"
+  name: "db"
+  host: "localhost"
+  port: "5432"
+  password: "pass"
+
+# Chain network configuration
+chain:
+  configPath: /home/ubuntu/agoranet/devnet/config/cl/chain-config.yaml
+  genesisTimestamp: 1667667600
+
+# Note: It is possible to run either the frontend or the indexer or both at the same time
+# Frontend config
+frontend:
+  enabled: true # Enable or disable to web frontend
+  imprint: "templates/imprint.example.html"  # Path to the imprint page content
+  siteName: "BOSagora Consensus Explorer" # Name of the site, displayed in the title tag
+  siteSubtitle: "BOSagora Devnet" # Subtitle shown on the main page
+  csrfAuthKey: '0123456789abcdef000000000000000000000000000000000000000000000000'
+  jwtSigningSecret: "0123456789abcdef000000000000000000000000000000000000000000000000"
+  jwtIssuer: "agorascan.io"
+  jwtValidityInMinutes: 30
+  server:
+    host: "0.0.0.0" # Address to listen on
+    port: "3333" # Port to listen on
+  readerDatabase:
+    user: "postgres"
+    name: "db"
+    host: "localhost"
+    port: "5432"
+    password: "pass"
+  writerDatabase:
+    user: "postgres"
+    name: "db"
+    host: "localhost"
+    port: "5432"
+    password: "pass"
+  sessionSecret: "a05b7224e46c2a02bf933fff596a35367c8355ba20b95704f7e1edc524d1c913"
+  email:
+    smtp:
+      server: "<emailserver>"
+      host: "<emailhost>"
+      user: "<emailuser>"
+      password: "<emailpassword>"
+  flashSecret: "" # Encryption secret for flash cookies
+# Indexer config
+indexer:
+  enabled: true # Enable or disable the indexing service
+  fixCanonOnStartup: false
+  fullIndexOnStartup: false # Perform a one time full db index on startup
+  indexMissingEpochsOnStartup: false # Check for missing epochs and export them after startup
+  checkAllBlocksOnStartup: false
+  updateAllEpochStatistics: false
+
+  node:
+    host: "localhost" # Address of the backend node
+    port: "4000" # GRPC port of the Prysm node
+    type: "prysm" # can be either prysm or lighthouse
+    pageSize: 500 # the amount of entries to fetch per paged rpc call, TODO set to 500
+  eth1Endpoint: "/home/ubuntu/.agora/el/geth.ipc"
+  eth1DepositContractAddress: "0x720C56DB8f81cd68BBDFe1aAC8B3EB66e6Dea0d5"
+  eth1DepositContractFirstBlock: 22
+  OneTimeExport:
+    enabled: false
+  pubkeyTagsExporter:
+    enabled: false
+metrics:
+  enabled: true
+  address: 0.0.0.0:8085
+notifications:
+  enabled: false
+SSVExporter:
+  enabled: false
+rocketpoolExporter:
+  enabled: false
+ethStoreExporter:
+  enabled: false

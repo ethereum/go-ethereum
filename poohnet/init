@@ -1,0 +1,55 @@
+#!/bin/sh
+if [ -z $1 ]
+then
+    echo "No parameter passed"
+    exit
+elsef
+    echo "Config: $1"
+fi
+config=$1
+
+if [ -z $2 ]
+then
+    echo "No second parameter passed"
+    exit
+elsef
+    echo "Node: $2"
+fi
+number=$2
+
+sudo rm -rf $HOME/.pooh/el
+mkdir -p $HOME/.pooh/el
+sudo rm -rf /home/ubuntu/.pooh/el
+mkdir $HOME/.pooh/el
+mkdir $HOME/.pooh/el/geth
+mkdir $HOME/.pooh/el/keystore
+
+if [ "$config" = "pow" ]
+then
+  config_folder="config"
+elif [ "$config" = "pos" ]
+then
+  config_folder="config4pos"
+else
+  echo "Invalid config parameter"
+  exit
+fi
+echo "Configure folder: $config_folder"
+
+cp -rf ./$config_folder/el/template/node$number/* $HOME/.pooh/el
+
+docker run -it \
+  -v $HOME/.pooh/el:/data \
+  -v ./$config_folder/el:/config \
+  --name pow-node --rm \
+  linked0/poohnet-pow:latest \
+  --datadir=/data \
+  init \
+  /config/genesis.json
+
+
+if [ $number -ne 0 ]
+then
+  cp -f ./$config_folder/el/nodekey/nodekey$number $HOME/.pooh/el/geth/nodekey
+fi
+
