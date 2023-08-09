@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	executionv1a1 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha1"
+	executionv1a2 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha2"
 	"github.com/ethereum/go-ethereum/log"
 	"google.golang.org/grpc"
 )
@@ -14,26 +15,29 @@ import (
 type GRPCServerHandler struct {
 	mu sync.Mutex
 
-	endpoint               string
-	server                 *grpc.Server
-	executionServiceServer *executionv1a1.ExecutionServiceServer
+	endpoint                   string
+	server                     *grpc.Server
+	executionServiceServerV1a1 *executionv1a1.ExecutionServiceServer
+	executionServiceServerV1a2 *executionv1a2.ExecutionServiceServer
 }
 
 // NewServer creates a new gRPC server.
 // It registers the execution service server.
 // It registers the gRPC server with the node so it can be stopped on shutdown.
-func NewGRPCServerHandler(node *Node, execService executionv1a1.ExecutionServiceServer, cfg *Config) error {
+func NewGRPCServerHandler(node *Node, execServiceV1a1 executionv1a1.ExecutionServiceServer, execServiceV1a2 executionv1a2.ExecutionServiceServer, cfg *Config) error {
 	server := grpc.NewServer()
 
 	log.Info("gRPC server enabled", "endpoint", cfg.GRPCEndpoint())
 
 	serverHandler := &GRPCServerHandler{
-		endpoint:               cfg.GRPCEndpoint(),
-		server:                 server,
-		executionServiceServer: &execService,
+		endpoint:                   cfg.GRPCEndpoint(),
+		server:                     server,
+		executionServiceServerV1a1: &execServiceV1a1,
+		executionServiceServerV1a2: &execServiceV1a2,
 	}
 
-	executionv1a1.RegisterExecutionServiceServer(server, execService)
+	executionv1a1.RegisterExecutionServiceServer(server, execServiceV1a1)
+	executionv1a2.RegisterExecutionServiceServer(server, execServiceV1a2)
 
 	node.RegisterGRPCServer(serverHandler)
 	return nil

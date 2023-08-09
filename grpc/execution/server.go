@@ -15,11 +15,14 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	executionv1a1 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha1"
+	executionv1a2 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha2"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// executionServiceServer is the implementation of the ExecutionServiceServer interface.
-type ExecutionServiceServer struct {
+// executionServiceServer is the implementation of the ExecutionServiceServerV1Alpha1 interface.
+type ExecutionServiceServerV1Alpha1 struct {
 	// NOTE - from the generated code:
 	// All implementations must embed UnimplementedExecutionServiceServer
 	// for forward compatibility
@@ -31,19 +34,19 @@ type ExecutionServiceServer struct {
 	bc *core.BlockChain
 }
 
-func NewExecutionServiceServer(eth *eth.Ethereum) *ExecutionServiceServer {
+func NewExecutionServiceServerV1Alpha1(eth *eth.Ethereum) *ExecutionServiceServerV1Alpha1 {
 	consensus := catalyst.NewConsensusAPI(eth)
 
 	bc := eth.BlockChain()
 
-	return &ExecutionServiceServer{
+	return &ExecutionServiceServerV1Alpha1{
 		eth:       eth,
 		consensus: consensus,
 		bc:        bc,
 	}
 }
 
-func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1a1.DoBlockRequest) (*executionv1a1.DoBlockResponse, error) {
+func (s *ExecutionServiceServerV1Alpha1) DoBlock(ctx context.Context, req *executionv1a1.DoBlockRequest) (*executionv1a1.DoBlockResponse, error) {
 	log.Info("DoBlock called request", "request", req)
 	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
 
@@ -113,7 +116,7 @@ func (s *ExecutionServiceServer) DoBlock(ctx context.Context, req *executionv1a1
 	return res, nil
 }
 
-func (s *ExecutionServiceServer) FinalizeBlock(ctx context.Context, req *executionv1a1.FinalizeBlockRequest) (*executionv1a1.FinalizeBlockResponse, error) {
+func (s *ExecutionServiceServerV1Alpha1) FinalizeBlock(ctx context.Context, req *executionv1a1.FinalizeBlockRequest) (*executionv1a1.FinalizeBlockResponse, error) {
 	header := s.bc.GetHeaderByHash(common.BytesToHash(req.BlockHash))
 	if header == nil {
 		return nil, fmt.Errorf("failed to get header for block hash 0x%x", req.BlockHash)
@@ -123,11 +126,200 @@ func (s *ExecutionServiceServer) FinalizeBlock(ctx context.Context, req *executi
 	return &executionv1a1.FinalizeBlockResponse{}, nil
 }
 
-func (s *ExecutionServiceServer) InitState(ctx context.Context, req *executionv1a1.InitStateRequest) (*executionv1a1.InitStateResponse, error) {
+func (s *ExecutionServiceServerV1Alpha1) InitState(ctx context.Context, req *executionv1a1.InitStateRequest) (*executionv1a1.InitStateResponse, error) {
 	currHead := s.eth.BlockChain().CurrentHeader()
 	res := &executionv1a1.InitStateResponse{
 		BlockHash: currHead.Hash().Bytes(),
 	}
 
 	return res, nil
+}
+
+// ExecutionServiceServerV1Alpha2 is the implementation of the ExecutionServiceServer interface.
+type ExecutionServiceServerV1Alpha2 struct {
+	// NOTE - from the generated code:
+	// All implementations must embed UnimplementedExecutionServiceServer
+	// for forward compatibility
+	executionv1a2.UnimplementedExecutionServiceServer
+
+	consensus *catalyst.ConsensusAPI
+	eth       *eth.Ethereum
+
+	bc *core.BlockChain
+}
+
+func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServerV1Alpha2 {
+	consensus := catalyst.NewConsensusAPI(eth)
+
+	bc := eth.BlockChain()
+
+	return &ExecutionServiceServerV1Alpha2{
+		eth:       eth,
+		consensus: consensus,
+		bc:        bc,
+	}
+}
+
+// GetBlock will return a block given an identifier.
+func (s *ExecutionServiceServerV1Alpha2) GetBlock(ctx context.Context, req *executionv1a2.GetBlockRequest) (*executionv1a2.Block, error) {
+	log.Info("GetBlock called request", "request", req)
+
+	res, err := s.getBlockFromIdentifier(req.GetIdentifier())
+	if err != nil {
+		return nil, fmt.Errorf("Block header cannot be converted to execution block")
+	}
+
+	return res, nil
+}
+
+// BatchGetBlocks will return an array of Blocks given an array of block identifiers.
+func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req *executionv1a2.BatchGetBlocksRequest) (*executionv1a2.BatchGetBlocksResponse, error) {
+	var blocks []*executionv1a2.Block
+
+	ids := req.GetIdentifiers()
+	for _, id := range ids {
+		block, err := s.getBlockFromIdentifier(id)
+		if err != nil {
+			return nil, err
+		}
+
+		blocks = append(blocks, block)
+	}
+
+	res := &executionv1a2.BatchGetBlocksResponse{
+		Blocks: blocks,
+	}
+
+	return res, nil
+}
+
+// CreateBlock is used to drive deterministic creation of an executed block from a sequenced block.
+func (s *ExecutionServiceServerV1Alpha2) CreateBlock(ctx context.Context, req *executionv1a2.CreateBlockRequest) (*executionv1a2.Block, error) {
+	log.Info("CreateBlock called request", "request", req)
+
+	// Validate block being created has valid previous hash
+	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
+	softHash := s.bc.CurrentSafeBlock().Hash()
+	headHash := s.bc.CurrentHeader().Hash()
+	if prevHeadHash != headHash || headHash != softHash {
+		return nil, fmt.Errorf("Block can only be created on top head block, when head matches soft")
+	}
+
+	// The Engine API has been modified to use transactions from this mempool and abide by it's ordering.
+	s.eth.TxPool().SetAstriaOrdered(req.Transactions)
+
+	// Build a payload to add to the chain
+	payloadAttributes := &miner.BuildPayloadArgs{
+		Parent:       prevHeadHash,
+		Timestamp:    uint64(req.GetTimestamp().GetSeconds()),
+		Random:       common.Hash{},
+		FeeRecipient: common.Address{},
+	}
+	payload, err := s.eth.Miner().BuildPayload(payloadAttributes)
+	if err != nil {
+		log.Error("failed to build payload", "err", err)
+		return nil, err
+	}
+
+	// call blockchain.InsertChain to actually execute and write the blocks to state
+	block, err := engine.ExecutableDataToBlock(*payload.Resolve().ExecutionPayload)
+	if err != nil {
+		return nil, err
+	}
+	blocks := types.Blocks{
+		block,
+	}
+	n, err := s.bc.InsertChain(blocks)
+	if err != nil {
+		return nil, err
+	}
+	if n != 1 {
+		return nil, fmt.Errorf("failed to insert block into blockchain (n=%d)", n)
+	}
+
+	// remove txs from original mempool
+	for _, tx := range block.Transactions() {
+		s.eth.TxPool().RemoveTx(tx.Hash())
+	}
+
+	res := &executionv1a2.Block{
+		Number: uint32(block.NumberU64()),
+		Hash:   block.Hash().Bytes(),
+		Timestamp: &timestamppb.Timestamp{
+			Seconds: int64(block.Time()),
+		},
+	}
+	return res, nil
+}
+
+// GetCommitmentState fetches the current CommitmentState of the chain.
+func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context, req *executionv1a2.GetCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
+	headBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentHeader())
+	softBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
+	firmBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed finding CommitmentState")
+	}
+
+	res := &executionv1a2.CommitmentState{
+		Head: headBlock,
+		Soft: softBlock,
+		Firm: firmBlock,
+	}
+
+	return res, nil
+}
+
+// UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
+func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Context, req *executionv1a2.UpdateCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
+	newForkChoice := &engine.ForkchoiceStateV1{
+		HeadBlockHash:      common.BytesToHash(req.CommitmentState.Head.Hash),
+		SafeBlockHash:      common.BytesToHash(req.CommitmentState.Soft.Hash),
+		FinalizedBlockHash: common.BytesToHash(req.CommitmentState.Firm.Hash),
+	}
+
+	_, err := s.consensus.ForkchoiceUpdatedV1(*newForkChoice, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req.CommitmentState, nil
+}
+
+func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *executionv1a2.BlockIdentifier) (*executionv1a2.Block, error) {
+	var header *types.Header
+	switch id_type := identifier.Identifier.(type) {
+	case *executionv1a2.BlockIdentifier_BlockNumber:
+		header = s.bc.GetHeaderByNumber(uint64(identifier.GetBlockNumber()))
+		break
+	case *executionv1a2.BlockIdentifier_BlockHash:
+		header = s.bc.GetHeaderByHash(common.BytesToHash(identifier.GetBlockHash()))
+		break
+	default:
+		return nil, fmt.Errorf("Identifier has unexpected type %T", id_type)
+	}
+
+	if header == nil {
+		return nil, fmt.Errorf("Couldn't locate block with identifier %s", identifier.Identifier)
+	}
+
+	res, err := s.ethHeaderToExecutionBlock(header)
+	if err != nil {
+		return nil, fmt.Errorf("Block header cannot be converted to execution block")
+	}
+
+	return res, nil
+}
+
+func (s *ExecutionServiceServerV1Alpha2) ethHeaderToExecutionBlock(header *types.Header) (*executionv1a2.Block, error) {
+	if header == nil {
+		return nil, fmt.Errorf("Cannot convert nil header to execution block")
+	}
+
+	return &executionv1a2.Block{
+		Number:          uint32(header.Number.Int64()),
+		Hash:            header.Hash().Bytes(),
+		ParentBlockHash: header.ParentHash.Bytes(),
+	}, nil
 }
