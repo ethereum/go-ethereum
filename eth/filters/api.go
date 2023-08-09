@@ -273,7 +273,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 // from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live mode.
 // Every other case should fail with an error.
 func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	if crit.ToBlock != nil {
+	if crit.ToBlock != nil && rpc.BlockNumber(crit.ToBlock.Int64()) != rpc.LatestBlockNumber {
 		return errInvalidToBlock
 	}
 	if crit.FromBlock == nil {
