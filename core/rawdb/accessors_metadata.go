@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/json"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -185,5 +186,40 @@ func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
 func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 	if err := db.Put(transitionStatusKey, data); err != nil {
 		log.Crit("Failed to store the eth2 transition status", "err", err)
+	}
+}
+
+// ReadSupplyDelta retrieves the amount of Ether (in Wei) issued (or burnt) in a
+// specific block. If unavailable for the specific block (non full synced node),
+// nil will be returned.
+func ReadSupplyDelta(db ethdb.KeyValueReader, number uint64, hash common.Hash) *big.Int {
+	blob, _ := db.Get(supplyDeltaKey(number, hash))
+	if len(blob) < 2 {
+		return nil
+	}
+	// Since negative big ints can't be encoded to bytes directly, use a dirty
+	// hack to store the negativift flag in the first byte (0 == positive,
+	// 1 == negative)
+	supplyDelta := new(big.Int).SetBytes(blob[1:])
+	if blob[0] == 1 {
+		supplyDelta.Neg(supplyDelta)
+	}
+	return supplyDelta
+}
+
+// WriteSupplyDelta stores the amount of Ether (in wei) issued (or burnt) in a
+// specific block.
+func WriteSupplyDelta(db ethdb.KeyValueWriter, number uint64, hash common.Hash, supplyDelta *big.Int) {
+	// Since negative big ints can't be encoded to bytes directly, use a dirty
+	// hack to store the negativift flag in the first byte (0 == positive,
+	// 1 == negative)
+	blob := []byte{0}
+	if supplyDelta.Sign() < 0 {
+		blob[0] = 1
+	}
+	blob = append(blob, supplyDelta.Bytes()...)
+
+	if err := db.Put(supplyDeltaKey(number, hash), blob); err != nil {
+		log.Crit("Failed to store block supply delta", "err", err)
 	}
 }

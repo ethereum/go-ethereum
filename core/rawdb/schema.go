@@ -112,6 +112,8 @@ var (
 	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
 
+	supplyDeltaPrefix = []byte("e") // supplyDeltaPrefix + num (uint64 big endian) + hash -> wei diff
+
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
 	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db
@@ -305,4 +307,9 @@ func IsStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 	}
 	accountHash := common.BytesToHash(key[len(trieNodeStoragePrefix) : len(trieNodeStoragePrefix)+common.HashLength])
 	return true, accountHash, key[len(trieNodeStoragePrefix)+common.HashLength:]
+}
+
+// supplyDeltaKey = supplyDeltaPrefix + num (uint64 big endian) + hash
+func supplyDeltaKey(number uint64, hash common.Hash) []byte {
+	return append(append(supplyDeltaPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }

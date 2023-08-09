@@ -930,6 +930,10 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+	SupplyDeltaFlag = &cli.BoolFlag{
+		Name:  "supplydelta",
+		Usage: "Track Ether supply deltas (don't use in production)",
+	}
 )
 
 var (
@@ -1742,6 +1746,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
+	}
+	if ctx.IsSet(SupplyDeltaFlag.Name) {
+		cfg.EnableSupplyDeltaRecording = ctx.Bool(SupplyDeltaFlag.Name)
 	}
 	// Override any default configs for hard coded networks.
 	switch {

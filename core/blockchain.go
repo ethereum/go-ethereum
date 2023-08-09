@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/supply"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -1392,6 +1393,36 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			break
 		}
 		bc.triedb.Dereference(root)
+	}
+	// If Ether supply delta tracking is enabled, do it before emitting events
+	if bc.vmConfig.EnableSupplyDeltaRecording {
+		// Note, this code path is opt-in for data analysis nodes, so speed
+		// is not really relevant, simplicity and containment much more so.
+		parent := rawdb.ReadHeader(bc.db, block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			log.Error("Failed to retrieve parent for supply delta", "err", err)
+		} else {
+			start := time.Now()
+
+			supplyDelta, err := supply.Delta(parent, block.Header(), bc.stateCache.TrieDB())
+			if err != nil {
+				log.Error("Failed to record Ether supply delta", "err", err)
+			} else {
+				rawdb.WriteSupplyDelta(bc.db, block.NumberU64(), block.Hash(), supplyDelta)
+			}
+
+			// Calculate the block coinbaseReward based on chain rules and progression.
+			rewards, withdrawals := supply.Issuance(block, bc.chainConfig)
+			burn := supply.Burn(block.Header())
+
+			// Calculate the difference between the "calculated" and "crawled" supply delta.
+			diff := new(big.Int).Set(supplyDelta)
+			diff.Sub(diff, rewards)
+			diff.Sub(diff, withdrawals)
+			diff.Add(diff, burn)
+
+			log.Info("Calculated supply delta for block", "number", block.Number(), "hash", block.Hash(), "supplydelta", supplyDelta, "rewards", rewards, "burn", burn, "withdrawals", withdrawals, "diff", diff, "elapsed", time.Since(start))
+		}
 	}
 	return nil
 }
