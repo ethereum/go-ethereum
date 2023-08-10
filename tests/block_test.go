@@ -18,6 +18,8 @@ package tests
 
 import (
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestBlockchain(t *testing.T) {
@@ -48,11 +50,17 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		if err := bt.checkFailure(t, test.Run(false, nil)); err != nil {
-			t.Errorf("test without snapshotter failed: %v", err)
+		if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
+			t.Errorf("test in hash mode without snapshotter failed: %v", err)
 		}
-		if err := bt.checkFailure(t, test.Run(true, nil)); err != nil {
-			t.Errorf("test with snapshotter failed: %v", err)
+		if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
+			t.Errorf("test in hash mode with snapshotter failed: %v", err)
+		}
+		if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
+			t.Errorf("test in path mode without snapshotter failed: %v", err)
+		}
+		if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
+			t.Errorf("test in path mode with snapshotter failed: %v", err)
 		}
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated

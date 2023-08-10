@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -37,6 +38,7 @@ var DeprecatedFlags = []cli.Flag{
 	CacheTrieJournalFlag,
 	CacheTrieRejournalFlag,
 	LegacyDiscoveryV5Flag,
+	TxLookupLimitFlag,
 }
 
 var (
@@ -66,6 +68,13 @@ var (
 	LegacyDiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "v5disc",
 		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use --discv5 instead)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated August 2023
+	TxLookupLimitFlag = &cli.Uint64Flag{
+		Name:     "txlookuplimit",
+		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (deprecated, use history.transactions instead)",
+		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.DeprecatedCategory,
 	}
 )

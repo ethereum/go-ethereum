@@ -47,8 +47,8 @@ func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.C
 	// Initialize a clean cache if the memory allowance is not zero
 	// or reuse the provided cache if it is not nil (inherited from
 	// the original disk layer).
-	if cleans == nil && db.config.CleanSize != 0 {
-		cleans = fastcache.New(db.config.CleanSize)
+	if cleans == nil && db.config.CleanCacheSize != 0 {
+		cleans = fastcache.New(db.config.CleanCacheSize)
 	}
 	return &diskLayer{
 		root:   root,
@@ -177,7 +177,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// corresponding states(journal), the stored state history will
 	// be truncated in the next restart.
 	if dl.db.freezer != nil {
-		err := writeHistory(dl.db.diskdb, dl.db.freezer, bottom, dl.db.config.StateLimit)
+		err := writeHistory(dl.db.diskdb, dl.db.freezer, bottom, dl.db.config.StateHistory)
 		if err != nil {
 			return nil, err
 		}
@@ -274,6 +274,20 @@ func (dl *diskLayer) size() common.StorageSize {
 		return 0
 	}
 	return common.StorageSize(dl.buffer.size)
+}
+
+// resetCache releases the memory held by clean cache to prevent memory leak.
+func (dl *diskLayer) resetCache() {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// Stale disk layer loses the ownership of clean cache.
+	if dl.stale {
+		return
+	}
+	if dl.cleans != nil {
+		dl.cleans.Reset()
+	}
 }
 
 // hasher is used to compute the sha256 hash of the provided data.
