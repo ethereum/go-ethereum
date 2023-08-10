@@ -9,26 +9,37 @@ It works by subscribing to particular events. The node will return a subscriptio
 
 **Example:**
 
-```sh
+```json
 // create subscription
-{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"] }
 ```
 
-returns
+**Response:**
 
-```sh
-{"jsonrpc":"2.0","id":1,"result":"0xcd0c3e8af590364c09d0fa6a1210faf5"}
+```json
+{ "id": 1, "jsonrpc": "2.0", "result": "0xcd0c3e8af590364c09d0fa6a1210faf5" }
+
 // incoming notifications
-{"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0xcd0c3e8af590364c09d0fa6a1210faf5","result":{"difficulty":"0xd9263f42a87",<...>, "uncles":[]}}}
-{"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0xcd0c3e8af590364c09d0fa6a1210faf5","result":{"difficulty":"0xd90b1a7ad02", <...>, "uncles":["0x80aacd1ea4c9da32efd8c2cc9ab38f8f70578fcd46a1a4ed73f82f3e0957f936"]}}}
+{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd9263f42a87", <...>,  "uncles": []}} }
+{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd90b1a7ad02",  <...>,  "uncles": ["0x80aacd1ea4c9da32efd8c2cc9ab38f8f70578fcd46a1a4ed73f82f3e0957f936"]}} }
+
 ```
 
 to cancel the subscription:
 
-```sh
-// cancel subscription
-{"id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0xcd0c3e8af590364c09d0fa6a1210faf5"]}
-{"jsonrpc":"2.0","id":1,"result":true}
+```json
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "method": "eth_unsubscribe",
+  "params": ["0xcd0c3e8af590364c09d0fa6a1210faf5"]
+}
+```
+
+**Response:**
+
+```json
+{ "id": 1, "jsonrpc": "2.0", "result": true }
 ```
 
 ## Considerations {#considerations}
@@ -49,9 +60,9 @@ Subscriptions are created with a regular RPC call with `eth_subscribe` as method
 
 **Example:**
 
-```sh
-{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
-{"id": 1, "jsonrpc": "2.0", "result": "0x9cef478923ff08bf67fde6c64013158d"}
+```json
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"] }
+{ "id": 1, "jsonrpc": "2.0", "result": "0x9cef478923ff08bf67fde6c64013158d" }
 ```
 
 ## Cancel subscription {#cancel-subscriptions}
@@ -65,8 +76,8 @@ Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as me
 **Example:**
 
 ```json
-{"id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x9cef478923ff08bf67fde6c64013158d"]}
-{"jsonrpc":"2.0","id":1,"result":true}
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x9cef478923ff08bf67fde6c64013158d"] }
+{ "id": 1, "jsonrpc": "2.0", "result": true }
 ```
 
 ## Supported Subscriptions {#supported-subscriptions}
@@ -77,17 +88,18 @@ Fires a notification each time a new header is appended to the chain, including 
 
 In case of a chain reorganization the subscription will emit the last header in the new chain. Therefore the subscription can emit multiple headers on the same height.
 
-#### Example
+**Example:**
 
 ```json
-{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"] }
 ```
 
-returns
+**Response:**
 
 ```json
-{"jsonrpc":"2.0","id":2,"result":"0x9ce59a13059e417087c02d3236a0b1cc"}
+{ "id": 1, "jsonrpc": "2.0", "result": "0x9ce59a13059e417087c02d3236a0b1cc" }
 
+// incoming notifications
 {
   "jsonrpc": "2.0",
   "method": "eth_subscription",
@@ -125,7 +137,7 @@ In case of a chain reorganization previous sent logs that are on the old chain w
    - **address**, either an address or an array of addresses. Only logs that are created from these addresses are returned (optional)
    - **topics**, only logs which match the specified topics (optional)
 
-#### Example
+**Example:**
 
 ```json
 {
@@ -142,12 +154,29 @@ In case of a chain reorganization previous sent logs that are on the old chain w
 }
 ```
 
-returns
+**Response:**
 
 ```json
-{"jsonrpc":"2.0","id":2,"result":"0x4a8a4c0517381924f9838102c5a4dcb7"}
+{ "id": 2, "jsonrpc": "2.0", "result": "0x4a8a4c0517381924f9838102c5a4dcb7" }
 
-{"jsonrpc":"2.0","method":"eth_subscription","params": {"subscription":"0x4a8a4c0517381924f9838102c5a4dcb7","result":{"address":"0x8320fe7702b96808f7bbc0d4a888ed1468216cfd","blockHash":"0x61cdb2a09ab99abf791d474f20c2ea89bf8de2923a2d42bb49944c8c993cbf04","blockNumber":"0x29e87","data":"0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000003","logIndex":"0x0","topics":["0xd78a0cb8bb633d06981248b816e7bd33c2a35a6089241d099fa519e361cab902"],"transactionHash":"0xe044554a0a55067caafd07f8020ab9f2af60bdfe337e395ecd84b4877a3d1ab4","transactionIndex":"0x0"}}}
+// incoming notifications
+{
+  "jsonrpc": "2.0",
+  "method": "eth_subscription",
+  "params": {
+    "subscription": "0x4a8a4c0517381924f9838102c5a4dcb7",
+    "result": {
+      "address": "0x8320fe7702b96808f7bbc0d4a888ed1468216cfd",
+      "blockHash": "0x61cdb2a09ab99abf791d474f20c2ea89bf8de2923a2d42bb49944c8c993cbf04",
+      "blockNumber": "0x29e87",
+      "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000003",
+      "logIndex": "0x0",
+      "topics": ["0xd78a0cb8bb633d06981248b816e7bd33c2a35a6089241d099fa519e361cab902"],
+      "transactionHash": "0xe044554a0a55067caafd07f8020ab9f2af60bdfe337e395ecd84b4877a3d1ab4",
+      "transactionIndex": "0x0"
+    }
+  }
+}
 ```
 
 ### newPendingTransactions {#newpendingtransactions}
@@ -160,16 +189,18 @@ When a transaction that was previously part of the canonical chain isn't part of
 
 none
 
-#### Example
+**Example:**
 
 ```json
-{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newPendingTransactions"]}
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newPendingTransactions"] }
 ```
 
-returns
+**Response:**
 
 ```json
-{"jsonrpc":"2.0","id":2,"result":"0xc3b33aa549fb9a60e95d21862596617c"}
+{ "id": 1, "jsonrpc": "2.0", "result": "0xc3b33aa549fb9a60e95d21862596617c" }
+
+// incoming notifications
 {
   "jsonrpc":"2.0",
   "method":"eth_subscription",
@@ -188,11 +219,29 @@ Indicates when the node starts or stops synchronizing. The result can either be 
 
 none
 
-#### Example
+**Example:**
 
 ```json
-{"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"]}
+{ "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"] }
+```
 
-{"jsonrpc":"2.0","id":2,"result":"0xe2ffeb2703bcf602d42922385829ce96"}
-{"subscription":"0xe2ffeb2703bcf602d42922385829ce96","result":{"syncing":true,"status":{"startingBlock":674427,"currentBlock":67400,"highestBlock":674432,"pulledStates":0,"knownStates":0}}}}
+**Response:**
+
+```json
+{ "id": 1, "jsonrpc": "2.0", "result": "0xe2ffeb2703bcf602d42922385829ce96" }
+
+// incoming notifications
+{
+  "subscription": "0xe2ffeb2703bcf602d42922385829ce96",
+  "result": {
+    "syncing": true,
+    "status": {
+      "startingBlock": 674427,
+      "currentBlock": 67400,
+      "highestBlock": 674432,
+      "pulledStates": 0,
+      "knownStates": 0
+    }
+  }
+}
 ```
