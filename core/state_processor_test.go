@@ -474,7 +474,7 @@ func TestProcessVerkle(t *testing.T) {
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
 	genesis := gspec.MustCommit(bcdb)
-	blockchain, _ := NewBlockChain(bcdb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(bcdb, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 
 	// Commit the genesis block to the block-generation database as it
@@ -489,7 +489,9 @@ func TestProcessVerkle(t *testing.T) {
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
 	}
-	chain, _, proofs, keyvals := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), gendb, 2, func(i int, gen *BlockGen) {
+	// TODO utiliser GenerateChainWithGenesis pour le rendre plus pratique
+	chain, _, proofs, keyvals := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 2, func(i int, gen *BlockGen) {
+		gen.SetPoS()
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{byte(i), 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)
