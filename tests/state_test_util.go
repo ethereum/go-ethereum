@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -187,43 +189,50 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 }
 
 // Run executes a specific subtest and verifies the post-state and logs
-func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool) (*snapshot.Tree, *state.StateDB, error) {
-	snaps, statedb, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter)
-	if checkedErr := t.checkError(subtest, err); checkedErr != nil {
-		return snaps, statedb, checkedErr
+func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, snaps *snapshot.Tree, state *state.StateDB)) (result error) {
+	triedb, snaps, statedb, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
+
+	// Invoke the callback at the end of function for further analysis.
+	defer func() {
+		postCheck(result, snaps, statedb)
+
+		if triedb != nil {
+			triedb.Close()
+		}
+	}()
+	checkedErr := t.checkError(subtest, err)
+	if checkedErr != nil {
+		return checkedErr
 	}
 	// The error has been checked; if it was unexpected, it's already returned.
 	if err != nil {
 		// Here, an error exists but it was expected.
 		// We do not check the post state or logs.
-		return snaps, statedb, nil
+		return nil
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	// N.B: We need to do this in a two-step process, because the first Commit takes care
 	// of self-destructs, and we need to touch the coinbase _after_ it has potentially self-destructed.
 	if root != common.Hash(post.Root) {
-		return snaps, statedb, fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
+		return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
 	}
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
-		return snaps, statedb, fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
+		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	// Re-init the post-state instance for further operation
-	statedb, err = state.New(root, statedb.Database(), snaps)
-	if err != nil {
-		return nil, nil, err
-	}
-	return snaps, statedb, nil
+	statedb, _ = state.New(root, statedb.Database(), snaps)
+	return nil
 }
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool) (*snapshot.Tree, *state.StateDB, common.Hash, error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (*trie.Database, *snapshot.Tree, *state.StateDB, common.Hash, error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
-		return nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
+		return nil, nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
+
 	block := t.genesis(config).ToBlock()
-	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
+	triedb, snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -237,7 +246,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
-		return nil, nil, common.Hash{}, err
+		triedb.Close()
+		return nil, nil, nil, common.Hash{}, err
 	}
 
 	// Try to recover tx with current signer
@@ -245,11 +255,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
-			return nil, nil, common.Hash{}, err
+			triedb.Close()
+			return nil, nil, nil, common.Hash{}, err
 		}
 
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-			return nil, nil, common.Hash{}, err
+			triedb.Close()
+			return nil, nil, nil, common.Hash{}, err
 		}
 	}
 
@@ -268,6 +280,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		context.Difficulty = big.NewInt(0)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
@@ -282,17 +295,25 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	statedb.AddBalance(block.Coinbase(), new(big.Int))
-	// Commit block
+
+	// Commit state mutations into database.
 	root, _ := statedb.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
-	return snaps, statedb, root, err
+	return triedb, snaps, statedb, root, err
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 	return t.json.Tx.GasLimit[t.json.Post[subtest.Fork][subtest.Index].Indexes.Gas]
 }
 
-func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool) (*snapshot.Tree, *state.StateDB) {
-	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool, scheme string) (*trie.Database, *snapshot.Tree, *state.StateDB) {
+	tconf := &trie.Config{Preimages: true}
+	if scheme == rawdb.HashScheme {
+		tconf.HashDB = hashdb.Defaults
+	} else {
+		tconf.PathDB = pathdb.Defaults
+	}
+	triedb := trie.NewDatabase(db, tconf)
+	sdb := state.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
@@ -313,10 +334,10 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 			NoBuild:    false,
 			AsyncBuild: false,
 		}
-		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root)
+		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
-	return snaps, statedb
+	return triedb, snaps, statedb
 }
 
 func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {

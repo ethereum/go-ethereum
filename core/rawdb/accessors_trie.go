@@ -36,7 +36,7 @@ import (
 //
 // Now this scheme is still kept for backward compatibility, and it will be used
 // for archive node and some other tries(e.g. light trie).
-const HashScheme = "hashScheme"
+const HashScheme = "hash"
 
 // PathScheme is the new path-based state scheme with which trie nodes are stored
 // in the disk with node path as the database key. This scheme will only store one
@@ -44,7 +44,7 @@ const HashScheme = "hashScheme"
 // is native. At the same time, this scheme will put adjacent trie nodes in the same
 // area of the disk with good data locality property. But this scheme needs to rely
 // on extra state diffs to survive deep reorg.
-const PathScheme = "pathScheme"
+const PathScheme = "path"
 
 // hasher is used to compute the sha256 hash of the provided data.
 type hasher struct{ sha crypto.KeccakState }
@@ -262,4 +262,26 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
 	}
+}
+
+// ReadStateScheme reads the state scheme of persistent state, or none
+// if the state is not present in database.
+func ReadStateScheme(db ethdb.Reader) string {
+	// Check if state in path-based scheme is present
+	blob, _ := ReadAccountTrieNode(db, nil)
+	if len(blob) != 0 {
+		return PathScheme
+	}
+	// In a hash-based scheme, the genesis state is consistently stored
+	// on the disk. To assess the scheme of the persistent state, it
+	// suffices to inspect the scheme of the genesis state.
+	header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
+	if header == nil {
+		return "" // empty datadir
+	}
+	blob = ReadLegacyTrieNode(db, header.Root)
+	if len(blob) == 0 {
+		return "" // no state in disk
+	}
+	return HashScheme
 }
