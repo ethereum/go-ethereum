@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const devEpochLength = 32
+
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
 type withdrawalQueue struct {
@@ -158,7 +160,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	payload := envelope.ExecutionPayload
 
 	var finalizedHash common.Hash
-	if payload.Number%32 == 0 {
+	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
 		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / 32 * 32).Hash()
