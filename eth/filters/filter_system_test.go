@@ -793,7 +793,7 @@ func TestLogsSubscription(t *testing.T) {
 		expectErr error
 		err       chan error
 	}{
-		// from 0 to latest
+		// from 0
 		{
 			FilterCriteria{FromBlock: big.NewInt(0)},
 			append(allLogs, liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
@@ -803,12 +803,12 @@ func TestLogsSubscription(t *testing.T) {
 			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
 			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidToBlock, nil,
 		},
-		// from 2 to latest
+		// from 2
 		{
 			FilterCriteria{FromBlock: big.NewInt(2)},
 			append(allLogs[1:], liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
 		},
-		// from latest to latest
+		// live logs
 		{
 			FilterCriteria{},
 			liveLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
@@ -1027,9 +1027,11 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 	}
 
 	go func() {
-		var fetched []*types.Log
-
-		timeout := time.After(3 * time.Second)
+		var (
+			fetched []*types.Log
+			timeout = time.After(3 * time.Second)
+			reorged = false
+		)
 	fetchLoop:
 		for {
 			select {
@@ -1040,11 +1042,12 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 				// We halt the sender by blocking Notify(). However sender will already prepare
 				// logs for next block and send as soon as Notify is released. So we do reorg
 				// one block earlier than we intend.
-				if l.BlockNumber == uint64(reorgAt) && l.Index == 0 {
+				if l.BlockNumber == uint64(reorgAt) && !reorged {
 					// signal reorg
 					reorgSignal <- struct{}{}
 					// wait for reorg to happen
 					<-reorgSignal
+					reorged = true
 				}
 			case <-timeout:
 				break fetchLoop
@@ -1102,26 +1105,40 @@ func TestLogsSubscriptionReorgedSimple(t *testing.T) {
 	t.Parallel()
 
 	expected := []*types.Log{
-		// Original chain until block 3
+		// Original chain until block 2
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
 
-		// New logs for 4 onwards
+		// New logs for 3 onwards
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
 		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
 	}
-	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+11, b)
-		b.AddTx(tx)
-	}, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+103, b)
-		b.AddTx(tx)
-	}, func(i int, b *core.BlockGen) {
-		tx := makeTx(i+1, i+21, b)
-		b.AddTx(tx)
-	}, 5, 4, 1, 2, expected)
+	t.Run("reorg-during-historical", func(t *testing.T) {
+		testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+11, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+103, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+21, b)
+			b.AddTx(tx)
+		}, 5, 4, 1, 2, expected)
+	})
+	t.Run("reorg-after-historical", func(t *testing.T) {
+		testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+11, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+103, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+21, b)
+			b.AddTx(tx)
+		}, 5, 4, 1, 5, expected)
+	})
 }
 
 func TestLogsSubscriptionReorgOldMore(t *testing.T) {

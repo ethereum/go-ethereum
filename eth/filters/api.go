@@ -251,13 +251,14 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 }
 
 // notifier is used for broadcasting data(eg: logs) to rpc receivers
-// used in unit testing
+// used in unit testing.
 type notifier interface {
 	Notify(id rpc.ID, data interface{}) error
 	Closed() <-chan interface{}
 }
 
-// Logs creates a subscription that fires for all new log that match the given filter criteria.
+// Logs creates a subscription that fires for all historical
+// and new logs that match the given filter criteria.
 func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -268,12 +269,13 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	return rpcSub, err
 }
 
-// logs is the inner implementation of logs filtering.
-// from: nil, to: nil -> only live mode.
-// from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live mode.
-// Every other case should fail with an error.
+// logs is the inner implementation of logs subscription.
+// The following criteria are valid:
+// * from: nil, to: nil -> yield live logs.
+// * from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live logs.
+// * Every other case should fail with an error.
 func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
-	if crit.ToBlock != nil && rpc.BlockNumber(crit.ToBlock.Int64()) != rpc.LatestBlockNumber {
+	if crit.ToBlock != nil {
 		return errInvalidToBlock
 	}
 	if crit.FromBlock == nil {
@@ -296,7 +298,7 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 	return api.histLogs(notifier, rpcSub, int64(from), crit)
 }
 
-// liveLogs only retrieves live logs
+// liveLogs only retrieves live logs.
 func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
 	matchedLogs := make(chan []*types.Log)
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
@@ -324,7 +326,7 @@ func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit F
 	return nil
 }
 
-// histLogs retrieves the logs older than current header.
+// histLogs retrieves logs older than current header.
 func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from int64, crit FilterCriteria) error {
 	// Subscribe the Live logs
 	// if an ChainReorg occurred,
@@ -352,10 +354,9 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	// Compose and notify the logs from liveLogs and histLogs
 	go func() {
 		var (
-			delivered  uint64
-			reorgBlock uint64
-			liveOnly   bool
-			reorged    bool
+			delivered uint64
+			liveOnly  bool
+			reorged   bool
 		)
 		for {
 			select {
@@ -380,9 +381,9 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					}
 					continue
 				}
-				reorgBlock = logs[0].BlockNumber
-				if reorgBlock <= delivered {
-					logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
+				reorgBlock := logs[0].BlockNumber
+				if !reorged && reorgBlock <= delivered {
+					logger.Debug("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
 					reorged = true
 				}
 				if !reorged {
@@ -430,7 +431,29 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<- *types.Log, closeC chan struct{}) error {
 	// The original request ctx will be canceled as soon as the parent goroutine
 	// returns a subscription. Use a new context instead.
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Fetch logs from a range of blocks.
+	fetchRange := func(from, to int64) error {
+		f := api.sys.NewRangeFilter(from, to, crit.Addresses, crit.Topics)
+		logsCh, errChan := f.rangeLogsAsync(ctx)
+		for {
+			select {
+			case <-closeC:
+				cancel()
+				return nil
+			case log := <-logsCh:
+				histLogs <- log
+			case err := <-errChan:
+				if err != nil {
+					logger.Error("Error while fetching historical logs", "err", err)
+					return err
+				}
+				// Range filter is done.
+				return nil
+			}
+		}
+	}
 
 	for {
 		// Get the latest block header.
@@ -440,31 +463,10 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 		}
 		head := header.Number.Int64()
 		if from > head {
-			logger.Info("Finish historical sync", "from", from, "head", head)
+			logger.Debug("Finish historical sync", "from", from, "head", head)
 			return nil
 		}
-
-		// Do historical sync beginning at `from` to head.
-		f := api.sys.NewRangeFilter(from, head, crit.Addresses, crit.Topics)
-		logsCh, errChan := f.rangeLogsAsync(ctx)
-
-	FORLOOP:
-		for {
-			select {
-			case <-closeC:
-				return nil
-			case log := <-logsCh:
-				histLogs <- log
-			case err := <-errChan:
-				// Range filter is done or error, let's also stop the reorgLogs subscribe
-				if err != nil {
-					logger.Error("Error while fetching historical logs", "err", err)
-					return err
-				}
-				break FORLOOP
-			}
-		}
-
+		fetchRange(from, head)
 		// Move forward to the next batch
 		from = head + 1
 	}
