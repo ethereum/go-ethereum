@@ -93,11 +93,17 @@ type PreResult struct {
 	GasUsed   uint64       `json:"gasUsed"`
 }
 
-func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreResult, error) {
+func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs, stateOverrides *ethapi.StateOverride) ([]PreResult, error) {
 	preResList := make([]PreResult, 0)
 	state, header, err := api.e.APIBackend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
 	if state == nil || err != nil {
 		return nil, err
+	}
+	if stateOverrides != nil {
+		err = stateOverrides.Apply(state)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for i := 0; i < len(origins); i++ {
 		origin := origins[i]
