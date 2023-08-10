@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/miner"
 )
 
@@ -51,8 +52,10 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
-		OverrideCancun          *uint64 `toml:",omitempty"`
-		OverrideVerkle          *uint64 `toml:",omitempty"`
+		OverrideCancun          *uint64             `toml:",omitempty"`
+		OverrideVerkle          *uint64             `toml:",omitempty"`
+		EnableTxTraceRecording  bool                `toml:",omitempty"`
+		TxTraceConfig           tracers.TraceConfig `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -91,6 +94,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverrideCancun = c.OverrideCancun
 	enc.OverrideVerkle = c.OverrideVerkle
+	enc.EnableTxTraceRecording = c.EnableTxTraceRecording
+	enc.TxTraceConfig = c.TxTraceConfig
 	return &enc, nil
 }
 
@@ -131,8 +136,10 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
-		OverrideCancun          *uint64 `toml:",omitempty"`
-		OverrideVerkle          *uint64 `toml:",omitempty"`
+		OverrideCancun          *uint64              `toml:",omitempty"`
+		OverrideVerkle          *uint64              `toml:",omitempty"`
+		EnableTxTraceRecording  *bool                `toml:",omitempty"`
+		TxTraceConfig           *tracers.TraceConfig `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -245,6 +252,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideVerkle != nil {
 		c.OverrideVerkle = dec.OverrideVerkle
+	}
+	if dec.EnableTxTraceRecording != nil {
+		c.EnableTxTraceRecording = *dec.EnableTxTraceRecording
+	}
+	if dec.TxTraceConfig != nil {
+		c.TxTraceConfig = *dec.TxTraceConfig
 	}
 	return nil
 }

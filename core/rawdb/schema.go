@@ -129,6 +129,8 @@ var (
 
 	CliqueSnapshotPrefix = []byte("clique-")
 
+	TracePrefix = []byte("tr-")
+
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
@@ -186,6 +188,11 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
+}
+
+// txTraceKey = TracePrefix + hash
+func txTraceKey(hash common.Hash) []byte {
+	return append(TracePrefix, hash.Bytes()...)
 }
 
 // accountSnapshotKey = SnapshotAccountPrefix + hash

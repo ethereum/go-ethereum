@@ -118,6 +118,21 @@ func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*
 	return tx, hash, blockNumber, index, nil
 }
 
+func (b *testBackend) GetTransactionTrace(ctx context.Context, traceCfg *TraceConfig, txHash common.Hash) (json.RawMessage, error) {
+	vmCfg := b.chain.GetVMConfig()
+	if vmCfg.EnableTxTraceRecording && *vmCfg.TxTracerName == *traceCfg.Tracer && common.CmpJson(vmCfg.TxTracerConfig, traceCfg.TracerConfig) {
+		data, err := rawdb.ReadTxTrace(b.chaindb, txHash)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("transaction trace %s not found", txHash.Hex())
+		}
+		return data, nil
+	}
+	return nil, fmt.Errorf("transaction trace config not support")
+}
+
 func (b *testBackend) RPCGasCap() uint64 {
 	return 25000000
 }

@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -241,6 +242,17 @@ var (
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
 		Value:    ethconfig.Defaults.TxLookupLimit,
 		Category: flags.EthCategory,
+	}
+	TxTraceEnabledFlag = &cli.BoolFlag{
+		Name:     "txtrace",
+		Usage:    "Enable record transaction trace while evm processing",
+		Category: flags.EthCategory,
+	}
+	TxTraceConfigPathFlag = &cli.PathFlag{
+		Name:      "txtrace.cfg",
+		Usage:     "Path to txtrace config file, if not set, use openEthereum's style as default config",
+		TakesFile: true,
+		Category:  flags.EthCategory,
 	}
 	LightKDFFlag = &cli.BoolFlag{
 		Name:     "lightkdf",
@@ -1844,6 +1856,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
 		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
 	}
+	if ctx.IsSet(TxTraceEnabledFlag.Name) {
+		cfg.EnableTxTraceRecording = true
+		cfg.TxTraceConfig = MakeTxTraceConfig(ctx)
+	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -2157,4 +2173,29 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 		preloads = append(preloads, strings.TrimSpace(file))
 	}
 	return preloads
+}
+
+// MakeTxtraceConfig reads the txtrace config file (the same traceconfig format as the debug_traceXXX APIs)
+// and returns the TraceConfig specified by the global --txtrace.cfg flag.
+func MakeTxTraceConfig(ctx *cli.Context) tracers.TraceConfig {
+	path := ctx.Path(TxTraceConfigPathFlag.Name)
+	var traceConfig tracers.TraceConfig
+	if path == "" {
+		tracer := "flatCallTracer"
+		tracerConfigdata, _ := json.Marshal(map[string]interface{}{
+			"convertParityErrors": true,
+			"includePrecompiles":  true,
+		})
+		traceConfig.Tracer = &tracer
+		traceConfig.TracerConfig = tracerConfigdata
+		return traceConfig
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		Fatalf("Failed to read txtrace file: %v", err)
+	}
+	if err := json.Unmarshal(data, &traceConfig); err != nil {
+		Fatalf("Failed to parse txtrace config file: %v", err)
+	}
+	return traceConfig
 }

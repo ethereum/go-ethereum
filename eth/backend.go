@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -44,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -182,6 +184,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
+			EnableTxTraceRecording:  config.EnableTxTraceRecording,
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
@@ -193,6 +196,20 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
+	if vmConfig.EnableTxTraceRecording {
+		vmConfig.TxTracerName = config.TxTraceConfig.Tracer
+		vmConfig.TxTracerConfig = config.TxTraceConfig.TracerConfig
+		// If TxTraceRecording is enabled, we need to create a tracer for each transaction.
+		vmConfig.TxTracerCreateFn = func(name *string, tc *vm.TraceContext, config json.RawMessage) (vm.EVMLoggerWithResult, error) {
+			return tracers.DefaultDirectory.New(*name, &tracers.Context{
+				BlockHash:   tc.BlockHash,
+				BlockNumber: tc.BlockNumber,
+				TxIndex:     tc.TxIndex,
+				TxHash:      tc.TxHash,
+			}, config)
+		}
+	}
+
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
 	if config.OverrideCancun != nil {
