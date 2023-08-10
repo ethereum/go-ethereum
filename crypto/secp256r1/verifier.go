@@ -28,11 +28,7 @@ func Verify(hash []byte, r, s, x, y *big.Int) bool {
 
 	// Verify the signature with the public key,
 	// then return true if it's valid, false otherwise
-	if ok := ecdsa.Verify(publicKey, hash, r, s); ok {
-		return true
-	}
-
-	return false
+	return ecdsa.Verify(publicKey, hash, r, s)
 }
 
 // Check the malleability issue
