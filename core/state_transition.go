@@ -403,7 +403,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gasRemaining -= gas
 
-	if rules.IsCancun {
+	if rules.IsVerkle {
 		targetAddr := msg.To
 		originAddr := msg.From
 

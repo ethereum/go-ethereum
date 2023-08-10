@@ -41,6 +41,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsVerkle:
+		precompiles = PrecompiledContractsBerlin
 	case evm.chainRules.IsCancun:
 		precompiles = PrecompiledContractsCancun
 	case evm.chainRules.IsBerlin:
@@ -135,7 +137,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
-	if txCtx.Accesses == nil && chainConfig.IsCancun(blockCtx.BlockNumber, blockCtx.Time) {
+	if txCtx.Accesses == nil && chainConfig.IsVerkle(blockCtx.BlockNumber, blockCtx.Time) {
 		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
@@ -145,7 +147,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
-	if txCtx.Accesses == nil && evm.chainRules.IsCancun {
+	if txCtx.Accesses == nil && evm.chainRules.IsVerkle {
 		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
 	}
 	evm.TxContext = txCtx
@@ -210,7 +212,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	var creation bool
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
-			if evm.chainRules.IsCancun {
+			if evm.chainRules.IsVerkle {
 				// proof of absence
 				tryConsumeGas(&gas, evm.Accesses.TouchAndChargeProofOfAbsence(caller.Address().Bytes()))
 			}
@@ -527,7 +529,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
-	if err == nil && evm.chainRules.IsCancun {
+	if err == nil && evm.chainRules.IsVerkle {
 		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:], value.Sign() != 0)) {
 			evm.StateDB.RevertToSnapshot(snapshot)
 			err = ErrOutOfGas

@@ -127,7 +127,7 @@ func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig, timestamp uint64) (c
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
 	// XXX check this is the case
 	// TODO remove the nil config check once we have rebased, it should never be nil
-	if cfg != nil && cfg.IsCancun(big.NewInt(int64(0)), timestamp) {
+	if cfg != nil && cfg.IsVerkle(big.NewInt(int64(0)), timestamp) {
 		db.EndVerkleTransition()
 	}
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
@@ -547,7 +547,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 // Note the state changes will be committed in hash-based scheme, use Commit
 // if path-scheme is preferred.
 func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{Verkle: g.Config != nil && g.Config.IsCancun(big.NewInt(int64(g.Number)), g.Timestamp)})
+	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{Verkle: g.Config != nil && g.Config.IsVerkle(big.NewInt(int64(g.Number)), g.Timestamp)})
 	block, err := g.Commit(db, triedb)
 	if err != nil {
 		panic(err)
