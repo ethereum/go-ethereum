@@ -92,6 +92,8 @@ type Database interface {
 	SetCurrentPreimageOffset(int64)
 
 	AddRootTranslation(originalRoot, translatedRoot common.Hash)
+
+	SetLastMerkleRoot(root common.Hash)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -272,6 +274,7 @@ type cachingDB struct {
 	origRoots           [32]common.Hash
 	translationIndex    int
 	translatedRootsLock sync.RWMutex
+	LastMerkleRoot      common.Hash // root hash of the read-only base tree
 
 	addrToPoint *utils.PointCache
 
@@ -379,6 +382,10 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 		}
 	}
 	if db.started {
+		mpt, err := db.openStorageMPTrie(db.LastMerkleRoot, address, root, nil)
+		if err != nil {
+			return nil, err
+		}
 		// Return a "storage trie" that is an adapter between the storge MPT
 		// and the unique verkle tree.
 		switch self := self.(type) {
@@ -505,4 +512,8 @@ func (db *cachingDB) GetStorageProcessed() bool {
 
 func (db *cachingDB) AddRootTranslation(originalRoot, translatedRoot common.Hash) {
 	db.AddTranslation(originalRoot, translatedRoot)
+}
+
+func (db *cachingDB) SetLastMerkleRoot(root common.Hash) {
+	db.LastMerkleRoot = root
 }

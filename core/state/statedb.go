@@ -1051,7 +1051,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-	return s.trie.Hash()
+	root := s.trie.Hash()
+
+	// Save the root of the MPT so that it can be used during the transition
+	if !s.Database().InTransition() && !s.Database().Transitioned() {
+		s.Database().SetLastMerkleRoot(root)
+	}
+
+	return root
 }
 
 // SetTxContext sets the current transaction hash and index which are
