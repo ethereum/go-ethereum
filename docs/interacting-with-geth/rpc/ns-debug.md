@@ -27,7 +27,7 @@ The location is specified as `<filename>:<line>`.
 | Console | `debug.backtraceAt(string)`                           |
 | RPC     | `{"method": "debug_backtraceAt", "params": [string]}` |
 
-Example:
+**Example:**
 
 ```js
 > debug.backtraceAt("server.go:443")
@@ -112,7 +112,7 @@ Retrieves the state that corresponds to the block number and returns a list of a
 | Console | `debug.traceBlockByHash(number, [options])`           |
 | RPC     | `{"method": "debug_dumpBlock", "params": [number]}`   |
 
-Example:
+**Example:**
 
 ```js
 > debug.dumpBlock(10)
@@ -500,7 +500,7 @@ The `traceBlock` method will return a full stack trace of all invoked opcodes of
 References:
 [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
-Example:
+**Example:**
 
 ```js
 > debug.traceBlock("0xblock_rlp")
@@ -585,7 +585,7 @@ The `debug_traceCall` method lets you run an `eth_call` within the context of th
 | Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                         |
 |   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                      |
 
-Example:
+**Example:**
 
 No specific call options:
 
@@ -697,7 +697,7 @@ If set, the previous four arguments will be ignored.
 
 Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
 
-Example:
+**Example:**
 
 ```js
 > debug.traceTransaction("0x2059dd53ecac9827faad14d364f9e04b1d5fe5b506e3acc886eff7a6f88a696a")

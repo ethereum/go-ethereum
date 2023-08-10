@@ -13,7 +13,7 @@ These methods are used for real-time events through subscriptions. See the [subs
 
 Executes a new message call immediately, without creating a transaction on the block chain. The `eth_call` method can be used to query internal contract state, to execute validations coded into a contract or even to test what the effect of a transaction would be without running it live.
 
-Parameters:
+**Parameters:**
 
 The method takes 3 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; and an optional state override-set to allow executing the call against a modified chain state.
 
@@ -44,7 +44,7 @@ The goal of the _state override set_ is manyfold:
 
 - It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
 
-Example:
+**Example:**
 
 ```json
 {
@@ -141,7 +141,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
-Parameters:
+**Parameters:**
 
 | Field              | Type     | Description                                    |
 | :----------------- | :------- | :--------------------------------------------- |
@@ -160,7 +160,7 @@ The method `eth_createAccessList` returns list of addresses and storage keys use
 
 That is, it gives the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. Like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined. Adding an `accessList` to a transaction does not necessary result in lower gas usage compared to a transaction without an access list.
 
-Example:
+**Example:**
 
 ```json
 {
@@ -180,7 +180,7 @@ Example:
 
 Returns a block header.
 
-Parameters:
+**Parameters:**
 
 | Field              | Type       | Description                        |
 | :----------------- | :--------- | :--------------------------------- |
@@ -223,7 +223,7 @@ curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"
 
 Returns a block header.
 
-Parameters:
+**Parameters:**
 
 | Field              | Type       | Description                        |
 | :----------------- | :--------- | :--------------------------------- |
