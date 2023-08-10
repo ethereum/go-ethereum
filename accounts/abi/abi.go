@@ -258,7 +258,7 @@ var panicSelector = crypto.Keccak256([]byte("Panic(uint256)"))[:4]
 var panicReasons = map[uint64]string{
 	0x00: "generic panic",
 	0x01: "assert(false)",
-	0x11: "arithmetic overflow",
+	0x11: "arithmetic underflow or overflow",
 	0x12: "division or modulo by zero",
 	0x21: "enum overflow",
 	0x22: "invalid encoded storage byte array accessed",
@@ -271,7 +271,7 @@ var panicReasons = map[uint64]string{
 // UnpackRevert resolves the abi-encoded revert reason. According to the solidity
 // spec https://solidity.readthedocs.io/en/latest/control-structures.html#revert,
 // the provided revert reason is abi-encoded as if it were a call to function
-// `Error(string)` and `Panic(uint256)`. So it's a special tool for it.
+// `Error(string)` or `Panic(uint256)`. So it's a special tool for it.
 func UnpackRevert(data []byte) (string, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
@@ -304,7 +304,7 @@ func UnpackRevert(data []byte) (string, error) {
 				return reason, nil
 			}
 		}
-		return fmt.Sprintf("unknown panic code: 0x%s", pCode.Text(16)), nil
+		return fmt.Sprintf("unknown panic code: %#x", pCode), nil
 	default:
 		return "", errors.New("invalid data for unpacking")
 	}
