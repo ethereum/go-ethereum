@@ -753,7 +753,7 @@ Sets the logging verbosity pattern.
 | Console | `debug.vmodule(string)`                           |
 | RPC     | `{"method": "debug_vmodule", "params": [string]}` |
 
-Examples:
+**Examples:**
 
 If you want to see messages from a particular Go package (directory) and all subdirectories, use:
 
