@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -216,15 +215,17 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *trie.Database, root 
 		log.Warn("Failed to load snapshot", "err", err)
 		if !config.NoBuild {
 			if config.Verkle {
-				snap.layers = map[common.Hash]snapshot{
-					root: &diskLayer{
-						diskdb: diskdb,
-						triedb: triedb,
-						root:   root,
-						cache:  fastcache.New(config.CacheSize * 1024 * 1024),
-					},
-				}
-				return snap, nil
+				// TODO update the Rebuild function
+				// 	snap.layers = map[common.Hash]snapshot{
+				// 		root: &diskLayer{
+				// 			diskdb: diskdb,
+				// 			triedb: triedb,
+				// 			root:   root,
+				// 			cache:  fastcache.New(config.CacheSize * 1024 * 1024),
+				// 		},
+				// 	}
+				// 	return snap, nil
+				return nil, nil
 			}
 			log.Warn("Failed to load snapshot, regenerating", "err", err)
 			snap.Rebuild(root)
