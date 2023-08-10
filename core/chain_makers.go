@@ -357,7 +357,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if err != nil {
 		panic(err)
 	}
-	if genesis.Config != nil && genesis.Config.IsCancun(genesis.ToBlock().Number(), genesis.ToBlock().Time()) {
+	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.ToBlock().Number(), genesis.ToBlock().Time()) {
 		blocks, receipts, _, _ := GenerateVerkleChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 		return db, blocks, receipts
 	}

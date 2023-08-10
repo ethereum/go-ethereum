@@ -52,7 +52,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		value := common.Hash(y.Bytes32())
 
-		if evm.chainRules.IsCancun {
+		if evm.chainRules.IsVerkle {
 			index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(contract.AddressPoint(), x.Bytes())
 			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(index)
 		}
@@ -111,7 +111,7 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	slot := common.Hash(loc.Bytes32())
 	var gasUsed uint64
 
-	if evm.chainRules.IsCancun {
+	if evm.chainRules.IsVerkle {
 		where := stack.Back(0)
 		addr := contract.Address()
 		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)

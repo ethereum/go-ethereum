@@ -311,7 +311,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	head := bc.CurrentBlock()
 
 	// Declare the end of the verkle transition is need be
-	if bc.chainConfig.Rules(head.Number, false /* XXX */, head.Time).IsCancun {
+	if bc.chainConfig.Rules(head.Number, false /* XXX */, head.Time).IsVerkle {
 		bc.stateCache.EndVerkleTransition()
 	}
 
@@ -411,7 +411,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			Recovery:   recover,
 			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
-			Verkle:     chainConfig.IsCancun(head.Number, head.Time),
+			Verkle:     chainConfig.IsVerkle(head.Number, head.Time),
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 	}

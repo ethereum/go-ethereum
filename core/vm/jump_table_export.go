@@ -27,7 +27,8 @@ import (
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
 	case rules.IsVerkle:
-		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
+		// TODO set to newCancunInstructionSet() when verkle-fork is defined
+		return newShanghaiInstructionSet(), errors.New("verkle-fork not defined yet")
 	case rules.IsPrague:
 		return newCancunInstructionSet(), errors.New("prague-fork not defined yet")
 	case rules.IsCancun:

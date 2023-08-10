@@ -346,7 +346,7 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	cs := uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20()))
-	if interpreter.evm.chainRules.IsCancun {
+	if interpreter.evm.chainRules.IsVerkle {
 		index := trieUtils.GetTreeKeyCodeSize(slot.Bytes())
 		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(index)
 		scope.Contract.UseGas(statelessGas)
@@ -374,7 +374,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(scope.Contract.Code, uint64CodeOffset, length.Uint64())
-	if interpreter.evm.chainRules.IsCancun {
+	if interpreter.evm.chainRules.IsVerkle {
 		scope.Contract.UseGas(touchEachChunksOnReadAndChargeGas(copyOffset, nonPaddedCopyLength, scope.Contract, scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment))
 	}
 	scope.Memory.Set(memOffset.Uint64(), uint64(len(paddedCodeCopy)), paddedCodeCopy)
@@ -465,7 +465,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = 0xffffffffffffffff
 	}
 	addr := common.Address(a.Bytes20())
-	if interpreter.evm.chainRules.IsCancun {
+	if interpreter.evm.chainRules.IsVerkle {
 		code := interpreter.evm.StateDB.GetCode(addr)
 		contract := &Contract{
 			Code:   code,
@@ -680,7 +680,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsCancun {
+	if interpreter.evm.chainRules.IsVerkle {
 		contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
 		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], value.Sign() != 0)
 		if !tryConsumeGas(&gas, statelessGas) {
@@ -734,7 +734,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsCancun {
+	if interpreter.evm.chainRules.IsVerkle {
 		codeAndHash := &codeAndHash{code: input}
 		contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], endowment.Sign() != 0)
@@ -998,7 +998,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 
-		if interpreter.evm.chainRules.IsCancun && *pc%31 == 0 {
+		if interpreter.evm.chainRules.IsVerkle && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			statelessGas := touchEachChunksOnReadAndChargeGas(*pc+1, uint64(1), scope.Contract, scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment)
@@ -1025,7 +1025,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			endMin = startMin + pushByteSize
 		}
 
-		if interpreter.evm.chainRules.IsCancun {
+		if interpreter.evm.chainRules.IsVerkle {
 			statelessGas := touchEachChunksOnReadAndChargeGas(uint64(startMin), uint64(pushByteSize), scope.Contract, scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment)
 			scope.Contract.UseGas(statelessGas)
 		}
