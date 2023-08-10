@@ -17,7 +17,7 @@ The method accepts a single argument, the [`enode`](https://ethereum.org/en/deve
 | Console | `admin.addPeer(url)`                           |
 | RPC     | `{"method": "admin_addPeer", "params": [url]}` |
 
-### Example
+Example:
 
 ```js
 > admin.addPeer("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303")
@@ -43,7 +43,7 @@ The `datadir` administrative property can be queried for the absolute path the r
 | Console | `admin.datadir`                   |
 | RPC     | `{"method": "admin_datadir"}`     |
 
-### Example
+Example:
 
 ```js
 > admin.datadir
@@ -78,7 +78,7 @@ The `nodeInfo` administrative property can be queried for all the information kn
 | Console | `admin.nodeInfo`                          |
 | RPC     | `{"method": "admin_nodeInfo"}`            |
 
-### Example
+Example:
 
 ```js
 > admin.nodeInfo
@@ -122,7 +122,7 @@ The `peers` administrative property can be queried for all the information known
 | Console | `admin.peers`                            |
 | RPC     | `{"method": "admin_peers"}`              |
 
-### Example
+Example:
 
 ```js
 > admin.peers
@@ -194,7 +194,7 @@ The method returns a boolean flag specifying whether the HTTP RPC listener was o
 | Console | `admin.startHTTP(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startHTTP", "params": [host, port, cors, apis]}`                            |
 
-### Example
+Example:
 
 ```js
 > admin.startHTTP("127.0.0.1", 8545)
@@ -218,7 +218,7 @@ The method returns a boolean flag specifying whether the WebSocket RPC listener 
 | Console | `admin.startWS(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startWS", "params": [host, port, cors, apis]}`                            |
 
-### Example
+Example:
 
 ```js
 > admin.startWS("127.0.0.1", 8546)
@@ -235,7 +235,7 @@ The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint
 | Console | `admin.stopHTTP()`               |
 | RPC     | `{"method": "admin_stopHTTP"`    |
 
-### Example
+Example:
 
 ```js
 > admin.stopHTTP()
@@ -252,7 +252,7 @@ The `stopWS` administrative method closes the currently open WebSocket RPC endpo
 | Console | `admin.stopWS()`               |
 | RPC     | `{"method": "admin_stopWS"`    |
 
-### Example
+Example:
 
 ```js
 > admin.stopWS()

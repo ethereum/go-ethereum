@@ -42,12 +42,12 @@ to cancel the subscription:
 
 Subscriptions are created with a regular RPC call with `eth_subscribe` as method and the subscription name as first parameter. If successful it returns the subscription id.
 
-### Parameters
+Parameters:
 
 1. Subscription name
 2. Optional arguments
 
-### Example
+Example:
 
 ```sh
 {"id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"]}
@@ -58,11 +58,11 @@ Subscriptions are created with a regular RPC call with `eth_subscribe` as method
 
 Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as method and the subscription id as first parameter. It returns a bool indicating if the subscription was cancelled successful.
 
-### Parameters
+Parameters:
 
 1. subscription id
 
-### Example
+Example:
 
 ```json
 {"id": 1, "jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x9cef478923ff08bf67fde6c64013158d"]}
@@ -119,7 +119,7 @@ Returns logs that are included in new imported blocks and match the given filter
 
 In case of a chain reorganization previous sent logs that are on the old chain will be resent with the `removed` property set to true. Logs from transactions that ended up in the new chain are emitted. Therefore a subscription can emit logs for the same transaction multiple times.
 
-#### Parameters
+Parameters:
 
 1. `object` with the following (optional) fields
    - **address**, either an address or an array of addresses. Only logs that are created from these addresses are returned (optional)
@@ -156,7 +156,7 @@ Returns the hash for all transactions that are added to the pending state and ar
 
 When a transaction that was previously part of the canonical chain isn't part of the new canonical chain after a reorganization its again emitted.
 
-#### Parameters
+Parameters:
 
 none
 
@@ -184,7 +184,7 @@ returns
 
 Indicates when the node starts or stops synchronizing. The result can either be a boolean indicating that the synchronization has started (true), finished (false) or an object with various progress indicators.
 
-#### Parameters
+Parameters:
 
 none
 

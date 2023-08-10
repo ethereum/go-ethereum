@@ -13,7 +13,7 @@ These methods are used for real-time events through subscriptions. See the [subs
 
 Executes a new message call immediately, without creating a transaction on the block chain. The `eth_call` method can be used to query internal contract state, to execute validations coded into a contract or even to test what the effect of a transaction would be without running it live.
 
-#### Parameters
+Parameters:
 
 The method takes 3 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; and an optional state override-set to allow executing the call against a modified chain state.
 
@@ -141,7 +141,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
-#### Parameters
+Parameters:
 
 | Field              | Type     | Description                                    |
 | :----------------- | :------- | :--------------------------------------------- |
@@ -180,7 +180,7 @@ Example:
 
 Returns a block header.
 
-#### Parameters
+Parameters:
 
 | Field              | Type       | Description                        |
 | :----------------- | :--------- | :--------------------------------- |
@@ -223,7 +223,7 @@ curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"
 
 Returns a block header.
 
-#### Parameters
+Parameters:
 
 | Field              | Type       | Description                        |
 | :----------------- | :--------- | :--------------------------------- |
