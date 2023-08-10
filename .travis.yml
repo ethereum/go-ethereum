@@ -1,10 +1,12 @@
 sudo: required
 language: go
 go_import_path: github.com/XinFinOrg/XDPoSChain
-branches:
-  only:
-  - master
-  - dev-upgrade
+
+on:
+  branches:
+    - master
+    - dev-upgrade 
+  tags: true
 
 env:
   global:
@@ -88,7 +90,31 @@ jobs:
     env:
       - GO111MODULE=auto
     name: T-Z tests
+
+  - stage: TAG Build
+    if: tag IS present
+    services:
+      - docker
+    install: skip
+    before_script:
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker --version  # document the version travis is using
+      - docker build -t xinfinorg/xdposchain:$TRAVIS_TAG -f cicd/Dockerfile .
+    script:
+      - docker push xinfinorg/xdposchain:$TRAVIS_TAG
     
+  - stage: (Devnet) Build, and push images
+    if: branch = dev-upgrade AND type = push AND tag IS blank
+    services:
+      - docker
+    install: skip
+    before_script:
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker --version  # document the version travis is using
+      - docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
+    script:
+      - docker push xinfinorg/devnet:latest
+
   - stage: (Devnet)Terraform plan
     if: branch = dev-upgrade AND type = pull_request
     dist: xenial
@@ -106,20 +132,7 @@ jobs:
         - terraform validate $tf_validation_cli_options
         - terraform plan $tf_plan_cli_options
   
-  - stage: (Devnet) Build, and push images
-    if: branch = dev-upgrade AND type = push AND tag IS blank
-    services:
-      - docker
-    install: skip
-    before_script:
-      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - docker --version  # document the version travis is using
-      - docker build -t xdc-devnet -f cicd/devnet/Dockerfile .
-    script:
-      - docker tag xdc-devnet:latest xinfinorg/devnet:latest # Always push to the latest
-      - docker push xinfinorg/devnet:latest
-
-  - stage: Terraform apply
+  - stage: (Devnet) Terraform apply
     if: branch = dev-upgrade AND type = push AND tag IS blank
     dist: xenial
     language: bash

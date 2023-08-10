@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# Update AWS Max Health can resolve below issue, and it's already addressed
-# echo "Preparing to start the XDC chain, it's likely to take up to 1 minute"
-# Sleep for > 30 as we need to wait for the ECS tasks container being killed by fargate. Otherwise it will ended up with two same nodes running on a single /work/xdcchain directory
-# sleep 60
-
 if [ ! -d /work/xdcchain/XDC/chaindata ]
 then
   # Randomly select a key from environment variable, seperated by ','
@@ -47,7 +42,7 @@ else
 fi
 
 INSTANCE_IP=$(curl https://checkip.amazonaws.com)
-netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
+netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xdc_xinfin_apothem_network_stats@stats.apothem.network:2000"
 
 
 echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"
@@ -57,7 +52,7 @@ echo "Starting nodes with $bootnodes ..."
 XDC --ethstats ${netstats} --gcmode=full \
 --nat extip:${INSTANCE_IP} \
 --bootnodes ${bootnodes} --syncmode full \
---datadir /work/xdcchain --networkid 551 \
+--datadir /work/xdcchain --networkid 51 \
 -port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
 --rpcport 8545 \
 --rpcapi admin,db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \

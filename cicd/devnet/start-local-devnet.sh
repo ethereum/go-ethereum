@@ -18,11 +18,11 @@ then
 
   echo "${private_key}" >> ./tmp/key
   echo "Creating a new wallet"
-  wallet=$(../../build/bin/XDC account import --password ./tmp/.pwd --datadir ./tmp/xdcchain ./tmp/key | awk -v FS="({|})" '{print $2}')
+  wallet=$(../../build/bin/XDC account import --password ./tmp/.pwd --datadir ./tmp/xdcchain ./tmp/key | sed -n 's/Address: {\(.*\)}/\1/p')
   ../../build/bin/XDC --datadir ./tmp/xdcchain init ./genesis.json
 else
   echo "Wallet already exist, re-use the same one. If you have changed the private key, please manually inspect the key if matches. Otherwise, delete the 'tmp' directory and start again!"
-  wallet=$(../../build/bin/XDC account list --datadir ./tmp/xdcchain | head -n 1 | awk -v FS="({|})" '{print $2}')
+  wallet=$(../../build/bin/XDC account list --datadir ./tmp/xdcchain | head -n 1 | sed -n 's/Address: {\(.*\)}/\1/p')
 fi
 
 input="./bootnodes.list"
