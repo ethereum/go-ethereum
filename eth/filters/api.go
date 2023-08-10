@@ -299,7 +299,7 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 }
 
 // liveLogs only retrieves live logs.
-func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+func (api *FilterAPI) liveLogs(notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
 	matchedLogs := make(chan []*types.Log)
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 	if err != nil {
@@ -310,14 +310,11 @@ func (api *FilterAPI) liveLogs(notify notifier, rpcSub *rpc.Subscription, crit F
 		for {
 			select {
 			case logs := <-matchedLogs:
-				for _, log := range logs {
-					log := log
-					notify.Notify(rpcSub.ID, &log)
-				}
+				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				logsSub.Unsubscribe()
 				return
-			case <-notify.Closed(): // connection dropped
+			case <-notifier.Closed(): // connection dropped
 				logsSub.Unsubscribe()
 				return
 			}
@@ -375,10 +372,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					continue
 				}
 				if liveOnly {
-					for _, log := range logs {
-						log := log
-						notifier.Notify(rpcSub.ID, &log)
-					}
+					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 					continue
 				}
 				reorgBlock := logs[0].BlockNumber
@@ -392,19 +386,13 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				if logs[0].Removed {
 					// Send removed logs notification up until the point
 					// we have delivered logs from old chain.
-					for _, log := range logs {
-						if log.BlockNumber <= delivered {
-							log := log
-							notifier.Notify(rpcSub.ID, &log)
-						}
-					}
+					notifyLogsIf(notifier, rpcSub.ID, logs, func(log *types.Log) bool {
+						return log.BlockNumber <= delivered
+					})
 				} else {
 					// New logs are emitted for the whole new chain since the reorg block.
 					// Send them all.
-					for _, log := range logs {
-						log := log
-						notifier.Notify(rpcSub.ID, &log)
-					}
+					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 				}
 			case log := <-histLogs:
 				// If ChainReorg is detected, we need to deliver the last block's full logs
@@ -469,6 +457,15 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 		fetchRange(from, head)
 		// Move forward to the next batch
 		from = head + 1
+	}
+}
+
+func notifyLogsIf(notifier notifier, id rpc.ID, logs []*types.Log, cond func(log *types.Log) bool) {
+	for _, log := range logs {
+		if cond == nil || cond(log) {
+			log := log
+			notifier.Notify(id, &log)
+		}
 	}
 }
 
