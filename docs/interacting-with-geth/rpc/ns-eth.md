@@ -148,13 +148,13 @@ This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `
 | `transaction`      | `Object` | `TransactionCall` object                       |
 | `blockNumberOrTag` | `Object` | Optional, blocknumber or `latest` or `pending` |
 
-#### Usage
+**Usage:**
 
 ```
 curl --data '{"method":"eth_createAccessList","params":[{"from": "0x8cd02c6cbd8375b39b06577f8d50c51d86e8d5cd", "data": "0x608060806080608155"}, "pending"],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
 ```
 
-#### Response
+**Response:**
 
 The method `eth_createAccessList` returns list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
 
@@ -186,13 +186,13 @@ Returns a block header.
 | :----------------- | :--------- | :--------------------------------- |
 | `blockNumber`      | `Quantity` | Block number                       |
 
-#### Usage
+**Usage:**
 
 ```
 curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_getHeaderByNumber","params":["0x10823a8"],"id":0}'
 ```
 
-#### Response
+**Response:**
 
 ```json
 {
@@ -229,13 +229,13 @@ Returns a block header.
 | :----------------- | :--------- | :--------------------------------- |
 | `blockHash`        | `string`   | Block hash                         |
 
-#### Usage
+**Usage:**
 
 ```
 curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_getHeaderByHash","params":["0x4574b6f248bf3295f76ae797454f4ec21c8ef5b53c0f7fee8534b65623d9360a"],"id":0}'
 ```
 
-#### Response
+**Response:**
 
 ```json
 {
