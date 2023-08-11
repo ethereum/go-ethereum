@@ -9,23 +9,28 @@ It works by subscribing to particular events. The node will return a subscriptio
 
 **Example:**
 
+Create subscription:
+
 ```json
-// create subscription
 { "id": 1, "jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"] }
 ```
 
 **Response:**
 
+Return a subscription id:
+
 ```json
 { "id": 1, "jsonrpc": "2.0", "result": "0xcd0c3e8af590364c09d0fa6a1210faf5" }
-
-// incoming notifications
-{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd9263f42a87", <...>,  "uncles": []}} }
-{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd90b1a7ad02",  <...>,  "uncles": ["0x80aacd1ea4c9da32efd8c2cc9ab38f8f70578fcd46a1a4ed73f82f3e0957f936"]}} }
-
 ```
 
-to cancel the subscription:
+After the creation of the subscrition, we can receive incoming notifications related to this subscription:
+
+```json
+{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd9263f42a87", <...>, "uncles": []}} }
+{ "jsonrpc": "2.0", "method": "eth_subscription", "params": {"subscription": "0xcd0c3e8af590364c09d0fa6a1210faf5", "result": {"difficulty": "0xd90b1a7ad02", <...>, "uncles": ["0x80aacd1ea4c9da32efd8c2cc9ab38f8f70578fcd46a1a4ed73f82f3e0957f936"]}} }
+```
+
+To cancel the subscription:
 
 ```json
 {
@@ -99,7 +104,6 @@ In case of a chain reorganization the subscription will emit the last header in 
 ```json
 { "id": 1, "jsonrpc": "2.0", "result": "0x9ce59a13059e417087c02d3236a0b1cc" }
 
-// incoming notifications
 {
   "jsonrpc": "2.0",
   "method": "eth_subscription",
@@ -159,7 +163,6 @@ In case of a chain reorganization previous sent logs that are on the old chain w
 ```json
 { "id": 2, "jsonrpc": "2.0", "result": "0x4a8a4c0517381924f9838102c5a4dcb7" }
 
-// incoming notifications
 {
   "jsonrpc": "2.0",
   "method": "eth_subscription",
@@ -200,7 +203,6 @@ none
 ```json
 { "id": 1, "jsonrpc": "2.0", "result": "0xc3b33aa549fb9a60e95d21862596617c" }
 
-// incoming notifications
 {
   "jsonrpc":"2.0",
   "method":"eth_subscription",
@@ -230,7 +232,6 @@ none
 ```json
 { "id": 1, "jsonrpc": "2.0", "result": "0xe2ffeb2703bcf602d42922385829ce96" }
 
-// incoming notifications
 {
   "subscription": "0xe2ffeb2703bcf602d42922385829ce96",
   "result": {
