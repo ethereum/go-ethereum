@@ -1215,16 +1215,6 @@ func (s *StateDB) GetTrie() Trie {
 	return s.trie
 }
 
-// XXX check it's still needed
-func (s *StateDB) Cap(root common.Hash) error {
-	if s.snaps != nil {
-		return s.snaps.Cap(root, 0)
-	}
-	// pre-verkle path: noop if s.snaps hasn't been
-	// initialized.
-	return nil
-}
-
 // Commit writes the state to the underlying in-memory trie database.
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
