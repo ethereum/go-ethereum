@@ -117,7 +117,7 @@ func hash(states map[common.Hash][]byte) (common.Hash, []byte) {
 	for hash := range states {
 		hs = append(hs, hash)
 	}
-	slices.SortFunc(hs, func(a, b common.Hash) bool { return a.Less(b) })
+	slices.SortFunc(hs, common.Hash.Cmp)
 
 	var input []byte
 	for _, hash := range hs {

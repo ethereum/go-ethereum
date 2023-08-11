@@ -98,8 +98,8 @@ func (f *fuzzer) fuzz() int {
 	if len(entries) <= 1 {
 		return 0
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return bytes.Compare(a.k, b.k) < 0
+	slices.SortFunc(entries, func(a, b *kv) int {
+		return bytes.Compare(a.k, b.k)
 	})
 
 	var ok = 0

@@ -182,8 +182,8 @@ func (f *fuzzer) fuzz() int {
 	dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
-	slices.SortFunc(vals, func(a, b kv) bool {
-		return bytes.Compare(a.k, b.k) < 0
+	slices.SortFunc(vals, func(a, b kv) int {
+		return bytes.Compare(a.k, b.k)
 	})
 	for _, kv := range vals {
 		if f.debugging {
