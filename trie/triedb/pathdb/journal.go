@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -341,6 +342,14 @@ func (db *Database) Journal(root common.Hash) error {
 	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)
 	}
+	disk := db.tree.bottom()
+	if l, ok := l.(*diffLayer); ok {
+		log.Info("Persisting dirty state to disk", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.layers)
+	} else { // disk layer only on noop runs (likely) or deep reorgs (unlikely)
+		log.Info("Persisting dirty state to disk", "root", root, "layers", disk.buffer.layers)
+	}
+	start := time.Now()
+
 	// Run the journaling
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -373,6 +382,6 @@ func (db *Database) Journal(root common.Hash) error {
 
 	// Set the db in read only mode to reject all following mutations
 	db.readOnly = true
-	log.Info("Stored journal in triedb", "disk", diskroot, "size", common.StorageSize(journal.Len()))
+	log.Info("Persisted dirty state to disk", "size", common.StorageSize(journal.Len()), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
