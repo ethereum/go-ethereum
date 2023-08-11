@@ -298,9 +298,13 @@ func doTest(cmdline []string) {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
-	gotest := tc.Go("test", "-tags=ckzg")
+	gotest := tc.Go("test")
+
 	// CI needs a bit more time for the statetests (default 10m).
 	gotest.Args = append(gotest.Args, "-timeout=20m")
+
+	// Enable CKZG backend in CI.
+	gotest.Args = append(gotest.Args, "-tags=ckzg")
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.

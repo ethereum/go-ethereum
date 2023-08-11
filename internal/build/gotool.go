@@ -55,7 +55,7 @@ func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 	}
 	// CKZG by default is not portable, append the necessary build flags to make
 	// it not rely on modern CPU instructions and enable linking against
-	tool.Env = append(tool.Env, "CGO_CFLAGS=-D__BLST_PORTABLE__")
+	tool.Env = append(tool.Env, "CGO_CFLAGS=-std=c99 -O2 -D__BLST_PORTABLE__")
 
 	return tool
 }
