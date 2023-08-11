@@ -355,12 +355,9 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		db.nonlevel0CompGauge.Update(int64(stats.NonLevel0Comp))
 		db.seekCompGauge.Update(int64(stats.SeekComp))
 
-		// leveldb maybe has more than 7 levels
-		if len(db.levelsGauge) != len(stats.LevelTablesCounts) {
-			db.levelsGauge = make([]metrics.Gauge, len(stats.LevelTablesCounts))
-			for i := range db.levelsGauge {
-				db.levelsGauge[i] = metrics.GetOrRegisterGauge(namespace+fmt.Sprintf("tables/level%v", i), nil)
-			}
+		// goleveldb may have more than 7 layers, so we'll only append the missing layers
+		for i := len(db.levelsGauge); i < len(stats.LevelTablesCounts); i++ {
+			db.levelsGauge = append(db.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
 		}
 
 		for i, tables := range stats.LevelTablesCounts {
