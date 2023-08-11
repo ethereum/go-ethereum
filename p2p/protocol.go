@@ -78,8 +78,8 @@ func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
-// Less defines the canonical sorting order of capabilities.
-func (cap Cap) Less(other Cap) int {
+// Cmp defines the canonical sorting order of capabilities.
+func (cap Cap) Cmp(other Cap) int {
 	if cap.Name == other.Name {
 		if cap.Version < other.Version {
 			return -1
