@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Filter can be used to retrieve and filter logs.
+// Filter can be used to retrieve and filter historical logs.
 type Filter struct {
 	sys *FilterSystem
 

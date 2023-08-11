@@ -335,7 +335,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
 	var (
 		liveLogs = make(chan []*types.Log)
-		histLogs = make(chan *types.Log)
+		histLogs = make(chan []*types.Log)
 		histDone = make(chan error)
 		closeC   = make(chan struct{})
 	)
@@ -394,12 +394,18 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// Send them all.
 					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 				}
-			case log := <-histLogs:
-				// If ChainReorg is detected, we need to deliver the last block's full logs
-				if !reorged || delivered == log.BlockNumber {
-					delivered = log.BlockNumber
+			case logs := <-histLogs:
+				if len(logs) == 0 {
+					continue
+				}
+				if reorged {
+					continue
+				}
+				for _, log := range logs {
 					notifier.Notify(rpcSub.ID, &log)
 				}
+				// Assuming batch = all logs of a single block
+				delivered = logs[0].BlockNumber
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				liveLogsSub.Unsubscribe()
 				closeC <- struct{}{}
@@ -416,7 +422,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 }
 
 // doHistLogs retrieves the logs older than current header, and forward them to the histLogs channel.
-func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<- *types.Log, closeC chan struct{}) error {
+func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<- []*types.Log, closeC chan struct{}) error {
 	// The original request ctx will be canceled as soon as the parent goroutine
 	// returns a subscription. Use a new context instead.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -430,8 +436,8 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 			case <-closeC:
 				cancel()
 				return nil
-			case log := <-logsCh:
-				histLogs <- log
+			case logs := <-logsCh:
+				histLogs <- logs
 			case err := <-errChan:
 				if err != nil {
 					logger.Error("Error while fetching historical logs", "err", err)
