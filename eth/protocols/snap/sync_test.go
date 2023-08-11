@@ -1417,8 +1417,8 @@ type kv struct {
 	k, v []byte
 }
 
-func (k *kv) less(other *kv) bool {
-	return bytes.Compare(k.k, other.k) < 0
+func (k *kv) cmp(other *kv) int {
+	return bytes.Compare(k.k, other.k)
 }
 
 func key32(i uint64) []byte {
@@ -1478,7 +1478,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1540,7 +1540,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 		accTrie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
@@ -1587,7 +1587,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit account trie
 	root, set, _ := accTrie.Commit(true)
@@ -1652,7 +1652,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 		storageRoots[common.BytesToHash(key)] = stRoot
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit account trie
 	root, set, _ := accTrie.Commit(true)
@@ -1696,7 +1696,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 	root, nodes, _ := trie.Commit(false)
 	return root, nodes, entries
 }
@@ -1747,7 +1747,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 		trie.MustUpdate(elem.k, elem.v)
 		entries = append(entries, elem)
 	}
-	slices.SortFunc(entries, (*kv).less)
+	slices.SortFunc(entries, (*kv).cmp)
 	root, nodes, _ := trie.Commit(false)
 	return root, nodes, entries
 }

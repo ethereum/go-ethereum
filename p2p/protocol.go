@@ -78,9 +78,21 @@ func (cap Cap) String() string {
 }
 
 // Less defines the canonical sorting order of capabilities.
-func (cap Cap) Less(other Cap) bool {
+func (cap Cap) Less(other Cap) int {
 	if cap.Name == other.Name {
-		return cap.Version < other.Version
+		if cap.Version < other.Version {
+			return -1
+		}
+		if cap.Version > other.Version {
+			return 1
+		}
+		return 0
 	}
-	return cap.Name < other.Name
+	if cap.Name < other.Name {
+		return -1
+	}
+	if cap.Name > other.Name {
+		return 1
+	}
+	return 0
 }

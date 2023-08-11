@@ -92,6 +92,12 @@ type namedMetric struct {
 	m    interface{}
 }
 
-func (m namedMetric) less(other namedMetric) bool {
-	return m.name < other.name
+func (m namedMetric) less(other namedMetric) int {
+	if m.name < other.name {
+		return -1
+	}
+	if m.name > other.name {
+		return 1
+	}
+	return 0
 }
