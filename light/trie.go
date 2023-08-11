@@ -157,6 +157,10 @@ func (db *odrDatabase) AddRootTranslation(originalRoot common.Hash, translatedRo
 	panic("not implemented") // TODO: Implement
 }
 
+func (db *odrDatabase) SetLastMerkleRoot(root common.Hash) {
+	panic("not implemented") // TODO: Implement
+}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
