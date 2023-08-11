@@ -525,7 +525,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 			dl.accountList = append(dl.accountList, hash)
 		}
 	}
-	slices.SortFunc(dl.accountList, common.Hash.Less)
+	slices.SortFunc(dl.accountList, common.Hash.Cmp)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
@@ -563,7 +563,7 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	for k := range storageMap {
 		storageList = append(storageList, k)
 	}
-	slices.SortFunc(storageList, common.Hash.Less)
+	slices.SortFunc(storageList, common.Hash.Cmp)
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList, destructed

@@ -77,8 +77,8 @@ func (ns nodeSet) nodes() []*enode.Node {
 		result = append(result, n.N)
 	}
 	// Sort by ID.
-	slices.SortFunc(result, func(a, b *enode.Node) bool {
-		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
+	slices.SortFunc(result, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 	return result
 }
@@ -103,8 +103,14 @@ func (ns nodeSet) topN(n int) nodeSet {
 	for _, v := range ns {
 		byscore = append(byscore, v)
 	}
-	slices.SortFunc(byscore, func(a, b nodeJSON) bool {
-		return a.Score >= b.Score
+	slices.SortFunc(byscore, func(a, b nodeJSON) int {
+		if a.Score > b.Score {
+			return -1
+		}
+		if a.Score < b.Score {
+			return 1
+		}
+		return 0
 	})
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {

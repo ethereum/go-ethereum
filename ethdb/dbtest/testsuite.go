@@ -527,7 +527,7 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 		vals = append(vals, randBytes(vsize))
 	}
 	if order {
-		slices.SortFunc(keys, func(a, b []byte) bool { return bytes.Compare(a, b) < 0 })
+		slices.SortFunc(keys, func(a, b []byte) int { return bytes.Compare(a, b) })
 	}
 	return keys, vals
 }
