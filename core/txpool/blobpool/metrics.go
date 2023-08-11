@@ -35,15 +35,15 @@ var (
 
 	// The below metrics track the per-shelf metrics for the primary blob store
 	// and the temporary limbo store.
-	shelfDatausedGaugeName = "blobpool/shelf-%d/dataused"
-	shelfDatagapsGaugeName = "blobpool/shelf-%d/datagaps"
-	shelfSlotusedGaugeName = "blobpool/shelf-%d/slotused"
-	shelfSlotgapsGaugeName = "blobpool/shelf-%d/slotgaps"
+	shelfDatausedGaugeName = "blobpool/shelf_%d/dataused"
+	shelfDatagapsGaugeName = "blobpool/shelf_%d/datagaps"
+	shelfSlotusedGaugeName = "blobpool/shelf_%d/slotused"
+	shelfSlotgapsGaugeName = "blobpool/shelf_%d/slotgaps"
 
-	limboShelfDatausedGaugeName = "blobpool/limbo/shelf-%d/dataused"
-	limboShelfDatagapsGaugeName = "blobpool/limbo/shelf-%d/datagaps"
-	limboShelfSlotusedGaugeName = "blobpool/limbo/shelf-%d/slotused"
-	limboShelfSlotgapsGaugeName = "blobpool/limbo/shelf-%d/slotgaps"
+	limboShelfDatausedGaugeName = "blobpool/limbo/shelf_%d/dataused"
+	limboShelfDatagapsGaugeName = "blobpool/limbo/shelf_%d/datagaps"
+	limboShelfSlotusedGaugeName = "blobpool/limbo/shelf_%d/slotused"
+	limboShelfSlotgapsGaugeName = "blobpool/limbo/shelf_%d/slotgaps"
 
 	// The oversized metrics aggregate the shelf stats above the max blob count
 	// limits to track transactions that are just huge, but don't contain blobs.
