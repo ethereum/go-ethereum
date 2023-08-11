@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -88,11 +89,5 @@ func (cap Cap) Less(other Cap) int {
 		}
 		return 0
 	}
-	if cap.Name < other.Name {
-		return -1
-	}
-	if cap.Name > other.Name {
-		return 1
-	}
-	return 0
+	return strings.Compare(cap.Name, other.Name)
 }
