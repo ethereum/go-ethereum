@@ -1054,13 +1054,7 @@ func (bc *BlockChain) procFutureBlocks() {
 	}
 	if len(blocks) > 0 {
 		slices.SortFunc(blocks, func(a, b *types.Block) int {
-			if a.NumberU64() < b.NumberU64() {
-				return -1
-			}
-			if a.NumberU64() > b.NumberU64() {
-				return 1
-			}
-			return 0
+			return a.Number().Cmp(b.Number())
 		})
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
