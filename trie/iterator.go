@@ -555,7 +555,8 @@ func (it *nodeIterator) pop() {
 }
 
 // reachedPath normalizes a path by truncating a terminator if present, and returns true if it is
-// greater than or equal to the target.
+// greater than or equal to the target. Using this, the path of a value node embedded a full node
+// will compare less than the full node's children.
 func reachedPath(path, target []byte) bool {
 	if hasTerm(path) {
 		path = path[:len(path)-1]
@@ -563,31 +564,36 @@ func reachedPath(path, target []byte) bool {
 	return bytes.Compare(path, target) >= 0
 }
 
-// A value embedded in a fullNode occupies its last child slot, but we want to visit it last to
-// produce a pre-order traversal. These two functions handle the ordering by mapping index 0 to the
-// value, and shifting the indices of children over by 1.
+// A value embedded in a full node occupies the last slot (16) of the array of children. In order to
+// produce a pre-order traversal when iterating children, we jump to this last slot first, then go
+// back iterate the child nodes (and skip the last slot at the end):
+
+// prevChildIndex returns the index of a child in a full node which precedes the given index when
+// performing a pre-order traversal.
 func prevChildIndex(index int) int {
 	switch index {
-	case 0:
+	case 0: // We jumped back to iterate the children, from the value slot
 		return 16
-	case 16:
+	case 16: // We jumped to the embedded value slot at the end, from the placeholder index
 		return -1
-	case 17:
+	case 17: // We skipped the value slot after iterating all the children
 		return 15
-	default:
+	default: // We are iterating the children in sequence
 		return index - 1
 	}
 }
 
+// nextChildIndex returns the index of a child in a full node which follows the given index when
+// performing a pre-order traversal.
 func nextChildIndex(index int) int {
 	switch index {
-	case -1:
+	case -1: // Jump from the placeholder index to the embedded value slot
 		return 16
-	case 15:
+	case 15: // Skip the value slot after iterating the children
 		return 17
-	case 16:
+	case 16: // From the embedded value slot, jump back to iterate the children
 		return 0
-	default:
+	default: // Iterate children in sequence
 		return index + 1
 	}
 }
