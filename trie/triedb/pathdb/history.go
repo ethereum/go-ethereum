@@ -262,20 +262,20 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 	for addr := range states.Accounts {
 		accountList = append(accountList, addr)
 	}
-	slices.SortFunc(accountList, func(a, b common.Address) bool { return a.Less(b) })
+	slices.SortFunc(accountList, common.Address.Cmp)
 
 	for addr, slots := range states.Storages {
 		slist := make([]common.Hash, 0, len(slots))
 		for slotHash := range slots {
 			slist = append(slist, slotHash)
 		}
-		slices.SortFunc(slist, func(a, b common.Hash) bool { return a.Less(b) })
+		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
 	}
 	for addr := range states.Incomplete {
 		incomplete = append(incomplete, addr)
 	}
-	slices.SortFunc(incomplete, func(a, b common.Address) bool { return a.Less(b) })
+	slices.SortFunc(incomplete, common.Address.Cmp)
 
 	return &history{
 		meta: &meta{

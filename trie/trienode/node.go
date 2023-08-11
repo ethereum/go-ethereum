@@ -18,10 +18,10 @@ package trienode
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
@@ -83,9 +83,7 @@ func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
 		paths = append(paths, path)
 	}
 	// Bottom-up, the longest path first
-	slices.SortFunc(paths, func(a, b string) bool {
-		return a > b // Sort in reverse order
-	})
+	sort.Sort(sort.Reverse(sort.StringSlice(paths)))
 	for _, path := range paths {
 		callback(path, set.Nodes[path])
 	}
