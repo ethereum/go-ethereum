@@ -184,7 +184,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	}
 
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
-	return statedb.Cap(root) // XXX check this is still necessary
+	return nil
 }
 
 // CommitGenesisState loads the stored genesis state with the given block
