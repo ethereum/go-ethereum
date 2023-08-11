@@ -345,7 +345,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 	}
 
 	go func() {
-		histDone <- api.doHistLogs(from, crit, histLogs, closeC)
+		histDone <- api.doHistLogs(from, crit.Addresses, crit.Topics, histLogs, closeC)
 	}()
 
 	// Compose and notify the logs from liveLogs and histLogs
@@ -377,7 +377,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				}
 				reorgBlock := logs[0].BlockNumber
 				if !reorged && reorgBlock <= delivered {
-					logger.Debug("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
+					logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
 					reorged = true
 				}
 				if !reorged {
@@ -422,14 +422,14 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 }
 
 // doHistLogs retrieves the logs older than current header, and forward them to the histLogs channel.
-func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<- []*types.Log, closeC chan struct{}) error {
+func (api *FilterAPI) doHistLogs(from int64, addrs []common.Address, topics [][]common.Hash, histLogs chan<- []*types.Log, closeC chan struct{}) error {
 	// The original request ctx will be canceled as soon as the parent goroutine
 	// returns a subscription. Use a new context instead.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Fetch logs from a range of blocks.
 	fetchRange := func(from, to int64) error {
-		f := api.sys.NewRangeFilter(from, to, crit.Addresses, crit.Topics)
+		f := api.sys.NewRangeFilter(from, to, addrs, topics)
 		logsCh, errChan := f.rangeLogsAsync(ctx)
 		for {
 			select {
@@ -457,10 +457,12 @@ func (api *FilterAPI) doHistLogs(from int64, crit FilterCriteria, histLogs chan<
 		}
 		head := header.Number.Int64()
 		if from > head {
-			logger.Debug("Finish historical sync", "from", from, "head", head)
+			logger.Info("Finish historical sync", "from", from, "head", head)
 			return nil
 		}
-		fetchRange(from, head)
+		if err := fetchRange(from, head); err != nil {
+			return err
+		}
 		// Move forward to the next batch
 		from = head + 1
 	}
