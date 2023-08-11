@@ -1,5 +1,6 @@
 **/*_test.go
 
-build/_workspace
-build/_bin
+.git/
+build/
+!build/ci.go
 tests/testdata
