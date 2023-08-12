@@ -55,19 +55,15 @@ var (
 // DirectoryFlag is custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	Name string
-
+	Aliases     []string
+	Name        string
 	Category    string
 	DefaultText string
 	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value DirectoryString
-
-	Aliases []string
+	Value       DirectoryString
+	Required    bool
+	Hidden      bool
+	HasBeenSet  bool
 }
 
 // For cli.Flag:
@@ -143,19 +139,15 @@ var (
 
 // TextMarshalerFlag wraps a TextMarshaler value.
 type TextMarshalerFlag struct {
-	Name string
-
+	Aliases     []string
+	Name        string
 	Category    string
 	DefaultText string
 	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value TextMarshaler
-
-	Aliases []string
+	Value       TextMarshaler
+	Required    bool
+	Hidden      bool
+	HasBeenSet  bool
 }
 
 // For cli.Flag:
@@ -224,19 +216,15 @@ var (
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or
 // hexadecimal syntax.
 type BigFlag struct {
-	Name string
-
+	Aliases     []string
+	Name        string
 	Category    string
 	DefaultText string
 	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value *big.Int
-
-	Aliases []string
+	Value       *big.Int
+	Required    bool
+	Hidden      bool
+	HasBeenSet  bool
 }
 
 // For cli.Flag:

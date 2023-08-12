@@ -55,10 +55,10 @@ type Call struct {
 
 // jsTimer is a single timer instance with a callback function
 type jsTimer struct {
+	call     goja.FunctionCall
 	timer    *time.Timer
 	duration time.Duration
 	interval bool
-	call     goja.FunctionCall
 }
 
 // evalReq is a serialized vm execution request processed by runEventLoop.

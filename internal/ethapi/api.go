@@ -640,13 +640,13 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 
 // Result structs for GetProof
 type AccountResult struct {
-	Address      common.Address  `json:"address"`
 	AccountProof []string        `json:"accountProof"`
-	Balance      *hexutil.Big    `json:"balance"`
-	CodeHash     common.Hash     `json:"codeHash"`
-	Nonce        hexutil.Uint64  `json:"nonce"`
-	StorageHash  common.Hash     `json:"storageHash"`
 	StorageProof []StorageResult `json:"storageProof"`
+	Balance      *hexutil.Big    `json:"balance"`
+	Nonce        hexutil.Uint64  `json:"nonce"`
+	CodeHash     common.Hash     `json:"codeHash"`
+	StorageHash  common.Hash     `json:"storageHash"`
+	Address      common.Address  `json:"address"`
 }
 
 type StorageResult struct {
@@ -1364,15 +1364,13 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
+	Input            hexutil.Bytes     `json:"input"`
 	BlockHash        *common.Hash      `json:"blockHash"`
 	BlockNumber      *hexutil.Big      `json:"blockNumber"`
-	From             common.Address    `json:"from"`
 	Gas              hexutil.Uint64    `json:"gas"`
 	GasPrice         *hexutil.Big      `json:"gasPrice"`
 	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
 	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             common.Hash       `json:"hash"`
-	Input            hexutil.Bytes     `json:"input"`
 	Nonce            hexutil.Uint64    `json:"nonce"`
 	To               *common.Address   `json:"to"`
 	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
@@ -1384,6 +1382,8 @@ type RPCTransaction struct {
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
 	YParity          *hexutil.Uint64   `json:"yParity,omitempty"`
+	Hash             common.Hash       `json:"hash"`
+	From             common.Address    `json:"from"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
