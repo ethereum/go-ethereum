@@ -191,8 +191,8 @@ var (
 )
 
 type ValidatorData struct {
-	Address common.Address
 	Message hexutil.Bytes
+	Address common.Address
 }
 
 // TypedData is a type to encapsulate EIP-712 typed messages

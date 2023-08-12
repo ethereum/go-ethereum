@@ -28,20 +28,20 @@ import (
 
 // Field represents a struct field.
 type Field struct {
+	Type     Type
 	Name     string
+	Tag      string
 	Index    int
 	Exported bool
-	Type     Type
-	Tag      string
 }
 
 // Type represents the attributes of a Go type.
 type Type struct {
 	Name      string
 	Kind      reflect.Kind
+	Elem      *Type // non-nil for Kind values of Ptr, Slice, Array
 	IsEncoder bool  // whether type implements rlp.Encoder
 	IsDecoder bool  // whether type implements rlp.Decoder
-	Elem      *Type // non-nil for Kind values of Ptr, Slice, Array
 }
 
 // DefaultNilValue determines whether a nil pointer to t encodes/decodes

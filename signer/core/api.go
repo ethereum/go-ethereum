@@ -113,12 +113,12 @@ type Validator interface {
 
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
-	chainID     *big.Int
-	am          *accounts.Manager
 	UI          UIClientAPI
 	validator   Validator
-	rejectMode  bool
 	credentials storage.Storage
+	chainID     *big.Int
+	am          *accounts.Manager
+	rejectMode  bool
 }
 
 // Metadata about a request
@@ -287,7 +287,8 @@ func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAP
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
-	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, credentials}
+	signer := &SignerAPI{chainID: big.NewInt(chainID), am: am, UI: ui,
+		validator: validator, rejectMode: !advancedMode, credentials: credentials}
 	if !noUSB {
 		signer.startUSBListener()
 	}

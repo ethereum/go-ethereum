@@ -37,16 +37,14 @@ var errTraceSyntax = errors.New("expect file.go:234")
 // glog logger: setting global log levels; overriding with callsite pattern
 // matches; and requesting backtraces at certain positions.
 type GlogHandler struct {
-	origin Handler // The origin handler this wraps
-
-	level     atomic.Uint32 // Current log level, atomically accessible
-	override  atomic.Bool   // Flag whether overrides are used, atomically accessible
-	backtrace atomic.Bool   // Flag whether backtrace location is set
-
 	patterns  []pattern       // Current list of patterns to override with
-	siteCache map[uintptr]Lvl // Cache of callsite pattern evaluations
+	origin    Handler         // The origin handler this wraps
 	location  string          // file:line location where to do a stackdump at
+	siteCache map[uintptr]Lvl // Cache of callsite pattern evaluations
 	lock      sync.RWMutex    // Lock protecting the override pattern list
+	level     atomic.Uint32   // Current log level, atomically accessible
+	override  atomic.Bool     // Flag whether overrides are used, atomically accessible
+	backtrace atomic.Bool     // Flag whether backtrace location is set
 }
 
 // NewGlogHandler creates a new log handler with filtering functionality similar

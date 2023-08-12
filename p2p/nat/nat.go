@@ -183,12 +183,12 @@ func PMP(gateway net.IP) Interface {
 // This type is useful because discovery can take a while but we
 // want return an Interface value from UPnP, PMP and Auto immediately.
 type autodisc struct {
-	what string // type of interface being autodiscovered
-	once sync.Once
-	doit func() Interface
-
-	mu    sync.Mutex
+	what  string // type of interface being autodiscovered
 	found Interface
+	doit  func() Interface
+	once  sync.Once
+
+	mu sync.Mutex
 }
 
 func startautodisc(what string, doit func() Interface) Interface {

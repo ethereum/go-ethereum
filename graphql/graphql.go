@@ -79,9 +79,9 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 
 // Account represents an Ethereum account at a particular block.
 type Account struct {
+	blockNrOrHash rpc.BlockNumberOrHash
 	r             *Resolver
 	address       common.Address
-	blockNrOrHash rpc.BlockNumberOrHash
 }
 
 // getState fetches the StateDB object for an account.
@@ -171,8 +171,8 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 
 // AccessTuple represents EIP-2930
 type AccessTuple struct {
-	address     common.Address
 	storageKeys []common.Hash
+	address     common.Address
 }
 
 func (at *AccessTuple) Address(ctx context.Context) common.Address {
@@ -188,8 +188,8 @@ func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
 type Withdrawal struct {
 	index     uint64
 	validator uint64
-	address   common.Address
 	amount    uint64
+	address   common.Address
 }
 
 func (w *Withdrawal) Index(ctx context.Context) hexutil.Uint64 {
