@@ -11,16 +11,17 @@ import (
 
 // BlockTrace contains block execution traces and results required for rollers.
 type BlockTrace struct {
-	ChainID          uint64             `json:"chainID"`
-	Version          string             `json:"version"`
-	Coinbase         *AccountWrapper    `json:"coinbase"`
-	Header           *Header            `json:"header"`
-	Transactions     []*TransactionData `json:"transactions"`
-	StorageTrace     *StorageTrace      `json:"storageTrace"`
-	TxStorageTraces  []*StorageTrace    `json:"txStorageTraces,omitempty"`
-	ExecutionResults []*ExecutionResult `json:"executionResults"`
-	MPTWitness       *json.RawMessage   `json:"mptwitness,omitempty"`
-	WithdrawTrieRoot common.Hash        `json:"withdraw_trie_root,omitempty"`
+	ChainID           uint64             `json:"chainID"`
+	Version           string             `json:"version"`
+	Coinbase          *AccountWrapper    `json:"coinbase"`
+	Header            *Header            `json:"header"`
+	Transactions      []*TransactionData `json:"transactions"`
+	StorageTrace      *StorageTrace      `json:"storageTrace"`
+	TxStorageTraces   []*StorageTrace    `json:"txStorageTraces,omitempty"`
+	ExecutionResults  []*ExecutionResult `json:"executionResults"`
+	MPTWitness        *json.RawMessage   `json:"mptwitness,omitempty"`
+	WithdrawTrieRoot  common.Hash        `json:"withdraw_trie_root,omitempty"`
+	StartL1QueueIndex uint64             `json:"startL1QueueIndex"`
 }
 
 // StorageTrace stores proofs of storage needed by storage circuit

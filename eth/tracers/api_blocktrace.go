@@ -65,5 +65,6 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 	if err != nil {
 		return nil, err
 	}
-	return core.CreateTraceEnv(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), statedb, parent, block, true)
+	chaindb := api.backend.ChainDb()
+	return core.CreateTraceEnv(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
 }

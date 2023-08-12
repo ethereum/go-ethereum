@@ -266,7 +266,7 @@ func (v *BlockValidator) createTraceEnv(block *types.Block) (*TraceEnv, error) {
 		return nil, err
 	}
 
-	return CreateTraceEnv(v.config, v.bc, v.engine, statedb, parent, block, true)
+	return CreateTraceEnv(v.config, v.bc, v.engine, v.db, statedb, parent, block, true)
 }
 
 func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {
