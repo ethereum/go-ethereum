@@ -29,8 +29,8 @@ import (
 // txWithMinerFee wraps a transaction with its gas price or effective miner gasTipCap
 type txWithMinerFee struct {
 	tx   *txpool.LazyTransaction
-	from common.Address
 	fees *big.Int
+	from common.Address
 }
 
 // newTxWithMinerFee creates a wrapped transaction, calculating the effective

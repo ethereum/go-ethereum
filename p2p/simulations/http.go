@@ -89,12 +89,12 @@ func (c *Client) LoadSnapshot(snap *Snapshot) error {
 // SubscribeOpts is a collection of options to use when subscribing to network
 // events
 type SubscribeOpts struct {
+	// Filter instructs the server to only send a subset of message events
+	Filter string
+
 	// Current instructs the server to send events for existing nodes and
 	// connections first
 	Current bool
-
-	// Filter instructs the server to only send a subset of message events
-	Filter string
 }
 
 // SubscribeNetwork subscribes to network events which are sent from the server

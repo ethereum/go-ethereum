@@ -40,15 +40,14 @@ const (
 
 // Event is an event emitted by a simulation network
 type Event struct {
-	// Type is the type of the event
-	Type EventType `json:"type"`
-
 	// Time is the time the event happened
 	Time time.Time `json:"time"`
 
-	// Control indicates whether the event is the result of a controlled
-	// action in the network
-	Control bool `json:"control"`
+	// Type is the type of the event
+	Type EventType `json:"type"`
+
+	//Optionally provide data (currently for simulation frontends only)
+	Data interface{} `json:"data"`
 
 	// Node is set if the type is EventTypeNode
 	Node *Node `json:"node,omitempty"`
@@ -59,8 +58,9 @@ type Event struct {
 	// Msg is set if the type is EventTypeMsg
 	Msg *Msg `json:"msg,omitempty"`
 
-	//Optionally provide data (currently for simulation frontends only)
-	Data interface{} `json:"data"`
+	// Control indicates whether the event is the result of a controlled
+	// action in the network
+	Control bool `json:"control"`
 }
 
 // NewEvent creates a new event for the given object which should be either a

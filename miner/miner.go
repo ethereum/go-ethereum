@@ -45,14 +45,13 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards
-	ExtraData hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor  uint64         // Target gas floor for mined blocks.
-	GasCeil   uint64         // Target gas ceiling for mined blocks.
-	GasPrice  *big.Int       // Minimum gas price for mining a transaction
-	Recommit  time.Duration  // The time interval for miner to re-create mining work.
-
-	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
+	ExtraData         hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor          uint64         // Target gas floor for mined blocks.
+	GasCeil           uint64         // Target gas ceiling for mined blocks.
+	GasPrice          *big.Int       // Minimum gas price for mining a transaction
+	Recommit          time.Duration  // The time interval for miner to re-create mining work.
+	NewPayloadTimeout time.Duration  // The maximum time allowance for creating a new payload
+	Etherbase         common.Address `toml:",omitempty"` // Public address for block mining rewards
 }
 
 // DefaultConfig contains default settings for miner.
@@ -70,15 +69,14 @@ var DefaultConfig = Config{
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	mux     *event.TypeMux
 	eth     Backend
 	engine  consensus.Engine
+	wg      sync.WaitGroup
+	mux     *event.TypeMux
 	exitCh  chan struct{}
 	startCh chan struct{}
 	stopCh  chan struct{}
 	worker  *worker
-
-	wg sync.WaitGroup
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(header *types.Header) bool) *Miner {

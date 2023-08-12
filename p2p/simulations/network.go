@@ -720,8 +720,8 @@ type Node struct {
 	Config *adapters.NodeConfig `json:"config"`
 
 	// up tracks whether or not the node is running
-	up   bool
 	upMu *sync.RWMutex
+	up   bool
 }
 
 func newNode(an adapters.Node, ac *adapters.NodeConfig, up bool) *Node {
@@ -800,6 +800,12 @@ func (n *Node) UnmarshalJSON(raw []byte) error {
 
 // Conn represents a connection between two nodes in the network
 type Conn struct {
+	// Registers when the connection was grabbed to dial
+	initiated time.Time
+
+	one   *Node
+	other *Node
+
 	// One is the node which initiated the connection
 	One enode.ID `json:"one"`
 
@@ -808,11 +814,6 @@ type Conn struct {
 
 	// Up tracks whether or not the connection is active
 	Up bool `json:"up"`
-	// Registers when the connection was grabbed to dial
-	initiated time.Time
-
-	one   *Node
-	other *Node
 }
 
 // nodesUp returns whether both nodes are currently up

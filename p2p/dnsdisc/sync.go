@@ -226,16 +226,16 @@ func (ct *clientTree) slowdownRootUpdate(ctx context.Context) bool {
 
 // subtreeSync is the sync of an ENR or link subtree.
 type subtreeSync struct {
+	missing []string // missing tree node hashes
+	root    string
 	c       *Client
 	loc     *linkEntry
-	root    string
-	missing []string // missing tree node hashes
-	link    bool     // true if this sync is for the link tree
-	leaves  int      // counter of synced leaves
+	leaves  int  // counter of synced leaves
+	link    bool // true if this sync is for the link tree
 }
 
 func newSubtreeSync(c *Client, loc *linkEntry, root string, link bool) *subtreeSync {
-	return &subtreeSync{c, loc, root, []string{root}, link, 0}
+	return &subtreeSync{c: c, loc: loc, root: root, missing: []string{root}, link: link, leaves: 0}
 }
 
 func (ts *subtreeSync) done() bool {

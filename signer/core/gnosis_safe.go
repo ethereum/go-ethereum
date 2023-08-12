@@ -30,24 +30,22 @@ import (
 // it also conforms to the API required by the Gnosis Safe tx relay service.
 // See 'SafeMultisigTransaction' on https://safe-transaction.mainnet.gnosis.io/
 type GnosisSafeTx struct {
-	// These fields are only used on output
-	Signature  hexutil.Bytes           `json:"signature"`
-	SafeTxHash common.Hash             `json:"contractTransactionHash"`
-	Sender     common.MixedcaseAddress `json:"sender"`
-	// These fields are used both on input and output
+	Sender         common.MixedcaseAddress `json:"sender"`
 	Safe           common.MixedcaseAddress `json:"safe"`
 	To             common.MixedcaseAddress `json:"to"`
 	Value          math.Decimal256         `json:"value"`
 	GasPrice       math.Decimal256         `json:"gasPrice"`
-	Data           *hexutil.Bytes          `json:"data"`
-	Operation      uint8                   `json:"operation"`
-	GasToken       common.Address          `json:"gasToken"`
-	RefundReceiver common.Address          `json:"refundReceiver"`
 	BaseGas        big.Int                 `json:"baseGas"`
 	SafeTxGas      big.Int                 `json:"safeTxGas"`
 	Nonce          big.Int                 `json:"nonce"`
-	InputExpHash   common.Hash             `json:"safeTxHash"`
+	Signature      hexutil.Bytes           `json:"signature"`
+	Data           *hexutil.Bytes          `json:"data"`
 	ChainId        *math.HexOrDecimal256   `json:"chainId,omitempty"`
+	SafeTxHash     common.Hash             `json:"contractTransactionHash"`
+	InputExpHash   common.Hash             `json:"safeTxHash"`
+	GasToken       common.Address          `json:"gasToken"`
+	RefundReceiver common.Address          `json:"refundReceiver"`
+	Operation      uint8                   `json:"operation"`
 }
 
 // ToTypedData converts the tx to a EIP-712 Typed Data structure for signing
