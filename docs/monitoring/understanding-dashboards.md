@@ -205,8 +205,8 @@ Measures the rate that data is written to, or read from, the LevelDB and ancient
 - **leveldb write**: Rate that data is written to the fast-access LevelDB database that stores recent data.
 - **ancient read**: Rate that data is read from the freezer (the database storing older data).
 - **ancient write**: Rate that data is written to the freezer (the database storing older data)
-- **compaction read**: Rate that data is read from the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
-- **compaction write**: Rate that data is written to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting uneccessary data)
+- **compaction read**: Rate that data is read from the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting unnecessary data)
+- **compaction write**: Rate that data is written to the LevelDB database while it is being compacted (i.e. free space is reclaimed by deleting unnecessary data)
 
 #### Session totals
 
@@ -226,7 +226,7 @@ The current default Geth Grafana dashboard includes panels for light nodes. Ligh
 
 ## Creating new dashboards
 
-If the default dashboard isn't right for you, you can update it in the browser. Remove panels by clicking on their titles and selectign `remove`. Add a new panel by clicking the "plus" icon in the upper right of the browser window. There, you will have to define an InfluxDB query for the metric you want to display. The endpoints for the various metrics that Geth reports are listed by Geth at the address/port combination passed to `--metrics.addr` and `metrics.port` on startup - by default `127.0.0.1:6060/debug/metrics`. It is also possible to configure a panel by providing a JSON configuration model. Individial components are defined using the following syntax (the example below is for the CPU panel):
+If the default dashboard isn't right for you, you can update it in the browser. Remove panels by clicking on their titles and selecting `remove`. Add a new panel by clicking the "plus" icon in the upper right of the browser window. There, you will have to define an InfluxDB query for the metric you want to display. The endpoints for the various metrics that Geth reports are listed by Geth at the address/port combination passed to `--metrics.addr` and `metrics.port` on startup - by default `127.0.0.1:6060/debug/metrics`. It is also possible to configure a panel by providing a JSON configuration model. Individual components are defined using the following syntax (the example below is for the CPU panel):
 
 ```json
 {

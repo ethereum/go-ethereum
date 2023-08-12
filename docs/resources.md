@@ -17,11 +17,11 @@ Here are more resources for a deeper understanding of Geth and related topics.
 
 [Sina's EVM tracing workshop at Devcon 6, Bogota](https://youtu.be/b8RdmGsilfU)
 
-[Péter at ETH Prage 2022: Ethereum in numbers: where TPS meets physics](https://www.youtube.com/watch?v=TdsaVoJiy3g)
+[Péter at ETH Prague 2022: Ethereum in numbers: where TPS meets physics](https://www.youtube.com/watch?v=TdsaVoJiy3g)
 
 [Marius at ETH Amsterdam 2022: Deep dive into Geth](https://www.youtube.com/watch?v=c4N79UXZqSc)
 
-[Péter interview at ETH Prage 2022:](https://www.youtube.com/watch?v=cfxGzZZ_uOI)
+[Péter interview at ETH Prague 2022:](https://www.youtube.com/watch?v=cfxGzZZ_uOI)
 
 [Guillame at Devconnect 2022: Stateless Ethereum](https://www.youtube.com/watch?v=XkzJncPYj0M&list=PLJijNYoOwnsuqDH9ITSvbqDOaUdA1vp2O&index=9)
 
@@ -33,7 +33,7 @@ Here are more resources for a deeper understanding of Geth and related topics.
 
 [Marius interview at ETH Prague 2022](https://www.youtube.com/watch?v=QKr3KHTjbjQ)
 
-[Marius at ETHOnline 2021: The Megre from the perspective of the execution layer](https://www.youtube.com/watch?v=3DDjfUvQ2TE)
+[Marius at ETHOnline 2021: The Merge from the perspective of the execution layer](https://www.youtube.com/watch?v=3DDjfUvQ2TE)
 
 [Péter's 2020 online Geth AMA](https://www.youtube.com/watch?v=gVMDw66atr4)
 

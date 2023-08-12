@@ -45,14 +45,14 @@ geth <other flags> --http
 The commands above use default HTTP/WS endpoints and only enables the default JSON-RPC libraries. To update the Websockets or HTTP endpoints used, or to add support for additional libraries, the `.addr` `.port` and `.api` flags can be used as follows:
 
 ```sh
-# define a custom http adress, custom http port and enable libraries
+# define a custom http address, custom http port and enable libraries
 geth <other commands> --http --http.addr 192.60.52.21 --http.port 8552 --http.api eth,web3,admin
 
 # define a custom Websockets address and enable libraries
 geth <other commands> --ws --ws.addr 192.60.52.21 --ws.port 8552 --ws.api eth,web3,admin
 ```
 
-It is important to note that by default **some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled**. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**"
+It is important to note that by default **some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled**. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**
 
 The Javascript console can also be connected to a Geth node using IPC. When Geth is started, a `geth.ipc` file is automatically generated and saved to the data directory. This file, or a custom path to a specific ipc file can be passed to `geth attach` as follows:
 

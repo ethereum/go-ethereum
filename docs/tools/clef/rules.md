@@ -110,7 +110,7 @@ Since the user has complete freedom to write custom rules, it is plausible that 
 
 Javascript is very flexible but also easy to write incorrectly. For example, users might assume that javascript can handle large integers natively rather than explicitly using `bigInt`. This is an error commonly encountered in the Ethereum context when users attempt to multiply `gas` by `gasCost`.
 
-It’s unclear whether any other language would be more secure - there is alwas the possibility of implementing an insecure rule.
+It’s unclear whether any other language would be more secure - there is always the possibility of implementing an insecure rule.
 
 ### Credential security {#credential-security}
 
@@ -238,4 +238,4 @@ function OnApprovedTx(resp) {
 
 ## Summary {#summary}
 
-Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef GitHub](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
+Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitable ruleset files. See the [Clef GitHub](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.

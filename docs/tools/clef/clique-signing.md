@@ -283,7 +283,7 @@ To create an extremely trustless ruleset, the `raw_data` could be verified to en
 ]
 ```
 
-However, `messages` could also be used. They do not come from the external caller, but are generated inernally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
+However, `messages` could also be used. They do not come from the external caller, but are generated internally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
 
 ```js
 function OnSignerStartup(info) {}
