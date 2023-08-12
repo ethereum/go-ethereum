@@ -31,7 +31,7 @@ Geth's PoW algorithm, [Ethash](https://ethereum.org/en/developers/docs/consensus
 
 #### Clique {#clique}
 
-Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225](https://eips.ethereum.org/EIPS/eip-225). The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
+Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consensus protocol is specified in [EIP-225](https://eips.ethereum.org/EIPS/eip-225). The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
 ### Creating The Genesis Block {#creating-genesis-block}
 
@@ -151,7 +151,7 @@ geth init --datadir data genesis.json
 
 With the node configured and initialized, the next step is to set up a peer-to-peer network. This requires a bootstrap node. The bootstrap node is a normal node that is designated to be the entry point that other nodes use to join the network. Any node can be chosen to be the bootstrap node.
 
-To configure a bootstrap node, the IP address of the machine the bootstrap node will run on must be known. The bootsrap node needs to know its own IP address so that it can broadcast it to other nodes. On a local machine this can be found using tools such as `ifconfig` and on cloud instances such as Amazon EC2 the IP address of the virtual machine can be found in the management console. Any firewalls must allow UDP and TCP traffic on port 30303.
+To configure a bootstrap node, the IP address of the machine the bootstrap node will run on must be known. The bootstrap node needs to know its own IP address so that it can broadcast it to other nodes. On a local machine this can be found using tools such as `ifconfig` and on cloud instances such as Amazon EC2 the IP address of the virtual machine can be found in the management console. Any firewalls must allow UDP and TCP traffic on port 30303.
 
 The bootstrap node IP is set using the `--nat` flag (the command below contains an example address - replace it with the correct one).
 
@@ -233,7 +233,7 @@ geth --datadir node1 account new
 This command returns a request for a password. Once a password has been provided the following information is returned to the terminal:
 
 ```terminal
-Your new account is locked with a password. Please give a password. Do not foget this password.
+Your new account is locked with a password. Please give a password. Do not forget this password.
 Password:
 Repeat password:
 

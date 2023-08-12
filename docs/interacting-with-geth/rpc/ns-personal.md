@@ -7,7 +7,7 @@ The JSON-RPC API's `personal` namespace has historically been used to manage acc
 
 ## Method replacements
 
-The following list shows each method from the `personal` namespace and the intended method in Clef that supercedes it.
+The following list shows each method from the `personal` namespace and the intended method in Clef that supersedes it.
 
 ### personal_listAccounts
 
@@ -62,7 +62,7 @@ clef list-wallets
 
 ### personal_newAccount
 
-`personal_newAccount` was used to create a new accoutn and save it in the keystore. Clef has an equivalent method, `account_new`. It can be accessed on the terminal using an http request or using a Clef command:
+`personal_newAccount` was used to create a new account and save it in the keystore. Clef has an equivalent method, `account_new`. It can be accessed on the terminal using an http request or using a Clef command:
 
 Example call (curl):
 
@@ -80,7 +80,7 @@ Both require manual approval in Clef unless a custom ruleset is in place.
 
 ### personal_openWallet
 
-`personal_OpenWallet` initiates a hardware wallet opening procedure by establishing a USB connection and then attempting to authenticate via the provided passphrase. Note, the method may return an extra challenge requiring a second open (e.g. the Trezor PIN matrix challenge). `personal_openWallet` is identical to `clef_openWallet`. The Clef method is not externally eposed, meaning it must be called via a UI.
+`personal_OpenWallet` initiates a hardware wallet opening procedure by establishing a USB connection and then attempting to authenticate via the provided passphrase. Note, the method may return an extra challenge requiring a second open (e.g. the Trezor PIN matrix challenge). `personal_openWallet` is identical to `clef_openWallet`. The Clef method is not externally exposed, meaning it must be called via a UI.
 
 ### personal_sendTransaction
 
@@ -206,7 +206,7 @@ curl --data '{"id": 2, "jsonrpc": "2.0", "method": "account_signTransaction", "p
 
 ## Methods without replacements
 
-Thjere are a few methods that were available in the `personal` namepsace that have been deprecated without replacements. These are:
+There are a few methods that were available in the `personal` namepsace that have been deprecated without replacements. These are:
 
 ### personal_unlockAccount
 
@@ -392,7 +392,7 @@ Deletes a pairing between wallet and Geth.
 
 Validate the given passphrase and submit transaction.
 
-The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
+The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belonging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
 
 | Client  | Method invocation                                                |
 | :------ | ---------------------------------------------------------------- |

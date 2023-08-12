@@ -19,7 +19,7 @@ Vulnerabilities typically take two forms:
 
 In most cases so far, vulnerabilities in Geth have been of the second type, where the health of the network is a concern, rather than individual node operators. For such issues, Geth reserves the right to silently patch and ship fixes in new releases.
 
-### Why silent patches {#why-slient-patches}
+### Why silent patches {#why-silent-patches}
 
 In the case of Ethereum, it takes a lot of time (weeks, months) to get node operators to update even to a scheduled hard fork. If we were to highlight that a release contains important consensus or DoS fixes, there is always a risk of someone trying to beat node operators to the punch, and exploit the vulnerability. Delaying a potential attack sufficiently to make the majority of node operators immune may be worth the temporary loss of transparency.
 
@@ -43,7 +43,7 @@ In keeping with this policy, we have taken inspiration from [Solidity bug disclo
 
 There is a JSON-formatted list ([`vulnerabilities.json`](/docs/vulnerabilities/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
 
-As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](/docs/vulnerabilities/vulnerabilities.json.minisig), and cross-check the data against its own version number.
+As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publicly disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](/docs/vulnerabilities/vulnerabilities.json.minisig), and cross-check the data against its own version number.
 
 The list of vulnerabilities was started in November 2020, and covers mainly `v1.9.7` and forward.
 

@@ -40,7 +40,7 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - Some firewall configurations can prohibit UDP traffic. The static nodes feature or `admin.addPeer()` on the console can be used to configure connections manually.
 
-- Running Geth in [light mode](/docs/fundamentals/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
+- Running Geth in [light mode](/docs/fundamentals/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not currently work on proof-of-stake networks**.
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 

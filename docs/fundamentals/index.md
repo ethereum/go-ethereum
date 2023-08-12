@@ -24,4 +24,4 @@ Note also that there is a page explaining common log messages that are often que
 - [Pruning](/docs/fundamentals/pruning): read about Geth's data pruning options
 - [Private networks](/docs/fundamentals/private-network): learn hoe to set up a private network of multiple Geth nodes
 - [Light clients](/docs/fundamentals/les): read about Geth's light mode.
-- [Mining](/docs/fundamentals/mining): read about the minign algorithms Geth used to use to secure Ethereum before the network switched to proof-of-stake.
+- [Mining](/docs/fundamentals/mining): read about the mining algorithms Geth used to use to secure Ethereum before the network switched to proof-of-stake.

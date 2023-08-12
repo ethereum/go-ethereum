@@ -10,7 +10,7 @@ There are several ways to monitor the performance of a Geth node. Insights into 
 To follow along with the instructions on this page it will be useful to have:
 
 - a running Geth instance.
-- basic working knowlegde of bash/terminal.
+- basic working knowledge of bash/terminal.
 
 [This video](https://www.youtube.com/watch?v=cOBab8IJMYI) provides an excellent introduction to Geth monitoring.
 
@@ -80,7 +80,7 @@ docker run \
     prom/prometheus:latest
 ```
 
-Here a example directoy of `/path/to/promethus`:
+Here a example directory of `/path/to/prometheus`:
 
 ```sh
 prometheus/

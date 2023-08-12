@@ -50,7 +50,7 @@ The outputs look as follows:
 
 These are all the data required to deploy the contract using the Geth Javascript console. Open the Javascript console using `./geth attach geth.ipc`.
 
-Now, for convenice we can store the abi and bytecode in variables in the console:
+Now, for convenience we can store the abi and bytecode in variables in the console:
 
 ```js
 var abi = [

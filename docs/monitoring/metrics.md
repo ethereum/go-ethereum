@@ -9,7 +9,7 @@ The goal of the Geth metrics system is that - similar to logs - arbitrary metric
 
 ## Metric types {#metric-types}
 
-Geth's metrics can be classified into four types: meters, timers, counters and guages.
+Geth's metrics can be classified into four types: meters, timers, counters and gauges.
 
 ### Meters {#meters}
 
@@ -34,7 +34,7 @@ Timers are extensions of _meters_, the _duration_ of an event is collected along
 
 A counter is a single int64 value that can be incremented and decremented. The current value of the counter can be queried.
 
-### Gauges {#guages}
+### Gauges {#gauges}
 
 A gauge is a single int64 value. Its value can increment and decrement - as with a counter - but can also be set arbitrarily.
 
