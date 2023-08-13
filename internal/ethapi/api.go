@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+  "strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,384 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tyler-smith/go-bip39"
 )
+
+type BundleAPI struct {
+	b     Backend
+	chain *core.BlockChain
+}
+
+func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
+	return &BundleAPI{b, chain}
+}
+
+func (s *BlockChainAPI) CallNew(ctx context.Context, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (map[string]interface{}, error) {
+	result, err := DoCallBundle(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrides *StateOverride) (map[string]interface{}, error) {
+	if len(args.Transactions) == 0 {
+		return nil, errors.New("bundle missing txs")
+	}
+
+	if len(args.BlockNumbers) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and block numbers mismatch")
+	}
+
+	if len(args.Timestamps) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and timestamps mismatch")
+	}
+
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	state, parent, err := s.b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
+
+	coinbase := parent.Coinbase
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
+	}
+	difficulty := parent.Difficulty
+	if args.Difficulty != nil {
+		difficulty = args.Difficulty
+	}
+	gasLimit := parent.GasLimit
+	if args.GasLimit != nil {
+		gasLimit = *args.GasLimit
+	}
+	var baseFee *big.Int
+	if args.BaseFee != nil {
+		baseFee = args.BaseFee
+	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumbers[0].Int64())) {
+		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	vmconfig := vm.Config{}
+	vmconfig.NoBaseFee = true
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+	coinbaseBalanceBefore := state.GetBalance(coinbase)
+
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
+	for i, tx := range args.Transactions {
+		header := &types.Header{
+			ParentHash: parent.Hash(),
+			Number:     big.NewInt(int64(args.BlockNumbers[i])),
+			GasLimit:   gasLimit,
+			Time:       *args.Timestamps[i],
+			Difficulty: difficulty,
+			Coinbase:   coinbase,
+			BaseFee:    baseFee,
+		}
+		msg, err := tx.ToMessage(0, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
+		randomHash := common.HexToHash("0x" + strconv.Itoa(i))
+		state.SetTxContext(randomHash, i)
+
+		receipt, result, err := core.ApplyTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig, randomHash)
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+
+		txHash := randomHash.String()
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+		logs := receipt.Logs
+		if logs == nil {
+			logs = []*types.Log{}
+		}
+		jsonResult := map[string]interface{}{
+			"txHash":  txHash,
+			"gasUsed": receipt.GasUsed,
+			"logs":    logs,
+			"status":  receipt.Status,
+		}
+		totalGasUsed += receipt.GasUsed
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
+		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
+		jsonResult["gasPrice"] = new(big.Int).Div(coinbaseDiffTx, big.NewInt(int64(receipt.GasUsed))).String()
+		jsonResult["gasUsed"] = receipt.GasUsed
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
+	ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["gasFees"] = gasFees.String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
+	ret["totalGasUsed"] = totalGasUsed
+	ret["stateBlockNumber"] = parent.Number.Int64()
+
+	return ret, nil
+}
+
+func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args CallBundleArgs, overrides *StateOverride) (map[string]interface{}, error) {
+	if len(args.Transactions) == 0 {
+		return nil, errors.New("bundle missing txs")
+	}
+
+	if len(args.BlockNumbers) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and block numbers mismatch")
+	}
+
+	if len(args.Timestamps) != len(args.Transactions) {
+		return nil, errors.New("bundle txs and timestamps mismatch, len1" + strconv.Itoa(len(args.Timestamps)) + " len2 " + strconv.Itoa(len(args.Transactions)))
+	}
+
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	timeoutMilliSeconds := int64(5000)
+	if args.Timeout != nil {
+		timeoutMilliSeconds = *args.Timeout
+	}
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	state, parent, err := b.StateAndHeaderByNumberOrHash(ctx, args.StateBlockNumberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	if err := overrides.Apply(state); err != nil {
+		return nil, err
+	}
+
+	coinbase := parent.Coinbase
+	if args.Coinbase != nil {
+		coinbase = common.HexToAddress(*args.Coinbase)
+	}
+	difficulty := parent.Difficulty
+	if args.Difficulty != nil {
+		difficulty = args.Difficulty
+	}
+	gasLimit := parent.GasLimit
+	if args.GasLimit != nil {
+		gasLimit = *args.GasLimit
+	}
+	var baseFee *big.Int
+	if args.BaseFee != nil {
+		baseFee = args.BaseFee
+	} else if b.ChainConfig().IsLondon(big.NewInt(args.BlockNumbers[0].Int64())) {
+		baseFee = misc.CalcBaseFee(b.ChainConfig(), parent)
+	}
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	vmconfig := vm.Config{}
+	vmconfig.NoBaseFee = true
+	// Setup the gas pool (also for unmetered requests)
+	// and apply the message.
+	gp := new(core.GasPool).AddGas(math.MaxUint64)
+
+	results := []map[string]interface{}{}
+	coinbaseBalanceBefore := state.GetBalance(coinbase)
+
+	var totalGasUsed uint64
+	gasFees := new(big.Int)
+	lastReverted := false
+	for i, tx := range args.Transactions {
+		header := &types.Header{
+			ParentHash: parent.Hash(),
+			Number:     big.NewInt(int64(args.BlockNumbers[i])),
+			GasLimit:   gasLimit,
+			Time:       *args.Timestamps[i],
+			Difficulty: difficulty,
+			Coinbase:   coinbase,
+			BaseFee:    baseFee,
+		}
+		msg, err := tx.ToMessage(0, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		coinbaseBalanceBeforeTx := state.GetBalance(coinbase)
+		randomHash := common.HexToHash("0x" + strconv.Itoa(i))
+		state.SetTxContext(randomHash, i)
+
+		receipt, result, err := core.ApplyTransactionWithResult(b.ChainConfig(), chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig, randomHash)
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+
+		txHash := randomHash.String()
+		if err != nil {
+			return nil, fmt.Errorf("err: %w; txhash %s", err, randomHash)
+		}
+		logs := receipt.Logs
+		if logs == nil {
+			logs = []*types.Log{}
+		}
+		jsonResult := map[string]interface{}{
+			"txHash":  txHash,
+			"gasUsed": receipt.GasUsed,
+			"logs":    logs,
+			"status":  receipt.Status,
+			"input":   tx.Input,
+		}
+		totalGasUsed += receipt.GasUsed
+		if result.Err != nil {
+			jsonResult["error"] = result.Err.Error()
+			revert := result.Revert()
+			if len(revert) > 0 {
+				jsonResult["revert"] = string(revert)
+			}
+			// if we are last transaction
+			if i == len(args.Transactions)-1 {
+				lastReverted = true
+			}
+		} else {
+			dst := make([]byte, hex.EncodedLen(len(result.Return())))
+			hex.Encode(dst, result.Return())
+			jsonResult["value"] = "0x" + string(dst)
+		}
+		coinbaseDiffTx := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBeforeTx)
+		jsonResult["coinbaseDiff"] = coinbaseDiffTx.String()
+		jsonResult["gasPrice"] = new(big.Int).Div(coinbaseDiffTx, big.NewInt(int64(receipt.GasUsed))).String()
+		jsonResult["gasUsed"] = receipt.GasUsed
+		results = append(results, jsonResult)
+	}
+
+	ret := map[string]interface{}{}
+	ret["results"] = results
+	coinbaseDiff := new(big.Int).Sub(state.GetBalance(coinbase), coinbaseBalanceBefore)
+	ret["coinbaseDiff"] = coinbaseDiff.String()
+	ret["gasFees"] = gasFees.String()
+	ret["ethSentToCoinbase"] = new(big.Int).Sub(coinbaseDiff, gasFees).String()
+	ret["bundleGasPrice"] = new(big.Int).Div(coinbaseDiff, big.NewInt(int64(totalGasUsed))).String()
+	ret["totalGasUsed"] = totalGasUsed
+	ret["stateBlockNumber"] = parent.Number.Int64()
+	ret["lastReverted"] = lastReverted
+	return ret, nil
+}
+
+func (s *BundleAPI) CallBundleArray(ctx context.Context, args []CallBundleArgs, overrides *StateOverride) ([]map[string]interface{}, error) {
+	ret := []map[string]interface{}{}
+	for _, arg := range args {
+		result, err := doCallBundle(ctx, s.b, s.chain, arg, overrides)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, result)
+	}
+	return ret, nil
+}
+
+func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArgs, overrides *StateOverride) (map[string]interface{}, error) {
+	timeoutMilliSeconds := int64(5000)
+	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	currentPercentage := 50000 // 100000 = 100%
+	lower := 0
+	upper := 100000
+	resultPercentage := 0
+	lastResult := map[string]interface{}{}
+	lastPercentage := 0
+	for {
+		if (lastPercentage == currentPercentage) || (currentPercentage <= 1) {
+			resultPercentage = currentPercentage
+			break
+		}
+		// convert percentage to hex and pad with 0s until 64 chars
+		percentageHex := fmt.Sprintf("%064s", strconv.FormatInt(int64(currentPercentage), 16))
+		originalFirst10Chars := args.MaxWalletTransaction.Data.String()[0:10]
+		m := hexutil.Bytes{}
+		m.UnmarshalText([]byte(originalFirst10Chars + percentageHex))
+
+		args.MaxWalletTransaction.setInput(m)
+		callBundleArgs := CallBundleArgs{
+			Transactions:           append(args.Transactions, args.MaxWalletTransaction),
+			BlockNumbers:           append(args.BlockNumbers, args.MaxWalletBlockNumber),
+			Timestamps:             append(args.Timestamps, args.MaxWalletTimestamp),
+			StateBlockNumberOrHash: args.StateBlockNumberOrHash,
+		}
+		result, err := doCallBundle(ctx, s.b, s.chain, callBundleArgs, overrides)
+		lastResult = result
+		if err != nil {
+			return lastResult, err
+		}
+		// if results last tx reverted, we found the max wallet
+		if result["lastReverted"] == true && currentPercentage <= 1 {
+			resultPercentage = 0
+			break
+		}
+		if currentPercentage >= 90000 {
+			resultPercentage = 90000
+			break
+		}
+		if result["lastReverted"] == true {
+			upper = currentPercentage
+		} else {
+			lower = currentPercentage
+		}
+		lastPercentage = currentPercentage
+		currentPercentage = int((upper + lower) / 2)
+	}
+	lastResult["percentage"] = resultPercentage
+	return lastResult, nil
+}
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {

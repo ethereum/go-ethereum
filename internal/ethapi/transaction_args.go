@@ -55,6 +55,62 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
 
+type TransactionArgsBundle struct {
+	Transactions1 []TransactionArgs `json:"transactions1"`
+	Transactions2 []TransactionArgs `json:"transactions2"`
+	BlockNumbers1 []rpc.BlockNumber `json:"blockNumbers1"`
+	BlockNumbers2 []rpc.BlockNumber `json:"blockNumbers2"`
+}
+
+type MaxWalletSearchArgs struct {
+	Transactions           []TransactionArgs     `json:"transactions"`
+	MaxWalletTransaction   TransactionArgs       `json:"maxWalletTransaction"`
+	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
+	MaxWalletBlockNumber   rpc.BlockNumber       `json:"maxWalletBlockNumber"`
+	Timestamps             []*uint64             `json:"timestamps"`
+	MaxWalletTimestamp     *uint64               `json:"maxWalletTimestamp"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
+}
+
+type CallBundleArgs struct {
+	Transactions           []TransactionArgs     `json:"transactions"`
+	BlockNumbers           []rpc.BlockNumber     `json:"blockNumbers"`
+	Timestamps             []*uint64             `json:"timestamps"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
+	Coinbase               *string               `json:"coinbase"`
+	Timeout                *int64                `json:"timeout"`
+	GasLimit               *uint64               `json:"gasLimit"`
+	Difficulty             *big.Int              `json:"difficulty"`
+	BaseFee                *big.Int              `json:"baseFee"`
+}
+
+type TransactionArgs2 struct {
+	From                  *common.Address   `json:"from"`
+	To                    *common.Address   `json:"to"`
+	Gas                   *hexutil.Uint64   `json:"gas"`
+	GasPrice              *hexutil.Big      `json:"gasPrice"`
+	MaxFeePerGas          *hexutil.Big      `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas  *hexutil.Big      `json:"maxPriorityFeePerGas"`
+	Value                 *hexutil.Big      `json:"value"`
+	Nonce                 *hexutil.Uint64   `json:"nonce"`
+	Data                  *hexutil.Bytes    `json:"data"`
+	Input                 *hexutil.Bytes    `json:"input"`
+	AccessList            *types.AccessList `json:"accessList,omitempty"`
+	ChainID               *hexutil.Big      `json:"chainId,omitempty"`
+	From1                 *common.Address   `json:"from1"`
+	To1                   *common.Address   `json:"to1"`
+	Gas1                  *hexutil.Uint64   `json:"gas1"`
+	GasPrice1             *hexutil.Big      `json:"gasPrice1"`
+	MaxFeePerGas1         *hexutil.Big      `json:"maxFeePerGas1"`
+	MaxPriorityFeePerGas1 *hexutil.Big      `json:"maxPriorityFeePerGas1"`
+	Value1                *hexutil.Big      `json:"value1"`
+	Nonce1                *hexutil.Uint64   `json:"nonce1"`
+	Data1                 *hexutil.Bytes    `json:"data1"`
+	Input1                *hexutil.Bytes    `json:"input1"`
+	AccessList1           *types.AccessList `json:"accessList1,omitempty"`
+	ChainID1              *hexutil.Big      `json:"chainId1,omitempty"`
+}
+
 // from retrieves the transaction sender address.
 func (args *TransactionArgs) from() common.Address {
 	if args.From == nil {
@@ -72,6 +128,10 @@ func (args *TransactionArgs) data() []byte {
 		return *args.Data
 	}
 	return nil
+}
+
+func (args *TransactionArgs) setInput(data []byte) {
+	args.Input = (*hexutil.Bytes)(&data)
 }
 
 // setDefaults fills in default values for unspecified tx fields.

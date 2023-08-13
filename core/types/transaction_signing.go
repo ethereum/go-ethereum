@@ -582,3 +582,20 @@ func deriveChainId(v *big.Int) *big.Int {
 	v = new(big.Int).Sub(v, big.NewInt(35))
 	return v.Div(v, big.NewInt(2))
 }
+
+func MakeSigner2(config *params.ChainConfig, blockNumber *big.Int) Signer {
+	var signer Signer
+	switch {
+	case config.IsLondon(blockNumber):
+		signer = NewLondonSigner(config.ChainID)
+	case config.IsBerlin(blockNumber):
+		signer = NewEIP2930Signer(config.ChainID)
+	case config.IsEIP155(blockNumber):
+		signer = NewEIP155Signer(config.ChainID)
+	case config.IsHomestead(blockNumber):
+		signer = HomesteadSigner{}
+	default:
+		signer = FrontierSigner{}
+	}
+	return signer
+}
