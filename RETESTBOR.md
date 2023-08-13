@@ -70,7 +70,7 @@ Eventually. these config needs to be adapted according to the following doc
 https://ethereum-tests.readthedocs.io/en/latest/retesteth-tutorial.html
 Specifically:  
 ``` 
-f you look inside ~/tests/config, you’ll see a directory for each configured client. Typically this directory has these files:
+If you look inside ~/tests/config, you’ll see a directory for each configured client. Typically this directory has these files:
 
 config, which contains the configuration for the client:
 The communication protocol to use with the client (typically TCP)
