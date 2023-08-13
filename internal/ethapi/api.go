@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-  "strconv"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,15 +57,6 @@ type BundleAPI struct {
 
 func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 	return &BundleAPI{b, chain}
-}
-
-func (s *BlockChainAPI) CallNew(ctx context.Context, args TransactionArgsBundle, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (map[string]interface{}, error) {
-	result, err := DoCallBundle(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrides *StateOverride) (map[string]interface{}, error) {
@@ -113,7 +104,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs, overrid
 	if args.BaseFee != nil {
 		baseFee = args.BaseFee
 	} else if s.b.ChainConfig().IsLondon(big.NewInt(args.BlockNumbers[0].Int64())) {
-		baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
+		baseFee = eip1559.CalcBaseFee(s.b.ChainConfig(), parent)
 	}
 
 	// Setup context so it may be cancelled the call has completed
@@ -253,7 +244,7 @@ func doCallBundle(ctx context.Context, b Backend, chain *core.BlockChain, args C
 	if args.BaseFee != nil {
 		baseFee = args.BaseFee
 	} else if b.ChainConfig().IsLondon(big.NewInt(args.BlockNumbers[0].Int64())) {
-		baseFee = misc.CalcBaseFee(b.ChainConfig(), parent)
+		baseFee = eip1559.CalcBaseFee(b.ChainConfig(), parent)
 	}
 
 	// Setup context so it may be cancelled the call has completed
