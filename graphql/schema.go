@@ -77,6 +77,18 @@ const schema string = `
         storageKeys : [Bytes32!]!
     }
 
+    # EIP-4895
+    type Withdrawal {
+        # Index is a monotonically increasing identifier issued by consensus layer.
+        index: Long!
+        # Validator is index of the validator associated with withdrawal.
+        validator: Long!
+        # Recipient address of the withdrawn amount.
+        address: Address!
+        # Amount is the withdrawal value in Gwei.
+        amount: Long!
+    }
+
     # Transaction is an Ethereum transaction.
     type Transaction {
         # Hash is the hash of this transaction.
@@ -139,6 +151,7 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
+        yParity: Long
         # Envelope transaction support
         type: Long
         accessList: [AccessTuple!]
@@ -248,6 +261,12 @@ const schema string = `
         rawHeader: Bytes!
         # Raw is the RLP encoding of the block.
         raw: Bytes!
+        # WithdrawalsRoot is the withdrawals trie root in this block.
+        # If withdrawals are unavailable for this block, this field will be null.
+        withdrawalsRoot: Bytes32
+        # Withdrawals is a list of withdrawals associated with this block. If
+        # withdrawals are unavailable for this block, this field will be null.
+        withdrawals: [Withdrawal!]
     }
 
     # CallData represents the data associated with a local contract call.

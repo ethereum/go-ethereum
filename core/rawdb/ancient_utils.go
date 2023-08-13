@@ -50,36 +50,58 @@ func (info *freezerInfo) size() common.StorageSize {
 	return total
 }
 
+func inspect(name string, order map[string]bool, reader ethdb.AncientReader) (freezerInfo, error) {
+	info := freezerInfo{name: name}
+	for t := range order {
+		size, err := reader.AncientSize(t)
+		if err != nil {
+			return freezerInfo{}, err
+		}
+		info.sizes = append(info.sizes, tableSize{name: t, size: common.StorageSize(size)})
+	}
+	// Retrieve the number of last stored item
+	ancients, err := reader.Ancients()
+	if err != nil {
+		return freezerInfo{}, err
+	}
+	info.head = ancients - 1
+
+	// Retrieve the number of first stored item
+	tail, err := reader.Tail()
+	if err != nil {
+		return freezerInfo{}, err
+	}
+	info.tail = tail
+	return info, nil
+}
+
 // inspectFreezers inspects all freezers registered in the system.
 func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 	var infos []freezerInfo
 	for _, freezer := range freezers {
 		switch freezer {
 		case chainFreezerName:
-			// Chain ancient store is a bit special. It's always opened along
-			// with the key-value store, inspect the chain store directly.
-			info := freezerInfo{name: freezer}
-			// Retrieve storage size of every contained table.
-			for table := range chainFreezerNoSnappy {
-				size, err := db.AncientSize(table)
-				if err != nil {
-					return nil, err
-				}
-				info.sizes = append(info.sizes, tableSize{name: table, size: common.StorageSize(size)})
-			}
-			// Retrieve the number of last stored item
-			ancients, err := db.Ancients()
+			info, err := inspect(chainFreezerName, chainFreezerNoSnappy, db)
 			if err != nil {
 				return nil, err
 			}
-			info.head = ancients - 1
+			infos = append(infos, info)
 
-			// Retrieve the number of first stored item
-			tail, err := db.Tail()
+		case stateFreezerName:
+			datadir, err := db.AncientDatadir()
 			if err != nil {
 				return nil, err
 			}
-			info.tail = tail
+			f, err := NewStateFreezer(datadir, true)
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+
+			info, err := inspect(stateFreezerName, stateFreezerNoSnappy, f)
+			if err != nil {
+				return nil, err
+			}
 			infos = append(infos, info)
 
 		default:

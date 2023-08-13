@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -128,6 +129,7 @@ func runCmd(ctx *cli.Context) error {
 		receiver      = common.BytesToAddress([]byte("receiver"))
 		genesisConfig *core.Genesis
 		preimages     = ctx.Bool(DumpFlag.Name)
+		blobHashes    []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -141,12 +143,23 @@ func runCmd(ctx *cli.Context) error {
 		gen := readGenesis(ctx.String(GenesisFlag.Name))
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
-		genesis := gen.MustCommit(db)
-		sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: preimages})
+		triedb := trie.NewDatabase(db, &trie.Config{
+			Preimages: preimages,
+			HashDB:    hashdb.Defaults,
+		})
+		defer triedb.Close()
+		genesis := gen.MustCommit(db, triedb)
+		sdb := state.NewDatabaseWithNodeDB(db, triedb)
 		statedb, _ = state.New(genesis.Root(), sdb, nil)
 		chainConfig = gen.Config
 	} else {
-		sdb := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: preimages})
+		db := rawdb.NewMemoryDatabase()
+		triedb := trie.NewDatabase(db, &trie.Config{
+			Preimages: preimages,
+			HashDB:    hashdb.Defaults,
+		})
+		defer triedb.Close()
+		sdb := state.NewDatabaseWithNodeDB(db, triedb)
 		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}
@@ -217,6 +230,7 @@ func runCmd(ctx *cli.Context) error {
 		Time:        genesisConfig.Timestamp,
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
+		BlobHashes:  blobHashes,
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		},
@@ -278,8 +292,7 @@ func runCmd(ctx *cli.Context) error {
 	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		statedb.Commit(true)
-		statedb.IntermediateRoot(true)
+		statedb.Commit(genesisConfig.Number, true)
 		fmt.Println(string(statedb.Dump(nil)))
 	}
 
