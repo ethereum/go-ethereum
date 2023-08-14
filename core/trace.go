@@ -502,14 +502,14 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 
 	for i, tx := range block.Transactions() {
 		evmTrace := env.ExecutionResults[i]
-		// probably a Contract Call
-		if len(tx.Data()) != 0 && tx.To() != nil {
+		// Contract is created.
+		if tx.To() == nil {
+			evmTrace.ByteCode = hexutil.Encode(tx.Data())
+		} else { // contract call be included at this case, specially fallback call's data is empty.
 			evmTrace.ByteCode = hexutil.Encode(statedb.GetCode(*tx.To()))
 			// Get tx.to address's code hash.
 			codeHash := statedb.GetPoseidonCodeHash(*tx.To())
 			evmTrace.PoseidonCodeHash = &codeHash
-		} else if tx.To() == nil { // Contract is created.
-			evmTrace.ByteCode = hexutil.Encode(tx.Data())
 		}
 	}
 
