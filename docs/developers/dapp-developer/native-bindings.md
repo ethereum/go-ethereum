@@ -40,13 +40,17 @@ pragma solidity >0.7.0 < 0.9.0;
 */
 
 contract Storage {
+	string public version;
+	uint256 public value;
 
-	uint256 value;
+	constructor(string memory _version)  {
+      version = _version;
+    }
 
 	function store(uint256 number) public{
 		value = number;
 	}
-
+ 
 	function retrieve() public view returns (uint256){
 		return value;
 	}
@@ -224,12 +228,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
 	}
-	auth, err := bind.NewTransactor(strings.NewReader(key), "<<strong_password>>")
+
+	keyDataBytes, err := os.ReadFile(keyFile)
+	if err != nil {
+		fmt.Print("error reading key file: ", err)
+	}
+
+	auth, err := bind.NewTransactorWithChainID(strings.NewReader(string(keyDataBytes)), "<<strong_password>>", chainId)
 	if err != nil {
 		log.Fatalf("Failed to create authorized transactor: %v", err)
 	}
 	// Deploy the contract passing the newly created `auth` and `conn` vars
-	address, tx, instance, err := DeployStorage(auth, conn), new(big.Int), "Storage contract in Go!", 0, "Go!")
+	address, tx, instance, err := DeployStorage(auth, conn, "v0.0")
 	if err != nil {
 		log.Fatalf("Failed to deploy new storage contract: %v", err)
 	}
@@ -238,12 +248,12 @@ func main() {
 
 	time.Sleep(250 * time.Millisecond) // Allow it to be processed by the local node :P
 
-	// function call on `instance`. Retrieves pending name
-	name, err := instance.Name(&bind.CallOpts{Pending: true})
+	// function call on `instance`. Retrieves version string.
+	version, err := instance.Version(&bind.CallOpts{Pending: true})
 	if err != nil {
-		log.Fatalf("Failed to retrieve pending name: %v", err)
+		log.Fatalf("Failed to retrieve pending version data: %v", err)
 	}
-	fmt.Println("Pending name:", name)
+	fmt.Println("Pending version string:", version)
 }
 ```
 
