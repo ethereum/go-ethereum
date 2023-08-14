@@ -449,8 +449,10 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		sharedConfig := rpcConfig
-		sharedConfig.jwtSecret = secret
+		// Don't limit the requests to the auth endpoint
+		sharedConfig := rpcEndpointConfig{
+			jwtSecret: secret,
+		}
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
