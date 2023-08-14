@@ -1080,6 +1080,10 @@ func (s *StateDB) clearJournalAndRefund() {
 // deleteStorage iterates the storage trie belongs to the account and mark all
 // slots inside as deleted.
 func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (bool, map[common.Hash][]byte, *trienode.NodeSet, error) {
+	// verkle: a deletion is akin to overwriting with 0s
+	if s.GetTrie().IsVerkle() {
+		return false, nil, nil, nil
+	}
 	start := time.Now()
 	tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, root, s.trie)
 	// XXX NOTE: it might just be possible to use an empty trie here, as verkle will not
