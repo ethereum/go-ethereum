@@ -92,7 +92,7 @@ type Header struct {
 	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
 
 	// BeaconRoot was added by EIP-4788 and is ignored in legacy headers.
-	BeaconRoot *common.Hash `json:"beaconRoot" rlp:"optional"`
+	BeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
