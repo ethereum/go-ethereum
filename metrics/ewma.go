@@ -3,16 +3,13 @@ package metrics
 import (
 	"math"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
-// EWMAs continuously calculate an exponentially-weighted moving average
-// based on an outside source of clock ticks.
+// EWMAs continuously calculate an exponentially-weighted moving average.
 type EWMA interface {
 	Rate() float64
 	Snapshot() EWMA
-	Tick()
 	Update(int64)
 }
 
@@ -46,11 +43,6 @@ func (a EWMASnapshot) Rate() float64 { return float64(a) }
 // Snapshot returns the snapshot.
 func (a EWMASnapshot) Snapshot() EWMA { return a }
 
-// Tick panics.
-func (EWMASnapshot) Tick() {
-	panic("Tick called on an EWMASnapshot")
-}
-
 // Update panics.
 func (EWMASnapshot) Update(int64) {
 	panic("Update called on an EWMASnapshot")
@@ -71,14 +63,14 @@ func (NilEWMA) Tick() {}
 // Update is a no-op.
 func (NilEWMA) Update(n int64) {}
 
-// StandardEWMA is the standard implementation of an EWMA and tracks the number
-// of uncounted events and processes them on each tick.  It uses the
-// sync/atomic package to manage uncounted events.
+// StandardEWMA is the standard implementation of an EWMA, which tracks the
+// number of uncounted events and their EWMA.
 type StandardEWMA struct {
-	uncounted atomic.Int64
+	uncounted int64
 	alpha     float64
-	rate      float64
+	ewma      float64
 	init      bool
+	timestamp int64
 	mutex     sync.Mutex
 }
 
@@ -86,7 +78,29 @@ type StandardEWMA struct {
 func (a *StandardEWMA) Rate() float64 {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	return a.rate * float64(time.Second)
+	if !a.init {
+		return 0
+	}
+
+	// Get number of seconds elapsed.
+	now := time.Now().UnixNano()
+	elapsed := math.Floor(float64(now-a.timestamp) / 1e9)
+
+	// Wait at least one second for uncounted to accumulate.
+	if elapsed >= 1 && a.uncounted != 0 {
+		a.ewma = a.alpha*float64(a.uncounted) + (1-a.alpha)*a.ewma
+
+		// a.uncounted may be older than 1 second.
+		a.ewma = math.Pow(1-a.alpha, elapsed-1) * a.ewma
+
+		a.timestamp = now
+		a.uncounted = 0
+		return a.ewma
+	}
+
+	a.ewma = math.Pow(1-a.alpha, elapsed) * a.ewma
+	a.timestamp = now
+	return a.ewma
 }
 
 // Snapshot returns a read-only copy of the EWMA.
@@ -94,23 +108,35 @@ func (a *StandardEWMA) Snapshot() EWMA {
 	return EWMASnapshot(a.Rate())
 }
 
-// Tick ticks the clock to update the moving average.  It assumes it is called
-// every five seconds.
-func (a *StandardEWMA) Tick() {
-	count := a.uncounted.Load()
-	a.uncounted.Add(-count)
-	instantRate := float64(count) / float64(5*time.Second)
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	if a.init {
-		a.rate += a.alpha * (instantRate - a.rate)
-	} else {
-		a.init = true
-		a.rate = instantRate
-	}
+// Used to elapse time in unit tests. Not safe!
+func (a *StandardEWMA) addToTimestamp(ns int64) {
+	a.timestamp += ns
 }
 
 // Update adds n uncounted events.
 func (a *StandardEWMA) Update(n int64) {
-	a.uncounted.Add(n)
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	now := time.Now().UnixNano()
+	if !a.init {
+		a.ewma = float64(n)
+		a.timestamp = now
+		a.init = true
+		return
+	}
+
+	// Wait at least 1s for uncounted events to accumulate.
+	elapsed := math.Floor(float64(now-a.timestamp) / 1e9)
+	if elapsed < 1 {
+		a.uncounted += n
+		return
+	}
+
+	// Update EWMA with data from previous 1s interval.
+	a.ewma = a.alpha*float64(a.uncounted) + (1-a.alpha)*a.ewma
+	a.ewma = math.Pow(1-a.alpha, elapsed-1) * a.ewma
+
+	// n starts the next interval.
+	a.timestamp = now
+	a.uncounted = n
 }
