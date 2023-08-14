@@ -46,7 +46,7 @@ type ValidationOptions struct {
 //
 // This check is public to allow different transaction pools to check the basic
 // rules without duplicating code and running the risk of missed updates.
-func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []kzg4844.Commitment, proofs []kzg4844.Proof, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
+func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
 	// Ensure transactions not implemented by the calling pool are rejected
 	if opts.Accept&(1<<tx.Type()) == 0 {
 		return fmt.Errorf("%w: tx type %v not supported by this pool", core.ErrTxTypeNotSupported, tx.Type())
@@ -110,6 +110,10 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 	}
 	// Ensure blob transactions have valid commitments
 	if tx.Type() == types.BlobTxType {
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			return fmt.Errorf("missing sidecar in blob transaction")
+		}
 		// Ensure the number of items in the blob transaction and vairous side
 		// data match up before doing any expensive validations
 		hashes := tx.BlobHashes()
@@ -119,37 +123,44 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 		if len(hashes) > params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
 			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
 		}
-		if len(blobs) != len(hashes) {
-			return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(blobs), len(hashes))
+		if err := validateBlobSidecar(hashes, sidecar); err != nil {
+			return err
 		}
-		if len(commits) != len(hashes) {
-			return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(commits), len(hashes))
-		}
-		if len(proofs) != len(hashes) {
-			return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(proofs), len(hashes))
-		}
-		// Blob quantities match up, validate that the provers match with the
-		// transaction hash before getting to the cryptography
-		hasher := sha256.New()
-		for i, want := range hashes {
-			hasher.Write(commits[i][:])
-			hash := hasher.Sum(nil)
-			hasher.Reset()
+	}
+	return nil
+}
 
-			var vhash common.Hash
-			vhash[0] = params.BlobTxHashVersion
-			copy(vhash[1:], hash[1:])
+func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
+	if len(sidecar.Blobs) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
+	}
+	if len(sidecar.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sidecar.Commitments), len(hashes))
+	}
+	if len(sidecar.Proofs) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(sidecar.Proofs), len(hashes))
+	}
+	// Blob quantities match up, validate that the provers match with the
+	// transaction hash before getting to the cryptography
+	hasher := sha256.New()
+	for i, want := range hashes {
+		hasher.Write(sidecar.Commitments[i][:])
+		hash := hasher.Sum(nil)
+		hasher.Reset()
 
-			if vhash != want {
-				return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, vhash, want)
-			}
+		var vhash common.Hash
+		vhash[0] = params.BlobTxHashVersion
+		copy(vhash[1:], hash[1:])
+
+		if vhash != want {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, vhash, want)
 		}
-		// Blob commitments match with the hashes in the transaction, verify the
-		// blobs themselves via KZG
-		for i := range blobs {
-			if err := kzg4844.VerifyBlobProof(blobs[i], commits[i], proofs[i]); err != nil {
-				return fmt.Errorf("invalid blob %d: %v", i, err)
-			}
+	}
+	// Blob commitments match with the hashes in the transaction, verify the
+	// blobs themselves via KZG
+	for i := range sidecar.Blobs {
+		if err := kzg4844.VerifyBlobProof(sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
+			return fmt.Errorf("invalid blob %d: %v", i, err)
 		}
 	}
 	return nil

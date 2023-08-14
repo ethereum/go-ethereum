@@ -75,7 +75,7 @@ type Database struct {
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
 
-	levelsGauge [7]metrics.Gauge // Gauge for tracking the number of tables in levels
+	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -146,13 +146,8 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
 	ldb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
-	// leveldb has only up to 7 levels
-	for i := range ldb.levelsGauge {
-		ldb.levelsGauge[i] = metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil)
-	}
-
 	// Start up the metrics gathering and return
-	go ldb.meter(metricsGatheringInterval)
+	go ldb.meter(metricsGatheringInterval, namespace)
 	return ldb, nil
 }
 
@@ -271,7 +266,7 @@ func (db *Database) Path() string {
 
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
-func (db *Database) meter(refresh time.Duration) {
+func (db *Database) meter(refresh time.Duration, namespace string) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]int64, 2)
 	for i := 0; i < 2; i++ {
@@ -360,8 +355,11 @@ func (db *Database) meter(refresh time.Duration) {
 		db.nonlevel0CompGauge.Update(int64(stats.NonLevel0Comp))
 		db.seekCompGauge.Update(int64(stats.SeekComp))
 
-		// update tables amount
 		for i, tables := range stats.LevelTablesCounts {
+			// Append metrics for additional layers
+			if i >= len(db.levelsGauge) {
+				db.levelsGauge = append(db.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
+			}
 			db.levelsGauge[i].Update(int64(tables))
 		}
 
