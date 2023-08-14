@@ -518,7 +518,7 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			hash := tx.Hash()
 			stats[i] = txStatus(backend, hash)
 			if stats[i].Status == txpool.TxStatusUnknown {
-				if errs := backend.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, false, backend.AddTxsSync()); errs[0] != nil {
+				if errs := backend.TxPool().Add([]*types.Transaction{tx}, false, backend.AddTxsSync()); errs[0] != nil {
 					stats[i].Error = errs[0].Error()
 					continue
 				}
