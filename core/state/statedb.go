@@ -1082,7 +1082,7 @@ func (s *StateDB) clearJournalAndRefund() {
 func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (bool, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	// verkle: a deletion is akin to overwriting with 0s
 	if s.GetTrie().IsVerkle() {
-		return false, nil, nil, nil
+		return false, nil, trienode.NewNodeSet(addrHash), nil
 	}
 	start := time.Now()
 	tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, root, s.trie)
