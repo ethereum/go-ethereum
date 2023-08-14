@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/gballet/go-verkle"
 )
@@ -67,22 +66,7 @@ func (t *TransitionTrie) GetStorage(addr common.Address, key []byte) ([]byte, er
 		return val, nil
 	}
 	// TODO also insert value into overlay
-	rlpval, err := t.base.GetStorage(addr, key)
-	if err != nil {
-		return nil, err
-	}
-	if len(rlpval) == 0 {
-		return nil, nil
-	}
-	// the value will come as RLP, decode it so that the
-	// interface is consistent.
-	_, content, _, err := rlp.Split(rlpval)
-	if err != nil || len(content) == 0 {
-		return nil, err
-	}
-	var v [32]byte
-	copy(v[32-len(content):], content)
-	return v[:], nil
+	return t.base.GetStorage(addr, key)
 }
 
 // GetAccount abstract an account read from the trie.
@@ -111,7 +95,15 @@ func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount
 // by the caller while they are stored in the trie. If a node was not found in the
 // database, a trie.MissingNodeError is returned.
 func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value []byte) error {
-	return t.overlay.UpdateStorage(address, key, value)
+	var v []byte
+	if len(value) >= 32 {
+		v = value[:32]
+	} else {
+		var val [32]byte
+		copy(val[32-len(value):], value[:])
+		v = val[:]
+	}
+	return t.overlay.UpdateStorage(address, key, v)
 }
 
 // UpdateAccount abstract an account write to the trie.

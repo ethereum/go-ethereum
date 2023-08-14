@@ -1746,6 +1746,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		if parent.Number.Uint64() == conversionBlock {
 			bc.StartVerkleTransition(parent.Root, emptyVerkleRoot, bc.Config(), &parent.Time)
+			bc.stateCache.SetLastMerkleRoot(parent.Root)
 		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 		if err != nil {
