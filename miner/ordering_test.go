@@ -88,7 +88,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 			}
 			groups[addr] = append(groups[addr], &txpool.LazyTransaction{
 				Hash:      tx.Hash(),
-				Tx:        &txpool.Transaction{Tx: tx},
+				Tx:        tx,
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
@@ -101,7 +101,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 
 	txs := types.Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
-		txs = append(txs, tx.Tx.Tx)
+		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}
 	if len(txs) != expectedCount {
@@ -153,7 +153,7 @@ func TestTransactionTimeSort(t *testing.T) {
 
 		groups[addr] = append(groups[addr], &txpool.LazyTransaction{
 			Hash:      tx.Hash(),
-			Tx:        &txpool.Transaction{Tx: tx},
+			Tx:        tx,
 			Time:      tx.Time(),
 			GasFeeCap: tx.GasFeeCap(),
 			GasTipCap: tx.GasTipCap(),
@@ -164,7 +164,7 @@ func TestTransactionTimeSort(t *testing.T) {
 
 	txs := types.Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
-		txs = append(txs, tx.Tx.Tx)
+		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}
 	if len(txs) != len(keys) {

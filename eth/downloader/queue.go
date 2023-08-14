@@ -798,7 +798,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			}
 		}
 		// Blocks must have a number of blobs corresponding to the header gas usage,
-		// and zero before the Cancun hardfork
+		// and zero before the Cancun hardfork.
 		var blobs int
 		for _, tx := range txLists[index] {
 			// Count the number of blobs to validate against the header's blobGasUsed
@@ -813,6 +813,9 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 					if hash[0] != params.BlobTxHashVersion {
 						return errInvalidBody
 					}
+				}
+				if tx.BlobTxSidecar() != nil {
+					return errInvalidBody
 				}
 			}
 		}
