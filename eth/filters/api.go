@@ -36,11 +36,12 @@ import (
 )
 
 var (
-	errInvalidTopic     = errors.New("invalid topic(s)")
-	errFilterNotFound   = errors.New("filter not found")
-	errConnectDropped   = errors.New("connection dropped")
-	errInvalidToBlock   = errors.New("log subscription does not support history block range")
-	errInvalidFromBlock = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
+	errInvalidTopic       = errors.New("invalid topic(s)")
+	errFilterNotFound     = errors.New("filter not found")
+	errConnectDropped     = errors.New("connection dropped")
+	errInvalidToBlock     = errors.New("log subscription does not support history block range")
+	errInvalidFromBlock   = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
+	errClientUnsubscribed = errors.New("client unsubscribed")
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -337,15 +338,17 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		liveLogs = make(chan []*types.Log)
 		histLogs = make(chan []*types.Log)
 		histDone = make(chan error)
-		closeC   = make(chan struct{})
 	)
 	liveLogsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), liveLogs)
 	if err != nil {
 		return err
 	}
 
+	// The original request ctx will be canceled as soon as the parent goroutine
+	// returns a subscription. Use a new context instead.
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		histDone <- api.doHistLogs(from, crit.Addresses, crit.Topics, histLogs, closeC)
+		histDone <- api.doHistLogs(ctx, from, crit.Addresses, crit.Topics, histLogs)
 	}()
 
 	// Compose and notify the logs from liveLogs and histLogs
@@ -354,6 +357,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			delivered uint64
 			liveOnly  bool
 			reorged   bool
+			staleHash common.Hash
 		)
 		for {
 			select {
@@ -381,6 +385,10 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					reorged = true
 				}
 				if !reorged {
+					// Reorg in future. Remember fork point.
+					if logs[0].Removed && staleHash == (common.Hash{}) {
+						staleHash = logs[0].BlockHash
+					}
 					continue
 				}
 				if logs[0].Removed {
@@ -401,18 +409,29 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				if reorged {
 					continue
 				}
-				for _, log := range logs {
-					notifier.Notify(rpcSub.ID, &log)
+				if logs[0].BlockHash == staleHash {
+					// We have reached the fork point and the historical producer
+					// is emitting old logs because of delay. Restart the process
+					// from last delivered block.
+					logger.Info("Restarting historical logs delivery", "from", logs[0].BlockNumber, "delivered", delivered)
+					liveLogsSub.Unsubscribe()
+					// Stop hist logs fetcher
+					cancel()
+					if err := api.histLogs(notifier, rpcSub, int64(logs[0].BlockNumber), crit); err != nil {
+						logger.Warn("failed to restart historical logs delivery", "err", err)
+					}
+					return
 				}
+				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 				// Assuming batch = all logs of a single block
 				delivered = logs[0].BlockNumber
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				liveLogsSub.Unsubscribe()
-				closeC <- struct{}{}
+				cancel()
 				return
 			case <-notifier.Closed(): // connection dropped
 				liveLogsSub.Unsubscribe()
-				closeC <- struct{}{}
+				cancel()
 				return
 			}
 		}
@@ -422,29 +441,22 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 }
 
 // doHistLogs retrieves the logs older than current header, and forward them to the histLogs channel.
-func (api *FilterAPI) doHistLogs(from int64, addrs []common.Address, topics [][]common.Hash, histLogs chan<- []*types.Log, closeC chan struct{}) error {
-	// The original request ctx will be canceled as soon as the parent goroutine
-	// returns a subscription. Use a new context instead.
-	ctx, cancel := context.WithCancel(context.Background())
-
+func (api *FilterAPI) doHistLogs(ctx context.Context, from int64, addrs []common.Address, topics [][]common.Hash, histLogs chan<- []*types.Log) error {
 	// Fetch logs from a range of blocks.
 	fetchRange := func(from, to int64) error {
 		f := api.sys.NewRangeFilter(from, to, addrs, topics)
 		logsCh, errChan := f.rangeLogsAsync(ctx)
 		for {
 			select {
-			case <-closeC:
-				cancel()
-				return nil
 			case logs := <-logsCh:
-				histLogs <- logs
-			case err := <-errChan:
-				if err != nil {
-					logger.Error("Error while fetching historical logs", "err", err)
-					return err
+				select {
+				case histLogs <- logs:
+				case <-ctx.Done():
+					// Flush out all logs until the range filter voluntarily exits.
+					continue
 				}
-				// Range filter is done.
-				return nil
+			case err := <-errChan:
+				return err
 			}
 		}
 	}
@@ -461,6 +473,10 @@ func (api *FilterAPI) doHistLogs(from int64, addrs []common.Address, topics [][]
 			return nil
 		}
 		if err := fetchRange(from, head); err != nil {
+			if errors.Is(err, context.Canceled) {
+				logger.Info("Historical logs delivery canceled", "from", from, "to", head)
+				return nil
+			}
 			return err
 		}
 		// Move forward to the next batch
