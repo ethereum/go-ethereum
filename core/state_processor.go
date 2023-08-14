@@ -92,6 +92,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			Data:      (*beaconRoot)[:], // TODO use 4byte invocation?
 		}
 		vmenv.Reset(NewEVMTxContext(msg), statedb)
+		statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
 		_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 100_000, common.Big0)
 		statedb.Finalise(true)
 	}
