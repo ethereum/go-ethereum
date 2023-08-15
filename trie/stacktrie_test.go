@@ -165,6 +165,38 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 			{"123e", "x___________________________2", "0d230561e398c579e09a9f7b69ceaf7d3970f5a436fdb28b68b7a37c5bdd6b80"},
 			{"13aa", "x___________________________3", "ff0dc70ce2e5db90ee42a4c2ad12139596b890e90eb4e16526ab38fa465b35cf"},
 		},
+		{ // branch node with short values
+			{"01", "a", "b48605025f5f4b129d40a420e721aa7d504487f015fce85b96e52126365ef7dc"},
+			{"80", "b", "2dc6b680daf74db067cb7aeaad73265ded93d96fce190fcbf64f498d475672ab"},
+			{"ee", "c", "017dc705a54ac5328dd263fa1bae68d655310fb3e3f7b7bc57e9a43ddf99c4bf"},
+			{"ff", "d", "bd5a3584d271d459bd4eb95247b2fc88656b3671b60c1125ffe7bc0b689470d0"},
+		},
+		{ // ext node with short branch node, then becoming long
+			{"a0", "a", "a83e028cb1e4365935661a9fd36a5c65c30b9ab416eaa877424146ca2a69d088"},
+			{"a1", "b", "f586a4639b07b01798ca65e05c253b75d51135ebfbf6f8d6e87c0435089e65f0"},
+			{"a2", "c", "63e297c295c008e09a8d531e18d57f270b6bc403e23179b915429db948cd62e3"},
+			{"a3", "d", "94a7b721535578e9381f1f4e4b6ec29f8bdc5f0458a30320684c562f5d47b4b5"},
+			{"a4", "e", "4b7e66d1c81965cdbe8fab8295ef56bc57fefdc5733d4782d2f8baf630f083c6"},
+			{"a5", "f", "2997e7b502198ce1783b5277faacf52b25844fb55a99b63e88bdbbafac573106"},
+			{"a6", "g", "bee629dd27a40772b2e1a67ec6db270d26acdf8d3b674dfae27866ad6ae1f48b"},
+		},
+		{ // branch node with short values, then long ones
+			{"a001", "v1", "b9cc982d995392b51e6787f1915f0b88efd4ad8b30f138da0a3e2242f2323e35"},
+			{"b002", "v2", "a7b474bc77ef5097096fa0ee6298fdae8928c0bc3724e7311cd0fa9ed1942fc7"},
+			{"c003", "v___________________________3", "dceb5bb7c92b0e348df988a8d9fc36b101397e38ebd405df55ba6ee5f14a264a"},
+			{"d004", "v___________________________4", "36e60ecb86b9626165e1c6543c42ecbe4d83bca58e8e1124746961511fce362a"},
+		},
+		{ // ext node to branch node with short values, then long ones
+			{"8002", "v1", "3258fcb3e9e7d7234ecd3b8d4743999e4ab3a21592565e0a5ca64c141e8620d9"},
+			{"8004", "v2", "b6cb95b7024a83c17624a3c9bed09b4b5e8ed426f49f54b8ad13c39028b1e75a"},
+			{"8008", "v___________________________3", "c769d82963abe6f0900bf69754738eeb2f84559777cfa87a44f54e1aab417871"},
+			{"800d", "v___________________________4", "1cad1fdaab1a6fa95d7b780fd680030e423eb76669971368ba04797a8d9cdfc9"},
+		},
+		{ // ext node with a child of size 31 (Y) and branch node with a child of size 31 (X)
+			{"000001", "ZZZZZZZZZ", "cef154b87c03c563408520ff9b26923c360cbc3ddb590c079bedeeb25a8c9c77"},
+			{"000002", "Y", "2130735e600f612f6e657a32bd7be64ddcaec6512c5694844b19de713922895d"},
+			{"000003", "XXXXXXXXXXXXXXXXXXXXXXXXXXXX", "962c0fffdeef7612a4f7bff1950d67e3e81c878e48b9ae45b3b374253b050bd8"},
+		},
 	}
 	st := NewStackTrie(nil)
 	for i, test := range tests {
