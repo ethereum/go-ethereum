@@ -143,6 +143,9 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
 	if args.GasPrice == nil && eip1559ParamsSet {
 		// Sanity check the EIP-1559 fee parameters if present.
+		if args.MaxFeePerGas.ToInt().Sign() == 0 {
+			return errors.New("maxFeePerGas must be non-zero")
+		}
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}

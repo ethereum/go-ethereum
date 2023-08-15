@@ -176,6 +176,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			nil,
 			errors.New("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
 		},
+		{
+			"dynamic fee tx post-London, explicit gas price",
+			true,
+			&TransactionArgs{MaxFeePerGas: zero, MaxPriorityFeePerGas: zero},
+			nil,
+			errors.New("maxFeePerGas must be non-zero"),
+		},
 
 		// Misc
 		{
