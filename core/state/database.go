@@ -69,8 +69,6 @@ type Database interface {
 
 	EndVerkleTransition()
 
-	InTransition() bool
-
 	Transitioned() bool
 
 	SetCurrentSlotHash(hash common.Hash)
@@ -92,8 +90,6 @@ type Database interface {
 	SetCurrentPreimageOffset(int64)
 
 	AddRootTranslation(originalRoot, translatedRoot common.Hash)
-
-	SetLastMerkleRoot(root common.Hash)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -199,10 +195,6 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 		addrToPoint:   utils.NewPointCache(),
 		ended:         triedb.IsVerkle(),
 	}
-}
-
-func (db *cachingDB) InTransition() bool {
-	return db.started && !db.ended
 }
 
 func (db *cachingDB) Transitioned() bool {
@@ -312,47 +304,16 @@ func (db *cachingDB) openVKTrie(root common.Hash) (Trie, error) {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	var (
-		mpt Trie
-		err error
-	)
 
-	// TODO separate both cases when I can be certain that it won't
-	// find a Verkle trie where is expects a Transitoion trie.
-	if db.started || db.ended {
-		var r common.Hash
-		if db.ended {
-			r = root
-		} else {
-			r = db.getTranslation(root)
-		}
-		vkt, err := db.openVKTrie(r)
+	if db.ended {
+		vkt, err := db.openVKTrie(root)
 		if err != nil {
 			return nil, err
 		}
 
-		// If the verkle conversion has ended, return a single
-		// verkle trie.
-		if db.ended {
-			return vkt, nil
-		}
-
-		// Otherwise, return a transition trie, with a base MPT
-		// trie and an overlay, verkle trie.
-		mpt, err = db.openMPTTrie(db.baseRoot)
-		if err != nil {
-			return nil, err
-		}
-
-		return trie.NewTransitionTree(mpt.(*trie.SecureTrie), vkt.(*trie.VerkleTrie), false), nil
-	} else {
-		mpt, err = db.openMPTTrie(root)
-		if err != nil {
-			return nil, err
-		}
+		return vkt, nil
 	}
-
-	return mpt, nil
+	return db.openMPTTrie(root)
 }
 
 func (db *cachingDB) openStorageMPTrie(stateRoot common.Hash, address common.Address, root common.Hash, _ Trie) (Trie, error) {
@@ -366,36 +327,7 @@ func (db *cachingDB) openStorageMPTrie(stateRoot common.Hash, address common.Add
 // OpenStorageTrie opens the storage trie of an account
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
 	if db.ended {
-		mpt, err := db.openStorageMPTrie(common.Hash{}, address, common.Hash{}, self)
-		if err != nil {
-			return nil, err
-		}
-		// Return a "storage trie" that is an adapter between the storge MPT
-		// and the unique verkle tree.
-		switch self := self.(type) {
-		case *trie.VerkleTrie:
-			return trie.NewTransitionTree(mpt.(*trie.StateTrie), self, true), nil
-		case *trie.TransitionTrie:
-			return trie.NewTransitionTree(mpt.(*trie.StateTrie), self.Overlay(), true), nil
-		default:
-			panic("unexpected trie type")
-		}
-	}
-	if db.started {
-		mpt, err := db.openStorageMPTrie(db.LastMerkleRoot, address, root, nil)
-		if err != nil {
-			return nil, err
-		}
-		// Return a "storage trie" that is an adapter between the storge MPT
-		// and the unique verkle tree.
-		switch self := self.(type) {
-		case *trie.VerkleTrie:
-			return trie.NewTransitionTree(mpt.(*trie.SecureTrie), self, true), nil
-		case *trie.TransitionTrie:
-			return trie.NewTransitionTree(mpt.(*trie.SecureTrie), self.Overlay(), true), nil
-		default:
-			panic("unexpected trie type")
-		}
+		return self, nil
 	}
 	mpt, err := db.openStorageMPTrie(stateRoot, address, root, nil)
 	return mpt, err
@@ -405,8 +337,6 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
-		return t.Copy()
-	case *trie.TransitionTrie:
 		return t.Copy()
 	case *trie.VerkleTrie:
 		return t.Copy()

@@ -18,15 +18,11 @@
 package core
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
-	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1519,30 +1515,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain, true)
 }
 
-func findVerkleConversionBlock() (uint64, error) {
-	if _, err := os.Stat("conversion.txt"); os.IsNotExist(err) {
-		return math.MaxUint64, nil
-	}
-
-	f, err := os.Open("conversion.txt")
-	if err != nil {
-		log.Error("Failed to open conversion.txt", "err", err)
-		return 0, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	scanner.Scan()
-	conversionBlock, err := strconv.ParseUint(scanner.Text(), 10, 64)
-	if err != nil {
-		log.Error("Failed to parse conversionBlock", "err", err)
-		return 0, err
-	}
-	log.Info("Found conversion block info", "conversionBlock", conversionBlock)
-
-	return conversionBlock, nil
-}
-
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -1555,11 +1527,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
-	}
-
-	conversionBlock, err := findVerkleConversionBlock()
-	if err != nil {
-		return 0, err
 	}
 
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
@@ -1744,10 +1711,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 
-		if parent.Number.Uint64() == conversionBlock {
-			bc.StartVerkleTransition(parent.Root, emptyVerkleRoot, bc.Config(), &parent.Time)
-			bc.stateCache.SetLastMerkleRoot(parent.Root)
-		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 		if err != nil {
 			return it.index, err
@@ -2531,14 +2494,6 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
 
-func (bc *BlockChain) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, cancunTime *uint64) {
-	bc.stateCache.StartVerkleTransition(originalRoot, translatedRoot, chainConfig, cancunTime)
-}
-
 func (bc *BlockChain) EndVerkleTransition() {
 	bc.stateCache.EndVerkleTransition()
-}
-
-func (bc *BlockChain) AddRootTranslation(originalRoot, translatedRoot common.Hash) {
-	bc.stateCache.AddRootTranslation(originalRoot, translatedRoot)
 }

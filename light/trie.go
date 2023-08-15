@@ -109,10 +109,6 @@ func (db *odrDatabase) EndVerkleTransition() {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) InTransition() bool {
-	panic("not implemented") // TODO: Implement
-}
-
 func (db *odrDatabase) Transitioned() bool {
 	panic("not implemented") // TODO: Implement
 }

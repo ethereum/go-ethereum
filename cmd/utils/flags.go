@@ -216,11 +216,6 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
-	TreeRootFlag = &cli.StringFlag{
-		Name:  "roothash",
-		Usage: "Root hash of the tree (if empty, use the latest)",
-		Value: "",
-	}
 
 	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SyncModeFlag    = &flags.TextMarshalerFlag{

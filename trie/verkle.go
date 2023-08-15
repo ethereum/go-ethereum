@@ -469,14 +469,6 @@ func ChunkifyCode(code []byte) ChunkedCode {
 	return chunks
 }
 
-func (t *VerkleTrie) SetStorageRootConversion(addr common.Address, root common.Hash) {
-	t.db.SetStorageRootConversion(addr, root)
-}
-
-func (t *VerkleTrie) ClearStrorageRootConversion(addr common.Address) {
-	t.db.ClearStorageRootConversion(addr)
-}
-
 func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	var (
 		chunks = ChunkifyCode(code)
