@@ -216,23 +216,25 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 					}
 					copy(safeValue[32-len(value):], value)
 
-					var slotnr [32]byte
+					var slotnr []byte
 					if hasPreimagesBin {
-						if _, err := io.ReadFull(fpreimages, slotnr[:]); err != nil {
+						var s [32]byte
+						slotnr = s[:]
+						if _, err := io.ReadFull(fpreimages, slotnr); err != nil {
 							return nil, nil, 0, fmt.Errorf("reading preimage file: %s", err)
 						}
 					} else {
-						slotnr := rawdb.ReadPreimage(migrdb.DiskDB(), stIt.Hash())
+						slotnr = rawdb.ReadPreimage(migrdb.DiskDB(), stIt.Hash())
 						if len(slotnr) != 32 {
 							return nil, nil, 0, fmt.Errorf("slotnr len is zero is not 32: %d", len(slotnr))
 						}
 					}
 					if crypto.Keccak256Hash(slotnr[:]) != stIt.Hash() {
-						return nil, nil, 0, fmt.Errorf("preimage file does not match storage hash: %s!=%s", crypto.Keccak256Hash(slotnr[:]), stIt.Hash())
+						return nil, nil, 0, fmt.Errorf("preimage file does not match storage hash: %s!=%s", crypto.Keccak256Hash(slotnr), stIt.Hash())
 					}
 					preimageSeek += int64(len(slotnr))
 
-					mkv.addStorageSlot(migrdb.GetCurrentAccountAddress().Bytes(), slotnr[:], safeValue[:])
+					mkv.addStorageSlot(migrdb.GetCurrentAccountAddress().Bytes(), slotnr, safeValue[:])
 
 					// advance the storage iterator
 					migrdb.SetStorageProcessed(!stIt.Next())
