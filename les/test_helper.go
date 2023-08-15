@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -188,7 +189,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 	chain, _ := light.NewLightChain(odr, gspec.Config, engine)
 
 	client := &LightEthereum{
@@ -226,7 +227,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-	genesis := gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	// create a simulation backend and pre-commit several customized block to the database.
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)

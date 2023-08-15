@@ -215,8 +215,14 @@ func (sq *servingQueue) freezePeers() {
 		tasks.list = append(tasks.list, task)
 		tasks.sumTime += task.expTime
 	}
-	slices.SortFunc(peerList, func(a, b *peerTasks) bool {
-		return a.priority < b.priority
+	slices.SortFunc(peerList, func(a, b *peerTasks) int {
+		if a.priority < b.priority {
+			return -1
+		}
+		if a.priority > b.priority {
+			return 1
+		}
+		return 0
 	})
 	drop := true
 	for _, tasks := range peerList {

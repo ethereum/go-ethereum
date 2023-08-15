@@ -390,7 +390,8 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	if root == (common.Hash{}) {
 		return nil
 	}
-	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
+	triedb := trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix), trie.HashDefaults)
+	trie, _ := trie.New(trie.TrieID(root), triedb)
 	return trie
 }
 
