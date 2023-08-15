@@ -176,17 +176,6 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			return err
 		}
 	}
-	// cpuProfile, err := os.Create("cpu.out")
-	// if err != nil {
-	// 	return fmt.Errorf("Error creating CPU profile: %v", err)
-	// }
-	// defer cpuProfile.Close()
-	// err = pprof.StartCPUProfile(cpuProfile)
-	// if err != nil {
-	// 	return fmt.Errorf("Error starting CPU profile: %v", err)
-	// }
-	// defer pprof.StopCPUProfile()
-	// params.ClearVerkleWitnessCosts()
 
 	stream := rlp.NewStream(reader, 0)
 
