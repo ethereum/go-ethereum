@@ -383,6 +383,8 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
+func (b *Block) BeaconRoot() *common.Hash { return b.header.BeaconRoot }
+
 func (b *Block) ExcessBlobGas() *uint64 {
 	var excessBlobGas *uint64
 	if b.header.ExcessBlobGas != nil {

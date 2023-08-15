@@ -292,6 +292,14 @@ func Transition(ctx *cli.Context) error {
 		prestate.Env.Difficulty = calcDifficulty(chainConfig, env.Number, env.Timestamp,
 			env.ParentTimestamp, env.ParentDifficulty, env.ParentUncleHash)
 	}
+	if chainConfig.IsCancun(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+		// We require EIP-4788 beacon root to be set in the env
+		if env.ParentBeaconBlockRoot == nil {
+			return NewError(ErrorConfig, errors.New("post-cancun env requires parentBeaconBlockRoot to be set"))
+		}
+	} else {
+		env.ParentBeaconBlockRoot = nil // un-set it if it has been set too early
+	}
 	// Run the test and aggregate the result
 	s, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
