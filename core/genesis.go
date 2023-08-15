@@ -125,9 +125,7 @@ func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig, timestamp uint64) (c
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
-	// XXX check this is the case
-	// TODO remove the nil config check once we have rebased, it should never be nil
-	if cfg != nil && cfg.IsVerkle(big.NewInt(int64(0)), timestamp) {
+	if cfg.IsVerkle(big.NewInt(int64(0)), timestamp) {
 		db.EndVerkleTransition()
 	}
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
