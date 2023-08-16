@@ -14,7 +14,7 @@ Retrieves a snapshot of all clique state at a given block.
 | Console | `clique.getSnapshot(blockNumber)`                           |
 | RPC     | `{"method": "clique_getSnapshot", "params": [blockNumber]}` |
 
-Example:
+**Example:**
 
 ```js
 > clique.getSnapshot(5463755)
@@ -118,7 +118,7 @@ This is a debugging method which returns statistics about signer activity for th
 | Console | `clique.status()`                           |
 | RPC     | `{"method": "clique_status", "params": []}` |
 
-Example:
+**Example:**
 
 ```js
 > clique.status()

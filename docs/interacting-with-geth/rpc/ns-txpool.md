@@ -19,7 +19,7 @@ Please note, there may be multiple transactions associated with the same account
 | Console | `txpool.content`                                                      |
 |   RPC   | `{"method": "txpool_content"}`                                        |
 
-### Example
+**Example:**
 
 ```js
 > txpool.content
@@ -127,7 +127,7 @@ Please note, there may be multiple transactions associated with the same account
 | Console | `txpool.inspect`                                             |
 |   RPC   | `{"method": "txpool_inspect"}`                               |
 
-### Example
+**Example:**
 
 ```js
 > txpool.inspect
@@ -194,7 +194,7 @@ The result is an object with two fields `pending` and `queued`, each of which is
 | Console | `txpool.status`                               |
 | RPC     | `{"method": "txpool_status"}`                 |
 
-### Example
+**Example:**
 
 ```js
 > txpool.status

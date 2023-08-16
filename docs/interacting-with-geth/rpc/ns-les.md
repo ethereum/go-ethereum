@@ -15,7 +15,7 @@ Get information about currently connected and total/individual allowed connectio
 | Console | `les.serverInfo()`                           |
 | RPC     | `{"method": "les_serverInfo", "params": []}` |
 
-### Example
+**Example:**
 
 ```js
 > les.serverInfo
@@ -39,7 +39,7 @@ Get individual client information (connection, balance, pricing) on the specifie
 | Console | `les.clientInfo([id, ...])`                                          |
 | RPC     | `{"method": "les_clientInfo", "params": [[id, ...]]}`                |
 
-### Example
+**Example:**
 
 ```js
 > les.clientInfo([])
@@ -111,7 +111,7 @@ Get individual client information on clients with a positive balance in the spec
 | Console | `les.priorityClientInfo(id, id, number)`                                                         |
 | RPC     | `{"method": "les_priorityClientInfo", "params": [id, id, number]}`                               |
 
-### Example
+**Example:**
 
 ```js
 > les.priorityClientInfo("0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", 100)
@@ -206,7 +206,7 @@ Add signed value to the token balance of the specified client and update its `me
 | Console | `les.addBalance(id, number, string)`                                        |
 | RPC     | `{"method": "les_addBalance", "params": [id, number, string]}`              |
 
-### Example
+**Example:**
 
 ```js
 > les.addBalance("0x6a47fe7bb23fd335df52ef1690f37ab44265a537b1d18eb616a3e77f898d9e77", 1000000000, "qwerty")
@@ -223,17 +223,17 @@ Set capacity and pricing factors for the specified list of connected clients or 
 | Console | `les.setClientParams([id, ...], {string: value, ...})`                           |
 | RPC     | `{"method": "les_setClientParams", "params": [[id, ...], {string: value, ...}]}` |
 
-### Example
+**Example:**
 
 ```js
 > les.setClientParams(["0x6a47fe7bb23fd335df52ef1690f37ab44265a537b1d18eb616a3e77f898d9e77"], {
-	"capacity": 100000,
-	"pricing/timeFactor": 0,
-	"pricing/capacityFactor": 1000000000,
-	"pricing/requestCostFactor": 1000000000,
-	"pricing/negative/timeFactor": 0,
-	"pricing/negative/capacityFactor": 1000000000,
-	"pricing/negative/requestCostFactor": 1000000000,
+    "capacity": 100000,
+    "pricing/timeFactor": 0,
+    "pricing/capacityFactor": 1000000000,
+    "pricing/requestCostFactor": 1000000000,
+    "pricing/negative/timeFactor": 0,
+    "pricing/negative/capacityFactor": 1000000000,
+    "pricing/negative/requestCostFactor": 1000000000,
 })
 null
 ```
@@ -248,16 +248,16 @@ Set default pricing factors for subsequently connected clients.
 | Console | `les.setDefaultParams({string: value, ...})`                           |
 | RPC     | `{"method": "les_setDefaultParams", "params": [{string: value, ...}]}` |
 
-### Example
+**Example:**
 
 ```js
 > les.setDefaultParams({
-	"pricing/timeFactor": 0,
-	"pricing/capacityFactor": 1000000000,
-	"pricing/requestCostFactor": 1000000000,
-	"pricing/negative/timeFactor": 0,
-	"pricing/negative/capacityFactor": 1000000000,
-	"pricing/negative/requestCostFactor": 1000000000,
+    "pricing/timeFactor": 0,
+    "pricing/capacityFactor": 1000000000,
+    "pricing/requestCostFactor": 1000000000,
+    "pricing/negative/timeFactor": 0,
+    "pricing/negative/capacityFactor": 1000000000,
+    "pricing/negative/requestCostFactor": 1000000000,
 })
 null
 ```
@@ -272,7 +272,7 @@ Get the index and hashes of the latest known checkpoint.
 | Console | `les.latestCheckpoint()`                           |
 | RPC     | `{"method": "les_latestCheckpoint", "params": []}` |
 
-### Example
+**Example:**
 
 ```js
 > les.latestCheckpoint
@@ -289,7 +289,7 @@ Get checkpoint hashes by index.
 | Console | `les.getCheckpoint(number)`                           |
 | RPC     | `{"method": "les_getCheckpoint", "params": [number]}` |
 
-### Example
+**Example:**
 
 ```js
 > les.getCheckpoint(256)
@@ -306,7 +306,7 @@ Get the address of the checkpoint oracle contract.
 | Console | `les.checkpointContractAddress()`                              |
 | RPC     | `{"method": "les_getCheckpointContractAddress", "params": []}` |
 
-### Example
+**Example:**
 
 ```js
 > les.checkpointContractAddress
