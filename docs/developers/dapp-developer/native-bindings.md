@@ -229,7 +229,7 @@ func main() {
 		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
 	}
 
-	keyDataBytes, err := os.ReadFile(keyFile)
+	keyDataBytes, err := os.ReadFile(<<path/to/keystore/file>>)
 	if err != nil {
 		fmt.Print("error reading key file: ", err)
 	}
