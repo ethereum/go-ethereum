@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -60,10 +61,11 @@ var (
 // public methods and some additional methods for internal usage.
 type layer interface {
 	// Node retrieves the trie node with the node info. An error will be returned
-	// if the read operation exits abnormally. For example, if the layer is already
-	// stale, or the associated state is regarded as corrupted. Notably, no error
-	// will be returned if the requested node is not found in database.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+	// if the read operation exits abnormally. Specifically, if the layer is
+	// already stale.
+	//
+	// Note, no error will be returned if the requested node is not found in database.
+	node(owner common.Hash, path []byte, depth int) ([]byte, *nodeLoc, error)
 
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
@@ -78,7 +80,7 @@ type layer interface {
 	// the provided dirty trie nodes along with the state change set.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer
+	update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string][]byte, states *triestate.Set) *diffLayer
 
 	// journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the layer without
@@ -208,15 +210,6 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	return db
 }
 
-// Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (layer, error) {
-	l := db.tree.get(root)
-	if l == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
-	}
-	return l, nil
-}
-
 // Update adds a new layer into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all). Apart
 // from that this function will flatten the extra diff layers at bottom into disk
@@ -298,7 +291,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Ensure the provided state root matches the stored one.
 	root = types.TrieRootHash(root)
-	_, stored := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
@@ -469,11 +462,6 @@ func (db *Database) SetBufferSize(size int) error {
 	}
 	db.bufferSize = size
 	return db.tree.bottom().setBufferSize(db.bufferSize)
-}
-
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.PathScheme
 }
 
 // modifyAllowed returns the indicator if mutation is allowed. This function
