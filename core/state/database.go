@@ -365,8 +365,9 @@ func (db *cachingDB) openStorageMPTrie(stateRoot common.Hash, address common.Add
 
 // OpenStorageTrie opens the storage trie of an account
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	// TODO this should only return a verkle tree
 	if db.ended {
-		mpt, err := db.openStorageMPTrie(common.Hash{}, address, common.Hash{}, self)
+		mpt, err := db.openStorageMPTrie(types.EmptyRootHash, address, common.Hash{}, self)
 		if err != nil {
 			return nil, err
 		}
