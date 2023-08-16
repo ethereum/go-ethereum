@@ -120,14 +120,14 @@ var (
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
-	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish
+	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish,
+	//   kinetic
 	debDistroGoBoots = map[string]string{
 		"trusty":  "golang-1.11", // EOL: 04/2024
 		"xenial":  "golang-go",   // EOL: 04/2026
 		"bionic":  "golang-go",   // EOL: 04/2028
 		"focal":   "golang-go",   // EOL: 04/2030
 		"jammy":   "golang-go",   // EOL: 04/2032
-		"kinetic": "golang-go",   // EOL: 07/2023
 		"lunar":   "golang-go",   // EOL: 01/2024
 	}
 
