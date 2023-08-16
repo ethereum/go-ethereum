@@ -40,7 +40,7 @@ const (
 	// Engine API batch limits: these are not configurable by users, and should cover the
 	// needs of all CLs.
 	engineAPIBatchItemLimit         = 2000
-	engineAPIBatchResponseSizeLimit = 100 * 1000 * 1000
+	engineAPIBatchResponseSizeLimit = 250 * 1000 * 1000
 )
 
 var (
