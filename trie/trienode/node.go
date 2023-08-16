@@ -130,16 +130,6 @@ func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
 }
 
-// Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
-// we get rid of it?
-func (set *NodeSet) Hashes() []common.Hash {
-	var ret []common.Hash
-	for _, node := range set.Nodes {
-		ret = append(ret, node.Hash)
-	}
-	return ret
-}
-
 // Summary returns a string-representation of the NodeSet.
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)

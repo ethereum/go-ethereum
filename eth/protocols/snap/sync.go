@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -718,11 +717,11 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 // cleanPath is used to remove the dangling nodes in the stackTrie.
 func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
-	if owner == (common.Hash{}) && rawdb.ExistsAccountTrieNode(s.db, path) {
+	if owner == (common.Hash{}) && rawdb.HasAccountTrieNode(s.db, path) {
 		rawdb.DeleteAccountTrieNode(batch, path)
 		deletionGauge.Inc(1)
 	}
-	if owner != (common.Hash{}) && rawdb.ExistsStorageTrieNode(s.db, owner, path) {
+	if owner != (common.Hash{}) && rawdb.HasStorageTrieNode(s.db, owner, path) {
 		rawdb.DeleteStorageTrieNode(batch, owner, path)
 		deletionGauge.Inc(1)
 	}
@@ -2601,7 +2600,7 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hasher := crypto.NewKeccakState()
 	hash := make([]byte, 32)
 
 	codes := make([][]byte, len(req.hashes))
@@ -2849,7 +2848,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	// Cross reference the requested trienodes with the response to find gaps
 	// that the serving node is missing
 	var (
-		hasher = sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher = crypto.NewKeccakState()
 		hash   = make([]byte, 32)
 		nodes  = make([][]byte, len(req.hashes))
 		fills  uint64
@@ -2955,7 +2954,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hasher := crypto.NewKeccakState()
 	hash := make([]byte, 32)
 
 	codes := make([][]byte, len(req.hashes))
