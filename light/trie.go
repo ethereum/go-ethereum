@@ -51,15 +51,15 @@ type odrDatabase struct {
 	backend OdrBackend
 }
 
-func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenTrie(root common.Hash) (trie.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (trie.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
-func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
+func (db *odrDatabase) CopyTrie(t trie.Trie) trie.Trie {
 	switch t := t.(type) {
 	case *odrTrie:
 		cpy := &odrTrie{db: t.db, id: t.id}

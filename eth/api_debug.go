@@ -236,7 +236,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	return storageRangeAt(st, keyStart, maxResult)
 }
 
-func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
+func storageRangeAt(st trie.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
 	trieIt, err := st.NodeIterator(start)
 	if err != nil {
 		return StorageRangeResult{}, err

@@ -38,14 +38,13 @@ func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db *D
 	return NewStateTrie(id, db)
 }
 
-// StateTrie wraps a trie with key hashing. In a stateTrie trie, all
-// access operations hash the key using keccak256. This prevents
-// calling code from creating long chains of nodes that
-// increase the access time.
+// StateTrie wraps a merkle patricia trie with key hashing. In a stateTrie trie,
+// all access operations hash the key using keccak256. This prevents calling code
+// from creating long chains of nodes that increase the access time.
 //
-// Contrary to a regular trie, a StateTrie can only be created with
-// New and must have an attached database. The database also stores
-// the preimage of each key if preimage recording is enabled.
+// Contrary to a regular trie, a StateTrie can only be created with New and must
+// have an attached database. The database also stores the preimage of each key
+// if preimage recording is enabled.
 //
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {

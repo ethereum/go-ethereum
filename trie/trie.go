@@ -34,7 +34,7 @@ import (
 // it's not usable anymore. Callers have to re-create the trie with new root
 // based on the updated trie database.
 //
-// Trie is not safe for concurrent use.
+// MPT is not safe for concurrent use.
 type MPT struct {
 	root  node
 	owner common.Hash
@@ -84,19 +84,19 @@ func New(id *ID, db *Database) (*MPT, error) {
 	if err != nil {
 		return nil, err
 	}
-	trie := &MPT{
+	t := &MPT{
 		owner:  id.Owner,
 		reader: reader,
 		tracer: newTracer(),
 	}
 	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
-		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
+		rootnode, err := t.resolveAndTrack(id.Root[:], nil)
 		if err != nil {
 			return nil, err
 		}
-		trie.root = rootnode
+		t.root = rootnode
 	}
-	return trie, nil
+	return t, nil
 }
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.

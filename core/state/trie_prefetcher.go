@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -37,7 +38,7 @@ var (
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
-	fetches  map[string]Trie        // Partially or fully fetcher tries
+	fetches  map[string]trie.Trie   // Partially or fully fetcher tries
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	deliveryMissMeter metrics.Meter
@@ -111,7 +112,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	copy := &triePrefetcher{
 		db:      p.db,
 		root:    p.root,
-		fetches: make(map[string]Trie), // Active prefetchers use the fetches map
+		fetches: make(map[string]trie.Trie), // Active prefetchers use the fetches map
 
 		deliveryMissMeter: p.deliveryMissMeter,
 		accountLoadMeter:  p.accountLoadMeter,
@@ -158,7 +159,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
 // have it.
-func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
+func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) trie.Trie {
 	// If the prefetcher is inactive, return from existing deep copies
 	id := p.trieID(owner, root)
 	if p.fetches != nil {
@@ -210,15 +211,15 @@ type subfetcher struct {
 	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
-	trie  Trie           // Trie being populated with nodes
+	trie  trie.Trie      // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // Channel to request a copy of the current trie
+	wake chan struct{}       // Wake channel if a new task is scheduled
+	stop chan struct{}       // Channel to interrupt processing
+	term chan struct{}       // Channel to signal interruption
+	copy chan chan trie.Trie // Channel to request a copy of the current trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -237,7 +238,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		wake:  make(chan struct{}, 1),
 		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
+		copy:  make(chan chan trie.Trie),
 		seen:  make(map[string]struct{}),
 	}
 	go sf.loop()
@@ -260,8 +261,8 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 
 // peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
 // is currently.
-func (sf *subfetcher) peek() Trie {
-	ch := make(chan Trie)
+func (sf *subfetcher) peek() trie.Trie {
+	ch := make(chan trie.Trie)
 	select {
 	case sf.copy <- ch:
 		// Subfetcher still alive, return copy from it

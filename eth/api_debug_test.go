@@ -35,7 +35,7 @@ import (
 
 var dumper = spew.ConfigState{Indent: "    "}
 
-func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.IteratorDump {
+func accountRangeTest(t *testing.T, trie *trie.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.IteratorDump {
 	result := statedb.IteratorDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,

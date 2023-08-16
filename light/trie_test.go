@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -61,7 +60,7 @@ func TestNodeIterator(t *testing.T) {
 	}
 }
 
-func diffTries(t1, t2 state.Trie) error {
+func diffTries(t1, t2 trie.Trie) error {
 	trieIt1, err := t1.NodeIterator(nil)
 	if err != nil {
 		return err

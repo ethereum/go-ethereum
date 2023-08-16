@@ -85,7 +85,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	case *TrieRequest:
 		var (
 			err error
-			t   state.Trie
+			t   trie.Trie
 		)
 		if len(req.Id.AccountAddress) > 0 {
 			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToAddress(req.Id.AccountAddress), req.Id.Root)

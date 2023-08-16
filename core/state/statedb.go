@@ -68,7 +68,7 @@ func (n *proofList) Delete(key []byte) error {
 type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
-	trie       Trie
+	trie       trie.Trie
 	hasher     crypto.KeccakState
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
@@ -385,7 +385,7 @@ func (s *StateDB) Database() Database {
 // StorageTrie returns the storage trie of an account. The return value is a copy
 // and is nil for non-existent accounts. An error will be returned if storage trie
 // is existent but can't be loaded correctly.
-func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
+func (s *StateDB) StorageTrie(addr common.Address) (trie.Trie, error) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return nil, nil

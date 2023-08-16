@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
@@ -411,7 +410,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			// Open the account or storage trie for the request
 			statedb := bc.StateCache()
 
-			var trie state.Trie
+			var trie trie.Trie
 			switch len(request.AccountAddress) {
 			case 0:
 				// No account key specified, open an account trie

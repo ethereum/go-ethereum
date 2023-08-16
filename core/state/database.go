@@ -23,11 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 const (
@@ -41,13 +39,13 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// OpenTrie opens the main account trie.
-	OpenTrie(root common.Hash) (Trie, error)
+	OpenTrie(root common.Hash) (trie.Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (trie.Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
-	CopyTrie(Trie) Trie
+	CopyTrie(trie.Trie) trie.Trie
 
 	// ContractCode retrieves a particular contract's code.
 	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
@@ -60,76 +58,6 @@ type Database interface {
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *trie.Database
-}
-
-// Trie is a Ethereum Merkle Patricia trie.
-type Trie interface {
-	// GetKey returns the sha3 preimage of a hashed key that was previously used
-	// to store a value.
-	//
-	// TODO(fjl): remove this when StateTrie is removed
-	GetKey([]byte) []byte
-
-	// GetStorage returns the value for key stored in the trie. The value bytes
-	// must not be modified by the caller. If a node was not found in the database,
-	// a trie.MissingNodeError is returned.
-	GetStorage(addr common.Address, key []byte) ([]byte, error)
-
-	// GetAccount abstracts an account read from the trie. It retrieves the
-	// account blob from the trie with provided account address and decodes it
-	// with associated decoding algorithm. If the specified account is not in
-	// the trie, nil will be returned. If the trie is corrupted(e.g. some nodes
-	// are missing or the account blob is incorrect for decoding), an error will
-	// be returned.
-	GetAccount(address common.Address) (*types.StateAccount, error)
-
-	// UpdateStorage associates key with value in the trie. If value has length zero,
-	// any existing value is deleted from the trie. The value bytes must not be modified
-	// by the caller while they are stored in the trie. If a node was not found in the
-	// database, a trie.MissingNodeError is returned.
-	UpdateStorage(addr common.Address, key, value []byte) error
-
-	// UpdateAccount abstracts an account write to the trie. It encodes the
-	// provided account object with associated algorithm and then updates it
-	// in the trie with provided address.
-	UpdateAccount(address common.Address, account *types.StateAccount) error
-
-	// UpdateContractCode abstracts code write to the trie. It is expected
-	// to be moved to the stateWriter interface when the latter is ready.
-	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
-
-	// DeleteStorage removes any existing value for key from the trie. If a node
-	// was not found in the database, a trie.MissingNodeError is returned.
-	DeleteStorage(addr common.Address, key []byte) error
-
-	// DeleteAccount abstracts an account deletion from the trie.
-	DeleteAccount(address common.Address) error
-
-	// Hash returns the root hash of the trie. It does not write to the database and
-	// can be used even if the trie doesn't have one.
-	Hash() common.Hash
-
-	// Commit collects all dirty nodes in the trie and replace them with the
-	// corresponding node hash. All collected nodes(including dirty leaves if
-	// collectLeaf is true) will be encapsulated into a nodeset for return.
-	// The returned nodeset can be nil if the trie is clean(nothing to commit).
-	// Once the trie is committed, it's not usable anymore. A new trie must
-	// be created with new root and updated trie database for following usage
-	Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error)
-
-	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
-	// starts at the key after the given start key. And error will be returned
-	// if fails to create node iterator.
-	NodeIterator(startKey []byte) (trie.NodeIterator, error)
-
-	// Prove constructs a Merkle proof for key. The result contains all encoded nodes
-	// on the path to the value at key. The value itself is also included in the last
-	// node and can be retrieved by verifying the proof.
-	//
-	// If the trie does not contain a value for key, the returned proof contains all
-	// nodes of the longest existing prefix of the key (at least the root), ending
-	// with the node that proves the absence of the key.
-	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -169,7 +97,7 @@ type cachingDB struct {
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
-func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+func (db *cachingDB) OpenTrie(root common.Hash) (trie.Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -178,7 +106,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (trie.Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -187,7 +115,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 }
 
 // CopyTrie returns an independent copy of the given trie.
-func (db *cachingDB) CopyTrie(t Trie) Trie {
+func (db *cachingDB) CopyTrie(t trie.Trie) trie.Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
 		return t.Copy()
