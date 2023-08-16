@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -22,18 +23,10 @@ func TestGetOrRegisterMeter(t *testing.T) {
 }
 
 func TestMeterDecay(t *testing.T) {
-	ma := meterArbiter{
-		ticker: time.NewTicker(time.Millisecond),
-		meters: make(map[*StandardMeter]struct{}),
-	}
-	defer ma.ticker.Stop()
 	m := newStandardMeter()
-	ma.meters[m] = struct{}{}
 	m.Mark(1)
-	ma.tickMeters()
 	rateMean := m.RateMean()
 	time.Sleep(100 * time.Millisecond)
-	ma.tickMeters()
 	if m.RateMean() >= rateMean {
 		t.Error("m.RateMean() didn't decrease")
 	}
@@ -47,22 +40,13 @@ func TestMeterNonzero(t *testing.T) {
 	}
 }
 
-func TestMeterStop(t *testing.T) {
-	l := len(arbiter.meters)
-	m := NewMeter()
-	if l+1 != len(arbiter.meters) {
-		t.Errorf("arbiter.meters: %d != %d\n", l+1, len(arbiter.meters))
-	}
-	m.Stop()
-	if l != len(arbiter.meters) {
-		t.Errorf("arbiter.meters: %d != %d\n", l, len(arbiter.meters))
-	}
-}
-
 func TestMeterSnapshot(t *testing.T) {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
 	m := NewMeter()
-	m.Mark(1)
-	if snapshot := m.Snapshot(); m.RateMean() != snapshot.RateMean() {
+	m.Mark(r.Int63())
+
+	// RateMean() updates every millisecond, so we test Count().
+	if snapshot := m.Snapshot(); m.Count() != snapshot.Count() {
 		t.Fatal(snapshot)
 	}
 }

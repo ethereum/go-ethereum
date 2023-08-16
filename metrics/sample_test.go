@@ -296,6 +296,8 @@ func testExpDecaySampleStatistics(t *testing.T, s Sample) {
 }
 
 func testUniformSampleStatistics(t *testing.T, s Sample) {
+	epsilonPercentile := .00000000001
+
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}

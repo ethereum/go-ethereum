@@ -36,12 +36,10 @@ func TestCollector(t *testing.T) {
 	c.addHistogram("test/histogram", histogram)
 
 	meter := metrics.NewMeter()
-	defer meter.Stop()
 	meter.Mark(9999999)
 	c.addMeter("test/meter", meter)
 
 	timer := metrics.NewTimer()
-	defer timer.Stop()
 	timer.Update(20 * time.Millisecond)
 	timer.Update(21 * time.Millisecond)
 	timer.Update(22 * time.Millisecond)

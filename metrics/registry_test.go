@@ -145,19 +145,27 @@ func TestRegistryGetOrRegisterWithLazyInstantiation(t *testing.T) {
 }
 
 func TestRegistryUnregister(t *testing.T) {
-	l := len(arbiter.meters)
+	count := 0
+	counter := func(string, interface{}) {
+		count++
+	}
+
 	r := NewRegistry()
 	r.Register("foo", NewCounter())
 	r.Register("bar", NewMeter())
 	r.Register("baz", NewTimer())
-	if len(arbiter.meters) != l+2 {
-		t.Errorf("arbiter.meters: %d != %d\n", l+2, len(arbiter.meters))
+	r.Each(counter)
+	if count != 3 {
+		t.Errorf("Register() count: %d != %d\n", 3, count)
 	}
+
 	r.Unregister("foo")
 	r.Unregister("bar")
 	r.Unregister("baz")
-	if len(arbiter.meters) != l {
-		t.Errorf("arbiter.meters: %d != %d\n", l+2, len(arbiter.meters))
+	count = 0
+	r.Each(counter)
+	if count != 0 {
+		t.Errorf("Unregister() count: %d != %d\n", 0, count)
 	}
 }
 
