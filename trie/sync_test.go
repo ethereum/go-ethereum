@@ -119,7 +119,7 @@ func TestEmptySync(t *testing.T) {
 	emptyC := NewEmpty(dbC)
 	emptyD, _ := New(TrieID(types.EmptyRootHash), dbD)
 
-	for i, trie := range []*Trie{emptyA, emptyB, emptyC, emptyD} {
+	for i, trie := range []*MPT{emptyA, emptyB, emptyC, emptyD} {
 		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB, dbC, dbD}[i].Scheme())
 		if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v, %v, %v", i, paths, nodes, codes)

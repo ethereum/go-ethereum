@@ -28,14 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
+// MPT is a Merkle Patricia Trie. Use New to create a trie that sits on
 // top of a database. Whenever trie performs a commit operation, the generated
 // nodes will be gathered and returned in a set. Once the trie is committed,
 // it's not usable anymore. Callers have to re-create the trie with new root
 // based on the updated trie database.
 //
 // Trie is not safe for concurrent use.
-type Trie struct {
+type MPT struct {
 	root  node
 	owner common.Hash
 
@@ -57,13 +57,13 @@ type Trie struct {
 }
 
 // newFlag returns the cache flag value for a newly created node.
-func (t *Trie) newFlag() nodeFlag {
+func (t *MPT) newFlag() nodeFlag {
 	return nodeFlag{dirty: true}
 }
 
 // Copy returns a copy of Trie.
-func (t *Trie) Copy() *Trie {
-	return &Trie{
+func (t *MPT) Copy() *MPT {
+	return &MPT{
 		root:      t.root,
 		owner:     t.owner,
 		committed: t.committed,
@@ -79,12 +79,12 @@ func (t *Trie) Copy() *Trie {
 // zero hash or the sha3 hash of an empty string, then trie is initially
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
-func New(id *ID, db *Database) (*Trie, error) {
+func New(id *ID, db *Database) (*MPT, error) {
 	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err
 	}
-	trie := &Trie{
+	trie := &MPT{
 		owner:  id.Owner,
 		reader: reader,
 		tracer: newTracer(),
@@ -100,14 +100,14 @@ func New(id *ID, db *Database) (*Trie, error) {
 }
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
-func NewEmpty(db *Database) *Trie {
+func NewEmpty(db *Database) *MPT {
 	tr, _ := New(TrieID(types.EmptyRootHash), db)
 	return tr
 }
 
 // MustNodeIterator is a wrapper of NodeIterator and will omit any encountered
 // error but just print out an error message.
-func (t *Trie) MustNodeIterator(start []byte) NodeIterator {
+func (t *MPT) MustNodeIterator(start []byte) NodeIterator {
 	it, err := t.NodeIterator(start)
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.NodeIterator", "err", err)
@@ -117,7 +117,7 @@ func (t *Trie) MustNodeIterator(start []byte) NodeIterator {
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key.
-func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
+func (t *MPT) NodeIterator(start []byte) (NodeIterator, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return nil, ErrCommitted
@@ -127,7 +127,7 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 
 // MustGet is a wrapper of Get and will omit any encountered error but just
 // print out an error message.
-func (t *Trie) MustGet(key []byte) []byte {
+func (t *MPT) MustGet(key []byte) []byte {
 	res, err := t.Get(key)
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.Get", "err", err)
@@ -140,7 +140,7 @@ func (t *Trie) MustGet(key []byte) []byte {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
-func (t *Trie) Get(key []byte) ([]byte, error) {
+func (t *MPT) Get(key []byte) ([]byte, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return nil, ErrCommitted
@@ -152,7 +152,7 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 	return value, err
 }
 
-func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+func (t *MPT) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
@@ -190,7 +190,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 
 // MustGetNode is a wrapper of GetNode and will omit any encountered error but
 // just print out an error message.
-func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
+func (t *MPT) MustGetNode(path []byte) ([]byte, int) {
 	item, resolved, err := t.GetNode(path)
 	if err != nil {
 		log.Error("Unhandled trie error in Trie.GetNode", "err", err)
@@ -203,7 +203,7 @@ func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
-func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
+func (t *MPT) GetNode(path []byte) ([]byte, int, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return nil, 0, ErrCommitted
@@ -221,7 +221,7 @@ func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
 	return item, resolved, nil
 }
 
-func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
+func (t *MPT) getNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
 	// If non-existent path requested, abort
 	if origNode == nil {
 		return nil, nil, 0, nil
@@ -284,7 +284,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 
 // MustUpdate is a wrapper of Update and will omit any encountered error but
 // just print out an error message.
-func (t *Trie) MustUpdate(key, value []byte) {
+func (t *MPT) MustUpdate(key, value []byte) {
 	if err := t.Update(key, value); err != nil {
 		log.Error("Unhandled trie error in Trie.Update", "err", err)
 	}
@@ -299,7 +299,7 @@ func (t *Trie) MustUpdate(key, value []byte) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
-func (t *Trie) Update(key, value []byte) error {
+func (t *MPT) Update(key, value []byte) error {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return ErrCommitted
@@ -307,7 +307,7 @@ func (t *Trie) Update(key, value []byte) error {
 	return t.update(key, value)
 }
 
-func (t *Trie) update(key, value []byte) error {
+func (t *MPT) update(key, value []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
@@ -326,7 +326,7 @@ func (t *Trie) update(key, value []byte) error {
 	return nil
 }
 
-func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
+func (t *MPT) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
@@ -407,7 +407,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 
 // MustDelete is a wrapper of Delete and will omit any encountered error but
 // just print out an error message.
-func (t *Trie) MustDelete(key []byte) {
+func (t *MPT) MustDelete(key []byte) {
 	if err := t.Delete(key); err != nil {
 		log.Error("Unhandled trie error in Trie.Delete", "err", err)
 	}
@@ -417,7 +417,7 @@ func (t *Trie) MustDelete(key []byte) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
-func (t *Trie) Delete(key []byte) error {
+func (t *MPT) Delete(key []byte) error {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return ErrCommitted
@@ -435,7 +435,7 @@ func (t *Trie) Delete(key []byte) error {
 // delete returns the new root of the trie with key deleted.
 // It reduces the trie to minimal form by simplifying
 // nodes on the way up after deleting recursively.
-func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
+func (t *MPT) delete(n node, prefix, key []byte) (bool, node, error) {
 	switch n := n.(type) {
 	case *shortNode:
 		matchlen := prefixLen(key, n.Key)
@@ -573,7 +573,7 @@ func concat(s1 []byte, s2 ...byte) []byte {
 	return r
 }
 
-func (t *Trie) resolve(n node, prefix []byte) (node, error) {
+func (t *MPT) resolve(n node, prefix []byte) (node, error) {
 	if n, ok := n.(hashNode); ok {
 		return t.resolveAndTrack(n, prefix)
 	}
@@ -584,7 +584,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 // and path prefix and also tracks the loaded node blob in tracer treated as the
 // node's original value. The rlp-encoded blob is preferred to be loaded from
 // database because it's easy to decode node while complex to encode node to blob.
-func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
+func (t *MPT) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	blob, err := t.reader.node(prefix, common.BytesToHash(n))
 	if err != nil {
 		return nil, err
@@ -595,7 +595,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
-func (t *Trie) Hash() common.Hash {
+func (t *MPT) Hash() common.Hash {
 	hash, cached := t.hashRoot()
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
@@ -607,7 +607,7 @@ func (t *Trie) Hash() common.Hash {
 // The returned nodeset can be nil if the trie is clean (nothing to commit).
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+func (t *MPT) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	defer t.tracer.reset()
 	defer func() {
 		t.committed = true
@@ -648,7 +648,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot() (node, node) {
+func (t *MPT) hashRoot() (node, node) {
 	if t.root == nil {
 		return hashNode(types.EmptyRootHash.Bytes()), nil
 	}
@@ -663,7 +663,7 @@ func (t *Trie) hashRoot() (node, node) {
 }
 
 // Reset drops the referenced root node and cleans all internal state.
-func (t *Trie) Reset() {
+func (t *MPT) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0

@@ -49,8 +49,8 @@ var (
 	addresses []common.Address
 	txHashes  []common.Hash
 
-	chtTrie   *trie.Trie
-	bloomTrie *trie.Trie
+	chtTrie   *trie.MPT
+	bloomTrie *trie.MPT
 	chtKeys   [][]byte
 	bloomKeys [][]byte
 )
@@ -87,7 +87,7 @@ func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []co
 	return
 }
 
-func makeTries() (chtTrie *trie.Trie, bloomTrie *trie.Trie, chtKeys, bloomKeys [][]byte) {
+func makeTries() (chtTrie *trie.MPT, bloomTrie *trie.MPT, chtKeys, bloomKeys [][]byte) {
 	chtTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), trie.HashDefaults))
 	bloomTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), trie.HashDefaults))
 	for i := 0; i < testChainLen; i++ {
@@ -122,8 +122,8 @@ type fuzzer struct {
 
 	chtKeys   [][]byte
 	bloomKeys [][]byte
-	chtTrie   *trie.Trie
-	bloomTrie *trie.Trie
+	chtTrie   *trie.MPT
+	bloomTrie *trie.MPT
 
 	input     io.Reader
 	exhausted bool
@@ -247,7 +247,7 @@ func (f *fuzzer) AddTxsSync() bool {
 	return false
 }
 
-func (f *fuzzer) GetHelperTrie(typ uint, index uint64) *trie.Trie {
+func (f *fuzzer) GetHelperTrie(typ uint, index uint64) *trie.MPT {
 	if typ == 0 {
 		return f.chtTrie
 	} else if typ == 1 {

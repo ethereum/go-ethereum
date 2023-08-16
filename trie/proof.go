@@ -33,7 +33,7 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+func (t *MPT) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
 		return ErrCommitted
@@ -566,7 +566,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, reader: newEmptyReader(), tracer: newTracer()}
+	tr := &MPT{root: root, reader: newEmptyReader(), tracer: newTracer()}
 	if empty {
 		tr.root = nil
 	}

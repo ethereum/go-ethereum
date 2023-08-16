@@ -418,7 +418,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(steps)
 }
 
-func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
+func verifyAccessList(old *MPT, new *MPT, set *trienode.NodeSet) error {
 	deletes, inserts, updates := diffTries(old, new)
 
 	// Check insertion set
@@ -625,7 +625,7 @@ func benchGet(b *testing.B) {
 	b.StopTimer()
 }
 
-func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
+func benchUpdate(b *testing.B, e binary.ByteOrder) *MPT {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	k := make([]byte, 32)
 	b.ReportAllocs()
@@ -1156,15 +1156,15 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	b.StopTimer()
 }
 
-func getString(trie *Trie, k string) []byte {
+func getString(trie *MPT, k string) []byte {
 	return trie.MustGet([]byte(k))
 }
 
-func updateString(trie *Trie, k, v string) {
+func updateString(trie *MPT, k, v string) {
 	trie.MustUpdate([]byte(k), []byte(v))
 }
 
-func deleteString(trie *Trie, k string) {
+func deleteString(trie *MPT, k string) {
 	trie.MustDelete([]byte(k))
 }
 

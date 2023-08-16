@@ -55,7 +55,7 @@ func (f *fuzzer) readInt() uint64 {
 	return x
 }
 
-func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
+func (f *fuzzer) randomTrie(n int) (*trie.MPT, map[string]*kv) {
 	trie := trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	vals := make(map[string]*kv)
 	size := f.readInt()

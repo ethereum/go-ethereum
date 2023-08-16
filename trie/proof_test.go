@@ -51,7 +51,7 @@ func randBytes(n int) []byte {
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.
-func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
+func makeProvers(trie *MPT) []func(key []byte) *memorydb.Database {
 	var provers []func(key []byte) *memorydb.Database
 
 	// Create a direct trie based Merkle prover
@@ -1035,7 +1035,7 @@ func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
 	}
 }
 
-func randomTrie(n int) (*Trie, map[string]*kv) {
+func randomTrie(n int) (*MPT, map[string]*kv) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	vals := make(map[string]*kv)
 	for i := byte(0); i < 100; i++ {
@@ -1054,7 +1054,7 @@ func randomTrie(n int) (*Trie, map[string]*kv) {
 	return trie, vals
 }
 
-func nonRandomTrie(n int) (*Trie, map[string]*kv) {
+func nonRandomTrie(n int) (*MPT, map[string]*kv) {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	vals := make(map[string]*kv)
 	max := uint64(0xffffffffffffffff)

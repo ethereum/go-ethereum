@@ -49,7 +49,7 @@ func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db *D
 //
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {
-	trie             Trie
+	trie             MPT
 	preimages        *preimageStore
 	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte

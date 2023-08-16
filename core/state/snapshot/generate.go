@@ -117,12 +117,12 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 // proofResult contains the output of range proving which can be used
 // for further processing regardless if it is successful or not.
 type proofResult struct {
-	keys     [][]byte   // The key set of all elements being iterated, even proving is failed
-	vals     [][]byte   // The val set of all elements being iterated, even proving is failed
-	diskMore bool       // Set when the database has extra snapshot states since last iteration
-	trieMore bool       // Set when the trie has extra snapshot states(only meaningful for successful proving)
-	proofErr error      // Indicator whether the given state range is valid or not
-	tr       *trie.Trie // The trie, in case the trie was resolved by the prover (may be nil)
+	keys     [][]byte  // The key set of all elements being iterated, even proving is failed
+	vals     [][]byte  // The val set of all elements being iterated, even proving is failed
+	diskMore bool      // Set when the database has extra snapshot states since last iteration
+	trieMore bool      // Set when the trie has extra snapshot states(only meaningful for successful proving)
+	proofErr error     // Indicator whether the given state range is valid or not
+	tr       *trie.MPT // The trie, in case the trie was resolved by the prover (may be nil)
 }
 
 // valid returns the indicator that range proof is successful or not.

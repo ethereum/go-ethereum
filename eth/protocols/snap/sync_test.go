@@ -127,9 +127,9 @@ type testPeer struct {
 	test          *testing.T
 	remote        *Syncer
 	logger        log.Logger
-	accountTrie   *trie.Trie
+	accountTrie   *trie.MPT
 	accountValues []*kv
-	storageTries  map[common.Hash]*trie.Trie
+	storageTries  map[common.Hash]*trie.MPT
 	storageValues map[common.Hash][]*kv
 
 	accountRequestHandler accountHandlerFunc
@@ -161,8 +161,8 @@ func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 	return peer
 }
 
-func (t *testPeer) setStorageTries(tries map[common.Hash]*trie.Trie) {
-	t.storageTries = make(map[common.Hash]*trie.Trie)
+func (t *testPeer) setStorageTries(tries map[common.Hash]*trie.MPT) {
+	t.storageTries = make(map[common.Hash]*trie.MPT)
 	for root, trie := range tries {
 		t.storageTries[root] = trie.Copy()
 	}
@@ -1460,7 +1460,7 @@ func getCodeByHash(hash common.Hash) []byte {
 }
 
 // makeAccountTrieNoStorage spits out a trie, along with the leafs
-func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) {
+func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.MPT, []*kv) {
 	var (
 		db      = trie.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie = trie.NewEmpty(db)
@@ -1492,7 +1492,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 // makeBoundaryAccountTrie constructs an account trie. Instead of filling
 // accounts normally, this function will fill a few accounts which have
 // boundary hash.
-func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
+func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.MPT, []*kv) {
 	var (
 		entries    []*kv
 		boundaries []common.Hash
@@ -1553,13 +1553,13 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 
 // makeAccountTrieWithStorageWithUniqueStorage creates an account trie where each accounts
 // has a unique storage set.
-func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots int, code bool) (string, *trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
+func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots int, code bool) (string, *trie.MPT, []*kv, map[common.Hash]*trie.MPT, map[common.Hash][]*kv) {
 	var (
 		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie        = trie.NewEmpty(db)
 		entries        []*kv
 		storageRoots   = make(map[common.Hash]common.Hash)
-		storageTries   = make(map[common.Hash]*trie.Trie)
+		storageTries   = make(map[common.Hash]*trie.MPT)
 		storageEntries = make(map[common.Hash][]*kv)
 		nodes          = trienode.NewMergedNodeSet()
 	)
@@ -1608,13 +1608,13 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 }
 
 // makeAccountTrieWithStorage spits out a trie, along with the leafs
-func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool) (string, *trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
+func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool) (string, *trie.MPT, []*kv, map[common.Hash]*trie.MPT, map[common.Hash][]*kv) {
 	var (
 		db             = trie.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
 		accTrie        = trie.NewEmpty(db)
 		entries        []*kv
 		storageRoots   = make(map[common.Hash]common.Hash)
-		storageTries   = make(map[common.Hash]*trie.Trie)
+		storageTries   = make(map[common.Hash]*trie.MPT)
 		storageEntries = make(map[common.Hash][]*kv)
 		nodes          = trienode.NewMergedNodeSet()
 	)

@@ -236,7 +236,7 @@ func (test *stateTest) run() bool {
 // - the account was indeed not present in trie
 // - the account is present in new trie, nil->nil is regarded as invalid
 // - the slots transition is correct
-func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.MPT, addr common.Address, slots map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
@@ -287,7 +287,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 // - the account was indeed present in trie
 // - the account in old trie matches the provided value
 // - the slots transition is correct
-func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.MPT, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())

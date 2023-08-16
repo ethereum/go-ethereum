@@ -222,24 +222,24 @@ func TestAccessListLeak(t *testing.T) {
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	var cases = []struct {
-		op func(tr *Trie)
+		op func(tr *MPT)
 	}{
 		{
-			func(tr *Trie) {
+			func(tr *MPT) {
 				it := tr.MustNodeIterator(nil)
 				for it.Next(true) {
 				}
 			},
 		},
 		{
-			func(tr *Trie) {
+			func(tr *MPT) {
 				it := NewIterator(tr.MustNodeIterator(nil))
 				for it.Next() {
 				}
 			},
 		},
 		{
-			func(tr *Trie) {
+			func(tr *MPT) {
 				for _, val := range standard {
 					tr.Prove([]byte(val.k), rawdb.NewMemoryDatabase())
 				}
@@ -298,7 +298,7 @@ func compareSet(setA, setB map[string]struct{}) bool {
 	return true
 }
 
-func forNodes(tr *Trie) map[string][]byte {
+func forNodes(tr *MPT) map[string][]byte {
 	var (
 		it    = tr.MustNodeIterator(nil)
 		nodes = make(map[string][]byte)
@@ -317,7 +317,7 @@ func iterNodes(db *Database, root common.Hash) map[string][]byte {
 	return forNodes(tr)
 }
 
-func forHashedNodes(tr *Trie) map[string][]byte {
+func forHashedNodes(tr *MPT) map[string][]byte {
 	var (
 		it    = tr.MustNodeIterator(nil)
 		nodes = make(map[string][]byte)
@@ -331,7 +331,7 @@ func forHashedNodes(tr *Trie) map[string][]byte {
 	return nodes
 }
 
-func diffTries(trieA, trieB *Trie) (map[string][]byte, map[string][]byte, map[string][]byte) {
+func diffTries(trieA, trieB *MPT) (map[string][]byte, map[string][]byte, map[string][]byte) {
 	var (
 		nodesA = forHashedNodes(trieA)
 		nodesB = forHashedNodes(trieB)

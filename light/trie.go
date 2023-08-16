@@ -103,7 +103,7 @@ func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
-	trie *trie.Trie
+	trie *trie.MPT
 }
 
 func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {

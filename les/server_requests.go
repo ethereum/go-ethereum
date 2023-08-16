@@ -38,7 +38,7 @@ type serverBackend interface {
 	AddTxsSync() bool
 	BlockChain() *core.BlockChain
 	TxPool() *txpool.TxPool
-	GetHelperTrie(typ uint, index uint64) *trie.Trie
+	GetHelperTrie(typ uint, index uint64) *trie.MPT
 }
 
 // Decoder is implemented by the messages passed to the handler functions
@@ -458,7 +458,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 		var (
 			lastIdx  uint64
 			lastType uint
-			auxTrie  *trie.Trie
+			auxTrie  *trie.MPT
 			auxBytes int
 			auxData  [][]byte
 		)

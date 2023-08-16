@@ -139,7 +139,7 @@ type nodeIteratorState struct {
 }
 
 type nodeIterator struct {
-	trie  *Trie                // Trie being iterated
+	trie  *MPT                 // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 	path  []byte               // Path to the current node
 	err   error                // Failure set in case of an internal error in the iterator
@@ -160,7 +160,7 @@ func (e seekError) Error() string {
 	return "seek error: " + e.err.Error()
 }
 
-func newNodeIterator(trie *Trie, start []byte) NodeIterator {
+func newNodeIterator(trie *MPT, start []byte) NodeIterator {
 	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
 			trie: trie,

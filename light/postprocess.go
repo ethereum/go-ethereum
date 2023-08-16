@@ -134,7 +134,7 @@ type ChtIndexerBackend struct {
 	triedb               *trie.Database
 	section, sectionSize uint64
 	lastHash             common.Hash
-	trie                 *trie.Trie
+	trie                 *trie.MPT
 	originRoot           common.Hash
 }
 
@@ -336,7 +336,7 @@ type BloomTrieIndexerBackend struct {
 	parentSize        uint64
 	size              uint64
 	bloomTrieRatio    uint64
-	trie              *trie.Trie
+	trie              *trie.MPT
 	originRoot        common.Hash
 	sectionHeads      []common.Hash
 }
