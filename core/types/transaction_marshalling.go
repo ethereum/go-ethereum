@@ -373,20 +373,20 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		itx.BlobHashes = dec.BlobVersionedHashes
 
 		// signature R
-		var ok bool
+		var overflow bool
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
-		itx.R, ok = uint256.FromBig((*big.Int)(dec.R))
-		if !ok {
+		itx.R, overflow = uint256.FromBig((*big.Int)(dec.R))
+		if overflow {
 			return errors.New("'r' value overflows uint256")
 		}
 		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
-		itx.S, ok = uint256.FromBig((*big.Int)(dec.S))
-		if !ok {
+		itx.S, overflow = uint256.FromBig((*big.Int)(dec.S))
+		if overflow {
 			return errors.New("'s' value overflows uint256")
 		}
 		// signature V
@@ -394,8 +394,8 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return err
 		}
-		itx.V, ok = uint256.FromBig(vbig)
-		if !ok {
+		itx.V, overflow = uint256.FromBig(vbig)
+		if overflow {
 			return errors.New("'v' value overflows uint256")
 		}
 		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
