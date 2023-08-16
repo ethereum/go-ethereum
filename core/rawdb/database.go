@@ -480,6 +480,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		beaconHeaders   stat
 		cliqueSnaps     stat
 
+		// Verkle statistics
+		verkleTries        stat
+		verkleStateLookups stat
+
 		// Les statistic
 		chtTrieNodes   stat
 		bloomTrieNodes stat
@@ -549,6 +553,20 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
 			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+		case bytes.HasPrefix(key, VerklePrefix):
+			remain := key[len(VerklePrefix):]
+			switch {
+			case IsAccountTrieNode(remain):
+				verkleTries.Add(size)
+			case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
+				verkleStateLookups.Add(size)
+			case bytes.Equal(remain, persistentStateIDKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, trieJournalKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, snapshotSyncStatusKey):
+				metadata.Add(size)
+			}
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -595,6 +613,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
+		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
+		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
 		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}

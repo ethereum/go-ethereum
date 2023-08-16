@@ -117,6 +117,10 @@ var (
 	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
 
+	// VerklePrefix is the prefix of verkle states(verkle trie nodes,
+	// trie journal, persistent state id, state id lookups).
+	VerklePrefix = []byte("v")
+
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
 	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db
@@ -268,6 +272,11 @@ func stateIDKey(root common.Hash) []byte {
 // accountTrieNodeKey = trieNodeAccountPrefix + nodePath.
 func accountTrieNodeKey(path []byte) []byte {
 	return append(trieNodeAccountPrefix, path...)
+}
+
+// verkleTrieNodeKey = verklePrefix + trieNodeAccountPrefix + nodePath.
+func verkleTrieNodeKey(path []byte) []byte {
+	return append(VerklePrefix, append(trieNodeAccountPrefix, path...)...)
 }
 
 // storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.

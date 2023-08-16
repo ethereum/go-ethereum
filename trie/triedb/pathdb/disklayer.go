@@ -24,11 +24,8 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"golang.org/x/crypto/sha3"
 )
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
@@ -95,27 +92,25 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
-// Node implements the layer interface, retrieving the trie node with the
+// node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
-func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, *nodeLoc, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return nil, errSnapshotStale
+		return nil, nil, errSnapshotStale
 	}
 	// Try to retrieve the trie node from the not-yet-written
 	// node buffer first. Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the
 	// layer as stale.
-	n, err := dl.buffer.node(owner, path, hash)
-	if err != nil {
-		return nil, err
-	}
-	if n != nil {
+	n, found := dl.buffer.node(owner, path)
+	if found {
 		dirtyHitMeter.Mark(1)
-		dirtyReadMeter.Mark(int64(len(n.Blob)))
-		return n.Blob, nil
+		dirtyReadMeter.Mark(int64(len(n)))
+		dirtyNodeHitDepthHist.Update(int64(depth))
+		return n, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
 	}
 	dirtyMissMeter.Mark(1)
 
@@ -123,45 +118,31 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	key := cacheKey(owner, path)
 	if dl.cleans != nil {
 		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
-			h := newHasher()
-			defer h.release()
-
-			got := h.hash(blob)
-			if got == hash {
-				cleanHitMeter.Mark(1)
-				cleanReadMeter.Mark(int64(len(blob)))
-				return blob, nil
-			}
-			cleanFalseMeter.Mark(1)
-			log.Error("Unexpected trie node in clean cache", "owner", owner, "path", path, "expect", hash, "got", got)
+			cleanHitMeter.Mark(1)
+			cleanReadMeter.Mark(int64(len(blob)))
+			dirtyNodeHitDepthHist.Update(int64(depth))
+			return blob, &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanMissMeter.Mark(1)
 	}
 	// Try to retrieve the trie node from the disk.
-	var (
-		nBlob []byte
-		nHash common.Hash
-	)
+	var blob []byte
 	if owner == (common.Hash{}) {
-		nBlob, nHash = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
+		blob = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
 	} else {
-		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
+		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
-	if nHash != hash {
-		diskFalseMeter.Mark(1)
-		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
-		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path, nBlob)
+	if dl.cleans != nil && len(blob) > 0 {
+		dl.cleans.Set(key, blob)
+		cleanWriteMeter.Mark(int64(len(blob)))
+		dirtyNodeHitDepthHist.Update(int64(depth))
 	}
-	if dl.cleans != nil && len(nBlob) > 0 {
-		dl.cleans.Set(key, nBlob)
-		cleanWriteMeter.Mark(int64(len(nBlob)))
-	}
-	return nBlob, nil
+	return blob, &nodeLoc{loc: locDisk, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top
 // with the given state set.
-func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string][]byte, states *triestate.Set) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
@@ -316,23 +297,4 @@ func (dl *diskLayer) resetCache() {
 	if dl.cleans != nil {
 		dl.cleans.Reset()
 	}
-}
-
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
-
-var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
-}
-
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
-
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
 }

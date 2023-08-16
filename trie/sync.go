@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -691,13 +692,12 @@ func (s *Sync) hasNode(owner common.Hash, path []byte, hash common.Hash) (exists
 	}
 	// If node is running with path scheme, check the presence with node path.
 	var blob []byte
-	var dbHash common.Hash
 	if owner == (common.Hash{}) {
-		blob, dbHash = rawdb.ReadAccountTrieNode(s.database, path)
+		blob = rawdb.ReadAccountTrieNode(s.database, path)
 	} else {
-		blob, dbHash = rawdb.ReadStorageTrieNode(s.database, owner, path)
+		blob = rawdb.ReadStorageTrieNode(s.database, owner, path)
 	}
-	exists = hash == dbHash
+	exists = hash == crypto.Keccak256Hash(blob)
 	inconsistent = !exists && len(blob) != 0
 	return exists, inconsistent
 }

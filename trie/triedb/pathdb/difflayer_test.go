@@ -23,12 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/trie/testutil"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 func emptyLayer() *diskLayer {
 	return &diskLayer{
-		db:     New(rawdb.NewMemoryDatabase(), nil),
+		db:     New(rawdb.NewMemoryDatabase(), nil, false),
 		buffer: newNodeBuffer(DefaultBufferSize, nil, 0),
 	}
 }
@@ -57,23 +56,21 @@ func BenchmarkSearch1Layer(b *testing.B) { benchmarkSearch(b, 127, 128) }
 func benchmarkSearch(b *testing.B, depth int, total int) {
 	var (
 		npath []byte
-		nhash common.Hash
 		nblob []byte
 	)
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer, index int) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := make(map[common.Hash]map[string][]byte)
+		nodes[common.Hash{}] = make(map[string][]byte)
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				blob = testutil.RandBytes(100)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = blob
 			if npath == nil && depth == index {
 				npath = common.CopyBytes(path)
-				nblob = common.CopyBytes(node.Blob)
-				nhash = node.Hash
+				nblob = common.CopyBytes(blob)
 			}
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
@@ -90,7 +87,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		err  error
 	)
 	for i := 0; i < b.N; i++ {
-		have, err = layer.Node(common.Hash{}, npath, nhash)
+		have, _, err = layer.node(common.Hash{}, npath, 0)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -108,14 +105,14 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 func BenchmarkPersist(b *testing.B) {
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := make(map[common.Hash]map[string][]byte)
+		nodes[common.Hash{}] = make(map[string][]byte)
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				blob = testutil.RandBytes(100)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = blob
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
 	}
@@ -145,14 +142,14 @@ func BenchmarkJournal(b *testing.B) {
 
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := make(map[common.Hash]map[string][]byte)
+		nodes[common.Hash{}] = make(map[string][]byte)
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				blob = testutil.RandBytes(100)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = blob
 		}
 		// TODO(rjl493456442) a non-nil state set is expected.
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)

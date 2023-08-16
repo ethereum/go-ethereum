@@ -28,13 +28,8 @@ import (
 // node hash. It is general enough that can be used to represent trie node
 // corresponding to different trie implementations.
 type Node struct {
-	Hash common.Hash // Node hash, empty for deleted node
+	Hash common.Hash // Node hash, empty for deleted node or verkle node
 	Blob []byte      // Encoded node blob, nil for the deleted node
-}
-
-// Size returns the total memory size used by this node.
-func (n *Node) Size() int {
-	return len(n.Blob) + common.HashLength
 }
 
 // IsDeleted returns the indicator if the node is marked as deleted.
@@ -189,11 +184,17 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	return nil
 }
 
-// Flatten returns a two-dimensional map for internal nodes.
-func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
+// Slim creates a node map by assembling nodes from the given set while excluding
+// any other fields present in the MergedNodeSet. The node blobs are referenced
+// directly without deep-copied due to the fact that they are immutable.
+func (set *MergedNodeSet) Slim() map[common.Hash]map[string][]byte {
+	nodes := make(map[common.Hash]map[string][]byte)
 	for owner, set := range set.Sets {
-		nodes[owner] = set.Nodes
+		subset := make(map[string][]byte)
+		for path, node := range set.Nodes {
+			subset[path] = node.Blob
+		}
+		nodes[owner] = subset
 	}
 	return nodes
 }

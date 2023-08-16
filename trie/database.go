@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -27,6 +28,23 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
+
+// Reader wraps the Node method of a backing trie store.
+type Reader interface {
+	// Node retrieves the trie node blob with the provided trie identifier, node path and
+	// the corresponding node hash. No error will be returned if the node is not found.
+	//
+	// When looking up nodes in the account trie, 'owner' is the zero hash. For contract
+	// storage trie nodes, 'owner' is the hash of the account address that containing the
+	// storage.
+	//
+	// Notably, the provided hash might be useless in path mode if hash check is
+	// configured as disabled, e.g. in the verkle context.
+	//
+	// Don't modify the returned byte slice since it's not deep-copied and still
+	// be referenced by database.
+	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+}
 
 // Config defines all necessary options for database.
 type Config struct {
@@ -40,15 +58,21 @@ type Config struct {
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
+	IsVerkle:  false,
 	HashDB:    hashdb.Defaults,
+}
+
+// PathDefaults represents a config for using path-based scheme with
+// default settings.
+var PathDefaults = &Config{
+	Preimages: false,
+	IsVerkle:  false,
+	PathDB:    pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
-	// Scheme returns the identifier of used storage scheme.
-	Scheme() string
-
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -106,7 +130,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
 	if config.PathDB != nil {
-		db.backend = pathdb.New(diskdb, config.PathDB)
+		db.backend = pathdb.New(diskdb, config.PathDB, config.IsVerkle)
 	} else {
 		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
 	}
@@ -172,7 +196,10 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
-	return db.backend.Scheme()
+	if db.config.PathDB != nil {
+		return rawdb.PathScheme
+	}
+	return rawdb.HashScheme
 }
 
 // Close flushes the dangling preimages to disk and closes the trie database.

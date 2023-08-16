@@ -26,10 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
@@ -115,9 +113,10 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	_, root := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-	root = types.TrieRootHash(root)
-
+	var root = types.EmptyRootHash
+	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
+		root = db.config.Hasher(blob)
+	}
 	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
 	if err == nil {
@@ -157,14 +156,14 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := r.Decode(&encoded); err != nil {
 		return nil, fmt.Errorf("load disk nodes: %v", err)
 	}
-	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	nodes := make(map[common.Hash]map[string][]byte)
 	for _, entry := range encoded {
-		subset := make(map[string]*trienode.Node)
+		subset := make(map[string][]byte)
 		for _, n := range entry.Nodes {
 			if len(n.Blob) > 0 {
-				subset[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
+				subset[string(n.Path)] = n.Blob
 			} else {
-				subset[string(n.Path)] = trienode.NewDeleted()
+				subset[string(n.Path)] = nil
 			}
 		}
 		nodes[entry.Owner] = subset
@@ -195,14 +194,14 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	if err := r.Decode(&encoded); err != nil {
 		return nil, fmt.Errorf("load diff nodes: %v", err)
 	}
-	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	nodes := make(map[common.Hash]map[string][]byte)
 	for _, entry := range encoded {
-		subset := make(map[string]*trienode.Node)
+		subset := make(map[string][]byte)
 		for _, n := range entry.Nodes {
 			if len(n.Blob) > 0 {
-				subset[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
+				subset[string(n.Path)] = n.Blob
 			} else {
-				subset[string(n.Path)] = trienode.NewDeleted()
+				subset[string(n.Path)] = nil
 			}
 		}
 		nodes[entry.Owner] = subset
@@ -264,7 +263,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	for owner, subset := range dl.buffer.nodes {
 		entry := journalNodes{Owner: owner}
 		for path, node := range subset {
-			entry.Nodes = append(entry.Nodes, journalNode{Path: []byte(path), Blob: node.Blob})
+			entry.Nodes = append(entry.Nodes, journalNode{Path: []byte(path), Blob: node})
 		}
 		nodes = append(nodes, entry)
 	}
@@ -297,7 +296,7 @@ func (dl *diffLayer) journal(w io.Writer) error {
 	for owner, subset := range dl.nodes {
 		entry := journalNodes{Owner: owner}
 		for path, node := range subset {
-			entry.Nodes = append(entry.Nodes, journalNode{Path: []byte(path), Blob: node.Blob})
+			entry.Nodes = append(entry.Nodes, journalNode{Path: []byte(path), Blob: node})
 		}
 		nodes = append(nodes, entry)
 	}
@@ -363,14 +362,13 @@ func (db *Database) Journal(root common.Hash) error {
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err
 	}
-	// The stored state in disk might be empty, convert the
-	// root to emptyRoot in this case.
-	_, diskroot := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-	diskroot = types.TrieRootHash(diskroot)
-
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
-	if err := rlp.Encode(journal, diskroot); err != nil {
+	diskRoot := types.EmptyRootHash
+	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
+		diskRoot = db.config.Hasher(blob)
+	}
+	if err := rlp.Encode(journal, diskRoot); err != nil {
 		return err
 	}
 	// Finally write out the journal of each layer in reverse order.

@@ -105,7 +105,7 @@ type context struct {
 // Apply traverses the provided state diffs, apply them in the associated
 // post-state and return the generated dirty trie nodes. The state can be
 // loaded via the provided trie loader.
-func Apply(prevRoot common.Hash, postRoot common.Hash, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, loader TrieLoader) (map[common.Hash]map[string]*trienode.Node, error) {
+func Apply(prevRoot common.Hash, postRoot common.Hash, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, loader TrieLoader) (map[common.Hash]map[string][]byte, error) {
 	tr, err := loader.OpenTrie(postRoot)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func Apply(prevRoot common.Hash, postRoot common.Hash, accounts map[common.Addre
 	if err := ctx.nodes.Merge(result); err != nil {
 		return nil, err
 	}
-	return ctx.nodes.Flatten(), nil
+	return ctx.nodes.Slim(), nil
 }
 
 // updateAccount the account was present in prev-state, and may or may not

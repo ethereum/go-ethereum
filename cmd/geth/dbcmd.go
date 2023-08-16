@@ -220,11 +220,18 @@ func removeDB(ctx *cli.Context) error {
 		ancientDir = config.Node.ResolvePath(ancientDir)
 	}
 	// Delete state data
-	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
+	statePaths := []string{
+		rootDir,
+		filepath.Join(ancientDir, rawdb.MerkleStateFreezerName),
+		filepath.Join(ancientDir, rawdb.VerkleStateFreezerName),
+	}
 	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 
 	// Delete ancient chain
-	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
+	chainPaths := []string{filepath.Join(
+		ancientDir,
+		rawdb.ChainFreezerName,
+	)}
 	confirmAndRemoveDB(chainPaths, "ancient chain", ctx, removeChainDataFlag.Name)
 	return nil
 }
