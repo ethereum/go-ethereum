@@ -2398,10 +2398,9 @@ func (bc *BlockChain) maintainTxIndex() {
 	// useful in these scenarios that chain has no progress and indexer
 	// is never triggered.
 	head := rawdb.ReadHeadBlock(bc.db)
-	tail := rawdb.ReadTxIndexTail(bc.db)
-	if head != nil && tail != nil {
+	if head != nil {
 		done = make(chan struct{})
-		bc.indexBlocks(tail, head.NumberU64(), done)
+		go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
 	}
 
 	for {
