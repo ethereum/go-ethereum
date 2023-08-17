@@ -662,9 +662,10 @@ func TestTruncateTail(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("truncate-tail-%d", rand.Uint64())
+	var maxFileSize uint32 = 50
 
 	// Fill table
-	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,12 +673,12 @@ func TestTruncateTail(t *testing.T) {
 	// Write 7 x 20 bytes, splitting out into four files
 	batch := f.newBatch()
 	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
-	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
-	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
-	require.NoError(t, batch.AppendRaw(3, getChunk(20, 0xcc)))
-	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
-	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
-	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
+	require.NoError(t, batch.AppendRaw(1, getChunk(21, 0xEE)))
+	require.NoError(t, batch.AppendRaw(2, getChunk(22, 0xdd)))
+	require.NoError(t, batch.AppendRaw(3, getChunk(23, 0xcc)))
+	require.NoError(t, batch.AppendRaw(4, getChunk(24, 0xbb)))
+	require.NoError(t, batch.AppendRaw(5, getChunk(25, 0xaa)))
+	require.NoError(t, batch.AppendRaw(6, getChunk(26, 0x11)))
 	require.NoError(t, batch.commit())
 
 	// nothing to do, all the items should still be there.
@@ -685,32 +686,34 @@ func TestTruncateTail(t *testing.T) {
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieve(t, f, map[uint64][]byte{
 		0: getChunk(20, 0xFF),
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		1: getChunk(21, 0xEE),
+		2: getChunk(22, 0xdd),
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
 	})
 
 	// truncate single element( item 0 ), deletion is only supported at file level
+	// hiddenSize should be 20 (size of item 0)
 	f.truncateTail(1)
 	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		1: getChunk(21, 0xEE),
+		2: getChunk(22, 0xdd),
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
 	})
+	checkSizeHidden(t, f, 20)
 
 	// Reopen the table, the deletion information should be persisted as well
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,31 +721,33 @@ func TestTruncateTail(t *testing.T) {
 		0: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		1: getChunk(20, 0xEE),
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		1: getChunk(21, 0xEE),
+		2: getChunk(22, 0xdd),
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
 	})
+	checkSizeHidden(t, f, 20)
 
 	// truncate two elements( item 0, item 1 ), the file 0 should be deleted
+	// hiddenSize should be 0, as file 0 was deleted
 	f.truncateTail(2)
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		2: getChunk(22, 0xdd),
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
 	})
 
 	// Reopen the table, the above testing should still pass
 	f.Close()
-	f, err = newTable(os.TempDir(), fname, rm, wm, sg, 40, true, false)
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,12 +758,49 @@ func TestTruncateTail(t *testing.T) {
 		1: errOutOfBounds,
 	})
 	checkRetrieve(t, f, map[uint64][]byte{
-		2: getChunk(20, 0xdd),
-		3: getChunk(20, 0xcc),
-		4: getChunk(20, 0xbb),
-		5: getChunk(20, 0xaa),
-		6: getChunk(20, 0x11),
+		2: getChunk(22, 0xdd),
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
 	})
+
+	// truncate two elements( item 0, item 1, item 2 ), the file 0 should be deleted
+	// hiddenSize should be 22 (size of item 2), as item 0 and item 1 was deleted with file 0
+	f.truncateTail(3)
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+		1: errOutOfBounds,
+		2: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
+	})
+	checkSizeHidden(t, f, 22)
+
+	// Reopen the table, the above testing should still pass
+	f.Close()
+	f, err = newTable(os.TempDir(), fname, rm, wm, sg, maxFileSize, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	checkRetrieveError(t, f, map[uint64]error{
+		0: errOutOfBounds,
+		1: errOutOfBounds,
+		2: errOutOfBounds,
+	})
+	checkRetrieve(t, f, map[uint64][]byte{
+		3: getChunk(23, 0xcc),
+		4: getChunk(24, 0xbb),
+		5: getChunk(25, 0xaa),
+		6: getChunk(26, 0x11),
+	})
+	checkSizeHidden(t, f, 22)
 
 	// truncate all, the entire freezer should be deleted
 	f.truncateTail(7)
@@ -821,6 +863,18 @@ func TestTruncateHead(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
+}
+
+func checkSizeHidden(t *testing.T, f *freezerTable, size uint64) {
+	t.Helper()
+
+	sizeHidden, err := f.sizeHidden()
+	if err != nil {
+		t.Fatalf("can't get the size of hidden items: %v", err)
+	}
+	if sizeHidden != size {
+		t.Fatalf("the size of hidden items has wrong value %d (want %d)", sizeHidden, size)
+	}
 }
 
 func checkRetrieve(t *testing.T, f *freezerTable, items map[uint64][]byte) {

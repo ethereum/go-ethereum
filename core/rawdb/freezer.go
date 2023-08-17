@@ -226,7 +226,15 @@ func (f *Freezer) AncientSize(kind string) (uint64, error) {
 	defer f.writeLock.RUnlock()
 
 	if table := f.tables[kind]; table != nil {
-		return table.size()
+		size, err := table.size()
+		if err != nil {
+			return 0, err
+		}
+		hiddenSize, err := table.sizeHidden()
+		if err != nil {
+			return 0, err
+		}
+		return size - hiddenSize, nil
 	}
 	return 0, errUnknownTable
 }

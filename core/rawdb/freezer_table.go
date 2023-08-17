@@ -853,6 +853,39 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	return total, nil
 }
 
+// sizeHidden returns the total data size of hidden items in the freezer table.
+func (t *freezerTable) sizeHidden() (uint64, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.sizeHiddenNoLock()
+}
+
+// sizeHiddenNoLock returns the total data size of hidden items in the freezer table
+// without obtaining the mutex first.
+func (t *freezerTable) sizeHiddenNoLock() (uint64, error) {
+	hiddenItems := t.itemHidden.Load()
+	offsetItems := t.itemOffset.Load()
+	if hiddenItems <= offsetItems {
+		// Return 0 if there is no hidden items
+		return 0, nil
+	}
+
+	indices, err := t.getIndices(offsetItems, hiddenItems-offsetItems)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalSize int = 0
+	for i, firstIndex := range indices[:len(indices)-1] {
+		secondIndex := indices[i+1]
+		offset1, offset2, _ := firstIndex.bounds(secondIndex)
+		size := int(offset2 - offset1)
+		totalSize += size
+	}
+	return uint64(totalSize), nil
+}
+
 // advanceHead should be called when the current head file would outgrow the file limits,
 // and a new file must be opened. The caller of this method must hold the write-lock
 // before calling this method.
