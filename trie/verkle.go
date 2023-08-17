@@ -205,7 +205,11 @@ func (trie *VerkleTrie) UpdateStem(key []byte, values [][]byte) error {
 func (trie *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) error {
 	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(trie.pointCache.GetTreeKeyHeader(address[:]), key)
 	var v [32]byte
-	copy(v[:], value[:])
+	if len(value) >= 32 {
+		copy(v[:], value[:32])
+	} else {
+		copy(v[32-len(value):], value[:])
+	}
 	return trie.root.Insert(k, v[:], trie.flatdbNodeResolver)
 }
 
