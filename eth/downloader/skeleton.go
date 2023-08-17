@@ -648,7 +648,11 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 	}
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		if force {
-			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+			ancestor := uint64(0)
+			if parent != nil {
+				ancestor = parent.Number.Uint64()
+			}
+			log.Warn("Beacon chain forked", "ancestor", ancestor, "hash", parent.Hash(), "want", head.ParentHash)
 		}
 		return true
 	}
