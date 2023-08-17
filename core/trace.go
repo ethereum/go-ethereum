@@ -158,7 +158,13 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 					case errCh <- err:
 					default:
 					}
-					log.Error("failed to trace tx", "txHash", txs[task.index].Hash().String())
+					log.Error(
+						"failed to trace tx",
+						"txHash", txs[task.index].Hash().String(),
+						"blockHash", block.Hash().String(),
+						"blockNumber", block.NumberU64(),
+						"err", err,
+					)
 				}
 			}
 		}()
