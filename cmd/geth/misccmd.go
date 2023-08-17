@@ -18,13 +18,13 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"runtime"
-	"strings"
-
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	"os"
+	"runtime"
 )
 
 var (
@@ -72,7 +72,7 @@ and displays information about any security vulnerabilities that affect the curr
 func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
-	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println(cases.Title(language.English).String(clientIdentifier))
 	fmt.Println("Version:", params.VersionWithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)

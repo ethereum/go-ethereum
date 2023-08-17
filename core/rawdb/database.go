@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"os"
 	"path"
 	"path/filepath"
@@ -602,8 +604,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
 			stats = append(stats, []string{
-				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
-				strings.Title(table.name),
+				fmt.Sprintf("Ancient store (%s)", cases.Title(language.English).String(ancient.name)),
+				cases.Title(language.English).String(table.name),
 				table.size.String(),
 				fmt.Sprintf("%d", ancient.count()),
 			})

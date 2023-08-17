@@ -19,6 +19,8 @@ package version
 
 import (
 	"fmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -58,7 +60,7 @@ func VCS() (VCSInfo, bool) {
 func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
-		strings.Title(clientIdentifier),
+		cases.Title(language.English).String(clientIdentifier),
 		params.VersionWithCommit(git.Commit, git.Date),
 		runtime.GOOS, runtime.GOARCH,
 		runtime.Version(),
