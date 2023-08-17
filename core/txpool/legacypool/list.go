@@ -80,8 +80,8 @@ func (m *sortedMap) Put(tx *types.Transaction) {
 		heap.Push(m.index, nonce)
 	}
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	m.items[nonce], m.cache = tx, nil
+	m.cacheMu.Unlock()
 }
 
 // Forward removes all transactions from the map with a nonce lower than the
@@ -98,10 +98,10 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 	}
 	// If we had a cached order, shift the front
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	if m.cache != nil {
 		m.cache = m.cache[len(removed):]
 	}
+	m.cacheMu.Unlock()
 	return removed
 }
 
@@ -126,8 +126,8 @@ func (m *sortedMap) reheap() {
 	}
 	heap.Init(m.index)
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	m.cache = nil
+	m.cacheMu.Unlock()
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
@@ -170,10 +170,10 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 
 	// If we had a cache, shift the back
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	if m.cache != nil {
 		m.cache = m.cache[:len(m.cache)-len(drops)]
 	}
+	m.cacheMu.Unlock()
 	return drops
 }
 
@@ -194,8 +194,8 @@ func (m *sortedMap) Remove(nonce uint64) bool {
 	}
 	delete(m.items, nonce)
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	m.cache = nil
+	m.cacheMu.Unlock()
 
 	return true
 }
@@ -220,8 +220,8 @@ func (m *sortedMap) Ready(start uint64) types.Transactions {
 		heap.Pop(m.index)
 	}
 	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	m.cache = nil
+	m.cacheMu.Unlock()
 
 	return ready
 }
