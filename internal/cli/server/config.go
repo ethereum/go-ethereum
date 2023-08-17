@@ -67,6 +67,9 @@ type Config struct {
 	// Ancient is the directory to store the state in
 	Ancient string `hcl:"ancient,optional" toml:"ancient,optional"`
 
+	// DBEngine is used to select leveldb or pebble as database
+	DBEngine string `hcl:"dbengine,optional" toml:"dbengine,optional"`
+
 	// KeyStoreDir is the directory to store keystores
 	KeyStoreDir string `hcl:"keystore,optional" toml:"keystore,optional"`
 
@@ -592,6 +595,7 @@ func DefaultConfig() *Config {
 		EnablePreimageRecording: false,
 		DataDir:                 DefaultDataDir(),
 		Ancient:                 "",
+		DBEngine:                "leveldb",
 		Logging: &LoggingConfig{
 			Vmodule:   "",
 			Json:      false,
@@ -1278,6 +1282,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 	cfg := &node.Config{
 		Name:                  clientIdentifier,
 		DataDir:               c.DataDir,
+		DBEngine:              c.DBEngine,
 		KeyStoreDir:           c.KeyStoreDir,
 		UseLightweightKDF:     c.Accounts.UseLightweightKDF,
 		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,

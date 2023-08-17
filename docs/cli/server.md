@@ -18,6 +18,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```datadir.ancient```: Data directory for ancient chain segments (default = inside chaindata)
 
+- ```db.engine```: Backing database implementation to use ('leveldb' or 'pebble') (default: leveldb)
+
 - ```keystore```: Path of the directory where keystores are located
 
 - ```rpc.batchlimit```: Maximum number of messages in a batch (default=100, use 0 for no limits) (default: 100)
