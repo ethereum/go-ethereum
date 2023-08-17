@@ -163,7 +163,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
-		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / 32 * 32).Hash()
+		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength).Hash()
 	}
 
 	// mark the payload as canon
