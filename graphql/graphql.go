@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -277,7 +277,7 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 	case types.DynamicFeeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
-				// price = min(tip, gasFeeCap - baseFee) + baseFee
+				// price = min(gasTipCap + baseFee, gasFeeCap)
 				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap()))
 			}
 		}
@@ -566,6 +566,16 @@ func (t *Transaction) V(ctx context.Context) hexutil.Big {
 	return hexutil.Big(*v)
 }
 
+func (t *Transaction) YParity(ctx context.Context) (*hexutil.Uint64, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil || tx.Type() == types.LegacyTxType {
+		return nil, nil
+	}
+	v, _, _ := tx.RawSignatureValues()
+	ret := hexutil.Uint64(v.Int64())
+	return &ret, nil
+}
+
 func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	tx, _ := t.resolve(ctx)
 	if tx == nil {
@@ -714,7 +724,7 @@ func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 			return nil, nil
 		}
 	}
-	nextBaseFee := misc.CalcBaseFee(chaincfg, header)
+	nextBaseFee := eip1559.CalcBaseFee(chaincfg, header)
 	return (*hexutil.Big)(nextBaseFee), nil
 }
 
@@ -1130,7 +1140,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (hexutil.Uint64, error) {
-	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, b.r.backend.RPCGasCap())
+	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, b.r.backend.RPCGasCap())
 }
 
 type Pending struct {
@@ -1194,7 +1204,7 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (hexutil.Uint64, error) {
 	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-	return ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, p.r.backend.RPCGasCap())
+	return ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, p.r.backend.RPCGasCap())
 }
 
 // Resolver is the top-level object in the GraphQL hierarchy.
@@ -1207,6 +1217,9 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	Number *Long
 	Hash   *common.Hash
 }) (*Block, error) {
+	if args.Number != nil && args.Hash != nil {
+		return nil, errors.New("only one of number or hash must be specified")
+	}
 	var numberOrHash rpc.BlockNumberOrHash
 	if args.Number != nil {
 		if *args.Number < 0 {
@@ -1250,7 +1263,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	if to < from {
 		return []*Block{}, nil
 	}
-	ret := make([]*Block, 0, to-from+1)
+	var ret []*Block
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
 		block := &Block{
@@ -1268,6 +1281,9 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 			break
 		}
 		ret = append(ret, block)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	return ret, nil
 }

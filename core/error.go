@@ -102,6 +102,6 @@ var (
 	ErrSenderNoEOA = errors.New("sender not an eoa")
 
 	// ErrBlobFeeCapTooLow is returned if the transaction fee cap is less than the
-	// data gas fee of the block.
-	ErrBlobFeeCapTooLow = errors.New("max fee per data gas less than block data gas fee")
+	// blob gas fee of the block.
+	ErrBlobFeeCapTooLow = errors.New("max fee per blob gas less than block blob gas fee")
 )

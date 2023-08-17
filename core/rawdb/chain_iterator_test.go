@@ -19,12 +19,12 @@ package rawdb
 import (
 	"math/big"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"golang.org/x/exp/slices"
 )
 
 func TestChainIterator(t *testing.T) {
@@ -34,7 +34,7 @@ func TestChainIterator(t *testing.T) {
 	var block *types.Block
 	var txs []*types.Transaction
 	to := common.BytesToAddress([]byte{0x11})
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher()) // Empty genesis block
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newTestHasher()) // Empty genesis block
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	for i := uint64(1); i <= 10; i++ {
@@ -60,7 +60,7 @@ func TestChainIterator(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -92,11 +92,9 @@ func TestChainIterator(t *testing.T) {
 			}
 		}
 		if !c.reverse {
-			slices.Sort(numbers)
+			sort.Ints(numbers)
 		} else {
-			slices.SortFunc(numbers, func(a, b int) bool {
-				return a > b // Sort descending
-			})
+			sort.Sort(sort.Reverse(sort.IntSlice(numbers)))
 		}
 		if !reflect.DeepEqual(numbers, c.expect) {
 			t.Fatalf("Case %d failed, visit element mismatch, want %v, got %v", i, c.expect, numbers)
@@ -113,7 +111,7 @@ func TestIndexTransactions(t *testing.T) {
 	to := common.BytesToAddress([]byte{0x11})
 
 	// Write empty genesis block
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newHasher())
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newTestHasher())
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 
@@ -140,7 +138,7 @@ func TestIndexTransactions(t *testing.T) {
 			})
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}

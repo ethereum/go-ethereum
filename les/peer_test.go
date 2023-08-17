@@ -124,8 +124,8 @@ func TestHandshake(t *testing.T) {
 		genesis = common.HexToHash("cafebabe")
 
 		chain1, chain2   = &fakeChain{}, &fakeChain{}
-		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64(), chain1.CurrentHeader().Time)
-		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64(), chain2.CurrentHeader().Time)
+		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis(), chain1.CurrentHeader().Number.Uint64(), chain1.CurrentHeader().Time)
+		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis(), chain2.CurrentHeader().Number.Uint64(), chain2.CurrentHeader().Time)
 		filter1, filter2 = forkid.NewFilter(chain1), forkid.NewFilter(chain2)
 	)
 

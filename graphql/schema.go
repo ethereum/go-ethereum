@@ -151,6 +151,7 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
+        yParity: Long
         # Envelope transaction support
         type: Long
         accessList: [AccessTuple!]

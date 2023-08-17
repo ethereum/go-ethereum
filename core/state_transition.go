@@ -242,10 +242,6 @@ func (st *StateTransition) buyGas() error {
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
-			if st.evm.Context.ExcessBlobGas == nil {
-				// programming error
-				panic("missing field excess data gas")
-			}
 			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
 			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
 			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
@@ -471,7 +467,7 @@ func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gasRemaining
 }
 
-// blobGasUsed returns the amount of data gas used by the message.
+// blobGasUsed returns the amount of blob gas used by the message.
 func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 const (
@@ -66,10 +68,10 @@ type txPool interface {
 
 	// Get retrieves the transaction from local txpool with given
 	// tx hash.
-	Get(hash common.Hash) *txpool.Transaction
+	Get(hash common.Hash) *types.Transaction
 
 	// Add should add the given transactions to the pool.
-	Add(txs []*txpool.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, local bool, sync bool) []error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
@@ -183,7 +185,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		// If we've successfully finished a sync cycle, accept transactions from
 		// the network
-		h.acceptTxs.Store(true)
+		h.enableSyncedFeatures()
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
@@ -272,7 +274,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		n, err := h.chain.InsertChain(blocks)
 		if err == nil {
-			h.acceptTxs.Store(true) // Mark initial sync done on any fetcher import
+			h.enableSyncedFeatures() // Mark initial sync done on any fetcher import
 		}
 		return n, err
 	}
@@ -285,7 +287,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	addTxs := func(txs []*txpool.Transaction) []error {
+	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false, false)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx)
@@ -353,7 +355,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		number  = head.Number.Uint64()
 		td      = h.chain.GetTd(hash, number)
 	)
-	forkID := forkid.NewID(h.chain.Config(), genesis.Hash(), number, head.Time)
+	forkID := forkid.NewID(h.chain.Config(), genesis, number, head.Time)
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
@@ -672,5 +674,14 @@ func (h *handler) txBroadcastLoop() {
 		case <-h.txsSub.Err():
 			return
 		}
+	}
+}
+
+// enableSyncedFeatures enables the post-sync functionalities when the initial
+// sync is finished.
+func (h *handler) enableSyncedFeatures() {
+	h.acceptTxs.Store(true)
+	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
+		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
 }

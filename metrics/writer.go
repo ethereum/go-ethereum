@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/slices"
@@ -23,8 +24,7 @@ func WriteOnce(r Registry, w io.Writer) {
 	r.Each(func(name string, i interface{}) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
-
-	slices.SortFunc(namedMetrics, namedMetric.less)
+	slices.SortFunc(namedMetrics, namedMetric.cmp)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
@@ -92,6 +92,6 @@ type namedMetric struct {
 	m    interface{}
 }
 
-func (m namedMetric) less(other namedMetric) bool {
-	return m.name < other.name
+func (m namedMetric) cmp(other namedMetric) int {
+	return strings.Compare(m.name, other.name)
 }

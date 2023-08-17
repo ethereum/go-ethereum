@@ -61,8 +61,8 @@ func TestUDPv5_lookupE2E(t *testing.T) {
 	for i := range nodes {
 		expectedResult[i] = nodes[i].Self()
 	}
-	slices.SortFunc(expectedResult, func(a, b *enode.Node) bool {
-		return enode.DistCmp(target.ID(), a.ID(), b.ID()) < 0
+	slices.SortFunc(expectedResult, func(a, b *enode.Node) int {
+		return enode.DistCmp(target.ID(), a.ID(), b.ID())
 	})
 
 	// Do the lookup.

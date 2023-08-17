@@ -56,7 +56,7 @@ func (f *fuzzer) readInt() uint64 {
 }
 
 func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
-	trie := trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase()))
+	trie := trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	vals := make(map[string]*kv)
 	size := f.readInt()
 	// Fill it with some fluff
@@ -98,8 +98,8 @@ func (f *fuzzer) fuzz() int {
 	if len(entries) <= 1 {
 		return 0
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return bytes.Compare(a.k, b.k) < 0
+	slices.SortFunc(entries, func(a, b *kv) int {
+		return bytes.Compare(a.k, b.k)
 	})
 
 	var ok = 0

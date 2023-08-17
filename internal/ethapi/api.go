@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -897,6 +897,34 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	return res[:], state.Error()
 }
 
+// GetBlockReceipts returns the block receipts for the given block hash or number or tag.
+func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		// When the block doesn't exist, the RPC method should return JSON null
+		// as per specification.
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
+	txs := block.Transactions()
+	if len(txs) != len(receipts) {
+		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
+	}
+
+	// Derive the sender.
+	signer := types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
+
+	result := make([]map[string]interface{}, len(receipts))
+	for i, receipt := range receipts {
+		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
+	}
+
+	return result, nil
+}
+
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
@@ -1134,7 +1162,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
-func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1
@@ -1173,6 +1201,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
 		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+		err = overrides.Apply(state)
 		if err != nil {
 			return 0, err
 		}
@@ -1221,6 +1253,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
+	err = overrides.Apply(state)
+	if err != nil {
+		return 0, err
+	}
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		s := state.Copy()
@@ -1261,12 +1297,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
-func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Uint64, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash, overrides, s.b.RPCGasCap())
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
@@ -1375,6 +1411,7 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+	YParity          *hexutil.Uint64   `json:"yParity,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1402,25 +1439,32 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
+
 	switch tx.Type() {
 	case types.LegacyTxType:
 		// if a legacy transaction has an EIP-155 chain id, include it explicitly
 		if id := tx.ChainId(); id.Sign() != 0 {
 			result.ChainID = (*hexutil.Big)(id)
 		}
+
 	case types.AccessListTxType:
 		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+
 	case types.DynamicFeeTxType:
 		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
-			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			// price = min(gasTipCap + baseFee, gasFeeCap)
 			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
@@ -1438,7 +1482,7 @@ func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 		blockTime   = uint64(0)
 	)
 	if current != nil {
-		baseFee = misc.CalcBaseFee(config, current)
+		baseFee = eip1559.CalcBaseFee(config, current)
 		blockNumber = current.Number.Uint64()
 		blockTime = current.Time
 	}
@@ -1701,13 +1745,18 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 
 	// Derive the sender.
 	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
+	return marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
+}
+
+// marshalReceipt marshals a transaction receipt into a JSON object.
+func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
 		"blockHash":         blockHash,
 		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
+		"transactionHash":   tx.Hash(),
+		"transactionIndex":  hexutil.Uint64(txIndex),
 		"from":              from,
 		"to":                tx.To(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
@@ -1733,7 +1782,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
-	return fields, nil
+	return fields
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
