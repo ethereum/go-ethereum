@@ -57,7 +57,7 @@ func (c *Command) Flags() *flagset.Flagset {
 		Name:    "db.engine",
 		Usage:   "Backing database implementation to use ('leveldb' or 'pebble')",
 		Value:   &c.cliConfig.DBEngine,
-		Default: "leveldb",
+		Default: c.cliConfig.DBEngine,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
