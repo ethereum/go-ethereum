@@ -858,12 +858,6 @@ func (t *freezerTable) sizeHidden() (uint64, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.sizeHiddenNoLock()
-}
-
-// sizeHiddenNoLock returns the total data size of hidden items in the freezer table
-// without obtaining the mutex first.
-func (t *freezerTable) sizeHiddenNoLock() (uint64, error) {
 	hiddenItems := t.itemHidden.Load()
 	offsetItems := t.itemOffset.Load()
 	if hiddenItems <= offsetItems {
