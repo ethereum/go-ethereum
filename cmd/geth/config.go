@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"time"
 
@@ -149,8 +150,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	// TODO marcello double check
 	if ctx.IsSet(utils.OverrideShanghai.Name) {
-		v := ctx.Uint64(utils.OverrideShanghai.Name)
-		cfg.Eth.OverrideShanghai = &v
+		v := ctx.Int64(utils.OverrideShanghai.Name)
+		cfg.Eth.OverrideShanghai = new(big.Int).SetInt64(v)
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)

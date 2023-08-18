@@ -286,7 +286,7 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	// TODO marcello double check
-	if chainConfig.IsShanghai(prestate.Env.Number) && prestate.Env.Withdrawals == nil {
+	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number))) && prestate.Env.Withdrawals == nil {
 		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
 	}
 

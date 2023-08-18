@@ -284,7 +284,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify existence / non-existence of withdrawalsHash.
 	// TODO marcello double check
-	shanghai := chain.Config().IsShanghai(header.Time)
+	shanghai := chain.Config().IsShanghai(header.Number)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
@@ -293,7 +293,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of excessDataGas
-	cancun := chain.Config().IsCancun(header.Time)
+	cancun := chain.Config().IsCancun(header.Number)
 	if cancun && header.ExcessDataGas == nil {
 		return errors.New("missing excessDataGas")
 	}
@@ -392,7 +392,7 @@ func (beacon *Beacon) FinalizeAndAssemble(ctx context.Context, chain consensus.C
 		return beacon.ethone.FinalizeAndAssemble(ctx, chain, header, state, txs, uncles, receipts, nil)
 	}
 	// TODO marcello double check
-	shanghai := chain.Config().IsShanghai(header.Time)
+	shanghai := chain.Config().IsShanghai(header.Number)
 	if shanghai {
 		// All blocks after Shanghai must include a withdrawals root.
 		if withdrawals == nil {

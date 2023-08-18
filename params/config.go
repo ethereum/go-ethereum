@@ -81,7 +81,6 @@ var (
 		GrayGlacierBlock:              big.NewInt(15_050_000),
 		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		TerminalTotalDifficultyPassed: true,
-		ShanghaiTime:                  newUint64(1681338455),
 		Ethash:                        new(EthashConfig),
 	}
 
@@ -125,7 +124,6 @@ var (
 		TerminalTotalDifficulty:       big.NewInt(17_000_000_000_000_000),
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            big.NewInt(1735371),
-		ShanghaiTime:                  newUint64(1677557088),
 		Ethash:                        new(EthashConfig),
 	}
 
@@ -199,7 +197,6 @@ var (
 		ArrowGlacierBlock:             nil,
 		TerminalTotalDifficulty:       big.NewInt(10_790_000),
 		TerminalTotalDifficultyPassed: true,
-		ShanghaiTime:                  newUint64(1678832736),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -445,9 +442,9 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
-		CancunTime:                    nil,
-		PragueTime:                    nil,
+		ShanghaiBlock:                 nil,
+		CancunBlock:                   nil,
+		PragueBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -475,9 +472,9 @@ var (
 		ArrowGlacierBlock:             nil,
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
-		CancunTime:                    nil,
-		PragueTime:                    nil,
+		ShanghaiBlock:                 nil,
+		CancunBlock:                   nil,
+		PragueBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
@@ -505,9 +502,9 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
-		CancunTime:                    nil,
-		PragueTime:                    nil,
+		ShanghaiBlock:                 nil,
+		CancunBlock:                   nil,
+		PragueBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -538,9 +535,9 @@ var (
 		ArrowGlacierBlock:             nil,
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
-		CancunTime:                    nil,
-		PragueTime:                    nil,
+		ShanghaiBlock:                 nil,
+		CancunBlock:                   nil,
+		PragueBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -640,10 +637,10 @@ type ChainConfig struct {
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
 
 	// Fork scheduling was switched from blocks to timestamps here
-
-	ShanghaiTime *uint64 `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
-	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
-	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
+	// Fork scheduling switched back to blockNumber in Bor
+	ShanghaiBlock *big.Int `json:"shanghaiBlock,omitempty"` // Shanghai switch Block (nil = no fork, 0 = already on shanghai)
+	CancunBlock   *big.Int `json:"cancunBlock,omitempty"`   // Cancun switch Block (nil = no fork, 0 = already on cancun)
+	PragueBlock   *big.Int `json:"pragueBlock,omitempty"`   // Prague switch Block (nil = no fork, 0 = already on prague)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -900,16 +897,16 @@ func (c *ChainConfig) Description() string {
 
 	// Create a list of forks post-merge
 	banner += "Post-Merge hard forks (timestamp based):\n"
-	if c.ShanghaiTime != nil {
-		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiTime)
+	if c.ShanghaiBlock != nil {
+		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiBlock)
 	}
 
-	if c.CancunTime != nil {
-		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", *c.CancunTime)
+	if c.CancunBlock != nil {
+		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", *c.CancunBlock)
 	}
 
-	if c.PragueTime != nil {
-		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
+	if c.PragueBlock != nil {
+		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueBlock)
 	}
 
 	return banner
@@ -998,18 +995,18 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
 // TODO marcello double check
-func (c *ChainConfig) IsShanghai(time uint64) bool {
-	return isTimestampForked(c.ShanghaiTime, time)
+func (c *ChainConfig) IsShanghai(num *big.Int) bool {
+	return isBlockForked(c.ShanghaiBlock, num)
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
-func (c *ChainConfig) IsCancun(time uint64) bool {
-	return isTimestampForked(c.CancunTime, time)
+func (c *ChainConfig) IsCancun(num *big.Int) bool {
+	return isBlockForked(c.CancunBlock, num)
 }
 
 // IsPrague returns whether num is either equal to the Prague fork time or greater.
-func (c *ChainConfig) IsPrague(time uint64) bool {
-	return isTimestampForked(c.PragueTime, time)
+func (c *ChainConfig) IsPrague(num *big.Int) bool {
+	return isBlockForked(c.PragueBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -1067,9 +1064,9 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
-		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
-		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
-		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
+		{name: "shanghaiTime", block: c.ShanghaiBlock},
+		{name: "cancunTime", block: c.CancunBlock, optional: true},
+		{name: "pragueTime", block: c.PragueBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -1182,16 +1179,16 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 		return newBlockCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
 	}
 
-	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
-		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
+	if isForkBlockIncompatible(c.ShanghaiBlock, newcfg.ShanghaiBlock, headNumber) {
+		return newBlockCompatError("Shanghai fork block", c.ShanghaiBlock, newcfg.ShanghaiBlock)
 	}
 
-	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
-		return newTimestampCompatError("Cancun fork timestamp", c.CancunTime, newcfg.CancunTime)
+	if isForkBlockIncompatible(c.CancunBlock, newcfg.CancunBlock, headNumber) {
+		return newBlockCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
 	}
 
-	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
-		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
+	if isForkBlockIncompatible(c.PragueBlock, newcfg.PragueBlock, headNumber) {
+		return newBlockCompatError("Prague fork block", c.PragueBlock, newcfg.PragueBlock)
 	}
 
 	return nil
@@ -1375,8 +1372,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       c.IsShanghai(timestamp),
-		IsCancun:         c.IsCancun(timestamp),
-		IsPrague:         c.IsPrague(timestamp),
+		IsShanghai:       c.IsShanghai(num),
+		IsCancun:         c.IsCancun(num),
+		IsPrague:         c.IsPrague(num),
 	}
 }

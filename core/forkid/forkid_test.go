@@ -119,7 +119,7 @@ func TestCreation(t *testing.T) {
 func TestValidation(t *testing.T) {
 	// Config that has not timestamp enabled
 	legacyConfig := *params.MainnetChainConfig
-	legacyConfig.ShanghaiTime = nil
+	legacyConfig.ShanghaiBlock = nil
 
 	tests := []struct {
 		config *params.ChainConfig

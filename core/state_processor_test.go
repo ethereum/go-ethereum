@@ -365,8 +365,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					TerminalTotalDifficulty:       big.NewInt(0),
 					TerminalTotalDifficultyPassed: true,
 					// TODO marcello double check
-					ShanghaiTime: u64(0),
-					Bor:          &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
+					ShanghaiBlock: big.NewInt(0),
+					Bor:           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -446,7 +446,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
 	}
 	// TODO marcello double check
-	if config.IsShanghai(header.Time) {
+	if config.IsShanghai(header.Number) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
 
@@ -472,7 +472,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	// TODO marcello double check
-	if config.IsShanghai(header.Time) {
+	if config.IsShanghai(header.Number) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
 	}
 

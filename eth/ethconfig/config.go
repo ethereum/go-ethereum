@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -220,7 +221,7 @@ type Config struct {
 
 	// TODO marcello double check
 	// OverrideShanghai (TODO: remove after the fork)
-	OverrideShanghai *uint64 `toml:",omitempty"`
+	OverrideShanghai *big.Int `toml:",omitempty"`
 
 	// URL to connect to Heimdall node
 	HeimdallURL string

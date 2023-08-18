@@ -334,11 +334,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return consensus.ErrInvalidNumber
 	}
 	// TODO marcello double check
-	if chain.Config().IsShanghai(header.Time) {
+	if chain.Config().IsShanghai(header.Number) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
 
-	if chain.Config().IsCancun(header.Time) {
+	if chain.Config().IsCancun(header.Number) {
 		return fmt.Errorf("ethash does not support cancun fork")
 	}
 	// Verify the engine specific seal securing the block
