@@ -213,7 +213,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		// First reset and write 100 items.
-		if err := f.TruncateHead(0); err != nil {
+		if _, err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
 
@@ -255,8 +255,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			truncateErr = f.TruncateHead(10)
-
+			_, truncateErr = f.TruncateHead(10)
 			wg.Done()
 		}()
 		go func() {

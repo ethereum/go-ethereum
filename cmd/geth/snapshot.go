@@ -51,7 +51,6 @@ var (
 				ArgsUsage: "<root>",
 				Action:    pruneState,
 				Flags: flags.Merge([]cli.Flag{
-					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
@@ -89,8 +88,8 @@ In other words, this command does the snapshot to trie conversion.
 				Action:    checkDanglingStorage,
 				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
-geth snapshot check-dangling-storage <state-root> traverses the snap storage 
-data, and verifies that all snapshot storage data has a corresponding account. 
+geth snapshot check-dangling-storage <state-root> traverses the snap storage
+data, and verifies that all snapshot storage data has a corresponding account.
 `,
 			},
 			{
@@ -101,7 +100,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
-information about the specified address. 
+information about the specified address.
 `,
 			},
 			{
@@ -130,7 +129,7 @@ geth snapshot traverse-rawstate <state-root>
 will traverse the whole state from the given root and will abort if any referenced
 trie node or contract code is missing. This command can be used for state integrity
 verification. The default checking target is the HEAD state. It's basically identical
-to traverse-state, but the check granularity is smaller. 
+to traverse-state, but the check granularity is smaller.
 
 It's also usable without snapshot enabled.
 `,
@@ -148,7 +147,7 @@ It's also usable without snapshot enabled.
 				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
-as the backend data source, making this command a lot faster. 
+as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
@@ -161,7 +160,7 @@ block is used.
 // Deprecation: this command should be deprecated once the hash-based
 // scheme is deprecated.
 func pruneState(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
@@ -169,7 +168,6 @@ func pruneState(ctx *cli.Context) error {
 
 	prunerconfig := pruner.Config{
 		Datadir:   stack.ResolvePath(""),
-		Cachedir:  stack.ResolvePath(config.Eth.TrieCleanCacheJournal),
 		BloomSize: ctx.Uint64(utils.BloomFilterSizeFlag.Name),
 	}
 
@@ -313,8 +311,12 @@ func traverseState(ctx *cli.Context) error {
 		lastReport time.Time
 		start      = time.Now()
 	)
-
-	accIter := trie.NewIterator(t.NodeIterator(nil))
+	acctIt, err := t.NodeIterator(nil)
+	if err != nil {
+		log.Error("Failed to open iterator", "root", root, "err", err)
+		return err
+	}
+	accIter := trie.NewIterator(acctIt)
 	for accIter.Next() {
 		accounts += 1
 
@@ -332,8 +334,12 @@ func traverseState(ctx *cli.Context) error {
 				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
 			}
-
-			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
+			storageIt, err := storageTrie.NodeIterator(nil)
+			if err != nil {
+				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+				return err
+			}
+			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
 				slots += 1
 			}
@@ -426,8 +432,11 @@ func traverseRawState(ctx *cli.Context) error {
 		hasher     = crypto.NewKeccakState()
 		got        = make([]byte, 32)
 	)
-
-	accIter := t.NodeIterator(nil)
+	accIter, err := t.NodeIterator(nil)
+	if err != nil {
+		log.Error("Failed to open iterator", "root", root, "err", err)
+		return err
+	}
 	for accIter.Next(true) {
 		nodes += 1
 		node := accIter.Hash()
@@ -469,8 +478,11 @@ func traverseRawState(ctx *cli.Context) error {
 					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 					return errors.New("missing storage trie")
 				}
-
-				storageIter := storageTrie.NodeIterator(nil)
+				storageIter, err := storageTrie.NodeIterator(nil)
+				if err != nil {
+					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+					return err
+				}
 				for storageIter.Next(true) {
 					nodes += 1
 					node := storageIter.Hash()
@@ -582,7 +594,7 @@ func dumpState(ctx *cli.Context) error {
 	}{root})
 
 	for accIt.Next() {
-		account, err := snapshot.FullAccount(accIt.Account())
+		account, err := types.FullAccount(accIt.Account())
 		if err != nil {
 			return err
 		}
@@ -590,7 +602,7 @@ func dumpState(ctx *cli.Context) error {
 		da := &state.DumpAccount{
 			Balance:   account.Balance.String(),
 			Nonce:     account.Nonce,
-			Root:      account.Root,
+			Root:      account.Root.Bytes(),
 			CodeHash:  account.CodeHash,
 			SecureKey: accIt.Hash().Bytes(),
 		}

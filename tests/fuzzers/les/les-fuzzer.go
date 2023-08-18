@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -44,9 +45,9 @@ var (
 	testChainLen     = 256
 	testContractCode = common.Hex2Bytes("606060405260cc8060106000396000f360606040526000357c01000000000000000000000000000000000000000000000000000000009004806360cd2685146041578063c16431b914606b57603f565b005b6055600480803590602001909190505060a9565b6040518082815260200191505060405180910390f35b60886004808035906020019091908035906020019091905050608a565b005b80600060005083606481101560025790900160005b50819055505b5050565b6000600060005082606481101560025790900160005b5054905060c7565b91905056")
 
-	chain      *core.BlockChain
-	addrHashes []common.Hash
-	txHashes   []common.Hash
+	chain     *core.BlockChain
+	addresses []common.Address
+	txHashes  []common.Hash
 
 	chtTrie   *trie.Trie
 	bloomTrie *trie.Trie
@@ -54,7 +55,7 @@ var (
 	bloomKeys [][]byte
 )
 
-func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
+func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []common.Hash) {
 	gspec := &core.Genesis{
 		Config:   params.TestChainConfig,
 		Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
@@ -78,8 +79,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			}
 
 			gen.AddTx(tx)
-
-			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
+			addresses = append(addresses, addr)
 			txHashes = append(txHashes, tx.Hash())
 		})
 	bc, _ = core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
@@ -113,7 +113,7 @@ func makeTries() (chtTrie *trie.Trie, bloomTrie *trie.Trie, chtKeys, bloomKeys [
 }
 
 func init() {
-	chain, addrHashes, txHashes = makechain()
+	chain, addresses, txHashes = makechain()
 	chtTrie, bloomTrie, chtKeys, bloomKeys = makeTries()
 }
 
@@ -122,7 +122,8 @@ type fuzzer struct {
 	pool  *txpool.TxPool
 
 	chainLen  int
-	addr, txs []common.Hash
+	addresses []common.Address
+	txs       []common.Hash
 	nonce     uint64
 
 	chtKeys   [][]byte
@@ -135,17 +136,20 @@ type fuzzer struct {
 }
 
 func newFuzzer(input []byte) *fuzzer {
+	pool := legacypool.New(legacypool.DefaultConfig, chain)
+	txpool, _ := txpool.New(new(big.Int).SetUint64(legacypool.DefaultConfig.PriceLimit), chain, []txpool.SubPool{pool})
+
 	return &fuzzer{
 		chain:     chain,
 		chainLen:  testChainLen,
-		addr:      addrHashes,
+		addresses: addresses,
 		txs:       txHashes,
 		chtTrie:   chtTrie,
 		bloomTrie: bloomTrie,
 		chtKeys:   chtKeys,
 		bloomKeys: bloomKeys,
 		nonce:     uint64(len(txHashes)),
-		pool:      txpool.NewTxPool(txpool.DefaultConfig, params.TestChainConfig, chain),
+		pool:      txpool,
 		input:     bytes.NewReader(input),
 	}
 }
@@ -208,13 +212,12 @@ func (f *fuzzer) randomBlockHash() common.Hash {
 	return common.BytesToHash(f.read(common.HashLength))
 }
 
-func (f *fuzzer) randomAddrHash() []byte {
-	i := f.randomInt(3 * len(f.addr))
-	if i < len(f.addr) {
-		return f.addr[i].Bytes()
+func (f *fuzzer) randomAddress() []byte {
+	i := f.randomInt(3 * len(f.addresses))
+	if i < len(f.addresses) {
+		return f.addresses[i].Bytes()
 	}
-
-	return f.read(common.HashLength)
+	return f.read(common.AddressLength)
 }
 
 func (f *fuzzer) randomCHTTrieKey() []byte {
@@ -338,8 +341,8 @@ func Fuzz(input []byte) int {
 			req := &l.GetCodePacket{Reqs: make([]l.CodeReq, f.randomInt(l.MaxCodeFetch+1))}
 			for i := range req.Reqs {
 				req.Reqs[i] = l.CodeReq{
-					BHash:  f.randomBlockHash(),
-					AccKey: f.randomAddrHash(),
+					BHash:          f.randomBlockHash(),
+					AccountAddress: f.randomAddress(),
 				}
 			}
 
@@ -358,15 +361,15 @@ func Fuzz(input []byte) int {
 			for i := range req.Reqs {
 				if f.randomBool() {
 					req.Reqs[i] = l.ProofReq{
-						BHash:     f.randomBlockHash(),
-						AccKey:    f.randomAddrHash(),
-						Key:       f.randomAddrHash(),
-						FromLevel: uint(f.randomX(3)),
+						BHash:          f.randomBlockHash(),
+						AccountAddress: f.randomAddress(),
+						Key:            f.randomAddress(),
+						FromLevel:      uint(f.randomX(3)),
 					}
 				} else {
 					req.Reqs[i] = l.ProofReq{
 						BHash:     f.randomBlockHash(),
-						Key:       f.randomAddrHash(),
+						Key:       f.randomAddress(),
 						FromLevel: uint(f.randomX(3)),
 					}
 				}

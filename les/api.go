@@ -27,11 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-var (
-	errNoCheckpoint         = errors.New("no local checkpoint provided")
-	errNotActivated         = errors.New("checkpoint registrar is not activated")
-	errUnknownBenchmarkType = errors.New("unknown benchmark type")
-)
+var errUnknownBenchmarkType = errors.New("unknown benchmark type")
 
 // LightServerAPI provides an API to access the LES light server.
 type LightServerAPI struct {

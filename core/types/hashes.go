@@ -19,6 +19,7 @@ package types
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -40,3 +41,13 @@ var (
 	// EmptyWithdrawalsHash is the known hash of the empty withdrawal set.
 	EmptyWithdrawalsHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
+
+// TrieRootHash returns the hash itself if it's non-empty or the predefined
+// emptyHash one instead.
+func TrieRootHash(hash common.Hash) common.Hash {
+	if hash == (common.Hash{}) {
+		log.Error("Zero trie root hash!")
+		return EmptyRootHash
+	}
+	return hash
+}

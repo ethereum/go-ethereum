@@ -146,7 +146,7 @@ func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 }
 
 func (lc *LightChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&lc.procInterrupt) == 1
+	return lc.procInterrupt.Load()
 }
 
 // Odr returns the ODR backend of the chain
@@ -349,7 +349,7 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (lc *LightChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&lc.running, 0, 1) {
+	if !lc.stopped.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -363,7 +363,7 @@ func (lc *LightChain) Stop() {
 // errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
 // calling this method.
 func (lc *LightChain) StopInsert() {
-	atomic.StoreInt32(&lc.procInterrupt, 1)
+	lc.procInterrupt.Store(true)
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't
@@ -395,7 +395,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 func (lc *LightChain) InsertHeader(header *types.Header) error {
 	// Verify the header first before obtaining the lock
 	headers := []*types.Header{header}
-	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
+	if _, err := lc.hc.ValidateHeaderChain(headers); err != nil {
 		return err
 	}
 	// Make sure only one thread manipulates the chain at once
@@ -454,15 +454,10 @@ func (lc *LightChain) SetChainHead(header *types.Header) error {
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
-//
-// The verify parameter can be used to fine tune whether nonce verification
-// should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verify nonces, as well as
-// because nonces can be verified sparsely, not needing to check each.
-//
+
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (lc *LightChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}

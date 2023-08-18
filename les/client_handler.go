@@ -21,14 +21,12 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,25 +37,16 @@ import (
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
-	ulc        *ulc
 	forkFilter forkid.Filter
-	checkpoint *params.TrustedCheckpoint
-	fetcher    *lightFetcher
-	downloader *downloader.Downloader
 	backend    *LightEthereum
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
-
-	// Hooks used in the testing
-	syncStart func(header *types.Header) // Hook called when the syncing is started
-	syncEnd   func(header *types.Header) // Hook called when the syncing is done
 }
 
-func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
+func newClientHandler(backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
 		forkFilter: forkid.NewFilter(backend.blockchain),
-		checkpoint: checkpoint,
 		backend:    backend,
 		closeCh:    make(chan struct{}),
 	}
@@ -85,14 +74,8 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	return handler
 }
 
-func (h *clientHandler) start() {
-	h.fetcher.start()
-}
-
 func (h *clientHandler) stop() {
 	close(h.closeCh)
-	h.downloader.Terminate()
-	h.fetcher.stop()
 	h.wg.Wait()
 }
 
@@ -155,15 +138,9 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
 	}()
 
-	// Discard all the announces after the transition
-	// Also discarding initial signal to prevent syncing during testing.
-	if !(noInitAnnounce || h.backend.merger.TDDReached()) {
-		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
-	}
-
 	// Mark the peer starts to be served.
-	atomic.StoreUint32(&p.serving, 1)
-	defer atomic.StoreUint32(&p.serving, 0)
+	p.serving.Store(true)
+	defer p.serving.Store(false)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {
@@ -234,11 +211,6 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 
 			// Update peer head information first and then notify the announcement
 			p.updateHead(req.Hash, req.Number, req.Td)
-
-			// Discard all the announces after the transition
-			if !h.backend.merger.TDDReached() {
-				h.fetcher.announce(p, &req)
-			}
 		}
 	case msg.Code == BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")

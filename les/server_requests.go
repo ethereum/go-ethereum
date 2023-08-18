@@ -327,10 +327,10 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 
 			triedb := bc.StateCache().TrieDB()
-
-			account, err := getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
+			address := common.BytesToAddress(request.AccountAddress)
+			account, err := getAccount(triedb, header.Root, address)
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", address, "err", err)
 				p.bumpInvalid()
 
 				continue
@@ -338,7 +338,7 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 
 			code, err := bc.StateCache().ContractCode(common.BytesToHash(request.AccKey), common.BytesToHash(account.CodeHash))
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
+				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", address, "codehash", common.BytesToHash(account.CodeHash), "err", err)
 				continue
 			}
 			// Accumulate the code and abort if enough data was retrieved
@@ -461,9 +461,10 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 			default:
 				// Account key specified, open a storage trie
-				account, err := getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
+				address := common.BytesToAddress(request.AccountAddress)
+				account, err := getAccount(statedb.TrieDB(), root, address)
 				if err != nil {
-					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", address, "err", err)
 					p.bumpInvalid()
 
 					continue
@@ -471,12 +472,12 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 
 				trie, err = statedb.OpenStorageTrie(root, common.BytesToHash(request.AccKey), account.Root)
 				if trie == nil || err != nil {
-					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
+					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", address, "root", account.Root, "err", err)
 					continue
 				}
 			}
 			// Prove the user's request from the account or storage trie
-			if err := trie.Prove(request.Key, request.FromLevel, nodes); err != nil {
+			if err := trie.Prove(request.Key, nodes); err != nil {
 				p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
 				continue
 			}
@@ -527,7 +528,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			// the headers with no valid proof. Keep the compatibility for
 			// legacy les protocol and drop this hack when the les2/3 are
 			// not supported.
-			err := auxTrie.Prove(request.Key, request.FromLevel, nodes)
+			err := auxTrie.Prove(request.Key, nodes)
 			if p.version >= lpv4 && err != nil {
 				return nil
 			}
@@ -620,7 +621,7 @@ func handleGetTxStatus(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
 	// Looking the transaction in txpool first.
-	stat.Status = b.TxPool().Status([]common.Hash{hash})[0]
+	stat.Status = b.TxPool().Status(hash)
 
 	// If the transaction is unknown to the pool, try looking it up locally.
 	if stat.Status == txpool.TxStatusUnknown {

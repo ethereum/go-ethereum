@@ -124,6 +124,7 @@ func TestConfigRules(t *testing.T) {
 	t.Parallel()
 
 	c := &ChainConfig{
+		LondonBlock:  new(big.Int),
 		ShanghaiTime: newUint64(500),
 	}
 

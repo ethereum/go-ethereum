@@ -121,8 +121,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-
-		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
+		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, nil, b.RPCGasCap())
 		if err != nil {
 			return err
 		}
@@ -171,7 +170,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		}
 	} else {
 		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
 		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)

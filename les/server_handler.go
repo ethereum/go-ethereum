@@ -19,7 +19,6 @@ package les
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -173,8 +172,8 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	}()
 
 	// Mark the peer as being served.
-	atomic.StoreUint32(&p.serving, 1)
-	defer atomic.StoreUint32(&p.serving, 0)
+	p.serving.Store(true)
+	defer p.serving.Store(false)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {
@@ -389,8 +388,8 @@ func (h *serverHandler) AddTxsSync() bool {
 }
 
 // getAccount retrieves an account from the state based on root.
-func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccount, error) {
-	trie, err := trie.New(trie.StateTrieID(root), triedb)
+func getAccount(triedb *trie.Database, root common.Hash, addr common.Address) (types.StateAccount, error) {
+	trie, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		return types.StateAccount{}, err
 	}

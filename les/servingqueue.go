@@ -191,28 +191,12 @@ func (sq *servingQueue) threadController() {
 	}
 }
 
-type (
-	// peerTasks lists the tasks received from a given peer when selecting peers to freeze
-	peerTasks struct {
-		peer     *clientPeer
-		list     []*servingTask
-		sumTime  uint64
-		priority float64
-	}
-	// peerList is a sortable list of peerTasks
-	peerList []*peerTasks
-)
-
-func (l peerList) Len() int {
-	return len(l)
-}
-
-func (l peerList) Less(i, j int) bool {
-	return l[i].priority < l[j].priority
-}
-
-func (l peerList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
+// peerTasks lists the tasks received from a given peer when selecting peers to freeze
+type peerTasks struct {
+	peer     *clientPeer
+	list     []*servingTask
+	sumTime  uint64
+	priority float64
 }
 
 // freezePeers selects the peers with the worst priority queued tasks and freezes

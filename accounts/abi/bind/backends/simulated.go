@@ -718,11 +718,10 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	// Get the last block
 	block, err := b.blockByHash(ctx, b.pendingBlock.ParentHash())
 	if err != nil {
-		return fmt.Errorf("could not fetch parent")
+		return errors.New("could not fetch parent")
 	}
 	// Check transaction validity
-	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
-
+	signer := types.MakeSigner(b.blockchain.Config(), block.Number(), block.Time())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		return fmt.Errorf("invalid transaction: %v", err)
@@ -862,7 +861,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	// Get the last block
 	block := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())
 	if block == nil {
-		return fmt.Errorf("could not find parent")
+		return errors.New("could not find parent")
 	}
 
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
@@ -934,8 +933,11 @@ func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 	if number == nil {
 		return nil, nil
 	}
-
-	return rawdb.ReadReceipts(fb.db, hash, *number, fb.bc.Config()), nil
+	header := rawdb.ReadHeader(fb.db, hash, *number)
+	if header == nil {
+		return nil, nil
+	}
+	return rawdb.ReadReceipts(fb.db, hash, *number, header.Time, fb.bc.Config()), nil
 }
 
 func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {

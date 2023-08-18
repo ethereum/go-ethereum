@@ -23,14 +23,16 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/slices"
 )
 
 type fuzzer struct {
@@ -108,19 +110,6 @@ func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
 type kv struct {
 	k, v []byte
 }
-type kvs []kv
-
-func (k kvs) Len() int {
-	return len(k)
-}
-
-func (k kvs) Less(i, j int) bool {
-	return bytes.Compare(k[i].k, k[j].k) < 0
-}
-
-func (k kvs) Swap(i, j int) {
-	k[j], k[i] = k[i], k[j]
-}
 
 // Fuzz is the fuzzing entry-point.
 // The function must return
@@ -162,7 +151,7 @@ func (f *fuzzer) fuzz() int {
 		trieB   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(spongeB, owner, path, hash, blob, dbB.Scheme())
 		})
-		vals        kvs
+		vals        []kv
 		useful      bool
 		maxElements = 10000
 		// operate on unique keys only
@@ -197,16 +186,20 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, nodes := trieA.Commit(false)
+	rootA, nodes, err := trieA.Commit(false)
+	if err != nil {
+		panic(err)
+	}
 	if nodes != nil {
-		_ = dbA.Update(trie.NewWithNodeSet(nodes))
+		dbA.Update(rootA, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 	}
 	// Flush memdb -> disk (sponge)
 	_ = dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
-	sort.Sort(vals)
-
+	slices.SortFunc(vals, func(a, b kv) int {
+		return bytes.Compare(a.k, b.k)
+	})
 	for _, kv := range vals {
 		if f.debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
@@ -254,8 +247,7 @@ func (f *fuzzer) fuzz() int {
 	}
 
 	trieA, _ = trie.New(trie.TrieID(rootA), dbA)
-
-	iterA := trieA.NodeIterator(nil)
+	iterA := trieA.MustNodeIterator(nil)
 	for iterA.Next(true) {
 		if iterA.Hash() == (common.Hash{}) {
 			if _, present := nodeset[string(iterA.Path())]; present {

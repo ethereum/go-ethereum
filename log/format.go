@@ -32,20 +32,16 @@ var locationTrims = []string{
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
 // format output.
 func PrintOrigins(print bool) {
-	if print {
-		atomic.StoreUint32(&locationEnabled, 1)
-	} else {
-		atomic.StoreUint32(&locationEnabled, 0)
-	}
+	locationEnabled.Store(print)
 }
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
 // should append the log locations too when printing entries.
-var locationEnabled uint32
+var locationEnabled atomic.Bool
 
 // locationLength is the maxmimum path length encountered, which all logs are
 // padded to to aid in alignment.
-var locationLength uint32
+var locationLength atomic.Uint32
 
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
@@ -119,10 +115,10 @@ func TerminalFormat(usecolor bool) Format {
 				location = strings.TrimPrefix(location, prefix)
 			}
 			// Maintain the maximum location length for fancyer alignment
-			align := int(atomic.LoadUint32(&locationLength))
+			align := int(locationLength.Load())
 			if align < len(location) {
 				align = len(location)
-				atomic.StoreUint32(&locationLength, uint32(align))
+				locationLength.Store(uint32(align))
 			}
 
 			padding := strings.Repeat(" ", align-len(location))
@@ -176,7 +172,7 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 		v := formatLogfmtValue(ctx[i+1], term)
 
 		if !ok {
-			k, v = errorKey, formatLogfmtValue(k, term)
+			k, v = errorKey, fmt.Sprintf("%+T is not a string key", ctx[i])
 		} else {
 			k = escapeString(k)
 		}
@@ -229,18 +225,20 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 	}
 
 	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
-
-		props[r.KeyNames.Time] = r.Time
-		props[r.KeyNames.Lvl] = r.Lvl.String()
-		props[r.KeyNames.Msg] = r.Msg
+		props := map[string]interface{}{
+			r.KeyNames.Time: r.Time,
+			r.KeyNames.Lvl:  r.Lvl.String(),
+			r.KeyNames.Msg:  r.Msg,
+		}
 
 		ctx := make([]string, len(r.Ctx))
 
 		for i := 0; i < len(r.Ctx); i += 2 {
-			k, ok := r.Ctx[i].(string)
-			if !ok {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key,", r.Ctx[i])
+			if k, ok := r.Ctx[i].(string); ok {
+				ctx[i] = k
+				ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
+			} else {
+				props[errorKey] = fmt.Sprintf("%+T is not a string key,", r.Ctx[i])
 			}
 
 			ctx[i] = k
@@ -278,16 +276,18 @@ func JSONFormatEx(pretty, lineSeparated bool) Format {
 	}
 
 	return FormatFunc(func(r *Record) []byte {
-		props := make(map[string]interface{})
-
-		props[r.KeyNames.Time] = r.Time
-		props[r.KeyNames.Lvl] = r.Lvl.String()
-		props[r.KeyNames.Msg] = r.Msg
+		props := map[string]interface{}{
+			r.KeyNames.Time: r.Time,
+			r.KeyNames.Lvl:  r.Lvl.String(),
+			r.KeyNames.Msg:  r.Msg,
+		}
 
 		for i := 0; i < len(r.Ctx); i += 2 {
 			k, ok := r.Ctx[i].(string)
 			if !ok {
-				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
+				props[errorKey] = fmt.Sprintf("%+T is not a string key", r.Ctx[i])
+			} else {
+				props[k] = formatJSONValue(r.Ctx[i+1])
 			}
 
 			props[k] = formatJSONValue(r.Ctx[i+1])

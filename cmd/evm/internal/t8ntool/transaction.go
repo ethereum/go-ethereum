@@ -122,8 +122,12 @@ func Transaction(ctx *cli.Context) error {
 			return NewError(ErrorIO, errors.New("only rlp supported"))
 		}
 	}
+<<<<<<< HEAD
 
 	signer := types.MakeSigner(chainConfig, new(big.Int))
+=======
+	signer := types.MakeSigner(chainConfig, new(big.Int), 0)
+>>>>>>> bed84606583893fdb698cc1b5058cc47b4dbd837
 	// We now have the transactions in 'body', which is supposed to be an
 	// rlp list of transactions
 	it, err := rlp.NewListIterator([]byte(body))
@@ -157,7 +161,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Check intrinsic gas
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(0)); err != nil {
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(new(big.Int), 0)); err != nil {
 			r.Error = err
 			results = append(results, r)
 
@@ -192,7 +196,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// TODO marcello double check
 		// Check whether the init code size has been exceeded.
-		if chainConfig.IsShanghai(0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+		if chainConfig.IsShanghai(new(big.Int), 0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 			r.Error = errors.New("max initcode size exceeded")
 		}
 

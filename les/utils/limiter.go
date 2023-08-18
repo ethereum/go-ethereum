@@ -378,24 +378,9 @@ func (l *Limiter) Stop() {
 	l.cond.Signal()
 }
 
-type (
-	dropList     []dropListItem
-	dropListItem struct {
-		nq       *nodeQueue
-		priority float64
-	}
-)
-
-func (l dropList) Len() int {
-	return len(l)
-}
-
-func (l dropList) Less(i, j int) bool {
-	return l[i].priority < l[j].priority
-}
-
-func (l dropList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
+type dropListItem struct {
+	nq       *nodeQueue
+	priority float64
 }
 
 // dropRequests selects the nodes with the highest queued request cost to selection
@@ -404,7 +389,7 @@ func (l dropList) Swap(i, j int) {
 func (l *Limiter) dropRequests() {
 	var (
 		sumValue float64
-		list     dropList
+		list     []dropListItem
 	)
 
 	for _, nq := range l.nodes {

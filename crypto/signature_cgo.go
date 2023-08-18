@@ -22,6 +22,7 @@ package crypto
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -75,7 +76,7 @@ func VerifySignature(pubkey, digestHash, signature []byte) bool {
 func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 	x, y := secp256k1.DecompressPubkey(pubkey)
 	if x == nil {
-		return nil, fmt.Errorf("invalid public key")
+		return nil, errors.New("invalid public key")
 	}
 
 	return &ecdsa.PublicKey{X: x, Y: y, Curve: S256()}, nil

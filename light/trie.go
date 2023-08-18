@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -54,8 +55,8 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(state, addrHash, root common.Hash) (state.Trie, error) {
-	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
+func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
+	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
@@ -72,7 +73,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	}
 }
 
-func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
+func (db *odrDatabase) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	if codeHash == sha3Nil {
 		return nil, nil
 	}
@@ -83,15 +84,15 @@ func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, err
 	}
 
 	id := *db.id
-	id.AccKey = addrHash[:]
+	id.AccountAddress = addr[:]
 	req := &CodeRequest{Id: &id, Hash: codeHash}
 	err := db.backend.Retrieve(db.ctx, req)
 
 	return req.Data, err
 }
 
-func (db *odrDatabase) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
-	code, err := db.ContractCode(addrHash, codeHash)
+func (db *odrDatabase) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	code, err := db.ContractCode(addr, codeHash)
 	return len(code), err
 }
 
@@ -115,7 +116,7 @@ func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	var res []byte
 
 	err := t.do(key, func() (err error) {
-		res, err = t.trie.Get(key)
+		enc, err = t.trie.Get(key)
 		return err
 	})
 
@@ -155,11 +156,14 @@ func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount)
 	})
 }
 
+func (t *odrTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte) error {
+	return nil
+}
+
 func (t *odrTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	key = crypto.Keccak256(key)
-
 	return t.do(key, func() error {
-		return t.trie.Update(key, value)
+		return t.trie.Update(key, v)
 	})
 }
 
@@ -171,7 +175,7 @@ func (t *odrTrie) DeleteStorage(_ common.Address, key []byte) error {
 	})
 }
 
-// TryDeleteAccount abstracts an account deletion from the trie.
+// DeleteAccount abstracts an account deletion from the trie.
 func (t *odrTrie) DeleteAccount(address common.Address) error {
 	key := crypto.Keccak256(address.Bytes())
 
@@ -180,9 +184,9 @@ func (t *odrTrie) DeleteAccount(address common.Address) error {
 	})
 }
 
-func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet) {
+func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	if t.trie == nil {
-		return t.id.Root, nil
+		return t.id.Root, nil, nil
 	}
 
 	return t.trie.Commit(collectLeaf)
@@ -196,15 +200,15 @@ func (t *odrTrie) Hash() common.Hash {
 	return t.trie.Hash()
 }
 
-func (t *odrTrie) NodeIterator(startkey []byte) trie.NodeIterator {
-	return newNodeIterator(t, startkey)
+func (t *odrTrie) NodeIterator(startkey []byte) (trie.NodeIterator, error) {
+	return newNodeIterator(t, startkey), nil
 }
 
 func (t *odrTrie) GetKey(sha []byte) []byte {
 	return nil
 }
 
-func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *odrTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return errors.New("not implemented, needs client/server interface split")
 }
 
@@ -216,8 +220,8 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 
 		if t.trie == nil {
 			var id *trie.ID
-			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+			if len(t.id.AccountAddress) > 0 {
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccountAddress), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
@@ -252,8 +256,8 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 	if t.trie == nil {
 		it.do(func() error {
 			var id *trie.ID
-			if len(t.id.AccKey) > 0 {
-				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+			if len(t.id.AccountAddress) > 0 {
+				id = trie.StorageTrieID(t.id.StateRoot, crypto.Keccak256Hash(t.id.AccountAddress), t.id.Root)
 			} else {
 				id = trie.StateTrieID(t.id.StateRoot)
 			}
@@ -268,7 +272,11 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 	}
 
 	it.do(func() error {
-		it.NodeIterator = it.t.trie.NodeIterator(startkey)
+		var err error
+		it.NodeIterator, err = it.t.trie.NodeIterator(startkey)
+		if err != nil {
+			return err
+		}
 		return it.NodeIterator.Error()
 	})
 

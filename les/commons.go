@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/light"
@@ -54,7 +53,6 @@ type lesCommons struct {
 	chainDb, lesDb               ethdb.Database
 	chainReader                  chainReader
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
-	oracle                       *checkpointoracle.CheckpointOracle
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup
@@ -63,12 +61,11 @@ type lesCommons struct {
 // NodeInfo represents a short summary of the Ethereum sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64                   `json:"network"`    // Ethereum network ID (1=Mainnet, Rinkeby=4, Goerli=5)
-	Difficulty *big.Int                 `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash              `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig      `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash              `json:"head"`       // SHA3 hash of the host's best owned block
-	CHT        params.TrustedCheckpoint `json:"cht"`        // Trused CHT checkpoint for fast catchup
+	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Goerli=5)
+	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
+	Head       common.Hash         `json:"head"`       // SHA3 hash of the host's best owned block
 }
 
 // makeProtocols creates protocol descriptors for the given LES versions.
@@ -104,7 +101,6 @@ func (c *lesCommons) nodeInfo() interface{} {
 		Genesis:    c.genesis,
 		Config:     c.chainConfig,
 		Head:       hash,
-		CHT:        c.latestLocalCheckpoint(),
 	}
 }
 

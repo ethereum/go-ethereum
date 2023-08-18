@@ -129,7 +129,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 		}
 	}
 
-	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, cfg)
+	// Create inner call tracer with default configuration, don't forward
+	// the OnlyTopCall or WithLog to inner for now
+	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +256,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	case vm.CREATE, vm.CREATE2:
 		frame = newFlatCreate(input)
 	case vm.SELFDESTRUCT:
-		frame = newFlatSuicide(input)
+		frame = newFlatSelfdestruct(input)
 	case vm.CALL, vm.STATICCALL, vm.CALLCODE, vm.DELEGATECALL:
 		frame = newFlatCall(input)
 	default:
@@ -340,7 +342,7 @@ func newFlatCall(input *callFrame) *flatCallFrame {
 	}
 }
 
-func newFlatSuicide(input *callFrame) *flatCallFrame {
+func newFlatSelfdestruct(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: "suicide",
 		Action: flatCallAction{

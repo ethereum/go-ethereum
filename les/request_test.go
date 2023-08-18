@@ -16,6 +16,10 @@
 
 package les
 
+// Note: these tests are disabled now because they cannot work with the old sync
+// mechanism removed but will be useful again once the PoS ultralight mode is implemented
+
+/*
 import (
 	"context"
 	"testing"
@@ -23,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
@@ -129,3 +134,4 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	}
 	test(5)
 }
+*/

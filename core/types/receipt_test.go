@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -82,27 +83,15 @@ var (
 		},
 		Type: DynamicFeeTxType,
 	}
-)
 
-func TestDecodeEmptyTypedReceipt(t *testing.T) {
-	input := []byte{0x80}
-
-	var r Receipt
-
-	err := rlp.DecodeBytes(input, &r)
-	if err != errShortTypedReceipt {
-		t.Fatal("wrong error:", err)
-	}
-}
-
-// Tests that receipt data can be correctly derived from the contextual infos
-func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
-	to2 := common.HexToAddress("0x2")
-	to3 := common.HexToAddress("0x3")
-	to4 := common.HexToAddress("0x4")
-	to5 := common.HexToAddress("0x5")
-	txs := Transactions{
+	to2 = common.HexToAddress("0x2")
+	to3 = common.HexToAddress("0x3")
+	to4 = common.HexToAddress("0x4")
+	to5 = common.HexToAddress("0x5")
+	to6 = common.HexToAddress("0x6")
+	to7 = common.HexToAddress("0x7")
+	txs = Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
 			Value:    big.NewInt(1),
@@ -130,29 +119,52 @@ func TestDeriveFields(t *testing.T) {
 			Value:     big.NewInt(4),
 			Gas:       4,
 			GasTipCap: big.NewInt(44),
-			GasFeeCap: big.NewInt(1045),
+			GasFeeCap: big.NewInt(1044),
 		}),
 		NewTx(&DynamicFeeTx{
 			To:        &to5,
 			Nonce:     5,
 			Value:     big.NewInt(5),
 			Gas:       5,
-			GasTipCap: big.NewInt(56),
+			GasTipCap: big.NewInt(55),
 			GasFeeCap: big.NewInt(1055),
+		}),
+		// EIP-4844 transactions.
+		NewTx(&BlobTx{
+			To:         to6,
+			Nonce:      6,
+			Value:      uint256.NewInt(6),
+			Gas:        6,
+			GasTipCap:  uint256.NewInt(66),
+			GasFeeCap:  uint256.NewInt(1066),
+			BlobFeeCap: uint256.NewInt(100066),
+			BlobHashes: []common.Hash{{}},
+		}),
+		NewTx(&BlobTx{
+			To:         to7,
+			Nonce:      7,
+			Value:      uint256.NewInt(7),
+			Gas:        7,
+			GasTipCap:  uint256.NewInt(77),
+			GasFeeCap:  uint256.NewInt(1077),
+			BlobFeeCap: uint256.NewInt(100077),
+			BlobHashes: []common.Hash{{}, {}, {}},
 		}),
 	}
 
-	blockNumber := big.NewInt(1)
-	blockHash := common.BytesToHash([]byte{0x03, 0x14})
+	blockNumber = big.NewInt(1)
+	blockTime   = uint64(2)
+	blockHash   = common.BytesToHash([]byte{0x03, 0x14})
 
 	// Create the corresponding receipts
-	receipts := Receipts{
+	receipts = Receipts{
 		&Receipt{
 			Status:            ReceiptStatusFailed,
 			CumulativeGasUsed: 1,
 			Logs: []*Log{
 				{
 					Address: common.BytesToAddress([]byte{0x11}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[0].Hash(),
@@ -162,6 +174,7 @@ func TestDeriveFields(t *testing.T) {
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x01, 0x11}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[0].Hash(),
@@ -185,6 +198,7 @@ func TestDeriveFields(t *testing.T) {
 			Logs: []*Log{
 				{
 					Address: common.BytesToAddress([]byte{0x22}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[1].Hash(),
@@ -194,6 +208,7 @@ func TestDeriveFields(t *testing.T) {
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x02, 0x22}),
+					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
 					BlockNumber: blockNumber.Uint64(),
 					TxHash:      txs[1].Hash(),
@@ -249,13 +264,55 @@ func TestDeriveFields(t *testing.T) {
 			BlockNumber:       blockNumber,
 			TransactionIndex:  4,
 		},
+		&Receipt{
+			Type:              BlobTxType,
+			PostState:         common.Hash{6}.Bytes(),
+			CumulativeGasUsed: 21,
+			Logs:              []*Log{},
+			// derived fields:
+			TxHash:            txs[5].Hash(),
+			GasUsed:           6,
+			EffectiveGasPrice: big.NewInt(1066),
+			BlobGasUsed:       params.BlobTxBlobGasPerBlob,
+			BlobGasPrice:      big.NewInt(920),
+			BlockHash:         blockHash,
+			BlockNumber:       blockNumber,
+			TransactionIndex:  5,
+		},
+		&Receipt{
+			Type:              BlobTxType,
+			PostState:         common.Hash{7}.Bytes(),
+			CumulativeGasUsed: 28,
+			Logs:              []*Log{},
+			// derived fields:
+			TxHash:            txs[6].Hash(),
+			GasUsed:           7,
+			EffectiveGasPrice: big.NewInt(1077),
+			BlobGasUsed:       3 * params.BlobTxBlobGasPerBlob,
+			BlobGasPrice:      big.NewInt(920),
+			BlockHash:         blockHash,
+			BlockNumber:       blockNumber,
+			TransactionIndex:  6,
+		},
 	}
+)
 
+func TestDecodeEmptyTypedReceipt(t *testing.T) {
+	input := []byte{0x80}
+	var r Receipt
+	err := rlp.DecodeBytes(input, &r)
+	if err != errShortTypedReceipt {
+		t.Fatal("wrong error:", err)
+	}
+}
+
+// Tests that receipt data can be correctly derived from the contextual infos
+func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
+	blobGasPrice := big.NewInt(920)
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), basefee, txs)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
@@ -274,6 +331,38 @@ func TestDeriveFields(t *testing.T) {
 	d := diff.Diff(string(r1), string(r2))
 	if d != "" {
 		t.Fatal("receipts differ:", d)
+	}
+}
+
+// Test that we can marshal/unmarshal receipts to/from json without errors.
+// This also confirms that our test receipts contain all the required fields.
+func TestReceiptJSON(t *testing.T) {
+	for i := range receipts {
+		b, err := receipts[i].MarshalJSON()
+		if err != nil {
+			t.Fatal("error marshaling receipt to json:", err)
+		}
+		r := Receipt{}
+		err = r.UnmarshalJSON(b)
+		if err != nil {
+			t.Fatal("error unmarshaling receipt from json:", err)
+		}
+	}
+}
+
+// Test we can still parse receipt without EffectiveGasPrice for backwards compatibility, even
+// though it is required per the spec.
+func TestEffectiveGasPriceNotRequired(t *testing.T) {
+	r := *receipts[0]
+	r.EffectiveGasPrice = nil
+	b, err := r.MarshalJSON()
+	if err != nil {
+		t.Fatal("error marshaling receipt to json:", err)
+	}
+	r2 := Receipt{}
+	err = r2.UnmarshalJSON(b)
+	if err != nil {
+		t.Fatal("error unmarshaling receipt from json:", err)
 	}
 }
 
@@ -451,7 +540,9 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.ContractAddress = common.Address{0xff, 0xff, 0x33}
 	cpy.GasUsed = 0xffffffff
 	cpy.Logs = clearComputedFieldsOnLogs(receipt.Logs)
-
+	cpy.EffectiveGasPrice = big.NewInt(0)
+	cpy.BlobGasUsed = 0
+	cpy.BlobGasPrice = nil
 	return &cpy
 }
 

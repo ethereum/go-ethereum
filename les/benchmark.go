@@ -19,6 +19,7 @@ package les
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -60,7 +61,7 @@ func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	b.randMax = h.blockchain.CurrentHeader().Number.Int64() + 1 - d
 
 	if b.randMax < 0 {
-		return fmt.Errorf("chain is too short")
+		return errors.New("chain is too short")
 	}
 
 	if b.reverse {
@@ -126,7 +127,7 @@ func (b *benchmarkProofsOrCode) request(peer *serverPeer, index int) error {
 	_, _ = crand.Read(key)
 
 	if b.code {
-		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccountAddress: key}})
 	}
 
 	return peer.requestProofs(0, []ProofReq{{BHash: b.headHash, Key: key}})
@@ -148,7 +149,7 @@ func (b *benchmarkHelperTrie) init(h *serverHandler, count int) error {
 	}
 
 	if b.sectionCount == 0 {
-		return fmt.Errorf("no processed sections available")
+		return errors.New("no processed sections available")
 	}
 
 	return nil

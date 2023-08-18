@@ -258,7 +258,7 @@ func (w *Wallet) release() error {
 // with the wallet.
 func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
-		return fmt.Errorf("wallet already paired")
+		return errors.New("wallet already paired")
 	}
 
 	pairing, err := w.session.pair(puk)
@@ -850,7 +850,7 @@ func (s *Session) pair(secret []byte) (smartcardPairing, error) {
 // unpair deletes an existing pairing.
 func (s *Session) unpair() error {
 	if !s.verified {
-		return fmt.Errorf("unpair requires that the PIN be verified")
+		return errors.New("unpair requires that the PIN be verified")
 	}
 
 	return s.Channel.Unpair()
@@ -955,7 +955,7 @@ func (s *Session) initialize(seed []byte) error {
 	}
 
 	if status == "Online" {
-		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
+		return errors.New("card is already initialized, cowardly refusing to proceed")
 	}
 
 	s.Wallet.lock.Lock()

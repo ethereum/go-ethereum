@@ -99,7 +99,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		}
 
 		nodes := NewNodeSet()
-		t.Prove(req.Key, 0, nodes)
+		t.Prove(req.Key, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
 		req.Data = rawdb.ReadCode(odr.sdb, req.Hash)
@@ -140,9 +140,10 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain,
 	var receipts types.Receipts
 
 	if bc != nil {
-		number := rawdb.ReadHeaderNumber(db, bhash)
-		if number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config())
+		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
+			if header := rawdb.ReadHeader(db, bhash, *number); header != nil {
+				receipts = rawdb.ReadReceipts(db, bhash, *number, header.Time, bc.Config())
+			}
 		}
 	} else {
 		number := rawdb.ReadHeaderNumber(db, bhash)

@@ -23,14 +23,14 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -69,20 +69,9 @@ type processedFees struct {
 }
 
 // txGasAndReward is sorted in ascending order based on reward
-type (
-	txGasAndReward struct {
-		gasUsed uint64
-		reward  *big.Int
-	}
-	sortGasAndReward []txGasAndReward
-)
-
-func (s sortGasAndReward) Len() int { return len(s) }
-func (s sortGasAndReward) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s sortGasAndReward) Less(i, j int) bool {
-	return s[i].reward.Cmp(s[j].reward) < 0
+type txGasAndReward struct {
+	gasUsed uint64
+	reward  *big.Int
 }
 
 // processBlock takes a blockFees structure with the blockNumber, the header and optionally
@@ -96,7 +85,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	}
 
 	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+		bf.results.nextBaseFee = eip1559.CalcBaseFee(chainconfig, bf.header)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}
@@ -123,14 +112,14 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return
 	}
 
-	sorter := make(sortGasAndReward, len(bf.block.Transactions()))
-
+	sorter := make([]txGasAndReward, len(bf.block.Transactions()))
 	for i, tx := range bf.block.Transactions() {
 		reward, _ := tx.EffectiveGasTip(bf.block.BaseFee())
 		sorter[i] = txGasAndReward{gasUsed: bf.receipts[i].GasUsed, reward: reward}
 	}
-
-	sort.Stable(sorter)
+	slices.SortStableFunc(sorter, func(a, b txGasAndReward) int {
+		return a.reward.Cmp(b.reward)
+	})
 
 	var txIndex int
 
@@ -273,10 +262,9 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 
 	oldestBlock := lastBlock + 1 - blocks
 
-	var (
-		next    = oldestBlock
-		results = make(chan *blockFees, blocks)
-	)
+	var next atomic.Uint64
+	next.Store(oldestBlock)
+	results := make(chan *blockFees, blocks)
 
 	percentileKey := make([]byte, 8*len(rewardPercentiles))
 	for i, p := range rewardPercentiles {
@@ -287,7 +275,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 		go func() {
 			for {
 				// Retrieve the next block number to fetch with this goroutine
-				blockNumber := atomic.AddUint64(&next, 1) - 1
+				blockNumber := next.Add(1) - 1
 				if blockNumber > lastBlock {
 					return
 				}

@@ -291,13 +291,11 @@ func testSeedQuery() error {
 
 	// Retrieve the entire batch and check for duplicates
 	seeds := db.QuerySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
-	have := make(map[ID]struct{})
-
+	have := make(map[ID]struct{}, len(seeds))
 	for _, seed := range seeds {
 		have[seed.ID()] = struct{}{}
 	}
-
-	want := make(map[ID]struct{})
+	want := make(map[ID]struct{}, len(nodeDBSeedQueryNodes[1:]))
 	for _, seed := range nodeDBSeedQueryNodes[1:] {
 		want[seed.node.ID()] = struct{}{}
 	}

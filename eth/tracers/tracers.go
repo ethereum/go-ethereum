@@ -19,6 +19,7 @@ package tracers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -105,7 +106,7 @@ const (
 // It zero-pads the slice if it extends beyond memory bounds.
 func GetMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
 	if offset < 0 || size < 0 {
-		return nil, fmt.Errorf("offset or size must not be negative")
+		return nil, errors.New("offset or size must not be negative")
 	}
 
 	if int(offset+size) < m.Len() { // slice fully inside memory
