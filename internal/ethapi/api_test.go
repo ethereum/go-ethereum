@@ -1870,7 +1870,7 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	t.Parallel()
 
 	var (
-		backend, txHashes = setupReceiptBackend(t, 5)
+		backend, txHashes = setupReceiptBackend(t, 6)
 		api               = NewTransactionAPI(backend, new(AddrLocker))
 	)
 
