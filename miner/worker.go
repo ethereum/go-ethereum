@@ -1159,6 +1159,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
+	if !w.isRunning() {
+		return
+	}
+
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
 	w.circuitCapacityChecker.Reset()
