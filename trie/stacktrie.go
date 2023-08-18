@@ -444,7 +444,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 	case extNode:
 		st.children[0].hashRec(hasher, append(path, st.key...))
 
-		n := shortNode{Key: hexToCompact(st.key)}
+		n := shortNode{Key: hexToCompactInPlace(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
 		} else {
@@ -460,7 +460,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 
 	case leafNode:
 		st.key = append(st.key, byte(16))
-		n := shortNode{Key: hexToCompact(st.key), Val: valueNode(st.val)}
+		n := shortNode{Key: hexToCompactInPlace(st.key), Val: valueNode(st.val)}
 
 		n.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()
