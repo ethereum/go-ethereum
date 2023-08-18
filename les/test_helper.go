@@ -25,17 +25,14 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -46,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
@@ -106,16 +102,12 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 		ctx    = context.Background()
 		signer = types.HomesteadSigner{}
 	)
-
 	for i := 0; i < n; i++ {
 		switch i {
 		case 0:
 			// Builtin-block
 			//    number: 1
-			//    txs:    2
-			// deploy checkpoint contract
-			auth, _ := bind.NewKeyedTransactorWithChainID(bankKey, big.NewInt(1337))
-			oracleAddr, _, _, _ = contract.DeployCheckpointOracle(auth, backend, []common.Address{signerAddr}, sectionSize, processConfirms, big.NewInt(1))
+			//    txs:    1
 
 			// bankUser transfers some ether to user1
 			nonce, _ := backend.PendingNonceAt(ctx, bankAddr)
@@ -125,6 +117,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			// Builtin-block
 			//    number: 2
 			//    txs:    4
+
 			bankNonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			userNonce1, _ := backend.PendingNonceAt(ctx, userAddr1)
 
@@ -139,7 +132,6 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			// user1 deploys a test contract
 			tx3, _ := types.SignTx(types.NewContractCreation(userNonce1+1, big.NewInt(0), 200000, big.NewInt(params.InitialBaseFee), testContractCode), signer, userKey1)
 			backend.SendTransaction(ctx, tx3)
-
 			testContractAddr = crypto.CreateAddress(userAddr1, userNonce1+1)
 
 			// user1 deploys a event contract
@@ -149,6 +141,7 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			// Builtin-block
 			//    number: 3
 			//    txs:    2
+
 			// bankUser transfer some ether to signer
 			bankNonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			tx1, _ := types.SignTx(types.NewTransaction(bankNonce, signerAddr, big.NewInt(1000000000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, bankKey)
@@ -162,13 +155,13 @@ func prepare(n int, backend *backends.SimulatedBackend) {
 			// Builtin-block
 			//    number: 4
 			//    txs:    1
+
 			// invoke test contract
 			bankNonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
 			tx, _ := types.SignTx(types.NewTransaction(bankNonce, testContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, bankKey)
 			backend.SendTransaction(ctx, tx)
 		}
-
 		backend.Commit()
 	}
 }
@@ -181,7 +174,6 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	indexers[2] = light.NewBloomTrieIndexer(db, odr, config.BloomSize, config.BloomTrieSize, disablePruning)
 	// make bloomTrieIndexer as a child indexer of bloom indexer.
 	indexers[1].AddChildIndexer(indexers[2])
-
 	return indexers[:]
 }
 
@@ -196,29 +188,8 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-
 	genesis := gspec.MustCommit(db)
-	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil, nil)
-
-	if indexers != nil {
-		checkpointConfig := &params.CheckpointOracleConfig{
-			Address:   crypto.CreateAddress(bankAddr, 0),
-			Signers:   []common.Address{signerAddr},
-			Threshold: 1,
-		}
-		getLocal := func(index uint64) params.TrustedCheckpoint {
-			chtIndexer := indexers[0]
-			sectionHead := chtIndexer.SectionHead(index)
-
-			return params.TrustedCheckpoint{
-				SectionIndex: index,
-				SectionHead:  sectionHead,
-				CHTRoot:      light.GetChtRoot(db, index, sectionHead),
-				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
-			}
-		}
-		oracle = checkpointoracle.New(checkpointConfig, getLocal)
-	}
+	chain, _ := light.NewLightChain(odr, gspec.Config, engine)
 
 	client := &LightEthereum{
 		lesCommons: lesCommons{
@@ -241,12 +212,6 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	}
 	client.handler = newClientHandler(client)
 
-	if client.oracle != nil {
-		client.oracle.Start(backend)
-	}
-
-	client.handler.start()
-
 	return client.handler, func() {
 		client.handler.stop()
 	}
@@ -261,7 +226,6 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			BaseFee:  big.NewInt(params.InitialBaseFee),
 		}
 	)
-
 	genesis := gspec.MustCommit(db)
 
 	// create a simulation backend and pre-commit several customized block to the database.
@@ -270,27 +234,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 
 	txpoolConfig := legacypool.DefaultConfig
 	txpoolConfig.Journal = ""
-	txpool := txpool.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
 
-	if indexers != nil {
-		checkpointConfig := &params.CheckpointOracleConfig{
-			Address:   crypto.CreateAddress(bankAddr, 0),
-			Signers:   []common.Address{signerAddr},
-			Threshold: 1,
-		}
-		getLocal := func(index uint64) params.TrustedCheckpoint {
-			chtIndexer := indexers[0]
-			sectionHead := chtIndexer.SectionHead(index)
-
-			return params.TrustedCheckpoint{
-				SectionIndex: index,
-				SectionHead:  sectionHead,
-				CHTRoot:      light.GetChtRoot(db, index, sectionHead),
-				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
-			}
-		}
-		oracle = checkpointoracle.New(checkpointConfig, getLocal)
-	}
+	pool := legacypool.New(txpoolConfig, simulation.Blockchain())
+	txpool, _ := txpool.New(new(big.Int).SetUint64(txpoolConfig.PriceLimit), simulation.Blockchain(), []txpool.SubPool{pool})
 
 	server := &LesServer{
 		lesCommons: lesCommons{
@@ -315,17 +261,10 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	server.clientPool = vfs.NewClientPool(db, testBufRecharge, defaultConnectedBias, clock, alwaysTrueFn)
 	server.clientPool.Start()
 	server.clientPool.SetLimits(10000, 10000) // Assign enough capacity for clientpool
-
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
-	if server.oracle != nil {
-		server.oracle.Start(simulation)
-	}
-
 	server.servingQueue.setThreads(4)
 	server.handler.start()
-
 	closer := func() { server.Stop() }
-
 	return server.handler, simulation, closer
 }
 
@@ -348,7 +287,6 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	if p.cpeer == nil {
 		t.Fatal("handshake for client peer only")
 	}
-
 	var sendList keyValueList
 	sendList = sendList.add("protocolVersion", uint64(p.cpeer.version))
 	sendList = sendList.add("networkId", uint64(NetworkId))
@@ -356,15 +294,12 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	sendList = sendList.add("headHash", head)
 	sendList = sendList.add("headNum", headNum)
 	sendList = sendList.add("genesisHash", genesis)
-
 	if p.cpeer.version >= lpv4 {
 		sendList = sendList.add("forkID", &forkID)
 	}
-
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-
 	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
@@ -377,7 +312,6 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	if p.speer == nil {
 		t.Fatal("handshake for server peer only")
 	}
-
 	var sendList keyValueList
 	sendList = sendList.add("protocolVersion", uint64(p.speer.version))
 	sendList = sendList.add("networkId", uint64(NetworkId))
@@ -388,21 +322,18 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	sendList = sendList.add("serveHeaders", nil)
 	sendList = sendList.add("serveChainSince", uint64(0))
 	sendList = sendList.add("serveStateSince", uint64(0))
-	sendList = sendList.add("serveRecentState", core.DefaultCacheConfig.TriesInMemory-4)
+	sendList = sendList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	sendList = sendList.add("txRelay", nil)
 	sendList = sendList.add("flowControl/BL", testBufLimit)
 	sendList = sendList.add("flowControl/MRR", testBufRecharge)
 	sendList = sendList.add("flowControl/MRC", costList)
-
 	if p.speer.version >= lpv4 {
 		sendList = sendList.add("forkID", &forkID)
 		sendList = sendList.add("recentTxLookup", recentTxLookup)
 	}
-
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-
 	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
@@ -420,7 +351,6 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 
 	// Generate a random id and create the peer
 	var id enode.ID
-
 	rand.Read(id[:])
 
 	peer1 := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
@@ -429,7 +359,6 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 	// Start the peer on a new thread
 	errc1 := make(chan error, 1)
 	errc2 := make(chan error, 1)
-
 	go func() {
 		select {
 		case <-server.closeCh:
@@ -453,14 +382,11 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		default:
 		}
-
-		if atomic.LoadUint32(&peer1.serving) == 1 && atomic.LoadUint32(&peer2.serving) == 1 {
+		if peer1.serving.Load() && peer2.serving.Load() {
 			break
 		}
-
 		time.Sleep(50 * time.Millisecond)
 	}
-
 	return &testPeer{cpeer: peer1, net: net, app: app}, &testPeer{speer: peer2, net: app, app: net}, nil
 }
 
@@ -486,13 +412,11 @@ type testClient struct {
 
 	// Generate a random id and create the peer
 	var id enode.ID
-
 	rand.Read(id[:])
 	peer := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
-
 	go func() {
 		select {
 		case <-client.handler.closeCh:
@@ -500,19 +424,16 @@ type testClient struct {
 		case errCh <- client.handler.handle(peer, false):
 		}
 	}()
-
 	tp := &testPeer{
 		app:   app,
 		net:   net,
 		speer: peer,
 	}
-
 	var (
 		genesis = client.handler.backend.blockchain.Genesis()
 		head    = client.handler.backend.blockchain.CurrentHeader()
 		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-
 	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
@@ -523,19 +444,15 @@ type testClient struct {
 			return nil, nil, nil
 		default:
 		}
-
-		if atomic.LoadUint32(&peer.serving) == 1 {
+		if peer.serving.Load() {
 			break
 		}
-
 		time.Sleep(50 * time.Millisecond)
 	}
-
 	closePeer := func() {
 		tp.speer.close()
 		tp.close()
 	}
-
 	return tp, closePeer, errCh
 }*/
 
@@ -559,13 +476,11 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 
 	// Generate a random id and create the peer
 	var id enode.ID
-
 	rand.Read(id[:])
 	peer := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
-
 	go func() {
 		select {
 		case <-server.handler.closeCh:
@@ -573,19 +488,16 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		case errCh <- server.handler.handle(peer):
 		}
 	}()
-
 	tp := &testPeer{
 		app:   app,
 		net:   net,
 		cpeer: peer,
 	}
-
 	var (
 		genesis = server.handler.blockchain.Genesis()
 		head    = server.handler.blockchain.CurrentHeader()
 		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-
 	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
 
@@ -596,19 +508,15 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 			return nil, nil, nil
 		default:
 		}
-
-		if atomic.LoadUint32(&peer.serving) == 1 {
+		if peer.serving.Load() {
 			break
 		}
-
 		time.Sleep(50 * time.Millisecond)
 	}
-
 	closePeer := func() {
 		tp.cpeer.close()
 		tp.close()
 	}
-
 	return tp, closePeer, errCh
 }
 
@@ -628,12 +536,10 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		cdb    = rawdb.NewMemoryDatabase()
 		speers = newServerPeerSet()
 	)
-
 	var clock mclock.Clock = &mclock.System{}
 	if config.simClock {
 		clock = &mclock.Simulated{}
 	}
-
 	dist := newRequestDistributor(speers, clock)
 	rm := newRetrieveManager(speers, dist, func() time.Duration { return time.Millisecond * 500 })
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, speers, rm)
@@ -656,16 +562,12 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	if config.indexFn != nil {
 		config.indexFn(scIndexer, sbIndexer, sbtIndexer)
 	}
-
 	var (
 		err          error
 		speer, cpeer *testPeer
 	)
-
 	if config.connect {
 		done := make(chan struct{})
-		client.syncEnd = func(_ *types.Header) { close(done) }
-
 		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server, client, false)
 		if err != nil {
 			t.Fatalf("Failed to connect testing peers %v", err)
@@ -676,7 +578,6 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 			t.Fatal("test peer did not connect and sync within 3s")
 		}
 	}
-
 	s := &testServer{
 		clock:            clock,
 		backend:          b,
@@ -703,7 +604,6 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 			cpeer.cpeer.close()
 			speer.speer.close()
 		}
-
 		ccIndexer.Close()
 		cbIndexer.Close()
 		scIndexer.Close()
@@ -713,7 +613,6 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		b.Close()
 		clientClose()
 	}
-
 	return s, c, teardown
 }
 

@@ -8,6 +8,9 @@ require (
 	github.com/JekaMas/go-grpc-net-conn v0.0.0-20220708155319-6aff21f2d13d
 	github.com/JekaMas/workerpool v1.1.8
 	github.com/VictoriaMetrics/fastcache v1.6.0
+	github.com/aws/aws-sdk-go-v2 v1.2.0
+	github.com/aws/aws-sdk-go-v2/config v1.1.1
+	github.com/aws/aws-sdk-go-v2/credentials v1.1.1
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.1.1
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0
 	github.com/cespare/cp v1.1.1
@@ -54,6 +57,7 @@ require (
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/karalabe/usb v0.0.3-0.20230711191512-61db3e06439c
+	github.com/kylelemons/godebug v1.1.0
 	github.com/maticnetwork/crand v1.0.2
 	github.com/maticnetwork/heimdall v0.3.1-0.20230105132832-d0063f71e3f0
 	github.com/maticnetwork/polyproto v0.0.2
@@ -83,6 +87,7 @@ require (
 	golang.org/x/text v0.9.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.9.1
+	gonum.org/v1/gonum v0.11.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/yaml.v3 v3.0.1
@@ -151,6 +156,10 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.0.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.0.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.1.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.1.1 // indirect
 	github.com/bartekn/go-bip39 v0.0.0-20171116152956-a05967ea095d // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b // indirect
@@ -182,7 +191,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mitchellh/copystructure v1.0.0 // indirect
