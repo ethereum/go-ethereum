@@ -413,16 +413,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 	}
 
-	if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
-		// The L2 Fee is the same as the fee that is charged in the normal geth
-		// codepath. Add the L1DataFee to the L2 fee for the total fee that is sent
-		// to the sequencer.
-		l2Fee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
-		fee := new(big.Int).Add(st.l1DataFee, l2Fee)
-		st.state.AddBalance(st.evm.FeeRecipient(), fee)
-	} else {
-		st.state.AddBalance(st.evm.FeeRecipient(), new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
-	}
+	// The L2 Fee is the same as the fee that is charged in the normal geth
+	// codepath. Add the L1DataFee to the L2 fee for the total fee that is sent
+	// to the sequencer.
+	l2Fee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
+	fee := new(big.Int).Add(st.l1DataFee, l2Fee)
+	st.state.AddBalance(st.evm.FeeRecipient(), fee)
 
 	return &ExecutionResult{
 		L1DataFee:  st.l1DataFee,

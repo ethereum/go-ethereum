@@ -105,7 +105,7 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, 
 		coinbase:         coinbase,
 		signer:           types.MakeSigner(chainConfig, block.Number()),
 		state:            statedb,
-		blockCtx:         NewEVMBlockContext(block.Header(), chainContext, nil),
+		blockCtx:         NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
 		StorageTrace: &types.StorageTrace{
 			RootBefore:    parent.Root(),
 			RootAfter:     block.Root(),
