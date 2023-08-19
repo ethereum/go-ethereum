@@ -90,6 +90,47 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 	}
 }
 
+func TestTransactionBlobTx(t *testing.T) {
+	newUint64 := func(val uint64) *uint64 { return &val }
+	config := params.TestChainConfig
+	config.ShanghaiTime = newUint64(0)
+	config.CancunTime = newUint64(0)
+	var (
+		signer = types.LatestSigner(config)
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		tests  = allBlobTxs(common.Address{0xde, 0xad}, config)
+	)
+	t.Parallel()
+	for i, tt := range tests {
+		var tx2 types.Transaction
+		tx, err := types.SignNewTx(key, signer, tt.Tx)
+		if err != nil {
+			t.Fatalf("test %d: signing failed: %v", i, err)
+		}
+		// Regular transaction
+		if data, err := json.Marshal(tx); err != nil {
+			t.Fatalf("test %d: marshalling failed; %v", i, err)
+		} else if err = tx2.UnmarshalJSON(data); err != nil {
+			t.Fatalf("test %d: sunmarshal failed: %v", i, err)
+		} else if want, have := tx.Hash(), tx2.Hash(); want != have {
+			t.Fatalf("test %d: stx changed, want %x have %x", i, want, have)
+		}
+
+		// rpcTransaction
+		rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, nil, config)
+		if data, err := json.Marshal(rpcTx); err != nil {
+			t.Fatalf("test %d: marshalling failed; %v", i, err)
+		} else if err = tx2.UnmarshalJSON(data); err != nil {
+			t.Fatalf("test %d: unmarshal failed: %v", i, err)
+		} else if want, have := tx.Hash(), tx2.Hash(); want != have {
+			t.Fatalf("test %d: tx changed, want %x have %x", i, want, have)
+		} else {
+			want, have := tt.Want, string(data)
+			require.JSONEqf(t, want, have, "test %d: rpc json not match, want %s have %s", i, want, have)
+		}
+	}
+}
+
 type txData struct {
 	Tx   types.TxData
 	Want string
@@ -336,6 +377,52 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"s": "0x7626abc15834f391a117c63450047309dbf84c5ce3e8e609b607062641e2de43",
 				"yParity": "0x0"
 			}`,
+		},
+	}
+}
+
+func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
+	return []txData{
+		{
+			Tx: &types.BlobTx{
+				Nonce:      6,
+				GasTipCap:  uint256.NewInt(1),
+				GasFeeCap:  uint256.NewInt(5),
+				Gas:        6,
+				To:         addr,
+				BlobFeeCap: uint256.NewInt(1),
+				BlobHashes: []common.Hash{{1}},
+				Value:      new(uint256.Int),
+				V:          uint256.NewInt(32),
+				R:          uint256.NewInt(10),
+				S:          uint256.NewInt(11),
+			},
+			Want: `{
+                "blockHash": null,
+                "blockNumber": null,
+                "from": "0x71562b71999873db5b286df957af199ec94617f7",
+                "gas": "0x6",
+                "gasPrice": "0x5",
+                "maxFeePerGas": "0x5",
+                "maxPriorityFeePerGas": "0x1",
+                "maxFeePerBlobGas": "0x1",
+                "hash": "0x1f2b59a20e61efc615ad0cbe936379d6bbea6f938aafaf35eb1da05d8e7f46a3",
+                "input": "0x",
+                "nonce": "0x6",
+                "to": "0xdead000000000000000000000000000000000000",
+                "transactionIndex": null,
+                "value": "0x0",
+                "type": "0x3",
+                "accessList": [],
+                "chainId": "0x1",
+                "blobVersionedHashes": [
+                    "0x0100000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "v": "0x0",
+                "r": "0x618be8908e0e5320f8f3b48042a079fe5a335ebd4ed1422a7d2207cd45d872bc",
+                "s": "0x27b2bc6c80e849a8e8b764d4549d8c2efac3441e73cf37054eb0a9b9f8e89b27",
+                "yParity": "0x0"
+            }`,
 		},
 	}
 }
