@@ -47,7 +47,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )
@@ -1100,7 +1099,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 			t.Errorf("test %d: json marshal error: %v", i, err)
 			continue
 		}
-		assert.JSONEqf(t, tc.want, string(out), "test %d", i)
+		require.JSONEqf(t, tc.want, string(out), "test %d", i)
 	}
 }
 
