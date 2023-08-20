@@ -1164,14 +1164,14 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		blockHash   *common.Hash
 		fullTx      bool
 		reqHeader   bool
-		want        string
+		file        string
 		expectErr   error
 	}{
 		// 0. latest header
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			reqHeader:   true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0xfdc7303",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1196,7 +1196,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(0),
 			reqHeader:   true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x3b9aca00",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1221,7 +1221,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(1),
 			reqHeader:   true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x342770c0",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1246,7 +1246,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(9),
 			reqHeader:   true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x121a9cca",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1271,13 +1271,13 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(11),
 			reqHeader:   true,
-			want:        "null",
+			file:        "null",
 		},
 		// 5. pending header
 		{
 			blockNumber: rpc.PendingBlockNumber,
 			reqHeader:   true,
-			want: `{
+			file: `{
 				"difficulty": "0x0",
 				"extraData": "0x",
 				"gasLimit": "0x0",
@@ -1301,7 +1301,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// 6. latest block
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0xfdc7303",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1330,7 +1330,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// 7. genesis block
 		{
 			blockNumber: rpc.BlockNumber(0),
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x3b9aca00",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1357,7 +1357,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// 8. #1 block
 		{
 			blockNumber: rpc.BlockNumber(1),
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x342770c0",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1387,7 +1387,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(9),
 			fullTx:      true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x121a9cca",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1433,12 +1433,12 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.BlockNumber(11),
 			fullTx:      true,
-			want:        "null",
+			file:        "null",
 		},
 		// 11. pending block
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			want: `{
+			file: `{
 				"difficulty": "0x0",
 				"extraData": "0x",
 				"gasLimit": "0x0",
@@ -1476,7 +1476,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockNumber: rpc.PendingBlockNumber,
 			fullTx:      true,
-			want: `{
+			file: `{
 				"difficulty": "0x0",
 				"extraData": "0x",
 				"gasLimit": "0x0",
@@ -1531,7 +1531,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &blockHashes[len(blockHashes)-1],
 			reqHeader: true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0xfdc7303",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1556,7 +1556,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &blockHashes[0],
 			reqHeader: true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x3b9aca00",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1581,7 +1581,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &blockHashes[1],
 			reqHeader: true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x342770c0",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1606,7 +1606,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &blockHashes[len(blockHashes)-2],
 			reqHeader: true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x121a9cca",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1631,18 +1631,18 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &common.Hash{},
 			reqHeader: true,
-			want:      "null",
+			file:      "null",
 		},
 		// 18. pending hash
 		{
 			blockHash: &pendingHash,
 			reqHeader: true,
-			want:      `null`,
+			file:      `null`,
 		},
 		// 19. latest block
 		{
 			blockHash: &blockHashes[len(blockHashes)-1],
-			want: `{
+			file: `{
 				"baseFeePerGas": "0xfdc7303",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1671,7 +1671,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// 20. genesis block
 		{
 			blockHash: &blockHashes[0],
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x3b9aca00",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1698,7 +1698,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// 21. #1 block
 		{
 			blockHash: &blockHashes[1],
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x342770c0",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1728,7 +1728,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &blockHashes[len(blockHashes)-2],
 			fullTx:    true,
-			want: `{
+			file: `{
 				"baseFeePerGas": "0x121a9cca",
 				"difficulty": "0x20000",
 				"extraData": "0x",
@@ -1774,18 +1774,18 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		{
 			blockHash: &common.Hash{},
 			fullTx:    true,
-			want:      "null",
+			file:      "null",
 		},
 		// 24. pending block
 		{
 			blockHash: &pendingHash,
-			want:      `null`,
+			file:      `null`,
 		},
 		// 25. pending block + fullTx
 		{
 			blockHash: &pendingHash,
 			fullTx:    true,
-			want:      `null`,
+			file:      `null`,
 		},
 	}
 
@@ -1793,18 +1793,23 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		var (
 			result map[string]interface{}
 			err    error
+			rpc    string
 		)
 		if tt.blockHash != nil {
 			if tt.reqHeader {
 				result = api.GetHeaderByHash(context.Background(), *tt.blockHash)
+				rpc = "eth_getHeaderByHash"
 			} else {
 				result, err = api.GetBlockByHash(context.Background(), *tt.blockHash, tt.fullTx)
+				rpc = "eth_getBlockByHash"
 			}
 		} else {
 			if tt.reqHeader {
 				result, err = api.GetHeaderByNumber(context.Background(), tt.blockNumber)
+				rpc = "eth_getHeaderByNumber"
 			} else {
 				result, err = api.GetBlockByNumber(context.Background(), tt.blockNumber, tt.fullTx)
+				rpc = "eth_getBlockByNumber"
 			}
 		}
 		if tt.expectErr != nil {
@@ -1821,13 +1826,8 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		data, err := json.Marshal(result)
-		if err != nil {
-			t.Errorf("test %d: json marshal error", i)
-			continue
-		}
-		want, have := tt.want, string(data)
-		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+
+		testRPCResponseWithFile(t, i, result, rpc, tt.file)
 	}
 }
 
@@ -1995,20 +1995,7 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			t.Errorf("test %d: json marshal error", i)
-			continue
-		}
-		outputFile := filepath.Join("testdata", fmt.Sprintf("eth_getTransactionReceipt-%s.json", tt.file))
-		if os.Getenv("WRITE_TEST_FILES") != "" {
-			os.WriteFile(outputFile, data, 0644)
-		}
-		want, err := os.ReadFile(outputFile)
-		if err != nil {
-			t.Fatalf("error reading expected test file: %s output: %v", tt.file, err)
-		}
-		require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", i, string(want), string(data))
+		testRPCResponseWithFile(t, i, result, "eth_getTransactionReceipt", tt.file)
 	}
 }
 
@@ -2106,19 +2093,23 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			t.Errorf("test %d: json marshal error", i)
-			continue
-		}
-		outputFile := filepath.Join("testdata", fmt.Sprintf("eth_getBlockReceipts-%s.json", tt.file))
-		if os.Getenv("WRITE_TEST_FILES") != "" {
-			os.WriteFile(outputFile, data, 0644)
-		}
-		want, err := os.ReadFile(outputFile)
-		if err != nil {
-			t.Fatalf("error reading expected test file: %s output: %v", tt.file, err)
-		}
-		require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", i, string(want), string(data))
+		testRPCResponseWithFile(t, i, result, "eth_getBlockReceipts", tt.file)
 	}
+}
+
+func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		t.Errorf("test %d: json marshal error", testid)
+		return
+	}
+	outputFile := filepath.Join("testdata", fmt.Sprintf("eth_getBlockReceipts-%s.json", file))
+	if os.Getenv("WRITE_TEST_FILES") != "" {
+		os.WriteFile(outputFile, data, 0644)
+	}
+	want, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("error reading expected test file: %s output: %v", outputFile, err)
+	}
+	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
 }
