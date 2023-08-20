@@ -66,6 +66,28 @@ type txTraceTask struct {
 	index   int
 }
 
+func CreateTraceEnvHelper(chainConfig *params.ChainConfig, logConfig *vm.LogConfig, blockCtx vm.BlockContext, startL1QueueIndex uint64, coinbase common.Address, statedb *state.StateDB, rootBefore common.Hash, block *types.Block, commitAfterApply bool) *TraceEnv {
+	return &TraceEnv{
+		logConfig:        logConfig,
+		commitAfterApply: commitAfterApply,
+		chainConfig:      chainConfig,
+		coinbase:         coinbase,
+		signer:           types.MakeSigner(chainConfig, block.Number()),
+		state:            statedb,
+		blockCtx:         blockCtx,
+		StorageTrace: &types.StorageTrace{
+			RootBefore:    rootBefore,
+			RootAfter:     block.Root(),
+			Proofs:        make(map[string][]hexutil.Bytes),
+			StorageProofs: make(map[string]map[string][]hexutil.Bytes),
+		},
+		ZkTrieTracer:      make(map[string]state.ZktrieProofTracer),
+		ExecutionResults:  make([]*types.ExecutionResult, block.Transactions().Len()),
+		TxStorageTraces:   make([]*types.StorageTrace, block.Transactions().Len()),
+		StartL1QueueIndex: startL1QueueIndex,
+	}
+}
+
 func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, engine consensus.Engine, chaindb ethdb.Database, statedb *state.StateDB, parent *types.Block, block *types.Block, commitAfterApply bool) (*TraceEnv, error) {
 	var coinbase common.Address
 	var err error
@@ -94,29 +116,20 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, 
 		log.Error("missing FirstQueueIndexNotInL2Block for block during trace call", "number", parent.NumberU64(), "hash", parent.Hash())
 		return nil, fmt.Errorf("missing FirstQueueIndexNotInL2Block for block during trace call: hash=%v, parentHash=%vv", block.Hash(), parent.Hash())
 	}
-
-	env := &TraceEnv{
-		logConfig: &vm.LogConfig{
+	env := CreateTraceEnvHelper(
+		chainConfig,
+		&vm.LogConfig{
 			EnableMemory:     false,
 			EnableReturnData: true,
 		},
-		commitAfterApply: commitAfterApply,
-		chainConfig:      chainConfig,
-		coinbase:         coinbase,
-		signer:           types.MakeSigner(chainConfig, block.Number()),
-		state:            statedb,
-		blockCtx:         NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
-		StorageTrace: &types.StorageTrace{
-			RootBefore:    parent.Root(),
-			RootAfter:     block.Root(),
-			Proofs:        make(map[string][]hexutil.Bytes),
-			StorageProofs: make(map[string]map[string][]hexutil.Bytes),
-		},
-		ZkTrieTracer:      make(map[string]state.ZktrieProofTracer),
-		ExecutionResults:  make([]*types.ExecutionResult, block.Transactions().Len()),
-		TxStorageTraces:   make([]*types.StorageTrace, block.Transactions().Len()),
-		StartL1QueueIndex: *startL1QueueIndex,
-	}
+		NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
+		*startL1QueueIndex,
+		coinbase,
+		statedb,
+		parent.Root(),
+		block,
+		commitAfterApply,
+	)
 
 	key := coinbase.String()
 	if _, exist := env.Proofs[key]; !exist {
