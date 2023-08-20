@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -2131,190 +2133,67 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 
 	var testSuite = []struct {
 		test rpc.BlockNumberOrHash
-		want string
+		file string
 	}{
 		// 0. block without any txs(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[0], false),
-			want: `[]`,
+			file: "eth_getBlockReceipts-number-0",
 		},
 		// 1. block without any txs(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(0),
-			want: `[]`,
+			file: "eth_getBlockReceipts-number-1",
 		},
 		// 2. earliest tag
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.EarliestBlockNumber),
-			want: `[]`,
+			file: "eth_getBlockReceipts-tag-earliest",
 		},
 		// 3. latest tag
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber),
-			want: `[
-  {
-    "blobGasPrice": "0x1",
-    "blobGasUsed": "0x20000",
-    "blockHash": "0x2ffcbc982ea819900e22b96c72bc85c8c64e080b9479d1c68ee49f55564816e7",
-    "blockNumber": "0x6",
-    "contractAddress": null,
-    "cumulativeGasUsed": "0x5208",
-    "effectiveGasPrice": "0x1b09d63b",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0x5208",
-    "logs": [],
-    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "status": "0x1",
-    "to": "0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e",
-    "transactionHash": "0xb51ee3d2a89ba5d5623c73133c8d7a6ba9fb41194c17f4302c21b30994a1180f",
-    "transactionIndex": "0x0",
-    "type": "0x3"
-  }
-]
-`,
+			file: "eth_getBlockReceipts-tag-latest",
 		},
 		// 4. block with legacy transfer tx(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[1], false),
-			want: `[
-  {
-    "blockHash": "0x698945ab39ebe6cecff84886b3142630cf03a74b2c19eec8043534463a6ff60b",
-    "blockNumber": "0x1",
-    "contractAddress": null,
-    "cumulativeGasUsed": "0x5208",
-    "effectiveGasPrice": "0x342770c0",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0x5208",
-    "logs": [],
-    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "status": "0x1",
-    "to": "0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e",
-    "transactionHash": "0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e",
-    "transactionIndex": "0x0",
-    "type": "0x0"
-  }
-]`,
+			file: "eth_getBlockReceipts-block-with-legacy-transfer-tx",
 		},
 		// 5. block with contract create tx(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2)),
-			want: `[
-  {
-    "blockHash": "0xc7f8a266e8bee4e36fd6374ebb280b16b4ec881e865f9d69e3c8743a71f0197e",
-    "blockNumber": "0x2",
-    "contractAddress": "0xae9bea628c4ce503dcfd7e305cab4e29e7476592",
-    "cumulativeGasUsed": "0xcf50",
-    "effectiveGasPrice": "0x2db16291",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0xcf50",
-    "logs": [],
-    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "status": "0x1",
-    "to": null,
-    "transactionHash": "0x340e58cda5086495010b571fe25067fecc9954dc4ee3cedece00691fa3f5904a",
-    "transactionIndex": "0x0",
-    "type": "0x0"
-  }
-]`,
+			file: "eth_getBlockReceipts-block-with-contract-create-tx",
 		},
 		// 6. block with legacy contract call tx(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[3], false),
-			want: `[
-  {
-    "blockHash": "0x790f05c0ce7b6add0c7b1e8a777811738c540436e898ae6b09688dacc6581254",
-    "blockNumber": "0x3",
-    "contractAddress": null,
-    "cumulativeGasUsed": "0x5e28",
-    "effectiveGasPrice": "0x281c2585",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0x5e28",
-    "logs": [
-      {
-        "address": "0x0000000000000000000000000000000000031ec7",
-        "topics": [
-          "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-          "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
-          "0x0000000000000000000000000000000000000000000000000000000000000003"
-        ],
-        "data": "0x000000000000000000000000000000000000000000000000000000000000000d",
-        "blockNumber": "0x3",
-        "transactionHash": "0xeaf3921cbf03ba45bad4e6ab807b196ce3b2a0b5bacc355b6272fa96b11b4287",
-        "transactionIndex": "0x0",
-        "blockHash": "0x790f05c0ce7b6add0c7b1e8a777811738c540436e898ae6b09688dacc6581254",
-        "logIndex": "0x0",
-        "removed": false
-      }
-    ],
-    "logsBloom": "0x00000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000800000000000000008000000000000000000000000000000000020000000080000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000400000000002000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000",
-    "status": "0x1",
-    "to": "0x0000000000000000000000000000000000031ec7",
-    "transactionHash": "0xeaf3921cbf03ba45bad4e6ab807b196ce3b2a0b5bacc355b6272fa96b11b4287",
-    "transactionIndex": "0x0",
-    "type": "0x0"
-  }
-]`,
+			file: "eth_getBlockReceipts-block-with-legacy-contract-call-tx",
 		},
 		// 7. block with dynamic fee tx(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(4)),
-			want: `[
-  {
-    "blockHash": "0xa85ac2ee14add4cf9e92f1a023b4c9eac355266f9e87e70bdcd557d848c61305",
-    "blockNumber": "0x4",
-    "contractAddress": null,
-    "cumulativeGasUsed": "0x538d",
-    "effectiveGasPrice": "0x2325c42f",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0x538d",
-    "logs": [],
-    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "status": "0x0",
-    "to": "0x0000000000000000000000000000000000031ec7",
-    "transactionHash": "0xdcde2574628c9d7dff22b9afa19f235959a924ceec65a9df903a517ae91f5c84",
-    "transactionIndex": "0x0",
-    "type": "0x2"
-  }
-]`,
+			file: "eth_getBlockReceipts-block-with-dynamic-fee-tx",
 		},
 		// 8. block is empty
 		{
 			test: rpc.BlockNumberOrHashWithHash(common.Hash{}, false),
-			want: `null`,
+			file: "eth_getBlockReceipts-hash-empty",
 		},
 		// 9. block is not found
 		{
 			test: rpc.BlockNumberOrHashWithHash(common.HexToHash("deadbeef"), false),
-			want: `null`,
+			file: "eth_getBlockReceipts-hash-notfound",
 		},
 		// 10. block is not found
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(genBlocks + 1)),
-			want: `null`,
+			file: "eth_getBlockReceipts-block-notfound",
 		},
-		// 11. block with blobl tx
+		// 11. block with blob tx
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(6)),
-			want: `[
-  {
-    "blobGasPrice": "0x1",
-    "blobGasUsed": "0x20000",
-    "blockHash": "0x2ffcbc982ea819900e22b96c72bc85c8c64e080b9479d1c68ee49f55564816e7",
-    "blockNumber": "0x6",
-    "contractAddress": null,
-    "cumulativeGasUsed": "0x5208",
-    "effectiveGasPrice": "0x1b09d63b",
-    "from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
-    "gasUsed": "0x5208",
-    "logs": [],
-    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    "status": "0x1",
-    "to": "0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e",
-    "transactionHash": "0xb51ee3d2a89ba5d5623c73133c8d7a6ba9fb41194c17f4302c21b30994a1180f",
-    "transactionIndex": "0x0",
-    "type": "0x3"
-  }
-]`,
+			file: "eth_getBlockReceipts-block-with-blob-tx",
 		},
 	}
 
@@ -2328,12 +2207,19 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		data, err := json.Marshal(result)
+		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			t.Errorf("test %d: json marshal error", i)
 			continue
 		}
-		want, have := tt.want, string(data)
-		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+		outputFile := filepath.Join("testdata", tt.file+".json")
+		if os.Getenv("WRITE_TEST_FILES") != "" {
+			os.WriteFile(outputFile, data, 0644)
+		}
+		want, err := os.ReadFile(outputFile)
+		if err != nil {
+			t.Fatalf("error reading expected test file: %s output: %v", tt.file, err)
+		}
+		require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", i, string(want), string(data))
 	}
 }
