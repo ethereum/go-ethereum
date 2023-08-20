@@ -3035,6 +3035,9 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 				return addrs, err
 			}
 			blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
+			if err != nil {
+				return addrs, err
+			}
 			signTxs := engine.CacheSigningTxs(header.Hash(), blockData.Transactions())
 			for _, signtx := range signTxs {
 				blkHash := common.BytesToHash(signtx.Data()[len(signtx.Data())-32:])
