@@ -2037,62 +2037,62 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 		// 0. block without any txs(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[0], false),
-			file: "eth_getBlockReceipts-number-0",
+			file: "number-0",
 		},
 		// 1. block without any txs(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(0),
-			file: "eth_getBlockReceipts-number-1",
+			file: "number-1",
 		},
 		// 2. earliest tag
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.EarliestBlockNumber),
-			file: "eth_getBlockReceipts-tag-earliest",
+			file: "tag-earliest",
 		},
 		// 3. latest tag
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber),
-			file: "eth_getBlockReceipts-tag-latest",
+			file: "tag-latest",
 		},
 		// 4. block with legacy transfer tx(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[1], false),
-			file: "eth_getBlockReceipts-block-with-legacy-transfer-tx",
+			file: "block-with-legacy-transfer-tx",
 		},
 		// 5. block with contract create tx(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2)),
-			file: "eth_getBlockReceipts-block-with-contract-create-tx",
+			file: "block-with-contract-create-tx",
 		},
 		// 6. block with legacy contract call tx(hash)
 		{
 			test: rpc.BlockNumberOrHashWithHash(blockHashes[3], false),
-			file: "eth_getBlockReceipts-block-with-legacy-contract-call-tx",
+			file: "block-with-legacy-contract-call-tx",
 		},
 		// 7. block with dynamic fee tx(number)
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(4)),
-			file: "eth_getBlockReceipts-block-with-dynamic-fee-tx",
+			file: "block-with-dynamic-fee-tx",
 		},
 		// 8. block is empty
 		{
 			test: rpc.BlockNumberOrHashWithHash(common.Hash{}, false),
-			file: "eth_getBlockReceipts-hash-empty",
+			file: "hash-empty",
 		},
 		// 9. block is not found
 		{
 			test: rpc.BlockNumberOrHashWithHash(common.HexToHash("deadbeef"), false),
-			file: "eth_getBlockReceipts-hash-notfound",
+			file: "hash-notfound",
 		},
 		// 10. block is not found
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(genBlocks + 1)),
-			file: "eth_getBlockReceipts-block-notfound",
+			file: "block-notfound",
 		},
 		// 11. block with blob tx
 		{
 			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(6)),
-			file: "eth_getBlockReceipts-block-with-blob-tx",
+			file: "block-with-blob-tx",
 		},
 	}
 
@@ -2111,7 +2111,7 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 			t.Errorf("test %d: json marshal error", i)
 			continue
 		}
-		outputFile := filepath.Join("testdata", tt.file+".json")
+		outputFile := filepath.Join("testdata", fmt.Sprintf("eth_getBlockReceipts-%s.json", tt.file))
 		if os.Getenv("WRITE_TEST_FILES") != "" {
 			os.WriteFile(outputFile, data, 0644)
 		}
