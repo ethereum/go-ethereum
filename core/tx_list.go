@@ -290,7 +290,7 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, trc21Issuers map[common.Address]*big.Int) (types.Transactions, types.Transactions) {
+func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, trc21Issuers map[common.Address]*big.Int, number *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
@@ -303,7 +303,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, trc21Issuers map[co
 		maximum := costLimit
 		if tx.To() != nil {
 			if feeCapacity, ok := trc21Issuers[*tx.To()]; ok {
-				return new(big.Int).Add(costLimit, feeCapacity).Cmp(tx.TRC21Cost()) < 0 || tx.Gas() > gasLimit
+				return new(big.Int).Add(costLimit, feeCapacity).Cmp(tx.TxCost(number)) < 0 || tx.Gas() > gasLimit
 			}
 		}
 		return tx.Cost().Cmp(maximum) > 0 || tx.Gas() > gasLimit
