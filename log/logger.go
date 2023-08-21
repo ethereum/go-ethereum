@@ -172,13 +172,6 @@ type Logger interface {
 	//	log.Crit("msg", "key1", val1)
 	//	log.Crit("msg", "key1", val1, "key2", val2)
 	Crit(msg string, ctx ...interface{})
-
-	OnTrace(func(l Logging))
-	OnDebug(func(l Logging))
-	OnInfo(func(l Logging))
-	OnWarn(func(l Logging))
-	OnError(func(l Logging))
-	OnCrit(func(l Logging))
 }
 
 type logger struct {
@@ -209,7 +202,6 @@ func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
 func (l *logger) New(ctx ...interface{}) Logger {
 	child := &logger{newContext(l.ctx, ctx), new(swapHandler)}
 	child.SetHandler(l.h)
-
 	return child
 }
 
@@ -218,7 +210,6 @@ func newContext(prefix []interface{}, suffix []interface{}) []interface{} {
 	newCtx := make([]interface{}, len(prefix)+len(normalizedSuffix))
 	n := copy(newCtx, prefix)
 	copy(newCtx[n:], normalizedSuffix)
-
 	return newCtx
 }
 
@@ -329,7 +320,6 @@ func (c Ctx) toArray() []interface{} {
 	arr := make([]interface{}, len(c)*2)
 
 	i := 0
-
 	for k, v := range c {
 		arr[i] = k
 		arr[i+1] = v

@@ -285,12 +285,7 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
-<<<<<<< HEAD
-	// TODO marcello double check
-	if chainConfig.IsShanghai(prestate.Env.Number) && prestate.Env.Withdrawals == nil {
-=======
 	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) && prestate.Env.Withdrawals == nil {
->>>>>>> bed84606583893fdb698cc1b5058cc47b4dbd837
 		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
 	}
 

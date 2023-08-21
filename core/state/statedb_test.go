@@ -592,7 +592,7 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	assert.Equal(t, balance, b)
 
 	// Tx3 delete
-	states[3].Suicide(addr)
+	states[3].SelfDestruct(addr)
 
 	// Within Tx 3, the state should not change before finalize
 	v = states[3].GetState(addr, key)
@@ -648,7 +648,7 @@ func TestMVHashMapRevert(t *testing.T) {
 	assert.Equal(t, new(big.Int).SetUint64(uint64(200)), b)
 	assert.Equal(t, common.HexToHash("0x02"), v)
 
-	states[1].Suicide(addr)
+	states[1].SelfDestruct(addr)
 
 	states[1].RevertToSnapshot(snapshot)
 
@@ -983,12 +983,12 @@ func TestApplyMVWriteSet(t *testing.T) {
 	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 
 	// Tx3 write
-	states[3].Suicide(addr2)
+	states[3].SelfDestruct(addr2)
 	states[3].SetCode(addr1, code)
 	states[3].Finalise(true)
 	states[3].FlushMVWriteSet()
 
-	sSingleProcess.Suicide(addr2)
+	sSingleProcess.SelfDestruct(addr2)
 	sSingleProcess.SetCode(addr1, code)
 
 	sClean.ApplyMVWriteSet(states[3].MVWriteList())

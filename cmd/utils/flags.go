@@ -2001,16 +2001,13 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
-
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
-
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
-
 	if cfg.LightServ > 0 {
 		_, err := les.NewLesServer(stack, backend, cfg)
 		if err != nil {
@@ -2018,7 +2015,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		}
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
-
 	return backend.APIBackend, backend
 }
 
@@ -2267,7 +2263,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		UseHeimdallApp:      ctx.Bool(UseHeimdallAppFlag.Name),
 	}
 	_ = CreateBorEthereum(configs)
-	engine := ethconfig.CreateConsensusEngine(stack, config, configs, &ethashConfig, cliqueConfig, nil, false, chainDb, nil)
+	engine := ethconfig.CreateConsensusEngine(stack, config, configs, nil, false, chainDb, nil)
 
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)

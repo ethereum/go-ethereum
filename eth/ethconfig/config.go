@@ -131,6 +131,7 @@ type Config struct {
 	TrieTimeout    time.Duration
 	SnapshotCache  int
 	Preimages      bool
+	TriesInMemory  uint64
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
@@ -199,7 +200,7 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) consensus.Engine {
+func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) (consensus.Engine, error) {
 	var engine consensus.Engine
 	// nolint:nestif
 	if chainConfig.Clique != nil {
@@ -212,7 +213,7 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 		spanner := span.NewChainSpanner(blockchainAPI, contract.ValidatorSet(), chainConfig, common.HexToAddress(chainConfig.Bor.ValidatorContract))
 
 		if ethConfig.WithoutHeimdall {
-			return bor.New(chainConfig, db, blockchainAPI, spanner, nil, genesisContractsClient, ethConfig.DevFakeAuthor)
+			return bor.New(chainConfig, db, blockchainAPI, spanner, nil, genesisContractsClient, ethConfig.DevFakeAuthor), nil
 		} else {
 			if ethConfig.DevFakeAuthor {
 				log.Warn("Sanitizing DevFakeAuthor", "Use DevFakeAuthor with", "--bor.withoutheimdall")
@@ -227,13 +228,13 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 				heimdallClient = heimdall.NewHeimdallClient(ethConfig.HeimdallURL)
 			}
 
-			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false)
+			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false), nil
 		}
-	} else if !config.TerminalTotalDifficultyPassed {
+	} else if !chainConfig.TerminalTotalDifficultyPassed {
 		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
 	} else {
 		engine = ethash.NewFaker()
 	}
 
-	return beacon.New(engine)
+	return beacon.New(engine), nil
 }

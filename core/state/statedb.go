@@ -398,10 +398,11 @@ func (s *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 				s.SetNonce(addr, sr.GetNonce(addr))
 			case CodePath:
 				s.SetCode(addr, sr.GetCode(addr))
+			// TODO - Arpit -----------------
 			case SuicidePath:
 				stateObject := sr.getDeletedStateObject(addr)
 				if stateObject != nil && stateObject.deleted {
-					s.Suicide(addr)
+					s.SelfDestruct(addr)
 				}
 			default:
 				panic(fmt.Errorf("unknown key type: %d", path.GetSubpath()))
@@ -627,17 +628,10 @@ func (s *StateDB) Version() blockstm.Version {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Code()
-	}
-}
-
-func (s *StateDB) GetCode(addr common.Address) []byte {
 	return MVRead(s, blockstm.NewSubpathKey(addr, CodePath), nil, func(s *StateDB) []byte {
 		stateObject := s.getStateObject(addr)
 		if stateObject != nil {
-			return stateObject.Code(s.db)
+			return stateObject.Code()
 		}
 
 		return nil
@@ -870,12 +864,9 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	})
 	stateObject.markSelfdestructed()
 	stateObject.data.Balance = new(big.Int)
-}
 
 	MVWrite(s, blockstm.NewSubpathKey(addr, SuicidePath))
 	MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
-
-	return true
 }
 
 func (s *StateDB) Selfdestruct6780(addr common.Address) {
@@ -1038,27 +1029,27 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				return nil
 			}
 		}
-	}
-	// If snapshot unavailable or reading from it failed, load from the database
-	if data == nil {
-		start := time.Now()
-		var err error
-		data, err = s.trie.GetAccount(addr)
-		if metrics.EnabledExpensive {
-			s.AccountReads += time.Since(start)
-		}
-		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
-			return nil
-		}
+		// If snapshot unavailable or reading from it failed, load from the database
 		if data == nil {
-			return nil
+			start := time.Now()
+			var err error
+			data, err = s.trie.GetAccount(addr)
+			if metrics.EnabledExpensive {
+				s.AccountReads += time.Since(start)
+			}
+			if err != nil {
+				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+				return nil
+			}
+			if data == nil {
+				return nil
+			}
 		}
-	}
-	// Insert into the live set
-	obj := newObject(s, addr, data)
-	s.setStateObject(obj)
-	return obj
+		// Insert into the live set
+		obj := newObject(s, addr, data)
+		s.setStateObject(obj)
+		return obj
+	})
 }
 
 func (s *StateDB) setStateObject(object *stateObject) {
@@ -1366,7 +1357,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			continue
 		}
 
-if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
 
 			// We need to maintain account deletions explicitly (will remain

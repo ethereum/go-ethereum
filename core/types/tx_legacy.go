@@ -19,21 +19,18 @@ package types
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // LegacyTx is the transaction data of the original Ethereum transactions.
 type LegacyTx struct {
-	Nonce           uint64          // nonce of sender account
-	GasPrice        *big.Int        // wei per gas
-	gasPriceUint256 *uint256.Int    // wei per gas
-	Gas             uint64          // gas limit
-	To              *common.Address `rlp:"nil"` // nil means contract creation
-	Value           *big.Int        // wei amount
-	Data            []byte          // contract invocation input data
-	V, R, S         *big.Int        // signature values
+	Nonce    uint64          // nonce of sender account
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          // gas limit
+	To       *common.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int        // wei amount
+	Data     []byte          // contract invocation input data
+	V, R, S  *big.Int        // signature values
 }
 
 // NewTransaction creates an unsigned legacy transaction.
@@ -78,29 +75,18 @@ func (tx *LegacyTx) copy() TxData {
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
-
-		if cpy.gasPriceUint256 != nil {
-			cpy.gasPriceUint256.Set(tx.gasPriceUint256)
-		} else {
-			cpy.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
-		}
 	}
-
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
-
 	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
-
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
-
 	return cpy
 }
 

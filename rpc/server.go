@@ -51,14 +51,27 @@ type Server struct {
 	mutex  sync.Mutex
 	codecs map[ServerCodec]struct{}
 	run    atomic.Bool
+
+	BatchLimit    uint64
+	executionPool *SafePool
+
+	batchItemLimit     int
+	batchResponseLimit int
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer() *Server {
-	server := &Server{
-		idgen:  randomIDGenerator(),
-		codecs: make(map[ServerCodec]struct{}),
+func NewServer(service string, executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+	reportEpStats := true
+	if service == "" || service == "test" {
+		reportEpStats = false
 	}
+
+	server := &Server{
+		idgen:         randomIDGenerator(),
+		codecs:        make(map[ServerCodec]struct{}),
+		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
+	}
+	server.run.Store(true)
 
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.

@@ -55,13 +55,9 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = s.Withdrawals
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
 	enc.ParentUncleHash = s.ParentUncleHash
-<<<<<<< HEAD
-
-=======
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(s.ExcessBlobGas)
 	enc.ParentExcessBlobGas = (*math.HexOrDecimal64)(s.ParentExcessBlobGas)
 	enc.ParentBlobGasUsed = (*math.HexOrDecimal64)(s.ParentBlobGasUsed)
->>>>>>> bed84606583893fdb698cc1b5058cc47b4dbd837
 	return json.Marshal(&enc)
 }
 
@@ -163,9 +159,6 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	if dec.ParentUncleHash != nil {
 		s.ParentUncleHash = *dec.ParentUncleHash
 	}
-<<<<<<< HEAD
-
-=======
 	if dec.ExcessBlobGas != nil {
 		s.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
 	}
@@ -175,6 +168,5 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	if dec.ParentBlobGasUsed != nil {
 		s.ParentBlobGasUsed = (*uint64)(dec.ParentBlobGasUsed)
 	}
->>>>>>> bed84606583893fdb698cc1b5058cc47b4dbd837
 	return nil
 }

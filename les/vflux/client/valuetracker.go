@@ -86,15 +86,12 @@ func (nv *NodeValueTracker) transferStats(now mclock.AbsTime, transferRate float
 
 	dt := now - nv.lastTransfer
 	nv.lastTransfer = now
-
 	if dt < 0 {
 		dt = 0
 	}
-
 	recentRtStats := nv.rtStats
 	recentRtStats.SubStats(&nv.lastRtStats)
 	nv.lastRtStats = nv.rtStats
-
 	return nv.basket.transfer(-math.Expm1(-transferRate * float64(dt))), recentRtStats
 }
 
@@ -113,12 +110,10 @@ func (nv *NodeValueTracker) Served(reqs []ServedRequest, respTime time.Duration)
 	defer nv.lock.Unlock()
 
 	var value float64
-
 	for _, r := range reqs {
 		nv.basket.add(r.ReqType, r.Amount, nv.reqCosts[r.ReqType]*uint64(r.Amount), expFactor)
 		value += nv.reqValues[r.ReqType] * float64(r.Amount)
 	}
-
 	nv.rtStats.Add(respTime, value, expFactor)
 }
 
@@ -188,9 +183,7 @@ func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []Reque
 		sumAmount += req.InitAmount
 		sumValue += req.InitAmount * req.InitValue
 	}
-
 	scaleValues := sumAmount * basketFactor / sumValue
-
 	for i, req := range reqInfo {
 		mapping[i] = req.Name
 		initRefBasket.items[i].amount = uint64(req.InitAmount * basketFactor)
@@ -214,7 +207,6 @@ func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []Reque
 		vt.mappings = [][]string{mapping}
 		vt.currentMapping = 0
 	}
-
 	vt.statsExpirer.SetRate(now, statsExpRate)
 	vt.refBasket.init(vt.reqTypeCount)
 	vt.periodicUpdate()
@@ -232,7 +224,6 @@ func NewValueTracker(db ethdb.KeyValueStore, clock mclock.Clock, reqInfo []Reque
 			}
 		}
 	}()
-
 	return vt
 }
 
@@ -258,34 +249,26 @@ func (vt *ValueTracker) loadFromDb(mapping []string) error {
 	if err != nil {
 		return err
 	}
-
 	r := bytes.NewReader(enc)
-
 	var version uint
-
 	if err := rlp.Decode(r, &version); err != nil {
 		log.Error("Decoding value tracker state failed", "err", err)
 		return err
 	}
-
 	if version != vtVersion {
 		log.Error("Unknown ValueTracker version", "stored", version, "current", nvtVersion)
 		return fmt.Errorf("Unknown ValueTracker version %d (current version is %d)", version, vtVersion)
 	}
-
 	var vte valueTrackerEncV1
 	if err := rlp.Decode(r, &vte); err != nil {
 		log.Error("Decoding value tracker state failed", "err", err)
 		return err
 	}
-
 	logOffset := utils.Fixed64(vte.ExpOffset)
 	dt := time.Now().UnixNano() - int64(vte.SavedAt)
-
 	if dt > 0 {
 		logOffset += utils.Float64ToFixed64(float64(dt) * vt.offlineExpRate / math.Log(2))
 	}
-
 	vt.statsExpirer.SetLogOffset(vt.clock.Now(), logOffset)
 	vt.rtStats = vte.RtStats
 	vt.mappings = vte.Mappings
@@ -303,12 +286,10 @@ loop:
 		vt.currentMapping = i
 		break
 	}
-
 	if vt.currentMapping == -1 {
 		vt.currentMapping = len(vt.mappings)
 		vt.mappings = append(vt.mappings, mapping)
 	}
-
 	if int(vte.RefBasketMapping) == vt.currentMapping {
 		vt.refBasket.basket = vte.RefBasket
 	} else {
@@ -316,10 +297,8 @@ loop:
 			log.Error("Unknown request basket mapping", "stored", vte.RefBasketMapping, "current", vt.currentMapping)
 			return fmt.Errorf("Unknown request basket mapping %d (current version is %d)", vte.RefBasketMapping, vt.currentMapping)
 		}
-
 		vt.refBasket.basket = vte.RefBasket.convertMapping(vt.mappings[vte.RefBasketMapping], mapping, vt.initRefBasket)
 	}
-
 	return nil
 }
 
@@ -333,19 +312,16 @@ func (vt *ValueTracker) saveToDb() {
 		ExpOffset:        uint64(vt.statsExpirer.LogOffset(vt.clock.Now())),
 		SavedAt:          uint64(time.Now().UnixNano()),
 	}
-
 	enc1, err := rlp.EncodeToBytes(uint(vtVersion))
 	if err != nil {
 		log.Error("Encoding value tracker state failed", "err", err)
 		return
 	}
-
 	enc2, err := rlp.EncodeToBytes(&vte)
 	if err != nil {
 		log.Error("Encoding value tracker state failed", "err", err)
 		return
 	}
-
 	if err := vt.db.Put(vtKey, append(enc1, enc2...)); err != nil {
 		log.Error("Saving value tracker state failed", "err", err)
 	}
@@ -359,11 +335,9 @@ func (vt *ValueTracker) Stop() {
 	<-quit
 	vt.lock.Lock()
 	vt.periodicUpdate()
-
 	for id, nv := range vt.connected {
 		vt.saveNode(id, nv)
 	}
-
 	vt.connected = nil
 	vt.saveToDb()
 	vt.lock.Unlock()
@@ -378,7 +352,6 @@ func (vt *ValueTracker) Register(id enode.ID) *NodeValueTracker {
 		// ValueTracker has already been stopped
 		return nil
 	}
-
 	nv := vt.loadOrNewNode(id)
 	reqTypeCount := len(vt.refBasket.reqValues)
 	nv.reqCosts = make([]uint64, reqTypeCount)
@@ -387,7 +360,6 @@ func (vt *ValueTracker) Register(id enode.ID) *NodeValueTracker {
 	nv.basket.init(reqTypeCount)
 
 	vt.connected[id] = nv
-
 	return nv
 }
 
@@ -417,37 +389,28 @@ func (vt *ValueTracker) loadOrNewNode(id enode.ID) *NodeValueTracker {
 	if nv, ok := vt.connected[id]; ok {
 		return nv
 	}
-
 	nv := &NodeValueTracker{vt: vt, lastTransfer: vt.clock.Now()}
 	enc, err := vt.db.Get(append(vtNodeKey, id[:]...))
-
 	if err != nil {
 		return nv
 	}
-
 	r := bytes.NewReader(enc)
-
 	var version uint
-
 	if err := rlp.Decode(r, &version); err != nil {
 		log.Error("Failed to decode node value tracker", "id", id, "err", err)
 		return nv
 	}
-
 	if version != nvtVersion {
 		log.Error("Unknown NodeValueTracker version", "stored", version, "current", nvtVersion)
 		return nv
 	}
-
 	var nve nodeValueTrackerEncV1
 	if err := rlp.Decode(r, &nve); err != nil {
 		log.Error("Failed to decode node value tracker", "id", id, "err", err)
 		return nv
 	}
-
 	nv.rtStats = nve.RtStats
 	nv.lastRtStats = nve.RtStats
-
 	if int(nve.ServerBasketMapping) == vt.currentMapping {
 		nv.basket.basket = nve.ServerBasket
 	} else {
@@ -455,10 +418,8 @@ func (vt *ValueTracker) loadOrNewNode(id enode.ID) *NodeValueTracker {
 			log.Error("Unknown request basket mapping", "stored", nve.ServerBasketMapping, "current", vt.currentMapping)
 			return nv
 		}
-
 		nv.basket.basket = nve.ServerBasket.convertMapping(vt.mappings[nve.ServerBasketMapping], vt.mappings[vt.currentMapping], vt.initRefBasket)
 	}
-
 	return nv
 }
 
@@ -474,19 +435,16 @@ func (vt *ValueTracker) saveNode(id enode.ID, nv *NodeValueTracker) {
 		ServerBasketMapping: uint(vt.currentMapping),
 		ServerBasket:        nv.basket.basket,
 	}
-
 	enc1, err := rlp.EncodeToBytes(uint(nvtVersion))
 	if err != nil {
 		log.Error("Failed to encode service value information", "id", id, "err", err)
 		return
 	}
-
 	enc2, err := rlp.EncodeToBytes(&nve)
 	if err != nil {
 		log.Error("Failed to encode service value information", "id", id, "err", err)
 		return
 	}
-
 	if err := vt.db.Put(append(vtNodeKey, id[:]...), append(enc1, enc2...)); err != nil {
 		log.Error("Failed to save service value information", "id", id, "err", err)
 	}
@@ -498,7 +456,6 @@ func (vt *ValueTracker) RtStats() ResponseTimeStats {
 	defer vt.lock.Unlock()
 
 	vt.periodicUpdate()
-
 	return vt.rtStats
 }
 
@@ -516,14 +473,11 @@ func (vt *ValueTracker) periodicUpdate() {
 		vt.refBasket.add(basket)
 		vt.rtStats.AddStats(&rtStats)
 	}
-
 	vt.refBasket.normalize()
 	vt.refBasket.updateReqValues()
-
 	for _, nv := range vt.connected {
 		nv.updateCosts(nv.reqCosts, vt.refBasket.reqValues, vt.refBasket.reqValueFactor(nv.reqCosts))
 	}
-
 	vt.saveToDb()
 }
 
@@ -542,13 +496,11 @@ func (vt *ValueTracker) RequestStats() []RequestStatsItem {
 	defer vt.lock.Unlock()
 
 	vt.periodicUpdate()
-
 	res := make([]RequestStatsItem, len(vt.refBasket.basket.items))
 	for i, item := range vt.refBasket.basket.items {
 		res[i].Name = vt.mappings[vt.currentMapping][i]
 		res[i].ReqAmount = expFactor.Value(float64(item.amount)/basketFactor, vt.refBasket.basket.exp)
 		res[i].ReqValue = vt.refBasket.reqValues[i]
 	}
-
 	return res
 }

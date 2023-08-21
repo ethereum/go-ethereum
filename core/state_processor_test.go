@@ -48,9 +48,8 @@ func u64(val uint64) *uint64 { return &val }
 func TestStateProcessorErrors(t *testing.T) {
 	var (
 		cacheConfig = &CacheConfig{
-			TrieCleanLimit:   154,
-			TrieCleanJournal: "triecache",
-			Preimages:        true,
+			TrieCleanLimit: 154,
+			Preimages:      true,
 		}
 
 		config = &params.ChainConfig{
@@ -138,7 +137,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
@@ -349,7 +348,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 		)
 
 		defer blockchain.Stop()
@@ -432,13 +431,13 @@ func TestStateProcessorErrors(t *testing.T) {
 			}{
 				{ // ErrMaxInitCodeSizeExceeded
 					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 500000, common.Big0, misc.CalcBaseFee(config, genesis.Header()), tooBigInitCode[:]),
+						mkDynamicCreationTx(0, 500000, common.Big0, eip1559.CalcBaseFee(config, genesis.Header()), tooBigInitCode[:]),
 					},
 					want: "could not apply tx 0 [0x832b54a6c3359474a9f504b1003b2cc1b6fcaa18e4ef369eb45b5d40dad6378f]: max initcode size exceeded: code size 49153 limit 49152",
 				},
 				{ // ErrIntrinsicGas: Not enough gas to cover init code
 					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 54299, common.Big0, misc.CalcBaseFee(config, genesis.Header()), smallInitCode[:]),
+						mkDynamicCreationTx(0, 54299, common.Big0, eip1559.CalcBaseFee(config, genesis.Header()), smallInitCode[:]),
 					},
 					want: "could not apply tx 0 [0x39b7436cb432d3662a25626474282c5c4c1a213326fd87e4e18a91477bae98b2]: intrinsic gas too low: have 54299, want 54300",
 				},

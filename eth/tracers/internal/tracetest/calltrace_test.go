@@ -401,7 +401,7 @@ func TestInternals(t *testing.T) {
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false)
-			evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
+			evm := vm.NewEVM(blockContext, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
 			msg := &core.Message{
 				To:                &to,
 				From:              origin,
@@ -413,7 +413,7 @@ func TestInternals(t *testing.T) {
 				SkipAccountChecks: false,
 			}
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-			if _, err := st.TransitionDb(); err != nil {
+			if _, err := st.TransitionDb(context.Background()); err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}
 			// Retrieve the trace result and compare against the expected

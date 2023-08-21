@@ -139,6 +139,10 @@ func (t *transactionsByPriceAndNonce) Shift() {
 	heap.Pop(&t.heads)
 }
 
+func (t *transactionsByPriceAndNonce) GetTxs() int {
+	return len(t.txs)
+}
+
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.

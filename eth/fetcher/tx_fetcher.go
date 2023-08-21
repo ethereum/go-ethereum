@@ -183,35 +183,34 @@ type TxFetcher struct {
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
-func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, txArrivalWait time.Duration) *TxFetcher {
+func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*txpool.Transaction) []error, fetchTxs func(string, []common.Hash) error, txArrivalWait time.Duration) *TxFetcher {
 	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil, txArrivalWait)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
-	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
+	hasTx func(common.Hash) bool, addTxs func([]*txpool.Transaction) []error, fetchTxs func(string, []common.Hash) error,
 	clock mclock.Clock, rand *mrand.Rand, txArrivalWait time.Duration) *TxFetcher {
 	return &TxFetcher{
-		notify:        make(chan *txAnnounce),
-		cleanup:       make(chan *txDelivery),
-		drop:          make(chan *txDrop),
-		quit:          make(chan struct{}),
-		waitlist:      make(map[common.Hash]map[string]struct{}),
-		waittime:      make(map[common.Hash]mclock.AbsTime),
-		waitslots:     make(map[string]map[common.Hash]struct{}),
-		announces:     make(map[string]map[common.Hash]struct{}),
-		announced:     make(map[common.Hash]map[string]struct{}),
-		fetching:      make(map[common.Hash]string),
-		requests:      make(map[string]*txRequest),
-		alternates:    make(map[common.Hash]map[string]struct{}),
-		underpriced:   mapset.NewSet[common.Hash](),
-		hasTx:         hasTx,
-		addTxs:        addTxs,
-		fetchTxs:      fetchTxs,
-		clock:         clock,
-		rand:          rand,
-		txArrivalWait: txArrivalWait,
+		notify:      make(chan *txAnnounce),
+		cleanup:     make(chan *txDelivery),
+		drop:        make(chan *txDrop),
+		quit:        make(chan struct{}),
+		waitlist:    make(map[common.Hash]map[string]struct{}),
+		waittime:    make(map[common.Hash]mclock.AbsTime),
+		waitslots:   make(map[string]map[common.Hash]struct{}),
+		announces:   make(map[string]map[common.Hash]struct{}),
+		announced:   make(map[common.Hash]map[string]struct{}),
+		fetching:    make(map[common.Hash]string),
+		requests:    make(map[string]*txRequest),
+		alternates:  make(map[common.Hash]map[string]struct{}),
+		underpriced: mapset.NewSet[common.Hash](),
+		hasTx:       hasTx,
+		addTxs:      addTxs,
+		fetchTxs:    fetchTxs,
+		clock:       clock,
+		rand:        rand,
 	}
 }
 

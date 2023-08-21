@@ -269,7 +269,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	_ = ethereum.engine.VerifyHeader(ethereum.blockchain, ethereum.blockchain.CurrentHeader(), true) // TODO think on it
+	_ = ethereum.engine.VerifyHeader(ethereum.blockchain, ethereum.blockchain.CurrentHeader()) // TODO think on it
 
 	// BOR changes
 	ethereum.APIBackend.gpo.ProcessCache()

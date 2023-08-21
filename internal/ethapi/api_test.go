@@ -360,7 +360,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
+	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -534,6 +534,29 @@ func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Sub
 func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
 func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	panic("implement me")
+}
+
+func (b testBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt, err := b.GetBorBlockReceipt(ctx, hash)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	return receipt.Logs, nil
+}
+
+func (b testBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return nil, nil
+	}
+
+	receipt := rawdb.ReadRawBorReceipt(b.db, hash, *number)
+	if receipt == nil {
+		return nil, nil
+	}
+
+	return receipt, nil
 }
 
 func TestEstimateGas(t *testing.T) {

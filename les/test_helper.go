@@ -189,7 +189,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		}
 	)
 	genesis := gspec.MustCommit(db)
-	chain, _ := light.NewLightChain(odr, gspec.Config, engine)
+	chain, _ := light.NewLightChain(odr, gspec.Config, engine, nil)
 
 	client := &LightEthereum{
 		lesCommons: lesCommons{

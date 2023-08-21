@@ -66,7 +66,6 @@ func (s *Server) Register(b Service, id, desc string) {
 		log.Error("Service ID contains ':'", "id", srv.id)
 		return
 	}
-
 	s.lock.Lock()
 	s.services[srv.id] = srv
 	s.lock.Unlock()
@@ -90,7 +89,6 @@ func (s *Server) Serve(id enode.ID, address string, requests vflux.Requests) vfl
 	// the lock only protects against contention caused by new service registration
 	s.lock.Lock()
 	results := make(vflux.Replies, len(requests))
-
 	for i, req := range requests {
 		if service := s.services[req.Service]; service != nil {
 			results[i] = service.backend.Handle(id, address, req.Name, req.Params)
@@ -99,7 +97,6 @@ func (s *Server) Serve(id enode.ID, address string, requests vflux.Requests) vfl
 	s.lock.Unlock()
 	time.Sleep(s.delayPerRequest * time.Duration(reqLen))
 	close(ch)
-
 	return results
 }
 
@@ -109,14 +106,11 @@ func (s *Server) ServeEncoded(id enode.ID, addr *net.UDPAddr, req []byte) []byte
 	if err := rlp.DecodeBytes(req, &requests); err != nil {
 		return nil
 	}
-
 	results := s.Serve(id, addr.String(), requests)
 	if results == nil {
 		return nil
 	}
-
 	res, _ := rlp.EncodeToBytes(&results)
-
 	return res
 }
 

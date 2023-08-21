@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -102,6 +103,11 @@ var (
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
 	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
+
+	resetCacheGauge  = metrics.NewRegisteredGauge("txpool/resetcache", nil)
+	reinitCacheGauge = metrics.NewRegisteredGauge("txpool/reinittcache", nil)
+	hitCacheCounter  = metrics.NewRegisteredCounter("txpool/cachehit", nil)
+	missCacheCounter = metrics.NewRegisteredCounter("txpool/cachemiss", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
 )
@@ -1437,7 +1443,8 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
+		balUint256, _ := uint256.FromBig(pool.currentState.GetBalance(addr))
+		drops, _ := list.Filter(balUint256, gasLimit)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1638,7 +1645,8 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
+		balUint256, _ := uint256.FromBig(pool.currentState.GetBalance(addr))
+		drops, invalids := list.Filter(balUint256, gasLimit)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)

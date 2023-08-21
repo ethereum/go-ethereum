@@ -107,7 +107,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	}
 	r.GasUsed = uint64(*dec.GasUsed)
 	if dec.EffectiveGasPrice != nil {
-		r.EffectiveGasPrice = dec.EffectiveGasPrice
+		r.EffectiveGasPrice = (*big.Int)(dec.EffectiveGasPrice)
 	}
 	if dec.BlobGasUsed != nil {
 		r.BlobGasUsed = uint64(*dec.BlobGasUsed)

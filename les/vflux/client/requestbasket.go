@@ -80,10 +80,8 @@ func (b *requestBasket) setExp(exp uint64) {
 			item.value >>= shift
 			b.items[i] = item
 		}
-
 		b.exp = exp
 	}
-
 	if exp < b.exp {
 		shift := b.exp - exp
 		for i, item := range b.items {
@@ -91,7 +89,6 @@ func (b *requestBasket) setExp(exp uint64) {
 			item.value <<= shift
 			b.items[i] = item
 		}
-
 		b.exp = exp
 	}
 }
@@ -127,23 +124,18 @@ func (s *serverBasket) transfer(ratio float64) requestBasket {
 		items: make([]basketItem, len(s.basket.items)),
 		exp:   s.basket.exp,
 	}
-
 	for i, v := range s.basket.items {
 		ta := uint64(float64(v.amount) * ratio)
 		tv := uint64(float64(v.value) * ratio)
-
 		if ta > v.amount {
 			ta = v.amount
 		}
-
 		if tv > v.value {
 			tv = v.value
 		}
-
 		s.basket.items[i] = basketItem{v.amount - ta, v.value - tv}
 		res.items[i] = basketItem{ta, tv}
 	}
-
 	return res
 }
 
@@ -165,22 +157,18 @@ func (r *referenceBasket) add(newBasket requestBasket) {
 		totalCost  uint64
 		totalValue float64
 	)
-
 	for i, v := range newBasket.items {
 		totalCost += v.value
 		totalValue += float64(v.amount) * r.reqValues[i]
 	}
-
 	if totalCost > 0 {
 		// add to reference with scaled values
 		scaleValues := totalValue / float64(totalCost)
-
 		for i, v := range newBasket.items {
 			r.basket.items[i].amount += v.amount
 			r.basket.items[i].value += uint64(float64(v.value) * scaleValues)
 		}
 	}
-
 	r.updateReqValues()
 }
 
@@ -204,7 +192,6 @@ func (r *referenceBasket) normalize() {
 		sumAmount += b.amount
 		sumValue += b.value
 	}
-
 	add := float64(int64(sumAmount-sumValue)) / float64(sumValue)
 	for i, b := range r.basket.items {
 		b.value += uint64(int64(float64(b.value) * add))
@@ -219,16 +206,13 @@ func (r *referenceBasket) reqValueFactor(costList []uint64) float64 {
 		totalCost  float64
 		totalValue uint64
 	)
-
 	for i, b := range r.basket.items {
 		totalCost += float64(costList[i]) * float64(b.amount) // use floats to avoid overflow
 		totalValue += b.value
 	}
-
 	if totalCost < 1 {
 		return 0
 	}
-
 	return float64(totalValue) * basketFactor / totalCost
 }
 
@@ -242,13 +226,10 @@ func (b *basketItem) DecodeRLP(s *rlp.Stream) error {
 	var item struct {
 		Amount, Value uint64
 	}
-
 	if err := s.Decode(&item); err != nil {
 		return err
 	}
-
 	b.amount, b.value = item.Amount, item.Value
-
 	return nil
 }
 
@@ -263,13 +244,10 @@ func (r *requestBasket) DecodeRLP(s *rlp.Stream) error {
 		Items []basketItem
 		Exp   uint64
 	}
-
 	if err := s.Decode(&enc); err != nil {
 		return err
 	}
-
 	r.items, r.exp = enc.Items, enc.Exp
-
 	return nil
 }
 
@@ -283,11 +261,8 @@ func (r requestBasket) convertMapping(oldMapping, newMapping []string, initBaske
 	for i, name := range oldMapping {
 		nameMap[name] = i
 	}
-
 	rc := requestBasket{items: make([]basketItem, len(newMapping))}
-
 	var scale, oldScale, newScale float64
-
 	for i, name := range newMapping {
 		if ii, ok := nameMap[name]; ok {
 			rc.items[i] = r.items[ii]
@@ -295,19 +270,16 @@ func (r requestBasket) convertMapping(oldMapping, newMapping []string, initBaske
 			newScale += float64(rc.items[i].amount) * float64(initBasket.items[i].amount)
 		}
 	}
-
 	if oldScale > 1e-10 {
 		scale = newScale / oldScale
 	} else {
 		scale = 1
 	}
-
 	for i, name := range newMapping {
 		if _, ok := nameMap[name]; !ok {
 			rc.items[i].amount = uint64(float64(initBasket.items[i].amount) * scale)
 			rc.items[i].value = uint64(float64(initBasket.items[i].value) * scale)
 		}
 	}
-
 	return rc
 }

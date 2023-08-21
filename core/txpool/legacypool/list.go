@@ -463,41 +463,37 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
 			return false, nil
 		}
-
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
-		a := uint256.NewInt(100 + priceBump)
-		aFeeCap := uint256.NewInt(0).Mul(a, old.GasFeeCapUint())
-		aTip := a.Mul(a, old.GasTipCapUint())
+		a := big.NewInt(100 + int64(priceBump))
+		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
+		aTip := a.Mul(a, old.GasTipCap())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
-		b := cmath.U100
+		b := big.NewInt(100)
 		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
 		thresholdTip := aTip.Div(aTip, b)
 
 		// We have to ensure that both the new fee cap and tip are higher than the
 		// old ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements.
-		if tx.GasFeeCapUIntLt(thresholdFeeCap) || tx.GasTipCapUIntLt(thresholdTip) {
+		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
 		// Old is being replaced, subtract old cost
 		l.subTotalCost([]*types.Transaction{old})
 	}
-
 	// Add new tx cost to totalcost
 	l.totalcost.Add(l.totalcost, tx.Cost())
-
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-
-	if cost := tx.CostUint(); l.costcap == nil || l.costcap.Lt(cost) {
-		l.costcap = cost
+	cost := tx.Cost()
+	costUint256, _ := uint256.FromBig(cost)
+	if cost = tx.Cost(); l.costcap.Cmp(costUint256) < 0 {
+		l.costcap = costUint256
 	}
-
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
 	}
-
 	return true, old
 }
 
@@ -648,7 +644,7 @@ func (l *list) subTotalCost(txs []*types.Transaction) {
 // then the heap is sorted based on the effective tip based on the given base fee.
 // If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
-	baseFee   *uint256.Int // heap should always be re-sorted after baseFee is changed
+	baseFee   *big.Int // heap should always be re-sorted after baseFee is changed
 	list      []*types.Transaction
 	baseFeeMu sync.RWMutex
 }
@@ -672,7 +668,7 @@ func (h *priceHeap) cmp(a, b *types.Transaction) int {
 
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
-		if c := a.EffectiveGasTipTxUintCmp(b, h.baseFee); c != 0 {
+		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
 			h.baseFeeMu.RUnlock()
 
 			return c
@@ -872,7 +868,7 @@ func (l *pricedList) Reheap() {
 
 // SetBaseFee updates the base fee and triggers a re-heap. Note that Removed is not
 // necessary to call right before SetBaseFee when processing a new block.
-func (l *pricedList) SetBaseFee(baseFee *uint256.Int) {
+func (l *pricedList) SetBaseFee(baseFee *big.Int) {
 	l.urgent.baseFeeMu.Lock()
 	l.urgent.baseFee = baseFee
 	l.urgent.baseFeeMu.Unlock()

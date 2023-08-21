@@ -292,7 +292,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
-	worker.noempty.Store(true)
 	worker.profileCount = new(int32)
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -308,9 +307,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		Cache: interruptedTxCache,
 	}
 
-	if !worker.interruptCommitFlag {
-		worker.noempty.Store(false)
-	}
+	// TODO - Arpit
+	// if !worker.interruptCommitFlag {
+	// 	worker.noempty.Store(false)
+	// }
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -625,17 +625,6 @@ func (w *worker) mainLoop(ctx context.Context) {
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil)
-
-				var baseFee *uint256.Int
-				if w.current.header.BaseFee != nil {
-					baseFee = cmath.FromBig(w.current.header.BaseFee)
-				}
-
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, baseFee)
-				tcount := w.current.tcount
-
-				//nolint:contextcheck
 				w.commitTransactions(w.current, txset, nil, context.Background())
 
 				// Only update the snapshot if any new transactons were added
@@ -880,14 +869,14 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	// nolint : staticcheck
 	interruptCtx = vm.SetCurrentTxOnContext(interruptCtx, tx.Hash())
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx.Tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 
 		return nil, err
 	}
-	env.txs = append(env.txs, tx.Tx)
+	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 
 	return receipt.Logs, nil
@@ -943,6 +932,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	}
 
 	initialGasLimit := env.gasPool.Gas()
+
 	initialTxs := txs.GetTxs()
 
 	var breakCause string
@@ -1022,7 +1012,7 @@ mainloop:
 			start = time.Now()
 		})
 
-		logs, err := w.commitTransaction(env, tx, interruptCtx)
+		logs, err := w.commitTransaction(env, tx.Tx, interruptCtx)
 
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -1053,7 +1043,7 @@ mainloop:
 			txs.Shift()
 
 			log.OnDebug(func(lg log.Logging) {
-				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
+				lg("Committed new tx", "tx hash", tx.Tx.Hash(), "from", from, "to", tx.Tx.To(), "nonce", tx.Tx.Nonce(), "gas", tx.Tx.Gas(), "gasPrice", tx.Tx.GasPrice(), "value", tx.Tx.Value(), "time spent", time.Since(start))
 			})
 
 		default:
@@ -1382,7 +1372,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
 		prePendingTime := time.Now()
 
-		pending := w.eth.TxPool().Pending(ctx, true)
+		pending := w.eth.TxPool().Pending(true)
 		remoteTxs = pending
 
 		postPendingTime := time.Now()
@@ -1413,7 +1403,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	)
 
 	if len(localTxs) > 0 {
-		var txs *types.TransactionsByPriceAndNonce
+		var txs *transactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.LocalTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
 			var baseFee *uint256.Int
@@ -1421,7 +1411,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 				baseFee = cmath.FromBig(env.header.BaseFee)
 			}
 
-			txs := newTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
+			txs := newTransactionsByPriceAndNonce(env.signer, localTxs, baseFee.ToBig())
 
 			tracing.SetAttributes(
 				span,
@@ -1441,7 +1431,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	}
 
 	if len(remoteTxs) > 0 {
-		var txs *types.TransactionsByPriceAndNonce
+		var txs *transactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.RemoteTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
 			var baseFee *uint256.Int
@@ -1449,7 +1439,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 				baseFee = cmath.FromBig(env.header.BaseFee)
 			}
 
-			txs = newTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
+			txs = newTransactionsByPriceAndNonce(env.signer, remoteTxs, baseFee.ToBig())
 
 			tracing.SetAttributes(
 				span,
@@ -1552,7 +1542,9 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, timest
 		stopFn()
 	}()
 
-	if !noempty && w.interruptCommitFlag {
+	// TODO - Arpit
+	if w.interruptCommitFlag {
+		// if !noempty && w.interruptCommitFlag {
 		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
 		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
 		// nolint : staticcheck
@@ -1567,11 +1559,12 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, timest
 		attribute.Int("number", int(work.header.Number.Uint64())),
 	)
 
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-	if !noempty && !w.noempty.Load() {
-		_ = w.commit(ctx, work.copy(), nil, false, start)
-	}
+	// TODO - Arpit
+	// // Create an empty block based on temporary copied state for
+	// // sealing in advance without waiting block execution finished.
+	// if !noempty && !w.noempty.Load() {
+	// 	_ = w.commit(ctx, work.copy(), nil, false, start)
+	// }
 	// Fill pending transactions from the txpool into the block.
 	err = w.fillTransactions(ctx, interrupt, work, interruptCtx)
 

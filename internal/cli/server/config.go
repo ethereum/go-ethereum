@@ -1084,8 +1084,6 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 		godebug.SetGCPercent(int(gogc))
 
-		n.TrieCleanCacheJournal = c.Cache.Journal
-		n.TrieCleanCacheRejournal = c.Cache.Rejournal
 		n.DatabaseCache = calcPerc(c.Cache.PercDatabase)
 		n.SnapshotCache = calcPerc(c.Cache.PercSnapshot)
 		n.TrieCleanCache = calcPerc(c.Cache.PercTrie)

@@ -71,7 +71,7 @@ func TestGenesisContractChange(t *testing.T) {
 		b.Finalize(chain, h, statedb, nil, nil, nil)
 
 		// write state to database
-		root, err := statedb.Commit(false)
+		root, err := statedb.Commit(0, false)
 		require.NoError(t, err)
 		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
 

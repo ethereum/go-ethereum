@@ -49,14 +49,10 @@ func TestBuildSchema(t *testing.T) {
 	// Copy config
 	conf := node.DefaultConfig
 	conf.DataDir = ddir
-
 	stack, err := node.New(&conf)
-	defer stack.Close()
-
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
-
 	defer stack.Close()
 	// Make sure the schema can be parsed and matched up to the object model.
 	if _, err := newHandler(stack, nil, nil, []string{}, []string{}); err != nil {
@@ -68,7 +64,6 @@ func TestBuildSchema(t *testing.T) {
 func TestGraphQLBlockSerialization(t *testing.T) {
 	stack := createNode(t)
 	defer stack.Close()
-
 	genesis := &core.Genesis{
 		Config:     params.AllEthashProtocolChanges,
 		GasLimit:   11500000,
@@ -158,25 +153,20 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
-
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
-
 		if have := string(bodyBytes); have != tt.want {
 			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
 		}
-
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
 	}
 }
 
-// nolint:typecheck
 func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	// Account for signing txes
 	var (
@@ -185,10 +175,8 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		funds   = big.NewInt(1000000000000000)
 		dad     = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 	)
-
 	stack := createNode(t)
 	defer stack.Close()
-
 	genesis := &core.Genesis{
 		Config:     params.AllEthashProtocolChanges,
 		GasLimit:   11500000,
@@ -207,7 +195,6 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 	signer := types.LatestSigner(genesis.Config)
 	newGQLService(t, stack, false, genesis, 1, func(i int, gen *core.BlockGen) {
 		gen.SetCoinbase(common.Address{1})
-
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    uint64(0),
 			To:       &dad,
@@ -250,18 +237,14 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not post: %v", err)
 		}
-
 		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-
 		if err != nil {
 			t.Fatalf("could not read from response body: %v", err)
 		}
-
 		if have := string(bodyBytes); have != tt.want {
 			t.Errorf("testcase %d %s,\nhave:\n%v\nwant:\n%v", i, tt.body, have, tt.want)
 		}
-
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
@@ -272,27 +255,20 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	stack := createNode(t)
 	defer stack.Close()
-
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
 	}
-
 	body := strings.NewReader(`{"query": "{block{number}}","variables": null}`)
-
 	resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", body)
 	if err != nil {
 		t.Fatalf("could not post: %v", err)
 	}
-
 	resp.Body.Close()
 	// make sure the request is not handled successfully
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-// nolint:typecheck
 func TestGraphQLConcurrentResolvers(t *testing.T) {
-	t.Parallel()
-
 	var (
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
@@ -315,7 +291,6 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		signer = types.LatestSigner(genesis.Config)
 		stack  = createNode(t)
 	)
-
 	defer stack.Close()
 
 	var tx *types.Transaction
@@ -339,13 +314,13 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		// Multiple txes race to get/set the block hash.
 		{
 			body: "{block { transactions { logs { account { address } } } } }",
-			want: fmt.Sprintf(`{"block":{"transactions":[{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]}]}}`, dadStr, dadStr, core.GetFeeAddress(), dadStr, dadStr, core.GetFeeAddress(), dadStr, dadStr, core.GetFeeAddress()),
+			want: fmt.Sprintf(`{"block":{"transactions":[{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]}]}}`, dadStr, dadStr, dadStr, dadStr, dadStr, dadStr),
 		},
 		// Multiple fields of a tx race to resolve it. Happens in this case
 		// because resolving the tx body belonging to a log is delayed.
 		{
 			body: `{block { logs(filter: {}) { transaction { nonce value gasPrice }}}}`,
-			want: `{"block":{"logs":[{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}}]}}`,
+			want: `{"block":{"logs":[{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}}]}}`,
 		},
 		// Multiple txes of a block race to set/retrieve receipts of a block.
 		{
@@ -374,17 +349,13 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		},
 	} {
 		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
-
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}
-
 		have, err := json.Marshal(res.Data)
-
 		if err != nil {
 			t.Fatalf("failed to encode graphql response for testcase #%d: %s", i, err)
 		}
-
 		if string(have) != tt.want {
 			t.Errorf("response unmatch for testcase #%d.\nExpected:\n%s\nGot:\n%s\n", i, tt.want, have)
 		}
@@ -452,8 +423,6 @@ func TestWithdrawals(t *testing.T) {
 }
 
 func createNode(t *testing.T) *node.Node {
-	t.Helper()
-
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
 		HTTPPort:     0,
@@ -464,7 +433,6 @@ func createNode(t *testing.T) *node.Node {
 	if err != nil {
 		t.Fatalf("could not create node: %v", err)
 	}
-
 	return stack
 }
 
@@ -488,7 +456,6 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		shanghaiTime := uint64(5)
 		chainCfg.ShanghaiTime = &shanghaiTime
 	}
-
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
@@ -502,11 +469,9 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 	}
 	// Set up handler
 	filterSystem := filters.NewFilterSystem(ethBackend.APIBackend, filters.Config{})
-
 	handler, err := newHandler(stack, ethBackend.APIBackend, filterSystem, []string{}, []string{})
 	if err != nil {
 		t.Fatalf("could not create graphql service: %v", err)
 	}
-
 	return handler, chain
 }

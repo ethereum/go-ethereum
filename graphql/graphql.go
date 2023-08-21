@@ -74,7 +74,6 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 	default:
 		err = fmt.Errorf("unexpected type %T for Long", input)
 	}
-
 	return err
 }
 
@@ -100,12 +99,10 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-
 	balance := state.GetBalance(a.address)
 	if balance == nil {
 		return hexutil.Big{}, fmt.Errorf("failed to load balance %x", a.address)
 	}
-
 	return hexutil.Big(*balance), nil
 }
 
@@ -116,15 +113,12 @@ func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) 
 		if err != nil {
 			return 0, err
 		}
-
 		return hexutil.Uint64(nonce), nil
 	}
-
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
 	}
-
 	return hexutil.Uint64(state.GetNonce(a.address)), nil
 }
 
@@ -133,7 +127,6 @@ func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return state.GetCode(a.address), nil
 }
 
@@ -142,7 +135,6 @@ func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) 
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return state.GetState(a.address, args.Slot), nil
 }
 
@@ -233,7 +225,6 @@ type Transaction struct {
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
 	if t.tx != nil {
 		return t.tx, t.block
 	}
@@ -280,7 +271,6 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 	if tx == nil {
 		return hexutil.Big{}
 	}
-
 	switch tx.Type() {
 	case types.AccessListTxType:
 		return hexutil.Big(*tx.GasPrice())
@@ -306,16 +296,13 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if block == nil {
 		return nil, nil
 	}
-
 	header, err := block.resolveHeader(ctx)
 	if err != nil || header == nil {
 		return nil, err
 	}
-
 	if header.BaseFee == nil {
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
-
 	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee), tx.GasFeeCap())), nil
 }
 
@@ -324,7 +311,6 @@ func (t *Transaction) MaxFeePerGas(ctx context.Context) *hexutil.Big {
 	if tx == nil {
 		return nil
 	}
-
 	switch tx.Type() {
 	case types.AccessListTxType:
 		return nil
@@ -340,7 +326,6 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) *hexutil.Big {
 	if tx == nil {
 		return nil
 	}
-
 	switch tx.Type() {
 	case types.AccessListTxType:
 		return nil
@@ -360,12 +345,10 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 	if block == nil {
 		return nil, nil
 	}
-
 	header, err := block.resolveHeader(ctx)
 	if err != nil || header == nil {
 		return nil, err
 	}
-
 	if header.BaseFee == nil {
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
@@ -374,7 +357,6 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return (*hexutil.Big)(tip), nil
 }
 
@@ -383,11 +365,9 @@ func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
 	if tx == nil {
 		return hexutil.Big{}, nil
 	}
-
 	if tx.Value() == nil {
 		return hexutil.Big{}, fmt.Errorf("invalid transaction value %x", t.hash)
 	}
-
 	return hexutil.Big(*tx.Value()), nil
 }
 
@@ -404,12 +384,10 @@ func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) *Account {
 	if tx == nil {
 		return nil
 	}
-
 	to := tx.To()
 	if to == nil {
 		return nil
 	}
-
 	return &Account{
 		r:             t.r,
 		address:       *to,
@@ -422,10 +400,8 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) *Account {
 	if tx == nil {
 		return nil
 	}
-
 	signer := types.LatestSigner(t.r.backend.ChainConfig())
 	from, _ := types.Sender(signer, tx)
-
 	return &Account{
 		r:             t.r,
 		address:       from,
@@ -455,12 +431,10 @@ func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
 	if block == nil {
 		return nil, nil
 	}
-
 	receipts, err := block.resolveReceipts(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	return receipts[t.index], nil
 }
 
@@ -469,7 +443,6 @@ func (t *Transaction) Status(ctx context.Context) (*hexutil.Uint64, error) {
 	if err != nil || receipt == nil {
 		return nil, err
 	}
-
 	if len(receipt.PostState) != 0 {
 		return nil, nil
 	}
@@ -500,7 +473,6 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 	if err != nil || receipt == nil || receipt.ContractAddress == (common.Address{}) {
 		return nil, err
 	}
-
 	return &Account{
 		r:             t.r,
 		address:       receipt.ContractAddress,
@@ -512,16 +484,12 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	_, block := t.resolve(ctx)
 	// Pending tx
 	if block == nil {
-		//nolint:nilnil
 		return nil, nil
 	}
-
 	h, err := block.Hash(ctx)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return t.getLogs(ctx, h)
 }
 
@@ -532,12 +500,9 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
 		logs, err = filter.Logs(ctx)
 	)
-
 	if err != nil {
 		return nil, err
 	}
-
-	// nolint:prealloc
 	var ret []*Log
 	// Select tx logs from all block logs
 	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) >= t.index })
@@ -549,7 +514,6 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 		})
 		ix++
 	}
-
 	return &ret, nil
 }
 
@@ -564,10 +528,8 @@ func (t *Transaction) AccessList(ctx context.Context) *[]*AccessTuple {
 	if tx == nil {
 		return nil
 	}
-
 	accessList := tx.AccessList()
 	ret := make([]*AccessTuple, 0, len(accessList))
-
 	for _, al := range accessList {
 		ret = append(ret, &AccessTuple{
 			address:     al.Address,
@@ -619,7 +581,6 @@ func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	if tx == nil {
 		return hexutil.Bytes{}, nil
 	}
-
 	return tx.MarshalBinary()
 }
 
@@ -628,7 +589,6 @@ func (t *Transaction) RawReceipt(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil || receipt == nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return receipt.MarshalBinary()
 }
 
@@ -653,26 +613,21 @@ type Block struct {
 func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	if b.block != nil {
 		return b.block, nil
 	}
-
 	if b.numberOrHash == nil {
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		b.numberOrHash = &latest
 	}
-
 	var err error
 	b.block, err = b.r.backend.BlockByNumberOrHash(ctx, *b.numberOrHash)
-
 	if b.block != nil {
 		b.hash = b.block.Hash()
 		if b.header == nil {
 			b.header = b.block.Header()
 		}
 	}
-
 	return b.block, err
 }
 
@@ -682,26 +637,20 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	if b.header != nil {
 		return b.header, nil
 	}
-
 	if b.numberOrHash == nil && b.hash == (common.Hash{}) {
 		return nil, errBlockInvariant
 	}
-
 	var err error
 	b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
-
 	if err != nil {
 		return nil, err
 	}
-
 	if b.hash == (common.Hash{}) {
 		b.hash = b.header.Hash()
 	}
-
 	return b.header, nil
 }
 
@@ -710,19 +659,14 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	if b.receipts != nil {
 		return b.receipts, nil
 	}
-
 	receipts, err := b.r.backend.GetReceipts(ctx, b.hash)
-
 	if err != nil {
 		return nil, err
 	}
-
 	b.receipts = receipts
-
 	return receipts, nil
 }
 
@@ -738,7 +682,6 @@ func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	return b.hash, nil
 }
 
@@ -763,11 +706,9 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if header.BaseFee == nil {
 		return nil, nil
 	}
-
 	return (*hexutil.Big)(header.BaseFee), nil
 }
 
@@ -776,7 +717,6 @@ func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	chaincfg := b.r.backend.ChainConfig()
 	if header.BaseFee == nil {
 		// Make sure next block doesn't enable EIP-1559
@@ -792,11 +732,9 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	if _, err := b.resolveHeader(ctx); err != nil {
 		return nil, err
 	}
-
 	if b.header == nil || b.header.Number.Uint64() < 1 {
 		return nil, nil
 	}
-
 	var (
 		num       = rpc.BlockNumber(b.header.Number.Uint64() - 1)
 		hash      = b.header.ParentHash
@@ -805,7 +743,6 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 			BlockHash:   &hash,
 		}
 	)
-
 	return &Block{
 		r:            b.r,
 		numberOrHash: &numOrHash,
@@ -818,7 +755,6 @@ func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-
 	return hexutil.Big(*header.Difficulty), nil
 }
 
@@ -827,7 +763,6 @@ func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-
 	return hexutil.Uint64(header.Time), nil
 }
 
@@ -836,7 +771,6 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return header.Nonce[:], nil
 }
 
@@ -845,7 +779,6 @@ func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return header.MixDigest, nil
 }
 
@@ -854,7 +787,6 @@ func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return header.TxHash, nil
 }
 
@@ -863,7 +795,6 @@ func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return header.Root, nil
 }
 
@@ -872,7 +803,6 @@ func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return header.ReceiptHash, nil
 }
 
@@ -881,7 +811,6 @@ func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return header.UncleHash, nil
 }
 
@@ -899,9 +828,7 @@ func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 	if err != nil || block == nil {
 		return nil, err
 	}
-
 	ret := make([]*Block, 0, len(block.Uncles()))
-
 	for _, uncle := range block.Uncles() {
 		blockNumberOrHash := rpc.BlockNumberOrHashWithHash(uncle.Hash(), false)
 		ret = append(ret, &Block{
@@ -911,7 +838,6 @@ func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 			hash:         uncle.Hash(),
 		})
 	}
-
 	return &ret, nil
 }
 
@@ -920,7 +846,6 @@ func (b *Block) ExtraData(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return header.Extra, nil
 }
 
@@ -929,7 +854,6 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return header.Bloom.Bytes(), nil
 }
 
@@ -938,12 +862,10 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-
 	td := b.r.backend.GetTd(ctx, hash)
 	if td == nil {
 		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", hash)
 	}
-
 	return hexutil.Big(*td), nil
 }
 
@@ -952,7 +874,6 @@ func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return rlp.EncodeToBytes(header)
 }
 
@@ -961,7 +882,6 @@ func (b *Block) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-
 	return rlp.EncodeToBytes(block)
 }
 
@@ -980,7 +900,6 @@ func (a BlockNumberArgs) NumberOr(current rpc.BlockNumberOrHash) rpc.BlockNumber
 		blockNr := rpc.BlockNumber(*a.Block)
 		return rpc.BlockNumberOrHashWithNumber(blockNr)
 	}
-
 	return current
 }
 
@@ -995,7 +914,6 @@ func (b *Block) Miner(ctx context.Context, args BlockNumberArgs) (*Account, erro
 	if err != nil {
 		return nil, err
 	}
-
 	return &Account{
 		r:             b.r,
 		address:       header.Coinbase,
@@ -1017,7 +935,6 @@ func (b *Block) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	if err != nil || block == nil {
 		return nil, err
 	}
-
 	ret := make([]*Transaction, 0, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		ret = append(ret, &Transaction{
@@ -1028,7 +945,6 @@ func (b *Block) Transactions(ctx context.Context) (*[]*Transaction, error) {
 			index: uint64(i),
 		})
 	}
-
 	return &ret, nil
 }
 
@@ -1037,14 +953,11 @@ func (b *Block) TransactionAt(ctx context.Context, args struct{ Index Long }) (*
 	if err != nil || block == nil {
 		return nil, err
 	}
-
 	txs := block.Transactions()
 	if args.Index < 0 || int(args.Index) >= len(txs) {
 		return nil, nil
 	}
-
 	tx := txs[args.Index]
-
 	return &Transaction{
 		r:     b.r,
 		hash:  tx.Hash(),
@@ -1059,15 +972,12 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index Long }) (*Block,
 	if err != nil || block == nil {
 		return nil, err
 	}
-
 	uncles := block.Uncles()
 	if args.Index < 0 || int(args.Index) >= len(uncles) {
 		return nil, nil
 	}
-
 	uncle := uncles[args.Index]
 	blockNumberOrHash := rpc.BlockNumberOrHashWithHash(uncle.Hash(), false)
-
 	return &Block{
 		r:            b.r,
 		numberOrHash: &blockNumberOrHash,
@@ -1135,7 +1045,6 @@ func runFilter(ctx context.Context, r *Resolver, filter *filters.Filter) ([]*Log
 	if err != nil || logs == nil {
 		return nil, err
 	}
-
 	ret := make([]*Log, 0, len(logs))
 	for _, log := range logs {
 		ret = append(ret, &Log{
@@ -1144,7 +1053,6 @@ func runFilter(ctx context.Context, r *Resolver, filter *filters.Filter) ([]*Log
 			log:         log,
 		})
 	}
-
 	return ret, nil
 }
 
@@ -1153,7 +1061,6 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	if args.Filter.Addresses != nil {
 		addresses = *args.Filter.Addresses
 	}
-
 	var topics [][]common.Hash
 	if args.Filter.Topics != nil {
 		topics = *args.Filter.Topics
@@ -1163,7 +1070,6 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	if err != nil {
 		return nil, err
 	}
-
 	filter := b.r.filterSystem.NewBlockFilter(hash, addresses, topics)
 
 	// Run the filter and return all the logs
@@ -1251,7 +1157,6 @@ func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	ret := make([]*Transaction, 0, len(txs))
 	for i, tx := range txs {
 		ret = append(ret, &Transaction{
@@ -1261,7 +1166,6 @@ func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
 			index: uint64(i),
 		})
 	}
-
 	return &ret, nil
 }
 
@@ -1269,7 +1173,6 @@ func (p *Pending) Account(ctx context.Context, args struct {
 	Address common.Address
 }) *Account {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-
 	return &Account{
 		r:             p.r,
 		address:       args.Address,
@@ -1315,12 +1218,10 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	Hash   *common.Hash
 }) (*Block, error) {
 	var numberOrHash rpc.BlockNumberOrHash
-
 	if args.Number != nil {
 		if *args.Number < 0 {
 			return nil, nil
 		}
-
 		number := rpc.BlockNumber(*args.Number)
 		numberOrHash = rpc.BlockNumberOrHashWithNumber(number)
 	} else if args.Hash != nil {
@@ -1328,7 +1229,6 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	} else {
 		numberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	}
-
 	block := &Block{
 		r:            r,
 		numberOrHash: &numberOrHash,
@@ -1342,7 +1242,6 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	} else if h == nil {
 		return nil, nil
 	}
-
 	return block, nil
 }
 
@@ -1358,7 +1257,6 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	} else {
 		to = rpc.BlockNumber(r.backend.CurrentBlock().Number.Int64())
 	}
-
 	if to < from {
 		return []*Block{}, nil
 	}
@@ -1379,13 +1277,11 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 			// Blocks after must be non-existent too, break.
 			break
 		}
-
 		ret = append(ret, block)
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 	}
-
 	return ret, nil
 }
 
@@ -1411,9 +1307,7 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 	if err := tx.UnmarshalBinary(args.Data); err != nil {
 		return common.Hash{}, err
 	}
-
 	hash, err := ethapi.SubmitTransaction(ctx, r.backend, tx)
-
 	return hash, err
 }
 
@@ -1443,24 +1337,20 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	if args.Filter.FromBlock != nil {
 		begin = int64(*args.Filter.FromBlock)
 	}
-
 	end := rpc.LatestBlockNumber.Int64()
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
 	}
-
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {
 		addresses = *args.Filter.Addresses
 	}
-
 	var topics [][]common.Hash
 	if args.Filter.Topics != nil {
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
 	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
-
 	return runFilter(ctx, r, filter)
 }
 
@@ -1469,11 +1359,9 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-
 	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
 		tipcap.Add(tipcap, head.BaseFee)
 	}
-
 	return (hexutil.Big)(*tipcap), nil
 }
 
@@ -1482,7 +1370,6 @@ func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-
 	return (hexutil.Big)(*tipcap), nil
 }
 

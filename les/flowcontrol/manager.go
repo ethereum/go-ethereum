@@ -115,7 +115,6 @@ func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager 
 	if curve != nil {
 		cm.SetRechargeCurve(curve)
 	}
-
 	go func() {
 		// regularly recalculate and update total capacity
 		for {
@@ -130,7 +129,6 @@ func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager 
 			}
 		}
 	}()
-
 	return cm
 }
 
@@ -148,7 +146,6 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 
 	now := cm.clock.Now()
 	cm.updateRecharge(now)
-
 	cm.curve = curve
 	if len(curve) > 0 {
 		cm.totalRecharge = curve[len(curve)-1].Y
@@ -165,13 +162,10 @@ func (cm *ClientManager) SetCapacityLimits(min, max, raiseThreshold uint64) {
 	if min < 1 {
 		min = 1
 	}
-
 	cm.minLogTotalCap = math.Log(float64(min))
-
 	if max < 1 {
 		max = 1
 	}
-
 	cm.maxLogTotalCap = math.Log(float64(max))
 	cm.logTotalCap = cm.maxLogTotalCap
 	cm.capacityRaiseThreshold = raiseThreshold
@@ -186,11 +180,9 @@ func (cm *ClientManager) connect(node *ClientNode) {
 
 	now := cm.clock.Now()
 	cm.updateRecharge(now)
-
 	node.corrBufValue = int64(node.params.BufLimit)
 	node.rcLastIntValue = cm.rcLastIntValue
 	node.queueIndex = -1
-
 	cm.updateTotalCapacity(now, true)
 	cm.totalConnected += node.params.MinRecharge
 	cm.updateRaiseLimit()
@@ -218,7 +210,6 @@ func (cm *ClientManager) accepted(node *ClientNode, maxCost uint64, now mclock.A
 
 	cm.updateNodeRc(node, -int64(maxCost), &node.params, now)
 	rcTime := (node.params.BufLimit - uint64(node.corrBufValue)) * FixedPointMultiplier / node.params.MinRecharge
-
 	return -int64(now) - int64(rcTime)
 }
 
@@ -230,7 +221,6 @@ func (cm *ClientManager) processed(node *ClientNode, maxCost, realCost uint64, n
 	if realCost > maxCost {
 		realCost = maxCost
 	}
-
 	cm.updateBuffer(node, int64(maxCost-realCost), now)
 }
 
@@ -241,12 +231,10 @@ func (cm *ClientManager) updateBuffer(node *ClientNode, add int64, now mclock.Ab
 	defer cm.lock.Unlock()
 
 	cm.updateNodeRc(node, add, &node.params, now)
-
 	if node.corrBufValue > node.bufValue {
 		if node.log != nil {
 			node.log.add(now, fmt.Sprintf("corrected  bv=%d  oldBv=%d", node.corrBufValue, node.bufValue))
 		}
-
 		node.bufValue = node.corrBufValue
 	}
 }
@@ -270,18 +258,14 @@ func (cm *ClientManager) updateRaiseLimit() {
 		cm.logTotalCapRaiseLimit = 0
 		return
 	}
-
 	limit := float64(cm.totalConnected + cm.capacityRaiseThreshold)
 	limit2 := float64(cm.totalConnected) * capacityRaiseThresholdRatio
-
 	if limit2 > limit {
 		limit = limit2
 	}
-
 	if limit < 1 {
 		limit = 1
 	}
-
 	cm.logTotalCapRaiseLimit = math.Log(limit)
 }
 
@@ -297,15 +281,12 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		if sumRecharge > cm.totalRecharge {
 			sumRecharge = cm.totalRecharge
 		}
-
 		bonusRatio := float64(1)
 		v := cm.curve.ValueAt(sumRecharge)
 		s := float64(sumRecharge)
-
 		if v > s && s > 0 {
 			bonusRatio = v / s
 		}
-
 		dt := now - lastUpdate
 		// fetch the client that finishes first
 		rcqNode := cm.rcQueue.PopItem() // if sumRecharge > 0 then the queue cannot be empty
@@ -316,17 +297,14 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 			// to current bonusRatio and return
 			cm.addToQueue(rcqNode)
 			cm.rcLastIntValue += int64(bonusRatio * float64(dt))
-
 			return
 		}
-
 		lastUpdate += dtNext
 		// finished recharging, update corrBufValue and sumRecharge if necessary and do next step
 		if rcqNode.corrBufValue < int64(rcqNode.params.BufLimit) {
 			rcqNode.corrBufValue = int64(rcqNode.params.BufLimit)
 			cm.sumRecharge -= rcqNode.params.MinRecharge
 		}
-
 		cm.rcLastIntValue = rcqNode.rcFullIntValue
 	}
 }
@@ -336,15 +314,12 @@ func (cm *ClientManager) addToQueue(node *ClientNode) {
 		cm.priorityOffset += 0x4000000000000000
 		// recreate priority queue with new offset to avoid overflow; should happen very rarely
 		newRcQueue := prque.New[int64, *ClientNode](func(a *ClientNode, i int) { a.queueIndex = i })
-
 		for cm.rcQueue.Size() > 0 {
 			n := cm.rcQueue.PopItem()
 			newRcQueue.Push(n, cm.priorityOffset-n.rcFullIntValue)
 		}
-
 		cm.rcQueue = newRcQueue
 	}
-
 	cm.rcQueue.Push(node, cm.priorityOffset-node.rcFullIntValue)
 }
 
@@ -352,47 +327,36 @@ func (cm *ClientManager) addToQueue(node *ClientNode) {
 // It also adds or removes the rcQueue entry and updates ServerParams and sumRecharge if necessary.
 func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *ServerParams, now mclock.AbsTime) {
 	cm.updateRecharge(now)
-
 	wasFull := true
 	if node.corrBufValue != int64(node.params.BufLimit) {
 		wasFull = false
-
 		node.corrBufValue += (cm.rcLastIntValue - node.rcLastIntValue) * int64(node.params.MinRecharge) / FixedPointMultiplier
 		if node.corrBufValue > int64(node.params.BufLimit) {
 			node.corrBufValue = int64(node.params.BufLimit)
 		}
-
 		node.rcLastIntValue = cm.rcLastIntValue
 	}
-
 	node.corrBufValue += bvc
 	diff := int64(params.BufLimit - node.params.BufLimit)
-
 	if diff > 0 {
 		node.corrBufValue += diff
 	}
-
 	isFull := false
-
 	if node.corrBufValue >= int64(params.BufLimit) {
 		node.corrBufValue = int64(params.BufLimit)
 		isFull = true
 	}
-
 	if !wasFull {
 		cm.sumRecharge -= node.params.MinRecharge
 	}
-
 	if params != &node.params {
 		node.params = *params
 	}
-
 	if !isFull {
 		cm.sumRecharge += node.params.MinRecharge
 		if node.queueIndex != -1 {
 			cm.rcQueue.Remove(node.queueIndex)
 		}
-
 		node.rcLastIntValue = cm.rcLastIntValue
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)
 		cm.addToQueue(node)
@@ -408,15 +372,12 @@ func (cm *ClientManager) reduceTotalCapacity(frozenCap uint64) {
 	if frozenCap < cm.totalConnected {
 		ratio = float64(frozenCap) / float64(cm.totalConnected)
 	}
-
 	now := cm.clock.Now()
 	cm.updateTotalCapacity(now, false)
-
 	cm.logTotalCap -= capacityDropFactor * ratio
 	if cm.logTotalCap < cm.minLogTotalCap {
 		cm.logTotalCap = cm.minLogTotalCap
 	}
-
 	cm.updateTotalCapacity(now, true)
 }
 
@@ -436,11 +397,9 @@ func (cm *ClientManager) updateTotalCapacity(now mclock.AbsTime, refresh bool) {
 			cm.logTotalCap = cm.logTotalCapRaiseLimit
 		}
 	}
-
 	if cm.logTotalCap > cm.maxLogTotalCap {
 		cm.logTotalCap = cm.maxLogTotalCap
 	}
-
 	if refresh {
 		cm.refreshCapacity()
 	}
@@ -453,7 +412,6 @@ func (cm *ClientManager) refreshCapacity() {
 	if totalCapacity >= cm.totalCapacity*0.999 && totalCapacity <= cm.totalCapacity*1.001 {
 		return
 	}
-
 	cm.totalCapacity = totalCapacity
 	if cm.totalCapacityCh != nil {
 		select {
@@ -470,7 +428,6 @@ func (cm *ClientManager) SubscribeTotalCapacity(ch chan uint64) uint64 {
 	defer cm.lock.Unlock()
 
 	cm.totalCapacityCh = ch
-
 	return uint64(cm.totalCapacity)
 }
 
@@ -480,12 +437,10 @@ type PieceWiseLinear []struct{ X, Y uint64 }
 // ValueAt returns the curve's value at a given point
 func (pwl PieceWiseLinear) ValueAt(x uint64) float64 {
 	l := 0
-
 	h := len(pwl)
 	if h == 0 {
 		return 0
 	}
-
 	for h != l {
 		m := (l + h) / 2
 		if x > pwl[m].X {
@@ -494,21 +449,17 @@ func (pwl PieceWiseLinear) ValueAt(x uint64) float64 {
 			h = m
 		}
 	}
-
 	if l == 0 {
 		return float64(pwl[0].Y)
 	}
-
 	l--
 	if h == len(pwl) {
 		return float64(pwl[l].Y)
 	}
-
 	dx := pwl[h].X - pwl[l].X
 	if dx < 1 {
 		return float64(pwl[l].Y)
 	}
-
 	return float64(pwl[l].Y) + float64(pwl[h].Y-pwl[l].Y)*float64(x-pwl[l].X)/float64(dx)
 }
 
@@ -519,9 +470,7 @@ func (pwl PieceWiseLinear) Valid() bool {
 		if i.X < lastX {
 			return false
 		}
-
 		lastX = i.X
 	}
-
 	return true
 }

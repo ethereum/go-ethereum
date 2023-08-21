@@ -56,29 +56,22 @@ func TestConstantTotalCapacity(t *testing.T) {
 }
 
 func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, randomSend int, priorityOverflow bool) {
-	t.Helper()
-
 	clock := &mclock.Simulated{}
 	nodes := make([]*testNode, nodeCount)
-
 	var totalCapacity uint64
-
 	for i := range nodes {
 		nodes[i] = &testNode{capacity: uint64(50000 + rand.Intn(100000))}
 		totalCapacity += nodes[i].capacity
 	}
-
 	m := NewClientManager(PieceWiseLinear{{0, totalCapacity}}, clock)
 	if priorityOverflow {
 		// provoke a situation where rcLastUpdate overflow needs to be handled
 		m.rcLastIntValue = math.MaxInt64 - 10000000000
 	}
-
 	for _, n := range nodes {
 		n.bufLimit = n.capacity * 6000
 		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
 	}
-
 	maxNodes := make([]int, maxCapacityNodes)
 	for i := range maxNodes {
 		// we don't care if some indexes are selected multiple times
@@ -87,21 +80,18 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	}
 
 	var sendCount int
-
 	for i := 0; i < testLength; i++ {
 		now := clock.Now()
 		for _, idx := range maxNodes {
 			for nodes[idx].send(t, now) {
 			}
 		}
-
 		if rand.Intn(testLength) < maxCapacityNodes*3 {
 			maxNodes[rand.Intn(maxCapacityNodes)] = rand.Intn(nodeCount)
 		}
 
 		sendCount += randomSend
 		failCount := randomSend * 10
-
 		for sendCount > 0 && failCount > 0 {
 			if nodes[rand.Intn(nodeCount)].send(t, now) {
 				sendCount--
@@ -116,7 +106,6 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	for _, n := range nodes {
 		totalCost += n.totalCost
 	}
-
 	ratio := float64(totalCost) / float64(totalCapacity) / testLength
 	if ratio < 0.98 || ratio > 1.02 {
 		t.Errorf("totalCost/totalCapacity/testLength ratio incorrect (expected: 1, got: %f)", ratio)
@@ -127,20 +116,15 @@ func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
 	if now < n.waitUntil {
 		return false
 	}
-
 	n.index++
 	if ok, _, _ := n.node.AcceptRequest(0, n.index, testMaxCost); !ok {
 		t.Fatalf("Rejected request after expected waiting time has passed")
 	}
-
 	rcost := uint64(rand.Int63n(testMaxCost))
-
 	bv := n.node.RequestProcessed(0, n.index, testMaxCost, rcost)
 	if bv < testMaxCost {
 		n.waitUntil = now + mclock.AbsTime((testMaxCost-bv)*1001000/n.capacity)
 	}
-
 	n.totalCost += rcost
-
 	return true
 }

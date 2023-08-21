@@ -1213,10 +1213,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		return nil, err
 	}
 
-	return doCallWithState(ctx, b, args, header, state, timeout, globalGasCap)
+	return doCallWithState(ctx, b, args, header, state, timeout, globalGasCap, blockOverrides)
 }
 
-func doCallWithState(ctx context.Context, b Backend, args TransactionArgs, header *types.Header, state *state.StateDB, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+func doCallWithState(ctx context.Context, b Backend, args TransactionArgs, header *types.Header, state *state.StateDB, timeout time.Duration, globalGasCap uint64, blockOverrides *BlockOverrides) (*core.ExecutionResult, error) {
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1317,6 +1317,19 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
+	return s.CallWithState(ctx, args, blockNrOrHash, nil, overrides, blockOverrides)
+}
+
+// CallWithState executes the given transaction on the given state for
+// the given block number. Note that as it does an EVM call, fields in
+// the underlying state will change. Make sure to handle it outside of
+// this function (ideally by sending a copy of state).
+//
+// Additionally, the caller can specify a batch of contract for fields overriding.
+//
+// Note, this function doesn't make and changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (s *BlockChainAPI) CallWithState(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -1595,7 +1608,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) map[string]interface{} {
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig, db ethdb.Database) map[string]interface{} {
 	fields := RPCMarshalHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 
@@ -1605,7 +1618,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		}
 		if fullTx {
 			formatTx = func(idx int, tx *types.Transaction) interface{} {
-				return newRPCTransactionFromBlockIndex(block, uint64(idx), config)
+				return newRPCTransactionFromBlockIndex(block, uint64(idx), config, db)
 			}
 		}
 
@@ -1644,7 +1657,7 @@ func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Head
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
+	fields := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig(), s.b.ChainDb())
 	if inclTx {
 		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
@@ -1780,7 +1793,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 		return nil
 	}
 
-	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+	rpcTx := newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config)
 
 	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
 	if borReceipt != nil && index == uint64(len(txs)-1) {

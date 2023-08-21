@@ -143,12 +143,10 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
 	}
-
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-// nolint:gocognit
 func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec txJSON
 	err := json.Unmarshal(input, &dec)
@@ -158,7 +156,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	// Decode / verify fields according to transaction type.
 	var inner TxData
-
 	switch dec.Type {
 	case LegacyTxType:
 		var itx LegacyTx
@@ -166,7 +163,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
-
 		itx.Nonce = uint64(*dec.Nonce)
 		if dec.To != nil {
 			itx.To = dec.To
@@ -174,7 +170,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in transaction")
 		}
-
 		itx.Gas = uint64(*dec.Gas)
 		if dec.GasPrice == nil {
 			return errors.New("missing required field 'gasPrice' in transaction")
@@ -183,7 +178,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
-
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Input == nil {
 			return errors.New("missing required field 'input' in transaction")
@@ -194,13 +188,11 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
-
 		itx.R = (*big.Int)(dec.R)
 		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
-
 		itx.S = (*big.Int)(dec.S)
 		// signature V
 		if dec.V == nil {
@@ -219,12 +211,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
-
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
-
 		itx.Nonce = uint64(*dec.Nonce)
 		if dec.To != nil {
 			itx.To = dec.To
@@ -232,7 +222,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in transaction")
 		}
-
 		itx.Gas = uint64(*dec.Gas)
 		if dec.GasPrice == nil {
 			return errors.New("missing required field 'gasPrice' in transaction")
@@ -241,7 +230,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
-
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Input == nil {
 			return errors.New("missing required field 'input' in transaction")
@@ -255,13 +243,11 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
-
 		itx.R = (*big.Int)(dec.R)
 		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
-
 		itx.S = (*big.Int)(dec.S)
 		// signature V
 		itx.V, err = dec.yParityValue()
@@ -280,12 +266,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
-
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
-
 		itx.Nonce = uint64(*dec.Nonce)
 		if dec.To != nil {
 			itx.To = dec.To
@@ -297,18 +281,14 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
 		}
-
 		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
-
 		if dec.MaxFeePerGas == nil {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
-
 		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
-
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Input == nil {
 			return errors.New("missing required field 'input' in transaction")
@@ -325,13 +305,11 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
-
 		itx.R = (*big.Int)(dec.R)
 		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
-
 		itx.S = (*big.Int)(dec.S)
 		// signature V
 		itx.V, err = dec.yParityValue()

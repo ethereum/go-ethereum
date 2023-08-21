@@ -118,10 +118,7 @@ func CreateBorEthereum(cfg *ethconfig.Config) *eth.Ethereum {
 		Fatalf("Failed to start stack: %v", err)
 	}
 
-	_, err = stack.Attach()
-	if err != nil {
-		Fatalf("Failed to attach to node: %v", err)
-	}
+	stack.Attach()
 
 	return ethereum
 }

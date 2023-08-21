@@ -786,44 +786,15 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if ioflag {
 		statedb.AddEmptyMVHashMap()
 	}
-	// Native tracers have low overhead
-	var (
-		txs       = block.Transactions()
-		blockHash = block.Hash()
-		is158     = api.backend.ChainConfig().IsEIP158(block.Number())
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
-	)
-	for i, tx := range txs {
-		// Generate the next state snapshot fast without tracing
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txctx := &Context{
-			BlockHash:   blockHash,
-			BlockNumber: block.Number(),
-			TxIndex:     i,
-			TxHash:      tx.Hash(),
-		}
-		res, err := api.traceTx(ctx, msg, txctx, blockCtx, statedb, config)
-		if err != nil {
-			return nil, err
-		}
-		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
-		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(is158)
-	}
-	return results, nil
-}
 
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs, stateSyncPresent = api.getAllBlockTransactions(ctx, block)
-		blockHash = block.Hash()
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
-		pend      sync.WaitGroup
+		blockHash             = block.Hash()
+		blockCtx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		signer                = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		results               = make([]*txTraceResult, len(txs))
+		pend                  sync.WaitGroup
 	)
 
 	threads := runtime.NumCPU()
@@ -1407,7 +1378,7 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		canon = false
 	}
 	if timestamp := override.VerkleTime; timestamp != nil {
-		copy.VerkleTime = timestamp
+		chainConfigCopy.VerkleTime = timestamp
 		canon = false
 	}
 

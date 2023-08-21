@@ -481,8 +481,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.MumbaiChainConfig
 	case ghash == params.BorMainnetGenesisHash:
 		return params.BorMainnetChainConfig
-	case ghash == params.KilnGenesisHash:
-		return DefaultKilnGenesisBlock().Config
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -671,17 +669,6 @@ func DefaultBorMainnetGenesisBlock() *Genesis {
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
 		Alloc:      readPrealloc("allocs/bor_mainnet.json"),
 	}
-}
-
-func DefaultKilnGenesisBlock() *Genesis {
-	g := new(Genesis)
-	reader := strings.NewReader(KilnAllocData)
-
-	if err := json.NewDecoder(reader).Decode(g); err != nil {
-		panic(err)
-	}
-
-	return g
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.

@@ -383,10 +383,6 @@ func (p *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*type
 		if len(run) != 0 || len(block) != 0 {
 			return run, block
 		}
-
-		if err != nil {
-			errs = append(errs, err)
-		}
 	}
 	return []*types.Transaction{}, []*types.Transaction{}
 }
@@ -415,8 +411,6 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 		if status := subpool.Status(hash); status != TxStatusUnknown {
 			return status
 		}
-
-		pool.pendingMu.TryLock()
 	}
 	return TxStatusUnknown
 }
