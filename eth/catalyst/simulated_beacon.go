@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const devEpochLength = 32
+
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
 type withdrawalQueue struct {
@@ -157,6 +159,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	}
 	payload := envelope.ExecutionPayload
 
+	var finalizedHash common.Hash
+	if payload.Number%devEpochLength == 0 {
+		finalizedHash = payload.BlockHash
+	} else {
+		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength).Hash()
+	}
+
 	// mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
 		return fmt.Errorf("failed to mark payload as canonical: %v", err)
@@ -164,7 +173,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	c.curForkchoiceState = engine.ForkchoiceStateV1{
 		HeadBlockHash:      payload.BlockHash,
 		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: payload.BlockHash,
+		FinalizedBlockHash: finalizedHash,
 	}
 	// mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
