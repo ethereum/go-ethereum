@@ -1359,11 +1359,9 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	newUint64 := func(val uint64) *uint64 { return &val }
-
 	config := *params.TestChainConfig
-	config.ShanghaiTime = newUint64(0)
-	config.CancunTime = newUint64(0)
+	config.ShanghaiTime = new(uint64)
+	config.CancunTime = new(uint64)
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -1372,8 +1370,8 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
 		genesis    = &core.Genesis{
 			Config:        &config,
-			ExcessBlobGas: newUint64(0),
-			BlobGasUsed:   newUint64(0),
+			ExcessBlobGas: new(uint64),
+			BlobGasUsed:   new(uint64),
 			Alloc: core.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
