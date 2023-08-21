@@ -273,89 +273,69 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 // and secondly to read them with the standard tx json format
 func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Transactions, error) {
 	var signedTxs []*types.Transaction
-	for i, txWithKey := range txs {
-		tx := txWithKey.tx
-		key := txWithKey.key
-		v, r, s := tx.RawSignatureValues()
-		if key != nil && v.BitLen()+r.BitLen()+s.BitLen() == 0 {
-			// This transaction needs to be signed
-			var (
-				signed *types.Transaction
-				err    error
-			)
-			if txWithKey.protected {
-				signed, err = types.SignTx(tx, signer, key)
-			} else {
-				signed, err = types.SignTx(tx, types.FrontierSigner{}, key)
-			}
-			if err != nil {
-				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
-			}
-			signedTxs = append(signedTxs, signed)
-		} else {
+	for i, tx := range txs {
+		var (
+			v, r, s = tx.tx.RawSignatureValues()
+			signed  *types.Transaction
+			err     error
+		)
+		if tx.key == nil || v.BitLen()+r.BitLen()+s.BitLen() != 0 {
 			// Already signed
-			signedTxs = append(signedTxs, tx)
+			signedTxs = append(signedTxs, tx.tx)
+			continue
 		}
+		// This transaction needs to be signed
+		if tx.protected {
+			signed, err = types.SignTx(tx.tx, signer, tx.key)
+		} else {
+			signed, err = types.SignTx(tx.tx, types.FrontierSigner{}, tx.key)
+		}
+		if err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
+		}
+		signedTxs = append(signedTxs, signed)
 	}
 	return signedTxs, nil
 }
 
 func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *params.ChainConfig) (types.Transactions, error) {
 	var txsWithKeys []*txWithKey
+	var signed types.Transactions
 	if txStr != stdinSelector {
-		inFile, err := os.Open(txStr)
+		data, err := os.ReadFile(txStr)
 		if err != nil {
 			return nil, NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
 		}
-		defer inFile.Close()
-		decoder := json.NewDecoder(inFile)
-		if strings.HasSuffix(txStr, ".rlp") {
+		if strings.HasSuffix(txStr, ".rlp") { // A file containing an rlp list
 			var body hexutil.Bytes
-			if err := decoder.Decode(&body); err != nil {
+			if err := json.Unmarshal(data, &body); err != nil {
 				return nil, err
 			}
-			var txs types.Transactions
-			if err := rlp.DecodeBytes(body, &txs); err != nil {
+			// Already signed transactions
+			if err := rlp.DecodeBytes(body, &signed); err != nil {
 				return nil, err
 			}
-			for _, tx := range txs {
-				txsWithKeys = append(txsWithKeys, &txWithKey{
-					key: nil,
-					tx:  tx,
-				})
-			}
-		} else {
-			if err := decoder.Decode(&txsWithKeys); err != nil {
-				return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
-			}
+			return signed, nil
+		}
+		if err := json.Unmarshal(data, &txsWithKeys); err != nil {
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
 		}
 	} else {
 		if len(inputData.TxRlp) > 0 {
 			// Decode the body of already signed transactions
 			body := common.FromHex(inputData.TxRlp)
-			var txs types.Transactions
-			if err := rlp.DecodeBytes(body, &txs); err != nil {
+			// Already signed transactions
+			if err := rlp.DecodeBytes(body, &signed); err != nil {
 				return nil, err
 			}
-			for _, tx := range txs {
-				txsWithKeys = append(txsWithKeys, &txWithKey{
-					key: nil,
-					tx:  tx,
-				})
-			}
-		} else {
-			// JSON encoded transactions
-			txsWithKeys = inputData.Txs
+			return signed, nil
 		}
+		// JSON encoded transactions
+		txsWithKeys = inputData.Txs
 	}
 	// We may have to sign the transactions.
 	signer := types.MakeSigner(chainConfig, big.NewInt(int64(env.Number)), env.Timestamp)
-
-	if txs, err := signUnsignedTransactions(txsWithKeys, signer); err != nil {
-		return nil, NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
-	} else {
-		return txs, err
-	}
+	return signUnsignedTransactions(txsWithKeys, signer)
 }
 
 func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
