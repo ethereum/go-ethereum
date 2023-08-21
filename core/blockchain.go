@@ -2403,8 +2403,7 @@ func (bc *BlockChain) maintainTxIndex() {
 	// Launch the initial processing if chain is not empty. This step is
 	// useful in these scenarios that chain has no progress and indexer
 	// is never triggered.
-	head := rawdb.ReadHeadBlock(bc.db)
-	if head != nil {
+	if head := rawdb.ReadHeadBlock(bc.db); head != nil {
 		done = make(chan struct{})
 		go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
 	}
