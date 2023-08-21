@@ -86,7 +86,7 @@ func TestSetFeeDefaults(t *testing.T) {
 			true,
 			&TransactionArgs{GasPrice: zero},
 			nil,
-			errors.New("gasPrice must be non-zero"),
+			errors.New("gasPrice must be non-zero after london fork"),
 		},
 
 		// Access list txs
