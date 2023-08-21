@@ -10,6 +10,7 @@ data template_file devnet_container_definition {
     cloudwatch_group = "tf-${each.key}"
     cloudwatch_region = "${var.region}"
     log_level = "${lookup(each.value, "logLevel", "${var.logLevel}")}"
+    chain_network = "devnet"
   }
 }
 
@@ -81,7 +82,7 @@ resource "aws_ecs_service" "devnet_ecs_service" {
       aws_default_security_group.devnet_xdcnode_security_group.id
     ]
   }
-  
+
   deployment_circuit_breaker {
     enable = true
     rollback = false
