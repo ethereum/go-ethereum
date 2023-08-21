@@ -171,15 +171,15 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	// the new root
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  100_000,
-		GasPrice:  new(big.Int).SetUint64(0), // TODO use nil?
-		GasFeeCap: new(big.Int).SetUint64(0), // TODO use basefee?
-		GasTipCap: new(big.Int).SetUint64(0), // TODO use zero?
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
 		To:        &params.BeaconRootsStorageAddress,
-		Data:      beaconRoot[:], // TODO use 4byte invocation?
+		Data:      beaconRoot[:],
 	}
 	vmenv.Reset(NewEVMTxContext(msg), statedb)
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
-	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 100_000, common.Big0)
+	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.Big0)
 	statedb.Finalise(true)
 }

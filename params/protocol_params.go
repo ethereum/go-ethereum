@@ -185,7 +185,7 @@ var (
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 
 	// BeaconRootsStorageAddress is the address where historical beacon roots are stored as per EIP-4788
-	BeaconRootsStorageAddress = common.HexToAddress("0xBeAC00541d49391ED88ABF392bfC1F4dEa8c4143")
+	BeaconRootsStorageAddress = common.HexToAddress("0xbEac00dDB15f3B6d645C48263dC93862413A222D")
 	// SystemAddress is where the system-transaction is sent from as per EIP-4788
 	SystemAddress common.Address = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 )
