@@ -702,9 +702,9 @@ type Message struct {
 	balanceTokenFee *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool, balanceTokenFee *big.Int) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool, balanceTokenFee *big.Int, number *big.Int) Message {
 	if balanceTokenFee != nil {
-		gasPrice = common.TRC21GasPrice
+		gasPrice = common.GetGasPrice(number)
 	}
 	return Message{
 		from:            from,
