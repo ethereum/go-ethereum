@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -76,8 +77,9 @@ func ApplyMessage(
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, state, chainConfig, vm.Config{})
 
+	// nolint : contextcheck
 	// Apply the transaction to the current state (included in the env)
-	_, gasLeft, err := vmenv.Call(
+	ret, gasLeft, err := vmenv.Call(
 		vm.AccountRef(msg.From()),
 		*msg.To(),
 		msg.Data(),
@@ -85,6 +87,13 @@ func ApplyMessage(
 		msg.Value(),
 		nil,
 	)
+
+	success := big.NewInt(5).SetBytes(ret)
+
+	if success.Cmp(big.NewInt(0)) == 0 {
+		log.Error("message execution failed on contract", "msgData", msg.Data)
+	}
+
 	// Update the state with pending changes
 	if err != nil {
 		state.Finalise(true)
