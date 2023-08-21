@@ -137,12 +137,14 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
-	// who are not yet synced past London to get defaults for other tx values. See
-	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
+	// If the tx has completely specified a fee mechanism, no default is needed.
+	// This allows users who are not yet synced past London to get defaults for
+	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
+	// for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
+
+	// Sanity check the EIP-1559 fee parameters if present.
 	if args.GasPrice == nil && eip1559ParamsSet {
-		// Sanity check the EIP-1559 fee parameters if present.
 		if args.MaxFeePerGas.ToInt().Sign() == 0 {
 			return errors.New("maxFeePerGas must be non-zero")
 		}
@@ -151,18 +153,18 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		}
 		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
-
-	// Now attempt to fill in default value depending on whether London is active or not.
+	// Sanity check the non-EIP-1559 fee parameters.
 	head := b.CurrentHeader()
 	isLondon := b.ChainConfig().IsLondon(head.Number)
 	if args.GasPrice != nil && !eip1559ParamsSet {
-		// Sanity-check that zero gasprice is not used post London
+		// Zero gas-price is not allowed after London fork
 		if args.GasPrice.ToInt().Sign() == 0 && isLondon {
-			return errors.New("gasPrice must be non-zero")
+			return errors.New("gasPrice must be non-zero after london fork")
 		}
 		return nil // No need to set anything, user already set GasPrice
 	}
 
+	// Now attempt to fill in default value depending on whether London is active or not.
 	if isLondon {
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
