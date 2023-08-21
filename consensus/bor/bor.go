@@ -888,6 +888,10 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	finalizeCtx, finalizeSpan := tracing.StartSpan(ctx, "bor.FinalizeAndAssemble")
 	defer tracing.EndSpan(finalizeSpan)
 
+	if len(withdrawals) > 0 {
+		return nil, errors.New("Bor does not support withdrawals")
+	}
+
 	stateSyncData := []*types.StateSyncData{}
 
 	headerNumber := header.Number.Uint64()
