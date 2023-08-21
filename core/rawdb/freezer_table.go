@@ -517,6 +517,11 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		return err
 	}
 	// Truncate the deleted index entries from the index file.
+	// Close index file first to avoid "Access denied"
+	// error on Windows.
+	if err := t.index.Close(); err != nil {
+		return err
+	}
 	err = copyFrom(t.index.Name(), t.index.Name(), indexEntrySize*(newDeleted-deleted+1), func(f *os.File) error {
 		tailIndex := indexEntry{
 			filenum: newTailId,
@@ -529,9 +534,6 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		return err
 	}
 	// Reopen the modified index file to load the changes
-	if err := t.index.Close(); err != nil {
-		return err
-	}
 	t.index, err = openFreezerFileForAppend(t.index.Name())
 	if err != nil {
 		return err
@@ -868,6 +870,8 @@ func (t *freezerTable) sizeHidden() (uint64, error) {
 	// return the starting offset of the first non-hidden item
 	buffer := make([]byte, indexEntrySize)
 	if _, err := t.index.ReadAt(buffer, int64((hiddenItems-offsetItems)*indexEntrySize)); err != nil {
+		// manual get the index at hiddenItems
+		// getIndices would meet EOF error when all items are hidden
 		return 0, err
 	}
 	index := new(indexEntry)
