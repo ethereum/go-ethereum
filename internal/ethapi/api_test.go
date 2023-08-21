@@ -99,10 +99,9 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 }
 
 func TestTransactionBlobTx(t *testing.T) {
-	newUint64 := func(val uint64) *uint64 { return &val }
 	config := *params.TestChainConfig
-	config.ShanghaiTime = newUint64(0)
-	config.CancunTime = newUint64(0)
+	config.ShanghaiTime = new(uint64)
+	config.CancunTime = new(uint64)
 	tests := allBlobTxs(common.Address{0xde, 0xad}, &config)
 
 	testTransactionMarshal(t, tests, &config)
