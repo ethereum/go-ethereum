@@ -159,7 +159,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		// Now decode the inner transaction.
 		inner, err := tx.decodeTyped(b)
 		if err == nil {
-			tx.setDecoded(inner, uint64(len(b)))
+			tx.setDecoded(inner, size)
 		}
 		return err
 	}
