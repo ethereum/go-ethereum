@@ -2263,7 +2263,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		UseHeimdallApp:      ctx.Bool(UseHeimdallAppFlag.Name),
 	}
 	_ = CreateBorEthereum(configs)
-	engine := ethconfig.CreateConsensusEngine(stack, config, configs, nil, false, chainDb, nil)
+	engine, err := ethconfig.CreateConsensusEngine(config, configs, chainDb, nil)
+	if err != nil {
+		Fatalf("%v", err)
+	}
 
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)

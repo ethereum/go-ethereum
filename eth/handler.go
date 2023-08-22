@@ -96,6 +96,7 @@ type handlerConfig struct {
 	txArrivalWait  time.Duration       // Maximum duration to wait for an announced tx before requesting it
 	checker        ethereum.ChainValidator
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	EthAPI         *ethapi.BlockChainAPI  // EthAPI to interact
 }
 
 type handler struct {

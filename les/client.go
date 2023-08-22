@@ -102,7 +102,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
-	engine := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, config, chainDb, nil)
+	if err != nil {
+		return nil, err
+	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
@@ -154,7 +157,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, nil); err != nil {
 		return nil, err
 	}
 	leth.chainReader = leth.blockchain

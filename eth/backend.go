@@ -155,10 +155,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
-	if err != nil {
-		return nil, err
-	}
+	// TODO - Check this - Arpit
 	eth := &Ethereum{
 		config:            config,
 		merger:            consensus.NewMerger(chainDb),
@@ -177,12 +174,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 
-	ethereum.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, ethereum, nil}
-	if ethereum.APIBackend.allowUnprotectedTxs {
-		log.Debug(" ###########", "Unprotected transactions allowed")
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	// TODO - Check this - Arpit
+	// if ethereum.APIBackend.allowUnprotectedTxs {
+	// 	log.Debug(" ###########", "Unprotected transactions allowed")
 
-		config.TxPool.AllowUnprotectedTxs = true
-	}
+	// 	config.TxPool.AllowUnprotectedTxs = true
+	// }
 
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
@@ -191,18 +189,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
-	if config.OverrideShanghai != nil {
-		overrides.OverrideShanghai = config.OverrideShanghai
-	}
-
 	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, trie.NewDatabase(chainDb), config.Genesis, &overrides)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
 
-	blockChainAPI := ethapi.NewBlockChainAPI(ethereum.APIBackend)
-	engine := ethconfig.CreateConsensusEngine(stack, chainConfig, config, &ethashConfig, cliqueConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, blockChainAPI)
-	ethereum.engine = engine
+	blockChainAPI := ethapi.NewBlockChainAPI(eth.APIBackend)
+	engine, err := ethconfig.CreateConsensusEngine(chainConfig, config, chainDb, blockChainAPI)
+	eth.engine = engine
+	if err != nil {
+		return nil, err
+	}
 	// END: Bor changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -249,13 +246,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// check if Parallel EVM is enabled
 	// if enabled, use parallel state processor
 	if config.ParallelEVM.Enable {
-		ethereum.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
+		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	} else {
-		ethereum.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, ethereum.engine, vmConfig, ethereum.shouldPreserve, &config.TxLookupLimit, checker)
+		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	}
 
 	// Override the chain config with provided settings.
-	var overrides core.ChainOverrides
 	if config.OverrideCancun != nil {
 		overrides.OverrideCancun = config.OverrideCancun
 	}
@@ -263,19 +259,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
 
-	ethereum.APIBackend.gpo = gasprice.NewOracle(ethereum.APIBackend, gpoParams)
+	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
 	if err != nil {
 		return nil, err
 	}
 
-	_ = ethereum.engine.VerifyHeader(ethereum.blockchain, ethereum.blockchain.CurrentHeader()) // TODO think on it
+	_ = eth.engine.VerifyHeader(eth.blockchain, eth.blockchain.CurrentHeader()) // TODO think on it
 
 	// BOR changes
-	ethereum.APIBackend.gpo.ProcessCache()
+	eth.APIBackend.gpo.ProcessCache()
 	// BOR changes
 
-	ethereum.bloomIndexer.Start(ethereum.blockchain)
+	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.BlobPool.Datadir != "" {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
@@ -295,9 +291,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
 		Database:       chainDb,
-		Chain:          ethereum.blockchain,
-		TxPool:         ethereum.txPool,
-		Merger:         ethereum.merger,
+		Chain:          eth.blockchain,
+		TxPool:         eth.txPool,
+		Merger:         eth.merger,
 		Network:        config.NetworkId,
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
@@ -305,39 +301,39 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		RequiredBlocks: config.RequiredBlocks,
 		EthAPI:         blockChainAPI,
 		checker:        checker,
-		txArrivalWait:  ethereum.p2pServer.TxArrivalWait,
+		txArrivalWait:  eth.p2pServer.TxArrivalWait,
 	}); err != nil {
 		return nil, err
 	}
 
-	ethereum.miner = miner.New(ethereum, &config.Miner, ethereum.blockchain.Config(), ethereum.EventMux(), ethereum.engine, ethereum.isLocalBlock)
-	_ = ethereum.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, eth.isLocalBlock)
+	_ = eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	// Setup DNS discovery iterators.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
 
-	ethereum.ethDialCandidates, err = dnsclient.NewIterator(ethereum.config.EthDiscoveryURLs...)
+	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
 	if err != nil {
 		return nil, err
 	}
 
-	ethereum.snapDialCandidates, err = dnsclient.NewIterator(ethereum.config.SnapDiscoveryURLs...)
+	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start the RPC service
-	ethereum.netRPCService = ethapi.NewNetAPI(ethereum.p2pServer, config.NetworkId)
+	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, config.NetworkId)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(ethereum.APIs())
-	stack.RegisterProtocols(ethereum.Protocols())
-	stack.RegisterLifecycle(ethereum)
+	stack.RegisterAPIs(eth.APIs())
+	stack.RegisterProtocols(eth.Protocols())
+	stack.RegisterLifecycle(eth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
-	ethereum.shutdownTracker.MarkStartup()
+	eth.shutdownTracker.MarkStartup()
 
-	return ethereum, nil
+	return eth, nil
 }
 
 func makeExtraData(extra []byte) []byte {
@@ -730,7 +726,8 @@ func (s *Ethereum) Stop() error {
 
 	// closing consensus engine first, as miner has deps on it
 	s.engine.Close()
-	s.txPool.Stop()
+	// TODO - Check this Arpit
+	// s.txPool.Stop()
 	s.miner.Close()
 	s.blockchain.Stop()
 
