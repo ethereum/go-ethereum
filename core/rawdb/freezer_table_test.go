@@ -703,7 +703,6 @@ func TestTruncateTail(t *testing.T) {
 	if err := f.truncateTail(1); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 	})
@@ -743,7 +742,6 @@ func TestTruncateTail(t *testing.T) {
 	if err := f.truncateTail(2); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
@@ -785,7 +783,6 @@ func TestTruncateTail(t *testing.T) {
 	if err := f.truncateTail(3); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
@@ -827,7 +824,6 @@ func TestTruncateTail(t *testing.T) {
 	if err := f.truncateTail(8); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(f.dumpIndexString(0, 1000))
 	checkRetrieveError(t, f, map[uint64]error{
 		0: errOutOfBounds,
 		1: errOutOfBounds,
