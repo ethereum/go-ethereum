@@ -72,6 +72,9 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 
 	log.Debug("start to check circuit capacity for tx", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 	rawResult := C.apply_tx(C.uint64_t(ccc.ID), tracesStr)
+	defer func() {
+		C.free(rawResult)
+	}()
 	log.Debug("check circuit capacity for tx done", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 
 	result := &WrappedRowUsage{}
@@ -118,6 +121,9 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 
 	log.Debug("start to check circuit capacity for block", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash())
 	rawResult := C.apply_block(C.uint64_t(ccc.ID), tracesStr)
+	defer func() {
+		C.free(rawResult)
+	}()
 	log.Debug("check circuit capacity for block done", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash())
 
 	result := &WrappedRowUsage{}
