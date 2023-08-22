@@ -898,15 +898,15 @@ func (c *ChainConfig) Description() string {
 	// Create a list of forks post-merge
 	banner += "Post-Merge hard forks (timestamp based):\n"
 	if c.ShanghaiBlock != nil {
-		banner += fmt.Sprintf(" - Shanghai:                    @%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiBlock)
+		banner += fmt.Sprintf(" - Shanghai:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
 	}
 
 	if c.CancunBlock != nil {
-		banner += fmt.Sprintf(" - Cancun:                      @%-8v\n", *c.CancunBlock)
+		banner += fmt.Sprintf(" - Cancun:                      #%-8v\n", c.CancunBlock)
 	}
 
 	if c.PragueBlock != nil {
-		banner += fmt.Sprintf(" - Prague:                      @%-8v\n", *c.PragueBlock)
+		banner += fmt.Sprintf(" - Prague:                      #%-8v\n", c.PragueBlock)
 	}
 
 	return banner
