@@ -188,19 +188,21 @@ func (test *stateTest) run() bool {
 	defer disk.Close()
 	defer tdb.Close()
 
-	snap, _ := snapshot.New(snapshot.Config{
-		CacheSize:  1,
-		Recovery:   false,
-		NoBuild:    false,
-		AsyncBuild: false,
-	}, disk, tdb, types.EmptyRootHash)
-
+	var snaps *snapshot.Tree
+	if rand.Intn(3) == 0 {
+		snaps, _ = snapshot.New(snapshot.Config{
+			CacheSize:  1,
+			Recovery:   false,
+			NoBuild:    false,
+			AsyncBuild: false,
+		}, disk, tdb, types.EmptyRootHash)
+	}
 	for i, actions := range test.actions {
 		root := types.EmptyRootHash
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snap)
+		state, err := New(root, sdb, snaps)
 		if err != nil {
 			panic(err)
 		}
