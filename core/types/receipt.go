@@ -271,8 +271,8 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w.WriteUint64(r.CumulativeGasUsed)
 	logList := w.List()
 	for _, log := range r.Logs {
-		if err := rlp.Encode(w, log); err != nil {
-			return err
+		if err := log.EncodeRLP(w); err != nil {
+			return nil
 		}
 	}
 	w.ListEnd(logList)
