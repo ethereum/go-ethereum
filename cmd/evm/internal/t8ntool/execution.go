@@ -69,25 +69,26 @@ type ommer struct {
 
 //go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase            common.Address                      `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty          *big.Int                            `json:"currentDifficulty"`
-	Random              *big.Int                            `json:"currentRandom"`
-	ParentDifficulty    *big.Int                            `json:"parentDifficulty"`
-	ParentBaseFee       *big.Int                            `json:"parentBaseFee,omitempty"`
-	ParentGasUsed       uint64                              `json:"parentGasUsed,omitempty"`
-	ParentGasLimit      uint64                              `json:"parentGasLimit,omitempty"`
-	GasLimit            uint64                              `json:"currentGasLimit"   gencodec:"required"`
-	Number              uint64                              `json:"currentNumber"     gencodec:"required"`
-	Timestamp           uint64                              `json:"currentTimestamp"  gencodec:"required"`
-	ParentTimestamp     uint64                              `json:"parentTimestamp,omitempty"`
-	BlockHashes         map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-	Ommers              []ommer                             `json:"ommers,omitempty"`
-	Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
-	BaseFee             *big.Int                            `json:"currentBaseFee,omitempty"`
-	ParentUncleHash     common.Hash                         `json:"parentUncleHash"`
-	ExcessBlobGas       *uint64                             `json:"excessBlobGas,omitempty"`
-	ParentExcessBlobGas *uint64                             `json:"parentExcessBlobGas,omitempty"`
-	ParentBlobGasUsed   *uint64                             `json:"parentBlobGasUsed,omitempty"`
+	Coinbase              common.Address                      `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty            *big.Int                            `json:"currentDifficulty"`
+	Random                *big.Int                            `json:"currentRandom"`
+	ParentDifficulty      *big.Int                            `json:"parentDifficulty"`
+	ParentBaseFee         *big.Int                            `json:"parentBaseFee,omitempty"`
+	ParentGasUsed         uint64                              `json:"parentGasUsed,omitempty"`
+	ParentGasLimit        uint64                              `json:"parentGasLimit,omitempty"`
+	GasLimit              uint64                              `json:"currentGasLimit"   gencodec:"required"`
+	Number                uint64                              `json:"currentNumber"     gencodec:"required"`
+	Timestamp             uint64                              `json:"currentTimestamp"  gencodec:"required"`
+	ParentTimestamp       uint64                              `json:"parentTimestamp,omitempty"`
+	BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+	Ommers                []ommer                             `json:"ommers,omitempty"`
+	Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
+	BaseFee               *big.Int                            `json:"currentBaseFee,omitempty"`
+	ParentUncleHash       common.Hash                         `json:"parentUncleHash"`
+	ExcessBlobGas         *uint64                             `json:"excessBlobGas,omitempty"`
+	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
+	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
+	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
 }
 
 type stEnvMarshaling struct {
@@ -181,6 +182,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock != nil &&
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
+	}
+	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
+		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
 	var blobGasUsed uint64
 	for i, tx := range txs {
