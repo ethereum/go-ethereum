@@ -487,6 +487,9 @@ func (g *Genesis) ToBlock() *types.Block {
 			if head.BlobGasUsed == nil {
 				head.BlobGasUsed = new(uint64)
 			}
+			if head.BeaconRoot == nil {
+				head.BeaconRoot = new(common.Hash)
+			}
 		}
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
