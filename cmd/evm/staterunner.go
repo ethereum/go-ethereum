@@ -107,10 +107,12 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
 			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-				root := state.IntermediateRoot(false)
-				result.Root = &root
-				if jsonOut {
-					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+				if state != nil {
+					root := state.IntermediateRoot(false)
+					result.Root = &root
+					if jsonOut {
+						fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+					}
 				}
 				if err != nil {
 					// Test failed, mark as so and dump any state to aid debugging
