@@ -112,6 +112,8 @@ const schema string = `
         maxFeePerGas: BigInt
         # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei.
         maxPriorityFeePerGas: BigInt
+        # MaxFeePerBlobGas is the maximum blob gas fee cap per blob the sender is willing to pay for blob transaction, in wei.
+        maxFeePerBlobGas: BigInt
         # EffectiveTip is the actual amount of reward going to miner after considering the max fee cap.
         effectiveTip: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
@@ -141,6 +143,10 @@ const schema string = `
         # coerced into the EIP-1559 format by setting both maxFeePerGas and
         # maxPriorityFeePerGas as the transaction's gas price.
         effectiveGasPrice: BigInt
+        # BlobGasUsed is the amount of gas used for this blob transaction.
+        blobGasUsed: Long
+        # blobGasPrice is the actual value per blob gas deducted from the senders account.
+        blobGasPrice: BigInt
         # CreatedContract is the account that was created by a contract creation
         # transaction. If the transaction was not a contract creation transaction,
         # or it has not yet been mined, this field will be null.
@@ -162,6 +168,8 @@ const schema string = `
         # RawReceipt is the canonical encoding of the receipt. For post EIP-2718 typed transactions
         # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
+        # BlobVersionedHashes is a set of hash values contained in the blob transaction.
+        blobVersionedHashes: [Bytes32]
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
