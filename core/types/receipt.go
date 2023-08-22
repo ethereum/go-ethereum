@@ -177,9 +177,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err := s.ReadBytes(b); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		return r.decodeTyped(b)
 	}
 }
