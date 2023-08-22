@@ -145,6 +145,8 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, rlp.ListSize(size))
 		}
 		return err
+	case kind == rlp.Byte:
+		return errShortTypedTx
 	default:
 		// It's an EIP-2718 typed TX envelope.
 		// First read the tx payload bytes into a temporary buffer.

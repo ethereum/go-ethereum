@@ -165,6 +165,8 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		}
 		r.Type = LegacyTxType
 		return r.setFromRLP(dec)
+	case kind == rlp.Byte:
+		return errShortTypedReceipt
 	default:
 		// It's an EIP-2718 typed tx receipt.
 		b, buf, err := getPooledBuffer(size)
