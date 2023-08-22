@@ -330,6 +330,26 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) *hexutil.Big {
 	}
 }
 
+func (t *Transaction) MaxFeePerBlobGas(ctx context.Context) *hexutil.Big {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
+	return (*hexutil.Big)(tx.BlobGasFeeCap())
+}
+
+func (t *Transaction) BlobVersionedHashes(ctx context.Context) *[]common.Hash {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil
+	}
+	blobHashes := tx.BlobHashes()
+	return &blobHashes
+}
+
 func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 	tx, block := t.resolve(ctx)
 	if tx == nil {
@@ -460,6 +480,40 @@ func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*hexutil.Uint64, e
 	}
 	ret := hexutil.Uint64(receipt.CumulativeGasUsed)
 	return &ret, nil
+}
+
+func (t *Transaction) BlobGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil, nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil, nil
+	}
+
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+	ret := hexutil.Uint64(receipt.BlobGasUsed)
+	return &ret, nil
+}
+
+func (t *Transaction) BlobGasPrice(ctx context.Context) (*hexutil.Big, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil, nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil, nil
+	}
+
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+	ret := (*hexutil.Big)(receipt.BlobGasPrice)
+	return ret, nil
 }
 
 func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs) (*Account, error) {
