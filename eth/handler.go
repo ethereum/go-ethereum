@@ -683,6 +683,6 @@ func (h *handler) enableSyncedFeatures() {
 		h.snapSync.Store(false)
 	}
 	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
+		h.chain.TrieDB().SetBufferSize(pathdb.DefaultDirtyBufferSize)
 	}
 }

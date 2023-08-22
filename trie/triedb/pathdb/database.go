@@ -40,18 +40,18 @@ const (
 	// defaultCleanSize is the default memory allowance of clean cache.
 	defaultCleanSize = 16 * 1024 * 1024
 
-	// MaxBufferSize is the maximum memory allowance of node buffer.
+	// MaxDirtyBufferSize is the maximum memory allowance of node buffer.
 	// Too large nodebuffer will cause the system to pause for a long
 	// time when write happens. Also, the largest batch that pebble can
 	// support is 4GB, node will panic if batch size exceeds this limit.
-	MaxBufferSize = 256 * 1024 * 1024
+	MaxDirtyBufferSize = 256 * 1024 * 1024
 
-	// DefaultBufferSize is the default memory allowance of node buffer
+	// DefaultDirtyBufferSize is the default memory allowance of node buffer
 	// that aggregates the writes from above until it's flushed into the
 	// disk. It's meant to be used once the initial sync is finished.
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
-	DefaultBufferSize = 64 * 1024 * 1024
+	DefaultDirtyBufferSize = 64 * 1024 * 1024
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -96,9 +96,9 @@ type Config struct {
 // unreasonable or unworkable.
 func (c *Config) sanitize() *Config {
 	conf := *c
-	if conf.DirtyCacheSize > MaxBufferSize {
-		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.DirtyCacheSize), "updated", common.StorageSize(MaxBufferSize))
-		conf.DirtyCacheSize = MaxBufferSize
+	if conf.DirtyCacheSize > MaxDirtyBufferSize {
+		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.DirtyCacheSize), "updated", common.StorageSize(MaxDirtyBufferSize))
+		conf.DirtyCacheSize = MaxDirtyBufferSize
 	}
 	return &conf
 }
@@ -107,7 +107,7 @@ func (c *Config) sanitize() *Config {
 var Defaults = &Config{
 	StateHistory:   params.FullImmutabilityThreshold,
 	CleanCacheSize: defaultCleanSize,
-	DirtyCacheSize: DefaultBufferSize,
+	DirtyCacheSize: DefaultDirtyBufferSize,
 }
 
 // ReadOnly is the config in order to open database in read only mode.
@@ -439,9 +439,9 @@ func (db *Database) SetBufferSize(size int) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if size > MaxBufferSize {
-		log.Info("Capped node buffer size", "provided", common.StorageSize(size), "adjusted", common.StorageSize(MaxBufferSize))
-		size = MaxBufferSize
+	if size > MaxDirtyBufferSize {
+		log.Info("Capped node buffer size", "provided", common.StorageSize(size), "adjusted", common.StorageSize(MaxDirtyBufferSize))
+		size = MaxDirtyBufferSize
 	}
 	db.bufferSize = size
 	return db.tree.bottom().setBufferSize(db.bufferSize)
