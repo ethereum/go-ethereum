@@ -1030,8 +1030,8 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // fastDeleteStorage is the function that efficiently deletes the storage trie
 // of a specific account. It leverages the associated state snapshot for fast
-// storage iteration and reconstructs trie nodes by inserting them into the
-// stack trie.
+// storage iteration and constructs trie node deletion markers by creating
+// stack trie with iterated slots.
 func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (bool, common.StorageSize, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	iter, err := s.snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
 	if err != nil {
@@ -1056,7 +1056,9 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 		size += common.StorageSize(common.HashLength + len(slot))
 		slots[iter.Hash()] = slot
 
-		stack.Update(iter.Hash().Bytes(), slot)
+		if err := stack.Update(iter.Hash().Bytes(), slot); err != nil {
+			return false, 0, nil, nil, err
+		}
 	}
 	if stack.Hash() != root {
 		return false, 0, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
@@ -1117,7 +1119,7 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 		nodes   *trienode.NodeSet
 	)
 	// The fast approach can be failed if the snapshot is not fully
-	// generated, or it's internally corrupted. Fallback the slow
+	// generated, or it's internally corrupted. Fallback to the slow
 	// one just in case.
 	if s.snap != nil {
 		aborted, size, slots, nodes, err = s.fastDeleteStorage(addrHash, root)
