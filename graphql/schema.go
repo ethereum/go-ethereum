@@ -169,7 +169,7 @@ const schema string = `
         # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
         # BlobVersionedHashes is a set of hash values contained in the blob transaction.
-        blobVersionedHashes: [Bytes32]
+        blobVersionedHashes: [Bytes32!]
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
