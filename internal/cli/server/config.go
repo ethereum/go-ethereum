@@ -68,7 +68,7 @@ type Config struct {
 	Ancient string `hcl:"ancient,optional" toml:"ancient,optional"`
 
 	// DBEngine is used to select leveldb or pebble as database
-	DBEngine string `hcl:"dbengine,optional" toml:"dbengine,optional"`
+	DBEngine string `hcl:"db.engine,optional" toml:"db.engine,optional"`
 
 	// KeyStoreDir is the directory to store keystores
 	KeyStoreDir string `hcl:"keystore,optional" toml:"keystore,optional"`
