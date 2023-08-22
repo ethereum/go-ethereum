@@ -2421,6 +2421,12 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{}) {
 	defer func() { close(done) }()
 
+	// If head is 0, it means the chain is just initialized and no blocks are inserted,
+	// so don't need to indexing anything.
+	if head == 0 {
+		return
+	}
+
 	// The tail flag is not existent, it means the node is just initialized
 	// and all blocks(may from ancient store) are not indexed yet.
 	if tail == nil {
@@ -2479,6 +2485,14 @@ func (bc *BlockChain) maintainTxIndex() {
 	}
 	defer sub.Unsubscribe()
 	log.Info("Initialized transaction indexer", "limit", bc.TxLookupLimit())
+
+	// Launch the initial processing if chain is not empty. This step is
+	// useful in these scenarios that chain has no progress and indexer
+	// is never triggered.
+	if head := rawdb.ReadHeadBlock(bc.db); head != nil {
+		done = make(chan struct{})
+		go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
+	}
 
 	for {
 		select {
