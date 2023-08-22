@@ -71,8 +71,8 @@ const schema string = `
         transaction: Transaction!
     }
 
-    #EIP-2718
-    type AccessTuple{
+    # EIP-2718
+    type AccessTuple {
         address: Address!
         storageKeys : [Bytes32!]!
     }
@@ -171,16 +171,16 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-      # of topics. Topics matches a prefix of that list. An empty element array matches any
-      # topic. Non-empty elements represent an alternative that matches any of the
-      # contained topics.
-      #
-      # Examples:
-      #  - [] or nil          matches any topic list
-      #  - [[A]]              matches topic A in first position
-      #  - [[], [B]]          matches any topic in first position, B in second position
-      #  - [[A], [B]]         matches topic A in first position, B in second position
-      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+        # of topics. Topics matches a prefix of that list. An empty element array matches any
+        # topic. Non-empty elements represent an alternative that matches any of the
+        # contained topics.
+        #
+        # Examples:
+        #  - [] or nil          matches any topic list
+        #  - [[A]]              matches topic A in first position
+        #  - [[], [B]]          matches any topic in first position, B in second position
+        #  - [[A], [B]]         matches topic A in first position, B in second position
+        #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
@@ -312,21 +312,21 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-      # of topics. Topics matches a prefix of that list. An empty element array matches any
-      # topic. Non-empty elements represent an alternative that matches any of the
-      # contained topics.
-      #
-      # Examples:
-      #  - [] or nil          matches any topic list
-      #  - [[A]]              matches topic A in first position
-      #  - [[], [B]]          matches any topic in first position, B in second position
-      #  - [[A], [B]]         matches topic A in first position, B in second position
-      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+        # of topics. Topics matches a prefix of that list. An empty element array matches any
+        # topic. Non-empty elements represent an alternative that matches any of the
+        # contained topics.
+        #
+        # Examples:
+        #  - [] or nil          matches any topic list
+        #  - [[A]]              matches topic A in first position
+        #  - [[], [B]]          matches any topic in first position, B in second position
+        #  - [[A], [B]]         matches topic A in first position, B in second position
+        #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
     # SyncState contains the current synchronisation state of the client.
-    type SyncState{
+    type SyncState {
         # StartingBlock is the block number at which synchronisation started.
         startingBlock: Long!
         # CurrentBlock is the point at which synchronisation has presently reached.
@@ -337,17 +337,17 @@ const schema string = `
 
     # Pending represents the current pending state.
     type Pending {
-      # TransactionCount is the number of transactions in the pending state.
-      transactionCount: Long!
-      # Transactions is a list of transactions in the current pending state.
-      transactions: [Transaction!]
-      # Account fetches an Ethereum account for the pending state.
-      account(address: Address!): Account!
-      # Call executes a local call operation for the pending state.
-      call(data: CallData!): CallResult
-      # EstimateGas estimates the amount of gas that will be required for
-      # successful execution of a transaction for the pending state.
-      estimateGas(data: CallData!): Long!
+        # TransactionCount is the number of transactions in the pending state.
+        transactionCount: Long!
+        # Transactions is a list of transactions in the current pending state.
+        transactions: [Transaction!]
+        # Account fetches an Ethereum account for the pending state.
+        account(address: Address!): Account!
+        # Call executes a local call operation for the pending state.
+        call(data: CallData!): CallResult
+        # EstimateGas estimates the amount of gas that will be required for
+        # successful execution of a transaction for the pending state.
+        estimateGas(data: CallData!): Long!
     }
 
     type Query {
