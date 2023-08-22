@@ -37,7 +37,23 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 )
 
-func TestState(t *testing.T) {
+func TestStateHashTrie(t *testing.T) {
+	testState(t, true, false)
+}
+
+func TestStateHashSnap(t *testing.T) {
+	testState(t, true, true)
+}
+
+func TestStatePathTrie(t *testing.T) {
+	testState(t, false, false)
+}
+
+func TestStatePathSnap(t *testing.T) {
+	testState(t, false, true)
+}
+
+func testState(t *testing.T, hash bool, useSnapshots bool) {
 	t.Parallel()
 
 	st := new(testMatcher)
@@ -68,6 +84,10 @@ func TestState(t *testing.T) {
 	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")
 	st.fails(`stEIP4844-blobtransactions/opcodeBlobhBounds.json`, "test has incorrect state root")
 
+	var dbScheme = rawdb.PathScheme
+	if hash {
+		dbScheme = rawdb.HashScheme
+	}
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
 		filepath.Join(baseDir, "EIPTests", "StateTests"),
@@ -78,46 +98,11 @@ func TestState(t *testing.T) {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
 			for _, subtest := range test.Subtests() {
 				subtest := subtest
-				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-
-				t.Run(key+"/hash/trie", func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index), func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
-				})
-				t.Run(key+"/hash/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							if snaps != nil && state != nil {
-								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
-									result = err
-									return
-								}
-							}
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
-				})
-				t.Run(key+"/path/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
-				})
-				t.Run(key+"/path/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							if snaps != nil && state != nil {
+						test.Run(subtest, vmconfig, useSnapshots, dbScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+							if useSnapshots && snaps != nil && state != nil {
 								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
 									result = err
 									return
