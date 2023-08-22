@@ -38,12 +38,7 @@ func ipcListen(endpoint string) (net.Listener, error) {
 
 // newIPCConnection will connect to a named pipe with the given endpoint as name.
 func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
-	timeout := defaultPipeDialTimeout
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout = deadline.Sub(time.Now())
-		if timeout < 0 {
-			timeout = 0
-		}
-	}
-	return winio.DialPipe(endpoint, timeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultPipeDialTimeout)
+	defer cancel()
+	return winio.DialPipeContext(ctx, endpoint)
 }
