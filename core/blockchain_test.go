@@ -1844,7 +1844,7 @@ func TestTrieForkGC(t *testing.T) {
 		chain.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
 		chain.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
-	if nodes, _ := chain.TrieDB().Size(); nodes > 0 {
+	if _, nodes, _ := chain.TrieDB().Size(); nodes > 0 { // all memory is returned in the nodes return for hashdb
 		t.Fatalf("stale tries still alive after garbase collection")
 	}
 }
