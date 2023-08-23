@@ -42,8 +42,8 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 		return errors.New("header is missing blobGasUsed")
 	}
 	// Verify that the blob gas used remains within reasonable limits.
-	if *header.BlobGasUsed > params.BlobTxMaxBlobGasPerBlock {
-		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, params.BlobTxMaxBlobGasPerBlock)
+	if *header.BlobGasUsed > params.MaxBlobGasPerBlock {
+		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, params.MaxBlobGasPerBlock)
 	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
 		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
