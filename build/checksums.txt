@@ -1,5 +1,9 @@
 # This file contains sha256 checksums of optional build dependencies.
 
+# https://github.com/ethereum/execution-spec-tests/releases
+f05e56f5eb736209fb7424ab2f444a6ef55e356220ac72960ff4d3a33a63b051  fixtures.tar.gz
+
+# https://go.dev/dl/
 818d46ede85682dd551ad378ef37a4d247006f12ec59b5b755601d2ce114369a  go1.21.0.src.tar.gz
 b314de9f704ab122c077d2ec8e67e3670affe8865479d1f01991e7ac55d65e70  go1.21.0.darwin-amd64.tar.gz
 3aca44de55c5e098de2f406e98aba328898b05d509a2e2a356416faacf2c4566  go1.21.0.darwin-arm64.tar.gz
@@ -15,7 +19,7 @@ af920fbb74fc3d173118dc3cc35f02a709c1de642700e92a91a7d16981df3fec  go1.21.0.windo
 732121e64e0ecb07c77fdf6cc1bc5ce7b242c2d40d4ac29021ad4c64a08731f6  go1.21.0.windows-amd64.zip
 41342f5a0f8c083b14c68bde738ddcd313a4f53a5854bfdfab47f0e88247de12  go1.21.0.windows-arm64.zip
 
-
+# https://github.com/golangci/golangci-lint/releases
 fba08acc4027f69f07cef48fbff70b8a7ecdfaa1c2aba9ad3fb31d60d9f5d4bc  golangci-lint-1.51.1-darwin-amd64.tar.gz
 75b8f0ff3a4e68147156be4161a49d4576f1be37a0b506473f8c482140c1e7f2  golangci-lint-1.51.1-darwin-arm64.tar.gz
 e06b3459aaed356e1667580be00b05f41f3b2e29685d12cdee571c23e1edb414  golangci-lint-1.51.1-freebsd-386.tar.gz
@@ -42,8 +46,6 @@ c4f58b7e227b9fd41f0e9310dc83f4a4e7d026598e2f6e95b78761081a6d9bd2  golangci-lint-
 eb57f9bcb56646f2e3d6ccaf02ec227815fb05077b2e0b1bf9e755805acdc2b9  golangci-lint-1.51.1-windows-arm64.zip
 bce02f7232723cb727755ee11f168a700a00896a25d37f87c4b173bce55596b4  golangci-lint-1.51.1-windows-armv6.zip
 cf6403f84707ce8c98664736772271bc8874f2e760c2fd0f00cf3e85963507e9  golangci-lint-1.51.1-windows-armv7.zip
-
-f05e56f5eb736209fb7424ab2f444a6ef55e356220ac72960ff4d3a33a63b051  fixtures.tar.gz
 
 # This is the builder on PPA that will build Go itself (inception-y), don't modify!
 d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz
