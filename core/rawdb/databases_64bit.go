@@ -28,8 +28,8 @@ const PebbleEnabled = true
 
 // NewPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly)
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly, ephemeral bool) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
 	if err != nil {
 		return nil, err
 	}
