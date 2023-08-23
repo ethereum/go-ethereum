@@ -305,12 +305,13 @@ func doTest(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 
-	downloadSpecTestFixtures(*cachedir)
+	// Get test fixtures.
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	downloadSpecTestFixtures(csdb, *cachedir)
 
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
 	if *dlgo {
-		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 	gotest := tc.Go("test")
@@ -343,8 +344,7 @@ func doTest(cmdline []string) {
 }
 
 // downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
-func downloadSpecTestFixtures(cachedir string) string {
-	csdb := build.MustLoadChecksums("build/checksums.txt")
+func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	ext := ".tar.gz"
 	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
 	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
