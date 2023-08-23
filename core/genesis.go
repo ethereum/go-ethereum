@@ -167,21 +167,11 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 			return err
 		}
 	}
-
-	if err := writeGenesisStateSpec(db, blockhash, *ga); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// writeGenesisStateSpec marshals the genesis state specification and persist to database.
-func writeGenesisStateSpec(db ethdb.Database, blockhash common.Hash, alloc GenesisAlloc) error {
-	blob, err := json.Marshal(alloc)
+	// Marshal the genesis state specification and persist.
+	blob, err := json.Marshal(ga)
 	if err != nil {
 		return err
 	}
-
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
 	return nil
 }
@@ -405,19 +395,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
 		return newcfg, stored, compatErr
 	}
-
 	// Don't overwrite if the old is identical to the new
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}
-
-	// We only write genesis alloc if the `genesis` is non-nil, which happen on blockchain boot and custom network.
-	if genesis != nil && !rawdb.HasGenesisStateSpec(db, stored) {
-		if err := writeGenesisStateSpec(db, stored, genesis.Alloc); err != nil {
-			return newcfg, stored, fmt.Errorf("write genesis state spec: %w", err)
-		}
-	}
-
 	return newcfg, stored, nil
 }
 
@@ -549,7 +530,6 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 	if err := g.Alloc.flush(db, triedb, block.Hash(), bcLogger); err != nil {
 		return nil, err
 	}
-
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
