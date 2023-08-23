@@ -214,8 +214,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 	}
 
-	// Capture the tracer start/end events in debug mode
-	if evm.Config.Debug {
+	// Capture the tracer start/end events in debug mode. External contracts handle tracing themselves
+	if evm.Config.Debug && !isExternal {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 			defer func(startGas uint64, startTime time.Time) { // Lazy evaluation of the parameters
@@ -386,8 +386,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// future scenarios
 	evm.StateDB.AddBalance(addr, big0)
 
+	isExternal := evm.isExternalContract(addr)
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.Config.Debug {
+	if evm.Config.Debug && !isExternal {
 		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
@@ -396,7 +397,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
-	} else if evm.isExternalContract(addr) {
+	} else if isExternal {
 		ret, gas, err = evm.invokeExternalCallback(caller.Address(), addr, common.Big0, input, gas, true)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
