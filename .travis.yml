@@ -116,7 +116,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       if: type = pull_request
@@ -127,7 +127,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
@@ -136,7 +136,7 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA nightly uploads
     - stage: build
@@ -185,5 +185,5 @@ jobs:
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test  -race $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES
 
