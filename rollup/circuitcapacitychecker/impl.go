@@ -87,16 +87,12 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 		log.Error("fail to apply_tx in CircuitCapacityChecker", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash, "err", result.Error)
 		return nil, ErrUnknown
 	}
-	if result.TxRowUsage == nil || result.AccRowUsage == nil {
+	if result.AccRowUsage == nil {
 		log.Error("fail to apply_tx in CircuitCapacityChecker",
 			"id", ccc.ID, "TxHash", traces.Transactions[0].TxHash,
-			"result.TxRowUsage==nil", result.TxRowUsage == nil,
 			"result.AccRowUsage == nil", result.AccRowUsage == nil,
-			"err", "TxRowUsage or AccRowUsage is empty unexpectedly")
+			"err", "AccRowUsage is empty unexpectedly")
 		return nil, ErrUnknown
-	}
-	if !result.TxRowUsage.IsOk {
-		return nil, ErrTxRowConsumptionOverflow
 	}
 	if !result.AccRowUsage.IsOk {
 		return nil, ErrBlockRowConsumptionOverflow

@@ -14,7 +14,6 @@ pub mod checker {
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct RowUsageResult {
         pub acc_row_usage: Option<RowUsage>,
-        pub tx_row_usage: Option<RowUsage>,
         pub error: Option<String>,
     }
 
@@ -59,7 +58,11 @@ pub mod checker {
     #[no_mangle]
     pub unsafe extern "C" fn apply_tx(id: u64, tx_traces: *const c_char) -> *const c_char {
         let result = panic::catch_unwind(|| {
-            log::debug!("ccc apply_tx raw input, id: {:?}, tx_traces: {:?}", id, c_char_to_str(tx_traces));
+            log::debug!(
+                "ccc apply_tx raw input, id: {:?}, tx_traces: {:?}",
+                id,
+                c_char_to_str(tx_traces)
+            );
             let tx_traces_vec = c_char_to_vec(tx_traces);
             let traces = serde_json::from_slice::<BlockTrace>(&tx_traces_vec)
                 .unwrap_or_else(|_| panic!("id: {id:?}, fail to deserialize tx_traces"));
@@ -88,22 +91,19 @@ pub mod checker {
                 })
         });
         let r = match result {
-            Ok((acc_row_usage, tx_row_usage)) => {
+            Ok(acc_row_usage) => {
                 log::debug!(
-                    "id: {:?}, acc_row_usage: {:?}, tx_row_usage: {:?}",
+                    "id: {:?}, acc_row_usage: {:?}",
                     id,
                     acc_row_usage.row_number,
-                    tx_row_usage.row_number
                 );
                 RowUsageResult {
                     acc_row_usage: Some(acc_row_usage),
-                    tx_row_usage: Some(tx_row_usage),
                     error: None,
                 }
             }
             Err(e) => RowUsageResult {
                 acc_row_usage: None,
-                tx_row_usage: None,
                 error: Some(format!("{e:?}")),
             },
         };
@@ -114,7 +114,11 @@ pub mod checker {
     #[no_mangle]
     pub unsafe extern "C" fn apply_block(id: u64, block_trace: *const c_char) -> *const c_char {
         let result = panic::catch_unwind(|| {
-            log::debug!("ccc apply_block raw input, id: {:?}, block_trace: {:?}", id, c_char_to_str(block_trace));
+            log::debug!(
+                "ccc apply_block raw input, id: {:?}, block_trace: {:?}",
+                id,
+                c_char_to_str(block_trace)
+            );
             let block_trace = c_char_to_vec(block_trace);
             let traces = serde_json::from_slice::<BlockTrace>(&block_trace)
                 .unwrap_or_else(|_| panic!("id: {id:?}, fail to deserialize block_trace"));
@@ -136,22 +140,19 @@ pub mod checker {
                 })
         });
         let r = match result {
-            Ok((acc_row_usage, tx_row_usage)) => {
+            Ok(acc_row_usage) => {
                 log::debug!(
-                    "id: {:?}, acc_row_usage: {:?}, tx_row_usage: {:?}",
+                    "id: {:?}, acc_row_usage: {:?}",
                     id,
                     acc_row_usage.row_number,
-                    tx_row_usage.row_number
                 );
                 RowUsageResult {
                     acc_row_usage: Some(acc_row_usage),
-                    tx_row_usage: Some(tx_row_usage),
                     error: None,
                 }
             }
             Err(e) => RowUsageResult {
                 acc_row_usage: None,
-                tx_row_usage: None,
                 error: Some(format!("{e:?}")),
             },
         };

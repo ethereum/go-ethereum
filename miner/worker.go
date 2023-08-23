@@ -1068,40 +1068,38 @@ loop:
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
 
+		// Circuit capacity check
 		case errors.Is(err, circuitcapacitychecker.ErrBlockRowConsumptionOverflow):
-			// Circuit capacity check: circuit capacity limit reached in a block,
-			// don't pop or shift, just quit the loop immediately;
-			// though it might still be possible to add some "smaller" txs,
-			// but it's a trade-off between tracing overhead & block usage rate
-			log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash().String())
-			circuitCapacityReached = true
-			break loop
+			if w.current.tcount >= 1 {
+				// 1. Circuit capacity limit reached in a block, and it's not the first tx:
+				// don't pop or shift, just quit the loop immediately;
+				// though it might still be possible to add some "smaller" txs,
+				// but it's a trade-off between tracing overhead & block usage rate
+				log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash().String())
+				circuitCapacityReached = true
+				break loop
+			} else {
+				// 2. Circuit capacity limit reached in a block, and it's the first tx: skip the tx
+				log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash().String())
 
-		case (errors.Is(err, circuitcapacitychecker.ErrTxRowConsumptionOverflow) && tx.IsL1MessageTx()):
-			// Circuit capacity check: L1MessageTx row consumption too high, shift to the next from the account,
-			// because we shouldn't skip the entire txs from the same account.
-			// This is also useful for skipping "problematic" L1MessageTxs.
-			queueIndex := tx.AsL1MessageTx().QueueIndex
-			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash().String(), "queueIndex", queueIndex)
-			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "row consumption overflow")
-			w.current.nextL1MsgIndex = queueIndex + 1
+				if tx.IsL1MessageTx() {
+					// Skip L1 message transaction,
+					// shift to the next from the account because we shouldn't skip the entire txs from the same account
+					txs.Shift()
 
-			// after `ErrTxRowConsumptionOverflow`, ccc might not revert updates
-			// associated with this transaction so we cannot pack more transactions.
-			// TODO: fix this in ccc and change these lines back to `txs.Shift()`
-			circuitCapacityReached = true
-			break loop
+					queueIndex := tx.AsL1MessageTx().QueueIndex
+					log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "row consumption overflow")
+					w.current.nextL1MsgIndex = queueIndex + 1
+				} else {
+					// Skip L2 transaction and all other transactions from the same sender account
+					txs.Pop()
+				}
 
-		case (errors.Is(err, circuitcapacitychecker.ErrTxRowConsumptionOverflow) && !tx.IsL1MessageTx()):
-			// Circuit capacity check: L2MessageTx row consumption too high, skip the account.
-			// This is also useful for skipping "problematic" L2MessageTxs.
-			log.Trace("Circuit capacity limit reached for a single tx", "tx", tx.Hash().String())
-
-			// after `ErrTxRowConsumptionOverflow`, ccc might not revert updates
-			// associated with this transaction so we cannot pack more transactions.
-			// TODO: fix this in ccc and change these lines back to `txs.Pop()`
-			circuitCapacityReached = true
-			break loop
+				// Reset ccc so that we can process other transactions for this block
+				w.circuitCapacityChecker.Reset()
+				log.Trace("Worker reset ccc", "id", w.circuitCapacityChecker.ID)
+				circuitCapacityReached = false
+			}
 
 		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && tx.IsL1MessageTx()):
 			// Circuit capacity check: unknown circuit capacity checker error for L1MessageTx,
@@ -1111,9 +1109,9 @@ loop:
 			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "unknown row consumption error")
 			w.current.nextL1MsgIndex = queueIndex + 1
 
-			// after `ErrUnknown`, ccc might not revert updates associated
-			// with this transaction so we cannot pack more transactions.
-			// TODO: fix this in ccc and change these lines back to `txs.Shift()`
+			// Normally we would do `txs.Shift()` here.
+			// However, after `ErrUnknown`, ccc might remain in an
+			// inconsistent state, so we cannot pack more transactions.
 			circuitCapacityReached = true
 			break loop
 
@@ -1121,9 +1119,9 @@ loop:
 			// Circuit capacity check: unknown circuit capacity checker error for L2MessageTx, skip the account
 			log.Trace("Unknown circuit capacity checker error for L2MessageTx", "tx", tx.Hash().String())
 
-			// after `ErrUnknown`, ccc might not revert updates associated
-			// with this transaction so we cannot pack more transactions.
-			// TODO: fix this in ccc and change these lines back to `txs.Pop()`
+			// Normally we would do `txs.Pop()` here.
+			// However, after `ErrUnknown`, ccc might remain in an
+			// inconsistent state, so we cannot pack more transactions.
 			circuitCapacityReached = true
 			break loop
 
