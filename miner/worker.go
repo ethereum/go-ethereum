@@ -148,13 +148,12 @@ type newWorkReq struct {
 	timestamp int64
 }
 
-// newPayloadResult represents a result struct corresponds to payload generation.
+// newPayloadResult is the result of payload generation.
 type newPayloadResult struct {
-	err   error
-	block *types.Block
-	fees  *big.Int
-
-	sidecars []*types.BlobTxSidecar
+	err      error
+	block    *types.Block
+	fees     *big.Int               // total block fees
+	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -525,13 +524,7 @@ func (w *worker) mainLoop() {
 			w.commitWork(req.interrupt, req.timestamp)
 
 		case req := <-w.getWorkCh:
-			block, fees, sidecars, err := w.generateWork(req.params)
-			req.result <- &newPayloadResult{
-				err:      err,
-				block:    block,
-				fees:     fees,
-				sidecars: sidecars,
-			}
+			req.result <- w.generateWork(req.params)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -977,10 +970,10 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, []*types.BlobTxSidecar, error) {
+func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	work, err := w.prepareWork(params)
 	if err != nil {
-		return nil, nil, nil, err
+		return &newPayloadResult{err: err}
 	}
 	defer work.discard()
 
@@ -998,9 +991,13 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, [
 	}
 	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, nil, work.receipts, params.withdrawals)
 	if err != nil {
-		return nil, nil, nil, err
+		return &newPayloadResult{err: err}
 	}
-	return block, totalFees(block, work.receipts), work.sidecars, nil
+	return &newPayloadResult{
+		block:    block,
+		fees:     totalFees(block, work.receipts),
+		sidecars: work.sidecars,
+	}
 }
 
 // commitWork generates several new sealing tasks based on the parent block
