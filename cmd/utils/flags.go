@@ -2073,10 +2073,10 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
 // or fallback to write mode if the database is not initialized.
 func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
-	// If datadir doesn't exist we need to open db in write-mode
-	// so database engine can create files.
+	// If the database doesn't exist we need to open it in write-mode to allow
+	// the engine to create files.
 	readonly := true
-	if !common.FileExist(stack.ResolvePath("chaindata")) {
+	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
 		readonly = false
 	}
 	return MakeChainDatabase(ctx, stack, readonly)
