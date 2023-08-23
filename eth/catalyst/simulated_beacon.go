@@ -153,7 +153,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		return fmt.Errorf("error calling forkchoice update: %v", err)
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID)
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
 		return fmt.Errorf("error retrieving payload: %v", err)
 	}
