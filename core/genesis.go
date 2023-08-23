@@ -176,14 +176,14 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	return nil
 }
 
-func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc GenesisAlloc, found bool, err error) {
+func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc GenesisAlloc, err error) {
 	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
-			return nil, true, err
+			return nil, err
 		}
 
-		return alloc, true, nil
+		return alloc, nil
 	}
 
 	// Genesis allocation is missing and there are several possibilities:
@@ -201,22 +201,22 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc GenesisAll
 		genesis = DefaultSepoliaGenesisBlock()
 	}
 	if genesis != nil {
-		return genesis.Alloc, true, nil
+		return genesis.Alloc, nil
 	}
 
-	return nil, false, nil
+	return nil, nil
 }
 
 // CommitGenesisState loads the stored genesis state with the given block
 // hash and commits it into the provided trie database.
 func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
-	alloc, found, err := getGenesisState(db, blockhash)
+	alloc, err := getGenesisState(db, blockhash)
 	if err != nil {
 		return err
 	}
 
-	if !found {
-		return nil
+	if alloc == nil {
+		return errors.New("not found")
 	}
 
 	return alloc.flush(db, triedb, blockhash, nil)
