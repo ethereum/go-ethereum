@@ -1049,6 +1049,9 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 		size += common.StorageSize(len(path))
 	})
 	for iter.Next() {
+		if iter.Error() != nil {
+			return false, 0, nil, nil, err
+		}
 		if size > storageDeleteLimit {
 			return true, size, nil, nil, nil
 		}
@@ -1059,9 +1062,6 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 		if err := stack.Update(iter.Hash().Bytes(), slot); err != nil {
 			return false, 0, nil, nil, err
 		}
-	}
-	if iter.Error() != nil {
-		return false, 0, nil, nil, err
 	}
 	if stack.Hash() != root {
 		return false, 0, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
