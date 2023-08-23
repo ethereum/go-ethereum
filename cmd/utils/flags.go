@@ -501,6 +501,11 @@ var (
 		Value:    ethconfig.Defaults.Miner.NewPayloadTimeout,
 		Category: flags.MinerCategory,
 	}
+	MinerMevBoostUrl = &cli.StringFlag{
+		Name:     "miner.mevboost-url",
+		Usage:    "Specify the url of the mevboost service",
+		Category: flags.MinerCategory,
+	}
 
 	// Account settings
 	UnlockedAccountFlag = &cli.StringFlag{
@@ -1561,6 +1566,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
+	}
+	if ctx.IsSet(MinerMevBoostUrl.Name) {
+		cfg.MevBoostUrl = ctx.String(MinerMevBoostUrl.Name)
 	}
 }
 

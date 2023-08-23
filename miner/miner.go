@@ -53,6 +53,7 @@ type Config struct {
 	Recommit  time.Duration  // The time interval for miner to re-create mining work.
 
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
+	MevBoostUrl       string        // URL to mev boost.
 }
 
 // DefaultConfig contains default settings for miner.
