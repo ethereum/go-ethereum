@@ -85,7 +85,7 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 }
 
 // update updates the full-block with latest built version.
-func (payload *Payload) update(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, elapsed time.Duration) {
+func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -97,15 +97,23 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, sidecars []*ty
 	// Ensure the newly provided full block has a higher transaction fee.
 	// In post-merge stage, there is no uncle reward anymore and transaction
 	// fee(apart from the mev revenue) is the only indicator for comparison.
-	if payload.full == nil || fees.Cmp(payload.fullFees) > 0 {
-		payload.full = block
-		payload.fullFees = fees
-		payload.sidecars = sidecars
+	if payload.full == nil || r.fees.Cmp(payload.fullFees) > 0 {
+		payload.full = r.block
+		payload.fullFees = r.fees
+		payload.sidecars = r.sidecars
 
-		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
-		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(), "hash", block.Hash(),
-			"txs", len(block.Transactions()), "withdrawals", len(block.Withdrawals()), "gas", block.GasUsed(),
-			"fees", feesInEther, "root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
+		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
+		log.Info("Updated payload",
+			"id", payload.id,
+			"number", r.block.NumberU64(),
+			"hash", r.block.Hash(),
+			"txs", len(r.block.Transactions()),
+			"withdrawals", len(r.block.Withdrawals()),
+			"gas", r.block.GasUsed(),
+			"fees", feesInEther,
+			"root", r.block.Root(),
+			"elapsed", common.PrettyDuration(elapsed),
+		)
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
@@ -167,12 +175,12 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
-	empty, _, _, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
-	if err != nil {
-		return nil, err
+	empty := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
+	if empty.err != nil {
+		return nil, empty.err
 	}
 	// Construct a payload object for return.
-	payload := newPayload(empty, args.Id())
+	payload := newPayload(empty.block, args.Id())
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -191,9 +199,9 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			select {
 			case <-timer.C:
 				start := time.Now()
-				block, fees, sidecars, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
-				if err == nil {
-					payload.update(block, fees, sidecars, time.Since(start))
+				r := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
+				if r.err == nil {
+					payload.update(r, time.Since(start))
 				}
 				timer.Reset(w.recommit)
 			case <-payload.stop:
