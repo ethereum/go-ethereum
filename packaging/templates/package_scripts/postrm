@@ -3,6 +3,4 @@
 ###############
 # Remove bor installs
 ##############
-sudo rm -rf /var/lib/bor/config.toml
-sudo rm -rf /lib/systemd/system/bor.service
 sudo systemctl daemon-reload
