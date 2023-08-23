@@ -19,12 +19,11 @@ package tests
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestBlockchain(t *testing.T) {
-	t.Parallel()
-
 	bt := new(testMatcher)
 	// General state tests are 'exported' as blockchain tests, but we can run them natively.
 	// For speedier CI-runs, the line below can be uncommented, so those are skipped.
@@ -49,26 +48,39 @@ func TestBlockchain(t *testing.T) {
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
-	for _, dir := range []string{
-		blockTestDir,
-		executionSpecDir,
-	} {
-		bt.walk(t, dir, func(t *testing.T, name string, test *BlockTest) {
-			if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
-				t.Errorf("test in hash mode without snapshotter failed: %v", err)
-			}
-			if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
-				t.Errorf("test in hash mode with snapshotter failed: %v", err)
-			}
-			if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
-				t.Errorf("test in path mode without snapshotter failed: %v", err)
-			}
-			if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
-				t.Errorf("test in path mode with snapshotter failed: %v", err)
-			}
-		})
-	}
+	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		execBlockTest(t, bt, test)
+	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
 	// which run natively, so there's no reason to run them here.
+}
+
+// TestExecutionSpec runs the test fixtures from execution-spec-tests.
+func TestExecutionSpec(t *testing.T) {
+	if !common.FileExist(executionSpecDir) {
+		t.Skipf("directory %s does not exist", executionSpecDir)
+	}
+	bt := new(testMatcher)
+
+	// skip tests here if needed
+
+	bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
+		execBlockTest(t, bt, test)
+	})
+}
+
+func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
+	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
+		t.Errorf("test in hash mode without snapshotter failed: %v", err)
+	}
+	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
+		t.Errorf("test in hash mode with snapshotter failed: %v", err)
+	}
+	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
+		t.Errorf("test in path mode without snapshotter failed: %v", err)
+	}
+	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
+		t.Errorf("test in path mode with snapshotter failed: %v", err)
+	}
 }
