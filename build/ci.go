@@ -123,12 +123,12 @@ var (
 	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish,
 	//   kinetic
 	debDistroGoBoots = map[string]string{
-		"trusty":  "golang-1.11", // EOL: 04/2024
-		"xenial":  "golang-go",   // EOL: 04/2026
-		"bionic":  "golang-go",   // EOL: 04/2028
-		"focal":   "golang-go",   // EOL: 04/2030
-		"jammy":   "golang-go",   // EOL: 04/2032
-		"lunar":   "golang-go",   // EOL: 01/2024
+		"trusty": "golang-1.11", // EOL: 04/2024
+		"xenial": "golang-go",   // EOL: 04/2026
+		"bionic": "golang-go",   // EOL: 04/2028
+		"focal":  "golang-go",   // EOL: 04/2030
+		"jammy":  "golang-go",   // EOL: 04/2032
+		"lunar":  "golang-go",   // EOL: 01/2024
 	}
 
 	debGoBootPaths = map[string]string{
@@ -148,6 +148,13 @@ var (
 	// we need to switch over to a recursive builder to jumpt across supported
 	// versions.
 	gobootVersion = "1.19.6"
+
+	// This is the version of execution-spec-tests that we are using.
+	// When updating, you must also update build/checksums.txt.
+	executionSpecTestsVersion = "0.2.4"
+
+	// This is where the tests should be unpacked.
+	executionSpecTestsDir = "tests/spec-tests"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -288,17 +295,17 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 
 func doTest(cmdline []string) {
 	var (
-		dlgo         = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch         = flag.String("arch", "", "Run tests for given architecture")
-		cc           = flag.String("cc", "", "Sets C compiler binary")
-		coverage     = flag.Bool("coverage", false, "Whether to record code coverage")
-		verbose      = flag.Bool("v", false, "Whether to log verbosely")
-		race         = flag.Bool("race", false, "Execute the race detector")
-		stateTestDir = "tests/spec-tests"
+		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch     = flag.String("arch", "", "Run tests for given architecture")
+		cc       = flag.String("cc", "", "Sets C compiler binary")
+		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
+		verbose  = flag.Bool("v", false, "Whether to log verbosely")
+		race     = flag.Bool("race", false, "Execute the race detector")
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching downloads")
 	)
 	flag.CommandLine.Parse(cmdline)
 
-	downloadSpecTestFixtures(stateTestDir)
+	downloadSpecTestFixtures(*cachedir)
 
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
@@ -335,19 +342,17 @@ func doTest(cmdline []string) {
 	build.MustRun(gotest)
 }
 
+// downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
 func downloadSpecTestFixtures(cachedir string) string {
-	// Download the execution-spec-tests
-	const version = "0.2.4"
-
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	ext := ".tar.gz"
 	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
-	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", version, base, ext)
+	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
 		log.Fatal(err)
 	}
-	if err := build.ExtractArchive(archivePath, cachedir); err != nil {
+	if err := build.ExtractArchive(archivePath, executionSpecTestsDir); err != nil {
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
