@@ -86,18 +86,27 @@ nonce, err := cl.NonceAt(context.Background(), addr, big.NewInt(14000000))
 
 ### Querying past events {#querying-past-events}
 
-Contracts emit events during execution which can be queried from the client. The parameters for the event one is interested in have to be filled out in the `ethereum.FilterQuery` object. This includes which event topics are of interested, from which contracts and during which range of blocks. The example below queries `Transfer` events of all ERC-20 tokens for the last 10 blocks:
+Contracts emit events during execution which can be queried from the client. The parameters for the event one is interested in have to be filled out in the `ethereum.FilterQuery` object. This includes which event topics are of interest, from which contracts and during which range of blocks. The example below queries `Transfer` events of all ERC-20 tokens for the last 10 blocks:
 
 ```go
-blockNum, err := cl.BlockNumber(context.Background())
+blockNumber, err := cl.BlockNumber(context.Background())
 if err != nil {
-    return err
+	fmt.Println("Failed to retrieve block number:", err)
+	return
 }
+blockNumberBig := big.NewInt(int64(blockNumber))
+
+eventSignatureBytes := []byte("Transfer(address,address,uint256)")
+eventSignaturehash := crypto.Keccak256Hash(eventSignatureBytes)
+
 q := ethereum.FilterQuery{
-    FromBlock: new(big.Int).Sub(blockNum, big.NewInt(10)),
-    ToBlock: blockNum,
-    Topics: [][]common.Hash{common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")},
+	FromBlock: new(big.Int).Sub(blockNumberBig, big.NewInt(10)),
+	ToBlock:   blockNumberBig,
+	Topics: [][]common.Hash{
+		{eventSignaturehash},
+	},
 }
+
 logs, err := cl.FilterLogs(context.Background(), q)
 if err != nil {
     return err
