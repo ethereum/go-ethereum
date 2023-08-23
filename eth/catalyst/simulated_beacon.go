@@ -144,6 +144,16 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
+	// Reset to CurrentBlock incase the chain is rewinded
+	block := c.eth.BlockChain().CurrentBlock()
+	if c.curForkchoiceState.HeadBlockHash != block.Hash() {
+		c.curForkchoiceState = engine.ForkchoiceStateV1{
+			HeadBlockHash:      block.Hash(),
+			SafeBlockHash:      block.Hash(),
+			FinalizedBlockHash: block.Hash(),
+		}
+	}
+
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
 		SuggestedFeeRecipient: feeRecipient,
@@ -211,7 +221,7 @@ func (c *SimulatedBeacon) loopOnDemand() {
 	}
 }
 
-// loopOnDemand runs the block production loop for non-zero period configuration
+// loop runs the block production loop for non-zero period configuration
 func (c *SimulatedBeacon) loop() {
 	timer := time.NewTimer(0)
 	for {
