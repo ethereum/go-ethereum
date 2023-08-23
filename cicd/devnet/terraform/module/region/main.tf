@@ -2,18 +2,16 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.16"
+      version = "~> 5.13.1"
     }
   }
-
-  required_version = ">= 1.2.0"
 }
 
 resource "aws_vpc" "devnet_vpc" {
   cidr_block = "10.0.0.0/16"
   instance_tenancy = "default"
   enable_dns_hostnames = true
-  
+
   tags = {
     Name = "TfDevnetVpc"
   }

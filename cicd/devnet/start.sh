@@ -60,7 +60,7 @@ XDC --ethstats ${netstats} --gcmode=full \
 --datadir /work/xdcchain --networkid 551 \
 -port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
 --rpcport 8545 \
---rpcapi admin,db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
+--rpcapi admin,db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
 --rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
 --gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
 --periodicprofile --debugdatadir /work/xdcchain \
