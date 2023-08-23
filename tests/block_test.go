@@ -63,7 +63,9 @@ func TestExecutionSpec(t *testing.T) {
 	}
 	bt := new(testMatcher)
 
-	// skip tests here if needed
+	// cancun tests are not complete yet
+	bt.skipLoad(`^cancun/`)
+	bt.skipLoad(`-fork=Cancun`)
 
 	bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)

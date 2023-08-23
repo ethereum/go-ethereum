@@ -151,7 +151,7 @@ var (
 
 	// This is the version of execution-spec-tests that we are using.
 	// When updating, you must also update build/checksums.txt.
-	executionSpecTestsVersion = "0.2.4"
+	executionSpecTestsVersion = "1.0.2"
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"

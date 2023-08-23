@@ -1,7 +1,7 @@
 # This file contains sha256 checksums of optional build dependencies.
 
 # https://github.com/ethereum/execution-spec-tests/releases
-f05e56f5eb736209fb7424ab2f444a6ef55e356220ac72960ff4d3a33a63b051  fixtures.tar.gz
+24bac679f3a2d8240d8e08e7f6a70b70c2dabf673317d924cf1d1887b9fe1f81  fixtures.tar.gz
 
 # https://go.dev/dl/
 818d46ede85682dd551ad378ef37a4d247006f12ec59b5b755601d2ce114369a  go1.21.0.src.tar.gz
