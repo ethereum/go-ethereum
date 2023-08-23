@@ -895,13 +895,13 @@ func TestLargeL1MessageSkipPayloadCheck(t *testing.T) {
 		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}}, // different sender
 	}
 
-	l1MessageTest(t, msgs, false, func(blockNum int, block *types.Block, db ethdb.Database, w *worker) bool {
+	l1MessageTest(t, msgs, true, func(blockNum int, block *types.Block, db ethdb.Database, w *worker) bool {
 		switch blockNum {
 		case 0:
 			return false
 		case 1:
-			// include #0, #1 and #2
-			assert.Equal(3, len(block.Transactions()))
+			// include #0, #1 and #2 + one L2 tx
+			assert.Equal(4, len(block.Transactions()))
 
 			assert.True(block.Transactions()[0].IsL1MessageTx())
 			assert.Equal(uint64(0), block.Transactions()[0].AsL1MessageTx().QueueIndex)
@@ -909,6 +909,10 @@ func TestLargeL1MessageSkipPayloadCheck(t *testing.T) {
 			assert.Equal(uint64(1), block.Transactions()[1].AsL1MessageTx().QueueIndex)
 			assert.True(block.Transactions()[2].IsL1MessageTx())
 			assert.Equal(uint64(2), block.Transactions()[2].AsL1MessageTx().QueueIndex)
+
+			// since L1 messages do not count against the block size limit,
+			// we can include additional L2 transaction
+			assert.False(block.Transactions()[3].IsL1MessageTx())
 
 			// db is updated correctly
 			queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())

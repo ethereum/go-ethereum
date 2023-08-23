@@ -1003,7 +1003,7 @@ loop:
 			continue
 		}
 		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
+		// during transaction acceptance in the transaction pool.
 		//
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(w.current.signer, tx)
@@ -1050,15 +1050,18 @@ loop:
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
+			w.current.tcount++
+			txs.Shift()
+
 			if tx.IsL1MessageTx() {
 				queueIndex := tx.AsL1MessageTx().QueueIndex
 				log.Debug("Including L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String())
 				w.current.l1TxCount++
 				w.current.nextL1MsgIndex = queueIndex + 1
+			} else {
+				// only consider block size limit for L2 transactions
+				w.current.blockSize += tx.Size()
 			}
-			w.current.tcount++
-			w.current.blockSize += tx.Size()
-			txs.Shift()
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account

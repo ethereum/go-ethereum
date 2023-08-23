@@ -3353,6 +3353,8 @@ func TestL1MessageValidationFailure(t *testing.T) {
 	// initialize genesis
 	config := params.AllEthashProtocolChanges
 	config.Scroll.L1Config.NumL1MessagesPerBlock = 1
+	maxPayload := 1024
+	config.Scroll.MaxTxPayloadBytesPerBlock = &maxPayload
 
 	genspec := &Genesis{
 		Config: config,
@@ -3365,7 +3367,10 @@ func TestL1MessageValidationFailure(t *testing.T) {
 
 	// initialize L1 message DB
 	msgs := []types.L1MessageTx{
-		{QueueIndex: 0, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		// large L1 message, should not count against block payload limit
+		{QueueIndex: 0, Gas: 25100, To: &common.Address{1}, Data: make([]byte, 1025), Sender: common.Address{2}},
+
+		// normal L1 messages
 		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
 		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
 	}
