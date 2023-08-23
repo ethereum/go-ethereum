@@ -282,7 +282,7 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx)
+	rlp.DecodeBytes(res.Raw, parsedTx)
 
 	//The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
@@ -308,7 +308,7 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx2 := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx2)
+	rlp.DecodeBytes(res.Raw, parsedTx2)
 
 	//The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {
