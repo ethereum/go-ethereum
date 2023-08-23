@@ -1060,6 +1060,9 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 			return false, 0, nil, nil, err
 		}
 	}
+	if iter.Error() != nil {
+		return false, 0, nil, nil, err
+	}
 	if stack.Hash() != root {
 		return false, 0, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
