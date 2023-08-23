@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/rand"
 	"math/big"
+	"net"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -95,7 +96,10 @@ func TestAttachWelcome(t *testing.T) {
 		ipc = filepath.Join(t.TempDir(), "geth.ipc")
 	}
 	// And HTTP + WS attachment
-	p := trulyRandInt(1024, 65533) // Yeah, sometimes this will fail, sorry :P
+	p, err := getFreePort()
+	if err != nil {
+		p = trulyRandInt(1024, 65533) // Yeah, sometimes this will fail, sorry :P
+	}
 	httpPort = strconv.Itoa(p)
 	wsPort = strconv.Itoa(p + 1)
 	geth := runMinimalGeth(t, "--miner.etherbase", "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182",
@@ -159,4 +163,22 @@ To exit, press ctrl-d or type exit
 func trulyRandInt(lo, hi int) int {
 	num, _ := rand.Int(rand.Reader, big.NewInt(int64(hi-lo)))
 	return int(num.Int64()) + lo
+}
+
+// getFreePort asks the kernel for a free open TCP port that is ready to use.
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
+	return port, nil
 }
