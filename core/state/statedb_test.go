@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
@@ -508,7 +509,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 			forEachStorage(state, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
-			forEachStorage(checkState, addr, func(key, value common.Hash) bool {
+			forEachStorage(checkstate, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 		}
