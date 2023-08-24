@@ -17,13 +17,16 @@
 package miner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -205,6 +208,9 @@ type worker struct {
 	snapshotReceipts types.Receipts
 	snapshotState    *state.StateDB
 
+	mevSnapshotBlockMu sync.RWMutex // The lock used to protect the mevSnapshotBlock below
+	mevSnapshotBlock   *types.Block
+
 	// atomic status counters
 	running atomic.Bool  // The indicator whether the consensus engine is running or not.
 	newTxs  atomic.Int32 // New arrival transaction count since last sealing work submitting.
@@ -278,11 +284,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	}
 	worker.newpayloadTimeout = newpayloadTimeout
 
-	worker.wg.Add(4)
+	worker.wg.Add(5)
 	go worker.mainLoop()
 	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
+
+	// loop for requesting mev-boost for new block.
+	go worker.mevBoostLoop(worker.config.MevBoostRequestInterval)
 
 	// Submit first work to initialize pending state.
 	if init {
@@ -491,6 +500,58 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				w.resubmitHook(minRecommit, recommit)
 			}
 
+		case <-w.exitCh:
+			return
+		}
+	}
+}
+
+type ExecutionPayloadResponse struct {
+	Version string                `json:"version"`
+	Data    engine.ExecutableData `json:"data"`
+}
+
+func (res *ExecutionPayloadResponse) getBlock() (*types.Block, error) {
+	return engine.ExecutableDataToBlock(res.Data, nil)
+}
+
+// mevBoostLoop queries mev-boost instance for new block.
+func (w *worker) mevBoostLoop(interval time.Duration) {
+	defer w.wg.Done()
+
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // discard the initial tick
+
+	request := func(slot *big.Int, parent_hash common.Hash) {
+		// /eth/v1/builder/block/:slot/:parent_hash
+		url := fmt.Sprintf("%s/eth/v1/builder/block/%s/%s",
+			w.config.MevBoostUrl, slot.String(), parent_hash.String())
+		res, err := http.Get(url)
+		if err != nil {
+			log.Error("Failed to get mev-boost response", "err", err)
+			return
+		}
+		defer res.Body.Close()
+		var response ExecutionPayloadResponse
+		json.NewDecoder(res.Body).Decode(&response)
+		block, err := response.getBlock()
+		if err != nil {
+			log.Error("Failed to parse payload", "err", err)
+			return
+		}
+		w.updateMevSnapshot(block)
+		timer.Reset(interval)
+	}
+
+	for {
+		select {
+		case <-timer.C:
+			if w.isRunning() {
+				// find the parent
+				parent := w.chain.CurrentBlock()
+				go request(parent.Number, parent.Hash())
+			}
 		case <-w.exitCh:
 			return
 		}
@@ -732,6 +793,15 @@ func (w *worker) updateSnapshot(env *environment) {
 	)
 	w.snapshotReceipts = copyReceipts(env.receipts)
 	w.snapshotState = env.state.Copy()
+}
+
+func (w *worker) updateMevSnapshot(block *types.Block) {
+	w.mevSnapshotBlockMu.Lock()
+	defer w.mevSnapshotBlockMu.Unlock()
+	// Update snapshot if and only if the new block received has the larger timestamp and higher block number.
+	if w.mevSnapshotBlock.Header().Time < block.Header().Time && w.mevSnapshotBlock.Header().Number.Cmp(block.Header().Number) == -1 {
+		w.mevSnapshotBlock = block
+	}
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
