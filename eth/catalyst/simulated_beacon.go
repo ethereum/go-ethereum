@@ -176,10 +176,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
-		if block := c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength); block != nil {
-			finalizedHash = block.Hash()
+		number := (payload.Number - 1) / devEpochLength * devEpochLength
+		if block := c.eth.BlockChain().GetBlockByNumber(number); block == nil {
+			// Chain rewound after the ForkchoiceUpdate
+			log.Warn("Finalized block not found, skipping", "block", number)
+			return nil
 		} else {
-			finalizedHash = payload.BlockHash
+			finalizedHash = block.Hash()
 		}
 	}
 
