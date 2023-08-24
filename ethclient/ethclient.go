@@ -54,6 +54,11 @@ func NewClient(c *rpc.Client) *Client {
 	return &Client{c}
 }
 
+// SetHeader expose the function, in able to set http header.
+func (ec *Client) SetHeader(key, value string) {
+	ec.c.SetHeader(key, value)
+}
+
 func (ec *Client) Close() {
 	ec.c.Close()
 }

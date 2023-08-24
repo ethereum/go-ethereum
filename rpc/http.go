@@ -18,6 +18,8 @@ package rpc
 
 import (
 	"bytes"
+	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,6 +29,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -198,7 +201,9 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 			Body:       body,
 		}
 	}
-	return resp.Body, nil
+
+	// if encoding is set use it.
+	return newDecodeCompression(resp.Header.Get("Content-Encoding"), resp.Body)
 }
 
 // httpServerConn turns a HTTP connection into a Conn.
@@ -206,6 +211,28 @@ type httpServerConn struct {
 	io.Reader
 	io.Writer
 	r *http.Request
+}
+
+func newDecodeCompression(decoding string, rc io.ReadCloser) (io.ReadCloser, error) {
+	tps := strings.Split(strings.TrimSpace(strings.ToLower(decoding)), ",")
+	var res io.ReadCloser
+	switch tps[0] {
+	case "gzip":
+		gz, err := gzip.NewReader(rc)
+		if err != nil {
+			return nil, err
+		}
+		res = gz
+	case "deflate":
+		zl, err := zlib.NewReader(rc)
+		if err != nil {
+			return nil, err
+		}
+		res = zl
+	default:
+		res = rc
+	}
+	return res, nil
 }
 
 func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
