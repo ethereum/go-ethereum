@@ -18,7 +18,6 @@ package catalyst
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -156,15 +155,15 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		Withdrawals:           withdrawals,
 	})
 	if err != nil {
-		return fmt.Errorf("error calling forkchoice update: %v", err)
+		return err
 	}
 	if fcResponse == engine.STATUS_SYNCING {
-		return engine.InvalidForkChoiceState
+		return errors.New("chain rewind prevented invocation of payload creation")
 	}
 
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
-		return fmt.Errorf("error retrieving payload: %v", err)
+		return err
 	}
 	payload := envelope.ExecutionPayload
 
@@ -173,9 +172,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		finalizedHash = payload.BlockHash
 	} else {
 		if fh := c.finalizedBlockHash(payload.Number); fh == nil {
-			// Chain rewound after the ForkchoiceUpdate
-			log.Warn("Finalized block not found, skipping", "block", payload.Number)
-			return nil
+			return errors.New("chain rewind interrupted calculation of finalized block hash")
 		} else {
 			finalizedHash = *fh
 		}
@@ -183,12 +180,12 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 
 	// Mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
-		return fmt.Errorf("failed to mark payload as canonical: %v", err)
+		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
-		return fmt.Errorf("failed to mark block as canonical: %v", err)
+		return err
 	}
 	c.lastBlockTime = payload.Timestamp
 	return nil
@@ -209,14 +206,12 @@ func (c *SimulatedBeacon) loopOnDemand() {
 		case w := <-c.withdrawals.pending:
 			withdrawals := append(c.withdrawals.gatherPending(9), w)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("error performing sealing work", "err", err)
 			}
 		case <-newTxs:
 			withdrawals := c.withdrawals.gatherPending(10)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("error performing sealing work", "err", err)
 			}
 		}
 	}
@@ -232,10 +227,10 @@ func (c *SimulatedBeacon) loop() {
 		case <-timer.C:
 			withdrawals := c.withdrawals.gatherPending(10)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("Error performing sealing work", "err", err)
+			} else {
+				timer.Reset(time.Second * time.Duration(c.period))
 			}
-			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
 }
