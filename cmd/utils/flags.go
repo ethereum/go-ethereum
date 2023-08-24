@@ -104,6 +104,11 @@ func printHelp(out io.Writer, templ string, data interface{}) {
 	w.Flush()
 }
 
+const (
+	GCModeFull    = "full"
+	GCModeArchive = "archive"
+)
+
 // These are all the command line flags we support.
 // If you add to this list, please remember to include the
 // flag in the appropriate command definition.
@@ -233,7 +238,7 @@ var (
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
-		Value: "full",
+		Value: GCModeArchive,
 	}
 	SnapshotFlag = cli.BoolTFlag{
 		Name:  "snapshot",
@@ -432,7 +437,7 @@ var (
 		Usage: "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
 		Value: 10,
 	}
-	CacheNoPrefetchFlag = cli.BoolFlag{
+	CacheNoPrefetchFlag = cli.BoolTFlag{
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
@@ -1564,7 +1569,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, ScrollAlphaFlag, ScrollSepoliaFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
-	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
+	if ctx.GlobalString(GCModeFlag.Name) == GCModeArchive && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
 		ctx.GlobalSet(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
@@ -1618,11 +1623,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.DatabaseFreezer = ctx.GlobalString(AncientFlag.Name)
 	}
 
-	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
+	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != GCModeFull && gcmode != GCModeArchive {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	if ctx.GlobalIsSet(GCModeFlag.Name) {
-		cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
+		cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == GCModeArchive
 	}
 	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
@@ -1740,6 +1745,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
 		log.Info("Setting flag", "--l1.sync.startblock", "4038000")
 		stack.Config().L1DeploymentBlock = 4038000
+		// double check correct config
+		if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
+			log.Crit("Must use --gcmode=archive")
+		}
+		log.Info("Setting flag", "--gcmode", ctx.GlobalString(GCModeFlag.Name))
+		if !ctx.GlobalBool(CacheNoPrefetchFlag.Name) {
+			log.Crit("Must use --cache.noprefetch")
+		}
+		log.Info("Setting flag", "--cache.noprefetch", ctx.GlobalBool(CacheNoPrefetchFlag.Name))
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -2014,14 +2028,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 			}, nil, false)
 		}
 	}
-	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
+	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != GCModeFull && gcmode != GCModeArchive {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
 		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
 		TrieCleanNoPrefetch: ctx.GlobalBool(CacheNoPrefetchFlag.Name),
 		TrieDirtyLimit:      ethconfig.Defaults.TrieDirtyCache,
-		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == "archive",
+		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == GCModeArchive,
 		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
