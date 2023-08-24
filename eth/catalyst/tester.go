@@ -42,7 +42,7 @@ type FullSyncTester struct {
 // stack for launching and stopping the service controlled by node.
 func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, block *types.Block) (*FullSyncTester, error) {
 	cl := &FullSyncTester{
-		api:    NewConsensusAPI(backend),
+		api:    newConsensusAPIWithoutHeartbeat(backend),
 		block:  block,
 		closed: make(chan struct{}),
 	}
