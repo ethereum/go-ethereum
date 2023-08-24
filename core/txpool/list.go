@@ -165,7 +165,7 @@ func (m *sortedMap) reheap(withRlock bool) {
 
 	if withRlock {
 		m.m.RLock()
-		log.Info("[DEBUG] Acquired lock over txpool map while performing reheap")
+		log.Debug("Acquired lock over txpool map while performing reheap")
 	}
 
 	for nonce := range m.items {

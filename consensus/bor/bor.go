@@ -1225,7 +1225,6 @@ func (c *Bor) CommitStates(
 
 		stateSyncDelay := c.config.CalculateStateSyncDelay(number)
 		to = time.Unix(int64(header.Time-stateSyncDelay), 0)
-		log.Debug("Post Indore", "lastStateIDBig", lastStateIDBig, "to", to, "stateSyncDelay", stateSyncDelay)
 	} else {
 		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(nil, number-1, header.ParentHash)
 		if err != nil {
@@ -1233,7 +1232,6 @@ func (c *Bor) CommitStates(
 		}
 
 		to = time.Unix(int64(chain.Chain.GetHeaderByNumber(number-c.config.CalculateSprint(number)).Time), 0)
-		log.Debug("Pre Indore", "lastStateIDBig", lastStateIDBig, "to", to)
 	}
 
 	lastStateID := lastStateIDBig.Uint64()
