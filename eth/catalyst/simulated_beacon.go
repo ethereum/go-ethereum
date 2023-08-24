@@ -144,7 +144,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
-	// Reset to CurrentBlock in case of the chain was rewinded
+	// Reset to CurrentBlock in case of the chain was rewound
 	block := c.eth.BlockChain().CurrentBlock()
 	if c.curForkchoiceState.HeadBlockHash != block.Hash() {
 		c.curForkchoiceState = engine.ForkchoiceStateV1{
