@@ -895,15 +895,14 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		traces, err := w.current.traceEnv.GetBlockTrace(
 			types.NewBlockWithHeader(w.current.header).WithBody([]*types.Transaction{tx}, nil),
 		)
+		// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
+		// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
+		w.current.state.RevertToSnapshot(snap)
 		if err != nil {
-			// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
-			w.current.state.RevertToSnapshot(snap)
 			return nil, err
 		}
 		accRows, err = w.circuitCapacityChecker.ApplyTransaction(traces)
 		if err != nil {
-			// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
-			w.current.state.RevertToSnapshot(snap)
 			return nil, err
 		}
 		log.Trace(
@@ -912,9 +911,6 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 			"txhash", tx.Hash(),
 			"accRows", accRows,
 		)
-
-		// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
-		w.current.state.RevertToSnapshot(snap)
 	}
 
 	// create new snapshot for `core.ApplyTransaction`
