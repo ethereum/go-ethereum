@@ -437,7 +437,7 @@ var (
 		Usage: "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
 		Value: 10,
 	}
-	CacheNoPrefetchFlag = cli.BoolTFlag{
+	CacheNoPrefetchFlag = cli.BoolFlag{
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
@@ -1745,15 +1745,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
 		log.Info("Setting flag", "--l1.sync.startblock", "4038000")
 		stack.Config().L1DeploymentBlock = 4038000
-		// double check correct config
+		// disable pruning
 		if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
 			log.Crit("Must use --gcmode=archive")
 		}
-		log.Info("Setting flag", "--gcmode", ctx.GlobalString(GCModeFlag.Name))
-		if !ctx.GlobalBool(CacheNoPrefetchFlag.Name) {
-			log.Crit("Must use --cache.noprefetch")
-		}
-		log.Info("Setting flag", "--cache.noprefetch", ctx.GlobalBool(CacheNoPrefetchFlag.Name))
+		log.Info("Pruning disabled")
+		cfg.NoPruning = true
+		// disable prefetch
+		log.Info("Prefetch disabled")
+		cfg.NoPrefetch = true
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
