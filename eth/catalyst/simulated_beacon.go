@@ -145,13 +145,8 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	c.feeRecipientLock.Unlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	block := c.eth.BlockChain().CurrentBlock()
-	if c.curForkchoiceState.HeadBlockHash != block.Hash() {
-		c.curForkchoiceState = engine.ForkchoiceStateV1{
-			HeadBlockHash:      block.Hash(),
-			SafeBlockHash:      block.Hash(),
-			FinalizedBlockHash: block.Hash(),
-		}
+	if headerHash := c.eth.BlockChain().CurrentBlock().Hash(); c.curForkchoiceState.HeadBlockHash != headerHash {
+		c.setCurrentState(headerHash, headerHash)
 	}
 
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -190,11 +185,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
 		return fmt.Errorf("failed to mark payload as canonical: %v", err)
 	}
-	c.curForkchoiceState = engine.ForkchoiceStateV1{
-		HeadBlockHash:      payload.BlockHash,
-		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: finalizedHash,
-	}
+	c.setCurrentState(payload.BlockHash, finalizedHash)
 	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return fmt.Errorf("failed to mark block as canonical: %v", err)
@@ -246,6 +237,15 @@ func (c *SimulatedBeacon) loop() {
 			}
 			timer.Reset(time.Second * time.Duration(c.period))
 		}
+	}
+}
+
+// setCurrentState sets the current forkchoice state
+func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
+	c.curForkchoiceState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      headHash,
+		SafeBlockHash:      headHash,
+		FinalizedBlockHash: finalizedHash,
 	}
 }
 
