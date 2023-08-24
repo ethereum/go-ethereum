@@ -146,7 +146,8 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 
 	// Reset to CurrentBlock in case of the chain was rewound
 	if headerHash := c.eth.BlockChain().CurrentBlock().Hash(); c.curForkchoiceState.HeadBlockHash != headerHash {
-		c.setCurrentState(headerHash, headerHash)
+		finalizedHash := c.finalizedBlockHash(c.eth.BlockChain().CurrentBlock().Number.Uint64())
+		c.setCurrentState(headerHash, *finalizedHash)
 	}
 
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -171,13 +172,12 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
-		number := (payload.Number - 1) / devEpochLength * devEpochLength
-		if block := c.eth.BlockChain().GetBlockByNumber(number); block == nil {
+		if fh := c.finalizedBlockHash(payload.Number); fh == nil {
 			// Chain rewound after the ForkchoiceUpdate
-			log.Warn("Finalized block not found, skipping", "block", number)
+			log.Warn("Finalized block not found, skipping", "block", payload.Number)
 			return nil
 		} else {
-			finalizedHash = block.Hash()
+			finalizedHash = *fh
 		}
 	}
 
@@ -238,6 +238,23 @@ func (c *SimulatedBeacon) loop() {
 			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
+}
+
+// finalizedBlockHash returns the block hash of the finalized block corresponding to the given number
+// or nil if doesn't exist in the chain.
+func (c *SimulatedBeacon) finalizedBlockHash(number uint64) *common.Hash {
+	var finalizedNumber uint64
+	if number%devEpochLength == 0 {
+		finalizedNumber = number
+	} else {
+		finalizedNumber = (number - 1) / devEpochLength * devEpochLength
+	}
+
+	if finalizedBlock := c.eth.BlockChain().GetBlockByNumber(finalizedNumber); finalizedBlock != nil {
+		fh := finalizedBlock.Hash()
+		return &fh
+	}
+	return nil
 }
 
 // setCurrentState sets the current forkchoice state
