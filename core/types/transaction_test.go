@@ -214,7 +214,7 @@ func TestEIP2718TransactionEncode(t *testing.T) {
 
 func decodeTx(data []byte) (*Transaction, error) {
 	var tx Transaction
-	t, err := &tx, rlp.Decode(bytes.NewReader(data), &tx)
+	t, err := &tx, rlp.DecodeBytes(data, &tx)
 	return t, err
 }
 
