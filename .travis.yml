@@ -116,7 +116,7 @@ jobs:
       - docker push xinfinorg/devnet:latest
 
   - stage: (Devnet)Terraform plan
-    if: branch = dev-upgrade AND type = pull_request
+    if: branch = dev-upgrade AND type = push AND tag IS blank
     dist: xenial
     language: bash
     install:
@@ -142,7 +142,9 @@ jobs:
         - unzip terraform_"$tf_version"_linux_amd64.zip
         - sudo mv terraform /usr/local/bin/
         - rm terraform_"$tf_version"_linux_amd64.zip
-        - pip install --user awscli # install aws cli w/o sudo
+        - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        - unzip awscliv2.zip
+        - sudo ./aws/install
         - export PATH=$PATH:$HOME/.local/bin # put aws in the path
     script:
       - echo "Merge detected, executing changes(Devnet)"

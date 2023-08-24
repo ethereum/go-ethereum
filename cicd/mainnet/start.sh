@@ -3,7 +3,7 @@
 if [ ! -d /work/xdcchain/XDC/chaindata ]
 then
   # Randomly select a key from environment variable, seperated by ','
-  if test -z "$PRIVATE_KEYS" 
+  if test -z "$PRIVATE_KEYS"
   then
         echo "PRIVATE_KEYS environment variable has not been set. You need to pass at least one PK, or you can pass multiple PK seperated by ',', we will randomly choose one for you"
         exit 1
@@ -13,11 +13,11 @@ then
 
   echo "${private_key}" >> /tmp/key
   echo "Creating a new wallet"
-  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | sed -n 's/Address: {\(.*\)}/\1/p')
+  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -F '[{}]' '{print $2}')
   XDC --datadir /work/xdcchain init /work/genesis.json
 else
   echo "Wallet already exist, re-use the same one"
-  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | sed -n 's/Address: {\(.*\)}/\1/p')
+  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -F '[{}]' '{print $2}')
 fi
 
 input="/work/bootnodes.list"
@@ -33,7 +33,7 @@ do
 done < "$input"
 
 log_level=3
-if test -z "$LOG_LEVEL" 
+if test -z "$LOG_LEVEL"
 then
   echo "Log level not set, default to verbosity of 3"
 else

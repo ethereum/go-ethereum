@@ -1,5 +1,5 @@
 #!/bin/bash
-if test -z "$NETWORK" 
+if test -z "$NETWORK"
 then
     echo "NETWORK env Must be set, mainnet/testnet/devnet"
     exit 1
