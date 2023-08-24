@@ -144,7 +144,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
-	// Reset to CurrentBlock incase the chain is rewinded
+	// Reset to CurrentBlock in case of the chain was rewinded
 	block := c.eth.BlockChain().CurrentBlock()
 	if c.curForkchoiceState.HeadBlockHash != block.Hash() {
 		c.curForkchoiceState = engine.ForkchoiceStateV1{
@@ -162,6 +162,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if err != nil {
 		return fmt.Errorf("error calling forkchoice update: %v", err)
 	}
+	if fcResponse == engine.STATUS_SYNCING {
+		return engine.InvalidForkChoiceState
+	}
 
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
@@ -173,10 +176,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
-		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength).Hash()
+		if block := c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength); block != nil {
+			finalizedHash = block.Hash()
+		} else {
+			finalizedHash = payload.BlockHash
+		}
 	}
 
-	// mark the payload as canon
+	// Mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
 		return fmt.Errorf("failed to mark payload as canonical: %v", err)
 	}
@@ -185,7 +192,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		SafeBlockHash:      payload.BlockHash,
 		FinalizedBlockHash: finalizedHash,
 	}
-	// mark the block containing the payload as canonical
+	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return fmt.Errorf("failed to mark block as canonical: %v", err)
 	}
