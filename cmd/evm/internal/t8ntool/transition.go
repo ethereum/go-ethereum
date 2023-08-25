@@ -39,17 +39,16 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/urfave/cli/v2"
 )
 
 const (
-	ErrorEVM              = 2
-	ErrorConfig           = 3
-	ErrorMissingBlockhash = 4
+	ErrorEVM = iota + 2
+	ErrorConfig
+	ErrorMissingBlockhash
 
-	ErrorJson = 10
-	ErrorIO   = 11
-	ErrorRlp  = 12
+	ErrorJson
+	ErrorIO
+	ErrorRlp
 
 	stdinSelector = "stdin"
 )

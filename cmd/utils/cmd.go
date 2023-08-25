@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/urfave/cli/v2"
+    "github.com/urfave/cli/v2"
 )
 
 const (
@@ -387,9 +387,10 @@ type exportHeader struct {
 }
 
 const exportMagic = "gethdbdump"
+
 const (
-	OpBatchAdd = 0
-	OpBatchDel = 1
+	OpBatchAdd = iota
+	OpBatchDel
 )
 
 // ImportLDBData imports a batch of snapshot data into the database

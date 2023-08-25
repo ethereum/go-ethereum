@@ -30,9 +30,9 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	ETH66 = 66
-	ETH67 = 67
-	ETH68 = 68
+	ETH66 = iota + 66
+	ETH67
+	ETH68
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
