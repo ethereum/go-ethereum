@@ -271,7 +271,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	logList := w.List()
 	for _, log := range r.Logs {
 		if err := log.EncodeRLP(w); err != nil {
-			return nil
+			return err
 		}
 	}
 	w.ListEnd(logList)
