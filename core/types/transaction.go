@@ -145,15 +145,23 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, rlp.ListSize(size))
 		}
 		return err
+	case kind == rlp.Byte:
+		return errShortTypedTx
 	default:
 		// It's an EIP-2718 typed TX envelope.
-		var b []byte
-		if b, err = s.Bytes(); err != nil {
+		// First read the tx payload bytes into a temporary buffer.
+		b, buf, err := getPooledBuffer(size)
+		if err != nil {
 			return err
 		}
+		defer encodeBufferPool.Put(buf)
+		if err := s.ReadBytes(b); err != nil {
+			return err
+		}
+		// Now decode the inner transaction.
 		inner, err := tx.decodeTyped(b)
 		if err == nil {
-			tx.setDecoded(inner, uint64(len(b)))
+			tx.setDecoded(inner, size)
 		}
 		return err
 	}
