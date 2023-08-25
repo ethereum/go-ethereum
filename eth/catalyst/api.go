@@ -471,21 +471,25 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHashes *[]common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	if params.ExcessBlobGas == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil excessBlobGas post-cancun"))
 	}
-	var hashes []common.Hash
-	if versionedHashes != nil {
-		hashes = *versionedHashes
+	if params.BlobGasUsed == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil params.BlobGasUsed post-cancun"))
+	}
+	if versionedHashes == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
 	}
 	if beaconRoot == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil parentBeaconBlockRoot post-cancun"))
 	}
+
 	if !api.eth.BlockChain().Config().IsCancun(new(big.Int).SetUint64(params.Number), params.Timestamp) {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV3 called pre-cancun"))
 	}
-	return api.newPayload(params, hashes, beaconRoot)
+
+	return api.newPayload(params, versionedHashes, beaconRoot)
 }
 
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
