@@ -78,6 +78,7 @@ const (
 var caps = []string{
 	"engine_forkchoiceUpdatedV1",
 	"engine_forkchoiceUpdatedV2",
+	"engine_forkchoiceUpdatedV3",
 	"engine_exchangeTransitionConfigurationV1",
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
@@ -192,17 +193,36 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 	return api.forkchoiceUpdated(update, payloadAttributes)
 }
 
+// ForkchoiceUpdatedV3 is equivalent to V2 with the addition of parent beacon block root in the payload attributes.
+func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	if payloadAttributes != nil {
+		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
+			return engine.STATUS_INVALID, engine.InvalidParams.With(err)
+		}
+	}
+	return api.forkchoiceUpdated(update, payloadAttributes)
+}
+
 func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
-	if !api.eth.BlockChain().Config().IsShanghai(api.eth.BlockChain().Config().LondonBlock, attr.Timestamp) {
-		// Reject payload attributes with withdrawals before shanghai
-		if attr.Withdrawals != nil {
-			return errors.New("withdrawals before shanghai")
-		}
-	} else {
-		// Reject payload attributes with nil withdrawals after shanghai
-		if attr.Withdrawals == nil {
-			return errors.New("missing withdrawals list")
-		}
+	c := api.eth.BlockChain().Config()
+
+	// Verify withdrawals attribute for Shanghai.
+	if err := checkAttribute(c.IsShanghai, attr.Withdrawals != nil, attr.Timestamp); err != nil {
+		return fmt.Errorf("invalid withdrawals: %w", err)
+	}
+	// Verify beacon root attribute for Cancun.
+	if err := checkAttribute(c.IsCancun, attr.BeaconRoot != nil, attr.Timestamp); err != nil {
+		return fmt.Errorf("invalid parent beacon block root: %w", err)
+	}
+	return nil
+}
+
+func checkAttribute(active func(*big.Int, uint64) bool, exists bool, time uint64) error {
+	if active(common.Big0, time) && !exists {
+		return errors.New("fork active, missing expected attribute")
+	}
+	if !active(common.Big0, time) && exists {
+		return errors.New("fork inactive, unexpected attribute set")
 	}
 	return nil
 }
