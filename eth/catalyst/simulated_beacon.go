@@ -144,9 +144,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	c.feeRecipientLock.Unlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	if headerHash := c.eth.BlockChain().CurrentBlock().Hash(); c.curForkchoiceState.HeadBlockHash != headerHash {
-		finalizedHash := c.finalizedBlockHash(c.eth.BlockChain().CurrentBlock().Number.Uint64())
-		c.setCurrentState(headerHash, *finalizedHash)
+	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
+		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -206,12 +206,12 @@ func (c *SimulatedBeacon) loopOnDemand() {
 		case w := <-c.withdrawals.pending:
 			withdrawals := append(c.withdrawals.gatherPending(9), w)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Warn("error performing sealing work", "err", err)
+				log.Warn("Error performing sealing work", "err", err)
 			}
 		case <-newTxs:
 			withdrawals := c.withdrawals.gatherPending(10)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Warn("error performing sealing work", "err", err)
+				log.Warn("Error performing sealing work", "err", err)
 			}
 		}
 	}
