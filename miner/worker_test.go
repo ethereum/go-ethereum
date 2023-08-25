@@ -1046,3 +1046,63 @@ func TestOversizedTxThenNormal(t *testing.T) {
 		}
 	})
 }
+
+func TestSkippedTransactionDatabaseEntries(t *testing.T) {
+	assert := assert.New(t)
+
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 10000000, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}, // over gas limit
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+	}
+
+	l1MessageTest(t, msgs, false, func(blockNum int, block *types.Block, db ethdb.Database, w *worker) bool {
+		switch blockNum {
+		case 0:
+			return false
+		case 1:
+			// skip #0, include #1
+			assert.Equal(1, len(block.Transactions()))
+
+			assert.True(block.Transactions()[0].IsL1MessageTx())
+			assert.Equal(uint64(1), block.Transactions()[0].AsL1MessageTx().QueueIndex)
+
+			// db is updated correctly
+			queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+			assert.NotNil(queueIndex)
+
+			assert.Equal(uint64(2), *queueIndex)
+
+			l1msg := rawdb.ReadL1Message(db, 0)
+			assert.NotNil(l1msg)
+			hash := types.NewTx(l1msg).Hash()
+
+			stx := rawdb.ReadSkippedTransaction(db, hash)
+			assert.NotNil(stx)
+			assert.True(stx.Tx.IsL1MessageTx())
+			assert.Equal(uint64(0), stx.Tx.AsL1MessageTx().QueueIndex)
+			assert.Equal("gas limit exceeded", stx.Reason)
+			assert.Equal(block.NumberU64(), stx.BlockNumber)
+			assert.Nil(stx.BlockHash)
+
+			numSkipped := rawdb.ReadNumSkippedTransactions(db)
+			assert.Equal(uint64(1), numSkipped)
+
+			hash2 := rawdb.ReadSkippedTransactionHash(db, 0)
+			assert.NotNil(hash2)
+			assert.Equal(&hash, hash2)
+
+			// iterator API
+			it := rawdb.IterateSkippedTransactionsFrom(db, 0)
+			hasMore := it.Next()
+			assert.True(hasMore)
+			assert.Equal(uint64(0), it.Index())
+			hash3 := it.TransactionHash()
+			assert.Equal(hash, hash3)
+			hasMore = it.Next()
+			assert.False(hasMore)
+			return true
+		default:
+			return true
+		}
+	})
+}

@@ -708,3 +708,47 @@ func (api *ScrollAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	return nil, err
 }
+
+// GetNumSkippedTransactions returns the number of skipped transactions.
+func (api *ScrollAPI) GetNumSkippedTransactions(ctx context.Context) (uint64, error) {
+	return rawdb.ReadNumSkippedTransactions(api.eth.ChainDb()), nil
+}
+
+// RPCTransaction is the standard RPC transaction return type with some additional skip-related fields.
+type RPCTransaction struct {
+	ethapi.RPCTransaction
+	SkipReason      string       `json:"skipReason"`
+	SkipBlockNumber *hexutil.Big `json:"skipBlockNumber"`
+	SkipBlockHash   *common.Hash `json:"skipBlockHash,omitempty"`
+}
+
+// GetSkippedTransaction returns a skipped transaction by its hash.
+func (api *ScrollAPI) GetSkippedTransaction(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
+	stx := rawdb.ReadSkippedTransaction(api.eth.ChainDb(), hash)
+	if stx == nil {
+		return nil, nil
+	}
+	var rpcTx RPCTransaction
+	rpcTx.RPCTransaction = *ethapi.NewRPCTransaction(stx.Tx, common.Hash{}, 0, 0, nil, api.eth.blockchain.Config())
+	rpcTx.SkipReason = stx.Reason
+	rpcTx.SkipBlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(stx.BlockNumber))
+	rpcTx.SkipBlockHash = stx.BlockHash
+	return &rpcTx, nil
+}
+
+// GetSkippedTransactionHashes returns a list of skipped transaction hashes between the two indices provided (inclusive).
+func (api *ScrollAPI) GetSkippedTransactionHashes(ctx context.Context, from uint64, to uint64) ([]common.Hash, error) {
+	it := rawdb.IterateSkippedTransactionsFrom(api.eth.ChainDb(), from)
+	defer it.Release()
+
+	var hashes []common.Hash
+
+	for it.Next() {
+		if it.Index() > to {
+			break
+		}
+		hashes = append(hashes, it.TransactionHash())
+	}
+
+	return hashes, nil
+}

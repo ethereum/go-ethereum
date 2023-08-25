@@ -132,6 +132,8 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		return nil
 	}
 
+	blockHash := block.Hash()
+
 	if v.config.Scroll.L1Config == nil {
 		// TODO: should we allow follower nodes to skip L1 message verification?
 		panic("Running on L1Message-enabled network but no l1Config was provided")
@@ -168,13 +170,16 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		// skipped messages
 		// TODO: consider verifying that skipped messages overflow
 		for index := queueIndex; index < txQueueIndex; index++ {
-			log.Debug("Skipped L1 message", "queueIndex", index, "tx", tx.Hash().String(), "block", block.Hash().String())
-
 			if exists := it.Next(); !exists {
 				// the message in this block is not available in our local db.
 				// we'll reprocess this block at a later time.
 				return consensus.ErrMissingL1MessageData
 			}
+
+			l1msg := it.L1Message()
+			skippedTx := types.NewTx(&l1msg)
+			log.Debug("Skipped L1 message", "queueIndex", index, "tx", skippedTx.Hash().String(), "block", blockHash.String())
+			rawdb.WriteSkippedTransaction(v.db, skippedTx, "unknown", block.NumberU64(), &blockHash)
 		}
 
 		queueIndex = txQueueIndex + 1

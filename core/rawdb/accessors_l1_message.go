@@ -98,7 +98,7 @@ type L1MessageIterator struct {
 // IterateL1MessagesFrom creates an L1MessageIterator that iterates over
 // all L1 message in the database starting at the provided enqueue index.
 func IterateL1MessagesFrom(db ethdb.Iteratee, fromQueueIndex uint64) L1MessageIterator {
-	start := encodeQueueIndex(fromQueueIndex)
+	start := encodeBigEndian(fromQueueIndex)
 	it := db.NewIterator(l1MessagePrefix, start)
 	keyLength := len(l1MessagePrefix) + 8
 
@@ -180,7 +180,7 @@ func ReadL1MessagesFrom(db ethdb.Iteratee, startIndex, maxCount uint64) []types.
 // The L2 block is identified by its block hash. If the L2 block contains zero
 // L1 messages, this value MUST equal its parent's value.
 func WriteFirstQueueIndexNotInL2Block(db ethdb.KeyValueWriter, l2BlockHash common.Hash, queueIndex uint64) {
-	if err := db.Put(FirstQueueIndexNotInL2BlockKey(l2BlockHash), encodeQueueIndex(queueIndex)); err != nil {
+	if err := db.Put(FirstQueueIndexNotInL2BlockKey(l2BlockHash), encodeBigEndian(queueIndex)); err != nil {
 		log.Crit("Failed to store first L1 message not in L2 block", "l2BlockHash", l2BlockHash, "err", err)
 	}
 }

@@ -110,6 +110,11 @@ var (
 
 	// Row consumption
 	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
+
+	// Skipped transactions
+	numSkippedTransactionsKey    = []byte("NumberOfSkippedTransactions")
+	skippedTransactionPrefix     = []byte("skip") // skippedTransactionPrefix + tx hash -> skipped transaction
+	skippedTransactionHashPrefix = []byte("sh")   // skippedTransactionHashPrefix + index -> tx hash
 )
 
 const (
@@ -243,8 +248,8 @@ func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
 }
 
-// encodeQueueIndex encodes an L1 enqueue index as big endian uint64
-func encodeQueueIndex(index uint64) []byte {
+// encodeBigEndian encodes an index as big endian uint64
+func encodeBigEndian(index uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, index)
 	return enc
@@ -252,7 +257,7 @@ func encodeQueueIndex(index uint64) []byte {
 
 // L1MessageKey = l1MessagePrefix + queueIndex (uint64 big endian)
 func L1MessageKey(queueIndex uint64) []byte {
-	return append(l1MessagePrefix, encodeQueueIndex(queueIndex)...)
+	return append(l1MessagePrefix, encodeBigEndian(queueIndex)...)
 }
 
 // FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
@@ -267,4 +272,14 @@ func rowConsumptionKey(hash common.Hash) []byte {
 
 func isNotFoundErr(err error) bool {
 	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
+}
+
+// SkippedTransactionKey = skippedTransactionPrefix + tx hash
+func SkippedTransactionKey(txHash common.Hash) []byte {
+	return append(skippedTransactionPrefix, txHash.Bytes()...)
+}
+
+// SkippedTransactionHashKey = skippedTransactionHashPrefix + index (uint64 big endian)
+func SkippedTransactionHashKey(index uint64) []byte {
+	return append(skippedTransactionHashPrefix, encodeBigEndian(index)...)
 }
