@@ -1345,6 +1345,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.ExcessBlobGas != nil {
 		result["excessBlobGas"] = hexutil.Uint64(*head.ExcessBlobGas)
 	}
+	if head.BeaconRoot != nil {
+		result["parentBeaconBlockRoot"] = head.BeaconRoot
+	}
 	return result
 }
 
