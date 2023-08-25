@@ -945,9 +945,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
 			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0)
 		}
+		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
 		header.BeaconRoot = genParams.beaconRoot
-		header.BlobGasUsed = new(uint64)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
