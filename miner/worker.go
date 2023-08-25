@@ -739,34 +739,56 @@ func (w *worker) updateSnapshot(env *environment) {
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
-	var (
-		snap = env.state.Snapshot()
-		gp   = env.gasPool.Gas()
-	)
+	if tx.Type() == types.BlobTxType {
+		return w.commitBlobTransaction(env, tx)
+	}
 
+	receipt, err := w.applyTransaction(env, tx)
+	if err != nil {
+		return nil, err
+	}
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
+	return receipt.Logs, nil
+}
+
+func (w *worker) commitBlobTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		panic("blob transaction without blobs in miner")
+	}
 	// Checking against blob gas limit: It's kind of ugly to perform this check here, but there
 	// isn't really a better place right now. The blob gas limit is checked at block validation time
 	// and not during execution. This means core.ApplyTransaction will not return an error if the
 	// tx has too many blobs. So we have to explicitly check it here.
-	if (env.blobs+len(tx.BlobHashes()))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+	if (env.blobs+len(sc.Blobs))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
 		return nil, errors.New("max data blobs reached")
 	}
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := w.applyTransaction(env, tx)
 	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		env.gasPool.SetGas(gp)
 		return nil, err
 	}
 	env.txs = append(env.txs, tx.WithoutBlobTxSidecar())
 	env.receipts = append(env.receipts, receipt)
-
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		env.sidecars = append(env.sidecars, sc)
-		env.blobs += len(sc.Blobs)
-	}
-
+	env.sidecars = append(env.sidecars, sc)
+	env.blobs += len(sc.Blobs)
+	*env.header.BlobGasUsed += receipt.BlobGasUsed
 	return receipt.Logs, nil
+}
+
+// applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
+func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
+	var (
+		snap = env.state.Snapshot()
+		gp   = env.gasPool.Gas()
+	)
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	if err != nil {
+		env.state.RevertToSnapshot(snap)
+		env.gasPool.SetGas(gp)
+	}
+	return receipt, err
 }
 
 func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
@@ -925,6 +947,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 		header.ExcessBlobGas = &excessBlobGas
 		header.BeaconRoot = genParams.beaconRoot
+		header.BlobGasUsed = new(uint64)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
