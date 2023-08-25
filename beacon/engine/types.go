@@ -64,7 +64,6 @@ type ExecutableData struct {
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed   *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas *uint64             `json:"excessBlobGas"`
-	BeaconRoot    *common.Hash        `json:"beaconRoot"`
 }
 
 // JSON type overrides for executableData.
@@ -173,7 +172,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
-func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash) (*types.Block, error) {
+func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -227,7 +226,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash)
 		WithdrawalsHash: withdrawalsRoot,
 		ExcessBlobGas:   params.ExcessBlobGas,
 		BlobGasUsed:     params.BlobGasUsed,
-		BeaconRoot:      params.BeaconRoot,
+		BeaconRoot:      beaconRoot,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
@@ -257,7 +256,6 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:   block.Withdrawals(),
 		BlobGasUsed:   block.BlobGasUsed(),
 		ExcessBlobGas: block.ExcessBlobGas(),
-		BeaconRoot:    block.BeaconRoot(),
 	}
 	bundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),
