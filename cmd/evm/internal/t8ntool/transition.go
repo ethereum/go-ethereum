@@ -42,14 +42,14 @@ import (
     "github.com/urfave/cli/v2"
 )
 
-const (
-	ErrorEVM = iota + 2
-	ErrorConfig
-	ErrorMissingBlockhash
+onst (
+	ErrorEVM              = 2
+	ErrorConfig           = 3
+	ErrorMissingBlockhash = 4
 
-	ErrorJson
-	ErrorIO
-	ErrorRlp
+	ErrorJson = 10
+	ErrorIO   = 11
+	ErrorRlp  = 12
 
 	stdinSelector = "stdin"
 )
