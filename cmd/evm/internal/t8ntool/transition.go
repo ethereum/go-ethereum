@@ -42,7 +42,7 @@ import (
     "github.com/urfave/cli/v2"
 )
 
-onst (
+const (
 	ErrorEVM              = 2
 	ErrorConfig           = 3
 	ErrorMissingBlockhash = 4
