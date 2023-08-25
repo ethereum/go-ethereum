@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1566,8 +1565,6 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
 	genesis, blocks := generateMergeChain(10, true)
-
-	spew.Dump(genesis)
 
 	// Set cancun time to last block + 5 seconds
 	time := blocks[len(blocks)-1].Time() + 5
