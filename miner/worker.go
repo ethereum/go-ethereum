@@ -962,14 +962,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	if w.chainConfig.IsCancun(header.Number, header.Time) {
-		if header.BeaconRoot == nil {
-			// Failure: we are unable to construct a block if we do not have
-			// the beacon root.
-			err = errors.New("missing parentBeaconRoot")
-			log.Error("Failed to construct block", "err", err)
-			return nil, err
-		}
+	if header.BeaconRoot != nil {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.BeaconRoot, vmenv, env.state)
