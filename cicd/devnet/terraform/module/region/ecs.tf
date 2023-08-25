@@ -10,6 +10,7 @@ data template_file devnet_container_definition {
     cloudwatch_group = "tf-${each.key}"
     cloudwatch_region = "${var.region}"
     log_level = "${lookup(each.value, "logLevel", "${var.logLevel}")}"
+    chain_network = "devnet"
   }
 }
 
@@ -29,8 +30,8 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   # Please set it back to cpu 256 and memory of 2048 after sync is done to save the cost
   # cpu = 256
   # memory = 2048
-  cpu = 512
-  memory = 3072
+  cpu = 1024
+  memory = 4096
   volume {
     name = "efs"
 
@@ -81,7 +82,7 @@ resource "aws_ecs_service" "devnet_ecs_service" {
       aws_default_security_group.devnet_xdcnode_security_group.id
     ]
   }
-  
+
   deployment_circuit_breaker {
     enable = true
     rollback = false

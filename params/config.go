@@ -47,21 +47,14 @@ var (
 			TimeoutPeriod:        60,
 			MinePeriod:           10,
 		},
-		9999999999: {
-			SwitchRound:          9999999999,
-			CertThreshold:        73, // based on masternode is 108
-			TimeoutSyncThreshold: 3,
-			TimeoutPeriod:        60,
-			MinePeriod:           10,
-		},
 	}
 
 	TestnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        3,
-			TimeoutSyncThreshold: 2,
-			TimeoutPeriod:        4,
+			CertThreshold:        7,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        60,
 			MinePeriod:           2,
 		},
 	}
@@ -159,10 +152,9 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				SwitchBlock:      common.TIPV2SwitchBlock,
-				CurrentConfig:    TestnetV2Configs[0],
-				AllConfigs:       TestnetV2Configs,
-				SkipV2Validation: true,
+				SwitchBlock:   common.TIPV2SwitchBlock,
+				CurrentConfig: TestnetV2Configs[0],
+				AllConfigs:    TestnetV2Configs,
 			},
 		},
 	}

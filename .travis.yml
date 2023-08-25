@@ -1,10 +1,12 @@
 sudo: required
 language: go
 go_import_path: github.com/XinFinOrg/XDPoSChain
-branches:
-  only:
-  - master
-  - dev-upgrade
+
+on:
+  branches:
+    - master
+    - dev-upgrade
+  tags: true
 
 env:
   global:
@@ -88,9 +90,33 @@ jobs:
     env:
       - GO111MODULE=auto
     name: T-Z tests
-    
+
+  - stage: TAG Build
+    if: tag IS present
+    services:
+      - docker
+    install: skip
+    before_script:
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker --version  # document the version travis is using
+      - docker build -t xinfinorg/xdposchain:$TRAVIS_TAG -f cicd/Dockerfile .
+    script:
+      - docker push xinfinorg/xdposchain:$TRAVIS_TAG
+
+  - stage: (Devnet) Build, and push images
+    if: branch = dev-upgrade AND type = push AND tag IS blank
+    services:
+      - docker
+    install: skip
+    before_script:
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker --version  # document the version travis is using
+      - docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
+    script:
+      - docker push xinfinorg/devnet:latest
+
   - stage: (Devnet)Terraform plan
-    if: branch = dev-upgrade AND type = pull_request
+    if: branch = dev-upgrade AND type = push AND tag IS blank
     dist: xenial
     language: bash
     install:
@@ -105,21 +131,8 @@ jobs:
         - terraform init $tf_init_cli_options
         - terraform validate $tf_validation_cli_options
         - terraform plan $tf_plan_cli_options
-  
-  - stage: (Devnet) Build, and push images
-    if: branch = dev-upgrade AND type = push AND tag IS blank
-    services:
-      - docker
-    install: skip
-    before_script:
-      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - docker --version  # document the version travis is using
-      - docker build -t xdc-devnet -f cicd/devnet/Dockerfile .
-    script:
-      - docker tag xdc-devnet:latest xinfinorg/devnet:latest # Always push to the latest
-      - docker push xinfinorg/devnet:latest
 
-  - stage: Terraform apply
+  - stage: (Devnet) Terraform apply
     if: branch = dev-upgrade AND type = push AND tag IS blank
     dist: xenial
     language: bash
@@ -129,7 +142,9 @@ jobs:
         - unzip terraform_"$tf_version"_linux_amd64.zip
         - sudo mv terraform /usr/local/bin/
         - rm terraform_"$tf_version"_linux_amd64.zip
-        - pip install --user awscli # install aws cli w/o sudo
+        - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        - unzip awscliv2.zip
+        - sudo ./aws/install
         - export PATH=$PATH:$HOME/.local/bin # put aws in the path
     script:
       - echo "Merge detected, executing changes(Devnet)"
@@ -137,19 +152,19 @@ jobs:
       # Terraform init and then apply changes to environment
       - terraform init $tf_init_cli_options
       - terraform apply $tf_apply_cli_options
-      - sleep 20
+      - sleep 5
       - |
         source .env
         for ((i=$us_east_2_start;i<$us_east_2_end;i++)); do
           echo "Force deploy xdc-$i"
-          sleep 5 && aws ecs update-service --region us-east-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment;
+          aws ecs update-service --region us-east-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
         done
         for ((i=$eu_west_1_start;i<$eu_west_1_end;i++)); do
           echo "Force deploy xdc-$i"
-          sleep 5 && aws ecs update-service --region eu-west-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment;
+          aws ecs update-service --region eu-west-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
         done
         for ((i=$ap_southeast_2_start;i<$ap_southeast_2_end;i++)); do
           echo "Force deploy xdc-$i"
-          sleep 5 && aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment;
+          aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
         done
-        
+

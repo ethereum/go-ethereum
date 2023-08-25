@@ -5,7 +5,8 @@
     "environment": [
       {"name": "PRIVATE_KEYS", "value": "${private_keys}"},
       {"name": "LOG_LEVEL", "value": "${log_level}"},
-      {"name": "NODE_NAME", "value": "${node_name}"}
+      {"name": "NODE_NAME", "value": "${node_name}"},
+      {"name": "NETWORK", "value": "${chain_network}"}
     ],
     "essential": true,
     "logConfiguration": {

@@ -47,7 +47,7 @@ var (
 
 	ErrInvalidCheckpointPenalties = errors.New("invalid penalty list on checkpoint block")
 
-	ErrValidatorsNotLegit = errors.New("validators does not match what's stored in snapshot minutes its penalty")
+	ErrValidatorsNotLegit = errors.New("validators does not match what's stored in snapshot minus its penalty")
 	ErrPenaltiesNotLegit  = errors.New("penalties does not match")
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.

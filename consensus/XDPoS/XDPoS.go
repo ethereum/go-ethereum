@@ -459,7 +459,7 @@ func (x *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (
 func (x *XDPoS) GetAuthorisedSignersFromSnapshot(chain consensus.ChainReader, header *types.Header) ([]common.Address, error) {
 	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
 	case params.ConsensusEngineVersion2:
-		return []common.Address{}, nil
+		return x.EngineV2.GetSignersFromSnapshot(chain, header)
 	default: // Default "v1"
 		return x.EngineV1.GetAuthorisedSignersFromSnapshot(chain, header)
 	}
