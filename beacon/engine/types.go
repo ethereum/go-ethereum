@@ -35,6 +35,7 @@ type PayloadAttributes struct {
 	Random                common.Hash         `json:"prevRandao"            gencodec:"required"`
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
+	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
 }
 
 // JSON type overrides for PayloadAttributes.
@@ -171,7 +172,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
-func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash) (*types.Block, error) {
+func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -207,25 +208,25 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash)
 		withdrawalsRoot = &h
 	}
 	header := &types.Header{
-		ParentHash:      params.ParentHash,
-		UncleHash:       types.EmptyUncleHash,
-		Coinbase:        params.FeeRecipient,
-		Root:            params.StateRoot,
-		TxHash:          types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:     params.ReceiptsRoot,
-		Bloom:           types.BytesToBloom(params.LogsBloom),
-		Difficulty:      common.Big0,
-		Number:          new(big.Int).SetUint64(params.Number),
-		GasLimit:        params.GasLimit,
-		GasUsed:         params.GasUsed,
-		Time:            params.Timestamp,
-		BaseFee:         params.BaseFeePerGas,
-		Extra:           params.ExtraData,
-		MixDigest:       params.Random,
-		WithdrawalsHash: withdrawalsRoot,
-		ExcessBlobGas:   params.ExcessBlobGas,
-		BlobGasUsed:     params.BlobGasUsed,
-		// TODO BeaconRoot
+		ParentHash:       params.ParentHash,
+		UncleHash:        types.EmptyUncleHash,
+		Coinbase:         params.FeeRecipient,
+		Root:             params.StateRoot,
+		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:      params.ReceiptsRoot,
+		Bloom:            types.BytesToBloom(params.LogsBloom),
+		Difficulty:       common.Big0,
+		Number:           new(big.Int).SetUint64(params.Number),
+		GasLimit:         params.GasLimit,
+		GasUsed:          params.GasUsed,
+		Time:             params.Timestamp,
+		BaseFee:          params.BaseFeePerGas,
+		Extra:            params.ExtraData,
+		MixDigest:        params.Random,
+		WithdrawalsHash:  withdrawalsRoot,
+		ExcessBlobGas:    params.ExcessBlobGas,
+		BlobGasUsed:      params.BlobGasUsed,
+		ParentBeaconRoot: beaconRoot,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
@@ -255,7 +256,6 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:   block.Withdrawals(),
 		BlobGasUsed:   block.BlobGasUsed(),
 		ExcessBlobGas: block.ExcessBlobGas(),
-		// TODO BeaconRoot
 	}
 	bundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),
