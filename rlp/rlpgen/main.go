@@ -35,6 +35,7 @@ func main() {
 		output     = flag.String("out", "-", "output file (default is stdout)")
 		genEncoder = flag.Bool("encoder", true, "generate EncodeRLP?")
 		genDecoder = flag.Bool("decoder", false, "generate DecodeRLP?")
+		norlpGen   = flag.Bool("norlpgen", true, "apply norlpgen build tag")
 		typename   = flag.String("type", "", "type to generate methods for")
 	)
 	flag.Parse()
@@ -45,7 +46,7 @@ func main() {
 		GenerateEncoder: *genEncoder,
 		GenerateDecoder: *genDecoder,
 	}
-	code, err := cfg.process()
+	code, err := cfg.process(*norlpGen)
 	if err != nil {
 		fatal(err)
 	}
@@ -70,13 +71,17 @@ type Config struct {
 }
 
 // process generates the Go code.
-func (cfg *Config) process() (code []byte, err error) {
+func (cfg *Config) process(norlpGen bool) (code []byte, err error) {
 	// Load packages.
 	pcfg := &packages.Config{
-		Mode:       packages.NeedName | packages.NeedTypes | packages.NeedImports | packages.NeedDeps,
-		Dir:        cfg.Dir,
-		BuildFlags: []string{"-tags", "norlpgen"},
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedImports | packages.NeedDeps,
+		Dir:  cfg.Dir,
 	}
+
+	if norlpGen {
+		pcfg.BuildFlags = []string{"-tags", "norlpgen"}
+	}
+
 	ps, err := packages.Load(pcfg, pathOfPackageRLP, ".")
 	if err != nil {
 		return nil, err
