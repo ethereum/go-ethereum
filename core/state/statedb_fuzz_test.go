@@ -31,10 +31,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
@@ -179,16 +181,28 @@ func (test *stateTest) run() bool {
 			storageList = append(storageList, copy2DSet(states.Storages))
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = trie.NewDatabase(disk, &trie.Config{OnCommit: onCommit})
+		tdb       = trie.NewDatabase(disk, &trie.Config{OnCommit: onCommit, PathDB: pathdb.Defaults})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
+	defer disk.Close()
+	defer tdb.Close()
+
+	var snaps *snapshot.Tree
+	if rand.Intn(3) == 0 {
+		snaps, _ = snapshot.New(snapshot.Config{
+			CacheSize:  1,
+			Recovery:   false,
+			NoBuild:    false,
+			AsyncBuild: false,
+		}, disk, tdb, types.EmptyRootHash)
+	}
 	for i, actions := range test.actions {
 		root := types.EmptyRootHash
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, nil)
+		state, err := New(root, sdb, snaps)
 		if err != nil {
 			panic(err)
 		}
