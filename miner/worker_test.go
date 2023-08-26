@@ -606,7 +606,7 @@ func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
 	}
 }
 
-func TestExcludeL1MsgFromTxlimit(t *testing.T) {
+func TestAcceptableTxlimit(t *testing.T) {
 	assert := assert.New(t)
 	var (
 		engine      consensus.Engine
@@ -617,8 +617,72 @@ func TestExcludeL1MsgFromTxlimit(t *testing.T) {
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine = clique.New(chainConfig.Clique, db)
 
-	// Set maxTxPerBlock = 2 and NumL1MessagesPerBlock = 2
-	maxTxPerBlock := 2
+	// Set maxTxPerBlock = 4, which >= non-l1msg + non-skipped l1msg txs
+	maxTxPerBlock := 4
+	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 3,
+	}
+
+	// Insert 3 l1msgs, with one be skipped.
+	l1msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 10000000, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}}, // over gas limit
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{4}},
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}}}
+	rawdb.WriteL1Messages(db, l1msgs)
+
+	chainConfig.LondonBlock = big.NewInt(0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Insert 2 non-l1msg txs
+	b.txPool.AddLocal(b.newRandomTx(true))
+	b.txPool.AddLocal(b.newRandomTx(false))
+
+	// Start mining!
+	w.start()
+
+	select {
+	case ev := <-sub.Chan():
+		block := ev.Data.(core.NewMinedBlockEvent).Block
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+		}
+		assert.Equal(4, len(block.Transactions()))
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout")
+	}
+}
+
+func TestUnacceptableTxlimit(t *testing.T) {
+	assert := assert.New(t)
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine = clique.New(chainConfig.Clique, db)
+
+	// Set maxTxPerBlock = 3, which < non-l1msg + l1msg txs
+	maxTxPerBlock := 3
 	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
 	chainConfig.Scroll.L1Config = &params.L1Config{
 		NumL1MessagesPerBlock: 2,
@@ -663,7 +727,7 @@ func TestExcludeL1MsgFromTxlimit(t *testing.T) {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 			t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 		}
-		assert.Equal(4, len(block.Transactions()))
+		assert.Equal(3, len(block.Transactions()))
 	case <-time.After(3 * time.Second):
 		t.Fatalf("timeout")
 	}
@@ -680,6 +744,8 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine = clique.New(chainConfig.Clique, db)
 
+	maxTxPerBlock := 4
+	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
 	chainConfig.Scroll.L1Config = &params.L1Config{
 		NumL1MessagesPerBlock: 10,
 	}
@@ -744,6 +810,8 @@ func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, withL2Tx bool, callba
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine = clique.New(chainConfig.Clique, db)
+	maxTxPerBlock := 4
+	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
 
 	maxPayload := 1024
 	chainConfig.Scroll.MaxTxPayloadBytesPerBlock = &maxPayload
