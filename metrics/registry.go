@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -47,15 +48,37 @@ type Registry interface {
 	Unregister(string)
 }
 
+type orderedRegistry struct {
+	StandardRegistry
+}
+
+// Call the given function for each registered metric.
+func (r *orderedRegistry) Each(f func(string, interface{})) {
+	var names []string
+	reg := r.registered()
+	for name := range reg {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		f(name, reg[name])
+	}
+}
+
+// NewRegistry creates a new registry.
+func NewRegistry() Registry {
+	return new(StandardRegistry)
+}
+
+// NewOrderedRegistry creates a new ordered registry (for testing).
+func NewOrderedRegistry() Registry {
+	return new(orderedRegistry)
+}
+
 // The standard implementation of a Registry uses sync.map
 // of names to metrics.
 type StandardRegistry struct {
 	metrics sync.Map
-}
-
-// Create a new registry.
-func NewRegistry() Registry {
-	return &StandardRegistry{}
 }
 
 // Call the given function for each registered metric.

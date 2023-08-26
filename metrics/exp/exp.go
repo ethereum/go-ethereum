@@ -128,7 +128,7 @@ func (exp *exp) publishGaugeFloat64(name string, metric metrics.GaugeFloat64) {
 }
 
 func (exp *exp) publishGaugeInfo(name string, metric metrics.GaugeInfo) {
-	exp.getInfo(name).Set(fmt.Sprintf("%s", metric.Value()))
+	exp.getInfo(name).Set(metric.Value().String())
 }
 
 func (exp *exp) publishHistogram(name string, metric metrics.Histogram) {

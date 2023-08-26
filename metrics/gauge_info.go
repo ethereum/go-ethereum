@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"encoding/json"
 	"sync"
 )
 
@@ -9,18 +10,14 @@ type GaugeInfo interface {
 	Snapshot() GaugeInfo
 	Update(GaugeInfoValue)
 	Value() GaugeInfoValue
-	ValueJsonString() string
 }
 
-type GaugeInfoEntry struct {
-	Key string
-	Val string
-}
+// GaugeInfoValue is a mappng of (string) keys to (string) values
+type GaugeInfoValue map[string]string
 
-type GaugeInfoValue []GaugeInfoEntry
-
-func NewGaugeInfoEntry(key string, val string) GaugeInfoEntry {
-	return GaugeInfoEntry{key, val}
+func (val GaugeInfoValue) String() string {
+	data, _ := json.Marshal(val)
+	return string(data)
 }
 
 // GetOrRegisterGaugeInfo returns an existing GaugeInfo or constructs and registers a
@@ -84,11 +81,6 @@ func (GaugeInfoSnapshot) Update(GaugeInfoValue) {
 // Value returns the value at the time the snapshot was taken.
 func (g GaugeInfoSnapshot) Value() GaugeInfoValue { return GaugeInfoValue(g) }
 
-// Value returns the value at the time the snapshot was taken in JSON string format.
-func (g GaugeInfoSnapshot) ValueJsonString() string {
-	return gaugeInfoValueToJsonString(g.Value())
-}
-
 // NilGauge is a no-op Gauge.
 type NilGaugeInfo struct{}
 
@@ -100,9 +92,6 @@ func (NilGaugeInfo) Update(v GaugeInfoValue) {}
 
 // Value is a no-op.
 func (NilGaugeInfo) Value() GaugeInfoValue { return GaugeInfoValue{} }
-
-// Value is a no-op.
-func (NilGaugeInfo) ValueJsonString() string { return gaugeInfoValueToJsonString(GaugeInfoValue{}) }
 
 // StandardGaugeInfo is the standard implementation of a GaugeInfo and uses
 // sync.Mutex to manage a single string value.
@@ -130,13 +119,6 @@ func (g *StandardGaugeInfo) Value() GaugeInfoValue {
 	return g.value
 }
 
-// Value returns the gauge's current value in JSON string format.
-func (g *StandardGaugeInfo) ValueJsonString() string {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	return gaugeInfoValueToJsonString(g.value)
-}
-
 // FunctionalGaugeInfo returns value from given function
 type FunctionalGaugeInfo struct {
 	value func() GaugeInfoValue
@@ -149,7 +131,8 @@ func (g FunctionalGaugeInfo) Value() GaugeInfoValue {
 
 // Value returns the gauge's current value in JSON string format
 func (g FunctionalGaugeInfo) ValueJsonString() string {
-	return gaugeInfoValueToJsonString(g.value())
+	data, _ := json.Marshal(g.value())
+	return string(data)
 }
 
 // Snapshot returns the snapshot.
@@ -158,18 +141,4 @@ func (g FunctionalGaugeInfo) Snapshot() GaugeInfo { return GaugeInfoSnapshot(g.V
 // Update panics.
 func (FunctionalGaugeInfo) Update(GaugeInfoValue) {
 	panic("Update called on a FunctionalGaugeInfo")
-}
-
-// Custom conversion to Json to avoid printing "Key" and "Val"
-func gaugeInfoValueToJsonString(g GaugeInfoValue) string {
-	lastIdx := len(g) - 1
-	v := "{"
-	for idx, entry := range g {
-		v += "\"" + entry.Key + "\":\"" + entry.Val + "\""
-		if idx != lastIdx {
-			v += ","
-		}
-	}
-	v += "}"
-	return v
 }

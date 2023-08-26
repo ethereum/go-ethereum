@@ -325,10 +325,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.currentSafeBlock.Store(nil)
 
 	// Update chain info data metrics
-	chainInfoGauge.Update(
-		metrics.GaugeInfoValue{
-			{Key: "chain_id", Val: bc.chainConfig.ChainID.String()},
-		})
+	chainInfoGauge.Update(metrics.GaugeInfoValue{"chain_id": bc.chainConfig.ChainID.String()})
 
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash

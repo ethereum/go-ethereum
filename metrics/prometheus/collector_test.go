@@ -1,6 +1,23 @@
+// Copyright 2023 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package prometheus
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -34,11 +51,11 @@ func TestCollector(t *testing.T) {
 
 	gaugeInfo := metrics.NewGaugeInfo()
 	gaugeInfo.Update(metrics.GaugeInfoValue{
-		metrics.NewGaugeInfoEntry("version", "1.10.18-unstable"),
-		metrics.NewGaugeInfoEntry("arch", "amd64"),
-		metrics.NewGaugeInfoEntry("os", "linux"),
-		metrics.NewGaugeInfoEntry("commit", "7caa2d8163ae3132c1c2d6978c76610caee2d949"),
-		metrics.NewGaugeInfoEntry("protocol_versions", "64 65 66"),
+		"version":           "1.10.18-unstable",
+		"arch":              "amd64",
+		"os":                "linux",
+		"commit":            "7caa2d8163ae3132c1c2d6978c76610caee2d949",
+		"protocol_versions": "64 65 66",
 	})
 	c.addGaugeInfo("geth/info", gaugeInfo)
 
@@ -72,59 +89,37 @@ func TestCollector(t *testing.T) {
 	emptyResettingTimer := metrics.NewResettingTimer().Snapshot()
 	c.addResettingTimer("test/empty_resetting_timer", emptyResettingTimer)
 
-	const expectedOutput = `# TYPE test_counter gauge
-test_counter 12345
-
-# TYPE test_counter_float64 gauge
-test_counter_float64 54321.98
-
-# TYPE test_gauge gauge
-test_gauge 23456
-
-# TYPE test_gauge_float64 gauge
-test_gauge_float64 34567.89
-
-# TYPE geth_info gauge
-geth_info {version="1.10.18-unstable", arch="amd64", os="linux", commit="7caa2d8163ae3132c1c2d6978c76610caee2d949", protocol_versions="64 65 66"} 1 
-
-# TYPE test_histogram_count counter
-test_histogram_count 0
-
-# TYPE test_histogram summary
-test_histogram {quantile="0.5"} 0
-test_histogram {quantile="0.75"} 0
-test_histogram {quantile="0.95"} 0
-test_histogram {quantile="0.99"} 0
-test_histogram {quantile="0.999"} 0
-test_histogram {quantile="0.9999"} 0
-
-# TYPE test_meter gauge
-test_meter 9999999
-
-# TYPE test_timer_count counter
-test_timer_count 6
-
-# TYPE test_timer summary
-test_timer {quantile="0.5"} 2.25e+07
-test_timer {quantile="0.75"} 4.8e+07
-test_timer {quantile="0.95"} 1.2e+08
-test_timer {quantile="0.99"} 1.2e+08
-test_timer {quantile="0.999"} 1.2e+08
-test_timer {quantile="0.9999"} 1.2e+08
-
-# TYPE test_resetting_timer_count counter
-test_resetting_timer_count 6
-
-# TYPE test_resetting_timer summary
-test_resetting_timer {quantile="0.50"} 12000000
-test_resetting_timer {quantile="0.95"} 120000000
-test_resetting_timer {quantile="0.99"} 120000000
-
-`
-	exp := c.buff.String()
-	if exp != expectedOutput {
-		t.Log("Expected Output:\n", expectedOutput)
-		t.Log("Actual Output:\n", exp)
+	var want string
+	if wantB, err := os.ReadFile("./testdata/prometheus.want"); err != nil {
+		t.Fatal(err)
+	} else {
+		want = string(wantB)
+	}
+	have := c.buff.String()
+	if have != want {
+		t.Logf("have\n%v", have)
+		t.Logf("have vs want:\n %v", findFirstDiffPos(have, want))
 		t.Fatal("unexpected collector output")
 	}
+}
+
+func findFirstDiffPos(a, b string) string {
+	x, y := []byte(a), []byte(b)
+	var res []byte
+	for i, ch := range x {
+		if i > len(y) {
+			res = append(res, ch)
+			res = append(res, fmt.Sprintf("<-- diff: %#x vs EOF", ch)...)
+			break
+		}
+		if ch != y[i] {
+			res = append(res, fmt.Sprintf("<-- diff: %#x (%c) vs %#x (%c)", ch, ch, y[i], y[i])...)
+			break
+		}
+		res = append(res, ch)
+	}
+	if len(res) > 100 {
+		res = res[len(res)-100:]
+	}
+	return string(res)
 }

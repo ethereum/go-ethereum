@@ -36,7 +36,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
-			"value": ms.ValueJsonString(),
+			"value": ms.Value().String(),
 		}
 		return measurement, fields
 	case metrics.Histogram:

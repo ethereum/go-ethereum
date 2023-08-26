@@ -23,10 +23,8 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"strconv"
+	"strings"
 	"unicode"
-
-	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -37,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -46,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -164,24 +162,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 	applyMetricConfig(ctx, &cfg)
 
-	// Create Info Gauge with geth system and build information
-	gethInfoGauge := metrics.NewRegisteredGaugeInfo("geth/info", nil)
-	protocolVersions := ""
-	for idx, val := range eth.ProtocolVersions {
-		protocolVersions += strconv.FormatUint(uint64(val), 10)
-		if idx < len(eth.ProtocolVersions)-1 {
-			protocolVersions += ","
-		}
-	}
-	gethInfo := metrics.GaugeInfoValue{
-		metrics.NewGaugeInfoEntry("version", params.VersionWithMeta),
-		metrics.NewGaugeInfoEntry("arch", runtime.GOARCH),
-		metrics.NewGaugeInfoEntry("os", runtime.GOOS),
-		metrics.NewGaugeInfoEntry("commit", gitCommit),
-		metrics.NewGaugeInfoEntry("protocol_versions", protocolVersions),
-	}
-	gethInfoGauge.Update(gethInfo)
-
 	return stack, cfg
 }
 
@@ -197,6 +177,20 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideVerkle = &v
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+
+	// Create gauge with geth system and build information
+	if eth != nil { // The 'eth' backend may be nil in light mode
+		var protos []string
+		for _, p := range eth.Protocols() {
+			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
+		}
+		metrics.NewRegisteredGaugeInfo("geth/info", nil).Update(metrics.GaugeInfoValue{
+			"arch":          runtime.GOARCH,
+			"os":            runtime.GOOS,
+			"version":       cfg.Node.Version,
+			"eth_protocols": strings.Join(protos, ","),
+		})
+	}
 
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)

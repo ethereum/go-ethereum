@@ -19,6 +19,7 @@ package prometheus
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -109,14 +110,14 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 func (c *collector) writeGaugeInfo(name string, value metrics.GaugeInfoValue) {
 	name = mutateKey(name)
 	c.buff.WriteString(fmt.Sprintf(typeGaugeTpl, name))
-	c.buff.WriteString(fmt.Sprintf("%s {", name))
-	for idx, entry := range value {
-		c.buff.WriteString(fmt.Sprintf("%s=\"%s\"", entry.Key, entry.Val))
-		if idx != len(value)-1 {
-			c.buff.WriteString(", ")
-		}
+	c.buff.WriteString(name)
+	c.buff.WriteString(" ")
+	var kvs []string
+	for k, v := range value {
+		kvs = append(kvs, fmt.Sprintf("%v=%q", k, v))
 	}
-	c.buff.WriteString("} 1 \n\n")
+	sort.Strings(kvs)
+	c.buff.WriteString(fmt.Sprintf("{%v} 1\n\n", strings.Join(kvs, ", ")))
 }
 
 func (c *collector) writeGaugeCounter(name string, value interface{}) {

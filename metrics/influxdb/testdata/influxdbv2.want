@@ -1,0 +1,6 @@
+goth.elite.meter count=0i,m1=0,m15=0,m5=0,mean=0 978307200000000000
+goth.info.gauge value="{\"arch\":\"amd64\",\"commit\":\"7caa2d8163ae3132c1c2d6978c76610caee2d949\",\"os\":\"linux\",\"protocol_versions\":\"64 65 66\",\"version\":\"1.10.18-unstable\"}" 978307200000000000
+goth.months.count value=12i 978307200000000000
+goth.pi.gauge value=3.14 978307200000000000
+goth.second.timer count=1i,m1=0,m15=0,m5=0,max=1000000000i,mean=1000000000,meanrate=0,min=1000000000i,p50=1000000000,p75=1000000000,p95=1000000000,p99=1000000000,p999=1000000000,p9999=1000000000,stddev=0,variance=0 978307200000000000
+goth.tau.count value=1.57 978307200000000000
