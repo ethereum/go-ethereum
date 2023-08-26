@@ -1610,7 +1610,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	}
 
 	// 11: verify locally built block
-	if status, err := api.NewPayloadV3(*execData.ExecutionPayload, &[]common.Hash{}, &common.Hash{42}); err != nil {
+	if status, err := api.NewPayloadV3(*execData.ExecutionPayload, []common.Hash{}, &common.Hash{42}); err != nil {
 		t.Fatalf("error validating payload: %v", err)
 	} else if status.Status != engine.VALID {
 		t.Fatalf("invalid payload")
