@@ -483,6 +483,11 @@ func (g *Genesis) ToBlock() *types.Block {
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
 		if conf.IsCancun(num, g.Timestamp) {
+			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
+			// the zero hash. This is because the genesis block does not have a parent
+			// by definition.
+			head.ParentBeaconRoot = new(common.Hash)
+			// EIP-4844 fields
 			head.ExcessBlobGas = g.ExcessBlobGas
 			head.BlobGasUsed = g.BlobGasUsed
 			if head.ExcessBlobGas == nil {
@@ -490,9 +495,6 @@ func (g *Genesis) ToBlock() *types.Block {
 			}
 			if head.BlobGasUsed == nil {
 				head.BlobGasUsed = new(uint64)
-			}
-			if head.BeaconRoot == nil {
-				head.BeaconRoot = new(common.Hash)
 			}
 		}
 	}
