@@ -121,6 +121,10 @@ type SubPool interface {
 	// Locals retrieves the accounts currently considered local by the pool.
 	Locals() []common.Address
 
+	// GetInclusionList returns an inclusion list from the pool containing pairs
+	// of transaction summary and data which are executable.
+	GetInclusionList() *types.InclusionList
+
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus

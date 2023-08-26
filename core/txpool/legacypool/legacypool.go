@@ -51,6 +51,14 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+
+	// maxTxsPerInclusionList is the maximum number of transactions that can be
+	// included in an inclusion list (MAX_TRANSACTIONS_PER_INCLUSION_LIST).
+	maxTxsPerInclusionList = 16
+
+	// maxGasPerInclusionList is the maximum amount of gas that can be included
+	// in an inclusion list (INCLUSION_LIST_MAX_GAS).
+	maxGasPerInclusionList = 5000000 // 5M
 )
 
 var (
@@ -1668,6 +1676,57 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			}
 		}
 	}
+}
+
+// GetInclusionList returns an inclusion list from the pool containing pairs
+// of transaction summary and data which are executable.
+func (pool *LegacyPool) GetInclusionList() *types.InclusionList {
+	// The following conditions should be satisfied while filling the inclusion list.
+	// 		1. The size of IL should not exceed `maxTxsPerInclusionList`
+	//
+	// 		2. The total gas limit should not exceed `maxGasPerInclusionList`
+	//
+	// 		3. The `maxFeePerGas` of all the transactions should be 1.125 times
+	//			the `baseFee` of the current block to account for increase in the
+	// 			next block due to EIP 1559.
+	summaries := make([]*types.InclusionListEntry, 0, maxTxsPerInclusionList)
+	transactions := make([]*types.Transaction, 0, maxTxsPerInclusionList)
+
+	// TODO(manav2401): Not sure what's the best way to fetch transactions for inclusion list.
+	// Few possibilities are: prioritise locals first, borrow the tx ordering
+	// logic from miner if we want to choose best transactions.
+
+	// TODO(manav): This is just a brute force logic - has a lot of scope for improvement
+	remoteTxs := pool.Pending(true)
+	for _, account := range pool.Locals() {
+		if txs := remoteTxs[account]; len(txs) > 0 {
+			delete(remoteTxs, account)
+
+			// TODO(manav): Decide if we want multiple txs from the same account.
+			for _, lasyTx := range txs {
+				tx := lasyTx.Resolve()
+				// TODO(manav): Perform checks for (2) and (3) here.
+				summary := types.InclusionListEntry{
+					Address:  account,
+					GasLimit: uint32(tx.Gas()),
+				}
+				summaries = append(summaries, &summary)
+				transactions = append(transactions, tx)
+				if len(summaries) == maxTxsPerInclusionList {
+					break
+				}
+			}
+
+			if len(summaries) == maxTxsPerInclusionList {
+				break
+			}
+		}
+	}
+
+	// If we still have space, fill with remote txs
+	// TODO(manav): borrow ordering logic from miner OR write a simple one for IL
+
+	return &types.InclusionList{Summary: summaries, Transactions: transactions}
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.

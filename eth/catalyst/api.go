@@ -87,6 +87,9 @@ var caps = []string{
 	"engine_newPayloadV3",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
+	"engine_getInclusionListV1",
+	"engine_newInclusionListV1",
+	"engine_newPayloadVePBS",
 }
 
 type ConsensusAPI struct {
@@ -154,6 +157,27 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
+}
+
+// GetInclusionListV1 returns an inclusion list which contains summary + list of transactions
+// which are valid for the current slot.
+func (api *ConsensusAPI) GetInclusionListV1() (*engine.InclusionListV1, error) {
+	// TODO(manav): Do we check here if we're on correct fork or are fully synced? If not
+	// we might end up delivering wrong IL. Other will reject it though but do we want to
+	// risk it?
+	// Call txpool.GetInclusion list here
+	return nil, nil
+}
+
+// NewInclusionListV1 validates whether an inclusion list (summary + txs) is
+// correct for the current state or not.
+func (api *ConsensusAPI) NewInclusionListV1() bool {
+	return false
+}
+
+// TODO: update/define executable params
+func (api *ConsensusAPI) NewPayloadVePBS() bool {
+	return false
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:

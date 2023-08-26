@@ -63,6 +63,8 @@ type ExecutableData struct {
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed   *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas *uint64             `json:"excessBlobGas"`
+
+	Summary []*InclusionListEntry `json:"summary"`
 }
 
 // JSON type overrides for executableData.
@@ -276,4 +278,16 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 type ExecutionPayloadBodyV1 struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+}
+
+// InclusionListV1 is used in the response to GetInclusionListV1 and request to NewInclusionListV1
+type InclusionListV1 struct {
+	Summary      []*InclusionListEntry `json:"summary"`
+	Transactions []*types.Transaction  `json:"transactions"`
+}
+
+// InclusionListEntry denotes a summary entry of (address, gasLimit)
+type InclusionListEntry struct {
+	address  common.Address `json:"address"`
+	gasLimit uint32         `json:"gasLimit"` // TODO(manav): change to uint8
 }
