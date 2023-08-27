@@ -17,7 +17,15 @@
 // Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+var (
+	// ErrNotFound is the errorcode if the requested key does not exist.
+	ErrNotFound = errors.New("not found")
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
