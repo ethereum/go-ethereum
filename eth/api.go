@@ -280,11 +280,22 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		return stateDb.RawDump(opts), nil
 	}
 
+	// TODO - Check this
 	var header *types.Header
 	if blockNr == rpc.LatestBlockNumber {
 		header = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
-		header = api.eth.blockchain.CurrentFinalBlock()
+		finalBlockNumber, err := getFinalizedBlockNumber(api.eth)
+		if err != nil {
+			return state.Dump{}, fmt.Errorf("finalized block not found")
+		}
+
+		block := api.eth.blockchain.CurrentFinalizedBlock(finalBlockNumber)
+		if block == nil {
+			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
+		}
+
+		header = block.Header()
 	} else if blockNr == rpc.SafeBlockNumber {
 		header = api.eth.blockchain.CurrentSafeBlock()
 	} else {
@@ -379,7 +390,17 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if number == rpc.LatestBlockNumber {
 				header = api.eth.blockchain.CurrentBlock()
 			} else if number == rpc.FinalizedBlockNumber {
-				header = api.eth.blockchain.CurrentFinalBlock()
+				finalBlockNumber, err := getFinalizedBlockNumber(api.eth)
+				if err != nil {
+					return state.IteratorDump{}, fmt.Errorf("finalized block not found")
+				}
+
+				block := api.eth.blockchain.CurrentFinalizedBlock(finalBlockNumber)
+				if block == nil {
+					return state.IteratorDump{}, fmt.Errorf("finalized block not found")
+				}
+
+				header = block.Header()
 			} else if number == rpc.SafeBlockNumber {
 				header = api.eth.blockchain.CurrentSafeBlock()
 			} else {
@@ -677,4 +698,28 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	api.eth.blockchain.SetTrieFlushInterval(t)
 
 	return nil
+}
+
+func getFinalizedBlockNumber(eth *Ethereum) (uint64, error) {
+	currentBlockNum := eth.BlockChain().CurrentBlock()
+
+	doExist, number, hash := eth.Downloader().GetWhitelistedMilestone()
+	if doExist && number <= currentBlockNum.Number.Uint64() {
+		block := eth.BlockChain().GetBlockByNumber(number)
+
+		if block.Hash() == hash {
+			return number, nil
+		}
+	}
+
+	doExist, number, hash = eth.Downloader().GetWhitelistedCheckpoint()
+	if doExist && number <= currentBlockNum.Number.Uint64() {
+		block := eth.BlockChain().GetBlockByNumber(number)
+
+		if block.Hash() == hash {
+			return number, nil
+		}
+	}
+
+	return 0, fmt.Errorf("No finalized block")
 }

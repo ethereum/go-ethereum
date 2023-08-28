@@ -18,6 +18,16 @@ func (ec *Client) GetRootHash(ctx context.Context, startBlockNumber uint64, endB
 	return rootHash, nil
 }
 
+// GetRootHash returns the merkle root of the block headers
+func (ec *Client) GetVoteOnHash(ctx context.Context, startBlockNumber uint64, endBlockNumber uint64, hash string, milestoneID string) (bool, error) {
+	var value bool
+	if err := ec.c.CallContext(ctx, &value, "bor_getVoteOnHash", startBlockNumber, endBlockNumber, hash, milestoneID); err != nil {
+		return false, err
+	}
+
+	return value, nil
+}
+
 // GetBorBlockReceipt returns bor block receipt
 func (ec *Client) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt

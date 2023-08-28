@@ -19,7 +19,7 @@ import (
 )
 
 func TestBorFilters(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	var (
 		db      = rawdb.NewMemoryDatabase()

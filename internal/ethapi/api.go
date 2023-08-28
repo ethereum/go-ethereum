@@ -2558,17 +2558,6 @@ func (api *DebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
 }
 
-// GetCheckpointWhitelist retrieves the current checkpoint whitelist
-// entries (of the form block number -> block hash)
-func (api *DebugAPI) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return api.b.GetCheckpointWhitelist()
-}
-
-// PurgeCheckpointWhitelist purges the current checkpoint whitelist entries
-func (api *DebugAPI) PurgeCheckpointWhitelist() {
-	api.b.PurgeCheckpointWhitelist()
-}
-
 // GetTraceStack returns the current trace stack
 func (api *DebugAPI) GetTraceStack() string {
 	buf := make([]byte, 1024)
