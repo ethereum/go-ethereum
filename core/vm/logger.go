@@ -43,7 +43,7 @@ type EVMLogger interface {
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
-	OnGasConsumed(gas, amount uint64, reason GasChangeReason)
+	OnGasChange(old, new uint64, reason GasChangeReason)
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful

@@ -265,7 +265,7 @@ func (st *StateTransition) buyGas() error {
 	}
 
 	if st.evm.Config.Tracer != nil {
-		st.evm.Config.Tracer.OnGasConsumed(0, -st.msg.GasLimit, vm.GasInitialBalance)
+		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, vm.GasInitialBalance)
 	}
 
 	st.gasRemaining += st.msg.GasLimit
@@ -391,7 +391,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	if t := st.evm.Config.Tracer; t != nil {
-		t.OnGasConsumed(st.gasRemaining, gas, vm.GasChangeIntrinsicGas)
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, vm.GasChangeIntrinsicGas)
 	}
 	st.gasRemaining -= gas
 
@@ -459,7 +459,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	}
 
 	if st.evm.Config.Tracer != nil {
-		st.evm.Config.Tracer.OnGasConsumed(st.gasRemaining, -refund, vm.GasRefunded)
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, vm.GasRefunded)
 	}
 
 	st.gasRemaining += refund
@@ -469,7 +469,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
 
 	if st.evm.Config.Tracer != nil {
-		st.evm.Config.Tracer.OnGasConsumed(st.gasRemaining, st.gasRemaining, vm.GasBuyBack)
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasBuyBack)
 	}
 
 	// Also return remaining gas to the block gas counter so it is

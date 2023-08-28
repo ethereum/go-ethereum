@@ -164,7 +164,7 @@ func (c *Contract) UseGas(gas uint64, logger EVMLogger, reason GasChangeReason) 
 		return false
 	}
 	if logger != nil {
-		logger.OnGasConsumed(c.Gas, gas, reason)
+		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
 	}
 	c.Gas -= gas
 	return true

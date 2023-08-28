@@ -120,6 +120,6 @@ func (p *Printer) OnNewAccount(a common.Address) {
 	fmt.Printf("OnNewAccount: a=%v\n", a)
 }
 
-func (p *Printer) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {
-	fmt.Printf("OnGasConsumed: gas=%v, amount=%v\n", gas, amount)
+func (p *Printer) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
+	fmt.Printf("OnGasChange: old=%v, new=%v, diff=%v\n", old, new, new-old)
 }
