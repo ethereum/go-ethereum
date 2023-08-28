@@ -2178,6 +2178,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 
 	// avoiding constructor changed by introducing new method to set genesis
 	filterAPI.SetChainConfig(ethcfg.Genesis.Config)
+
 	return filterSystem
 }
 
