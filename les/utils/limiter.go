@@ -17,10 +17,10 @@
 package utils
 
 import (
-	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"golang.org/x/exp/slices"
 )
 
 const maxSelectionWeight = 1000000000 // maximum selection weight of each individual node/address group
@@ -340,24 +340,9 @@ func (l *Limiter) Stop() {
 	l.cond.Signal()
 }
 
-type (
-	dropList     []dropListItem
-	dropListItem struct {
-		nq       *nodeQueue
-		priority float64
-	}
-)
-
-func (l dropList) Len() int {
-	return len(l)
-}
-
-func (l dropList) Less(i, j int) bool {
-	return l[i].priority < l[j].priority
-}
-
-func (l dropList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
+type dropListItem struct {
+	nq       *nodeQueue
+	priority float64
 }
 
 // dropRequests selects the nodes with the highest queued request cost to selection
@@ -366,7 +351,7 @@ func (l dropList) Swap(i, j int) {
 func (l *Limiter) dropRequests() {
 	var (
 		sumValue float64
-		list     dropList
+		list     []dropListItem
 	)
 	for _, nq := range l.nodes {
 		sumValue += nq.value
@@ -384,7 +369,15 @@ func (l *Limiter) dropRequests() {
 			priority: w / float64(nq.sumCost),
 		})
 	}
-	sort.Sort(list)
+	slices.SortFunc(list, func(a, b dropListItem) int {
+		if a.priority < b.priority {
+			return -1
+		}
+		if a.priority < b.priority {
+			return 1
+		}
+		return 0
+	})
 	for _, item := range list {
 		for _, request := range item.nq.queue {
 			close(request.process)

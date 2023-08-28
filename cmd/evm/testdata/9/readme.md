@@ -7,7 +7,7 @@ This test contains testcases for EIP-1559, which uses an new transaction type an
 The alloc portion contains one contract (`0x000000000000000000000000000000000000aaaa`), containing the 
 following code: `0x58585454`: `PC; PC; SLOAD; SLOAD`.
 
-Essentialy, this contract does `SLOAD(0)` and `SLOAD(1)`.
+Essentially, this contract does `SLOAD(0)` and `SLOAD(1)`.
 
 The alloc also contains some funds on `0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b`. 
 

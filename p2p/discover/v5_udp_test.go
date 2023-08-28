@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
-	"sort"
 	"testing"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 )
 
 // Real sockets, real crypto: this test checks end-to-end connectivity for UDPv5.
@@ -61,8 +61,8 @@ func TestUDPv5_lookupE2E(t *testing.T) {
 	for i := range nodes {
 		expectedResult[i] = nodes[i].Self()
 	}
-	sort.Slice(expectedResult, func(i, j int) bool {
-		return enode.DistCmp(target.ID(), expectedResult[i].ID(), expectedResult[j].ID()) < 0
+	slices.SortFunc(expectedResult, func(a, b *enode.Node) int {
+		return enode.DistCmp(target.ID(), a.ID(), b.ID())
 	})
 
 	// Do the lookup.

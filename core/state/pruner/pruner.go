@@ -57,7 +57,6 @@ const (
 // Config includes all the configurations for pruning.
 type Config struct {
 	Datadir   string // The directory of the state database
-	Cachedir  string // The directory of state clean cache
 	BloomSize uint64 // The Megabytes of memory allocated to bloom-filter
 }
 
@@ -241,7 +240,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		return err
 	}
 	if stateBloomRoot != (common.Hash{}) {
-		return RecoverPruning(p.config.Datadir, p.db, p.config.Cachedir)
+		return RecoverPruning(p.config.Datadir, p.db)
 	}
 	// If the target state root is not specified, use the HEAD-127 as the
 	// target. The reason for picking it is:
@@ -266,7 +265,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// is the presence of root can indicate the presence of the
 	// entire trie.
 	if !rawdb.HasLegacyTrieNode(p.db, root) {
-		// The special case is for clique based networks(rinkeby, goerli
+		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
 		// difflayer won't be created. So HEAD-127 may not paired with
@@ -299,12 +298,6 @@ func (p *Pruner) Prune(root common.Hash) error {
 			log.Info("Selecting user-specified state as the pruning target", "root", root)
 		}
 	}
-	// Before start the pruning, delete the clean trie cache first.
-	// It's necessary otherwise in the next restart we will hit the
-	// deleted state root in the "clean cache" so that the incomplete
-	// state is picked for usage.
-	deleteCleanTrieCache(p.config.Cachedir)
-
 	// All the state roots of the middle layer should be forcibly pruned,
 	// otherwise the dangling state will be left.
 	middleRoots := make(map[common.Hash]struct{})
@@ -342,7 +335,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
+func RecoverPruning(datadir string, db ethdb.Database) error {
 	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
 	if err != nil {
 		return err
@@ -377,12 +370,6 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 		return err
 	}
 	log.Info("Loaded state bloom filter", "path", stateBloomPath)
-
-	// Before start the pruning, delete the clean trie cache first.
-	// It's necessary otherwise in the next restart we will hit the
-	// deleted state root in the "clean cache" so that the incomplete
-	// state is picked for usage.
-	deleteCleanTrieCache(trieCachePath)
 
 	// All the state roots of the middle layers should be forcibly pruned,
 	// otherwise the dangling state will be left.
@@ -420,7 +407,10 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if err != nil {
 		return err
 	}
-	accIter := t.NodeIterator(nil)
+	accIter, err := t.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
 	for accIter.Next(true) {
 		hash := accIter.Hash()
 
@@ -441,7 +431,10 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				if err != nil {
 					return err
 				}
-				storageIter := storageTrie.NodeIterator(nil)
+				storageIter, err := storageTrie.NodeIterator(nil)
+				if err != nil {
+					return err
+				}
 				for storageIter.Next(true) {
 					hash := storageIter.Hash()
 					if hash != (common.Hash{}) {
@@ -490,24 +483,4 @@ func findBloomFilter(datadir string) (string, common.Hash, error) {
 		return "", common.Hash{}, err
 	}
 	return stateBloomPath, stateBloomRoot, nil
-}
-
-const warningLog = `
-
-WARNING!
-
-The clean trie cache is not found. Please delete it by yourself after the 
-pruning. Remember don't start the Geth without deleting the clean trie cache
-otherwise the entire database may be damaged!
-
-Check the command description "geth snapshot prune-state --help" for more details.
-`
-
-func deleteCleanTrieCache(path string) {
-	if !common.FileExist(path) {
-		log.Warn(warningLog)
-		return
-	}
-	os.RemoveAll(path)
-	log.Info("Deleted trie clean cache", "path", path)
 }

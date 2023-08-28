@@ -61,7 +61,7 @@ func TestRemoteDbWithHeaders(t *testing.T) {
 }
 
 func testReceiveHeaders(t *testing.T, ln net.Listener, gethArgs ...string) {
-	var ok uint32
+	var ok atomic.Uint32
 	server := &http.Server{
 		Addr: "localhost:0",
 		Handler: &testHandler{func(w http.ResponseWriter, r *http.Request) {
@@ -72,12 +72,12 @@ func testReceiveHeaders(t *testing.T, ln net.Listener, gethArgs ...string) {
 			if have, want := r.Header.Get("second"), "two"; have != want {
 				t.Fatalf("missing header, have %v want %v", have, want)
 			}
-			atomic.StoreUint32(&ok, 1)
+			ok.Store(1)
 		}}}
 	go server.Serve(ln)
 	defer server.Close()
 	runGeth(t, gethArgs...).WaitExit()
-	if atomic.LoadUint32(&ok) != 1 {
+	if ok.Load() != 1 {
 		t.Fatal("Test fail, expected invocation to succeed")
 	}
 }

@@ -197,9 +197,10 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//   - at most 'max' items,
-//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//     return as many items as fit into maxByteSize.
+//   - at most 'count' items,
+//   - if maxBytes is specified: at least 1 item (even if exceeding the maxByteSize),
+//     but will otherwise return as many items as fit into maxByteSize.
+//   - if maxBytes is not specified, 'count' items will be returned if they are present.
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
@@ -274,43 +275,46 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 }
 
 // TruncateHead discards any recent data above the provided threshold number.
-func (f *Freezer) TruncateHead(items uint64) error {
+// It returns the previous head number.
+func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	if f.readonly {
-		return errReadOnly
+		return 0, errReadOnly
 	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	if f.frozen.Load() <= items {
-		return nil
+	oitems := f.frozen.Load()
+	if oitems <= items {
+		return oitems, nil
 	}
 	for _, table := range f.tables {
 		if err := table.truncateHead(items); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	f.frozen.Store(items)
-	return nil
+	return oitems, nil
 }
 
 // TruncateTail discards any recent data below the provided threshold number.
-func (f *Freezer) TruncateTail(tail uint64) error {
+func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
-		return errReadOnly
+		return 0, errReadOnly
 	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	if f.tail.Load() >= tail {
-		return nil
+	old := f.tail.Load()
+	if old >= tail {
+		return old, nil
 	}
 	for _, table := range f.tables {
 		if err := table.truncateTail(tail); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	f.tail.Store(tail)
-	return nil
+	return old, nil
 }
 
 // Sync flushes all data tables to disk.
@@ -434,7 +438,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// TODO(s1na): This is a sanity-check since as of now no process does tail-deletion. But the migration
 	// process assumes no deletion at tail and needs to be modified to account for that.
 	if table.itemOffset.Load() > 0 || table.itemHidden.Load() > 0 {
-		return fmt.Errorf("migration not supported for tail-deleted freezers")
+		return errors.New("migration not supported for tail-deleted freezers")
 	}
 	ancientsPath := filepath.Dir(table.index.Name())
 	// Set up new dir for the migrated table, the content of which

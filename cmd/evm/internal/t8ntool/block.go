@@ -306,7 +306,7 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 	return inputData, nil
 }
 
-// dispatchOutput writes the output data to either stderr or stdout, or to the specified
+// dispatchBlock writes the output data to either stderr or stdout, or to the specified
 // files
 func dispatchBlock(ctx *cli.Context, baseDir string, block *types.Block) error {
 	raw, _ := rlp.EncodeToBytes(block)

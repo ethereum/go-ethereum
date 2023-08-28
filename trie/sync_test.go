@@ -56,8 +56,8 @@ func makeTestTrie(scheme string) (ethdb.Database, *Database, *StateTrie, map[str
 			trie.MustUpdate(key, val)
 		}
 	}
-	root, nodes := trie.Commit(false)
-	if err := triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
+	root, nodes, _ := trie.Commit(false)
+	if err := triedb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	if err := triedb.Commit(root, false); err != nil {
@@ -94,7 +94,7 @@ func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash) er
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
-	it := trie.NodeIterator(nil)
+	it := trie.MustNodeIterator(nil)
 	for it.Next(true) {
 	}
 	return it.Error()
@@ -111,16 +111,16 @@ type trieElement struct {
 func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(rawdb.NewMemoryDatabase())
 	dbB := NewDatabase(rawdb.NewMemoryDatabase())
-	//dbC := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
-	//dbD := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
+	dbC := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
+	dbD := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
 
 	emptyA := NewEmpty(dbA)
 	emptyB, _ := New(TrieID(types.EmptyRootHash), dbB)
-	//emptyC := NewEmpty(dbC)
-	//emptyD, _ := New(TrieID(types.EmptyRootHash), dbD)
+	emptyC := NewEmpty(dbC)
+	emptyD, _ := New(TrieID(types.EmptyRootHash), dbD)
 
-	for i, trie := range []*Trie{emptyA, emptyB /*emptyC, emptyD*/} {
-		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB /*dbC, dbD*/}[i].Scheme())
+	for i, trie := range []*Trie{emptyA, emptyB, emptyC, emptyD} {
+		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB, dbC, dbD}[i].Scheme())
 		if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v, %v, %v", i, paths, nodes, codes)
 		}
@@ -134,10 +134,10 @@ func TestIterativeSync(t *testing.T) {
 	testIterativeSync(t, 100, false, rawdb.HashScheme)
 	testIterativeSync(t, 1, true, rawdb.HashScheme)
 	testIterativeSync(t, 100, true, rawdb.HashScheme)
-	// testIterativeSync(t, 1, false, rawdb.PathScheme)
-	// testIterativeSync(t, 100, false, rawdb.PathScheme)
-	// testIterativeSync(t, 1, true, rawdb.PathScheme)
-	// testIterativeSync(t, 100, true, rawdb.PathScheme)
+	testIterativeSync(t, 1, false, rawdb.PathScheme)
+	testIterativeSync(t, 100, false, rawdb.PathScheme)
+	testIterativeSync(t, 1, true, rawdb.PathScheme)
+	testIterativeSync(t, 100, true, rawdb.PathScheme)
 }
 
 func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
@@ -159,12 +159,16 @@ func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		if !bypath {
 			for i, element := range elements {
 				owner, inner := ResolvePath([]byte(element.path))
-				data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+				data, err := reader.Node(owner, inner, element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
 				}
@@ -208,7 +212,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
 // partial results are returned, and the others sent only later.
 func TestIterativeDelayedSync(t *testing.T) {
 	testIterativeDelayedSync(t, rawdb.HashScheme)
-	//testIterativeDelayedSync(t, rawdb.PathScheme)
+	testIterativeDelayedSync(t, rawdb.PathScheme)
 }
 
 func testIterativeDelayedSync(t *testing.T, scheme string) {
@@ -230,12 +234,16 @@ func testIterativeDelayedSync(t *testing.T, scheme string) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(elements) > 0 {
 		// Sync only half of the scheduled nodes
 		results := make([]NodeSyncResult, len(elements)/2+1)
 		for i, element := range elements[:len(results)] {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -272,8 +280,8 @@ func testIterativeDelayedSync(t *testing.T, scheme string) {
 func TestIterativeRandomSyncIndividual(t *testing.T) {
 	testIterativeRandomSync(t, 1, rawdb.HashScheme)
 	testIterativeRandomSync(t, 100, rawdb.HashScheme)
-	// testIterativeRandomSync(t, 1, rawdb.PathScheme)
-	// testIterativeRandomSync(t, 100, rawdb.PathScheme)
+	testIterativeRandomSync(t, 1, rawdb.PathScheme)
+	testIterativeRandomSync(t, 100, rawdb.PathScheme)
 }
 
 func testIterativeRandomSync(t *testing.T, count int, scheme string) {
@@ -295,12 +303,16 @@ func testIterativeRandomSync(t *testing.T, count int, scheme string) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		}
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
 		results := make([]NodeSyncResult, 0, len(queue))
 		for path, element := range queue {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -336,7 +348,7 @@ func testIterativeRandomSync(t *testing.T, count int, scheme string) {
 // partial results are returned (Even those randomly), others sent only later.
 func TestIterativeRandomDelayedSync(t *testing.T) {
 	testIterativeRandomDelayedSync(t, rawdb.HashScheme)
-	// testIterativeRandomDelayedSync(t, rawdb.PathScheme)
+	testIterativeRandomDelayedSync(t, rawdb.PathScheme)
 }
 
 func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
@@ -358,12 +370,16 @@ func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 			syncPath: NewSyncPath([]byte(path)),
 		}
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]NodeSyncResult, 0, len(queue)/2+1)
 		for path, element := range queue {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -404,7 +420,7 @@ func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 // have such references.
 func TestDuplicateAvoidanceSync(t *testing.T) {
 	testDuplicateAvoidanceSync(t, rawdb.HashScheme)
-	// testDuplicateAvoidanceSync(t, rawdb.PathScheme)
+	testDuplicateAvoidanceSync(t, rawdb.PathScheme)
 }
 
 func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
@@ -426,13 +442,16 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	requested := make(map[common.Hash]struct{})
-
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -472,12 +491,10 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 // the database.
 func TestIncompleteSyncHash(t *testing.T) {
 	testIncompleteSync(t, rawdb.HashScheme)
-	// testIncompleteSync(t, rawdb.PathScheme)
+	testIncompleteSync(t, rawdb.PathScheme)
 }
 
 func testIncompleteSync(t *testing.T, scheme string) {
-	t.Parallel()
-
 	// Create a random trie to copy
 	_, srcDb, srcTrie, _ := makeTestTrie(scheme)
 
@@ -501,12 +518,16 @@ func testIncompleteSync(t *testing.T, scheme string) {
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(elements) > 0 {
 		// Fetch a batch of trie nodes
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -559,7 +580,7 @@ func testIncompleteSync(t *testing.T, scheme string) {
 // depth.
 func TestSyncOrdering(t *testing.T) {
 	testSyncOrdering(t, rawdb.HashScheme)
-	// testSyncOrdering(t, rawdb.PathScheme)
+	testSyncOrdering(t, rawdb.PathScheme)
 }
 
 func testSyncOrdering(t *testing.T, scheme string) {
@@ -585,12 +606,15 @@ func testSyncOrdering(t *testing.T, scheme string) {
 		})
 		reqs = append(reqs, NewSyncPath([]byte(paths[i])))
 	}
-
+	reader, err := srcDb.Reader(srcTrie.Hash())
+	if err != nil {
+		t.Fatalf("State is not available %x", srcTrie.Hash())
+	}
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -649,11 +673,15 @@ func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database
 			syncPath: NewSyncPath([]byte(paths[i])),
 		})
 	}
+	reader, err := srcDb.Reader(root)
+	if err != nil {
+		t.Fatalf("State is not available %x", root)
+	}
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
 			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(root).Node(owner, inner, element.hash)
+			data, err := reader.Node(owner, inner, element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
 			}
@@ -686,7 +714,7 @@ func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database
 // states synced in the last cycle.
 func TestSyncMovingTarget(t *testing.T) {
 	testSyncMovingTarget(t, rawdb.HashScheme)
-	// testSyncMovingTarget(t, rawdb.PathScheme)
+	testSyncMovingTarget(t, rawdb.PathScheme)
 }
 
 func testSyncMovingTarget(t *testing.T, scheme string) {
@@ -709,8 +737,8 @@ func testSyncMovingTarget(t *testing.T, scheme string) {
 		srcTrie.MustUpdate(key, val)
 		diff[string(key)] = val
 	}
-	root, nodes := srcTrie.Commit(false)
-	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
+	root, nodes, _ := srcTrie.Commit(false)
+	if err := srcDb.Update(root, preRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 		panic(err)
 	}
 	if err := srcDb.Commit(root, false); err != nil {
@@ -734,8 +762,8 @@ func testSyncMovingTarget(t *testing.T, scheme string) {
 		srcTrie.MustUpdate([]byte(k), val)
 		reverted[k] = val
 	}
-	root, nodes = srcTrie.Commit(false)
-	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
+	root, nodes, _ = srcTrie.Commit(false)
+	if err := srcDb.Update(root, preRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
 		panic(err)
 	}
 	if err := srcDb.Commit(root, false); err != nil {

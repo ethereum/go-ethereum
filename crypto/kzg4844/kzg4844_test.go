@@ -47,7 +47,6 @@ func randBlob() Blob {
 
 func TestCKZGWithPoint(t *testing.T)  { testKZGWithPoint(t, true) }
 func TestGoKZGWithPoint(t *testing.T) { testKZGWithPoint(t, false) }
-
 func testKZGWithPoint(t *testing.T, ckzg bool) {
 	if ckzg && !ckzgAvailable {
 		t.Skip("CKZG unavailable in this test build")
@@ -73,7 +72,6 @@ func testKZGWithPoint(t *testing.T, ckzg bool) {
 
 func TestCKZGWithBlob(t *testing.T)  { testKZGWithBlob(t, true) }
 func TestGoKZGWithBlob(t *testing.T) { testKZGWithBlob(t, false) }
-
 func testKZGWithBlob(t *testing.T, ckzg bool) {
 	if ckzg && !ckzgAvailable {
 		t.Skip("CKZG unavailable in this test build")
@@ -106,6 +104,8 @@ func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
 	useCKZG.Store(ckzg)
 
 	blob := randBlob()
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		BlobToCommitment(blob)
 	}
@@ -124,6 +124,8 @@ func benchmarkComputeProof(b *testing.B, ckzg bool) {
 		blob  = randBlob()
 		point = randFieldElement()
 	)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ComputeProof(blob, point)
 	}
@@ -144,6 +146,8 @@ func benchmarkVerifyProof(b *testing.B, ckzg bool) {
 		commitment, _   = BlobToCommitment(blob)
 		proof, claim, _ = ComputeProof(blob, point)
 	)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		VerifyProof(commitment, point, claim, proof)
 	}
@@ -162,6 +166,8 @@ func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
 		blob          = randBlob()
 		commitment, _ = BlobToCommitment(blob)
 	)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ComputeBlobProof(blob, commitment)
 	}
@@ -181,6 +187,8 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 		commitment, _ = BlobToCommitment(blob)
 		proof, _      = ComputeBlobProof(blob, commitment)
 	)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		VerifyBlobProof(blob, commitment, proof)
 	}
