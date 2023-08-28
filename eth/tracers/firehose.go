@@ -745,10 +745,10 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 	})
 }
 
-func (f *Firehose) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {
+func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 	f.ensureInBlockAndInTrx()
 
-	if amount == 0 {
+	if old == new {
 		return
 	}
 
@@ -768,7 +768,7 @@ func (f *Firehose) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) 
 	}
 
 	activeCall := f.callStack.Peek()
-	change := f.newGasChange("tracer", gas, gas-amount, gasChangeReasonFromChain(reason))
+	change := f.newGasChange("tracer", old, new, gasChangeReasonFromChain(reason))
 
 	// There is an initial gas consumption happening will the call is not yet started, we track it manually
 	if activeCall == nil {

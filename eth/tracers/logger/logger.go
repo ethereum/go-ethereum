@@ -219,7 +219,7 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 // CaptureKeccakPreimage is called during the KECCAK256 opcode.
 func (l *StructLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
-func (l *StructLogger) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {}
+func (l *StructLogger) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
@@ -410,7 +410,7 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 
 func (t *mdLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
-func (t *mdLogger) OnGasConsumed(gas, amount uint64, reason vm.GasChangeReason) {}
+func (t *mdLogger) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}
 
 func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
