@@ -732,7 +732,14 @@ func (f *Firehose) OnLog(l *types.Log) {
 }
 
 func (f *Firehose) OnNewAccount(a common.Address) {
-	f.ensureInBlockAndInTrxAndInCall()
+	f.ensureInBlockOrTrx()
+	if f.transaction == nil {
+		// We receive OnNewAccount on finalization of the block which means there is no
+		// transaction active. In that case, we do not track the account creation because
+		// the "old" Firehose didn't but mainly because we don't have `AccountCreation` at
+		// the block level so what can we do...
+		return
+	}
 
 	if f.isPrecompiledAddr(a) {
 		return

@@ -145,7 +145,6 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 // Also, the genesis state specification will be flushed as well.
 func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash, bcLogger BlockchainLogger) error {
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
-	statedb.SetLogger(bcLogger)
 	if err != nil {
 		return err
 	}
