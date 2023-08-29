@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 // Proof-of-stake protocol constants.
@@ -354,7 +356,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.AddBalance(w.Address, amount)
 
 		// The returned gas is not charged
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:])
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.BalanceLeafKey)
 	}
 	// No block reward which is issued by consensus layer instead.
 }

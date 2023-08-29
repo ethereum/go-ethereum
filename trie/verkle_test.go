@@ -65,11 +65,9 @@ func TestReproduceTree(t *testing.T) {
 	}
 
 	root := verkle.New()
-	kv := make(map[string][]byte)
 
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
-		kv[string(key)] = values[i]
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...))
@@ -286,11 +284,9 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 	}
 
 	root := verkle.New()
-	kv := make(map[string][]byte)
 
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
-		kv[string(key)] = values[i]
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...))
@@ -333,11 +329,9 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	}
 
 	root := verkle.New()
-	kv := make(map[string][]byte)
 
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
-		kv[string(key)] = values[i]
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...))

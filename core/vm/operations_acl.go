@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
@@ -53,8 +53,8 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		value := common.Hash(y.Bytes32())
 
 		if evm.chainRules.IsVerkle {
-			index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(contract.AddressPoint(), x.Bytes())
-			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(index)
+			treeIndex, subIndex := utils.GetTreeKeyStorageSlotTreeIndexes(x.Bytes())
+			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(contract.Address().Bytes(), *treeIndex, subIndex)
 		}
 
 		if current == value { // noop (1)
@@ -113,9 +113,9 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 
 	if evm.chainRules.IsVerkle {
 		where := stack.Back(0)
+		treeIndex, subIndex := utils.GetTreeKeyStorageSlotTreeIndexes(where.Bytes())
 		addr := contract.Address()
-		index := trieUtils.GetTreeKeyStorageSlot(addr[:], where)
-		gasUsed += evm.Accesses.TouchAddressOnReadAndComputeGas(index)
+		gasUsed += evm.Accesses.TouchAddressOnReadAndComputeGas(addr.Bytes(), *treeIndex, subIndex)
 	}
 
 	// Check slot presence in the access list

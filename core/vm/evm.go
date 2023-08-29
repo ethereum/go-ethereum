@@ -138,7 +138,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
 	if txCtx.Accesses == nil && chainConfig.IsVerkle(blockCtx.BlockNumber, blockCtx.Time) {
-		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
+		txCtx.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
@@ -148,7 +148,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	if txCtx.Accesses == nil && evm.chainRules.IsVerkle {
-		txCtx.Accesses = state.NewAccessWitness(evm.StateDB.(*state.StateDB))
+		txCtx.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
 	}
 	evm.TxContext = txCtx
 	evm.StateDB = statedb
@@ -530,7 +530,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if err == nil && evm.chainRules.IsVerkle {
-		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:], value.Sign() != 0)) {
+		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:])) {
 			evm.StateDB.RevertToSnapshot(snapshot)
 			err = ErrOutOfGas
 		}
