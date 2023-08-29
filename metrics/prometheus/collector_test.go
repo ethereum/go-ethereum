@@ -49,6 +49,7 @@ func TestCollector(t *testing.T) {
 	timer.Update(120 * time.Millisecond)
 	timer.Update(23 * time.Millisecond)
 	timer.Update(24 * time.Millisecond)
+	timer.Update(30 * time.Millisecond)
 	c.addTimer("test/timer", timer)
 
 	resettingTimer := metrics.NewResettingTimer()
@@ -58,6 +59,7 @@ func TestCollector(t *testing.T) {
 	resettingTimer.Update(120 * time.Millisecond)
 	resettingTimer.Update(13 * time.Millisecond)
 	resettingTimer.Update(14 * time.Millisecond)
+	resettingTimer.Update(30 * time.Millisecond)
 	c.addResettingTimer("test/resetting_timer", resettingTimer.Snapshot())
 
 	emptyResettingTimer := metrics.NewResettingTimer().Snapshot()
@@ -83,27 +85,27 @@ test_histogram {quantile="0.99"} 0
 test_histogram {quantile="0.999"} 0
 test_histogram {quantile="0.9999"} 0
 test_histogram_sum 0.000000
-test_histogram_count 6
+test_histogram_count 0
 
 # TYPE test_meter gauge
 test_meter 9999999
 
 # TYPE test_timer summary
-test_timer {quantile="0.5"} 2.25e+07
-test_timer {quantile="0.75"} 4.8e+07
+test_timer {quantile="0.5"} 2.3e+07
+test_timer {quantile="0.75"} 3e+07
 test_timer {quantile="0.95"} 1.2e+08
 test_timer {quantile="0.99"} 1.2e+08
 test_timer {quantile="0.999"} 1.2e+08
 test_timer {quantile="0.9999"} 1.2e+08
-test_timer_sum 550500000.000000
-test_timer_count 6
+test_timer_sum 533000000.000000
+test_timer_count 7
 
 # TYPE test_resetting_timer summary
-test_resetting_timer {quantile="0.50"} 12000000
+test_resetting_timer {quantile="0.50"} 13000000
 test_resetting_timer {quantile="0.95"} 120000000
 test_resetting_timer {quantile="0.99"} 120000000
-test_resetting_timer_sum 180000000
-test_resetting_timer_count 6
+test_resetting_timer_sum 210000000
+test_resetting_timer_count 7
 
 `
 
