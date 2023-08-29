@@ -353,6 +353,10 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 
 	// Compose and notify the logs from liveLogs and histLogs
 	go func() {
+		defer func() {
+			liveLogsSub.Unsubscribe()
+			cancel()
+		}()
 		var (
 			delivered uint64
 			liveOnly  bool
@@ -364,7 +368,6 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			case err := <-histDone:
 				if err != nil {
 					logger.Warn("History logs delivery failed", "err", err)
-					liveLogsSub.Unsubscribe()
 					return
 				}
 				// Else historical logs are all delivered, let's switch to live mode
@@ -426,12 +429,8 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				// Assuming batch = all logs of a single block
 				delivered = logs[0].BlockNumber
 			case <-rpcSub.Err(): // client send an unsubscribe request
-				liveLogsSub.Unsubscribe()
-				cancel()
 				return
 			case <-notifier.Closed(): // connection dropped
-				liveLogsSub.Unsubscribe()
-				cancel()
 				return
 			}
 		}
