@@ -536,3 +536,7 @@ func (s *stateObject) Balance() *big.Int {
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
 }
+
+func (s *stateObject) Root() common.Hash {
+	return s.data.Root
+}
